@@ -1,0 +1,259 @@
+{
+  "id": "trl-4",
+  "feature": "trust-layers",
+  "title": "Write the static-rules craft page and wire the doctrine",
+  "lane": "standard",
+  "role": "docs",
+  "status": "capped",
+  "deps": [
+    "trl-1",
+    "trl-2",
+    "trl-3"
+  ],
+  "decisions": [
+    "135ea187-5a1c-42ad-ad8d-8584e92b4dc2",
+    "df297521-5dee-4a2f-a5cd-fe27b7440ba0",
+    "eb87cd73-2ca9-4b8f-a5fe-13af040488dc"
+  ],
+  "files": [
+    "expertise/static-rules.md",
+    "expertise/INDEX.md",
+    "skills/bee-capturing/references/promotion.md",
+    "packages/bee/LEADER.md",
+    ".bee/LEADER.md",
+    ".bee/expertise/*",
+    ".bee/onboarding.json",
+    ".claude/skills/*",
+    ".agents/skills/*",
+    ".claude-plugin/skills/*",
+    ".codex-plugin/skills/*",
+    ".opencode/skills/*",
+    "skills-lock.json",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/trust-layers/CONTEXT.md",
+    "expertise/INDEX.md",
+    "expertise/tests.md",
+    "skills/bee-capturing/references/promotion.md",
+    "docs/knowledge/areas/human-mailbox/overview.md",
+    "docs/knowledge/patterns/20260713-promote-an-order-to-the-always-loaded-layer.md"
+  ],
+  "affects_skills": [
+    "skills/bee-capturing/references/promotion.md"
+  ],
+  "affects_specs": [],
+  "action": "Implement docs/history/trust-layers/CONTEXT.md D2 and the doctrine half of D3. Load the bee-technical-writing skill first; the craft page is a how-to guide, one type per file. (1) Write expertise/static-rules.md in the voice and frontmatter shape of the other craft pages in expertise/ (read expertise/tests.md for the shape). Content, generic to any project, never about bee itself: when a mistake's fix-at layer is check, pick the highest of four homes that can hold the rule, in this order: a type the compiler enforces (make the wrong value impossible to build), a rule in the linter the project already runs, a test, a hook or guard. For the lint home, name where a project rule usually lives per ecosystem: ESLint (no-restricted-syntax, no-restricted-imports, or a local rule), Clippy (disallowed-methods and disallowed-types in clippy.toml), Ruff (banned-api under flake8-tidy-imports), golangci-lint (forbidigo, depguard), and a pattern rule tool such as ast-grep or Semgrep when the project's linter cannot express the rule. State the proof: show the new rule red on the past mistake, then green after the fix; a rule never seen red proves only that it loads. State where the rule must run: it has to be a member of the project's commands.test list, or CI never sees it. State that a tool the project does not already run is the owner's decision: ask before adding one. State how to stage the red proof: rebuild the past mistake as a small fixture or a scratch edit, show the rule red on it, then remove it so it does not stay in the tree. State the dead end: when the project has no commands.test list, or it is the sentinel none, take the question to the owner instead of writing a rule nothing runs. Add a one-line list of rule homes for other ecosystems (.NET banned-API analyzers, ErrorProne or ArchUnit for Java, detekt for Kotlin, RuboCop custom cops, PHPStan custom rules, SwiftLint custom_rules, Credo), and say that a project with no compiler-checked types starts at the lint home. State when not to write a rule: a one-off, or a rule with false positives that people will switch off. Keep it under 140 lines. (2) Add one row for static-rules.md to the Craft table of expertise/INDEX.md. (3) In skills/bee-capturing/references/promotion.md, step 2 of the Promotion Decision Tree (anchor: `2. Mechanizable? A grep/lint line in a verify command, a guard, a hook`), add one sentence that points to `.bee/expertise/static-rules.md` for which home to pick and how to prove it. (4) In packages/bee/LEADER.md, in the bullet that starts `Write a mistake down the MOMENT you notice it` (anchor: `bee mailbox reflect --wrong \"<what went wrong>\"`), add at most three lines: a correction from the user of how you worked (not a new instruction or a changed requirement) is a mistake too, recorded the same way with `--source user` the moment it is given, with the user's own words kept in `--wrong` so a repeat matches; an accepted P1 or P2 review finding takes `--source review`; the same key seen twice is a fix-first candidate whatever its source. (5) Run the regen chain: `.bee/bin/bee dev regen`, then `.bee/bin/bee dev release-manifest --write`, then `.bee/bin/bee onboard --repo-root . --json` and, when it reports changes_needed, `.bee/bin/bee onboard --repo-root . --apply --json`, so .bee/LEADER.md, .bee/expertise/ and the vendored skill trees match their sources. `.bee/bin/bee` in this worktree is the installed binary of the main checkout; the regen chain reads the source files of this worktree, so that binary is the right one to run. In a worktree the onboard report may still list runtime files such as .bee/reservations.json as changes_needed; that is expected, and no skill, expertise or leader file may remain in its plan after the apply. Never hand-edit a vendored tree. If a parity test pins a line count or a rule list of LEADER.md, keep the new lines inside the existing rule block and update the pinned value only where the test names it. Cite CONTEXT.md D-numbers in prose, never raw decision ids. One commit.",
+  "verify": ".bee/bin/bee dev release-manifest --check && .bee/bin/bee onboard --repo-root . --json && cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test rule_index_parity --test pointer_integrity --test instruction_laws",
+  "must_haves": {
+    "truths": [
+      "expertise/static-rules.md states the four homes in order, the per-ecosystem rule homes, the red-then-green proof with its fixture removed, that a new tool needs the owner's yes, and when not to write a rule",
+      "expertise/INDEX.md routes to static-rules.md",
+      "Step 2 of the promotion tree points to the static-rules page",
+      "The leader doctrine says a user correction is recorded as a reflection with --source user in the user's own words, and an accepted P1 or P2 review finding with --source review",
+      "The vendored copies under .bee/ and the skill trees match their sources after the regen chain"
+    ],
+    "artifacts": [
+      {
+        "path": "expertise/static-rules.md",
+        "substantive": "the how-to guide for turning a check row into a static rule"
+      },
+      {
+        "path": ".bee/expertise/static-rules.md",
+        "substantive": "the vendored copy, written by the regen chain"
+      }
+    ],
+    "key_links": [
+      "docs/history/codex-harness-hardening/release-manifest.json lists the new craft page so hosts receive it"
+    ],
+    "prohibitions": [
+      "No hand edit of a vendored tree",
+      "No change to FIX_AT_VALUES or to any refusal",
+      "No more than three new lines in packages/bee/LEADER.md",
+      "No code comments"
+    ],
+    "open_choices": []
+  },
+  "trace": {
+    "worker": "trl-4-worker",
+    "outcome": "Wrote the static-rules craft page, wired INDEX, promotion step 2 and the leader doctrine, ran the regen chain; commit ac7ac7a56",
+    "files_changed": [
+      "expertise/static-rules.md",
+      "expertise/INDEX.md",
+      "skills/bee-capturing/references/promotion.md",
+      "packages/bee/LEADER.md",
+      "docs/knowledge/areas/human-mailbox/overview.md",
+      ".bee/LEADER.md",
+      ".bee/expertise/INDEX.md",
+      ".bee/expertise/static-rules.md",
+      ".bee/onboarding.json",
+      ".claude/skills/bee-capturing/references/promotion.md",
+      ".agents/skills/bee-capturing/references/promotion.md",
+      ".claude-plugin/skills/bee-capturing/references/promotion.md",
+      ".codex-plugin/skills/bee-capturing/references/promotion.md",
+      ".opencode/skills/bee-capturing/references/promotion.md",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [
+      "sync-ack: Doctrine and craft-page cell; it extended human-mailbox/overview.md and trl-5 consolidates the rest"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-13T07:41:39.166Z",
+    "behavior_change": false,
+    "verification_evidence": ".bee/bin/bee dev release-manifest --check && .bee/bin/bee onboard --repo-root . --json && cargo test --release --test rule_index_parity --test pointer_integrity --test instruction_laws — green:static — docs and doctrine change, parity and pointer tests cover it (9, 10, 5 passed; manifest matches 607 files; onboard up_to_date)",
+    "verify_output": "green:static",
+    "verify_passed": true,
+    "claim_session": "b39d6126-50db-4f5e-8fdb-7ac15a337530",
+    "verify_command": ".bee/bin/bee dev release-manifest --check && .bee/bin/bee onboard --repo-root . --json && cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test rule_index_parity --test pointer_integrity --test instruction_laws",
+    "claimed_at": "2026-11-13T07:40:11.732Z",
+    "knowledge_delta": [
+      "docs/knowledge/areas/human-mailbox/overview.md"
+    ],
+    "sync_ack": "Doctrine and craft-page cell; it extended human-mailbox/overview.md and trl-5 consolidates the rest",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Wrote the static-rules craft page, wired INDEX, promotion step 2 and the leader doctrine, ran the regen chain; commit ac7ac7a56",
+      "commit": "ac7ac7a56b75fdcd9761c26e307a09ba494a6320",
+      "files": [
+        "expertise/static-rules.md",
+        "expertise/INDEX.md",
+        "skills/bee-capturing/references/promotion.md",
+        "packages/bee/LEADER.md",
+        "docs/knowledge/areas/human-mailbox/overview.md",
+        ".bee/LEADER.md",
+        ".bee/expertise/INDEX.md",
+        ".bee/expertise/static-rules.md",
+        ".bee/onboarding.json",
+        ".claude/skills/bee-capturing/references/promotion.md",
+        ".agents/skills/bee-capturing/references/promotion.md",
+        ".claude-plugin/skills/bee-capturing/references/promotion.md",
+        ".codex-plugin/skills/bee-capturing/references/promotion.md",
+        ".opencode/skills/bee-capturing/references/promotion.md",
+        "docs/history/codex-harness-hardening/release-manifest.json"
+      ],
+      "tests": ".bee/bin/bee dev release-manifest --check && .bee/bin/bee onboard --repo-root . --json && cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test rule_index_parity --test pointer_integrity --test instruction_laws — green:static — .bee/bin/bee dev release-manifest --check && .bee/bin/bee onboard --repo-root . --json && cargo test --release --test rule_index_parity --test pointer_integrity --test instruction_laws — green:static — docs and doctrine change, parity and pointer tests cover it (9, 10, 5 passed; manifest matches 607 files; onboard up_to_date)",
+      "deviations": []
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 311 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "expertise/static-rules.md states the four homes in order, the per-ecosystem rule homes, the red-then-green proof with its fixture removed, that a new tool needs the owner's yes, and when not to write a rule",
+            "artifact": "expertise/static-rules.md"
+          },
+          {
+            "requirement": "expertise/INDEX.md routes to static-rules.md",
+            "artifact": "expertise/static-rules.md"
+          },
+          {
+            "requirement": "Step 2 of the promotion tree points to the static-rules page",
+            "artifact": "expertise/static-rules.md"
+          },
+          {
+            "requirement": "The leader doctrine says a user correction is recorded as a reflection with --source user in the user's own words, and an accepted P1 or P2 review finding with --source review",
+            "artifact": "expertise/static-rules.md"
+          },
+          {
+            "requirement": "The vendored copies under .bee/ and the skill trees match their sources after the regen chain",
+            "artifact": "expertise/static-rules.md"
+          },
+          {
+            "requirement": "the how-to guide for turning a check row into a static rule",
+            "artifact": "expertise/static-rules.md"
+          },
+          {
+            "requirement": "the vendored copy, written by the regen chain",
+            "artifact": ".bee/expertise/static-rules.md"
+          },
+          {
+            "requirement": "docs/history/codex-harness-hardening/release-manifest.json lists the new craft page so hosts receive it",
+            "artifact": "expertise/static-rules.md"
+          },
+          {
+            "requirement": "expertise/static-rules.md",
+            "artifact": "expertise/static-rules.md"
+          },
+          {
+            "requirement": "expertise/INDEX.md",
+            "artifact": "expertise/INDEX.md"
+          },
+          {
+            "requirement": "skills/bee-capturing/references/promotion.md",
+            "artifact": "skills/bee-capturing/references/promotion.md"
+          },
+          {
+            "requirement": "packages/bee/LEADER.md",
+            "artifact": "packages/bee/LEADER.md"
+          },
+          {
+            "requirement": "docs/knowledge/areas/human-mailbox/overview.md",
+            "artifact": "docs/knowledge/areas/human-mailbox/overview.md"
+          },
+          {
+            "requirement": ".bee/LEADER.md",
+            "artifact": ".bee/LEADER.md"
+          },
+          {
+            "requirement": ".bee/expertise/INDEX.md",
+            "artifact": ".bee/expertise/INDEX.md"
+          },
+          {
+            "requirement": ".bee/expertise/static-rules.md",
+            "artifact": ".bee/expertise/static-rules.md"
+          },
+          {
+            "requirement": ".bee/onboarding.json",
+            "artifact": ".bee/onboarding.json"
+          },
+          {
+            "requirement": ".claude/skills/bee-capturing/references/promotion.md",
+            "artifact": ".claude/skills/bee-capturing/references/promotion.md"
+          },
+          {
+            "requirement": ".agents/skills/bee-capturing/references/promotion.md",
+            "artifact": ".agents/skills/bee-capturing/references/promotion.md"
+          },
+          {
+            "requirement": ".claude-plugin/skills/bee-capturing/references/promotion.md",
+            "artifact": ".claude-plugin/skills/bee-capturing/references/promotion.md"
+          },
+          {
+            "requirement": ".codex-plugin/skills/bee-capturing/references/promotion.md",
+            "artifact": ".codex-plugin/skills/bee-capturing/references/promotion.md"
+          },
+          {
+            "requirement": ".opencode/skills/bee-capturing/references/promotion.md",
+            "artifact": ".opencode/skills/bee-capturing/references/promotion.md"
+          },
+          {
+            "requirement": "docs/history/codex-harness-hardening/release-manifest.json",
+            "artifact": "docs/history/codex-harness-hardening/release-manifest.json"
+          }
+        ],
+        "recorded_at": "2026-11-13T07:41:39.279Z",
+        "recorded_by": "b39d6126-50db-4f5e-8fdb-7ac15a337530",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": {
+    "new": 62450,
+    "cached": 747462,
+    "total": 809912,
+    "models": {
+      "claude-sonnet-5-5": {
+        "new": 62450,
+        "cached": 747462,
+        "total": 809912
+      }
+    },
+    "jobs": [
+      "job-1794555618393-851053-1"
+    ]
+  }
+}

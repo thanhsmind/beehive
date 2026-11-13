@@ -1,0 +1,249 @@
+{
+  "id": "trl-1",
+  "feature": "trust-layers",
+  "title": "Offer a project's own static checks at onboarding",
+  "lane": "standard",
+  "role": "code",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "420c8c96-ef15-4522-bc96-b7109044af2b",
+    "7bd71a3f-3509-47a7-835c-a71c6e48598d",
+    "4d39a59f-ae3f-4bc9-9d0d-cd5c19367e79"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/onboard/notices.rs",
+    "packages/bee-rs/crates/bee/src/onboard/templates.rs",
+    "packages/bee-rs/crates/bee/src/onboard/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/trust-layers/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/onboard/notices.rs",
+    "packages/bee-rs/crates/bee/src/onboard/templates.rs",
+    "packages/bee-rs/crates/bee/src/onboard/tests.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/onboarding/"
+  ],
+  "action": "Implement docs/history/trust-layers/CONTEXT.md D1 as refined by D5, and contract C1. Anchors in onboard/notices.rs: `pub fn detect_commands(root: &Path) -> Vec<Candidate> {`, `pub fn commands_notices(repo_root: &Path, first_onboard: bool) -> Vec<String> {`, the predicate `let recorded = COMMAND_KEYS.iter().any(|key| {` inside it, and `fn declares_test(commands: Option<&serde_json::Map<String, Value>>) -> bool {`; in onboard/templates.rs: `pub const NO_TEST_VERIFICATION_OFFER` (the offer posture to follow). (1) Detector. Add a static-check detector beside detect_commands, with its own result type (do not reuse Candidate, whose key comes from COMMAND_KEYS): input the repo root; output at most one candidate per kind, the kinds being lint and type check; each candidate carries the command, the source file and a marker word. It reads the project's own root files only and runs no tool. Lint kind, first hit wins: a package.json script named lint; a Makefile target named lint; a composer.json script named lint; Cargo.toml (`cargo clippy -- -D warnings`, marker clippy); pyproject.toml holding a `[tool.ruff` table (`ruff check .`, marker ruff); go.mod (`go vet ./...`, marker vet). Type-check kind, first hit wins: a package.json script named typecheck or type-check; a Makefile target named typecheck; pyproject.toml holding a `[tool.mypy` table (`mypy .`, marker mypy). For a manifest script the marker word is the script name. For a package.json script the runner follows the lockfile at the root: pnpm-lock.yaml gives `pnpm run <name>`, yarn.lock gives `yarn <name>`, bun.lockb or bun.lock gives `bun run <name>`, otherwise `npm run <name>`. A malformed manifest yields no candidate from that file and never panics. (2) Recorded rule (D5). In commands_notices a test command counts as recorded when commands.test is a non-empty string or a non-empty list (the declares_test rule); setup and start keep their string rule. So a list-valued commands.test no longer draws the `No standard commands recorded` notice; this is an intended fix, and a test must pin it. (3) Notices. Case (a): no command recorded and at least one static check detected: the existing first notice (either arm) gains one sentence that lists the static checks with their sources and says to offer them as the first members of the `commands.test` list, before the tests. Case (b): a test command is recorded and it is not the sentinel none, and at least one detected check has its marker word in no commands.test entry: return one notice that lists those checks with their sources and says to offer adding them before the tests in the `commands.test` list. Both cases also say: run each proposed check once first and tell the user whether it is green or how many findings it reports; look through the project's recorded decisions for an earlier answer about that check and stay silent about a check the user already refused; record the user's answer for each check as a decision; never write an unconfirmed value. Case (c): commands.test is the sentinel none, or nothing is detected, or only setup or start is recorded: return exactly what the function returns today for that config (for a list-valued test with nothing detected that is now an empty list, per (2)). The Greenfield notice text does not change. Keep fixed notice text as constants in templates.rs. Red first, with test names that contain static_check: one candidate per kind and manifest beats convention; the lockfile picks the runner; a malformed package.json; case (a) for both arms; case (b) fires for a string and for a list that lacks the marker word and is silent when an entry contains it (for example `pnpm lint` or `cargo clippy --all-targets -- -D warnings`); a list-valued commands.test with nothing detected returns nothing; the none sentinel; and with no candidate the two existing arms equal today's exact strings. No code comments. The proof run must show the new tests ran: quote the count of tests the filter matched, which must be above zero.",
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- static_check",
+  "must_haves": {
+    "truths": [
+      "A project with a lint script and a recorded commands.test that lacks the word lint gets one notice naming the lint command and its source",
+      "A project whose commands.test already has an entry containing the check's marker word gets no static-check notice",
+      "A project with no command recorded and a static check found gets the existing notice plus the static checks, offered first in the commands.test list",
+      "A list-valued commands.test counts as recorded and no longer draws the No standard commands recorded notice",
+      "With no candidate detected, or commands.test set to none, a string-valued or empty config gets exactly the strings it got before",
+      "Each static-check notice tells the agent to run the check once before offering it and to record the user's answer as a decision",
+      "The detector reads files only and runs no tool"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/onboard/notices.rs",
+        "substantive": "the static-check detector, the two notice arms and their static_check tests"
+      }
+    ],
+    "key_links": [
+      "commands_notices calls the static-check detector"
+    ],
+    "prohibitions": [
+      "Never write a detected command to .bee/config.json",
+      "No new commands key and no change to COMMAND_KEYS",
+      "No code comments"
+    ],
+    "open_choices": [
+      "Extra marker files beyond the listed ones"
+    ]
+  },
+  "trace": {
+    "worker": "trl-1-worker",
+    "outcome": "Static-check detector and case (a)/(b) notices added with 10 static_check tests; ends at commit 654eb1718",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/onboard/notices.rs",
+      "packages/bee-rs/crates/bee/src/onboard/templates.rs",
+      "docs/knowledge/areas/onboarding/host-project-artifacts.md"
+    ],
+    "deviations": [
+      "sync-ack: The listed concepts were suspect before this cell and none describes the command notices; the cell added its delta to host-project-artifacts.md and trl-5 consolidates the area"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-13T07:21:56.867Z",
+    "behavior_change": true,
+    "verification_evidence": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- static_check — green:unit — filter matched 10 tests, 10 passed; full suite has 1 unrelated failure (cli_shape guard on docs/history/trust-layers/plan.md)",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "b39d6126-50db-4f5e-8fdb-7ac15a337530",
+    "verify_command": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- static_check",
+    "claimed_at": "2026-11-13T07:15:03.920Z",
+    "knowledge_delta": [
+      "docs/knowledge/areas/onboarding/host-project-artifacts.md"
+    ],
+    "sync_ack": "The listed concepts were suspect before this cell and none describes the command notices; the cell added its delta to host-project-artifacts.md and trl-5 consolidates the area",
+    "mistakes": [
+      {
+        "wrong": "The worker wrote the static_check tests after the code, so no test was seen red",
+        "better": "write each failing test first and keep its red output",
+        "fix_at": "doctrine"
+      }
+    ],
+    "report": {
+      "outcome": "Static-check detector and case (a)/(b) notices added with 10 static_check tests; ends at commit 654eb1718",
+      "commit": "654eb1718fb37f4b61589e38a0ffed49f9912dcc",
+      "files": [
+        "packages/bee-rs/crates/bee/src/onboard/notices.rs",
+        "packages/bee-rs/crates/bee/src/onboard/templates.rs",
+        "docs/knowledge/areas/onboarding/host-project-artifacts.md"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- static_check — green:unit — cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- static_check — green:unit — filter matched 10 tests, 10 passed; full suite has 1 unrelated failure (cli_shape guard on docs/history/trust-layers/plan.md)",
+      "deviations": []
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 343 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "A project with a lint script and a recorded commands.test that lacks the word lint gets one notice naming the lint command and its source",
+            "artifact": "packages/bee-rs/crates/bee/src/onboard/notices.rs"
+          },
+          {
+            "requirement": "A project whose commands.test already has an entry containing the check's marker word gets no static-check notice",
+            "artifact": "packages/bee-rs/crates/bee/src/onboard/notices.rs"
+          },
+          {
+            "requirement": "A project with no command recorded and a static check found gets the existing notice plus the static checks, offered first in the commands.test list",
+            "artifact": "packages/bee-rs/crates/bee/src/onboard/notices.rs"
+          },
+          {
+            "requirement": "A list-valued commands.test counts as recorded and no longer draws the No standard commands recorded notice",
+            "artifact": "packages/bee-rs/crates/bee/src/onboard/notices.rs"
+          },
+          {
+            "requirement": "With no candidate detected, or commands.test set to none, a string-valued or empty config gets exactly the strings it got before",
+            "artifact": "packages/bee-rs/crates/bee/src/onboard/notices.rs"
+          },
+          {
+            "requirement": "Each static-check notice tells the agent to run the check once before offering it and to record the user's answer as a decision",
+            "artifact": "packages/bee-rs/crates/bee/src/onboard/notices.rs"
+          },
+          {
+            "requirement": "The detector reads files only and runs no tool",
+            "artifact": "packages/bee-rs/crates/bee/src/onboard/notices.rs"
+          },
+          {
+            "requirement": "the static-check detector, the two notice arms and their static_check tests",
+            "artifact": "packages/bee-rs/crates/bee/src/onboard/notices.rs"
+          },
+          {
+            "requirement": "commands_notices calls the static-check detector",
+            "artifact": "packages/bee-rs/crates/bee/src/onboard/notices.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/onboard/notices.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/onboard/notices.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/onboard/templates.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/onboard/templates.rs"
+          },
+          {
+            "requirement": "docs/knowledge/areas/onboarding/host-project-artifacts.md",
+            "artifact": "docs/knowledge/areas/onboarding/host-project-artifacts.md"
+          }
+        ],
+        "recorded_at": "2026-11-13T07:22:05.539Z",
+        "recorded_by": "b39d6126-50db-4f5e-8fdb-7ac15a337530",
+        "commit_diff": "checked"
+      }
+    ],
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "truth-lint-missing-notice",
+            "status": "PASS",
+            "evidence": "notices.rs commands_notices: entries non-empty -> missing = checks whose marker no entry contains -> one notice from STATIC_CHECK_MISSING_OFFER with '{command} — {source}' (static_check_list); test static_check_case_b_fires_for_a_string_and_a_list_lacking_the_marker and case_b_is_silent (pnpm lint present -> only 'npm run typecheck' named) ok"
+          },
+          {
+            "id": "truth-marker-present-silent",
+            "status": "PASS",
+            "evidence": "notices.rs: missing.is_empty() -> Vec::new(); test static_check_case_b_is_silent_when_an_entry_has_the_marker ok (clippy entry; pnpm lint+typecheck)"
+          },
+          {
+            "id": "truth-no-command-existing-notice-plus-checks-first",
+            "status": "PASS",
+            "evidence": "static_sentence appended to both 'No standard commands recorded' arms; STATIC_CHECK_FIRST_OFFER 'Offer them as the first members of the `commands.test` list, before the tests.' (templates.rs:369); test static_check_case_a_adds_a_sentence_to_both_arms ok"
+          },
+          {
+            "id": "truth-list-counts-as-recorded",
+            "status": "PASS",
+            "evidence": "test_entries handles Value::Array; recorded = !entries.is_empty() || setup/start; test static_check_list_valued_test_with_nothing_detected_returns_nothing ok (first_onboard=true -> empty)"
+          },
+          {
+            "id": "truth-old-strings-unchanged",
+            "status": "PASS",
+            "evidence": "checks empty -> static_sentence '' so both arms produce pre-change text; test static_check_without_a_candidate_keeps_the_old_strings asserts exact old strings; 'none' -> early Vec::new() (test static_check_none_sentinel_and_setup_only_stay_silent), same as before since a non-empty string was recorded"
+          },
+          {
+            "id": "truth-run-once-and-record-decision",
+            "status": "PASS",
+            "evidence": "STATIC_CHECK_HOW_TO_OFFER (templates.rs:373) 'Run each proposed check once first ... Record the user's answer for each check as a decision.' appended in both arms; case_a/case_b tests assert 'green or how many findings' and 'as a decision'"
+          },
+          {
+            "id": "truth-detector-reads-only",
+            "status": "PASS",
+            "evidence": "detect_static_checks/static_check_for/package_runner use exists, read_manifest_json, fs::read_to_string, makefile_targets only; the only Command::new in notices.rs is tracked_gitignore_paths (notices.rs:491, pre-existing git ls-files)"
+          },
+          {
+            "id": "link-commands_notices-calls-detector",
+            "status": "PASS",
+            "evidence": "notices.rs commands_notices: 'let checks = detect_static_checks(repo_root);'"
+          },
+          {
+            "id": "prohibit-no-config-write",
+            "status": "PASS",
+            "evidence": "fs::write/create_dir in notices.rs appear only in #[cfg(test)] fixtures (lines 617-825); commands_notices returns Vec<String> only"
+          },
+          {
+            "id": "prohibit-no-new-key-or-COMMAND_KEYS-change",
+            "status": "PASS",
+            "evidence": "templates.rs:332 COMMAND_KEYS = [setup,start,test]; diff of 654eb1718 to templates.rs adds only three STATIC_CHECK_* consts"
+          },
+          {
+            "id": "prohibit-no-code-comments",
+            "status": "PASS",
+            "evidence": "added lines of 654eb1718 grepped for //, /*, #: only a markdown heading in host-project-artifacts.md"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "sonnet",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-11-13T07:45:07.224Z"
+      }
+    ]
+  },
+  "usage": {
+    "new": 66821,
+    "cached": 636418,
+    "total": 703239,
+    "models": {
+      "claude-sonnet-5-5": {
+        "new": 66821,
+        "cached": 636418,
+        "total": 703239
+      }
+    },
+    "jobs": [
+      "job-1794554114346-462852-1"
+    ]
+  }
+}

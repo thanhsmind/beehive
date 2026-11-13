@@ -1,0 +1,218 @@
+{
+  "id": "trl-3",
+  "feature": "trust-layers",
+  "title": "Report the prose load in the feedback digest",
+  "lane": "standard",
+  "role": "code",
+  "status": "capped",
+  "deps": [
+    "trl-2"
+  ],
+  "decisions": [
+    "04b0108e-1397-4f27-bf03-18cfa9a4a299",
+    "60f72e0f-2289-46b8-b39b-0485290a3edc",
+    "c5fc83dd-c32c-4fc2-a04d-8862fe9459be"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/feedback.rs"
+  ],
+  "read_first": [
+    "docs/history/trust-layers/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/verbs/feedback.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/human-mailbox/overview.md"
+  ],
+  "action": "Implement docs/history/trust-layers/CONTEXT.md D4 as refined by D7, and contract C3, in verbs/feedback.rs. Anchors: `fn build_digest` (it builds the digest object), `fn digest_summary_line` (the one printed sentence, where the mistakes witness already adds a clause), `fn collect_feedback(root: &Path) -> Option<CollectData> {` (it already walks .bee/backlog.jsonl row by row and reads each row's layer), and the test `the_digest_counts_clean_run_answers_against_real_reflections` (how a digest test builds its fixture). The functions collect_counts, counts_value and summary_line serve bee feedback count: do not change them, and the counts object stays byte-identical. Add one top-level key prose_load to the digest object. It holds: for each of AGENTS.md, CLAUDE.md and LEADER.md that exists at the repo root, its path and line count, and their sum as the project lines; the line count of .bee/LEADER.md as the bee lines; the number of critical patterns, counted as the top-level list lines (lines that start with `- `) under the `## Critical patterns` heading of docs/knowledge/index.md up to the next `## ` heading; and the number of rows filed in .bee/backlog.jsonl whose layer is exactly fix-at:check and the number whose layer is exactly fix-at:architecture, tallied from the raw rows in the existing backlog walk, before any row is dropped or folded. A file that is a symbolic link to another counted file is counted once. A source that is absent (no such file, no such section, no backlog) reads as null in the object, never as zero, following the existing witness, which uses null for not measured. An unreadable or malformed row is skipped. Nothing here fails or refuses the digest. Add one clause to the printed digest sentence that names, in plain words, the project lines, the bee lines, the critical pattern count and the two counts of rows filed; an absent source prints as not present, never as 0. It is a witness: it refuses nothing, drops nothing, and adds no score or threshold. The digest carries counts and the fixed file names only, never file content. Red first, with test names that contain prose_load: a fixture root with AGENTS.md, a .bee/LEADER.md, an index with three top-level critical pattern lines and one nested line, and a backlog with two check rows and one architecture row yields those exact numbers in the object and in the printed sentence; a CLAUDE.md that is a symbolic link to AGENTS.md is not counted twice (unix only: gate that test with cfg(unix)); an empty root yields nulls, the words not present, and a successful digest; the counts object of an empty root is unchanged. No code comments. The proof run must show the new tests ran: quote the count of tests the filter matched, which must be above zero.",
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- prose_load",
+  "must_haves": {
+    "truths": [
+      "The digest object holds a top-level prose_load with project lines, bee lines, the critical pattern count and the two fix-at row counts",
+      "The printed digest sentence names project lines, bee lines, critical patterns and rows filed",
+      "An absent source reads as null in the object and as not present in the sentence, and the digest still succeeds",
+      "bee feedback count and the counts object are unchanged",
+      "The digest holds no content of the instruction files"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/feedback.rs",
+        "substantive": "the prose_load collection, its place in the digest object and printed line, and prose_load tests"
+      }
+    ],
+    "key_links": [
+      "build_digest puts prose_load on the digest object and digest_summary_line prints its clause"
+    ],
+    "prohibitions": [
+      "No refusal, threshold or score from the prose load",
+      "No code comments"
+    ],
+    "open_choices": [
+      "The key names inside prose_load"
+    ]
+  },
+  "trace": {
+    "worker": "trl-3-worker",
+    "outcome": "Digest now carries prose_load and a prose load clause in the printed sentence; commit a6c882bd9",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/feedback.rs",
+      "docs/knowledge/areas/human-mailbox/overview.md"
+    ],
+    "deviations": [
+      "sync-ack: The cell extended human-mailbox/overview.md; other suspect concepts anchored by feedback.rs were suspect before and trl-5 consolidates"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-13T07:40:06.335Z",
+    "behavior_change": true,
+    "verification_evidence": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- prose_load — green:unit — filter matched 4 tests, 4 passed; full suite 0 failed",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "b39d6126-50db-4f5e-8fdb-7ac15a337530",
+    "verify_command": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- prose_load",
+    "claimed_at": "2026-11-13T07:31:26.495Z",
+    "knowledge_delta": [
+      "docs/knowledge/areas/human-mailbox/overview.md"
+    ],
+    "sync_ack": "The cell extended human-mailbox/overview.md; other suspect concepts anchored by feedback.rs were suspect before and trl-5 consolidates",
+    "no_mistakes": true,
+    "knowledge_used": [
+      {
+        "path": "docs/knowledge/areas/human-mailbox/overview.md",
+        "changed": "extended the digest witness entry instead of filing a new concept"
+      }
+    ],
+    "report": {
+      "outcome": "Digest now carries prose_load and a prose load clause in the printed sentence; commit a6c882bd9",
+      "commit": "a6c882bd9ba322ec253fc3f244a51d8fc6adc209",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/feedback.rs",
+        "docs/knowledge/areas/human-mailbox/overview.md"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- prose_load — green:unit — cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- prose_load — green:unit — filter matched 4 tests, 4 passed; full suite 0 failed",
+      "deviations": [],
+      "knowledge_used": [
+        "docs/knowledge/areas/human-mailbox/overview.md — extended the digest witness entry instead of filing a new concept"
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 197 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "The digest object holds a top-level prose_load with project lines, bee lines, the critical pattern count and the two fix-at row counts",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/feedback.rs"
+          },
+          {
+            "requirement": "The printed digest sentence names project lines, bee lines, critical patterns and rows filed",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/feedback.rs"
+          },
+          {
+            "requirement": "An absent source reads as null in the object and as not present in the sentence, and the digest still succeeds",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/feedback.rs"
+          },
+          {
+            "requirement": "bee feedback count and the counts object are unchanged",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/feedback.rs"
+          },
+          {
+            "requirement": "The digest holds no content of the instruction files",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/feedback.rs"
+          },
+          {
+            "requirement": "the prose_load collection, its place in the digest object and printed line, and prose_load tests",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/feedback.rs"
+          },
+          {
+            "requirement": "build_digest puts prose_load on the digest object and digest_summary_line prints its clause",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/feedback.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/feedback.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/feedback.rs"
+          },
+          {
+            "requirement": "docs/knowledge/areas/human-mailbox/overview.md",
+            "artifact": "docs/knowledge/areas/human-mailbox/overview.md"
+          }
+        ],
+        "recorded_at": "2026-11-13T07:40:06.449Z",
+        "recorded_by": "b39d6126-50db-4f5e-8fdb-7ac15a337530",
+        "commit_diff": "checked"
+      }
+    ],
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "truth-top-level-prose_load-fields",
+            "status": "PASS",
+            "evidence": "feedback.rs prose_load_value returns project_files, project_lines, bee_lines, critical_patterns, fix_at_check_rows, fix_at_architecture_rows; build_digest inserts it at top level; test prose_load_reports_lines_patterns_and_rows_in_object_and_sentence ok (3,2,3,2,1)"
+          },
+          {
+            "id": "truth-sentence-names-all",
+            "status": "PASS",
+            "evidence": "digest_summary_line adds 'prose load: {prose}'; test asserts 'prose load: 3 project lines, 2 bee lines, 3 critical patterns, 2 check and 1 architecture rows filed'"
+          },
+          {
+            "id": "truth-absent-null-not-present",
+            "status": "PASS",
+            "evidence": "count_once/critical_pattern_count/fix_at_row_counts return None on absence; prose_load_line maps None to 'not present'; test prose_load_of_an_empty_root_is_null_not_zero_and_the_digest_succeeds ok"
+          },
+          {
+            "id": "truth-count-and-counts-unchanged",
+            "status": "PASS",
+            "evidence": "run_count (feedback.rs:1448-1463) uses collect_counts/counts_value/summary_line, untouched by a6c882bd9; test prose_load_leaves_the_counts_object_of_an_empty_root_unchanged ok (exact JSON)"
+          },
+          {
+            "id": "truth-no-file-content",
+            "status": "PASS",
+            "evidence": "prose_load_value stores only {path, lines} and integer counts; count_lines returns lines().count()"
+          },
+          {
+            "id": "link-build_digest-and-summary-line",
+            "status": "PASS",
+            "evidence": "feedback.rs build_digest: m.insert(\"prose_load\", prose_load_value(root)); digest_summary_line: let prose = prose_load_line(digest)"
+          },
+          {
+            "id": "prohibit-no-refusal-threshold-score",
+            "status": "PASS",
+            "evidence": "added code of a6c882bd9 has no comparison against a limit, no error path, no score; digest returns Some regardless of prose_load"
+          },
+          {
+            "id": "prohibit-no-code-comments",
+            "status": "PASS",
+            "evidence": "added lines of a6c882bd9 grepped for //, /*, #: no hits"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "sonnet",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-11-13T07:45:07.227Z"
+      }
+    ]
+  },
+  "usage": {
+    "new": 61992,
+    "cached": 900458,
+    "total": 962450,
+    "models": {
+      "claude-sonnet-5-5": {
+        "new": 61992,
+        "cached": 900458,
+        "total": 962450
+      }
+    },
+    "jobs": [
+      "job-1794555092952-749398-1"
+    ]
+  }
+}

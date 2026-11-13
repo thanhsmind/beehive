@@ -1,0 +1,174 @@
+{
+  "id": "trl-5",
+  "feature": "trust-layers",
+  "title": "Consolidate this feature's knowledge and write its delivery",
+  "lane": "standard",
+  "role": "writer",
+  "status": "capped",
+  "deps": [
+    "trl-1",
+    "trl-2",
+    "trl-3",
+    "trl-4"
+  ],
+  "decisions": [
+    "420c8c96-ef15-4522-bc96-b7109044af2b",
+    "135ea187-5a1c-42ad-ad8d-8584e92b4dc2",
+    "df297521-5dee-4a2f-a5cd-fe27b7440ba0",
+    "04b0108e-1397-4f27-bf03-18cfa9a4a299",
+    "4d39a59f-ae3f-4bc9-9d0d-cd5c19367e79",
+    "eb87cd73-2ca9-4b8f-a5fe-13af040488dc",
+    "c5fc83dd-c32c-4fc2-a04d-8862fe9459be"
+  ],
+  "files": [
+    "docs/knowledge/**",
+    "docs/history/trust-layers/delivery.md"
+  ],
+  "read_first": [
+    "docs/history/trust-layers/CONTEXT.md",
+    "docs/history/trust-layers/plan.md",
+    "docs/knowledge/areas/human-mailbox/overview.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Run the writer consolidation step on this feature: run `bee knowledge consolidate --feature trust-layers`. No onboarding concept documents the command notices today: add a short section on them and on the static-check offer (D1, D5), with the recorded rule for a list-valued commands.test, to docs/knowledge/areas/onboarding/host-project-artifacts.md, or to the onboarding concept you find closer after reading the area index; add the --source field (D3) and the prose-load witness (D4) to docs/knowledge/areas/human-mailbox/overview.md beside the reflection rules and 'A mistake seen twice'; name the static-rules craft page (D2) where the promotion tree is described. Dedupe and trim the deltas the cells wrote, anchor each concept to the code it describes, never restate code, and write docs/history/trust-layers/delivery.md listing the concepts changed and why, one line each, plus a Known limits section with these three: a repeat counts across distinct runs only, and only when the first four words of the what match; the prose-load line is printed by bee feedback digest and no host routine prints it yet; the installed .bee/bin/bee carries the feature only after a rebuild and reinstall. Cite CONTEXT.md D-numbers, never raw decision ids. Run `.bee/bin/bee knowledge index` when a concept's frontmatter changed, then `.bee/bin/bee knowledge check` green. One commit.",
+  "verify": ".bee/bin/bee knowledge check",
+  "must_haves": {
+    "truths": [
+      "area and pattern concepts describe the feature's changes, anchored to code",
+      "docs/history/trust-layers/delivery.md lists every concept the feature changed"
+    ],
+    "artifacts": [
+      {
+        "path": "docs/history/trust-layers/delivery.md",
+        "substantive": "the feature's delivery record"
+      }
+    ],
+    "key_links": [
+      "the delivery lands in the same merge as the code"
+    ],
+    "prohibitions": [
+      "No restating of code in area concepts",
+      "No code comments"
+    ],
+    "open_choices": []
+  },
+  "trace": {
+    "worker": "trl-5-worker",
+    "outcome": "Consolidated trust-layers knowledge and wrote delivery.md; commit 737c37850",
+    "files_changed": [
+      "docs/knowledge/areas/human-mailbox/overview.md",
+      "docs/history/trust-layers/delivery.md",
+      "docs/knowledge/index.md",
+      "docs/knowledge/areas/onboarding/index.md",
+      "docs/knowledge/areas/okf-profile/index.md",
+      "docs/knowledge/areas/workflow-state/index.md",
+      "docs/knowledge/patterns/index.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-11-13T07:45:48.984Z",
+    "behavior_change": false,
+    "verification_evidence": "docs-only change; 0 OKF errors, 0 profile errors",
+    "verify_output": "green:static",
+    "verify_passed": true,
+    "claim_session": "b39d6126-50db-4f5e-8fdb-7ac15a337530",
+    "verify_command": ".bee/bin/bee knowledge check",
+    "claimed_at": "2026-11-13T07:45:12.832Z",
+    "knowledge_delta": [
+      "docs/knowledge/areas/human-mailbox/overview.md",
+      "docs/knowledge/index.md",
+      "docs/knowledge/areas/onboarding/index.md",
+      "docs/knowledge/areas/okf-profile/index.md",
+      "docs/knowledge/areas/workflow-state/index.md",
+      "docs/knowledge/patterns/index.md"
+    ],
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Consolidated trust-layers knowledge and wrote delivery.md; commit 737c37850",
+      "commit": "737c378500eee5457895a552b874b7c528c206af",
+      "files": [
+        "docs/knowledge/areas/human-mailbox/overview.md",
+        "docs/history/trust-layers/delivery.md",
+        "docs/knowledge/index.md",
+        "docs/knowledge/areas/onboarding/index.md",
+        "docs/knowledge/areas/okf-profile/index.md",
+        "docs/knowledge/areas/workflow-state/index.md",
+        "docs/knowledge/patterns/index.md"
+      ],
+      "tests": ".bee/bin/bee knowledge check — green:static — docs-only change; 0 OKF errors, 0 profile errors",
+      "deviations": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "area and pattern concepts describe the feature's changes, anchored to code",
+            "artifact": "docs/history/trust-layers/delivery.md"
+          },
+          {
+            "requirement": "docs/history/trust-layers/delivery.md lists every concept the feature changed",
+            "artifact": "docs/history/trust-layers/delivery.md"
+          },
+          {
+            "requirement": "the feature's delivery record",
+            "artifact": "docs/history/trust-layers/delivery.md"
+          },
+          {
+            "requirement": "the delivery lands in the same merge as the code",
+            "artifact": "docs/history/trust-layers/delivery.md"
+          },
+          {
+            "requirement": "docs/knowledge/areas/human-mailbox/overview.md",
+            "artifact": "docs/knowledge/areas/human-mailbox/overview.md"
+          },
+          {
+            "requirement": "docs/history/trust-layers/delivery.md",
+            "artifact": "docs/history/trust-layers/delivery.md"
+          },
+          {
+            "requirement": "docs/knowledge/index.md",
+            "artifact": "docs/knowledge/index.md"
+          },
+          {
+            "requirement": "docs/knowledge/areas/onboarding/index.md",
+            "artifact": "docs/knowledge/areas/onboarding/index.md"
+          },
+          {
+            "requirement": "docs/knowledge/areas/okf-profile/index.md",
+            "artifact": "docs/knowledge/areas/okf-profile/index.md"
+          },
+          {
+            "requirement": "docs/knowledge/areas/workflow-state/index.md",
+            "artifact": "docs/knowledge/areas/workflow-state/index.md"
+          },
+          {
+            "requirement": "docs/knowledge/patterns/index.md",
+            "artifact": "docs/knowledge/patterns/index.md"
+          }
+        ],
+        "recorded_at": "2026-11-13T07:45:58.460Z",
+        "recorded_by": "b39d6126-50db-4f5e-8fdb-7ac15a337530",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": {
+    "new": 38503,
+    "cached": 245945,
+    "total": 284448,
+    "models": {
+      "claude-sonnet-5-5": {
+        "new": 38503,
+        "cached": 245945,
+        "total": 284448
+      }
+    },
+    "jobs": [
+      "job-1794555920230-872393-1"
+    ]
+  }
+}

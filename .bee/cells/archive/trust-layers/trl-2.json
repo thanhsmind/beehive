@@ -1,0 +1,256 @@
+{
+  "id": "trl-2",
+  "feature": "trust-layers",
+  "title": "Record where a reflection came from",
+  "lane": "standard",
+  "role": "code",
+  "status": "capped",
+  "deps": [
+    "trl-1"
+  ],
+  "decisions": [
+    "df297521-5dee-4a2f-a5cd-fe27b7440ba0",
+    "8ddbe4ab-bf33-43ab-a031-ccba81bae765",
+    "eb87cd73-2ca9-4b8f-a5fe-13af040488dc"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/mailbox.rs",
+    "packages/bee-rs/crates/bee/src/verbs/mailbox_digest.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+    "packages/bee-rs/crates/bee/src/verbs/work.rs",
+    "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+  ],
+  "read_first": [
+    "docs/history/trust-layers/CONTEXT.md",
+    "docs/knowledge/areas/human-mailbox/overview.md",
+    "packages/bee-rs/crates/bee/src/verbs/mailbox.rs",
+    "packages/bee-rs/crates/bee/src/verbs/mailbox_digest.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/human-mailbox/overview.md"
+  ],
+  "action": "Implement docs/history/trust-layers/CONTEXT.md D3 (the verb half) as refined by D6, and contract C2. Anchors in verbs/mailbox.rs: `pub(crate) const FIX_AT_VALUES: [&str; 4] = [\"architecture\", \"check\", \"doctrine\", \"none\"];`, the function `read_reflection` holding `let missing: Vec<&str> = [(\"--wrong\", wrong), (\"--better\", better), (\"--fix-at\", fix_at)]`, `pub(crate) fn reflection(at: &str, wrong: &str, better: &str, fix_at: &str) -> Self {`, the structs `Entry` and `LetterItem` with their `to_value`, and the frontmatter writer that uses `emit_opt`; in verbs/mailbox_digest.rs: `fn reflection_key(fix_at: Option<&str>, what: &str) -> Option<String> {`. Add an optional --source flag to bee mailbox reflect with the closed, lower-case, exact set self, user, review; default self. Shape: an optional source field on Entry and on LetterItem (the entry must hold every fact the letter prints). Entry and LetterItem are built by struct literals in other places too: `let entry = mailbox::Entry {` in verbs/cells/handlers_close.rs (two sites) and verbs/drivers/close.rs, and `Entry {` in a test helper in verbs/work.rs; give each of those sites an absent source and change nothing else there. Absent or self: the stored entry row carries no source key, and the letter item carries none, so both are byte-identical to before this change (the serializers must insert the key only when it is set, never as null). user or review: the entry row and the letter item carry source with that word, and the Mistakes & reflection bullet for that entry says `your correction` for user and `from a review` for review. Any other value, an empty value included: exit non-zero, append nothing, and name the three legal values in the error. --source together with --no-mistakes: refused, the same way --wrong with --no-mistakes is. The --json result of the verb carries source when it is set. A reflection read back from a cap trace has no source. reflection_key must not read source: two reflections with the same layer and the same first four words fold into one key whatever their sources. An entry read back with no source key is a self reflection. Register --source on the mailbox reflect verb in generated/registry_payload.json with a description of the three values, so bee mailbox reflect --help lists it and the CLI-shape guard accepts it. That file is one compact JSON line and is hand-edited: change it by a JSON round-trip that keeps its compact byte format and key order. The flag name source already exists in the registry vocabulary, so the pinned distinct-flag count in catalog.rs must not change; if a test says it does, stop and report. Do not change the --mistake path of bee cells cap beyond the absent source. Red first, with test names that contain reflect_source: a default call stores no source key and its letter item has none; user and review are stored and rendered with the two phrases; an off-set value and an empty value refuse and append nothing; --source with --no-mistakes refuses; a user reflection and a self reflection with the same layer and what produce the same lesson key. No code comments. The proof run must show the new tests ran: quote the count of tests the filter matched, which must be above zero.",
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- reflect_source && cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test registry_contracts",
+  "must_haves": {
+    "truths": [
+      "bee mailbox reflect with --source user stores source user on the entry and the letter bullet says your correction",
+      "bee mailbox reflect without --source writes an entry row and a letter item with no source key",
+      "A --source value outside self, user, review exits non-zero, appends nothing and lists the three values",
+      "The lesson key of a reflection does not depend on its source",
+      "The registry lists --source on mailbox reflect"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/mailbox.rs",
+        "substantive": "the --source flag, its validation, the stored field and reflect_source tests"
+      }
+    ],
+    "key_links": [
+      "generated/registry_payload.json registers --source on mailbox reflect"
+    ],
+    "prohibitions": [
+      "No change to FIX_AT_VALUES",
+      "No change to the stored shape of a default reflection or of the clean-run answer",
+      "No code comments"
+    ],
+    "open_choices": []
+  },
+  "trace": {
+    "worker": "trl-2-worker",
+    "outcome": "Added --source self|user|review to bee mailbox reflect, registered it, tests and knowledge in one commit 5e479d41f",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/mailbox.rs",
+      "packages/bee-rs/crates/bee/src/verbs/mailbox_digest.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+      "packages/bee-rs/crates/bee/src/verbs/work.rs",
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+      "docs/knowledge/areas/human-mailbox/overview.md"
+    ],
+    "deviations": [
+      "sync-ack: The cell extended human-mailbox/overview.md, the concept that owns the reflection entry; other suspect concepts anchored by these files were suspect before and trl-5 consolidates"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-13T07:31:11.415Z",
+    "behavior_change": true,
+    "verification_evidence": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- reflect_source && cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test registry_contracts — green:unit — filter matched 5 tests (5 passed), registry_contracts 12 passed; full suite has 1 failure from docs/history/trust-layers/plan.md quoting cell text as a command (not from this change)",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "b39d6126-50db-4f5e-8fdb-7ac15a337530",
+    "verify_command": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- reflect_source && cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test registry_contracts",
+    "claimed_at": "2026-11-13T07:22:11.838Z",
+    "knowledge_delta": [
+      "docs/knowledge/areas/human-mailbox/overview.md"
+    ],
+    "sync_ack": "The cell extended human-mailbox/overview.md, the concept that owns the reflection entry; other suspect concepts anchored by these files were suspect before and trl-5 consolidates",
+    "mistakes": [
+      {
+        "wrong": "The worker wrote the reflect_source tests after the code and did not drive the compiled verb end to end",
+        "better": "write the failing test first, and run the built verb once on a scratch store",
+        "fix_at": "doctrine"
+      }
+    ],
+    "report": {
+      "outcome": "Added --source self|user|review to bee mailbox reflect, registered it, tests and knowledge in one commit 5e479d41f",
+      "commit": "5e479d41f4a82281604dd46a6922313f7473a2c4",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/mailbox.rs",
+        "packages/bee-rs/crates/bee/src/verbs/mailbox_digest.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+        "packages/bee-rs/crates/bee/src/verbs/work.rs",
+        "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+        "docs/knowledge/areas/human-mailbox/overview.md"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- reflect_source && cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test registry_contracts — green:unit — cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- reflect_source && cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test registry_contracts — green:unit — filter matched 5 tests (5 passed), registry_contracts 12 passed; full suite has 1 failure from docs/history/trust-layers/plan.md quoting cell text as a command (not from this change)",
+      "deviations": []
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 157 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "bee mailbox reflect with --source user stores source user on the entry and the letter bullet says your correction",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/mailbox.rs"
+          },
+          {
+            "requirement": "bee mailbox reflect without --source writes an entry row and a letter item with no source key",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/mailbox.rs"
+          },
+          {
+            "requirement": "A --source value outside self, user, review exits non-zero, appends nothing and lists the three values",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/mailbox.rs"
+          },
+          {
+            "requirement": "The lesson key of a reflection does not depend on its source",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/mailbox.rs"
+          },
+          {
+            "requirement": "The registry lists --source on mailbox reflect",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/mailbox.rs"
+          },
+          {
+            "requirement": "the --source flag, its validation, the stored field and reflect_source tests",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/mailbox.rs"
+          },
+          {
+            "requirement": "generated/registry_payload.json registers --source on mailbox reflect",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/mailbox.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/mailbox.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/mailbox.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/mailbox_digest.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/mailbox_digest.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/work.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/work.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+            "artifact": "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+          },
+          {
+            "requirement": "docs/knowledge/areas/human-mailbox/overview.md",
+            "artifact": "docs/knowledge/areas/human-mailbox/overview.md"
+          }
+        ],
+        "recorded_at": "2026-11-13T07:31:11.539Z",
+        "recorded_by": "b39d6126-50db-4f5e-8fdb-7ac15a337530",
+        "commit_diff": "checked"
+      }
+    ],
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "truth-source-user-stored-and-rendered",
+            "status": "PASS",
+            "evidence": "mailbox.rs:3083-3092 read_source then entry.source = source before record_stop; Entry/LetterItem to_value add 'source' when Some; compose_body mailbox.rs:2007 Some(\"user\") -> '— your correction'; test reflect_source_user_and_review_are_stored_and_rendered_with_their_phrase ok"
+          },
+          {
+            "id": "truth-default-no-source-key",
+            "status": "PASS",
+            "evidence": "read_source(None|Some(\"self\")) -> Ok(None) (mailbox.rs:901); key inserted only on Some; test reflect_source_default_stores_no_key_and_the_letter_item_has_none ok (entry, item and rendered letter have no 'source')"
+          },
+          {
+            "id": "truth-bad-source-refused",
+            "status": "PASS",
+            "evidence": "read_source Err message lists SOURCE_VALUES.join(\", \") = 'self, user, review'; run_reflect returns emit_error before record_stop; feedback.rs:340 emit_error -> ExitCode::FAILURE (feedback.rs:347); test reflect_source_off_set_and_empty_values_are_refused_naming_the_three ok. Note: CLI js_trim accepts ' user' as user, same trim convention as --fix-at"
+          },
+          {
+            "id": "truth-lesson-key-ignores-source",
+            "status": "PASS",
+            "evidence": "mailbox_digest.rs:755 reflection_key(fix_at, what) reads no source; test reflect_source_does_not_change_the_lesson_key ok"
+          },
+          {
+            "id": "truth-registry-lists-source",
+            "status": "PASS",
+            "evidence": "registry_payload.json 'bee mailbox reflect' parameters.properties.source = {type: string, description: 'Where this reflection came from — one of self ... | user ... | review ...'}; registry_contracts 12 passed"
+          },
+          {
+            "id": "link-registry-registers-source",
+            "status": "PASS",
+            "evidence": "same registry entry as above, parsed with python json"
+          },
+          {
+            "id": "prohibit-FIX_AT_VALUES-unchanged",
+            "status": "PASS",
+            "evidence": "mailbox.rs FIX_AT_VALUES = [architecture, check, doctrine, none]; 5e479d41f diff adds SOURCE_VALUES beside it and does not touch it"
+          },
+          {
+            "id": "prohibit-default-and-clean-run-shape-unchanged",
+            "status": "PASS",
+            "evidence": "Entry::reflection and the clean-run constructor set source: None; to_value/LetterItem::to_value/render_letter emit source only when Some; reflect result adds 'source' only when Some"
+          },
+          {
+            "id": "prohibit-no-code-comments",
+            "status": "PASS",
+            "evidence": "added lines of 5e479d41f grepped for //, /*, #: no hits"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "sonnet",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-11-13T07:45:07.226Z"
+      }
+    ]
+  },
+  "usage": {
+    "new": 78189,
+    "cached": 1323788,
+    "total": 1401977,
+    "models": {
+      "claude-sonnet-5-5": {
+        "new": 78189,
+        "cached": 1323788,
+        "total": 1401977
+      }
+    },
+    "jobs": [
+      "job-1794554538327-525792-1"
+    ]
+  }
+}
