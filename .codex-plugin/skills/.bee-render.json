@@ -8,7 +8,7 @@
     },
     {
       "name": "bee-deploying",
-      "sha256": "8378c4adfbb6cec4533229bc3e5a9786818fca25e561ad271b1cef11846070ad"
+      "sha256": "bea2e8944d1bef01b0622c9911bd2acc88d0b375363f3889ff7aa0dce80bf111"
     },
     {
       "name": "bee-evolving",
@@ -140,11 +140,11 @@
     },
     {
       "name": "bee-verify-upkeep",
-      "sha256": "3f582caabbe466b22936d1b43790354c9d32a0ac71ca9d1070c8a810c17dc937"
+      "sha256": "0c6f66dbea539952a92f156a8b4b5ff619b7758486f43381c72a8822955baebd"
     },
     {
       "name": "bee-verifying",
-      "sha256": "8b0447b8ef2cee092e30fe838e0e91fe4e65afd6f4da6798ec00aa154c9ed201"
+      "sha256": "9b744f2ef031d2d8a9e92b01a66c816ffb6b731830d78526963939b64155c2d9"
     },
     {
       "name": "bee-wayfinding",

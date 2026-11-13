@@ -148,7 +148,14 @@ generated skill, not a suggestion:
   the mapped features a change touches, with a floor of one smoke path when
   nothing is named. It takes a feature selector, it needs no secret or network a
   fresh clone lacks, and it is short enough to sit in front of every commit.
-- **Full drive** — every feature in the map, top to bottom.
+- **Full drive** — every feature in the map, top to bottom. Its literal entry
+  point is `drive --full`, beside `drive --fast`.
+
+Both entry points keep one exit-code contract (CONTEXT.md D4 and D7). A drive
+prints one `ok` or `FAIL` line per mapped feature. It exits 0 when every feature
+passes, 1 when any feature fails, and 2 when the entry point is unknown. A
+project deploy script reads that exit code before anything goes live, so a
+control script that exits 0 on a failed feature lets a broken product ship.
 
 **The FAST drive is what proves a user-facing change.** A worker runs it for
 that change's cap proof:
