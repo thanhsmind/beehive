@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "verify-render-standalone",
   "mode": null,
-  "phase": "exploring",
+  "phase": "idle",
   "approved_gates": {
     "context": false,
     "shape": true,
@@ -11,9 +11,9 @@
     "uat": false
   },
   "summary": "Feature \"verify-render-standalone\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at 06d2e6b; capture what settled, then bee close --feature verify-render-standalone.",
+  "next_action": "bee close finished \"verify-render-standalone\" — feature is closed.",
   "created_at": "2026-11-13T06:42:20.786Z",
-  "run_state": null,
+  "run_state": "awaiting-approval",
   "waiting_on": null,
   "route": {
     "class": "bugfix",
