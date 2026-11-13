@@ -24,8 +24,7 @@
 #   control-bee sh -- <cmd...>        run any command inside the sandbox
 #   control-bee put <rel-path>        write stdin to a file inside the sandbox
 #   control-bee newrepo <name>        create a second, NOT-onboarded target repo
-#   control-bee host -- <cmd...>      run a command with cwd = the real checkout
-#                                     (must name a --repo-root under VERIFY_HOME)
+#   control-bee host -- <cmd...>      run with cwd = the real checkout (--repo-root under VERIFY_HOME)
 #   control-bee snapshot <label>      copy sandbox .bee state into evidence
 #   control-bee cleanup               remove the sandbox; KEEP the evidence
 #   control-bee smoke                 one-shot live check on a private run id
@@ -357,8 +356,6 @@ cmd_cleanup() {
   printf 'evidence kept at %s\n' "$ev"
 }
 
-# ------------------------------------------------------------------------ smoke
-
 smoke_last() {
   local f; f="$(find "$(evidence_dir)" -maxdepth 1 -name '[0-9][0-9][0-9]-*.exit' | sort | tail -1)"
   printf '%s' "${f%.exit}"
@@ -449,6 +446,6 @@ case "${1:-}" in
   snapshot) shift; cmd_snapshot "$@" ;;
   cleanup)  shift; cmd_cleanup "$@" ;;
   smoke)    shift; cmd_smoke "$@" ;;
-  ""|-h|--help) sed -n '2,35p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//' ;;
+  ""|-h|--help) sed -n '2,34p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//' ;;
   *) die "unknown subcommand '$1' — run 'control-bee --help'" ;;
 esac

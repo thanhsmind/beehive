@@ -19,9 +19,8 @@
 #   3. `bee dev regen` — render-skill-trees, onboard --apply,
 #      release-manifest --write; called, never reimplemented here
 #   4. TEST GATE: the declared suite, read from .bee/config.json
-#      `commands.test`, then the live smoke of the built binary, run BEFORE
-#      anything is tagged. Tagging first is how a red build becomes a
-#      published tag, and a published tag never moves.
+#      `commands.test`, then the live smoke, runs BEFORE anything is tagged.
+#      Tagging first is how a red build becomes a tag that never moves.
 #   5. the release commit, path-scoped to the files this script itself wrote
 #   6. tag vX.Y.Z at HEAD (idempotent if the tag already points there)
 #   7. push main and the tag
