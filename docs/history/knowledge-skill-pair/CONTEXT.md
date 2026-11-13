@@ -92,18 +92,15 @@ Skill body wording, section order inside each skill, and the trigger-fixture bri
 
 ## Outstanding Questions
 
-### Deferred To Planning
+None open. The two technical questions shaping left for planning are answered in the Discovery section of `plan.md`: cap and finish share one flag struct and one parse, and the regen chain rewrites the rendered skill trees, the onboarding ledger and the release manifest.
 
-- [ ] Which generated files change when a skill is added (skill trees, manifests, registry payload) — `bee dev regen` output answers it.
-- [ ] Whether `cells finish` and `cells cap` share one parser for the new flag — reading `finish_support.rs` answers it.
+## Out Of Scope
 
-## Deferred Ideas
-
-- An onboarding notice that offers the two skills, as verify has — out of scope until the skills have run once here.
-- Thresholds in `.bee/config.json` — out of scope until the defaults of D7 prove wrong.
-- A report line that says "upkeep due" — out of scope; the skill reads the report itself.
+- An onboarding notice that offers the two skills, as verify has.
+- Thresholds in `.bee/config.json`.
+- A report line that says "upkeep due"; the skill reads the report itself.
 
 ## Handoff Note
 
-CONTEXT.md is the source of truth. Decision IDs are stable. Planning reads locked
-decisions, the read set, code context, canonical references, and deferred-to-planning questions.
+CONTEXT.md is the source of truth. Decision IDs are stable. Planning reads the locked
+decisions, the read set, the code context and the canonical references.

@@ -76,8 +76,7 @@ writer consolidates these changes and writes
 The seven rules have ONE home — the rule list `bee knowledge consolidate` prints — and that one
 home is what the worker brief renders (this feature's CONTEXT.md D6). Before it, the list held
 three rules and the brief carried a single sentence, so the two could not agree: a rule added to
-one was invisible to the other until someone remembered. The list later grew to five and then to
-seven (knowledge-skill-pair D6: state the condition under which a claim holds and mark a guess as
+one was invisible to the other. The list now holds seven rules (knowledge-skill-pair D6 added two: state the condition under which a claim holds and mark a guess as
 a guess; record how to find a volatile detail, never the detail), with no change to the render. `knowledge_rules` in
 `packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs` renders the same constant one line per
 rule under the brief's knowledge-delta bullet, so a worker reads the rules at the moment it
