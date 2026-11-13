@@ -1,0 +1,121 @@
+{
+  "id": "rel960-1",
+  "feature": "release-2-96-0",
+  "title": "Publish release 2.96.0 through the sanctioned script",
+  "lane": "tiny",
+  "role": "deploy",
+  "deps": [],
+  "decisions": [],
+  "files": [
+    ".claude-plugin/plugin.json",
+    ".codex-plugin/plugin.json",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/release-2-96-0/CONTEXT.md",
+    "scripts/release.sh"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Run `scripts/release.sh 2.96.0` with BEE_DISPATCH_ID set to an authorized deployment dispatch and the CI-pinned opencode 1.18.16 (/mnt/data/Projects/goglbe/beehive/.bee/tmp/oc11816/bin) first on PATH and CARGO_TARGET_DIR=/home/thanhsmind/.cache/cargo-target-rel2960, so the opencode contract tests run green. The script bumps both plugin manifests, runs the regen chain (render-skill-trees, onboard --apply, release-manifest --write), runs the declared test suite before tagging, makes the release commit, tags v2.96.0, pushes main and the tag, waits for the release-binaries workflow and verifies the published assets. Never walk those steps by hand. Re-running at a version already committed is idempotent — it resumes the tail. The regen obligation on .claude-plugin/plugin.json is discharged INSIDE the script's own regen chain, which is why the release manifest rides this cell's files.",
+  "verify": "bash scripts/release.sh 2.96.0 && bee dev release-manifest --check",
+  "must_haves": {
+    "truths": [
+      "both plugin manifests report 2.96.0",
+      "tag v2.96.0 exists locally and on the remote",
+      "the GitHub release for v2.96.0 carries the binaries and SHA256SUMS",
+      "the script printed its final OK line"
+    ],
+    "artifacts": [
+      {
+        "path": ".claude-plugin/plugin.json",
+        "substantive": "version 2.96.0"
+      },
+      {
+        "path": ".codex-plugin/plugin.json",
+        "substantive": "version 2.96.0"
+      }
+    ],
+    "key_links": [
+      "the pushed tag is what triggers release-binaries.yml"
+    ],
+    "prohibitions": [
+      "Do not hand-walk bump, tag or push",
+      "Do not skip the test gate"
+    ]
+  },
+  "behavior_change": false,
+  "status": "capped",
+  "trace": {
+    "worker": "rel960-leader",
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [
+      "sync-ack: A release bump changes only version stamps; no concept describes behavior that moved"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-13T09:43:21.409Z",
+    "behavior_change": false,
+    "verification_evidence": "release OK line printed, tag v2.96.0 on origin, run https://github.com/thanhsmind/beehive/actions/runs/43402798948 succeeded, 6 assets published",
+    "verify_output": "green:live",
+    "verify_passed": true,
+    "claim_session": "b39d6126-50db-4f5e-8fdb-7ac15a337530",
+    "verify_command": "bash scripts/release.sh 2.96.0 && bee dev release-manifest --check",
+    "claimed_at": "2026-11-13T09:33:54.194Z",
+    "knowledge_delta": [],
+    "sync_ack": "A release bump changes only version stamps; no concept describes behavior that moved",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Released bee 2.96.0",
+      "commit": "96e433b1c",
+      "files": [
+        ".claude-plugin/plugin.json",
+        ".codex-plugin/plugin.json",
+        "docs/history/codex-harness-hardening/release-manifest.json"
+      ],
+      "tests": "bash scripts/release.sh 2.96.0 && bee dev release-manifest --check — green:live — release OK line printed, tag v2.96.0 on origin, run https://github.com/thanhsmind/beehive/actions/runs/43402798948 succeeded, 6 assets published",
+      "deviations": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "both plugin manifests report 2.96.0",
+            "artifact": ".claude-plugin/plugin.json"
+          },
+          {
+            "requirement": "tag v2.96.0 exists locally and on the remote",
+            "artifact": ".claude-plugin/plugin.json"
+          },
+          {
+            "requirement": "the GitHub release for v2.96.0 carries the binaries and SHA256SUMS",
+            "artifact": ".claude-plugin/plugin.json"
+          },
+          {
+            "requirement": "the script printed its final OK line",
+            "artifact": ".claude-plugin/plugin.json"
+          },
+          {
+            "requirement": "version 2.96.0",
+            "artifact": ".claude-plugin/plugin.json"
+          },
+          {
+            "requirement": "version 2.96.0",
+            "artifact": ".codex-plugin/plugin.json"
+          },
+          {
+            "requirement": "the pushed tag is what triggers release-binaries.yml",
+            "artifact": ".claude-plugin/plugin.json"
+          }
+        ],
+        "recorded_at": "2026-11-13T09:43:21.503Z",
+        "recorded_by": "b39d6126-50db-4f5e-8fdb-7ac15a337530"
+      }
+    ]
+  },
+  "usage": null,
+  "usage_reason": "no herding job names this cell: no session is attributable to it"
+}
