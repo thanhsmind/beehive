@@ -3076,6 +3076,13 @@
       "packagePath": "packages/bee/design/bee-design/additions/frame-review.md"
     },
     {
+      "path": "packages/bee/design/bee-design/additions/refactoring-ui-craft.md",
+      "sha256": "80f078acbf881274f77936a239bf9bb533e5c1ff85d5048abc2321ca53acf9e2",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design/additions/refactoring-ui-craft.md"
+    },
+    {
       "path": "packages/bee/design/bee-design/additions/wcag-2-2.md",
       "sha256": "e4662f71fa848d236eb65d2fbdc6aa413555a28033a6510dc656d363e3cc7751",
       "mode": "644",
@@ -3266,7 +3273,7 @@
     },
     {
       "path": "packages/bee/design/bee-design/SKILL.md",
-      "sha256": "c7d91b6558d3dad4abc17a83f4d5e494d604511459b53e20f4c0839deb6ea41a",
+      "sha256": "1ac7dc3995a9bf65f1262b9e8d7ba4605767fc9944c8a0ba9c1ab1be585cedd2",
       "mode": "644",
       "role": "package_payload",
       "packagePath": "packages/bee/design/bee-design/SKILL.md"
