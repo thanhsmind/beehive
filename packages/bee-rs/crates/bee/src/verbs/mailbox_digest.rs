@@ -1062,6 +1062,7 @@ mod tests {
                 departure: None,
                 better: None,
                 fix_at: None,
+                source: None,
             }],
             needs_you: Vec::new(),
             body: format!(
@@ -1087,6 +1088,19 @@ mod tests {
     }
 
     // ── happy ───────────────────────────────────────────────────────────
+
+    #[test]
+    fn reflect_source_does_not_change_the_lesson_key() {
+        let mut user = Entry::reflection("2026-08-25T02:00:00.000Z", "Guessed a path twice today", "Read it", "check");
+        let mine = user.clone();
+        user.source = Some("user".to_string());
+        let key = |e: &Entry| {
+            let item = e.to_item();
+            reflection_key(item.fix_at.as_deref(), &item.what)
+        };
+        assert!(key(&user).is_some());
+        assert_eq!(key(&user), key(&mine));
+    }
 
     #[test]
     fn a_finished_day_with_two_letters_gets_one_digest_folding_both() {
@@ -1338,6 +1352,7 @@ mod tests {
                 departure,
                 better: None,
                 fix_at: None,
+                source: None,
             }],
             needs_you: Vec::new(),
             body,

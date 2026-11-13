@@ -3549,6 +3549,7 @@ fn record_feature_close_in_mailbox(root: &Path, feature: &str, usage_line: Optio
         // or mistake-fix-at's layer.
         better: None,
         fix_at: None,
+        source: None,
     };
     mailbox::record_close_stop(
         &control,

@@ -487,6 +487,7 @@ mod tests {
             needs_you: vec![],
             better: None,
             fix_at: None,
+            source: None,
         }
     }
 

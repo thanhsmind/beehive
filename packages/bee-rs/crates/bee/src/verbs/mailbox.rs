@@ -545,11 +545,12 @@ pub(crate) struct LetterItem {
     /// `none` — the vocabulary's own word for "no layer worth naming" — so
     /// nothing is backfilled and no consumer of the older item shape breaks.
     pub fix_at: Option<String>,
+    pub source: Option<String>,
 }
 
 impl LetterItem {
     fn to_value(&self) -> Value {
-        json!({
+        let mut value = json!({
             "what": self.what,
             "files": self.files,
             "commit": self.commit,
@@ -557,7 +558,11 @@ impl LetterItem {
             "departure": self.departure.as_ref().map(Departure::to_value),
             "better": self.better,
             "fix_at": self.fix_at,
-        })
+        });
+        if let Some(source) = &self.source {
+            value["source"] = json!(source);
+        }
+        value
     }
 
     fn from_value(v: &Value) -> Option<Self> {
@@ -572,6 +577,7 @@ impl LetterItem {
             // is a `None`, never a parse failure.
             better: opt_string(m, "better"),
             fix_at: opt_string(m, "fix_at"),
+            source: opt_string(m, "source"),
         })
     }
 }
@@ -626,6 +632,8 @@ pub(crate) const KIND_REFLECTION: &str = "reflection";
 /// `bee close` has to be able to ask "is this one mechanizable?" of a stored
 /// word rather than of a sentence.
 pub(crate) const FIX_AT_VALUES: [&str; 4] = ["architecture", "check", "doctrine", "none"];
+
+pub(crate) const SOURCE_VALUES: [&str; 3] = ["self", "user", "review"];
 
 /// reflection-becomes-lesson D2's kind: the run was ASKED whether anything
 /// went wrong and answered "nothing" — out loud, on the record.
@@ -685,11 +693,12 @@ pub(crate) struct Entry {
     /// same D8 reason `better` mirrors its own: the letter may print no fact
     /// the entry cannot hold.
     pub fix_at: Option<String>,
+    pub source: Option<String>,
 }
 
 impl Entry {
     pub(crate) fn to_value(&self) -> Value {
-        json!({
+        let mut value = json!({
             "at": self.at,
             "kind": self.kind,
             "what": self.what,
@@ -700,7 +709,11 @@ impl Entry {
             "needs_you": self.needs_you.iter().map(NeedsYou::to_value).collect::<Vec<_>>(),
             "better": self.better,
             "fix_at": self.fix_at,
-        })
+        });
+        if let Some(source) = &self.source {
+            value["source"] = json!(source);
+        }
+        value
     }
 
     /// letter-reflection D3's two parts, as ONE stored entry — the shape the
@@ -725,6 +738,7 @@ impl Entry {
             needs_you: Vec::new(),
             better: Some(one_line(better)),
             fix_at: Some(fix_at.trim().to_string()),
+            source: None,
         }
     }
 
@@ -752,6 +766,7 @@ impl Entry {
             // one. D1's vocabulary answers a mistake; this entry answers the
             // question instead of being one.
             fix_at: None,
+            source: None,
         }
     }
 
@@ -781,6 +796,7 @@ impl Entry {
             // backfilling them: a `None` here IS the answer `none`, read that
             // way by close and by the lesson miner.
             fix_at: opt_string(m, "fix_at"),
+            source: opt_string(m, "source"),
         })
     }
 
@@ -823,6 +839,7 @@ impl Entry {
             departure: self.departure.clone(),
             better: self.better.clone(),
             fix_at: self.fix_at.clone(),
+            source: self.source.clone(),
         }
     }
 }
@@ -879,6 +896,17 @@ pub(crate) fn read_reflection<'a>(
         ));
     }
     Ok((wrong.unwrap_or("").trim(), better.unwrap_or("").trim(), layer))
+}
+
+pub(crate) fn read_source(flag: Option<&str>) -> Result<Option<String>, String> {
+    match flag {
+        None | Some("self") => Ok(None),
+        Some(s) if SOURCE_VALUES.contains(&s) => Ok(Some(s.to_string())),
+        Some(s) => Err(format!(
+            "\"{s}\" is not a source — remedy: --source is one of {}, or leave it off for self.",
+            SOURCE_VALUES.join(", ")
+        )),
+    }
 }
 
 /// The SEPARATOR between a mistake's two parts, on the one-line spelling.
@@ -1451,6 +1479,9 @@ pub(crate) fn render_letter(letter: &Letter) -> String {
             // mistake-fix-at, on the same additive terms: it emits after
             // `better` and as `null` when there is nothing.
             emit_opt(&mut out, 4, "fix_at", item.fix_at.as_deref());
+            if let Some(source) = &item.source {
+                emit_scalar(&mut out, 4, "source", source);
+            }
         }
     }
 
@@ -1966,12 +1997,18 @@ pub(crate) fn compose_body(entries: &[Entry]) -> String {
             // Its OWN section, and never Done — a mistake is not a thing the
             // run did (letter-reflection D1). The two stored parts are joined
             // by the one connective; nothing else is added.
-            reflection.push(bullet(&match entry.better.as_deref().map(one_line) {
+            let line = match entry.better.as_deref().map(one_line) {
                 Some(better) if !better.is_empty() => {
                     format!("{} — better: {better}", one_line(&entry.what))
                 }
                 _ => one_line(&entry.what),
-            }));
+            };
+            let line = match entry.source.as_deref() {
+                Some("user") => format!("{line} — your correction"),
+                Some("review") => format!("{line} — from a review"),
+                _ => line,
+            };
+            reflection.push(bullet(&line));
         } else {
             done.push(bullet(&entry.what));
         }
@@ -2880,7 +2917,7 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
             // belongs to a single verb.
             let (rest, no_mistakes) = lift_bare_flag(rest, "no-mistakes");
             run_reflect(
-                parse_shape(&rest, &["wrong", "better", "fix-at", "session-id"])?,
+                parse_shape(&rest, &["wrong", "better", "fix-at", "source", "session-id"])?,
                 no_mistakes,
                 t0,
             )
@@ -2985,6 +3022,12 @@ fn run_mark(parsed: ParsedArgs, t0: Instant) -> Option<ExitCode> {
 //     door and never defaulted: a layer nobody named is the empty field D1
 //     exists to end.
 
+fn no_mistakes_clash(parsed: &ParsedArgs) -> bool {
+    mark_flag(parsed, "wrong").is_some()
+        || mark_flag(parsed, "better").is_some()
+        || parsed.flags.contains_key("source")
+}
+
 fn run_reflect(parsed: ParsedArgs, no_mistakes: bool, t0: Instant) -> Option<ExitCode> {
     let cmd = "mailbox reflect";
     let Ok(cwd) = std::env::current_dir() else { return None };
@@ -3002,9 +3045,9 @@ fn run_reflect(parsed: ParsedArgs, no_mistakes: bool, t0: Instant) -> Option<Exi
     // was none says nothing, and guessing which half was meant would store a
     // fact nobody wrote.
     if no_mistakes {
-        if mark_flag(&parsed, "wrong").is_some() || mark_flag(&parsed, "better").is_some() {
+        if no_mistakes_clash(&parsed) {
             let msg = format!(
-                "bee {cmd}: --no-mistakes states that this run hit none, so it cannot be passed with --wrong or --better — remedy: drop --no-mistakes to write the mistake down, or drop the two parts to state the clean run."
+                "bee {cmd}: --no-mistakes states that this run hit none, so it cannot be passed with --wrong, --better or --source — remedy: drop --no-mistakes to write the mistake down, or drop the other parts to state the clean run."
             );
             return Some(emit_error(&root, cmd, parsed.json, &msg, t0));
         }
@@ -3037,12 +3080,21 @@ fn run_reflect(parsed: ParsedArgs, no_mistakes: bool, t0: Instant) -> Option<Exi
         }
     };
 
+    let source = match read_source(parsed.flags.get("source").map(|s| js_trim(s))) {
+        Ok(source) => source,
+        Err(why) => {
+            let msg = format!("bee {cmd}: {why}");
+            return Some(emit_error(&root, cmd, parsed.json, &msg, t0));
+        }
+    };
+
     let session = crate::verbs::cells::resolve_session_flag_env(mark_flag(&parsed, "session-id"));
     let run = run_id(session.as_deref());
-    let entry = Entry::reflection(&now_iso(), wrong, better, fix_at);
+    let mut entry = Entry::reflection(&now_iso(), wrong, better, fix_at);
+    entry.source = source;
     record_stop(&root, &run, &entry);
 
-    let result = json!({
+    let mut result = json!({
         "run": run,
         "kind": KIND_REFLECTION,
         "at": entry.at,
@@ -3050,6 +3102,9 @@ fn run_reflect(parsed: ParsedArgs, no_mistakes: bool, t0: Instant) -> Option<Exi
         "better": entry.better,
         "fix_at": entry.fix_at,
     });
+    if let Some(source) = &entry.source {
+        result["source"] = json!(source);
+    }
     let text = format!("Wrote down one mistake for run {run}. It goes in that run's letter.");
     Some(emit_success(&root, cmd, parsed.json, &drift, &result, &text, t0))
 }
@@ -3081,6 +3136,7 @@ mod tests {
                     }),
                     better: None,
                     fix_at: None,
+                    source: None,
                 },
                 LetterItem {
                     what: "Followed the plan exactly".to_string(),
@@ -3090,6 +3146,7 @@ mod tests {
                     departure: None,
                     better: None,
                     fix_at: None,
+                    source: None,
                 },
             ],
             needs_you: vec![NeedsYou {
@@ -3114,6 +3171,7 @@ mod tests {
             needs_you: vec![],
             better: None,
             fix_at: None,
+            source: None,
         }
     }
 
@@ -4489,6 +4547,59 @@ mod tests {
         assert!(old_letter.items.iter().all(|i| i.fix_at.is_none()), "a missing key reads as None");
     }
 
+    fn reflect_source_entry(source: &str) -> Entry {
+        let mut entry = sample_reflection("2026-08-25T02:00:00.000Z", "Guessed a path", "Read it first");
+        entry.source = read_source(Some(source)).unwrap();
+        entry
+    }
+
+    #[test]
+    fn reflect_source_default_stores_no_key_and_the_letter_item_has_none() {
+        let entry = sample_reflection("2026-08-25T02:00:00.000Z", "Guessed a path", "Read it first");
+        assert!(entry.to_value().get("source").is_none());
+        assert!(entry.to_item().to_value().get("source").is_none());
+        let explicit = reflect_source_entry("self");
+        assert_eq!(explicit, entry);
+        let letter =
+            compose_letter("beehive", "run-one", "2026-08-25T06:00:00.000Z", &[entry]).unwrap();
+        assert!(!render_letter(&letter).contains("source"));
+    }
+
+    #[test]
+    fn reflect_source_user_and_review_are_stored_and_rendered_with_their_phrase() {
+        for (word, phrase) in [("user", "your correction"), ("review", "from a review")] {
+            let entry = reflect_source_entry(word);
+            assert_eq!(entry.to_value()["source"], word);
+            assert_eq!(entry.to_item().to_value()["source"], word);
+            assert_eq!(Entry::from_value(&entry.to_value()).unwrap().source.as_deref(), Some(word));
+            let body = compose_body(std::slice::from_ref(&entry));
+            assert!(body.contains(phrase), "{body}");
+            let letter =
+                compose_letter("beehive", "run-one", "2026-08-25T06:00:00.000Z", &[entry]).unwrap();
+            assert!(render_letter(&letter).contains(&format!("source: \"{word}\"")));
+        }
+    }
+
+    #[test]
+    fn reflect_source_off_set_and_empty_values_are_refused_naming_the_three() {
+        for bad in ["", "User", "reviewer", " user", "me"] {
+            let why = read_source(Some(bad)).unwrap_err();
+            assert!(why.contains("self, user, review"), "{why}");
+        }
+    }
+
+    #[test]
+    fn reflect_source_with_no_mistakes_is_refused_like_wrong() {
+        let parse = |v: &[&str]| {
+            let toks: Vec<OsString> = v.iter().map(OsString::from).collect();
+            parse_shape(&toks, &["wrong", "better", "fix-at", "source", "session-id"]).unwrap()
+        };
+        assert!(no_mistakes_clash(&parse(&["--source", "user"])));
+        assert!(no_mistakes_clash(&parse(&["--source", ""])));
+        assert!(no_mistakes_clash(&parse(&["--wrong", "a"])));
+        assert!(!no_mistakes_clash(&parse(&["--session-id", "run-7"])));
+    }
+
     /// TRUTH: `bee mailbox reflect` builds its entry through the store's own
     /// constructor, so what the verb appends and what the section renders can
     /// never be two different shapes.
@@ -5082,6 +5193,7 @@ nested:
             needs_you: vec![],
             better: None,
             fix_at: None,
+            source: None,
         }
     }
 
