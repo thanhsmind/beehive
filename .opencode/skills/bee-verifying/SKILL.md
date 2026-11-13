@@ -151,7 +151,7 @@ generated skill, not a suggestion:
 - **Full drive** — every feature in the map, top to bottom. Its literal entry
   point is `drive --full`, beside `drive --fast`.
 
-Both entry points keep one exit-code contract (CONTEXT.md D4 and D7). A drive
+Both entry points keep one exit-code contract. A drive
 prints one `ok` or `FAIL` line per mapped feature. It exits 0 when every feature
 passes, 1 when any feature fails, and 2 when the entry point is unknown. A
 project deploy script reads that exit code before anything goes live, so a

@@ -130,7 +130,7 @@ Report the three paths. Do not commit them unless the user asks.
   agent's.
 - `--skip-product-drive` on the script is the user's choice for one run,
   never the agent's, the same as `--yes`. It covers only a missing verify
-  skill and never overrides a red drive (CONTEXT.md D2 and D7).
+  skill and never overrides a red drive.
 - Never read, print or copy a secret value. Names only.
 - Never deploy a dirty working tree or an unpushed commit unless the
   user says so for that run.
