@@ -38,8 +38,9 @@ Pick one, and say which:
 Only edit the verification skill's own **source** directory — its SKILL.md,
 `features/`, and any harness scripts it owns — under `.bee/verify/verify-app/`.
 The copies under `.claude/skills/`, `.agents/skills/` and `.opencode/skills/`
-are bee's render output: never hand-edit them, and run `bee onboard --apply`
-after the source changes so every runtime sees the fix.
+are bee's render output: never hand-edit them, and run
+`bee onboard --verify-only --apply` (it needs no bee checkout) after the source
+changes so every runtime sees the fix.
 
 Never edit product code during a run: a behavior the map describes that the app
 no longer does is either doc drift (fix the map) or a product regression (report
@@ -106,8 +107,8 @@ call, not yours.
 
 6. **Ship or stop.** For changed: one worktree and one cell of proven
    corrections, proven by the re-driven features' `green:live` lines. Re-read
-   every changed file first, re-render with `bee onboard --apply` so the runtime
-   copies ship in the same change, and land it with `bee worktree merge`. For
+   every changed file first, re-render with `bee onboard --verify-only --apply` (no bee checkout needed) so
+   the runtime copies ship in the same change, and land it with `bee worktree merge`. For
    clean or blocked: no worktree, report the outcome and the coverage honestly.
 
 Keep concise run notes (features covered, unreachable prerequisites, confirmed

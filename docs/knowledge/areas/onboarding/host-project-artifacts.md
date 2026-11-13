@@ -290,6 +290,22 @@ not thereby agreed that every future commit should become slower.
   that goes red when a prune arm is injected. Provenance: cells `vsh-1`..`vsh-4`,
   commits 55b9c9ea, 4721ad4c, 25370f52, 228be6ff, eb228cf0.
 
+- Engine-free verify render: `bee onboard --verify-only [--apply]` serves a host
+  with no bee checkout, because the verify path reads only `<repo>/.bee/verify`
+  and `REPO_SKILL_TARGETS`. It branches in `try_native` before `Engine::locate`
+  (`run_verify_only`, `onboard/mod.rs`) and reuses `apply_copy_verify_skill`
+  through `apply_verify_only` (`onboard/apply.rs`), which rewrites only
+  `managed.verify_skills` and leaves every other `.bee/onboarding.json` key,
+  `updated_at` included, as found. Absent `.bee/onboarding.json` refuses with
+  kind `not_onboarded`. Rejected: running the full apply with a stub engine,
+  which would write bee-* skills, the AGENTS block and `.bee/bin` from nothing.
+  The `engine_not_found` refusal names this command when `.bee/verify/` holds a
+  skill directory. The registry flag entry is hand-edited in
+  `generated/registry_payload.json` (no generator exists) and the distinct-flag
+  pin in `catalog.rs` moved to 246 for `verify-only`. Key test:
+  `verify_only_apply_renders_every_runtime_home_with_no_engine_visible`.
+  Provenance: cell `vrs-1`.
+
 - Skillstation hub publish: constant `HUB_SKILLS` and the `publish_skillstation`
   plan item in `packages/bee-rs/crates/bee/src/onboard/plan.rs`; the
   `publish_skillstation` arm of `onboard/apply.rs` runs the commit, activate and
