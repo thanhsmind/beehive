@@ -9,12 +9,12 @@ bee:
   areas: [verify-pipeline]
   required_context: []
   decisions: [contention-split D1-D6 (decision 1ce777d9), "verify-scoping D1/D2 (decisions e39d3f89, 20534ea9)", 412e9b3a (commands.test is the one declared test path), "full-suite-once D1/D2 (decisions dc19f610, 82a5bff7)"]
-  sources: [docs/history/test-economy/CONTEXT.md, "docs/specs/verify-pipeline.md#R1", "docs/specs/verify-pipeline.md#R2", docs/history/full-suite-once/plan.md]
+  sources: [docs/history/release-smoke/CONTEXT.md, docs/history/test-economy/CONTEXT.md, "docs/specs/verify-pipeline.md#R1", "docs/specs/verify-pipeline.md#R2", docs/history/full-suite-once/plan.md]
   authoritative_for: "verify-pipeline: purpose, test execution, and proof discipline"
   owns.code: [packages/bee-rs/crates/bee/src/verbs/test_runner.rs]
   owns.skills: []
   owns.tests: [packages/bee-rs/crates/bee/tests/proof_gate.rs, packages/bee-rs/crates/bee/tests/concurrency.rs]
-  anchors: [packages/bee/LEADER.md, packages/bee-rs/crates/bee/src/verbs/test_runner.rs, packages/bee-rs/crates/bee/src/verbs/cells/validate.rs, packages/bee-rs/crates/bee/tests/full_suite_verify.rs, packages/bee-rs/crates/bee/tests/proof_gate.rs, packages/bee-rs/crates/bee/tests/concurrency.rs]
+  anchors: [.bee/verify/verify-app/control-bee, scripts/release.sh, packages/bee/LEADER.md, packages/bee-rs/crates/bee/src/verbs/test_runner.rs, packages/bee-rs/crates/bee/src/verbs/cells/validate.rs, packages/bee-rs/crates/bee/tests/full_suite_verify.rs, packages/bee-rs/crates/bee/tests/proof_gate.rs, packages/bee-rs/crates/bee/tests/concurrency.rs]
   verified_at: 2026-11-07
   verified_commit: 1f3dccd95e6ae4a66ff339a5fe63d93e5825799d
 ---
@@ -61,11 +61,13 @@ lifecycle.
 - Proof lines must name fresh command output and valid scope justifications.
 - A test that drives a POSIX shell script, a Unix symlink or `PermissionsExt` carries `#[cfg(unix)]`, so the Windows lane still compiles (windows-test-build D1). `cargo check --tests --target x86_64-pc-windows-gnu` reproduces the Windows build break on Linux. When a build-red Windows lane compiles again, the test failures it was hiding go to the backlog, not into the build fix (windows-test-build D2).
 - The `verify-app` feature map drifts as bee changes, and `bee-verify-upkeep` keeps it true. Nothing in close, merge or release starts the upkeep yet; it ran by hand on 2026-09-02 and 2026-11-12. The 2026-11-12 pass edits only the `.bee/verify/verify-app/` source and re-renders it with `bee onboard --apply` (verify-map-upkeep-2 D1). It files product defects to the backlog, never into the map change (verify-map-upkeep-2 D2). It ships only corrections proven live or cited from source (verify-map-upkeep-2 D3). Runnable gate fixtures live in `.bee/verify/verify-app/fixtures/`.
+- The release runs a live smoke of the built binary after the test suite and before the release commit (release-smoke D1). It is the `smoke` subcommand of the verify driver: a private run id that never moves `current-run`, the driver's own build, launch and doctor, then a fixed list of first-contact commands; the first failure keeps the sandbox and exits non-zero, a clean run removes the sandbox and keeps the evidence (release-smoke D2). `scripts/release.sh` stops with nothing committed, tagged or pushed on a red smoke, and `--no-test` skips it with one log line; the confirm checklist is unchanged and the idempotent re-run of a committed version does not run it (release-smoke D3). Rejected: a rule for the agent to run verify at release, because a step the script runs cannot be forgotten.
 
 ## Pointers (implementation)
 
 - Test runner invocation: `packages/bee-rs/crates/bee/src/verbs/test_runner.rs`.
 - Cell plan check: `full_suite_verify_problem` in `packages/bee-rs/crates/bee/src/verbs/cells/validate.rs`; tests in `packages/bee-rs/crates/bee/tests/full_suite_verify.rs`.
+- Release smoke: `cmd_smoke` in `.bee/verify/verify-app/control-bee`, called from the test gate block of `scripts/release.sh`.
 - Proof gate tests: `packages/bee-rs/crates/bee/tests/proof_gate.rs`.
 - Concurrency tests: `packages/bee-rs/crates/bee/tests/concurrency.rs`.
 

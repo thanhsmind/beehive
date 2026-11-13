@@ -19,8 +19,9 @@
 #   3. `bee dev regen` — render-skill-trees, onboard --apply,
 #      release-manifest --write; called, never reimplemented here
 #   4. TEST GATE: the declared suite, read from .bee/config.json
-#      `commands.test`, runs BEFORE anything is tagged. Tagging first is how a
-#      red build becomes a published tag, and a published tag never moves.
+#      `commands.test`, then the live smoke of the built binary, run BEFORE
+#      anything is tagged. Tagging first is how a red build becomes a
+#      published tag, and a published tag never moves.
 #   5. the release commit, path-scoped to the files this script itself wrote
 #   6. tag vX.Y.Z at HEAD (idempotent if the tag already points there)
 #   7. push main and the tag
@@ -291,8 +292,12 @@ elif [ -n "$ARG_VERSION" ]; then
     log "test     $TEST_CMD"
     bash -c "$TEST_CMD" >&2 \
       || fail "the declared test suite went RED — nothing tagged, nothing pushed; a published tag is the one thing a release can never take back"
+    log "smoke    bash .bee/verify/verify-app/control-bee smoke"
+    bash .bee/verify/verify-app/control-bee smoke >&2 \
+      || fail "the live smoke went RED — nothing tagged, nothing pushed; the evidence folder is named above"
   else
     log "test     skipped per release checklist (--no-test)"
+    log "smoke    skipped with the tests (--no-test)"
   fi
 
   # ----- the release commit, path-scoped -----

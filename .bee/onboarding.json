@@ -59,8 +59,8 @@
     },
     "verify_skills": {
       ".claude/skills/verify-app": {
-        "SKILL.md": "9f2c9361b0cf696e4fdc458f6342546ffa4598fb5f996511a28eae75b8dd9097",
-        "control-bee": "6e7fad6be0c0aa5f2341dc94880b5f0b60ba1316af4933dd1878aa66ec9eabc6",
+        "SKILL.md": "5a1a9e0cf9938fad3feaf806d0770b1c731a77bf157789105f551ac1600c2e90",
+        "control-bee": "93633ccfcecf946f26787bbd369350a18adcce61626ffba1b088871fc97500df",
         "features/README.md": "5a406fcc1f26d35cace271d33fb0f0e69905f1fb64ba10bfbeda25622ebae8a3",
         "features/cells-and-proof.md": "28719684a09d9ac3a2e781216321fbde72ce14cffd6bde79ff1027f4fecbb676",
         "features/codex-runtime.md": "4a4017bbf15806b661c8d5e97d9852e4f67614de524267508cb5a7c8402356b5",
@@ -80,8 +80,8 @@
         "fixtures/role-plan-v2.md": "05f99d5afeaad84a43de714a90ab388ba7073ff93e83a783764faba4d0c49965"
       },
       ".agents/skills/verify-app": {
-        "SKILL.md": "9f2c9361b0cf696e4fdc458f6342546ffa4598fb5f996511a28eae75b8dd9097",
-        "control-bee": "6e7fad6be0c0aa5f2341dc94880b5f0b60ba1316af4933dd1878aa66ec9eabc6",
+        "SKILL.md": "5a1a9e0cf9938fad3feaf806d0770b1c731a77bf157789105f551ac1600c2e90",
+        "control-bee": "93633ccfcecf946f26787bbd369350a18adcce61626ffba1b088871fc97500df",
         "features/README.md": "5a406fcc1f26d35cace271d33fb0f0e69905f1fb64ba10bfbeda25622ebae8a3",
         "features/cells-and-proof.md": "28719684a09d9ac3a2e781216321fbde72ce14cffd6bde79ff1027f4fecbb676",
         "features/codex-runtime.md": "4a4017bbf15806b661c8d5e97d9852e4f67614de524267508cb5a7c8402356b5",
@@ -101,8 +101,8 @@
         "fixtures/role-plan-v2.md": "05f99d5afeaad84a43de714a90ab388ba7073ff93e83a783764faba4d0c49965"
       },
       ".opencode/skills/verify-app": {
-        "SKILL.md": "9f2c9361b0cf696e4fdc458f6342546ffa4598fb5f996511a28eae75b8dd9097",
-        "control-bee": "6e7fad6be0c0aa5f2341dc94880b5f0b60ba1316af4933dd1878aa66ec9eabc6",
+        "SKILL.md": "5a1a9e0cf9938fad3feaf806d0770b1c731a77bf157789105f551ac1600c2e90",
+        "control-bee": "93633ccfcecf946f26787bbd369350a18adcce61626ffba1b088871fc97500df",
         "features/README.md": "5a406fcc1f26d35cace271d33fb0f0e69905f1fb64ba10bfbeda25622ebae8a3",
         "features/cells-and-proof.md": "28719684a09d9ac3a2e781216321fbde72ce14cffd6bde79ff1027f4fecbb676",
         "features/codex-runtime.md": "4a4017bbf15806b661c8d5e97d9852e4f67614de524267508cb5a7c8402356b5",
@@ -164,5 +164,5 @@
   },
   "design_role_offered": true,
   "created_at": "2026-07-24T03:53:44.750Z",
-  "updated_at": "2026-11-13T07:49:15.957Z"
+  "updated_at": "2026-11-13T08:12:48.524Z"
 }

@@ -195,6 +195,24 @@ confirm it is still there before reporting a proof.
 Run cleanup after a failed attempt too, so a broken run leaves no stray sandbox
 or registered worktree behind.
 
+## Smoke
+
+```bash
+bash .bee/verify/verify-app/control-bee smoke
+```
+
+One command, no sandbox to manage: it builds the release binary, launches an
+onboarded sandbox on a run id of its own (`smoke-<time>-<pid>`), runs the doctor,
+then checks that the binary's version equals `.claude-plugin/plugin.json`,
+`status --json`, `orient` and `--help --json` exit 0 (the JSON ones parse), a
+decision written with `decisions log` is found by `decisions search`, and a
+second `onboard` reports `up_to_date`. Each step prints one `ok` or `FAIL` line.
+It never touches `$VERIFY_HOME/current-run`, so a verify run in flight keeps its
+sandbox. The first failure prints the step, the evidence folder and the kept
+sandbox, and exits 1; a clean run removes the sandbox, keeps the evidence and
+exits 0. `scripts/release.sh` runs it after the test suite and before the
+release commit; a red smoke stops the release.
+
 ## Gotchas
 
 - **bee's own write guard fights inline shell.** This repo's `PreToolUse` hook
@@ -235,7 +253,7 @@ bash .bee/verify/verify-app/control-bee --help
 ```
 
 Subcommands: `build`, `bin`, `paths`, `launch`, `doctor`, `cli`, `sh`, `put`,
-`newrepo`, `host`, `snapshot`, `cleanup`.
+`newrepo`, `host`, `snapshot`, `cleanup`, `smoke`.
 
 ## Keeping this honest
 
