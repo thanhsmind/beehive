@@ -11,10 +11,15 @@
     "uat": false
   },
   "summary": "Feature \"trust-layers\" started at phase \"exploring\" (lane).",
-  "next_action": "Invoke bee-swarming.",
+  "next_action": "Merged into main at b10ac96; reload the product and test \"trust-layers\", then either approve uat (\"bee gate --name uat --approved true --lane trust-layers\") or fix it in the worktree and merge again.",
   "created_at": "2026-11-13T06:58:25.918Z",
   "run_state": "awaiting-approval",
-  "waiting_on": null,
+  "waiting_on": {
+    "kind": "gate",
+    "subject": "uat: trust-layers",
+    "asked_at": "2026-11-13T07:51:41.672Z",
+    "session": "bee-worktree-merge-sessionless"
+  },
   "route": {
     "class": "feature",
     "lane": "standard",
@@ -1013,14 +1018,5 @@
         }
       ]
     }
-  },
-  "merge_ready": {
-    "since": "2026-11-13T07:45:49.688Z",
-    "branch": "wt/trust-layers",
-    "worktree_id": "beehive--wt--trust-layers",
-    "uat": "pending",
-    "blocked_by": [
-      "scribing-debt"
-    ]
   }
 }
