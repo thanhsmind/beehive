@@ -1,0 +1,34 @@
+{
+  "schema_version": "1.0",
+  "feature": "verify-render-standalone",
+  "mode": null,
+  "phase": "exploring",
+  "approved_gates": {
+    "context": false,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"verify-render-standalone\" started at phase \"exploring\" (lane).",
+  "next_action": "Continue bee-exploring for \"verify-render-standalone\" (lane).",
+  "created_at": "2026-11-13T06:42:20.786Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null,
+  "route": {
+    "class": "bugfix",
+    "lane": "small",
+    "flags": [],
+    "product_files": 4,
+    "rationale": null,
+    "updated_at": "2026-11-13T06:42:17.453Z",
+    "feature": "verify-render-standalone"
+  },
+  "merge_ready": {
+    "since": "2026-11-13T06:58:33.259Z",
+    "branch": "wt/verify-render-standalone",
+    "worktree_id": "beehive--wt--verify-render-standalone",
+    "uat": "pending",
+    "blocked_by": []
+  }
+}
