@@ -28,7 +28,9 @@ Optimize for wall-clock speed. Finish tasks quickly.
 When the user asks for a release, run `scripts/release.sh <VERSION>`.
 That is the whole release: it bumps both plugin manifests, runs
 `bee dev regen`, runs the declared test suite BEFORE anything is
-tagged, makes the release commit, then tags, pushes, waits for
+tagged, runs the live smoke of the built binary
+(`bash .bee/verify/verify-app/control-bee smoke`) between the suite and
+the tag, makes the release commit, then tags, pushes, waits for
 release-binaries and verifies the published assets. Never walk those
 steps by hand — the script exists because a hand-walked checklist is a
 step that gets skipped.

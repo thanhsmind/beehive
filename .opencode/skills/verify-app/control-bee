@@ -24,10 +24,10 @@
 #   control-bee sh -- <cmd...>        run any command inside the sandbox
 #   control-bee put <rel-path>        write stdin to a file inside the sandbox
 #   control-bee newrepo <name>        create a second, NOT-onboarded target repo
-#   control-bee host -- <cmd...>      run a command with cwd = the real checkout
-#                                     (must name a --repo-root under VERIFY_HOME)
+#   control-bee host -- <cmd...>      run with cwd = the real checkout (--repo-root under VERIFY_HOME)
 #   control-bee snapshot <label>      copy sandbox .bee state into evidence
 #   control-bee cleanup               remove the sandbox; KEEP the evidence
+#   control-bee smoke                 one-shot live check on a private run id
 #
 # Environment:
 #   VERIFY_HOME   root for runs and evidence (default ${XDG_STATE_HOME:-$HOME/.local/state}/bee-verify)
@@ -132,7 +132,7 @@ cmd_launch() {
 
   local id; id="${VERIFY_RUN:-$(date +%Y%m%d-%H%M%S)-$$}"
   mkdir -p "$VERIFY_HOME"
-  printf '%s' "$id" > "$RUN_POINTER"
+  [ -n "${SMOKE_RUN:-}" ] || printf '%s' "$id" > "$RUN_POINTER"
   VERIFY_RUN="$id"; export VERIFY_RUN
   unset VERIFY_CWD          # launch always builds the main sandbox checkout
 
@@ -356,6 +356,80 @@ cmd_cleanup() {
   printf 'evidence kept at %s\n' "$ev"
 }
 
+smoke_last() {
+  local f; f="$(find "$(evidence_dir)" -maxdepth 1 -name '[0-9][0-9][0-9]-*.exit' | sort | tail -1)"
+  printf '%s' "${f%.exit}"
+}
+
+smoke_drive() {
+  "$@" > /dev/null 2>&1
+  SMOKE_STEM="$(smoke_last)"
+  [ -n "$SMOKE_STEM" ] || { echo "no evidence recorded"; return 1; }
+  [ "$(cat "$SMOKE_STEM.exit")" = 0 ] || { echo "exit $(cat "$SMOKE_STEM.exit"), see $SMOKE_STEM.err"; return 1; }
+}
+
+smoke_parses() {
+  python3 -c 'import json,sys; json.load(open(sys.argv[1]))' "$SMOKE_STEM.out"
+}
+
+smoke_step_version() {
+  local got
+  smoke_drive cmd_cli -- version --json
+  got="$(json_get "$SMOKE_STEM.out" version)"
+  [ "$got" = "$(release_version)" ] || { echo "binary reports $got, manifest says $(release_version)"; return 1; }
+}
+
+smoke_step_status() { smoke_drive cmd_cli -- status --json && smoke_parses; }
+
+smoke_step_orient() { smoke_drive cmd_cli -- orient --json; }
+
+smoke_step_help() { smoke_drive cmd_cli -- --help --json && smoke_parses; }
+
+smoke_step_decision() {
+  smoke_drive cmd_cli -- decisions log --decision "smokeprobe the release smoke wrote this decision" \
+    --rationale "proves the decisions store round-trips" --relation none --tags smoke --json
+  smoke_drive cmd_cli -- decisions search --text smokeprobe --json
+  grep -q 'smokeprobe' "$SMOKE_STEM.out" || { echo "search did not find the decision"; return 1; }
+}
+
+smoke_step_reonboard() {
+  local got
+  smoke_drive cmd_host -- "$(bee_bin)" onboard --repo-root "$(sandbox_dir)" --json
+  got="$(json_get "$SMOKE_STEM.out" status)"
+  [ "$got" = "up_to_date" ] || { echo "second onboard reported $got"; return 1; }
+}
+
+smoke_step() {
+  local name="$1"; shift
+  if ( "$@" ) >> "$(evidence_dir)/smoke.log" 2>&1; then
+    SMOKE_STEPS=$((SMOKE_STEPS + 1))
+    ok "$name"
+  else
+    printf '  FAIL  %s  (evidence %s, sandbox kept at %s)\n' "$name" "$(evidence_dir)" "$(run_dir)"
+    exit 1
+  fi
+}
+
+cmd_smoke() {
+  SMOKE_RUN=1; export SMOKE_RUN
+  VERIFY_RUN="smoke-$(date +%Y%m%d-%H%M%S)-$$"; export VERIFY_RUN
+  unset VERIFY_CWD
+  SMOKE_STEPS=0
+  mkdir -p "$(evidence_dir)" 2> /dev/null || { printf '  FAIL  prepare the evidence folder %s\n' "$(evidence_dir)"; exit 1; }
+  printf 'smoke: run %s\n' "$VERIFY_RUN"
+  smoke_step "build the release binary" cmd_build
+  smoke_step "launch an onboarded sandbox" cmd_launch
+  smoke_step "doctor" cmd_doctor
+  smoke_step "version equals the plugin manifest" smoke_step_version
+  smoke_step "status --json exits 0 and parses" smoke_step_status
+  smoke_step "orient exits 0" smoke_step_orient
+  smoke_step "--help --json exits 0 and parses" smoke_step_help
+  smoke_step "decision logged then found by search" smoke_step_decision
+  smoke_step "second onboard reports up_to_date" smoke_step_reonboard
+  cmd_cleanup >> "$(evidence_dir)/smoke.log" 2>&1
+  printf 'smoke: green — %s steps ok, evidence kept at %s\n' "$SMOKE_STEPS" "$(evidence_dir)"
+}
+
 # --------------------------------------------------------------------- dispatch
 
 case "${1:-}" in
@@ -371,6 +445,7 @@ case "${1:-}" in
   newrepo)  shift; cmd_newrepo "$@" ;;
   snapshot) shift; cmd_snapshot "$@" ;;
   cleanup)  shift; cmd_cleanup "$@" ;;
-  ""|-h|--help) sed -n '2,30p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//' ;;
+  smoke)    shift; cmd_smoke "$@" ;;
+  ""|-h|--help) sed -n '2,34p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//' ;;
   *) die "unknown subcommand '$1' — run 'control-bee --help'" ;;
 esac
