@@ -1,0 +1,542 @@
+---
+artifact_contract: bee-plan/v2
+mode: standard
+---
+
+# Plan: Knowledge gets a create skill and an upkeep skill
+
+## Summary
+
+bee gains two skills for a project's knowledge base. One builds the base
+once. One checks it from time to time and rewrites the entries that show a
+sign of being wrong, five at most in one run. When an agent finishes a piece
+of work it can say "this entry was wrong", and the knowledge report counts
+those answers. The printed writing rules grow from five to seven: say when a
+statement holds and mark a guess, and record how to find a detail that
+changes often.
+
+Mode: `standard` — 2 risk flags: public contracts (a new cap answer and a new report section every host gets), multi-domain (Rust code, skills).
+Why this is the least workflow that protects the work: the change adds a contract every worker brief carries, so it needs a plan check, but it adds no door and no refusal.
+
+## Requirements (from CONTEXT.md)
+
+- D1: two skills, `bee-knowledge-setup` and `bee-knowledge-upkeep`, with the frontmatter shape of the verify pair.
+- D2: setup reads the tree, uses the existing verbs, proves with `check --strict` and `index --check`.
+- D3: upkeep has three outcomes and a seven-step pass; edit scope `docs/knowledge/` only.
+- D4: at most 5 concepts a run; grounded in the concept's own sources; in place, headline first; no noisy signal; dedupe and retire here.
+- D5: `--knowledge-wrong` at cap, a `knowledge_wrong` report array, never refused; the report counts it.
+- D6: two more printed rules in `KNOWLEDGE_RULES`; every "five rules" swept.
+- D7: the timing and the upkeep-due numbers, written in the upkeep skill and one line in bee-capturing.
+- D8: the plan-check rulings — the report lists load counts for every loaded concept; grades come from the knowledge check; loaded-never-used is a weak signal; the worker reports a wrong concept it did not fix; the report text prints a note; the orientation file has one path.
+
+## Load-bearing claims
+
+Labels: `read` = opened at that line; `ran` = executed. Evidence is a verbatim substring of the anchored line.
+
+| # | Claim | Label | Anchor | Verbatim evidence |
+|---|-------|-------|--------|-------------------|
+| 1 | The writing rules are one fixed-size list, so two more rules change one constant | read | packages/bee-rs/crates/bee/src/verbs/knowledge/consolidate.rs:9 | `pub(crate) const KNOWLEDGE_RULES: [&str; 5] = [` |
+| 2 | Worker briefs print that same list, so the two new rules reach every worker with no second edit | read | packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs:1485 | `let knowledge_rules = knowledge::KNOWLEDGE_RULES` |
+| 3 | The cap reads the knowledge-used answer in one function the new answer can sit beside | read | packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs:1116 | `pub(crate) fn read_knowledge_used_answer(f: &CapFlags, report: &Value) -> KnowledgeUsedAnswer {` |
+| 4 | Optional report keys are a named list a new key joins | read | packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs:77 | `"knowledge_used",` |
+| 5 | A herded worker's result carries the answer as a typed field | read | packages/bee-rs/crates/bee/src/herding/mailbox.rs:553 | `pub knowledge_used: Option<Vec<String>>,` |
+| 6 | The report builds its knowledge-used section in one function that reads cell traces | read | packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs:494 | `pub(crate) fn build_knowledge_used(root: &Path) -> (Value, Vec<String>) {` |
+| 7 | The hook's command-shape guard has a test that declares the flag pair, so a new flag needs its declaration | read | packages/bee-rs/crates/bee/src/hooks/cli_shape.rs:756 | `fn the_knowledge_used_pair_is_declared_so_the_guard_resolves_it() {` |
+| 8 | The verify upkeep pass is a numbered list the knowledge pass can mirror | read | skills/bee-verify-upkeep/SKILL.md:56 | `## Pass` |
+| 9 | Every skill under `skills/bee-*` must have trigger cases or one test fails | read | packages/bee-rs/crates/bee/tests/skill_triggers.rs:151 | `fn skill_triggers_fixture_is_complete() {` |
+| 10 | A knowledge concept counts the rules as five, so the count needs a sweep | read | docs/knowledge/areas/okf-profile/context-and-promote.md:76 | `The five rules have ONE home` |
+| 11 | The use signal is thin today, so upkeep cannot rest on it alone | ran | .bee/bin/bee knowledge report | `knowledge used: 9 cell(s) answered (2 used a concept, 7 none), 1359 silent` |
+| 12 | Neither new skill name is taken | ran | ls skills/bee-knowledge-setup skills/bee-knowledge-upkeep | `ls: cannot access 'skills/bee-knowledge-setup': No such file or directory` |
+| 13 | The knowledge-used answer already ships: the cap writes it to the trace, so this plan adds only the wrong answer beside it | read | packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs:697 | `"knowledge_used".into(),` |
+| 14 | A herded worker reads its own knowledge-used paragraph, which the `knowledge_used` search misses | read | packages/bee-rs/crates/bee/src/herding/mailbox.rs:469 | `Knowledge used (OPTIONAL` |
+| 15 | The report turns its load counts into the never-used list only, so a used concept's load count is not reported and suspect-and-loaded cannot be computed today | read | packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs:548 | `let mut never_used: Vec<(String, usize)> = loads` |
+| 16 | The freshness grades print from the knowledge check, so upkeep reads orphan and suspect there | ran | .bee/bin/bee knowledge check | `freshness: 28 confirmed, 95 suspect, 0 orphan, 17 unverified` |
+
+## Discovery
+
+The leader read both verify skills, the knowledge-used cap path, the report
+builder and the rule list. A read worker digested the eight earlier
+knowledge features; its report shows `knowledge-in-the-flow` and
+`knowledge-useful-rules` shipped the read, write and use-count parts, so
+this plan adds only the wrong answer, the two rules and the two skills.
+Claim 13 anchors that. The two questions CONTEXT.md left to planning: cap and
+finish share one flag struct and one parse, so the new flag is declared once
+and named in two flag-name lists; and the regen chain rewrites the rendered
+skill trees, the onboarding ledger, the skills lock and the release manifest,
+which are the file rows ksp-1 and ksp-2 carry.
+
+## Approach
+
+Three cells. ksp-1 adds the wrong answer, its report section and the two
+rules (D5, D6, D8). ksp-2 writes both skills, their trigger cases and the
+bee-capturing line (D1 to D4, D7, D8). ksp-3 consolidates and owns every
+`docs/knowledge/` edit, the rule count in the concepts included.
+Rejected: a new `bee knowledge upkeep` verb (the pass is judgment, and the
+signals already print from `bee knowledge report`); a refusal when a cap
+gives no knowledge answer (knowledge-in-the-flow D1 forbids it); revision
+rules inside `KNOWLEDGE_RULES` (they apply to an audit, never to a cell
+write, and every worker brief would carry them).
+
+Risk map:
+- A new field on the cap flags struct touches many test literals — MEDIUM — the one fact: `rg -c "no_knowledge_used: false" packages/bee-rs/crates/bee/src` lists the sites — Lands in: ksp-1 — proof: the crate builds and `knowledge_wrong` tests pass.
+- Worker briefs grow by two rule lines and a prompt snapshot test may pin the old text — MEDIUM — the one fact: `packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs` holds the rendered-prompt tests — Lands in: ksp-1 — proof: the drivers tests that render the brief pass.
+- The herded brief text is pinned by a full-text test — MEDIUM — the one fact: claim 14 — Lands in: ksp-1 — proof: the mailbox tests pass with the twin paragraph.
+- Two skill descriptions that route to each other's job — MEDIUM — the one fact: the fixture takes near-miss rows — Lands in: ksp-2 — proof: `skill_triggers_fixture_is_complete`.
+
+Waves: serial, ksp-1 → ksp-2 → ksp-3: ksp-2 names the flag ksp-1 adds, both run the regen chain over the rendered skill trees, and ksp-3 consolidates what both wrote.
+
+## Role assignments
+
+```json
+{
+  "schema_version": "1.0",
+  "runtime": "claude",
+  "roster_sha256": "d4e696dbde7989d6388dacce3fd7057cb3a6935b46024b79698596a46f6f41d3",
+  "stages": [
+    {
+      "stage": "implementation",
+      "classification": "required",
+      "role": "code",
+      "reason": "ksp-1 writes Rust and its tests."
+    },
+    {
+      "stage": "docs",
+      "classification": "required",
+      "role": "docs",
+      "reason": "ksp-2 writes two skills, their trigger cases and one skill line, and runs the regen chain."
+    },
+    {
+      "stage": "writing",
+      "classification": "required",
+      "role": "writer",
+      "reason": "ksp-3 consolidates knowledge."
+    },
+    {
+      "stage": "slice-judge",
+      "classification": "required",
+      "role": "review",
+      "reason": "Standard lane: one read-only checklist judge covers the behavior-change cell ksp-1. Independent review stays user-invoked."
+    },
+    {
+      "stage": "hat-facts-gaps",
+      "classification": "required",
+      "role": "hat-facts-gaps",
+      "reason": "Default seat; audits the claims table."
+    },
+    {
+      "stage": "hat-alternatives",
+      "classification": "required",
+      "role": "hat-alternatives",
+      "reason": "Default seat; cites the SMALLER PATH check below."
+    },
+    {
+      "stage": "hat-user-impact",
+      "classification": "required",
+      "role": "hat-user-impact",
+      "reason": "Default seat; workers meet the new answer and owners meet the two skills."
+    },
+    {
+      "stage": "hat-risks",
+      "classification": "not-applicable",
+      "role": "hat-risks",
+      "reason": "Not high-risk; no hard-gate flag."
+    },
+    {
+      "stage": "hat-value",
+      "classification": "not-applicable",
+      "role": "hat-value",
+      "reason": "Not high-risk."
+    },
+    {
+      "stage": "deployment",
+      "classification": "not-applicable",
+      "role": "deploy",
+      "reason": "A release runs through scripts/release.sh only when the owner asks."
+    },
+    {
+      "stage": "planning",
+      "classification": "not-applicable",
+      "role": "plan",
+      "reason": "The leader wrote this plan."
+    },
+    {
+      "stage": "test-and-live-proof",
+      "classification": "not-applicable",
+      "role": "test",
+      "reason": "Each cell writes its own red-first tests."
+    },
+    {
+      "stage": "read-only-gather",
+      "classification": "required",
+      "role": "read",
+      "reason": "One gather digested the eight earlier knowledge features during shaping."
+    },
+    {
+      "stage": "fact-extraction",
+      "classification": "not-applicable",
+      "role": "extraction",
+      "reason": "No narrow lookup is left."
+    },
+    {
+      "stage": "generation-fallback",
+      "classification": "not-applicable",
+      "role": "generation",
+      "reason": "Every job has a specific role."
+    },
+    {
+      "stage": "generic-advisor",
+      "classification": "not-applicable",
+      "role": "advisor",
+      "reason": "The hat wave is the consult."
+    },
+    {
+      "stage": "supervision",
+      "classification": "not-applicable",
+      "role": "supervisor",
+      "reason": "No unattended loop."
+    },
+    {
+      "stage": "blind-lane-1",
+      "classification": "not-applicable",
+      "role": "lane-1",
+      "reason": "One shape."
+    },
+    {
+      "stage": "blind-lane-2",
+      "classification": "not-applicable",
+      "role": "lane-2",
+      "reason": "One shape."
+    },
+    {
+      "stage": "blind-lane-3",
+      "classification": "not-applicable",
+      "role": "lane-3",
+      "reason": "One shape."
+    },
+    {
+      "stage": "design-ui",
+      "classification": "not-applicable",
+      "role": "design",
+      "reason": "No rendered UI."
+    }
+  ]
+}
+```
+
+## Shape
+
+Epic map, one slice. Playbook: `skills/bee-planning/playbooks/feature.md` (cited, not copied).
+
+| Epic | Capability/Risk Area | Why It Exists | Slices | Proof Needed |
+|---|---|---|---|---|
+| The wrong signal | cap answer and report section | D5 | 1 | `knowledge_wrong` tests |
+| The rules | two more printed rules | D6 | 1 | `knowledge_rules` tests, brief render tests |
+| The skill pair | setup and upkeep | D1 to D4, D7 | 1 | trigger fixture test, manifest check |
+
+SMALLER PATH: the first draft had four cells, with the two rules in a cell of their own. That cell's Rust files were a subset of the wrong-answer cell's, and its only dependency on it was that shared set, so the three-cell shape here does the same work with one worker dispatch, one release build and one regen run fewer. A two-cell shape that also folds the skills into the code cell is cheaper still, but it puts Rust and two new skills under one role and one proof. PASS on three cells.
+
+PLAN CHECK (three seats, one round). STRUCTURE — BLOCKERS, closed: claim 10 quoted a line that counts the reply rules, not the knowledge writing rules (the row now anchors the real count and the cell no longer touches that file); the scope sentence in Discovery had no row (claim 13); the due table named signals the report does not print (D8a, claims 15 and 16). WARNINGS applied (D8): the herded brief paragraph is an anchor and has its test (claim 14); the worker line reports a wrong concept the cell did not fix; loaded-never-used is a weak signal that the reader must confirm; the report text prints a note; the orientation file has one path; the two code cells merged; `docs/knowledge/` text moved to the consolidation cell with an index check. Dismissed: a claims row for the rejected `--deviation` fold (the fold is no longer argued: the SMALLER PATH now compares shapes that keep D5). CELLS (reviewed: 3) — CRITICAL: none after the fixes. MINOR: a name-filtered proof passes on zero matches; ksp-1 must quote its matched test count.
+
+## Cells — current slice (preview)
+
+| id | title | files | deps | you see | proof |
+|---|---|---|---|---|---|
+| ksp-1 | Let a cap say a loaded concept was wrong, count it, and print seven writing rules | cells cap path, herded result and brief, hook shape, report.rs, consolidate.rs, worker prompt, bee-swarming | — | `bee cells cap --knowledge-wrong "<path> — <what>"` lands on the trace, `bee knowledge report` lists the concept with its note, and `bee knowledge consolidate` prints seven rules | `knowledge_wrong` and `knowledge_rules` tests |
+| ksp-2 | Write the knowledge setup and upkeep skills | two new skills (new), fixture, bee-capturing, rendered copies | ksp-1 | two new skills an owner can invoke; the upkeep one revises five concepts at most | trigger fixture test, manifest check |
+| ksp-3 | Consolidate this feature's knowledge and write its delivery | docs/knowledge/**, delivery.md | ksp-1, ksp-2 | okf-profile concepts describe the wrong answer, the seven rules and the skill pair | `.bee/bin/bee knowledge check`, index check |
+
+```json
+[
+  {
+    "id": "ksp-1",
+    "feature": "knowledge-skill-pair",
+    "title": "Let a cap say a loaded concept was wrong, count it, and print seven writing rules",
+    "lane": "standard",
+    "role": "code",
+    "status": "open",
+    "deps": [],
+    "decisions": [
+      "38241d3f-4a41-4576-a616-af136c6d16ed",
+      "c8491588-5d08-4a1f-8b82-86e176b5e0f3",
+      "bdd1d39e-b54d-42c2-9e96-afdce3ab4b65"
+    ],
+    "files": [
+      "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+      "packages/bee-rs/crates/bee/src/herding/mailbox.rs",
+      "packages/bee-rs/crates/bee/src/herding/run.rs",
+      "packages/bee-rs/crates/bee/src/hooks/cli_shape.rs",
+      "packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs",
+      "packages/bee-rs/crates/bee/src/verbs/knowledge/consolidate.rs",
+      "packages/bee-rs/crates/bee/src/verbs/knowledge/tests.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+      "packages/bee/prompts/worker-cell.md",
+      "skills/bee-swarming/SKILL.md",
+      ".claude/skills/*",
+      ".agents/skills/*",
+      ".opencode/skills/*",
+      ".claude-plugin/skills/*",
+      ".codex-plugin/skills/*",
+      ".bee/onboarding.json",
+      "skills-lock.json",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "read_first": [
+      "docs/history/knowledge-skill-pair/CONTEXT.md",
+      "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs",
+      "packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs",
+      "packages/bee-rs/crates/bee/src/verbs/knowledge/consolidate.rs",
+      "packages/bee-rs/crates/bee/src/herding/mailbox.rs"
+    ],
+    "affects_skills": [
+      "skills/bee-swarming/SKILL.md"
+    ],
+    "affects_specs": [
+      "docs/knowledge/areas/okf-profile/critical-bar.md",
+      "docs/knowledge/areas/okf-profile/context-and-promote.md"
+    ],
+    "action": "Implement docs/history/knowledge-skill-pair/CONTEXT.md D5 and D6 as refined by D8. PART ONE, the wrong answer (D5). The model to follow is the existing knowledge-used answer; find its sites with `rg -n \"knowledge_used|knowledge-used|Knowledge used\" packages/bee-rs/crates/bee/src packages/bee/prompts skills/bee-swarming` and give the new answer a twin at each site that carries the entry form (never at the no-knowledge-used sites: the new answer has no explicit-none form). Anchors: in verbs/cells/handlers_close.rs `pub(crate) fn read_knowledge_used_answer(f: &CapFlags, report: &Value) -> KnowledgeUsedAnswer {`, the `pub(crate) knowledge_used: Option<String>,` field of the cap flags (cap and finish share this one struct and one parse), the two flag-name lists that hold `\"knowledge-used\",`, and the trace write that inserts `\"knowledge_used\".into(),`; in verbs/cells/finish_support.rs the optional report key list that holds `\"knowledge_used\",` and the array check whose message starts `cells finish: --report key \\\"knowledge_used\\\" must be an array`; in herding/mailbox.rs the field `pub knowledge_used: Option<Vec<String>>,` and the herded brief paragraph that starts `Knowledge used (OPTIONAL` (it never spells the key with an underscore, and a full-text test in the same file pins the result contract block); in hooks/cli_shape.rs the test `fn the_knowledge_used_pair_is_declared_so_the_guard_resolves_it() {`; in verbs/knowledge/report.rs `pub(crate) fn build_knowledge_used(root: &Path) -> (Value, Vec<String>) {`. Contract. Input: `bee cells cap` and `bee cells finish` take `--knowledge-wrong \"<docs/knowledge path> — <what was wrong>\"`, single-value, split on the FIRST ` — ` separator; a line with no separator keeps the whole value as the path and leaves `wrong` empty. `--report` and a herded result file take a `knowledge_wrong` array of such lines; a non-array value is refused with a message in the voice of the knowledge_used one. Persisted state: `trace.knowledge_wrong` is an array of `{path, wrong}`; the flag entry and the report entries are all kept; silence writes no key. Never refused for an odd path or for silence. It is independent of the knowledge-used answer: a cap may carry both, and neither changes the other. Report: `bee knowledge report` gains a section after the knowledge-used lines. Text: one header line `reported wrong: <n> concept(s) in <m> cell(s)`, then per concept one line `  <count>  <path>` and, when the concept has a non-empty note, one more line `      <newest non-empty note>` cut to 120 characters (D8d); ranked by count descending then path, ten concepts at most; the header prints even at zero. JSON: `knowledge_wrong` with `cells`, and `concepts` as `[{path, wrong_count, notes}]` where notes holds the non-empty wrong texts. The existing knowledge_used JSON section also gains `loaded`: `[{path, loads}]` for EVERY docs/knowledge path the cell prepare rows loaded, used or not, sorted by loads descending then path (D8a); the existing `never_used` list and every existing text line stay byte-identical. The registry help text of cap and finish documents the flag beside `--knowledge-used`, and the report help names the new section and the `loaded` list. Worker-facing lines, in the same place and voice as the knowledge_used ones, in three homes: the result form in packages/bee/prompts/worker-cell.md, the herded brief paragraph in herding/mailbox.rs, and the knowledge-used line of skills/bee-swarming/SKILL.md. The wording (D8c): `knowledge_wrong` — a loaded concept that misled this cell and that you did not fix in this commit, `<docs/knowledge path> — <what was wrong>`; omit the key when there is none. PART TWO, the rules (D6). Anchor: in verbs/knowledge/consolidate.rs, `pub(crate) const KNOWLEDGE_RULES: [&str; 5] = [`. Append two rules after the existing five, which stay byte-identical and in order. Rule six, in the voice of the others: state the condition under which a claim holds, and mark a guess as a guess, never as a fact. Rule seven: for a detail that changes often (a column name, a path, a count), record how to find it, never the detail itself. Each is one sentence with no line break. `bee knowledge consolidate` prints seven rules in text and in its JSON `rules` array, and the cell brief that renders `knowledge::KNOWLEDGE_RULES` (drivers/prepare.rs, `let knowledge_rules = knowledge::KNOWLEDGE_RULES`) carries all seven with no edit there. Sweep the count in code, prompts and skills only: `rg -n -i \"five (writing )?rules|five knowledge|5 rules\" skills packages/bee/prompts packages/bee-rs/crates/bee/src .bee/expertise`; change a hit only when the lines around it show it counts the knowledge writing rules. The hit `five rules applied.` in skills/bee-hive/references/routing-and-contracts.md counts the reply rules and stays. Hits under docs/knowledge/ belong to cell ksp-3; do not edit them. Tests, red first. Names containing `knowledge_wrong`: the flag records path and wrong text; a line with no separator; the report array records every entry; flag and array together keep all; silence writes no key; a non-array report value is refused; a herded result reaches the trace through --from-job; the herded brief names the key; the report section counts, ranks, prints the newest note, caps at ten concepts and prints a zero header on an empty root; the `loaded` list holds a used concept with its load count; the command-shape guard resolves the flag; the rendered worker prompt names the key. Names containing `knowledge_rules`: the list has seven entries; the first five are unchanged (pin their opening words); consolidate's JSON carries seven; the rendered cell brief carries the two new rules. Repair any existing test that pinned five rules or the old herded brief text. Quote the matched test count of each filter in the proof line. Run the regen chain (`.bee/bin/bee dev regen`) after the prompt and skill edits. One commit.",
+    "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- knowledge_wrong && cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- knowledge_rules && cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- knowledge_used && cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- mailbox && cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- consolidate && cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- every_code_file_is_at_or_below_its_comment_baseline && .bee/bin/bee dev release-manifest --check",
+    "must_haves": {
+      "truths": [
+        "bee cells cap --knowledge-wrong \"<path> — <what>\" records {path, wrong} on trace.knowledge_wrong",
+        "A knowledge_wrong array in --report or in a herded result reaches the same trace key",
+        "A cap with no knowledge-wrong answer is accepted and writes no knowledge_wrong key",
+        "bee knowledge report lists concepts by wrong count in text and in JSON",
+        "Every knowledge-used behavior and test is unchanged",
+        "bee knowledge report JSON lists every loaded concept with its load count",
+        "The report text prints the newest non-empty note under a reported-wrong concept",
+        "A herded worker's brief names the knowledge_wrong key",
+        "bee knowledge consolidate prints seven rules, the first five byte-identical to today, and a cell brief carries the two new rules"
+      ],
+      "artifacts": [
+        {
+          "path": "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+          "substantive": "the knowledge-wrong flag, its reader and the trace write"
+        },
+        {
+          "path": "packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs",
+          "substantive": "the reported-wrong section builder and its tests"
+        },
+        {
+          "path": "packages/bee-rs/crates/bee/src/verbs/knowledge/consolidate.rs",
+          "substantive": "KNOWLEDGE_RULES with seven entries"
+        }
+      ],
+      "key_links": [
+        "the cap trace write and the report builder agree on trace.knowledge_wrong as an array of {path, wrong}",
+        "the worker prompt result form, the herded brief and bee-swarming name the knowledge_wrong key with the same wording",
+        "the cell brief renders the same seven-entry list consolidate prints"
+      ],
+      "prohibitions": [
+        "No refusal for a missing or odd knowledge-wrong answer",
+        "No change to the knowledge-used answer, its never_used list or its existing report text lines",
+        "No second home for the rule text and no change to the wording of rules one to five",
+        "No edit under docs/knowledge/",
+        "No code comments"
+      ],
+      "open_choices": [
+        "Whether the report builder is a new function or an extension of build_knowledge_used"
+      ]
+    },
+    "trace": {
+      "worker": null,
+      "outcome": null,
+      "files_changed": [],
+      "deviations": [],
+      "friction": null,
+      "capped_at": null,
+      "behavior_change": true
+    }
+  },
+  {
+    "id": "ksp-2",
+    "feature": "knowledge-skill-pair",
+    "title": "Write the knowledge setup and upkeep skills",
+    "lane": "standard",
+    "role": "docs",
+    "status": "open",
+    "deps": [
+      "ksp-1"
+    ],
+    "decisions": [
+      "00ceea97-1099-4517-ab4a-b9cacb053d6d",
+      "bf87be15-7508-4e25-9e19-6c673a3c3ae7",
+      "84749ff4-d1f2-4391-8d3f-669091eb5207",
+      "bdd1d39e-b54d-42c2-9e96-afdce3ab4b65"
+    ],
+    "files": [
+      "skills/bee-knowledge-setup/SKILL.md",
+      "skills/bee-knowledge-upkeep/SKILL.md",
+      "skills/bee-capturing/SKILL.md",
+      "packages/bee-rs/crates/bee/tests/fixtures/skill-triggers.json",
+      ".claude/skills/*",
+      ".agents/skills/*",
+      ".opencode/skills/*",
+      ".claude-plugin/skills/*",
+      ".codex-plugin/skills/*",
+      ".bee/onboarding.json",
+      "skills-lock.json",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "read_first": [
+      "docs/history/knowledge-skill-pair/CONTEXT.md",
+      "skills/bee-verifying/SKILL.md",
+      "skills/bee-verify-upkeep/SKILL.md",
+      "skills/bee-capturing/SKILL.md",
+      "skills/bee-capturing/references/concept-authoring.md",
+      ".bee/expertise/knowledge.md",
+      "skills/bee-writing-skills/SKILL.md",
+      "packages/bee-rs/crates/bee/tests/skill_triggers.rs"
+    ],
+    "affects_skills": [
+      "skills/bee-knowledge-setup/SKILL.md",
+      "skills/bee-knowledge-upkeep/SKILL.md",
+      "skills/bee-capturing/SKILL.md"
+    ],
+    "affects_specs": [
+      "docs/knowledge/areas/okf-profile/overview.md"
+    ],
+    "action": "Implement docs/history/knowledge-skill-pair/CONTEXT.md D1, D2, D3, D4 and D7 as refined by D8. Write two new skills, following the discipline of skills/bee-writing-skills/SKILL.md and the frontmatter shape of skills/bee-verifying/SKILL.md and skills/bee-verify-upkeep/SKILL.md (name, a `>-` description, `disable-model-invocation: true`, metadata with version '0.1', ecosystem bee and the bee-cli dependency). Each description ends with a `Not for` clause that names the other skill, and neither is for the in-flow write, which stays with bee-capturing. skills/bee-knowledge-setup/SKILL.md (D2): use ONCE per repo that has no docs/knowledge/ bundle. It reads the tree and never interviews the user for content; it points at .bee/expertise/knowledge.md for the craft and at `bee knowledge consolidate` for the printed writing rules, and restates neither. Steps: bundle absent, else route to bee-knowledge-upkeep; `bee knowledge bootstrap` when docs/specs/ holds specs, `bee knowledge new` otherwise, one area concept per real subsystem found in the tree; the orientation file at the one fixed path docs/knowledge/areas/project/overview.md (D8e), an area concept derived by reading the tree as .bee/expertise/knowledge.md (\"The orientation file\") describes; `bee knowledge seed-anchors`; prove with `bee knowledge check --strict` and `bee knowledge index --check`; offer the upkeep loop. skills/bee-knowledge-upkeep/SKILL.md (D3, D4, D7): the three outcomes clean, changed, blocked, as bee-verify-upkeep states them. Edit scope: docs/knowledge/ only; never product code; a concept that describes behavior the code no longer has is doc drift (fix the concept) or a product regression (report it, keep it out of this change). A `When a run is due` section with the D7 table, each signal beside the command that prints it (D8a): after a release; a concept reported wrong (`bee knowledge report`, the reported-wrong section); an orphan grade (`bee knowledge check --json`, the `freshness` object); a suspect concept loaded 5 or more times (the suspect list of that same object, joined with the `loaded` list of `bee knowledge report --json`); a concept loaded 5 or more times and never used (`bee knowledge report`). It says the numbers are starting defaults. It also says (D8b) that loaded-never-used is a weak signal while the report's silent cells outnumber its answered ones: such a concept may only be unreported, so it never makes a run due alone, and it is trimmed or retired only after the source reader confirms it is dead weight. A `When knowledge is read, written and revised` table with the D7 moments. The pass, numbered: 0 bundle present, else route to bee-knowledge-setup; 1 signals, from `bee knowledge report --json` (reported wrong, `loaded`, never used) and `bee knowledge check --json` (the freshness grades); 2 pick at most 5 concepts, ranked wrong count, then orphan, then suspect-and-loaded, then loaded-never-used, only from concepts that were loaded for work, and name the candidates left for the next run; 3 source wave, one read-only reader per picked concept through `bee dispatch prepare --kind gather`, each reads the concept, its bee.sources and its bee.anchors and returns held or drift with citations, and for a wrong report whether the signal is diagnostic or noise; 4 revise by the D4 rules, each stated once: grounded in the concept's own sources and anchors with the failing work only as the signal, a claim whose source cannot be read again is cut or marked as a guess, in place and headline first (title, description, the Read when line) and never an appended correction, a noisy signal revises nothing, a loaded-never-used concept is trimmed, merged into its owner or retired out loud with bee.superseded_by; `bee knowledge confirm` on a concept that held; 5 validate with `bee knowledge check --strict` and `bee knowledge index --check`; 6 ship or stop: for changed, one worktree and one cell of proven corrections landed with `bee worktree merge`; for clean or blocked, no worktree and an honest report of coverage. One sentence gives the reason for the limit of 5: a measured result that revision gain is flat from 5 to 20 concepts and falls beyond, from needless revision and drift (ReHarness, arXiv 2610.12668). skills/bee-capturing/SKILL.md gains one short paragraph beside its cap-time re-confirm text (anchor: the paragraph that names `bee knowledge confirm --id`): a loaded concept the cell proved wrong is fixed in place in the same commit, headline first; a wrong concept the cell did not fix is reported at cap with `--knowledge-wrong` (D8c). Add trigger cases to packages/bee-rs/crates/bee/tests/fixtures/skill-triggers.json for both skills: read `skill_triggers_fixture_is_complete` in packages/bee-rs/crates/bee/tests/skill_triggers.rs for the minimum counts of expect and near rows, follow the rows of bee-verifying and bee-verify-upkeep as the model (near-miss rows between the pair, and against bee-capturing and bee-grooming), include one Vietnamese brief for each, and never spell a skill slug inside a brief. Run `.bee/bin/bee dev regen` so the rendered copies and the manifest ship in the same commit. One commit.",
+    "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test skill_triggers -- skill_triggers_fixture_is_complete && .bee/bin/bee dev release-manifest --check && .bee/bin/bee knowledge check",
+    "must_haves": {
+      "truths": [
+        "skills/bee-knowledge-setup/SKILL.md and skills/bee-knowledge-upkeep/SKILL.md exist with the verify pair's frontmatter shape and opposite Not-for clauses",
+        "The upkeep skill limits a run to 5 revised concepts and names the four due signals and their rank",
+        "The upkeep skill states each D4 revision rule once",
+        "The trigger fixture test passes with both skills in scope",
+        "The rendered skill homes carry both skills",
+        "The upkeep due table names, for each signal, the command that prints it",
+        "The upkeep skill treats loaded-never-used as a weak signal that the source reader must confirm",
+        "The setup skill names docs/knowledge/areas/project/overview.md as the orientation file"
+      ],
+      "artifacts": [
+        {
+          "path": "skills/bee-knowledge-setup/SKILL.md",
+          "substantive": "the once-per-repo create skill, no placeholder text"
+        },
+        {
+          "path": "skills/bee-knowledge-upkeep/SKILL.md",
+          "substantive": "the periodic audit skill with outcomes, edit scope, due table, timing table and the numbered pass"
+        }
+      ],
+      "key_links": [
+        "the setup skill hands off to the upkeep skill and the upkeep skill routes a missing bundle to setup",
+        "bee-capturing names --knowledge-wrong, the flag ksp-1 added"
+      ],
+      "prohibitions": [
+        "No restating of the printed writing rules or of .bee/expertise/knowledge.md",
+        "No new bee verb and no refusal",
+        "No hand edit of a rendered skill copy"
+      ],
+      "open_choices": [
+        "Section order and wording inside each skill"
+      ]
+    },
+    "trace": {
+      "worker": null,
+      "outcome": null,
+      "files_changed": [],
+      "deviations": [],
+      "friction": null,
+      "capped_at": null,
+      "behavior_change": true
+    }
+  },
+  {
+    "id": "ksp-3",
+    "feature": "knowledge-skill-pair",
+    "title": "Consolidate this feature's knowledge and write its delivery",
+    "lane": "standard",
+    "role": "writer",
+    "status": "open",
+    "deps": [
+      "ksp-1",
+      "ksp-2"
+    ],
+    "decisions": [
+      "00ceea97-1099-4517-ab4a-b9cacb053d6d",
+      "bf87be15-7508-4e25-9e19-6c673a3c3ae7",
+      "38241d3f-4a41-4576-a616-af136c6d16ed",
+      "c8491588-5d08-4a1f-8b82-86e176b5e0f3",
+      "84749ff4-d1f2-4391-8d3f-669091eb5207",
+      "bdd1d39e-b54d-42c2-9e96-afdce3ab4b65"
+    ],
+    "files": [
+      "docs/knowledge/**",
+      "docs/history/knowledge-skill-pair/delivery.md"
+    ],
+    "read_first": [
+      "docs/history/knowledge-skill-pair/CONTEXT.md",
+      "docs/history/knowledge-skill-pair/plan.md"
+    ],
+    "affects_skills": [],
+    "affects_specs": [
+      "docs/knowledge/areas/okf-profile/critical-bar.md",
+      "docs/knowledge/areas/okf-profile/overview.md",
+      "docs/knowledge/areas/okf-profile/context-and-promote.md"
+    ],
+    "action": "Run the writer consolidation step on this feature: run `bee knowledge consolidate --feature knowledge-skill-pair`. Dedupe and trim the deltas the cells wrote, anchor each concept to the code it describes, never restate code, and write docs/history/knowledge-skill-pair/delivery.md listing the concepts changed and why, one line each, plus a short Limits section (the upkeep numbers are starting defaults; the setup skill has not run on a host repo yet). The okf-profile area must say, in the concept that owns each subject: the knowledge-wrong cap answer and its report section beside the knowledge-used text (critical-bar.md); the rule list now holds seven rules, and every place under docs/knowledge/ that counts the knowledge writing rules as five says seven or gives no count (find them with `rg -n -i \"five (knowledge )?(writing )?rules\" docs/knowledge`; context-and-promote.md has the count in its description and twice in its body); the setup and upkeep skill pair, what each owns and where the in-flow write stays (overview.md, or the concept that owns skills and entry points). Cite history decisions as D-numbers of docs/history/knowledge-skill-pair/CONTEXT.md, never raw store ids. Extend owning concepts; add a new concept only when no concept owns the subject. Run `.bee/bin/bee knowledge index` after any title or description edit, then `.bee/bin/bee knowledge check` and `.bee/bin/bee knowledge index --check` green. One commit.",
+    "verify": ".bee/bin/bee knowledge check && .bee/bin/bee knowledge index --check",
+    "must_haves": {
+      "truths": [
+        "area concepts describe the knowledge-wrong answer, the seven rules and the skill pair, anchored to code",
+        "docs/history/knowledge-skill-pair/delivery.md lists every concept the feature changed",
+        "No concept under docs/knowledge/ counts the knowledge writing rules as five"
+      ],
+      "artifacts": [
+        {
+          "path": "docs/history/knowledge-skill-pair/delivery.md",
+          "substantive": "the feature's delivery record"
+        }
+      ],
+      "key_links": [
+        "the delivery lands in the same merge as the code"
+      ],
+      "prohibitions": [
+        "No restating of code in area concepts",
+        "No code comments"
+      ],
+      "open_choices": []
+    },
+    "trace": {
+      "worker": null,
+      "outcome": null,
+      "files_changed": [],
+      "deviations": [],
+      "friction": null,
+      "capped_at": null,
+      "behavior_change": false
+    }
+  }
+]
+```
+
+## Test matrix
+
+| Row | Scenario | Pass when |
+|---|---|---|
+| Happy | cap with `--knowledge-wrong "docs/knowledge/areas/x.md — says the flag is boolean"` | Pass when the capped cell's `trace.knowledge_wrong` is `[{"path":"docs/knowledge/areas/x.md","wrong":"says the flag is boolean"}]` |
+| Happy | `bee knowledge report` over two cells that report the same concept | Pass when the text holds `reported wrong: 1 concept(s) in 2 cell(s)`, `  2  docs/knowledge/areas/x.md` and the newest note on the next line |
+| Happy | `bee knowledge report --json` where a concept was loaded 3 times and used once | Pass when `knowledge_used.loaded` holds `{"path": that concept, "loads": 3}` |
+| Edge | a herded worker's brief | Pass when the brief text holds `knowledge_wrong` |
+| Edge | a line with no separator | Pass when `wrong` is the empty string and the whole value is the path |
+| Edge | cap with no knowledge-wrong answer | Pass when the trace has no `knowledge_wrong` key and the cap succeeds |
+| Edge | an empty root | Pass when the report prints `reported wrong: 0 concept(s) in 0 cell(s)` |
+| Error | `--report` with `"knowledge_wrong": "x"` | Pass when the cap is refused and the message names the key `knowledge_wrong` and says it must be an array |
+| Change | `bee knowledge consolidate` on main and on head | Pass when main prints five rule lines and head prints seven, the first five identical |
+| Happy | the trigger fixture with both skills in scope | Pass when `skill_triggers_fixture_is_complete` reports `test result: ok` |
+
+## Open Questions
+
+- Whether upkeep's reader wave reaches enough of a concept's `bee.sources` when a source is an archived cell: the skill tells the reader to cut or mark such a claim (D4b); the first real run will show how often it happens.
+
+## Out of scope
+
+- An onboarding notice that offers the two skills.
+- Thresholds in `.bee/config.json`.
+- A report line that says upkeep is due.
+- Running either skill on this repo: the feature ships the skills; the first upkeep run is the owner's to invoke.
