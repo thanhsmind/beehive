@@ -10,6 +10,7 @@ use super::plan::verify_source_root;
 use super::templates::{
     COMMAND_KEYS, DESIGN_PACKS_OFFER, GITIGNORE_BLOCK_PATTERNS, NO_TEST_VERIFICATION_OFFER,
     RETIRED_VERIFY_KEY_NO_TEST_WARNING, RETIRED_VERIFY_KEY_WARNING, STALE_ADVISOR_KEY_WARNING,
+    STATIC_CHECK_FIRST_OFFER, STATIC_CHECK_HOW_TO_OFFER, STATIC_CHECK_MISSING_OFFER,
     TESTED_REPO_VERIFICATION_OFFER, VERIFICATION_UPKEEP_POINTER, VERIFY_APP_SKILL_NAME,
 };
 use super::util::{exists, read_dir_sorted, read_json_if_exists, read_text_if_exists, split_lines};
@@ -149,6 +150,110 @@ pub fn detect_commands(root: &Path) -> Vec<Candidate> {
         .collect()
 }
 
+pub struct StaticCheck {
+    pub command: String,
+    pub source: String,
+    pub marker: String,
+}
+
+fn package_runner(root: &Path, name: &str) -> String {
+    if exists(&root.join("pnpm-lock.yaml")) {
+        format!("pnpm run {name}")
+    } else if exists(&root.join("yarn.lock")) {
+        format!("yarn {name}")
+    } else if exists(&root.join("bun.lockb")) || exists(&root.join("bun.lock")) {
+        format!("bun run {name}")
+    } else {
+        format!("npm run {name}")
+    }
+}
+
+fn static_check_for(root: &Path, names: &[&str], conventions: &[(&str, &str, &str)]) -> Option<StaticCheck> {
+    let pkg = script_names(read_manifest_json(&root.join("package.json")));
+    if let Some(name) = names.iter().find(|n| pkg.iter().any(|p| p == *n)) {
+        return Some(StaticCheck {
+            command: package_runner(root, name),
+            source: "package.json".into(),
+            marker: (*name).into(),
+        });
+    }
+    let targets = std::fs::read_to_string(root.join("Makefile"))
+        .map(|t| makefile_targets(&t))
+        .unwrap_or_default();
+    if let Some(name) = names.iter().find(|n| targets.iter().any(|t| t == *n)) {
+        return Some(StaticCheck {
+            command: format!("make {name}"),
+            source: "Makefile".into(),
+            marker: (*name).into(),
+        });
+    }
+    if names.contains(&"lint") {
+        let composer = script_names(read_manifest_json(&root.join("composer.json")));
+        if composer.iter().any(|n| n == "lint") {
+            return Some(StaticCheck {
+                command: "composer lint".into(),
+                source: "composer.json".into(),
+                marker: "lint".into(),
+            });
+        }
+    }
+    for (file, table, command_marker) in conventions {
+        let (command, marker) = command_marker.split_once('|').unwrap_or((command_marker, ""));
+        let text = std::fs::read_to_string(root.join(file)).ok();
+        let hit = match text {
+            Some(t) => table.is_empty() || t.contains(table),
+            None => false,
+        };
+        if hit {
+            return Some(StaticCheck {
+                command: command.into(),
+                source: (*file).into(),
+                marker: marker.into(),
+            });
+        }
+    }
+    None
+}
+
+pub fn detect_static_checks(root: &Path) -> Vec<StaticCheck> {
+    [
+        static_check_for(
+            root,
+            &["lint"],
+            &[
+                ("Cargo.toml", "", "cargo clippy -- -D warnings|clippy"),
+                ("pyproject.toml", "[tool.ruff", "ruff check .|ruff"),
+                ("go.mod", "", "go vet ./...|vet"),
+            ],
+        ),
+        static_check_for(
+            root,
+            &["typecheck", "type-check"],
+            &[("pyproject.toml", "[tool.mypy", "mypy .|mypy")],
+        ),
+    ]
+    .into_iter()
+    .flatten()
+    .collect()
+}
+
+fn test_entries(commands: Option<&serde_json::Map<String, Value>>) -> Vec<String> {
+    match commands.and_then(|c| c.get("test")) {
+        Some(Value::String(s)) if !s.trim().is_empty() => vec![s.clone()],
+        Some(Value::Array(a)) => a
+            .iter()
+            .filter_map(Value::as_str)
+            .filter(|s| !s.trim().is_empty())
+            .map(str::to_string)
+            .collect(),
+        _ => Vec::new(),
+    }
+}
+
+fn static_check_list(checks: &[&StaticCheck]) -> String {
+    checks.iter().map(|c| format!("{} — {}", c.command, c.source)).collect::<Vec<_>>().join("; ")
+}
+
 // ── notices ────────────────────────────────────────────────────────────────
 
 /// host-packaging-gaps D2: name the two keys the one-time `add_pi_team` item
@@ -208,15 +313,46 @@ are not the safety net behind it.",
 pub fn commands_notices(repo_root: &Path, first_onboard: bool) -> Vec<String> {
     let config = read_json_if_exists(&repo_root.join(".bee").join("config.json"));
     let raw = config.as_ref().and_then(|c| c.get("commands")).filter(|c| c.is_object()).cloned();
-    let recorded = COMMAND_KEYS.iter().any(|key| {
-        raw.as_ref()
-            .and_then(|r| r.get(*key))
-            .and_then(Value::as_str)
-            .is_some_and(|v| !v.trim().is_empty())
-    });
+    let commands_map = raw.as_ref().and_then(Value::as_object);
+    let entries = test_entries(commands_map);
+    let recorded = !entries.is_empty()
+        || ["setup", "start"].iter().any(|key| {
+            raw.as_ref()
+                .and_then(|r| r.get(*key))
+                .and_then(Value::as_str)
+                .is_some_and(|v| !v.trim().is_empty())
+        });
+    let checks = detect_static_checks(repo_root);
+    if !entries.is_empty() {
+        if entries.iter().any(|e| e.trim() == "none") {
+            return Vec::new();
+        }
+        let missing: Vec<&StaticCheck> = checks
+            .iter()
+            .filter(|c| !entries.iter().any(|e| e.to_lowercase().contains(&c.marker.to_lowercase())))
+            .collect();
+        if missing.is_empty() {
+            return Vec::new();
+        }
+        return vec![format!(
+            "{} {}",
+            STATIC_CHECK_MISSING_OFFER.replace("{checks}", &static_check_list(&missing)),
+            STATIC_CHECK_HOW_TO_OFFER
+        )];
+    }
     if recorded {
         return Vec::new();
     }
+    let static_sentence = if checks.is_empty() {
+        String::new()
+    } else {
+        let all: Vec<&StaticCheck> = checks.iter().collect();
+        format!(
+            " {} {}",
+            STATIC_CHECK_FIRST_OFFER.replace("{checks}", &static_check_list(&all)),
+            STATIC_CHECK_HOW_TO_OFFER
+        )
+    };
     let candidates = detect_commands(repo_root);
     if !candidates.is_empty() {
         let proposals: Vec<String> = candidates
@@ -224,12 +360,13 @@ pub fn commands_notices(repo_root: &Path, first_onboard: bool) -> Vec<String> {
             .map(|c| format!("{}: {} — {}", c.key, c.value, c.source))
             .collect();
         return vec![format!(
-            "No standard commands recorded. Detected candidates: {}. Present them to the user as one pre-filled confirmation question (skippable) and write only confirmed values to .bee/config.json `commands` — never write unconfirmed values (D3). They power the session CI status gate.",
-            proposals.join("; ")
+            "No standard commands recorded. Detected candidates: {}. Present them to the user as one pre-filled confirmation question (skippable) and write only confirmed values to .bee/config.json `commands` — never write unconfirmed values (D3). They power the session CI status gate.{}",
+            proposals.join("; "),
+            static_sentence
         )];
     }
     let mut notices = vec![
-        "No standard commands recorded. Ask the user for the host project's setup/start/test commands and write them to .bee/config.json `commands` (skippable — never invent values). They power the session CI status gate.".to_string(),
+        format!("No standard commands recorded. Ask the user for the host project's setup/start/test commands and write them to .bee/config.json `commands` (skippable — never invent values). They power the session CI status gate.{static_sentence}"),
     ];
     if first_onboard {
         notices.push("Greenfield init lane (docs/09 item 6): this is the first onboard and no build was detected. Offer the init lane before any feature work — the first planning slice is one init cell whose must_haves are exactly: setup succeeds from scratch, one passing test exists, standard commands are recorded in .bee/config.json, and the repo has a clean first commit.".to_string());
@@ -473,6 +610,180 @@ pub fn has_prose_outside_block(text: &str) -> bool {
 mod tests {
     use super::*;
     use serde_json::json;
+
+    fn static_check_repo(files: &[(&str, &str)], config: Option<Value>) -> tempfile::TempDir {
+        let dir = tempfile::tempdir().unwrap();
+        for (name, body) in files {
+            std::fs::write(dir.path().join(name), body).unwrap();
+        }
+        if let Some(config) = config {
+            std::fs::create_dir_all(dir.path().join(".bee")).unwrap();
+            std::fs::write(dir.path().join(".bee").join("config.json"), config.to_string())
+                .unwrap();
+        }
+        dir
+    }
+
+    const STATIC_CHECK_LINT_PKG: &str = r#"{"scripts":{"lint":"eslint .","typecheck":"tsc"}}"#;
+    const STATIC_CHECK_OLD_FIRST: &str = "No standard commands recorded. Ask the user for the host project's setup/start/test commands and write them to .bee/config.json `commands` (skippable — never invent values). They power the session CI status gate.";
+
+    #[test]
+    fn static_check_one_candidate_per_kind_and_manifest_beats_convention() {
+        let dir = static_check_repo(
+            &[
+                ("package.json", STATIC_CHECK_LINT_PKG),
+                ("Cargo.toml", "[package]\n"),
+                ("pyproject.toml", "[tool.ruff]\n[tool.mypy]\n"),
+            ],
+            None,
+        );
+        let got = detect_static_checks(dir.path());
+        let pairs: Vec<(&str, &str, &str)> =
+            got.iter().map(|c| (c.command.as_str(), c.source.as_str(), c.marker.as_str())).collect();
+        assert_eq!(
+            pairs,
+            vec![("npm run lint", "package.json", "lint"), ("npm run typecheck", "package.json", "typecheck")]
+        );
+    }
+
+    #[test]
+    fn static_check_conventions_and_makefile_and_composer() {
+        let dir = static_check_repo(&[("Cargo.toml", "[package]\n"), ("Makefile", "typecheck:\n\ttsc\n")], None);
+        let got = detect_static_checks(dir.path());
+        let pairs: Vec<(&str, &str, &str)> =
+            got.iter().map(|c| (c.command.as_str(), c.source.as_str(), c.marker.as_str())).collect();
+        assert_eq!(
+            pairs,
+            vec![
+                ("cargo clippy -- -D warnings", "Cargo.toml", "clippy"),
+                ("make typecheck", "Makefile", "typecheck")
+            ]
+        );
+        let dir = static_check_repo(&[("composer.json", r#"{"scripts":{"lint":"phpcs"}}"#)], None);
+        assert_eq!(detect_static_checks(dir.path())[0].command, "composer lint");
+        let dir = static_check_repo(&[("pyproject.toml", "[tool.ruff.lint]\n[tool.mypy]\n"), ("go.mod", "module x\n")], None);
+        let cmds: Vec<String> = detect_static_checks(dir.path()).into_iter().map(|c| c.command).collect();
+        assert_eq!(cmds, vec!["ruff check .", "mypy ."]);
+        let dir = static_check_repo(&[("go.mod", "module x\n")], None);
+        assert_eq!(detect_static_checks(dir.path())[0].command, "go vet ./...");
+    }
+
+    #[test]
+    fn static_check_lockfile_picks_the_runner() {
+        for (lock, want) in [
+            ("pnpm-lock.yaml", "pnpm run lint"),
+            ("yarn.lock", "yarn lint"),
+            ("bun.lockb", "bun run lint"),
+            ("bun.lock", "bun run lint"),
+        ] {
+            let dir = static_check_repo(&[("package.json", STATIC_CHECK_LINT_PKG), (lock, "")], None);
+            assert_eq!(detect_static_checks(dir.path())[0].command, want);
+        }
+        let dir = static_check_repo(&[("package.json", r#"{"scripts":{"type-check":"tsc"}}"#)], None);
+        assert_eq!(detect_static_checks(dir.path())[0].command, "npm run type-check");
+    }
+
+    #[test]
+    fn static_check_malformed_package_json_yields_nothing() {
+        let dir = static_check_repo(&[("package.json", "{not json")], None);
+        assert!(detect_static_checks(dir.path()).is_empty());
+        let dir = static_check_repo(&[("package.json", "[1,2]")], None);
+        assert!(detect_static_checks(dir.path()).is_empty());
+    }
+
+    #[test]
+    fn static_check_case_a_adds_a_sentence_to_both_arms() {
+        let dir = static_check_repo(&[("Cargo.toml", "[package]\n")], None);
+        let n = commands_notices(dir.path(), true);
+        assert_eq!(n.len(), 2);
+        assert!(n[0].starts_with(STATIC_CHECK_OLD_FIRST));
+        assert!(n[0].contains("cargo clippy -- -D warnings — Cargo.toml"));
+        assert!(n[0].contains("first members of the `commands.test` list, before the tests"));
+        assert!(n[0].contains("green or how many findings"));
+        assert!(n[0].contains("earlier answer about that check"));
+        assert!(n[0].contains("as a decision"));
+        assert!(n[0].contains("Never write an unconfirmed value"));
+        assert!(n[1].starts_with("Greenfield init lane"));
+
+        let dir = static_check_repo(
+            &[("package.json", r#"{"scripts":{"lint":"x","start":"node ."}}"#)],
+            None,
+        );
+        let n = commands_notices(dir.path(), false);
+        assert_eq!(n.len(), 1);
+        assert!(n[0].contains("Detected candidates: start: npm run start — package.json."));
+        assert!(n[0].contains("npm run lint — package.json"));
+    }
+
+    #[test]
+    fn static_check_case_b_fires_for_a_string_and_a_list_lacking_the_marker() {
+        for test in [json!("cargo test"), json!(["cargo test", "cargo fmt --check"])] {
+            let dir = static_check_repo(
+                &[("Cargo.toml", "[package]\n")],
+                Some(json!({"commands": {"test": test}})),
+            );
+            let n = commands_notices(dir.path(), false);
+            assert_eq!(n.len(), 1, "for {test}");
+            assert!(n[0].contains("cargo clippy -- -D warnings — Cargo.toml"));
+            assert!(n[0].contains("before the tests in the `commands.test` list"));
+            assert!(n[0].contains("green or how many findings"));
+            assert!(n[0].contains("as a decision"));
+        }
+    }
+
+    #[test]
+    fn static_check_case_b_is_silent_when_an_entry_has_the_marker() {
+        let dir = static_check_repo(
+            &[("Cargo.toml", "[package]\n")],
+            Some(json!({"commands": {"test": ["cargo clippy --all-targets -- -D warnings", "cargo test"]}})),
+        );
+        assert!(commands_notices(dir.path(), false).is_empty());
+        let dir = static_check_repo(
+            &[("package.json", STATIC_CHECK_LINT_PKG)],
+            Some(json!({"commands": {"test": ["pnpm lint", "pnpm typecheck", "pnpm test"]}})),
+        );
+        assert!(commands_notices(dir.path(), false).is_empty());
+        let dir = static_check_repo(
+            &[("package.json", STATIC_CHECK_LINT_PKG)],
+            Some(json!({"commands": {"test": ["pnpm lint", "pnpm test"]}})),
+        );
+        let n = commands_notices(dir.path(), false);
+        assert_eq!(n.len(), 1);
+        assert!(n[0].contains("npm run typecheck"));
+        assert!(!n[0].contains("npm run lint"));
+    }
+
+    #[test]
+    fn static_check_list_valued_test_with_nothing_detected_returns_nothing() {
+        let dir = static_check_repo(&[], Some(json!({"commands": {"test": ["a", "b"]}})));
+        assert!(commands_notices(dir.path(), true).is_empty());
+    }
+
+    #[test]
+    fn static_check_none_sentinel_and_setup_only_stay_silent() {
+        let dir = static_check_repo(
+            &[("Cargo.toml", "[package]\n")],
+            Some(json!({"commands": {"test": "none"}})),
+        );
+        assert!(commands_notices(dir.path(), false).is_empty());
+        let dir = static_check_repo(
+            &[("Cargo.toml", "[package]\n")],
+            Some(json!({"commands": {"setup": "make setup"}})),
+        );
+        assert!(commands_notices(dir.path(), false).is_empty());
+    }
+
+    #[test]
+    fn static_check_without_a_candidate_keeps_the_old_strings() {
+        let dir = static_check_repo(&[], None);
+        let n = commands_notices(dir.path(), false);
+        assert_eq!(n, vec![STATIC_CHECK_OLD_FIRST.to_string()]);
+        let dir = static_check_repo(&[("package.json", r#"{"scripts":{"test":"vitest"}}"#)], None);
+        assert_eq!(
+            commands_notices(dir.path(), false),
+            vec!["No standard commands recorded. Detected candidates: test: npm test — package.json. Present them to the user as one pre-filled confirmation question (skippable) and write only confirmed values to .bee/config.json `commands` — never write unconfirmed values (D3). They power the session CI status gate.".to_string()]
+        );
+    }
 
     #[test]
     fn detect_commands_prefers_package_json_then_conventions() {
