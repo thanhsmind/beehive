@@ -3264,3 +3264,128 @@ fn leader_doctrine_files_refresh_on_drift_and_prune_stale_playbooks() {
     assert!(bee_dir.join("playbooks").join("handoff.md").is_file());
     assert!(!bee_dir.join("playbooks").join("retired.md").exists());
 }
+
+// ── bee onboard --verify-only: no engine, only .bee/verify/ ───────────────
+
+fn verify_only(repo: &Path, extra: &[&str]) -> (ExitCode, Value) {
+    let repo = repo.to_string_lossy().into_owned();
+    let mut argv: Vec<String> =
+        vec!["--verify-only".into(), "--json".into(), "--repo-root".into(), repo];
+    argv.extend(extra.iter().map(|s| (*s).to_string()));
+    match parse_args(&argv) {
+        ParseOutcome::Parsed(a) => run_verify_only(&a),
+        ParseOutcome::Error(m) => panic!("argv must parse: {m}"),
+        ParseOutcome::Delegate => panic!("argv must not delegate"),
+    }
+}
+
+fn engine_free_host(onboarding: Option<&str>) -> (tempfile::TempDir, PathBuf) {
+    let dir = tempfile::tempdir().unwrap();
+    let repo = dunce::canonicalize(dir.path()).unwrap().join("host");
+    std::fs::create_dir_all(&repo).unwrap();
+    assert!(!repo.join("packages").join("bee").join("AGENTS.block.md").exists());
+    write(&repo.join(".bee").join("verify").join("verify-app").join("SKILL.md"), "drive app\n");
+    if let Some(body) = onboarding {
+        write(&repo.join(".bee").join("onboarding.json"), body);
+    }
+    (dir, repo)
+}
+
+const HOST_ONBOARDING: &str = "{\n  \"schema_version\": 3,\n  \"bee_version\": \"1.2.3\",\n  \"managed\": {\n    \"helpers\": {\n      \".bee/bin/x.mjs\": \"abc\"\n    }\n  },\n  \"agents_sync\": {\n    \"k\": 1\n  },\n  \"created_at\": \"2020-01-01T00:00:00.000Z\",\n  \"updated_at\": \"2020-01-02T00:00:00.000Z\"\n}\n";
+
+#[test]
+fn verify_only_apply_renders_every_runtime_home_with_no_engine_visible() {
+    let (_dir, repo) = engine_free_host(Some(HOST_ONBOARDING));
+    let (code, payload) = verify_only(&repo, &["--apply"]);
+    assert_eq!(format!("{code:?}"), format!("{:?}", ExitCode::SUCCESS), "{payload}");
+    assert_eq!(payload["status"], "applied");
+    for home in [".claude/skills", ".agents/skills", ".opencode/skills"] {
+        let skill = repo.join(home).join("verify-app").join("SKILL.md");
+        assert_eq!(std::fs::read_to_string(&skill).unwrap(), "drive app\n", "{home}");
+    }
+    assert!(!repo.join(".claude").join("skills").join("bee-hive").exists());
+    assert!(!repo.join("AGENTS.md").exists());
+    assert!(!repo.join(".bee").join("bin").exists());
+}
+
+#[test]
+fn verify_only_without_apply_plans_the_verify_items_and_writes_nothing() {
+    let (_dir, repo) = engine_free_host(Some(HOST_ONBOARDING));
+    let before = snapshot(&repo);
+    let (code, payload) = verify_only(&repo, &[]);
+    assert_eq!(format!("{code:?}"), format!("{:?}", ExitCode::SUCCESS));
+    assert_eq!(payload["status"], "changes_needed");
+    assert_eq!(verify_actions(&payload, "plan", "copy_verify_skill").len(), 3);
+    assert_eq!(payload["plan"].as_array().unwrap().len(), 3);
+    assert_eq!(snapshot(&repo), before, "plan mode writes nothing");
+}
+
+#[test]
+fn verify_only_apply_changes_only_the_verify_ledger_in_onboarding_json() {
+    let (_dir, repo) = engine_free_host(Some(HOST_ONBOARDING));
+    verify_only(&repo, &["--apply"]);
+    let mut after = read_json(&repo.join(".bee").join("onboarding.json"));
+    let ledger = after["managed"]["verify_skills"].take();
+    assert!(ledger[".claude/skills/verify-app"]["SKILL.md"].is_string(), "{ledger}");
+    assert!(ledger[".agents/skills/verify-app"]["SKILL.md"].is_string(), "{ledger}");
+    assert!(ledger[".opencode/skills/verify-app"]["SKILL.md"].is_string(), "{ledger}");
+    after["managed"].as_object_mut().unwrap().remove("verify_skills");
+    let expected: Value = serde_json::from_str(HOST_ONBOARDING).unwrap();
+    assert_eq!(after, expected, "every other key keeps its value");
+}
+
+#[test]
+fn verify_only_refuses_when_the_project_is_not_onboarded_and_writes_nothing() {
+    let (_dir, repo) = engine_free_host(None);
+    let before = snapshot(&repo);
+    for extra in [&["--apply"][..], &[][..]] {
+        let (code, payload) = verify_only(&repo, extra);
+        assert_eq!(format!("{code:?}"), format!("{:?}", ExitCode::from(1)));
+        assert_eq!(payload["status"], "blocked_not_onboarded");
+        assert_eq!(payload["kind"], "not_onboarded");
+        assert!(payload["reason"].as_str().unwrap().contains("not onboarded"), "{payload}");
+    }
+    assert_eq!(snapshot(&repo), before);
+}
+
+#[test]
+fn verify_only_keeps_the_host_edit_block_and_never_prunes() {
+    let (_dir, repo) = engine_free_host(Some(HOST_ONBOARDING));
+    verify_only(&repo, &["--apply"]);
+    let claude = repo.join(".claude").join("skills").join("verify-app");
+    write(&claude.join("SKILL.md"), "drive app\nhost note\n");
+    write(&claude.join("NOTES.md"), "mine\n");
+    write(&repo.join(".bee").join("verify").join("verify-app").join("SKILL.md"), "drive app v2\n");
+    let (_, payload) = verify_only(&repo, &["--apply"]);
+    let skipped = payload["skills"]["skipped"].as_array().unwrap();
+    assert_eq!(skipped.len(), 1, "{payload}");
+    assert!(skipped[0]["reason"].as_str().unwrap().contains("FIX: copy the edits into .bee/verify/verify-app"));
+    assert_eq!(std::fs::read_to_string(claude.join("SKILL.md")).unwrap(), "drive app\nhost note\n");
+    assert_eq!(std::fs::read_to_string(claude.join("NOTES.md")).unwrap(), "mine\n");
+}
+
+#[test]
+fn verify_only_refuses_flags_that_only_serve_the_engine_sync() {
+    let argv: Vec<String> =
+        ["--verify-only", "--repo-hooks", "--no-statusline"].iter().map(|s| s.to_string()).collect();
+    match parse_args(&argv) {
+        ParseOutcome::Error(m) => {
+            assert!(m.contains("--repo-hooks") && m.contains("--no-statusline"), "{m}")
+        }
+        _ => panic!("must refuse"),
+    }
+}
+
+#[test]
+fn no_engine_refusal_names_verify_only_when_the_repo_holds_verify_skills() {
+    let (_dir, repo) = engine_free_host(None);
+    let err = super::source::LocateError {
+        invocation_root: repo.clone(),
+        missing_template: repo.join("packages").join("bee").join("AGENTS.block.md"),
+        repo_root_candidate: None,
+    };
+    assert!(no_engine_message(&err).contains("bee onboard --verify-only --apply"));
+
+    std::fs::remove_dir_all(repo.join(".bee").join("verify")).unwrap();
+    assert!(!no_engine_message(&err).contains("--verify-only"));
+}

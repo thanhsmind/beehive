@@ -124,6 +124,7 @@ struct Args {
     claude_settings: bool,
     runtime: String,
     design_packs: Option<Vec<String>>,
+    verify_only: bool,
 }
 
 impl Default for Args {
@@ -148,6 +149,7 @@ impl Default for Args {
             // GH #22 P0-1: default "both" matches install.sh's own default.
             runtime: "both".to_string(),
             design_packs: None,
+            verify_only: false,
         }
     }
 }
@@ -251,6 +253,8 @@ fn parse_args(argv: &[String]) -> ParseOutcome {
                 Ok(packs) => args.design_packs = Some(packs),
                 Err(message) => return ParseOutcome::Error(message),
             }
+        } else if arg == "--verify-only" {
+            args.verify_only = true;
         } else if arg == "--help" || arg == "-h" {
             return ParseOutcome::Delegate;
         } else {
@@ -263,6 +267,30 @@ fn parse_args(argv: &[String]) -> ParseOutcome {
             "--runtime must be claude, codex, pi, or both (got: {})",
             args.runtime
         ));
+    }
+    if args.verify_only {
+        let defaults = Args::default();
+        let engine_flags = [
+            (args.repo_hooks != defaults.repo_hooks, "--repo-hooks"),
+            (args.claude_md != defaults.claude_md, "--claude-md/--no-claude-md"),
+            (args.statusline != defaults.statusline, "--no-statusline"),
+            (args.claude_settings != defaults.claude_settings, "--no-claude-settings"),
+            (args.global_skills != defaults.global_skills, "--global-skills"),
+            (args.skillstation != defaults.skillstation, "--skillstation"),
+            (args.plugin_source != defaults.plugin_source, "--plugin-source"),
+            (args.force_downgrade != defaults.force_downgrade, "--force-downgrade"),
+            (args.runtime != defaults.runtime, "--runtime"),
+            (args.design_packs.is_some(), "--design-packs"),
+        ];
+        let named: Vec<&str> = engine_flags.iter().filter(|(on, _)| *on).map(|(_, n)| *n).collect();
+        if !named.is_empty() {
+            return ParseOutcome::Error(format!(
+                "--verify-only renders only .bee/verify/ skills and cannot be combined with {}, \
+which belong to the full onboard. FIX: drop {} or drop --verify-only.",
+                named.join(", "),
+                named.join(", ")
+            ));
+        }
     }
     ParseOutcome::Parsed(Box::new(args))
 }
@@ -359,6 +387,14 @@ pub(crate) const HOST_REPO_INSTALL_ONE_LINER: &str =
 /// that candidate is named too, so a refusal reports every root it tried,
 /// never only the cwd walk's.
 fn no_engine_message(err: &source::LocateError) -> String {
+    let verify_clause = if holds_verify_skill(&err.invocation_root)
+        || err.repo_root_candidate.as_deref().is_some_and(holds_verify_skill)
+    {
+        " To render only this repo's own .bee/verify/ skills without a checkout, run \
+`bee onboard --verify-only --apply`."
+    } else {
+        ""
+    };
     let repo_root_clause = match &err.repo_root_candidate {
         Some(r) => format!(" --repo-root ({}) was also tried and also missed the template.", r.display()),
         None => String::new(),
@@ -368,10 +404,16 @@ fn no_engine_message(err: &source::LocateError) -> String {
 vendors its files FROM that checkout — the skills, the expertise layer, the AGENTS.md block. \
 Searched upward from the invocation root ({}) for {} and found none.{repo_root_clause} FIX: run \
 this from inside a bee checkout (`cd <bee>` first), or re-run the installer, which brings its \
-own: {HOST_REPO_INSTALL_ONE_LINER}",
+own: {HOST_REPO_INSTALL_ONE_LINER}{verify_clause}",
         err.invocation_root.display(),
         err.missing_template.display()
     )
+}
+
+fn holds_verify_skill(repo_root: &Path) -> bool {
+    std::fs::read_dir(plan::verify_source_root(repo_root))
+        .map(|rd| rd.flatten().any(|e| e.file_type().is_ok_and(|t| t.is_dir())))
+        .unwrap_or(false)
 }
 
 fn no_engine_refusal(err: &source::LocateError, as_json: bool) -> ExitCode {
@@ -639,6 +681,56 @@ pub(crate) fn ledger_covered_roots() -> Vec<&'static str> {
     plan::ledger_covered_roots()
 }
 
+const NOT_ONBOARDED_KIND: &str = "not_onboarded";
+
+fn run_verify_only(args: &Args) -> (ExitCode, Value) {
+    let repo_root: PathBuf = match &args.repo_root {
+        Some(r) => util::path_resolve(r),
+        None => util::path_resolve(""),
+    };
+    let onboarding = repo_root.join(".bee").join("onboarding.json");
+    if !util::read_json_if_exists(&onboarding).is_some_and(|v| v.is_object()) {
+        return (
+            ExitCode::from(1),
+            json!({
+                "repo_root": repo_root.to_string_lossy(),
+                "status": "blocked_not_onboarded",
+                "kind": NOT_ONBOARDED_KIND,
+                "reason": format!(
+                    "bee onboard --verify-only: this project is not onboarded - {} is absent or unreadable, so nothing was written. FIX: run `bee onboard --apply` from a bee checkout, or the installer, first.",
+                    onboarding.display()
+                ),
+            }),
+        );
+    }
+    let items = plan::compute_verify_skill_items(&repo_root);
+    if !args.apply {
+        let status = if items.iter().any(|i| i["action"] == "copy_verify_skill") {
+            "changes_needed"
+        } else {
+            "up_to_date"
+        };
+        return (
+            ExitCode::SUCCESS,
+            json!({
+                "repo_root": repo_root.to_string_lossy(),
+                "status": status,
+                "plan": items,
+            }),
+        );
+    }
+    let (applied, skipped) = apply::apply_verify_only(&repo_root, &items);
+    (
+        ExitCode::SUCCESS,
+        json!({
+            "repo_root": repo_root.to_string_lossy(),
+            "status": "applied",
+            "applied": applied,
+            "skills": { "skipped": skipped },
+        }),
+    )
+}
+
 pub fn try_native(args: &[OsString]) -> Option<ExitCode> {
     if args.first().and_then(|a| a.to_str()) != Some("onboard") {
         return None;
@@ -647,6 +739,11 @@ pub fn try_native(args: &[OsString]) -> Option<ExitCode> {
     match parse_args(&argv) {
         ParseOutcome::Delegate => None,
         ParseOutcome::Error(message) => Some(error_exit(&message)),
+        ParseOutcome::Parsed(parsed) if parsed.verify_only => {
+            let (code, payload) = run_verify_only(&parsed);
+            emit(&payload, parsed.json);
+            Some(code)
+        }
         ParseOutcome::Parsed(parsed) => {
             // Geometry first: without a locatable source checkout there is
             // nothing authoritative to vendor from, so decline the command

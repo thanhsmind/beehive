@@ -1,0 +1,116 @@
+{
+  "id": "vrs-1",
+  "feature": "verify-render-standalone",
+  "lane": "small",
+  "role": "code",
+  "title": "Render host .bee/verify skills from the installed binary with bee onboard --verify-only",
+  "action": "Implement items 1-7 of docs/history/verify-render-standalone/plan.md (Contract). Add a --verify-only flag to bee onboard (packages/bee-rs/crates/bee/src/onboard/mod.rs parse_args and the dispatch arm near line 672) that never calls Engine::locate. Plan with compute_verify_skill_items(repo_root) only; print the verify items (text and --json) with zero writes when --apply is absent. With --apply, write only copy_verify_skill items through the existing apply code in onboard/apply.rs and update only managed.verify_skills in .bee/onboarding.json, keeping every other key of that file unchanged; touch no bee-* skill, AGENTS block, expertise file or .bee/bin file. Absent .bee/onboarding.json is a typed refusal with zero writes. Keep every existing verify safety rule (never prune, symlink/non-dir blocked, host-edit blocked with the existing FIX text, malformed bee:only marker blocks only its own skill). In no_engine_message (mod.rs:361), when <repo>/.bee/verify/ holds at least one skill directory, add one sentence naming `bee onboard --verify-only --apply`; JSON kind stays engine_not_found. Register the flag wherever the onboard CLI schema/help lives so the CLI-shape guard and help accept it, and run the regen the build requires (bee dev regen) if the registry is generated. Red first: write a test in onboard/tests.rs that runs onboard --verify-only --apply in a temp repo with no engine visible (no packages/bee/AGENTS.block.md above it) and asserts verify-app lands in .claude/skills, .agents/skills and .opencode/skills; watch it fail before the fix. Add tests for the no-apply plan (zero writes), other onboarding.json keys unchanged after apply, absent onboarding.json refusal, and the refusal sentence. No code comments.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee onboard",
+  "affects_skills": [],
+  "affects_specs": [],
+  "status": "capped",
+  "deps": [],
+  "decisions": [],
+  "files": [],
+  "read_first": [],
+  "trace": {
+    "worker": "vrs-1-worker",
+    "outcome": "Added bee onboard --verify-only (engine-free verify render, ledger-only onboarding.json update, not_onboarded refusal, engine_not_found hint); commit e764f4439",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/onboard/mod.rs",
+      "packages/bee-rs/crates/bee/src/onboard/apply.rs",
+      "packages/bee-rs/crates/bee/src/onboard/tests.rs",
+      "packages/bee-rs/crates/bee/src/router.rs",
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+      "packages/bee-rs/crates/bee/src/catalog.rs",
+      "docs/knowledge/areas/onboarding/host-project-artifacts.md"
+    ],
+    "deviations": [
+      "sync-ack: new behavior recorded in docs/knowledge/areas/onboarding/host-project-artifacts.md; the listed concepts were already suspect before this cell and describe no verify-only behavior"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-13T06:54:58.939Z",
+    "behavior_change": false,
+    "verification_evidence": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml — green:unit — whole workspace incl. 6 new verify-only tests; red seen first on the engine-free render test",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "294dbd38-38d5-4726-8de0-fc0d5f72b7e2",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee onboard",
+    "claimed_at": "2026-11-13T06:44:15.867Z",
+    "knowledge_delta": [
+      "docs/knowledge/areas/onboarding/host-project-artifacts.md"
+    ],
+    "sync_ack": "new behavior recorded in docs/knowledge/areas/onboarding/host-project-artifacts.md; the listed concepts were already suspect before this cell and describe no verify-only behavior",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Added bee onboard --verify-only (engine-free verify render, ledger-only onboarding.json update, not_onboarded refusal, engine_not_found hint); commit e764f4439",
+      "commit": "e764f44394d58cc5464123fb9903d7aedb51368c",
+      "files": [
+        "packages/bee-rs/crates/bee/src/onboard/mod.rs",
+        "packages/bee-rs/crates/bee/src/onboard/apply.rs",
+        "packages/bee-rs/crates/bee/src/onboard/tests.rs",
+        "packages/bee-rs/crates/bee/src/router.rs",
+        "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+        "packages/bee-rs/crates/bee/src/catalog.rs",
+        "docs/knowledge/areas/onboarding/host-project-artifacts.md"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee onboard — green:unit — PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml — green:unit — whole workspace incl. 6 new verify-only tests; red seen first on the engine-free render test",
+      "deviations": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/onboard/mod.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/onboard/mod.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/onboard/apply.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/onboard/apply.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/onboard/tests.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/onboard/tests.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/router.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/router.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+            "artifact": "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/catalog.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/catalog.rs"
+          },
+          {
+            "requirement": "docs/knowledge/areas/onboarding/host-project-artifacts.md",
+            "artifact": "docs/knowledge/areas/onboarding/host-project-artifacts.md"
+          }
+        ],
+        "recorded_at": "2026-11-13T06:58:46.820Z",
+        "recorded_by": "294dbd38-38d5-4726-8de0-fc0d5f72b7e2",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": {
+    "new": 109082,
+    "cached": 1959910,
+    "total": 2068992,
+    "models": {
+      "claude-sonnet-5-5": {
+        "new": 109082,
+        "cached": 1959910,
+        "total": 2068992
+      }
+    },
+    "jobs": [
+      "job-1794552266566-200753-1"
+    ]
+  }
+}

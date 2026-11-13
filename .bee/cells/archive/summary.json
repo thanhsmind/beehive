@@ -2153,5 +2153,10 @@
     "capped": 1,
     "dropped": 0,
     "archived_at": "2026-11-12T10:27:37.167Z"
+  },
+  "verify-render-standalone": {
+    "capped": 2,
+    "dropped": 0,
+    "archived_at": "2026-11-13T06:58:55.916Z"
   }
 }

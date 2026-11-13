@@ -850,6 +850,9 @@
     "contract:guard-cd-absolute-targets",
     "contract:cross-project-guard",
     "contract:supervisor-read-scope",
-    "contract:cross-project-refusal"
+    "contract:cross-project-refusal",
+    "contract:static-check-offer",
+    "contract:reflect-source",
+    "contract:prose-load"
   ]
 }
