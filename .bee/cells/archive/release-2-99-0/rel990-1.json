@@ -1,0 +1,100 @@
+{
+  "id": "rel990-1",
+  "feature": "release-2-99-0",
+  "title": "Publish release 2.99.0 through the sanctioned script",
+  "lane": "tiny",
+  "role": "deploy",
+  "deps": [],
+  "decisions": [
+    "7a394988-30ac-4ec1-bad2-20fa176d32f2"
+  ],
+  "files": [
+    ".claude-plugin/plugin.json",
+    ".codex-plugin/plugin.json",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/release-2-99-0/CONTEXT.md",
+    "scripts/release.sh"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Run `scripts/release.sh 2.99.0` with BEE_DISPATCH_ID set to an authorized deployment dispatch and the CI-pinned opencode 1.18.16 (/mnt/data/Projects/goglbe/beehive/.bee/tmp/oc11816/bin) first on PATH and CARGO_TARGET_DIR=/home/thanhsmind/.cache/cargo-target-rel2990, so the opencode contract tests run green. The script bumps both plugin manifests, runs the regen chain (render-skill-trees, onboard --apply, release-manifest --write), runs the declared test suite before tagging, makes the release commit, tags v2.99.0, pushes main and the tag, waits for the release-binaries workflow and verifies the published assets. Never walk those steps by hand. Re-running at a version already committed is idempotent — it resumes the tail. The regen obligation on .claude-plugin/plugin.json is discharged INSIDE the script's own regen chain, which is why the release manifest rides this cell's files.",
+  "verify": "bash scripts/release.sh 2.99.0 && bee dev release-manifest --check",
+  "must_haves": {
+    "truths": [
+      "both plugin manifests report 2.99.0",
+      "tag v2.99.0 exists locally and on the remote",
+      "the GitHub release for v2.99.0 carries the binaries and SHA256SUMS",
+      "the script printed its final OK line"
+    ],
+    "artifacts": [
+      {
+        "path": ".claude-plugin/plugin.json",
+        "substantive": "version 2.99.0"
+      },
+      {
+        "path": ".codex-plugin/plugin.json",
+        "substantive": "version 2.99.0"
+      }
+    ],
+    "key_links": [
+      "the pushed tag is what triggers release-binaries.yml"
+    ],
+    "prohibitions": [
+      "Do not hand-walk bump, tag or push",
+      "Do not skip the test gate"
+    ]
+  },
+  "behavior_change": false,
+  "status": "capped",
+  "trace": {
+    "worker": "rel990-deploy",
+    "outcome": "Released bee 2.99.0 via scripts/release.sh: commit 94c4a8106, tag v2.99.0, release-binaries CI succeeded, 6 assets published.",
+    "files_changed": [
+      ".agents/skills/.bee-skills-version.json",
+      ".bee/onboarding.json",
+      ".claude-plugin/plugin.json",
+      ".claude/skills/.bee-skills-version.json",
+      ".codex-plugin/plugin.json",
+      ".opencode/skills/.bee-skills-version.json",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [
+      "sync-ack: a version bump changes no behavior these concepts describe"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-13T19:38:45.634Z",
+    "behavior_change": false,
+    "verification_evidence": "script final line 'bee 2.99.0 is live', release-binaries run https://github.com/thanhsmind/beehive/actions/runs/43492509579 success, gh release v2.99.0 with 6 assets",
+    "verify_output": "green:live",
+    "verify_passed": true,
+    "claim_session": "9f743e96-ab1a-4868-be14-3ad297dfb006",
+    "verify_command": "bash scripts/release.sh 2.99.0 && bee dev release-manifest --check",
+    "claimed_at": "2026-11-13T19:25:25.063Z",
+    "knowledge_delta": [],
+    "sync_ack": "a version bump changes no behavior these concepts describe",
+    "no_mistakes": true,
+    "commit_pending": "the release commit 94c4a8106 is made by scripts/release.sh and carries no cell trailer, as in release-2-98-0",
+    "inline_reason": "every counted file is the release script's own mechanical bump and regen output; no file was hand-authored",
+    "report": {
+      "outcome": "Released bee 2.99.0 via scripts/release.sh: commit 94c4a8106, tag v2.99.0, release-binaries CI succeeded, 6 assets published.",
+      "commit": "94c4a8106ce33ef3d4fdfafdfa7755284a07d2f4",
+      "files": [
+        ".agents/skills/.bee-skills-version.json",
+        ".bee/onboarding.json",
+        ".claude-plugin/plugin.json",
+        ".claude/skills/.bee-skills-version.json",
+        ".codex-plugin/plugin.json",
+        ".opencode/skills/.bee-skills-version.json",
+        "docs/history/codex-harness-hardening/release-manifest.json"
+      ],
+      "tests": "bash scripts/release.sh 2.99.0 && bee dev release-manifest --check — green:live — script final line 'bee 2.99.0 is live', release-binaries run https://github.com/thanhsmind/beehive/actions/runs/43492509579 success, gh release v2.99.0 with 6 assets",
+      "deviations": []
+    },
+    "warnings": [],
+    "tests": "boundary"
+  },
+  "usage": null,
+  "usage_reason": "no herding job names this cell: no session is attributable to it"
+}

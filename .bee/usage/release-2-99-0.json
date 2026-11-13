@@ -1,0 +1,90 @@
+{
+  "schema": "bee-usage/v1",
+  "feature": "release-2-99-0",
+  "closed_at": "2026-11-13T19:38:54.258Z",
+  "sessions": [
+    {
+      "session_id": "9f743e96-ab1a-4868-be14-3ad297dfb006",
+      "models": {
+        "claude-opus-5-5": {
+          "input": 244,
+          "output": 49769,
+          "cache_write": 334680,
+          "cache_read": 13572291,
+          "new": 384693,
+          "cached": 13572291,
+          "total": 13956984
+        }
+      },
+      "subagent_models": {},
+      "subagent_count": 0,
+      "started_ms": 1794584365869,
+      "ended_ms": 1794598732488,
+      "totals": {
+        "new": 384693,
+        "cached": 13572291,
+        "total": 13956984
+      }
+    }
+  ],
+  "skipped": 0,
+  "totals": {
+    "main": {
+      "new": 384693,
+      "cached": 13572291,
+      "total": 13956984
+    },
+    "subagents": {
+      "new": 0,
+      "cached": 0,
+      "total": 0
+    },
+    "total": {
+      "new": 422420,
+      "cached": 13809955,
+      "total": 14232375
+    },
+    "herding": {
+      "new": 37727,
+      "cached": 237664,
+      "total": 275391,
+      "models": {
+        "claude-haiku-5-5": {
+          "input": 20,
+          "output": 4455,
+          "cache_write": 33252,
+          "cache_read": 237664,
+          "new": 37727,
+          "cached": 237664,
+          "total": 275391
+        }
+      }
+    }
+  },
+  "herding_sessions": [
+    {
+      "session_id": "db233c74-d48d-417a-8874-d50cb9290137",
+      "models": {
+        "claude-haiku-5-5": {
+          "input": 20,
+          "output": 4455,
+          "cache_write": 33252,
+          "cache_read": 237664,
+          "new": 37727,
+          "cached": 237664,
+          "total": 275391
+        }
+      },
+      "subagent_models": {},
+      "subagent_count": 0,
+      "started_ms": 1794597948079,
+      "ended_ms": 1794598656160,
+      "totals": {
+        "new": 37727,
+        "cached": 237664,
+        "total": 275391
+      },
+      "job_id": "job-1794597946559-1049288-1"
+    }
+  ]
+}
