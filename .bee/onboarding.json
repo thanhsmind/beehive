@@ -8,7 +8,7 @@
     "helpers": {},
     "lib": {},
     "expertise": {
-      "INDEX.md": "35b7797f402b1928553d8d43f6a82727b330ba53a8beb80ebe3d2806a3ac0026",
+      "INDEX.md": "dbb0bb767c29e8640f9047c304fb6ed74017306462c02a85e798f7b23150d887",
       "README.md": "3f9ad922145df53981bce91ae306dd96b7e48283918e7cd2da0074b2ce930e7d",
       "apis.md": "b7350c145f4442d4d0cf0f58a4e21e118ab4bb96654256a6837e10ccd5a070a8",
       "architecture.md": "0df001a4c6bfddd67c26517acc83c92cd0bbb3783b135e3c7a4ce7c76a1f4e83",
@@ -26,6 +26,7 @@
       "planning.md": "2fb019904d455b9cdb7d117d15be3709b31921cea643a9754b3bbba7d96062a8",
       "review.md": "320e48016138df67c3b4082bd8a588d190317e4f2623bfb370023ae914c0c681",
       "security.md": "c39709516b888a41ae620fa7b070f8c2b28623c8f1d8f4639267385de4edeed8",
+      "static-rules.md": "35cb07f73d6eef338d8625864d4e523713c49d0ecb3d146596613c8ea9b78a74",
       "tests.md": "f98ac132b9562658caa93cb50448cf96ac6d956002d804d556e833cc0c77ab25",
       "tests/patterns/asserting-on-generated-output.md": "4f7c229210b0c8ee952d21881b3a616259f0ac3cfc6c7719efbe473521065626",
       "tests/patterns/comparing-structured-data.md": "708d72115b3c9c0e5dfad84ac27c8ef153dc36620a4d1c5ce7050e005da363e7",
@@ -43,7 +44,7 @@
       "worker-cell.md": "f7eb44d7aef519c845454df24d415020510c9f6f0829b3f927c62cb89360605c"
     },
     "leader": {
-      "LEADER.md": "fa1c9f1e0464892583b64ca75326458ef666749a3dba8cd81666f4887597a006"
+      "LEADER.md": "a9657ad54bee4b7a47aa528c6f5bfe48b06bad07dbd85837ab1ecfa3c396cfa4"
     },
     "playbooks": {
       "bee-defects.md": "128820aaccc3644492f753d10cfba5231bfd7939624aba943da7ab74340a5dc5",
@@ -163,5 +164,5 @@
   },
   "design_role_offered": true,
   "created_at": "2026-07-24T03:53:44.750Z",
-  "updated_at": "2026-11-12T05:50:05.357Z"
+  "updated_at": "2026-11-13T07:41:00.779Z"
 }
