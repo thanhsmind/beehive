@@ -1,0 +1,90 @@
+{
+  "schema": "bee-usage/v1",
+  "feature": "release-2-97-0",
+  "closed_at": "2026-11-13T10:34:16.193Z",
+  "sessions": [
+    {
+      "session_id": "02472149-dd8d-4c2f-80ff-2dc1694a72eb",
+      "models": {
+        "claude-opus-5-5": {
+          "input": 210,
+          "output": 42241,
+          "cache_write": 139170,
+          "cache_read": 10358702,
+          "new": 181621,
+          "cached": 10358702,
+          "total": 10540323
+        }
+      },
+      "subagent_models": {},
+      "subagent_count": 0,
+      "started_ms": 1794563170946,
+      "ended_ms": 1794566053147,
+      "totals": {
+        "new": 181621,
+        "cached": 10358702,
+        "total": 10540323
+      }
+    }
+  ],
+  "skipped": 0,
+  "totals": {
+    "main": {
+      "new": 181621,
+      "cached": 10358702,
+      "total": 10540323
+    },
+    "subagents": {
+      "new": 0,
+      "cached": 0,
+      "total": 0
+    },
+    "total": {
+      "new": 212459,
+      "cached": 10527216,
+      "total": 10739675
+    },
+    "herding": {
+      "new": 30838,
+      "cached": 168514,
+      "total": 199352,
+      "models": {
+        "claude-haiku-5-5": {
+          "input": 14,
+          "output": 5004,
+          "cache_write": 25820,
+          "cache_read": 168514,
+          "new": 30838,
+          "cached": 168514,
+          "total": 199352
+        }
+      }
+    }
+  },
+  "herding_sessions": [
+    {
+      "session_id": "8846e56c-e9e7-41ea-ad3b-0554ce9b716e",
+      "models": {
+        "claude-haiku-5-5": {
+          "input": 14,
+          "output": 5004,
+          "cache_write": 25820,
+          "cache_read": 168514,
+          "new": 30838,
+          "cached": 168514,
+          "total": 199352
+        }
+      },
+      "subagent_models": {},
+      "subagent_count": 0,
+      "started_ms": 1794565520008,
+      "ended_ms": 1794565998800,
+      "totals": {
+        "new": 30838,
+        "cached": 168514,
+        "total": 199352
+      },
+      "job_id": "job-1794565518452-2242796-1"
+    }
+  ]
+}
