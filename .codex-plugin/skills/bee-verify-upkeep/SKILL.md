@@ -105,7 +105,15 @@ call, not yours.
    rendered copies carry no executable bit). App behavior that's actually broken
    → product gap; record it for the user, keep it out of this change.
 
-6. **Ship or stop.** For changed: one worktree and one cell of proven
+6. **Entry points.** Read the control script and check that it answers
+   `drive --fast` and `drive --full`, and that each prints one `ok` or `FAIL`
+   line per mapped feature and exits 0 when all pass, 1 when any fails and 2 for
+   an unknown entry point. A deploy script calls `drive --full` and trusts that
+   exit code. Add a missing entry point or exit code under edit scope, then
+   prove it by running it: `drive --full` for a real pass, and an unknown
+   argument for exit 2.
+
+7. **Ship or stop.** For changed: one worktree and one cell of proven
    corrections, proven by the re-driven features' `green:live` lines. Re-read
    every changed file first, re-render with `bee onboard --verify-only --apply` (no bee checkout needed) so
    the runtime copies ship in the same change, and land it with `bee worktree merge`. For

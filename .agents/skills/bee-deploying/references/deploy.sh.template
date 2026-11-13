@@ -2,18 +2,19 @@
 set -euo pipefail
 
 usage() {
-  echo "usage: scripts/deploy.sh <env> <version> [--yes] [--allow-dirty]" >&2
+  echo "usage: scripts/deploy.sh <env> <version> [--yes] [--allow-dirty] [--skip-product-drive]" >&2
   exit 2
 }
 
 ENV_NAME="${1:-}"; VERSION="${2:-}"
 [ -n "$ENV_NAME" ] && [ -n "$VERSION" ] || usage
 shift 2
-YES=0; ALLOW_DIRTY=0
+YES=0; ALLOW_DIRTY=0; SKIP_DRIVE=0
 for a in "$@"; do
   case "$a" in
     --yes) YES=1 ;;
     --allow-dirty) ALLOW_DIRTY=1 ;;
+    --skip-product-drive) SKIP_DRIVE=1 ;;
     *) usage ;;
   esac
 done
@@ -40,6 +41,32 @@ echo "== build"
 
 echo "== test"
 <test command>
+
+echo "== product drive"
+CONTROLS=()
+for f in .bee/verify/verify-app/control-*; do
+  [ -e "$f" ] && CONTROLS+=("$f")
+done
+if [ "${#CONTROLS[@]}" -gt 1 ]; then
+  echo "more than one control script, keep one: ${CONTROLS[*]}" >&2
+  exit 1
+elif [ "${#CONTROLS[@]}" -eq 0 ]; then
+  if [ "$SKIP_DRIVE" -ne 1 ]; then
+    echo "no verify skill under .bee/verify/verify-app/; the bee-verifying skill builds one" >&2
+    exit 1
+  fi
+  echo "product not driven: --skip-product-drive was passed"
+else
+  rc=0
+  bash "${CONTROLS[0]}" drive --full || rc=$?
+  if [ "$rc" -eq 2 ]; then
+    echo "${CONTROLS[0]} has no drive --full entry point; the bee-verify-upkeep skill adds it" >&2
+    exit 1
+  elif [ "$rc" -ne 0 ]; then
+    echo "product drive went red (exit $rc); nothing went live" >&2
+    exit 1
+  fi
+fi
 
 echo "== deploy $ENV_NAME $VERSION"
 live <deploy command> "$ENV_NAME" "$VERSION"

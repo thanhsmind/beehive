@@ -30,9 +30,14 @@ Required inputs, names only, never values:
 |---|------|-------------------|-----------------|
 | 1 | SAFE | `<build command>` | build ok, artifact at <path> |
 | 2 | SAFE | `<test command>` | green |
-| 3 | LIVE | `<push or deploy command>` | <what the tool prints> |
-| 4 | LIVE | <manual: wait for CI job X to go green> | link: <url> |
-| 5 | LIVE | `<migration or cache clear>` | <output> |
+| 3 | SAFE | `bash .bee/verify/verify-app/control-<app> drive --full` | every feature ok |
+| 4 | LIVE | `<push or deploy command>` | <what the tool prints> |
+| 5 | LIVE | <manual: wait for CI job X to go green> | link: <url> |
+| 6 | LIVE | `<migration or cache clear>` | <output> |
+
+Row 3 is the product drive: it runs before anything goes live, and a
+non-zero exit stops the deploy. The `## Verify` section is the check of
+the live target after the deploy.
 
 `SAFE` runs without asking. `LIVE` touches a real environment and waits
 for an explicit yes for that exact command.
@@ -46,7 +51,7 @@ for an explicit yes for that exact command.
 
 ## Rollback
 
-<how to undo; "redeploy the previous tag with step 3" is fine>
+<how to undo; "redeploy the previous tag with step 4" is fine>
 
 ## Gotchas
 

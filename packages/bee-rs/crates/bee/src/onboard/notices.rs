@@ -8,7 +8,7 @@
 
 use super::plan::verify_source_root;
 use super::templates::{
-    COMMAND_KEYS, DESIGN_PACKS_OFFER, GITIGNORE_BLOCK_PATTERNS, NO_TEST_VERIFICATION_OFFER,
+    COMMAND_KEYS, DEPLOY_DRIVES_NO_PRODUCT_NOTICE, DESIGN_PACKS_OFFER, GITIGNORE_BLOCK_PATTERNS, NO_TEST_VERIFICATION_OFFER,
     RETIRED_VERIFY_KEY_NO_TEST_WARNING, RETIRED_VERIFY_KEY_WARNING, STALE_ADVISOR_KEY_WARNING,
     STATIC_CHECK_FIRST_OFFER, STATIC_CHECK_HOW_TO_OFFER, STATIC_CHECK_MISSING_OFFER,
     TESTED_REPO_VERIFICATION_OFFER, VERIFICATION_UPKEEP_POINTER, VERIFY_APP_SKILL_NAME,
@@ -418,10 +418,22 @@ pub fn stale_advisor_notices(repo_root: &Path) -> Vec<String> {
             NO_TEST_VERIFICATION_OFFER.to_string()
         });
     }
+    if deploy_drives_no_product(repo_root) {
+        notices.push(DEPLOY_DRIVES_NO_PRODUCT_NOTICE.to_string());
+    }
     if design_offer_due(repo_root) {
         notices.push(DESIGN_PACKS_OFFER.to_string());
     }
     notices
+}
+
+fn deploy_drives_no_product(repo_root: &Path) -> bool {
+    let bodies: Vec<String> = ["docs/DEPLOY.md", "scripts/deploy.sh"]
+        .iter()
+        .filter_map(|rel| std::fs::read(repo_root.join(rel)).ok())
+        .map(|bytes| String::from_utf8_lossy(&bytes).into_owned())
+        .collect();
+    bodies.iter().any(|body| !body.contains(".bee/verify/verify-app/"))
 }
 
 pub fn design_offer_due(repo_root: &Path) -> bool {
@@ -879,6 +891,108 @@ mod tests {
             std::fs::write(skill, "drive the app\n").unwrap();
         }
         stale_advisor_notices(dir.path())
+    }
+
+    fn deploy_verify_repo(files: &[(&str, &str)], config: Value) -> Vec<String> {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(dir.path().join(".bee")).unwrap();
+        std::fs::write(dir.path().join(".bee").join("config.json"), config.to_string()).unwrap();
+        for (rel, body) in files {
+            let file = dir.path().join(rel);
+            std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+            std::fs::write(file, body).unwrap();
+        }
+        stale_advisor_notices(dir.path())
+    }
+
+    fn deploy_verify_count(notices: &[String]) -> usize {
+        notices.iter().filter(|n| n.as_str() == DEPLOY_DRIVES_NO_PRODUCT_NOTICE).count()
+    }
+
+    #[test]
+    fn deploy_verify_record_without_the_path_fires_once() {
+        let notices = deploy_verify_repo(&[("docs/DEPLOY.md", "# Deploy\n")], json!({}));
+        assert_eq!(deploy_verify_count(&notices), 1);
+        assert_eq!(notices.len(), 2, "the verification offer stays beside it");
+    }
+
+    #[test]
+    fn deploy_verify_script_naming_the_path_alone_is_silent() {
+        let notices = deploy_verify_repo(
+            &[("scripts/deploy.sh", "bash .bee/verify/verify-app/control-x drive --full\n")],
+            json!({}),
+        );
+        assert_eq!(deploy_verify_count(&notices), 0);
+    }
+
+    #[test]
+    fn deploy_verify_record_naming_the_path_beside_a_script_without_it_fires() {
+        let notices = deploy_verify_repo(
+            &[
+                ("docs/DEPLOY.md", "run .bee/verify/verify-app/control-x\n"),
+                ("scripts/deploy.sh", "echo deploy\n"),
+            ],
+            json!({}),
+        );
+        assert_eq!(deploy_verify_count(&notices), 1);
+    }
+
+    #[test]
+    fn deploy_verify_both_files_naming_the_path_are_silent() {
+        let named = "bash .bee/verify/verify-app/control-x drive --full\n";
+        let notices = deploy_verify_repo(
+            &[("docs/DEPLOY.md", named), ("scripts/deploy.sh", named)],
+            json!({}),
+        );
+        assert_eq!(deploy_verify_count(&notices), 0);
+    }
+
+    #[test]
+    fn deploy_verify_no_deploy_file_is_silent() {
+        let notices = deploy_verify_repo(&[], json!({}));
+        assert_eq!(deploy_verify_count(&notices), 0);
+    }
+
+    #[test]
+    fn deploy_verify_release_script_alone_is_silent() {
+        let notices = deploy_verify_repo(&[("scripts/release.sh", "echo release\n")], json!({}));
+        assert_eq!(deploy_verify_count(&notices), 0);
+    }
+
+    #[test]
+    fn deploy_verify_fires_beside_the_retired_verify_key() {
+        let notices = deploy_verify_repo(
+            &[("scripts/deploy.sh", "echo deploy\n")],
+            json!({"commands": {"verify": "make check"}}),
+        );
+        assert_eq!(deploy_verify_count(&notices), 1);
+        assert_eq!(notices[0], RETIRED_VERIFY_KEY_NO_TEST_WARNING);
+    }
+
+    #[test]
+    fn deploy_verify_notice_sits_between_the_verification_arm_and_the_design_offer() {
+        let notices = deploy_verify_repo(
+            &[("docs/DEPLOY.md", "# Deploy\n"), ("web/index.html", "<p>hi</p>\n")],
+            json!({}),
+        );
+        assert_eq!(
+            notices,
+            vec![
+                NO_TEST_VERIFICATION_OFFER.to_string(),
+                DEPLOY_DRIVES_NO_PRODUCT_NOTICE.to_string(),
+                DESIGN_PACKS_OFFER.to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn deploy_verify_notice_names_the_skills_and_stays_plain() {
+        for needed in ["bee-deploying", "bee-verifying", "first live step"] {
+            assert!(DEPLOY_DRIVES_NO_PRODUCT_NOTICE.contains(needed), "{needed}");
+        }
+        for banned in ["config.json", "gate", "cap ", "proof"] {
+            assert!(!DEPLOY_DRIVES_NO_PRODUCT_NOTICE.contains(banned), "{banned}");
+        }
     }
 
     #[test]

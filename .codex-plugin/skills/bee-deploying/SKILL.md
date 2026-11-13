@@ -31,13 +31,24 @@ or script owns *how* the command runs.
    `package.json` or platform file (`fly.toml`, `vercel.json`,
    `Procfile`) changed after that date, say so in one line and check
    the drifted step before you run it.
-2. Run the **Preconditions**. A red precondition stops the deploy:
+2. Check that the record and `scripts/deploy.sh` both carry the product
+   drive step before the first `LIVE` step: a `SAFE` row that runs
+   `bash .bee/verify/verify-app/control-<app> drive --full`, and the same
+   step in the script. When either lacks it, add it to both in this turn from
+   `references/DEPLOY.template.md` and `references/deploy.sh.template`, and
+   report the edit. When a project release script or deploy skill owns the
+   deploy (Step 0), do not edit it: tell the user the drive step is missing
+   and ask. Then read the control script, never run it in full, and check that
+   it answers `drive --full`. When it does not, point to `bee-verify-upkeep`
+   before you run anything `LIVE`. When the project has no verify skill, say
+   so and point to `bee-verifying`.
+3. Run the **Preconditions**. A red precondition stops the deploy:
    report it, never patch around it.
-3. Run the **Steps** in order. Before each `LIVE` step, show the exact
+4. Run the **Steps** in order. Before each `LIVE` step, show the exact
    command and wait for the user's yes. One yes covers one command,
    never the next.
-4. Run **Verify** and report its fresh output.
-5. When reality disagreed with the record (a step failed, or the user
+5. Run **Verify** and report its fresh output.
+6. When reality disagreed with the record (a step failed, or the user
    typed something the record did not say), fix the record in the same
    turn.
 
@@ -90,11 +101,14 @@ a real run removes that mark.
 
 1. `docs/DEPLOY.md` from `references/DEPLOY.template.md`: header with
    date and `TESTED` or `UNTESTED`; Target, Preconditions, Steps (each
-   `SAFE` or `LIVE`), Verify, Rollback, Gotchas.
+   `SAFE` or `LIVE`, with the product drive as a `SAFE` row before the first
+   `LIVE` row), Verify, Rollback, Gotchas.
 2. `scripts/deploy.sh` from `references/deploy.sh.template`, for the
    steps that are safe to automate: `set -euo pipefail`; environment and
    version as arguments; refuse a dirty tree unless `--allow-dirty`;
-   each `LIVE` command prints and asks `Continue? [y/N]` unless `--yes`.
+   each `LIVE` command prints and asks `Continue? [y/N]` unless `--yes`;
+   the product drive step runs `drive --full` before the first `LIVE`
+   command and stops on a non-zero exit.
    Nothing safe to automate: write no script and say why in the record.
 3. A short section appended to `CLAUDE.md`, or `AGENTS.md` when that is
    the project's file:
@@ -114,6 +128,9 @@ Report the three paths. Do not commit them unless the user asks.
 - A `LIVE` step never runs without a fresh yes from the user for that
   exact command. `--yes` on the script is the user's choice, never the
   agent's.
+- `--skip-product-drive` on the script is the user's choice for one run,
+  never the agent's, the same as `--yes`. It covers only a missing verify
+  skill and never overrides a red drive.
 - Never read, print or copy a secret value. Names only.
 - Never deploy a dirty working tree or an unpushed commit unless the
   user says so for that run.
