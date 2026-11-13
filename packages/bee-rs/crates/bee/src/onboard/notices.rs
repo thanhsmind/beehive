@@ -14,7 +14,8 @@ use super::templates::{
     TESTED_REPO_VERIFICATION_OFFER, VERIFICATION_UPKEEP_POINTER, VERIFY_APP_SKILL_NAME,
 };
 use super::util::{exists, read_dir_sorted, read_json_if_exists, read_text_if_exists, split_lines};
-use serde_json::Value;
+use crate::verbs::protocol::{gather_facts, protocol_state, render_protocol, ProtocolState, PROTOCOL_FILE};
+use serde_json::{json, Value};
 use std::path::Path;
 
 // ── lib/commands_detect.mjs ────────────────────────────────────────────────
@@ -434,6 +435,33 @@ fn deploy_drives_no_product(repo_root: &Path) -> bool {
         .map(|bytes| String::from_utf8_lossy(&bytes).into_owned())
         .collect();
     bodies.iter().any(|body| !body.contains(".bee/verify/verify-app/"))
+}
+
+pub fn workspace_protocol_notice(repo_root: &Path) -> (Value, Option<String>) {
+    let report = protocol_state(repo_root);
+    let unedited = report.state == ProtocolState::Valid
+        && std::fs::read(repo_root.join(PROTOCOL_FILE))
+            .map(|bytes| bytes == render_protocol(&gather_facts(repo_root)).into_bytes())
+            .unwrap_or(false);
+    let action_needed = report.state != ProtocolState::Valid || unedited;
+    let what = match report.state {
+        ProtocolState::Missing => "missing".to_string(),
+        ProtocolState::Unreadable => "unreadable".to_string(),
+        ProtocolState::Invalid => format!("invalid ({})", report.issues.join("; ")),
+        ProtocolState::Valid => "still bee's unedited render".to_string(),
+    };
+    let notice = action_needed.then(|| {
+        format!(
+            "workspace protocol: {PROTOCOL_FILE} is {what} — finish it now with the Workspace protocol procedure in bee-hive references/onboarding.md"
+        )
+    });
+    let value = json!({
+        "state": report.state.as_str(),
+        "unedited": unedited,
+        "issues": report.issues,
+        "action_needed": action_needed,
+    });
+    (value, notice)
 }
 
 pub fn design_offer_due(repo_root: &Path) -> bool {

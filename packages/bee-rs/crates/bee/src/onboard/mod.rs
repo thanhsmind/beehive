@@ -512,6 +512,7 @@ does run a POSIX shell."
         .chain(statusline_skip_notices.iter())
         .cloned()
         .collect();
+    let (workspace_protocol, protocol_notice) = notices::workspace_protocol_notice(&repo_root);
     // `items` is the plan (plan mode) or the applied list (apply mode).
     let build_notices = |items: &[Value]| -> Value {
         let mut out: Vec<Value> = Vec::new();
@@ -533,6 +534,9 @@ does run a POSIX shell."
         for n in
             notices::claude_settings_notices(items, &claude_settings_kept, opts.claude_settings)
         {
+            out.push(json!(n));
+        }
+        if let Some(n) = protocol_notice {
             out.push(json!(n));
         }
         Value::Array(out)
@@ -565,6 +569,7 @@ does run a POSIX shell."
         );
         payload.insert("notices".into(), build_notices(&computed.plan));
         payload.insert("design_offer".into(), json!(notices::design_offer_due(&repo_root)));
+        payload.insert("workspace_protocol".into(), workspace_protocol.clone());
         if computed.worktree_migration.applicable {
             payload.insert(
                 "worktree_migration".into(),
@@ -663,6 +668,7 @@ does run a POSIX shell."
             payload.insert("onboarding".into(), onboarding);
             payload.insert("notices".into(), notices);
             payload.insert("design_offer".into(), json!(notices::design_offer_due(&repo_root)));
+            payload.insert("workspace_protocol".into(), workspace_protocol);
             if forced_downgrade {
                 // F9: a forced apply reports the fact machine-readably.
                 payload.insert("forced_downgrade".into(), json!(true));

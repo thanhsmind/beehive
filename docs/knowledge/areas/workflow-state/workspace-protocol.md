@@ -11,7 +11,7 @@ bee:
   decisions: [workspace-protocol D1-D12 (`bee decisions search --text WORKSPACE_PROTOCOL`), protocol-init-from-project D1-D8 (init renders from the project; narrows D4), onboard-workspace-protocol a4c2c38d and 0687dd2a (onboard reports the protocol state and the procedure runs after it)]
   sources: [docs/history/workspace-protocol/CONTEXT.md (D1-D12), docs/history/workspace-protocol/plan.md, workspace-protocol cells wsp-1..wsp-4, docs/history/protocol-init-from-project/CONTEXT.md (D1-D8), onboard-workspace-protocol decisions a4c2c38d and 0687dd2a, cell owp-2]
   authoritative_for: "workflow-state: WORKSPACE_PROTOCOL.md, bee protocol, the prepare digests, bee dispatch verify, the purpose leaning lint"
-  anchors: [packages/bee/prompts/worker-cell.md, packages/bee/prompts/advisor.md, packages/bee-rs/crates/bee/src/verbs/protocol.rs, packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs, packages/bee-rs/crates/bee/src/verbs/drivers/brief_lint.rs, packages/bee-rs/crates/bee/src/doctor.rs, packages/bee-rs/crates/bee/src/onboard/notices.rs]
+  anchors: [packages/bee/prompts/worker-cell.md, packages/bee/prompts/advisor.md, packages/bee-rs/crates/bee/src/verbs/protocol.rs, packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs, packages/bee-rs/crates/bee/src/verbs/drivers/brief_lint.rs, packages/bee-rs/crates/bee/src/doctor.rs, packages/bee-rs/crates/bee/src/onboard/notices.rs, packages/bee-rs/crates/bee/src/onboard/mod.rs]
   verified_at: 2026-11-10
   verified_commit: 2f0495d24e30048da79fa3d5dcc287605cf6869c
 ---
