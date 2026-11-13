@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "deploy-verify-gate",
   "mode": null,
-  "phase": "swarming",
+  "phase": "compounding",
   "approved_gates": {
     "context": true,
     "shape": true,
@@ -11,15 +11,10 @@
     "uat": false
   },
   "summary": "Feature \"deploy-verify-gate\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at 3cdccc6; reload the product and test \"deploy-verify-gate\", then either approve uat (\"bee gate --name uat --approved true --lane deploy-verify-gate\") or fix it in the worktree and merge again.",
+  "next_action": "close",
   "created_at": "2026-11-13T08:21:08.903Z",
   "run_state": "awaiting-approval",
-  "waiting_on": {
-    "kind": "gate",
-    "subject": "uat: deploy-verify-gate",
-    "asked_at": "2026-11-13T09:25:48.605Z",
-    "session": "bee-worktree-merge-sessionless"
-  },
+  "waiting_on": null,
   "route": {
     "class": "feature",
     "lane": "standard",
@@ -751,5 +746,15 @@
         }
       ]
     }
+  },
+  "last_scribing_run": {
+    "feature": "deploy-verify-gate",
+    "date": "2026-11-13",
+    "at": "2026-11-13T09:25:48.661Z",
+    "areas_synced": [
+      "onboarding",
+      "verify-pipeline"
+    ],
+    "next_action": "close"
   }
 }
