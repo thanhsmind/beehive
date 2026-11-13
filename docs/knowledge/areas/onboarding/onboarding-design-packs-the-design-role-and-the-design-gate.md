@@ -9,7 +9,7 @@ bee:
   lifecycle: active
   areas: [onboarding]
   decisions: ["design-os-in-bee D3 (961426b5): bee's team gains a dedicated UI design role", "design-os-in-bee D4 (572bc11e): design packs install by project type and a pack not picked is never written into the host", "design-os-in-bee D6 (587bcc85): a UI cell carries ui gate proof under a baseline ratchet"]
-  anchors: [packages/bee/design/, scripts/sync-design-os.sh, scripts/design-os-contract.mjs, packages/bee-rs/crates/bee/src/onboard/, scripts/install.sh, packages/bee/agents/bee-comb.md.tmpl, packages/bee/design/bee-design/additions/wcag-2-2.md, packages/bee/design/bee-design-motion/additions/frame-rehearsal.md, packages/bee/design/bee-design/SKILL.md]
+  anchors: [packages/bee/design/, scripts/sync-design-os.sh, scripts/design-os-contract.mjs, packages/bee-rs/crates/bee/src/onboard/, scripts/install.sh, packages/bee/agents/bee-comb.md.tmpl, packages/bee/design/bee-design/additions/wcag-2-2.md, packages/bee/design/bee-design/additions/refactoring-ui-craft.md, packages/bee/design/bee-design-motion/additions/frame-rehearsal.md, packages/bee/design/bee-design/SKILL.md]
   verified_at: 2026-11-10
   verified_commit: 32878a03635a413a538709e9ca05050fccd6e6fb
 ---
@@ -111,7 +111,15 @@ lacks, ported from ui-ux-pro-max-skill under MIT — focus not obscured, a drag
 alternative, accessible login, a pause for auto-rotation, scrim contrast on the
 real background, and an error summary that takes focus (decision e7b47aa2); the
 fresh-context critic's brief — frames only, the closest gold example beside
-them, ranked findings; and, in the motion pack, frame rehearsal scripts
+them, ranked findings; twenty-five Refactoring UI craft rules checked by eye in
+the render, with a symptom lookup, an overcorrection table and a not-a-finding
+list, and the source rules left out because bee's own tells, colour science and
+defaults contradict them (the thick one-side accent border, extra whitespace
+that expresses no grouping, HSL ramps, hand-picked type scales, justified text,
+repeating background patterns), each declined rule naming the bee file that
+owns the opposite stance; the second source is the MIT-licensed
+refactoring-ui-skill restatement, credited in the addition's Source section;
+and, in the motion pack, frame rehearsal scripts
 ported from Stageshow under MIT — the contact sheet, the jump and drift scan,
 and the box-fit check, without the parts bound to Stageshow's own kit
 (decision 967bd7a2).
@@ -207,8 +215,8 @@ flowchart TD
   test overrides `BEE_DESIGN_OS_CLI`, `BEE_DESIGN_NODE_BIN`.
 - Close rule: `verbs/cells/design_rule.rs`, called from `handlers_close.rs` and
   `handlers_write.rs`.
-- bee's additions: `packages/bee/design/bee-design/additions/wcag-2-2.md` and
-  `additions/frame-review.md`; `packages/bee/design/bee-design-motion/additions/frame-rehearsal.md`
+- bee's additions: `packages/bee/design/bee-design/additions/wcag-2-2.md`,
+  `additions/refactoring-ui-craft.md` and `additions/frame-review.md`; `packages/bee/design/bee-design-motion/additions/frame-rehearsal.md`
   and `additions/rehearse/` (`sheet.mjs`, `jumps.mjs`, `layout.mjs`, their
   `*-core.mjs`, `LICENSE-stageshow.md`, `rehearse.test.mjs`); the wipe they
   avoid is `scripts/sync-design-os.sh`. Frame check and the `MOTION` hand-over
