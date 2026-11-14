@@ -41,6 +41,11 @@ Inputs — read these; nothing else is provided:
 Learned context (machine-assembled — read before implementing; prefer it over re-deriving):
 {{learned_context}}
 {{/if}}
+{{#if principles}}
+
+Principles of this cell's class (machine-assembled):
+{{principles}}
+{{/if}}
 {{#if expertise}}
 
 Expertise — dispatcher-picked; read/load before implementing:

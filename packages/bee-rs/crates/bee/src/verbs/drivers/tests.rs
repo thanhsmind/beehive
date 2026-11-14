@@ -5151,7 +5151,7 @@ exit 0
         };
         assert!(
             text.starts_with(
-                "door tests: BLOCKING — 1 capped cell(s) carry a report with no valid proof line (demo-1) — re-cap with a real proof line: \"<command> — <result> — <scope reason>\". | settle: bee cells finish\n"
+                "door tests: BLOCKING — 1 capped cell(s) carry a report with no valid proof line (demo-1) — re-cap with a real proof line: \"<command> — <result> — <scope reason>\", and cap a separate test-role cell that depends on each stamped cell. | settle: bee cells finish\n"
             ),
             "{text}"
         );
@@ -13032,6 +13032,210 @@ Finish with: .bee/bin/bee cells finish --id c-golden --outcome "<one line>" --fi
         assert!(prompt.contains(
             "- docs/history/demo/plan.md (when present)\n\nLearned context (machine-assembled"
         ));
+    }
+
+    fn dispatch_principles_cell(percent: &str, cell_id: &str, role: &str, deps: &str) -> (String, Value) {
+        let tmp = tempfile::tempdir().unwrap();
+        let config = format!(
+            r#"{{"models":{{"claude":{{"generation":"sonnet"}}}},"principles_holdout_percent":{percent}}}"#
+        );
+        let root = repo(&tmp, &config);
+        bundle_fixture(&root);
+        w(&root, ".bee/lanes/demo.json", r#"{"feature":"demo","route":{"class":"bugfix"}}"#);
+        w(
+            &root,
+            &format!(".bee/cells/{cell_id}.json"),
+            &format!(
+                r#"{{"id":"{cell_id}","feature":"demo","status":"claimed","trace":{{"worker":"w"}},"lane":"small","role":"{role}","deps":{deps}}}"#
+            ),
+        );
+        let Prepared::Value(v) =
+            prepare_dispatch(&root, "claude", "cell", Some(cell_id), Some("w"), false, None, None, true, None)
+                .unwrap()
+        else {
+            panic!("expected an envelope")
+        };
+        let prompt = v["payload"]["prompt"].as_str().unwrap().to_string();
+        let log = std::fs::read_to_string(root.join(".bee/logs/dispatch.jsonl")).unwrap();
+        let record: Value = serde_json::from_str(log.lines().last().unwrap()).unwrap();
+        (prompt, record)
+    }
+
+    const PRINCIPLES_HEADER: &str = "Principles of this cell's class";
+
+    #[test]
+    fn a_principles_arm_cell_prompt_carries_the_class_principles() {
+        let (prompt, record) = dispatch_principles_cell("0", "c-1", "code", "[]");
+        assert_eq!(record["principles_arm"], json!("principles"));
+        assert!(prompt.contains(PRINCIPLES_HEADER), "{prompt}");
+        assert!(prompt.contains("- Principles (class=bugfix)"), "{prompt}");
+    }
+
+    #[test]
+    fn a_principles_holdout_cell_prompt_carries_none_and_keeps_learned_context() {
+        let (prompt, record) = dispatch_principles_cell("100", "c-2", "code", "[]");
+        assert_eq!(record["principles_arm"], json!("holdout"));
+        assert!(!prompt.contains(PRINCIPLES_HEADER), "{prompt}");
+        assert!(!prompt.contains("{{"), "{prompt}");
+        assert_eq!(record["knowledge_arm"], json!("knowledge"));
+    }
+
+    #[test]
+    fn a_tester_lands_in_its_implementers_principles_arm() {
+        for pair in 0..40 {
+            let implementer = format!("impl-{pair}");
+            let arm = |id: &str, role: &str, deps: &str| {
+                dispatch_principles_cell("50", id, role, deps).1["principles_arm"].clone()
+            };
+            assert_eq!(
+                arm(&implementer, "code", "[]"),
+                arm(&format!("{implementer}t"), "test", &format!(r#"["{implementer}"]"#)),
+                "{implementer}"
+            );
+        }
+    }
+
+    fn principles_bucket_held(anchor: &str, percent: u32) -> bool {
+        let digest = crate::verbs::reservations::sha256_hex(&format!("principles:{anchor}"));
+        u32::from_str_radix(&digest[..8], 16).unwrap() % 100 < percent
+    }
+
+    fn principles_root(tmp: &tempfile::TempDir, percent: Option<&str>) -> PathBuf {
+        let extra = percent.map(|p| format!(r#","principles_holdout_percent":{p}"#)).unwrap_or_default();
+        let root = repo(tmp, &format!(r#"{{"models":{{"claude":{{"generation":"sonnet"}}}}{extra}}}"#));
+        w(&root, ".bee/lanes/demo.json", r#"{"feature":"demo","route":{"class":"bugfix"}}"#);
+        root
+    }
+
+    fn principles_arm_of(root: &Path, cell: Value) -> &'static str {
+        cell_principles(root, root, &cell).0
+    }
+
+    #[test]
+    fn an_absent_principles_holdout_percent_holds_out_the_ten_percent_bucket() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = principles_root(&tmp, None);
+        let mut held = 0;
+        for n in 0..200 {
+            let id = format!("p-{n}");
+            let expected = if principles_bucket_held(&id, 10) { "holdout" } else { "principles" };
+            held += usize::from(expected == "holdout");
+            assert_eq!(principles_arm_of(&root, json!({"id": id, "feature": "demo"})), expected, "{id}");
+        }
+        assert!(held > 0 && held < 200, "{held}");
+    }
+
+    #[test]
+    fn an_invalid_principles_holdout_percent_falls_back_to_ten() {
+        for bad in ["\"50\"", "-1", "101", "5.5", "null", "true"] {
+            let tmp = tempfile::tempdir().unwrap();
+            let root = principles_root(&tmp, Some(bad));
+            for n in 0..60 {
+                let id = format!("p-{n}");
+                let expected = if principles_bucket_held(&id, 10) { "holdout" } else { "principles" };
+                assert_eq!(principles_arm_of(&root, json!({"id": id, "feature": "demo"})), expected, "{bad} {id}");
+            }
+        }
+    }
+
+    #[test]
+    fn a_tester_hashes_its_first_dependency_and_every_other_cell_hashes_itself() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = principles_root(&tmp, Some("50"));
+        let arm = |held: bool| if held { "holdout" } else { "principles" };
+        let mut split = 0;
+        for n in 0..60 {
+            let own = format!("t-{n}");
+            let dep = format!("i-{n}");
+            split += usize::from(principles_bucket_held(&own, 50) != principles_bucket_held(&dep, 50));
+            let deps = json!([dep, "other-dep"]);
+            assert_eq!(
+                principles_arm_of(&root, json!({"id": own, "feature": "demo", "role": "test", "deps": deps})),
+                arm(principles_bucket_held(&dep, 50)),
+                "test {own}"
+            );
+            assert_eq!(
+                principles_arm_of(&root, json!({"id": own, "feature": "demo", "role": "code", "deps": deps})),
+                arm(principles_bucket_held(&own, 50)),
+                "code {own}"
+            );
+            assert_eq!(
+                principles_arm_of(&root, json!({"id": own, "feature": "demo", "role": "test", "deps": []})),
+                arm(principles_bucket_held(&own, 50)),
+                "lone test {own}"
+            );
+        }
+        assert!(split > 0, "fixture never separates own-id from dep-id hashing");
+    }
+
+    #[test]
+    fn the_principles_holdout_never_moves_the_learned_context_holdout() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(
+            &tmp,
+            r#"{"models":{"claude":{"generation":"sonnet"}},"principles_holdout_percent":100,"knowledge_holdout_percent":0}"#,
+        );
+        for n in 0..40 {
+            let id = format!("k-{n}");
+            assert_eq!(principles_arm_of(&root, json!({"id": id})), "holdout", "{id}");
+            assert_eq!(knowledge_arm(&root, &id), "knowledge", "{id}");
+        }
+        let (prompt, record) = {
+            let tmp = tempfile::tempdir().unwrap();
+            let root = repo(
+                &tmp,
+                r#"{"models":{"claude":{"generation":"sonnet"}},"principles_holdout_percent":0,"knowledge_holdout_percent":100}"#,
+            );
+            bundle_fixture(&root);
+            w(&root, ".bee/lanes/demo.json", r#"{"feature":"demo","route":{"class":"bugfix"}}"#);
+            w(&root, ".bee/cells/c-1.json", r#"{"id":"c-1","feature":"demo","status":"claimed","trace":{"worker":"w"},"lane":"small"}"#);
+            let Prepared::Value(v) =
+                prepare_dispatch(&root, "claude", "cell", Some("c-1"), Some("w"), false, None, None, true, None)
+                    .unwrap()
+            else {
+                panic!("expected an envelope")
+            };
+            let log = std::fs::read_to_string(root.join(".bee/logs/dispatch.jsonl")).unwrap();
+            (v["payload"]["prompt"].as_str().unwrap().to_string(), serde_json::from_str::<Value>(log.lines().last().unwrap()).unwrap())
+        };
+        assert_eq!(record["knowledge_arm"], json!("holdout"));
+        assert_eq!(record["principles_arm"], json!("principles"));
+        assert!(prompt.contains(PRINCIPLES_HEADER), "{prompt}");
+        assert!(!prompt.contains(LEARNED_HEADER), "{prompt}");
+    }
+
+    #[test]
+    fn the_principles_block_is_the_class_names_and_one_line_rules_only() {
+        let (prompt, _) = dispatch_principles_cell("0", "c-1", "code", "[]");
+        let tmp = tempfile::tempdir().unwrap();
+        let expected = crate::principles::principle_lines(&principles_root(&tmp, Some("0")), Some("bugfix"));
+        assert!(expected.len() > 1, "{expected:?}");
+        let after = prompt.split_once(&format!("{PRINCIPLES_HEADER} (machine-assembled):\n")).expect("block").1;
+        let block: Vec<&str> = after.lines().take_while(|l| !l.is_empty()).collect();
+        assert_eq!(block, expected.iter().map(String::as_str).collect::<Vec<_>>());
+        for rule in &block[1..] {
+            assert!(rule.starts_with("  - `") && rule.contains("` — "), "{rule}");
+        }
+    }
+
+    #[test]
+    fn a_classless_lane_gets_the_principles_arm_and_no_empty_block() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, r#"{"models":{"claude":{"generation":"sonnet"}},"principles_holdout_percent":0}"#);
+        bundle_fixture(&root);
+        w(&root, ".bee/lanes/demo.json", r#"{"feature":"demo"}"#);
+        w(&root, ".bee/cells/c-1.json", r#"{"id":"c-1","feature":"demo","status":"claimed","trace":{"worker":"w"},"lane":"small"}"#);
+        let Prepared::Value(v) =
+            prepare_dispatch(&root, "claude", "cell", Some("c-1"), Some("w"), false, None, None, true, None).unwrap()
+        else {
+            panic!("expected an envelope")
+        };
+        let prompt = v["payload"]["prompt"].as_str().unwrap();
+        let log = std::fs::read_to_string(root.join(".bee/logs/dispatch.jsonl")).unwrap();
+        let record: Value = serde_json::from_str(log.lines().last().unwrap()).unwrap();
+        assert_eq!(record["principles_arm"], json!("principles"));
+        assert!(!prompt.contains(PRINCIPLES_HEADER), "{prompt}");
+        assert!(!prompt.contains("{{"), "{prompt}");
     }
 
     #[test]

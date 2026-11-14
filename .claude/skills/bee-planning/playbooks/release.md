@@ -13,3 +13,4 @@
 A release commit without that `OK` line is not a release.
 
 Proof line: the script's final `OK` line, verbatim.
+Proof floor: the cap refuses a result weaker than this class's floor and names it; the table is the cap's own (`bee cells finish --help`).

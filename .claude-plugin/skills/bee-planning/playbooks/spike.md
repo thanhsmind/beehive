@@ -23,3 +23,4 @@ A spike that becomes the implementation was never a spike.
 
 Proof line: the decision id the answer was logged under, and the
 observation of each variant.
+Proof floor: the cap refuses a result weaker than this class's floor and names it; the table is the cap's own (`bee cells finish --help`).

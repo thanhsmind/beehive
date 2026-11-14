@@ -104,6 +104,7 @@ fn supported_vars_for(name: &str) -> Option<&'static [&'static str]> {
             "feature",
             "cell_json",
             "learned_context",
+            "principles",
             "expertise",
             "advisor",
             "prior_rounds",

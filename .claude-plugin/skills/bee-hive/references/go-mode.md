@@ -4,7 +4,7 @@ Load this when executing go mode — the full bee pipeline from raw feature requ
 
 Trigger: `/go [feature]`, "run the full pipeline", or "go mode".
 
-**Lane fast paths short-circuit this diagram** (`routing-and-contracts.md` "Lane ceremony in full"): `docs` lane skips the pipeline entirely (announce → write → format-check → capture). `tiny`/`small` collapse Steps 2–5 into: no plan.md (`tiny`) or an opt-in scoping synthesis + plan.md (`small`) → draft cell(s) previewed before persist, inline reality check → **one merged shape+execution gate** → execution (tiny: inline or dispatched; small and up: dispatched through `bee dispatch prepare` because each role runs its own configured model) → orchestrator-authored done-report → capture. The full diagram below is the `standard`/`high-risk` pipeline.
+**Lane fast paths short-circuit this diagram** (`routing-and-contracts.md` "Lane ceremony in full"): `docs` lane skips the pipeline entirely (announce → write → format-check → capture). `tiny`/`small` collapse Steps 2–5 into: no plan.md (`tiny`) or an opt-in scoping synthesis + plan.md (`small`) → draft cell(s) previewed before persist, inline reality check → **one merged shape+execution gate** → execution (every code cell, `tiny` included: a dispatched implementer and a separate dispatched tester through `bee dispatch prepare`, because each role runs its own configured model) → orchestrator-authored done-report → capture. The full diagram below is the `standard`/`high-risk` pipeline.
 
 ```text
 User: "/go [feature]"
@@ -63,7 +63,7 @@ Before invoking `bee-shaping`:
 - **Gate 2:** "Work shape is ready. Approve before current-work preparation?" — approves `shape` AND `execution` together in one call (`bee gate --merge`); every lane merges the same way.
 - **Gate 3:** P1 > 0 → "P1 findings block merge. Fix before proceeding?" ; P1 = 0 → "Review complete. Approve merge?"
 
-Each gate is one question in the standard CONTEXT / QUESTION / RECOMMENDATION / options format, presented per the **Gate Presentation Contract** (`routing-and-contracts.md`): plain-language layer in chat, in the user's language; full mechanical report written to `docs/history/<feature>/reports/` and linked, never pasted. Gates are asked **one at a time** — Gate 1 and Gate 2 are never batched into a single question. `tiny`/`small` keep the same merge shape at a lighter ceremony (`routing-and-contracts.md` "Lane ceremony in full"): the inline reality check plus one merged question IS the contract there too, and `tiny` closes with a done-report instead of Gate 3. Optional at Gate 2 and Gate 3: a cross-model second opinion; disagreement is quoted to the user, never auto-resolved.
+Each gate is one question in the standard CONTEXT / QUESTION / RECOMMENDATION / options format, presented per the **Gate Presentation Contract** (`routing-and-contracts.md`): plain-language layer in chat, in the user's language; full mechanical report written to `docs/history/<feature>/reports/` and linked, never pasted. Gates are asked **one at a time** — Gate 1 and Gate 2 are never batched into a single question. `tiny`/`small` keep the same merge shape at a lighter ceremony (`routing-and-contracts.md` "Lane ceremony in full"): the reality check plus one merged question IS the contract there too, and `tiny` closes with a done-report instead of Gate 3. Optional at Gate 2 and Gate 3: a cross-model second opinion; disagreement is quoted to the user, never auto-resolved.
 
 ## Gate Presentations
 

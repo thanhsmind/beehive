@@ -32,7 +32,7 @@ use std::time::Instant;
 
 // ── cells cap / cells finish ───────────────────────────────────────────────
 
-pub(crate) const CAP_FLAGS: [&str; 20] = [
+pub(crate) const CAP_FLAGS: [&str; 22] = [
     "id",
     "outcome",
     "files",
@@ -52,10 +52,12 @@ pub(crate) const CAP_FLAGS: [&str; 20] = [
     "fix-at",
     "knowledge-used",
     "no-knowledge-used",
+    "principle-used",
+    "no-principle-used",
     "knowledge-wrong",
 ];
 
-pub(crate) const FINISH_FLAGS: [&str; 23] = [
+pub(crate) const FINISH_FLAGS: [&str; 25] = [
     "id",
     "outcome",
     "files",
@@ -75,6 +77,8 @@ pub(crate) const FINISH_FLAGS: [&str; 23] = [
     "fix-at",
     "knowledge-used",
     "no-knowledge-used",
+    "principle-used",
+    "no-principle-used",
     "knowledge-wrong",
     "from-job",
     "proof-result",
@@ -166,6 +170,8 @@ pub(crate) struct CapFlags {
     pub(crate) no_mistakes: bool,
     pub(crate) knowledge_used: Option<String>,
     pub(crate) no_knowledge_used: bool,
+    pub(crate) principle_used: Option<String>,
+    pub(crate) no_principle_used: bool,
     pub(crate) knowledge_wrong: Option<String>,
     /// wfl-1/D8: `--report <json-string>`, RAW — validated against the
     /// worker Result-form shape (finish_support.rs's `parse_report_flag`)
@@ -381,6 +387,7 @@ pub(crate) fn cap_cell_from_flags(root: &Path, f: &CapFlags, finish: bool) -> MR
     let mistakes_answer = read_mistakes_answer(id, f, &report_value)?;
 
     let knowledge_used_answer = read_knowledge_used_answer(f, &report_value);
+    let principles_used_answer = read_principles_used_answer(f, &report_value);
     let knowledge_wrong_answer = read_knowledge_wrong_answer(f, &report_value);
 
     // decision 13ce1858 (test-cadence-boundary D1): the one test door used
@@ -449,6 +456,20 @@ pub(crate) fn cap_cell_from_flags(root: &Path, f: &CapFlags, finish: bool) -> MR
             }
             _ => {}
         }
+        let cell_feature = cell_map.get("feature").and_then(Value::as_str).unwrap_or("");
+        let class = crate::verbs::plan_group::route_class(root, cell_feature);
+        if let Some(floor) = cell_proof_floor(&Value::Object(cell_map.clone()), class.as_deref()) {
+            if !proof_meets_floor(floor, &proof_result) {
+                return Err(Fail::Thrown(format!(
+                    "capCell: cell \"{id}\" refused — its proof result \"{proof_result}\" is weaker than this cell's floor {floor}. Re-run the proof so it shows {floor}, or say why in a deviation and ask the leader."
+                )));
+            }
+        }
+        if principles_used_answer == PrinciplesUsedAnswer::Silent && prepare_put_in_principles_arm(root, id) {
+            return Err(Fail::Thrown(format!(
+                "capCell: cell \"{id}\" refused — its prepare record put it in the principles arm, so the cap must answer which principle changed a decision: pass --principle-used \"<slug> — <the decision it changed>\", or --no-principle-used (a report may carry a principles_used array, [] for none)."
+            )));
+        }
         let mut trace = merge_trace(cell_map.get("trace"))?;
         trace = guard_claim_ownership(
             root,
@@ -507,6 +528,11 @@ pub(crate) fn cap_cell_from_flags(root: &Path, f: &CapFlags, finish: bool) -> MR
             let mut next = overrides;
             next.push(Value::Object(entry));
             trace.insert("judge_overrides".into(), Value::Array(next));
+        }
+        if f.inline_reason.is_some() && touches_code(&Value::Object(cell_map.clone())) {
+            return Err(Fail::Thrown(format!(
+                "capCell: cell \"{id}\" refused — an inline cap (--inline-reason) is not allowed on a code-touching cell: the worker that writes the code and the tester that verifies it are separate dispatched workers. FIX: dispatch the cell with `bee dispatch prepare --claim`, then cap it from that worker."
+            )));
         }
         let lane = match cell_map.get("lane") {
             Some(Value::String(s)) => s.clone(),
@@ -711,6 +737,22 @@ pub(crate) fn cap_cell_from_flags(root: &Path, f: &CapFlags, finish: bool) -> MR
                 trace.insert("no_knowledge_used".into(), Value::Bool(true));
             }
             KnowledgeUsedAnswer::Silent => {}
+        }
+        match &principles_used_answer {
+            PrinciplesUsedAnswer::Recorded(list) => {
+                trace.insert(
+                    "principles_used".into(),
+                    Value::Array(
+                        list.iter()
+                            .map(|(slug, changed)| json!({"slug": slug, "changed": changed}))
+                            .collect(),
+                    ),
+                );
+            }
+            PrinciplesUsedAnswer::None => {
+                trace.insert("no_principles_used".into(), Value::Bool(true));
+            }
+            PrinciplesUsedAnswer::Silent => {}
         }
         if !knowledge_wrong_answer.is_empty() {
             trace.insert(
@@ -1181,6 +1223,55 @@ pub(crate) fn read_knowledge_used_answer(f: &CapFlags, report: &Value) -> Knowle
     KnowledgeUsedAnswer::Silent
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) enum PrinciplesUsedAnswer {
+    Silent,
+    Recorded(Vec<(String, String)>),
+    None,
+}
+
+pub(crate) fn read_principles_used_answer(f: &CapFlags, report: &Value) -> PrinciplesUsedAnswer {
+    let mut asked = f.no_principle_used;
+    let mut lines: Vec<String> = f.principle_used.iter().cloned().collect();
+    if let Some(Value::Array(reported)) = report.get("principles_used") {
+        asked = true;
+        lines.extend(reported.iter().map(|v| jsjson::js_to_string(v)));
+    }
+    let mut recorded: Vec<(String, String)> = Vec::new();
+    for line in &lines {
+        let text = js_trim(line);
+        let (slug, changed) = match text.split_once(PROOF_SEPARATOR) {
+            Some((slug, changed)) => (js_trim(slug), js_trim(changed)),
+            None => (text, ""),
+        };
+        if slug.is_empty() {
+            continue;
+        }
+        let entry = (slug.to_string(), changed.to_string());
+        if !recorded.contains(&entry) {
+            recorded.push(entry);
+        }
+    }
+    if !recorded.is_empty() {
+        return PrinciplesUsedAnswer::Recorded(recorded);
+    }
+    if asked {
+        return PrinciplesUsedAnswer::None;
+    }
+    PrinciplesUsedAnswer::Silent
+}
+
+pub(crate) fn prepare_put_in_principles_arm(root: &Path, id: &str) -> bool {
+    let path = root.join(".bee").join("logs").join("dispatch.jsonl");
+    let Ok(text) = std::fs::read_to_string(path) else { return false };
+    text.lines()
+        .filter_map(|l| serde_json::from_str::<Value>(l).ok())
+        .filter(|v| v.get("cell").and_then(Value::as_str) == Some(id))
+        .filter_map(|v| v.get("principles_arm").and_then(Value::as_str).map(str::to_string))
+        .last()
+        .is_some_and(|arm| arm == "principles")
+}
+
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub(crate) struct KnowledgeWrong {
     pub(crate) path: String,
@@ -1376,6 +1467,8 @@ pub(crate) fn cap_flags_from(flags: &rsv::Flags) -> Option<CapFlags> {
     let no_mistakes = bool_flag(flags, "no-mistakes")?;
     let knowledge_used = opt_string_flag(flags, "knowledge-used")?;
     let no_knowledge_used = bool_flag(flags, "no-knowledge-used")?;
+    let principle_used = opt_string_flag(flags, "principle-used")?;
+    let no_principle_used = bool_flag(flags, "no-principle-used")?;
     let knowledge_wrong = opt_string_flag(flags, "knowledge-wrong")?;
     let force_ownership = bool_flag(flags, "force-ownership")?;
     // D2's --fix-first convention: trimmed; empty/absent = None.
@@ -1409,6 +1502,8 @@ pub(crate) fn cap_flags_from(flags: &rsv::Flags) -> Option<CapFlags> {
         no_mistakes,
         knowledge_used,
         no_knowledge_used,
+        principle_used,
+        no_principle_used,
         knowledge_wrong,
         session_flag,
         force_ownership,
@@ -1634,13 +1729,13 @@ pub(crate) fn finish_cap_and_release(
             Some(s) if !js_trim(s).is_empty() => js_trim(s),
             _ => {
                 return Err(Fail::Thrown(
-                    "cells finish: --from-job requires --proof-result <green:unit|green:static|green:live> (FIX: pass --proof-result)".to_string(),
+                    "cells finish: --from-job requires --proof-result <green:unit|green:static|green:live|green:red-first> (FIX: pass --proof-result)".to_string(),
                 ));
             }
         };
         if !PROOF_RESULT_VALUES.contains(&proof_result) {
             return Err(Fail::Thrown(format!(
-                "cells finish: --proof-result \"{proof_result}\" is invalid — must be one of: green:unit, green:static, green:live (FIX: pass a valid --proof-result)"
+                "cells finish: --proof-result \"{proof_result}\" is invalid — must be one of: green:unit, green:static, green:live, green:red-first (FIX: pass a valid --proof-result)"
             )));
         }
         if !cap_flags.no_mistakes && cap_flags.mistake.is_none() {
@@ -2434,6 +2529,8 @@ mod tests {
             knowledge_used: None,
             knowledge_wrong: None,
             no_knowledge_used: false,
+            principle_used: None,
+            no_principle_used: false,
             // Pinned so the run this test reads back can never depend on a
             // BEE_SESSION_ID/CLAUDE_CODE_SESSION_ID the test process inherited.
             session_flag: Some("mb-run".to_string()),

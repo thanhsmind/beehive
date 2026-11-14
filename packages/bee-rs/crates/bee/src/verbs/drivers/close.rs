@@ -2144,9 +2144,8 @@ pub(crate) fn render_close_door_lines(doors: &[Door]) -> Vec<String> {
 fn proof_door_detail(proof: &crate::verbs::cells::ProofCheck) -> String {
     if proof.blocking {
         return format!(
-            "{} capped cell(s) carry a report with no valid proof line ({}) — re-cap with a real proof line: \"<command> — <result> — <scope reason>\".",
-            proof.bad_ids.len(),
-            proof.bad_ids.join(", ")
+            "{} — re-cap with a real proof line: \"<command> — <result> — <scope reason>\", and cap a separate test-role cell that depends on each stamped cell.",
+            proof.debt_summary()
         );
     }
     if proof.proven_count == 0 && proof.legacy_count == 0 {
@@ -2778,9 +2777,8 @@ fn close_handler_core(
         result.insert("tests".into(), Value::Null);
         let lines = vec![
             format!(
-                "{CLOSE_PROOF_DEBT_PREFIX} \"{feature}\" — close stops at the tests door: {} capped cell(s) carry a report with no valid proof line ({}).",
-                proof.bad_ids.len(),
-                proof.bad_ids.join(", ")
+                "{CLOSE_PROOF_DEBT_PREFIX} \"{feature}\" — close stops at the tests door: {}.",
+                proof.debt_summary()
             ),
             "remedy: re-cap each cell above with a real proof line: \"<command> — <result> — <scope reason>\" (bee cells finish --id <id> --report '{...}').".to_string(),
             format!("next: settle the proof debt above, then re-run bee close --feature {feature}"),

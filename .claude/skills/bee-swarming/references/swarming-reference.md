@@ -10,11 +10,8 @@ check stay with the orchestrator, but implementation itself runs through
 under the same execution contract as a swarm worker (same worker prompt
 template, same status-token protocol, same reservation and cap discipline),
 never a full bee-swarming wave: no wave analysis, no reviewers, no panels.
-`tiny` may instead execute inline in the orchestrator session — same merged
-gate, cap discipline, and done-report; dispatch stays legal and, when
-chosen, follows this same contract. An inline tiny cap with more than one
-counted file (paths outside `.bee/` and `docs/history/`) is refused unless
-`--inline-reason "<why>"` is given.
+`tiny` is no exception: its code cell is dispatched under this same
+contract, then tested by a separate tester worker.
 The orchestrator claims the cell itself before spawning — same as any
 wave — then spawns it per the Operating Contract's Spawn step (param-carrying
 dispatch — a `model` param or a pinned agent type, never a bare marker) and

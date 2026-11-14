@@ -31,8 +31,8 @@ main is control-plane and fine; execution depends on transport:
   as the way back.
 - **External herding workers** (bee herding run with --cwd) receive an
   explicit cwd at process start. The leader can stay in main while the
-  worker writes in the worktree — no manual entry required. A `tiny` cell (one hand-authored file) may run inline in this
-session. From `small` up, execution is dispatched through `bee dispatch prepare` because each role runs its own configured model. Inline outside `tiny` is refused at cap without `--inline-reason`, and an inline `tiny` cap with more than one counted file (paths outside `.bee/` and `docs/history/`) is refused the same way. `bee route` refuses `--lane tiny` with `--files` above 1. Dispatches run one worker per cell
+  worker writes in the worktree — no manual entry required. Every code cell, `tiny` included, is dispatched
+through `bee dispatch prepare` because each role runs its own configured model; inline execution of a code cell is refused at cap. `bee route` refuses `--lane tiny` with `--files` above 1. Dispatches run one worker per cell
 (`references/swarming-reference.md` ("Single execution worker in full")),
 parallel by default: disjoint cells fan out concurrently (reservations
 prove it, the machine-aware limit caps it (`herding.limits.concurrency`; unset, bee sizes it from the CPU count — `docs/knowledge/areas/bee-herding/waves-and-occupancy.md`), the same number for native workers, never a fixed count), serial needs a named file conflict.
@@ -245,13 +245,35 @@ included: add guidance beside those words, never over them.
    before-state you saw on main. `bee close` and `bee worktree merge`
    check that recorded proof at the boundary; they run nothing
    themselves. CI runs the full declared command on every push — the
-   one deterministic net.
+   one deterministic net. When the dispatch prompt carries a Principles
+   block, the cap names each principle you applied and the decision it
+   changed (`--principle-used '<slug> — <decision>'`), or says plainly it
+   changed none (`--no-principle-used`).
 7. Return exactly one token, first thing in your final message, and the
    Result form beside it — never in place of it:
    `[DONE]` (outcome, files, commit) · `[BLOCKED]` (what, why, your
    diagnosis) · `[HANDOFF]` (the 150k-token or 65% handoff — handoff file
    written before the token; rule: agents-context-handoff-65) · `[PARKED]` (question, cell id) · `[NOOP]` (cell missing or already capped). Never wait
    silently; never ask a blocking question — you run headless.
+
+### Tester contract
+
+A code cell has two workers: the implementer writes the code and owns the
+existing test edits its change forces; a separate tester, dispatched after
+the implementer caps and sharing no context with it, verifies the result
+independently and adds the new tests. The tester is a `role: test` cell
+that depends on the implementer's cell.
+
+- A tester never edits product code. It writes tests, runs them, and caps
+  at or above the proof floor of its cell; the floor table is the cap's
+  own (`bee cells finish --help`), never copied into a brief.
+- A red result is a finding, not a fix: the tester returns `[BLOCKED]`
+  with the red output and its diagnosis.
+- The leader answers a red tester by reopening the implementer cell and
+  dispatching a fresh implementer. That prompt carries the tester's
+  `[BLOCKED]` block as a prior round. The tester re-runs after the new
+  implementer caps.
+- The tester's cap answers the principle question like any other cell's.
 
 ## Hard rules (both roles)
 

@@ -96,7 +96,7 @@ work endangers (decomposition, walking skeleton, dependency thinking:
 
 | Lane | Shape |
 |---|---|
-| `tiny` | one cell — the cell is the micro-plan |
+| `tiny` | one cell, plus its tester cell when it touches code — the cell is the micro-plan |
 | `small` | logged scoping synthesis + 1–3 cells; `plan.md` only on request |
 | `standard`/`high-risk` | `docs/history/<feature>/plan.md` — `references/planning-reference.md` ("Artifact: plan.md", "Phase plan vs epic map") |
 
@@ -168,9 +168,14 @@ test-shaped path in `files` or `role: test`, so a `code`-role cell adding an
 inline test module to a source file it already touches is NOT caught — citing
 is on the author (`docs/knowledge/areas/workflow-state/dispatch.md`).
 
-The writer owns tests TDD-style as part of each cell — coverage judgment
-first: cite existing tests by file and case, author only the gap
-(`.bee/expertise/tests.md`). The agent owns test scope (rule: agents-proof-at-cap) —
+Every code cell gets a tester cell: a `role: test` cell that depends on it,
+dispatched after the implementer caps, to a worker that shares no context
+with it (the Tester contract in `bee-swarming`). The implementer owns only
+the existing test edits its change forces; the tester adds the new tests —
+coverage judgment first: cite existing tests by file and case, author only
+the gap (`.bee/expertise/tests.md`). No lane skips the pair, `tiny`
+included. A docs-only cell gets a second cell for its parity and pointer
+checks instead of a tester. The agent owns test scope (rule: agents-proof-at-cap) —
 scoping detail in `references/planning-reference.md` ("Test scoping"). Then
 `bee state set --owner planning --phase swarming --next-action "Invoke bee-swarming."`
 

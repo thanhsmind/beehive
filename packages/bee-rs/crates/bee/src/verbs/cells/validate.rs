@@ -562,6 +562,7 @@ pub(crate) fn normalize_new_cell(cell: &Value) -> MR<Value> {
         _ => Value::String("open".into()),
     };
     out.insert("status".into(), status);
+    out.insert("tester_rule".into(), Value::Bool(true));
     for key in ["deps", "decisions", "files", "read_first", "affects_skills", "affects_specs"] {
         let value = match map.get(key) {
             Some(Value::Array(a)) => Value::Array(a.clone()),

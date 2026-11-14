@@ -24,3 +24,4 @@ This is the investigation route (per D3, decision `f1ffa7bd`): the existing
 read-only is craft here, not a guard (backlog `p-69bee217`).
 
 Proof line: the account's anchors, each one opened or run.
+Proof floor: the cap refuses a result weaker than this class's floor and names it; the table is the cap's own (`bee cells finish --help`).

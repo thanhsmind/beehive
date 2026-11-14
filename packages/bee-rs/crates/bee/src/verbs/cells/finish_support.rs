@@ -72,9 +72,10 @@ pub(crate) const REPORT_KEYS: [&str; 5] = ["outcome", "commit", "files", "tests"
 /// result is read against. Optional here so callers without a baseline keep
 /// capping cleanly; validated as a non-empty string when present and stored
 /// on the cell trace.
-pub(crate) const REPORT_OPTIONAL_KEYS: [&str; 9] = [
+pub(crate) const REPORT_OPTIONAL_KEYS: [&str; 10] = [
     "mistakes",
     "knowledge_used",
+    "principles_used",
     "knowledge_wrong",
     "baseline",
     "reaction",
@@ -96,7 +97,7 @@ pub(crate) const PROOF_SEPARATOR: &str = " — ";
 /// restated in a second place is how a closed vocabulary decays back into
 /// three free-text values. Checked on the WRITE path only, in
 /// [`parse_report_flag`] — see the D2 note on [`parse_tests_proof`].
-pub(crate) const PROOF_RESULT_VALUES: [&str; 3] = [
+pub(crate) const PROOF_RESULT_VALUES: [&str; 4] = [
     // the real product or command was driven and its observable result inspected
     "green:live",
     // automated tests passed
@@ -104,7 +105,42 @@ pub(crate) const PROOF_RESULT_VALUES: [&str; 3] = [
     // it compiled, type-checked, linted, or a parity/pointer check passed,
     // with nothing executed
     "green:static",
+    "green:red-first",
 ];
+
+pub(crate) fn class_proof_floor(class: Option<&str>) -> &'static str {
+    match class {
+        Some("bugfix") => "green:red-first",
+        Some("release") => "green:live",
+        Some("docs" | "research" | "spike" | "content") => "green:static",
+        _ => "green:unit",
+    }
+}
+
+pub(crate) fn cell_proof_floor(cell: &Value, class: Option<&str>) -> Option<&'static str> {
+    let role = cell.get("role").and_then(Value::as_str);
+    let files: Vec<&str> = cell
+        .get("files")
+        .and_then(Value::as_array)
+        .map(|a| a.iter().filter_map(Value::as_str).collect())
+        .unwrap_or_default();
+    if !files.is_empty() && files.iter().all(|f| f.ends_with(".md") || f.starts_with("docs/")) {
+        return Some("green:static");
+    }
+    match role {
+        Some("test") => Some(class_proof_floor(class)),
+        _ if !files.is_empty() => Some("green:unit"),
+        _ => None,
+    }
+}
+
+pub(crate) fn proof_meets_floor(floor: &str, result: &str) -> bool {
+    match floor {
+        "green:static" => true,
+        "green:unit" => matches!(result, "green:unit" | "green:live" | "green:red-first"),
+        _ => result == floor,
+    }
+}
 
 pub(crate) fn proof_reason_names_evidence(reason: &str) -> bool {
     reason.split_whitespace().any(|token| {
@@ -238,6 +274,14 @@ pub(crate) fn parse_report_flag(raw: &str) -> MR<Value> {
         _ => {
             return Err(Fail::Thrown(
                 "cells finish: --report key \"knowledge_used\" must be an array — one entry per concept that changed a decision, each \"<docs/knowledge path> — <the decision it changed>\"; an empty array states that no concept changed a decision.".to_string(),
+            ))
+        }
+    }
+    match map.get("principles_used") {
+        None | Some(Value::Array(_)) => {}
+        _ => {
+            return Err(Fail::Thrown(
+                "cells finish: --report key \"principles_used\" must be an array — one entry per class principle that changed a decision, each \"<slug> — <the decision it changed>\"; an empty array states that no principle changed a decision.".to_string(),
             ))
         }
     }
@@ -1058,6 +1102,12 @@ pub(crate) fn report_from_job(
     if let Some(entries) = &result.knowledge_used {
         map.insert(
             "knowledge_used".to_string(),
+            Value::Array(entries.iter().cloned().map(Value::String).collect()),
+        );
+    }
+    if let Some(entries) = &result.principles_used {
+        map.insert(
+            "principles_used".to_string(),
             Value::Array(entries.iter().cloned().map(Value::String).collect()),
         );
     }

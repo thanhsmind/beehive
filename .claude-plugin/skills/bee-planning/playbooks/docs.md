@@ -14,3 +14,4 @@
 A second document saying the same thing is not coverage.
 
 Proof line: the parity or pointer check that ran, and its output.
+Proof floor: the cap refuses a result weaker than this class's floor and names it; the table is the cap's own (`bee cells finish --help`).

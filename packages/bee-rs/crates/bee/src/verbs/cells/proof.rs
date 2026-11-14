@@ -46,6 +46,55 @@ pub(crate) struct ProofCheck {
     /// module runs no git.
     pub(crate) commits: Vec<(String, String)>,
     pub(crate) patch_ids: Vec<(String, String)>,
+    pub(crate) unpaired: Vec<String>,
+}
+
+impl ProofCheck {
+    pub(crate) fn debt_summary(&self) -> String {
+        let mut parts: Vec<String> = Vec::new();
+        if !self.bad_ids.is_empty() {
+            parts.push(format!(
+                "{} capped cell(s) carry a report with no valid proof line ({})",
+                self.bad_ids.len(),
+                self.bad_ids.join(", ")
+            ));
+        }
+        if !self.unpaired.is_empty() {
+            parts.push(format!(
+                "{} stamped cell(s) have no capped dependent tester or checker on the test role ({})",
+                self.unpaired.len(),
+                self.unpaired.join(", ")
+            ));
+        }
+        parts.join("; ")
+    }
+}
+
+fn cell_files(cell: &Value) -> Vec<&str> {
+    cell.get("files").and_then(Value::as_array).map(|a| a.iter().filter_map(Value::as_str).collect()).unwrap_or_default()
+}
+
+pub(crate) fn is_docs_path(path: &str) -> bool {
+    path.ends_with(".md") || path.starts_with("docs/")
+}
+
+pub(crate) fn touches_code(cell: &Value) -> bool {
+    let files = cell_files(cell);
+    !files.is_empty() && !files.iter().all(|f| is_docs_path(f))
+}
+
+pub(crate) fn needs_tester(cell: &Value) -> bool {
+    cell.get("tester_rule").and_then(Value::as_bool) == Some(true)
+        && cell.get("role").and_then(Value::as_str) != Some("test")
+        && !cell_files(cell).is_empty()
+}
+
+pub(crate) fn has_dependent_with_role_test(cells: &[Value], id: &str, capped_only: bool) -> bool {
+    cells.iter().any(|c| {
+        c.get("role").and_then(Value::as_str) == Some("test")
+            && (!capped_only || c.get("status").and_then(Value::as_str) == Some("capped"))
+            && c.get("deps").and_then(Value::as_array).is_some_and(|d| d.iter().any(|x| x.as_str() == Some(id)))
+    })
 }
 
 /// The D8 proof-check itself: every `status: "capped"` cell for `feature`
@@ -64,7 +113,15 @@ pub(crate) fn feature_proof_check(
     let mut patch_ids: Vec<(String, String)> = Vec::new();
     let mut proven_count = 0usize;
     let mut legacy_count = 0usize;
-    for cell in crate::verbs::drivers::list_cells_including_archive(root, feature, Some("capped"))? {
+    let mut unpaired: Vec<String> = Vec::new();
+    let all = crate::verbs::drivers::list_cells_including_archive(root, feature, None)?;
+    for cell in all.iter().filter(|c| c.get("status").and_then(Value::as_str) == Some("capped")) {
+        if needs_tester(cell) {
+            let id = cell.get("id").and_then(Value::as_str).unwrap_or("");
+            if !has_dependent_with_role_test(&all, id, true) {
+                unpaired.push(id.to_string());
+            }
+        }
         let report = cell.get("trace").and_then(|t| t.get("report"));
         let Some(report) = report else {
             legacy_count += 1;
@@ -92,7 +149,7 @@ pub(crate) fn feature_proof_check(
             bad_ids.push(id);
         }
     }
-    Ok(ProofCheck { blocking: !bad_ids.is_empty(), bad_ids, proven_count, legacy_count, commits, patch_ids })
+    Ok(ProofCheck { blocking: !bad_ids.is_empty() || !unpaired.is_empty(), bad_ids, unpaired, proven_count, legacy_count, commits, patch_ids })
 }
 
 #[cfg(test)]
@@ -332,5 +389,29 @@ mod tests {
         let check = feature_proof_check(root, "demo").unwrap();
         assert!(check.blocking, "an archived cap with an empty proof must still refuse");
         assert_eq!(check.bad_ids, vec!["demo-1".to_string()]);
+    }
+}
+
+#[cfg(test)]
+mod tester_rule_tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn the_rule_keys_on_files_not_role_names() {
+        for role in ["code", "design", "writer", "docs", "generation"] {
+            let cell = json!({"role": role, "tester_rule": true, "files": ["a.rs"]});
+            assert!(needs_tester(&cell), "{role}");
+        }
+        assert!(!needs_tester(&json!({"role": "test", "tester_rule": true, "files": ["a.rs"]})));
+        assert!(!needs_tester(&json!({"role": "code", "tester_rule": true, "files": []})));
+        assert!(!needs_tester(&json!({"role": "code", "files": ["a.rs"]})));
+    }
+
+    #[test]
+    fn docs_only_files_are_not_code_touching() {
+        assert!(touches_code(&json!({"files": ["docs/a.txt", "b.rs"]})));
+        assert!(!touches_code(&json!({"files": ["docs/a.txt", "README.md"]})));
+        assert!(!touches_code(&json!({"files": []})));
     }
 }

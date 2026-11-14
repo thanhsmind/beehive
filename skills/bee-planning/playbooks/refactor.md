@@ -17,3 +17,4 @@
    the whole payoff of a refactor.
 
 Proof line: the record, green before the change and green after it.
+Proof floor: the cap refuses a result weaker than this class's floor and names it; the table is the cap's own (`bee cells finish --help`).

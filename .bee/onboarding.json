@@ -41,10 +41,10 @@
       "gather.md": "6cb0ceeaac9bf833e1826469428cd1efc4308a73ebc1235a9e6aaed39f309b6d",
       "peer-boot.md": "bf9e4a6bc4fe17a669f59963a038ed32a71332d2c73683f478108d91da14f4f3",
       "reviewer.md": "e2c56ba17e2aa951a60c89f4c335a05355122062560e8e00277bd347dca87e9a",
-      "worker-cell.md": "9378d342ca8dea01333634430c18577f5b142420abb7d1ad314c5cc51a45ced4"
+      "worker-cell.md": "fbda47fb4e82ea15080f44b93c1142b97f9534a6f748ea97d69a0865295a3992"
     },
     "leader": {
-      "LEADER.md": "a9657ad54bee4b7a47aa528c6f5bfe48b06bad07dbd85837ab1ecfa3c396cfa4"
+      "LEADER.md": "ef354afff6aeda9444b245141725621f1923526fa8a90afab5ef30d238bc3594"
     },
     "playbooks": {
       "bee-defects.md": "128820aaccc3644492f753d10cfba5231bfd7939624aba943da7ab74340a5dc5",
@@ -59,7 +59,7 @@
     },
     "verify_skills": {
       ".claude/skills/verify-app": {
-        "SKILL.md": "5a1a9e0cf9938fad3feaf806d0770b1c731a77bf157789105f551ac1600c2e90",
+        "SKILL.md": "53390e3ab0d18f2fa998c85e1c7f0abefb60096a20c3f49e1b1f5706a8164985",
         "control-bee": "613ed4462ebdee90d80157cf829dbaa74d91261584019cfa2f610068c0230983",
         "features/README.md": "5a406fcc1f26d35cace271d33fb0f0e69905f1fb64ba10bfbeda25622ebae8a3",
         "features/cells-and-proof.md": "28719684a09d9ac3a2e781216321fbde72ce14cffd6bde79ff1027f4fecbb676",
@@ -80,7 +80,7 @@
         "fixtures/role-plan-v2.md": "05f99d5afeaad84a43de714a90ab388ba7073ff93e83a783764faba4d0c49965"
       },
       ".agents/skills/verify-app": {
-        "SKILL.md": "5a1a9e0cf9938fad3feaf806d0770b1c731a77bf157789105f551ac1600c2e90",
+        "SKILL.md": "53390e3ab0d18f2fa998c85e1c7f0abefb60096a20c3f49e1b1f5706a8164985",
         "control-bee": "613ed4462ebdee90d80157cf829dbaa74d91261584019cfa2f610068c0230983",
         "features/README.md": "5a406fcc1f26d35cace271d33fb0f0e69905f1fb64ba10bfbeda25622ebae8a3",
         "features/cells-and-proof.md": "28719684a09d9ac3a2e781216321fbde72ce14cffd6bde79ff1027f4fecbb676",
@@ -101,7 +101,7 @@
         "fixtures/role-plan-v2.md": "05f99d5afeaad84a43de714a90ab388ba7073ff93e83a783764faba4d0c49965"
       },
       ".opencode/skills/verify-app": {
-        "SKILL.md": "5a1a9e0cf9938fad3feaf806d0770b1c731a77bf157789105f551ac1600c2e90",
+        "SKILL.md": "53390e3ab0d18f2fa998c85e1c7f0abefb60096a20c3f49e1b1f5706a8164985",
         "control-bee": "613ed4462ebdee90d80157cf829dbaa74d91261584019cfa2f610068c0230983",
         "features/README.md": "5a406fcc1f26d35cace271d33fb0f0e69905f1fb64ba10bfbeda25622ebae8a3",
         "features/cells-and-proof.md": "28719684a09d9ac3a2e781216321fbde72ce14cffd6bde79ff1027f4fecbb676",
@@ -188,5 +188,5 @@
   },
   "design_role_offered": true,
   "created_at": "2026-07-24T03:53:44.750Z",
-  "updated_at": "2026-11-14T14:42:10.870Z"
+  "updated_at": "2026-11-14T17:45:59.554Z"
 }
