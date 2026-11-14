@@ -455,6 +455,122 @@ use crate::version::BEE_VERSION;
     }
 
     #[test]
+    fn orient_with_no_lane_records_keeps_the_route_principles() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write(root, ".bee/onboarding.json", &format!(r#"{{"bee_version":"{BEE_VERSION}"}}"#));
+        write(root, crate::principles::PRINCIPLE_INDEX, crate::principles::TEST_INDEX);
+        write(
+            root,
+            ".bee/state.json",
+            r#"{"phase":"swarming","feature":"solo","route":{"class":"refactor","lane":"standard"}}"#,
+        );
+        let packet = build_orient(&mut ctx_for(root)).unwrap();
+        let text = render_orient_text(&packet);
+        assert!(text.contains("Principles (class=refactor)"), "{text}");
+        assert!(text.contains("bee-principle-one-home"), "{text}");
+    }
+
+    fn bee_bin() -> PathBuf {
+        let mut dir = std::env::current_exe().unwrap();
+        dir.pop();
+        if dir.ends_with("deps") {
+            dir.pop();
+        }
+        let bin = dir.join(format!("bee{}", std::env::consts::EXE_SUFFIX));
+        assert!(bin.is_file(), "bee binary not built at {}", bin.display());
+        bin
+    }
+
+    fn file_snapshot(dir: &Path) -> Vec<(PathBuf, Vec<u8>)> {
+        let mut out = Vec::new();
+        for entry in std::fs::read_dir(dir).unwrap() {
+            let path = entry.unwrap().path();
+            if path.is_dir() {
+                out.push((path.clone(), Vec::new()));
+                out.extend(file_snapshot(&path));
+            } else {
+                out.push((path.clone(), std::fs::read(&path).unwrap()));
+            }
+        }
+        out.sort();
+        out
+    }
+
+    fn class_fixture() -> tempfile::TempDir {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write(root, ".bee/onboarding.json", &format!(r#"{{"bee_version":"{BEE_VERSION}"}}"#));
+        write(
+            root,
+            crate::principles::PRINCIPLE_INDEX,
+            &crate::principles::TEST_INDEX
+                .replace("  classes: refactor\n", "  classes: refactor, research\n"),
+        );
+        write(root, ".bee/state.json", r#"{"phase":"idle"}"#);
+        tmp
+    }
+
+    #[test]
+    fn bee_orient_class_research_prints_the_research_playbook_and_principles_and_writes_nothing() {
+        let tmp = class_fixture();
+        let root = tmp.path();
+        let before = file_snapshot(root);
+        let out = std::process::Command::new(bee_bin())
+            .args(["orient", "--class", "research"])
+            .current_dir(root)
+            .output()
+            .unwrap();
+        assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+        assert_eq!(
+            String::from_utf8(out.stdout).unwrap(),
+            [
+                "playbook: skills/bee-planning/playbooks/research.md",
+                "- Principles (class=research) — name each one you apply and the decision it changed:",
+                "  - `bee-principle-one-home` — a rule lives in one place and every other surface points at it",
+                "",
+            ]
+            .join("\n")
+        );
+        for args in [
+            ["orient", "--class", "research", "--json"],
+            ["orient", "--json", "--class", "research"],
+        ] {
+            let out = std::process::Command::new(bee_bin())
+                .args(args)
+                .current_dir(root)
+                .output()
+                .unwrap();
+            assert!(out.status.success(), "{args:?}: {}", String::from_utf8_lossy(&out.stderr));
+            let packet: Value = serde_json::from_slice(&out.stdout).unwrap();
+            assert_eq!(packet["class"], json!("research"));
+            assert_eq!(packet["playbook"], json!("skills/bee-planning/playbooks/research.md"));
+            assert_eq!(packet["principles"].as_array().unwrap().len(), 2);
+        }
+        assert_eq!(file_snapshot(root), before);
+    }
+
+    #[test]
+    fn bee_orient_refuses_an_unknown_class_naming_every_valid_one_and_writes_nothing() {
+        let tmp = class_fixture();
+        let root = tmp.path();
+        let before = file_snapshot(root);
+        let out = std::process::Command::new(bee_bin())
+            .args(["orient", "--class", "nope"])
+            .current_dir(root)
+            .output()
+            .unwrap();
+        assert_eq!(out.status.code(), Some(1));
+        assert!(out.stdout.is_empty(), "{}", String::from_utf8_lossy(&out.stdout));
+        let stderr = String::from_utf8(out.stderr).unwrap();
+        assert!(stderr.contains("unknown class \"nope\""), "{stderr}");
+        for class in crate::verbs::state_group::ROUTE_CLASS_VALUES {
+            assert!(stderr.contains(class), "{class} missing from: {stderr}");
+        }
+        assert_eq!(file_snapshot(root), before);
+    }
+
+    #[test]
     fn status_text_renderer_minimal_repo() {
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
