@@ -1,0 +1,178 @@
+{
+  "id": "ssps-1",
+  "feature": "skillstation-publish-skip",
+  "title": "Skip the hub publish of a skill already active with the same files",
+  "lane": "small",
+  "role": "code",
+  "deps": [],
+  "decisions": [
+    "D1",
+    "D2",
+    "D3",
+    "30aa7a86-a74c-4c42-b157-c9cb74fab022"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/onboard/plan.rs",
+    "packages/bee-rs/crates/bee/src/verbs/skillstation_group.rs",
+    "docs/knowledge/areas/onboarding/skillstation-hub-skills-and-aliases.md",
+    "docs/history/skillstation-publish-skip/delivery.md"
+  ],
+  "read_first": [
+    "docs/history/skillstation-publish-skip/CONTEXT.md",
+    "docs/history/skillstation-publish-skip/plan.md",
+    "docs/knowledge/areas/onboarding/skillstation-hub-skills-and-aliases.md",
+    "packages/bee-rs/crates/bee/src/onboard/plan.rs",
+    "packages/bee-rs/crates/bee/src/verbs/skillstation_group.rs",
+    "packages/bee-rs/crates/bee/src/onboard/render.rs"
+  ],
+  "action": "RED FIRST: in the onboard plan tests (find the existing --skillstation switch tests that call set_test_hub), add a test where the injected hub answers `skill show <id> --json` for bee-deploying and for every bee-principle-* of the test engine with manifest.status active and manifest.resources whose path is `skills/default/<id>/<rel>` and digest `sha256:<hex of the engine file rendered for claude>`. Plan with skillstation on and the claude runtime: assert zero publish_skillstation items, AND that the after_publish remove_skill items for the principles and the set_principles_hub item are still planned (D3). Add cases: one principle whose hub digest differs -> exactly that principle gets a publish item; one skill missing (runner error containing `skill not found`) -> it gets an item; one skill draft -> it gets an item; a hub runner that fails with any other reason -> every item kept (D2). Run the new test and watch it fail because 25-style items are planned today; record the red output. FIX: in skillstation_group.rs add the resource set to Hub (Vec of (rel path after the `<id>/` segment, hex digest without the `sha256:` prefix), parsed from manifest.resources; missing resources gives an empty set). In plan.rs add one helper that decides whether a skill needs a publish: hub_show via hub_runner(repo_root); Missing -> publish; Skip -> publish; status != active -> publish; else compare the sorted set from walk_skill_tree(engine.skills_root.join(id), Some(render claude)).files with the hub set; equal -> no item. Use it to filter publish_skillstation_items (bee-deploying, compared against the engine source rendered for claude) and publish_principle_items. Do not change apply.rs or the after_publish ordering. DOCS: in docs/knowledge/areas/onboarding/skillstation-hub-skills-and-aliases.md Business Rules, state the publish filter in two or three sentences citing skillstation-publish-skip D1-D3 (never raw decision ids). Write docs/history/skillstation-publish-skip/delivery.md (what changed, the red and green test names, proof). One commit.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- skillstation onboard",
+  "must_haves": {
+    "truths": [
+      "onboard --skillstation plans no publish_skillstation item for a skill active on the hub with the same per-file sha256 set",
+      "a missing, non-active or changed skill still gets a publish_skillstation item",
+      "a hub read that skips keeps every publish item",
+      "with zero publish items the switch still plans the after_publish principle removals and set_principles_hub"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/onboard/plan.rs",
+        "substantive": "the publish filter"
+      }
+    ],
+    "key_links": [
+      "plan.rs reads the hub through hub_show, not a copy",
+      "the staged content is hashed with walk_skill_tree and the claude render"
+    ],
+    "prohibitions": [
+      "No code comments",
+      "No change to apply.rs",
+      "Onboard tests never call the real skillstation"
+    ],
+    "open_choices": [
+      "The helper name and where the hub set lives inside Hub"
+    ]
+  },
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/onboarding/skillstation-hub-skills-and-aliases.md"
+  ],
+  "status": "capped",
+  "trace": {
+    "worker": "ssps-worker",
+    "outcome": "onboard --skillstation now publishes only missing, inactive or changed skills; commit f300a895b",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/onboard/plan.rs",
+      "packages/bee-rs/crates/bee/src/verbs/skillstation_group.rs",
+      "packages/bee-rs/crates/bee/src/onboard/tests.rs",
+      "docs/knowledge/areas/onboarding/skillstation-hub-skills-and-aliases.md",
+      "docs/history/skillstation-publish-skip/delivery.md"
+    ],
+    "deviations": [
+      "sync-ack: only the skillstation hub concept covers the publish filter and ssps-1 updated it; the other anchored concepts describe unrelated onboard behaviour that did not change"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-14T11:49:19.486Z",
+    "behavior_change": false,
+    "verification_evidence": "cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml — green:unit — full suite, 5118 passed 0 failed; red first: 5 publish_skip tests failed before the fix",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "27f5c17d-eba3-4da5-b4ba-e38100207824",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- skillstation onboard",
+    "claimed_at": "2026-11-14T11:43:47.839Z",
+    "knowledge_delta": [
+      "docs/knowledge/areas/onboarding/skillstation-hub-skills-and-aliases.md"
+    ],
+    "sync_ack": "only the skillstation hub concept covers the publish filter and ssps-1 updated it; the other anchored concepts describe unrelated onboard behaviour that did not change",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "onboard --skillstation now publishes only missing, inactive or changed skills; commit f300a895b",
+      "commit": "f300a895ba556612ebc10a2776a9a754cdd5f2ee",
+      "files": [
+        "packages/bee-rs/crates/bee/src/onboard/plan.rs",
+        "packages/bee-rs/crates/bee/src/verbs/skillstation_group.rs",
+        "packages/bee-rs/crates/bee/src/onboard/tests.rs",
+        "docs/knowledge/areas/onboarding/skillstation-hub-skills-and-aliases.md",
+        "docs/history/skillstation-publish-skip/delivery.md"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- skillstation onboard — green:unit — cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml — green:unit — full suite, 5118 passed 0 failed; red first: 5 publish_skip tests failed before the fix",
+      "deviations": [],
+      "patch_id": "ea00b73a704864c8aa0b63ad9d307684703743ea"
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "onboard --skillstation plans no publish_skillstation item for a skill active on the hub with the same per-file sha256 set",
+            "artifact": "packages/bee-rs/crates/bee/src/onboard/plan.rs"
+          },
+          {
+            "requirement": "a missing, non-active or changed skill still gets a publish_skillstation item",
+            "artifact": "packages/bee-rs/crates/bee/src/onboard/tests.rs"
+          },
+          {
+            "requirement": "a hub read that skips keeps every publish item",
+            "artifact": "packages/bee-rs/crates/bee/src/onboard/tests.rs"
+          },
+          {
+            "requirement": "with zero publish items the switch still plans the after_publish principle removals and set_principles_hub",
+            "artifact": "packages/bee-rs/crates/bee/src/onboard/tests.rs"
+          },
+          {
+            "requirement": "plan.rs reads the hub through hub_show, not a copy",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/skillstation_group.rs"
+          },
+          {
+            "requirement": "the staged content is hashed with walk_skill_tree and the claude render",
+            "artifact": "packages/bee-rs/crates/bee/src/onboard/plan.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/onboard/plan.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/onboard/plan.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/skillstation_group.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/skillstation_group.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/onboard/tests.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/onboard/tests.rs"
+          },
+          {
+            "requirement": "docs/knowledge/areas/onboarding/skillstation-hub-skills-and-aliases.md",
+            "artifact": "docs/knowledge/areas/onboarding/skillstation-hub-skills-and-aliases.md"
+          },
+          {
+            "requirement": "docs/history/skillstation-publish-skip/delivery.md",
+            "artifact": "docs/history/skillstation-publish-skip/delivery.md"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/.bee/logs/timings.jsonl",
+            "artifact": "packages/bee-rs/crates/bee/.bee/logs/timings.jsonl"
+          }
+        ],
+        "recorded_at": "2026-11-14T11:51:17.970Z",
+        "recorded_by": "27f5c17d-eba3-4da5-b4ba-e38100207824",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": {
+    "new": 74160,
+    "cached": 448741,
+    "total": 522901,
+    "models": {
+      "claude-sonnet-5-5": {
+        "new": 74160,
+        "cached": 448741,
+        "total": 522901
+      }
+    },
+    "jobs": [
+      "job-1794656631891-6001-1"
+    ]
+  }
+}

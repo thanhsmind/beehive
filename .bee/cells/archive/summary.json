@@ -2238,5 +2238,10 @@
     "capped": 9,
     "dropped": 0,
     "archived_at": "2026-11-14T11:16:53.280Z"
+  },
+  "skillstation-publish-skip": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-11-14T11:52:31.276Z"
   }
 }

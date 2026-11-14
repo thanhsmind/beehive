@@ -1,0 +1,90 @@
+{
+  "schema": "bee-usage/v1",
+  "feature": "skillstation-publish-skip",
+  "closed_at": "2026-11-14T11:52:31.316Z",
+  "sessions": [
+    {
+      "session_id": "27f5c17d-eba3-4da5-b4ba-e38100207824",
+      "models": {
+        "claude-opus-5-5": {
+          "input": 134,
+          "output": 27362,
+          "cache_write": 120830,
+          "cache_read": 6094377,
+          "new": 148326,
+          "cached": 6094377,
+          "total": 6242703
+        }
+      },
+      "subagent_models": {},
+      "subagent_count": 0,
+      "started_ms": 1794656431768,
+      "ended_ms": 1794657149034,
+      "totals": {
+        "new": 148326,
+        "cached": 6094377,
+        "total": 6242703
+      }
+    }
+  ],
+  "skipped": 0,
+  "totals": {
+    "main": {
+      "new": 148326,
+      "cached": 6094377,
+      "total": 6242703
+    },
+    "subagents": {
+      "new": 0,
+      "cached": 0,
+      "total": 0
+    },
+    "total": {
+      "new": 222486,
+      "cached": 6543118,
+      "total": 6765604
+    },
+    "herding": {
+      "new": 74160,
+      "cached": 448741,
+      "total": 522901,
+      "models": {
+        "claude-sonnet-5-5": {
+          "input": 22,
+          "output": 8508,
+          "cache_write": 65630,
+          "cache_read": 448741,
+          "new": 74160,
+          "cached": 448741,
+          "total": 522901
+        }
+      }
+    }
+  },
+  "herding_sessions": [
+    {
+      "session_id": "825b4067-2339-407e-bb80-804339b34b7e",
+      "models": {
+        "claude-sonnet-5-5": {
+          "input": 22,
+          "output": 8508,
+          "cache_write": 65630,
+          "cache_read": 448741,
+          "new": 74160,
+          "cached": 448741,
+          "total": 522901
+        }
+      },
+      "subagent_models": {},
+      "subagent_count": 0,
+      "started_ms": 1794656633490,
+      "ended_ms": 1794656907834,
+      "totals": {
+        "new": 74160,
+        "cached": 448741,
+        "total": 522901
+      },
+      "job_id": "job-1794656631891-6001-1"
+    }
+  ]
+}
