@@ -49,6 +49,7 @@ pub mod status_full;
 pub mod supervisor;
 pub mod test_runner;
 pub mod timings;
+pub mod skillstation_group;
 pub mod tmp_group;
 pub mod upkeep_group;
 pub mod plan_group;
@@ -138,6 +139,9 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
         return Some(code);
     }
     if let Some(code) = tmp_group::try_native(args, t0) {
+        return Some(code);
+    }
+    if let Some(code) = skillstation_group::try_native(args, t0) {
         return Some(code);
     }
     if let Some(code) = upkeep_group::try_native(args, t0) {

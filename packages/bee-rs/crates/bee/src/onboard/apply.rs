@@ -306,7 +306,7 @@ fn skillstation_failure_text(out: &std::process::Output) -> String {
     skillstation_reason(&stdout)
 }
 
-fn run_skillstation(cwd: &Path, args: &[&str]) -> Result<Value, String> {
+pub(crate) fn run_skillstation(cwd: &Path, args: &[&str]) -> Result<Value, String> {
     let out = std::process::Command::new("skillstation")
         .args(args)
         .current_dir(cwd)
