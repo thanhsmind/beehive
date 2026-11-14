@@ -23,5 +23,12 @@
     "rationale": null,
     "updated_at": "2026-11-14T04:52:06.987Z",
     "feature": "claim-clear-identity"
+  },
+  "merge_ready": {
+    "since": "2026-11-14T05:00:52.765Z",
+    "branch": "wt/claim-clear-identity",
+    "worktree_id": "beehive--wt--claim-clear-identity",
+    "uat": "pending",
+    "blocked_by": []
   }
 }
