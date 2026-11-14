@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "release-2-103-0",
   "mode": "tiny",
-  "phase": "swarming",
+  "phase": "idle",
   "approved_gates": {
     "context": false,
     "shape": true,
@@ -11,15 +11,10 @@
     "uat": false
   },
   "summary": "Feature \"release-2-103-0\" started at phase \"exploring\" (lane).",
-  "next_action": "Dispatch the deploy stage",
+  "next_action": "bee close finished \"release-2-103-0\" — feature is closed.",
   "created_at": "2026-11-14T22:33:13.536Z",
   "run_state": "awaiting-approval",
-  "waiting_on": {
-    "kind": "turn-end",
-    "subject": "Đã tạo quyền phát hành cho role deploy. Đang chạy worker deploy.",
-    "asked_at": "2026-11-14T22:33:57.246Z",
-    "session": "d5666677-acb1-4a34-a356-ce378948b498"
-  },
+  "waiting_on": null,
   "route": {
     "class": "release",
     "lane": "tiny",
