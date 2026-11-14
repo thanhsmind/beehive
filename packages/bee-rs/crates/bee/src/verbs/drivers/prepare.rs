@@ -1193,7 +1193,11 @@ pub(crate) fn learned_context_lines(root: &Path, cell: &Value) -> D<Vec<String>>
 const KNOWLEDGE_HOLDOUT_DEFAULT_PERCENT: u64 = 10;
 
 pub(crate) fn knowledge_holdout_percent(root: &Path) -> u64 {
-    match read_config_raw(root).get("knowledge_holdout_percent") {
+    holdout_percent(root, "knowledge_holdout_percent")
+}
+
+fn holdout_percent(root: &Path, key: &str) -> u64 {
+    match read_config_raw(root).get(key) {
         Some(Value::Number(n)) => {
             n.as_u64().filter(|p| *p <= 100).unwrap_or(KNOWLEDGE_HOLDOUT_DEFAULT_PERCENT)
         }
@@ -1201,10 +1205,35 @@ pub(crate) fn knowledge_holdout_percent(root: &Path) -> u64 {
     }
 }
 
-fn arm_of(root: &Path, key: &str) -> &'static str {
+fn in_holdout(root: &Path, key: &str, config_key: &str) -> bool {
     let digest = crate::verbs::reservations::sha256_hex(key);
     let bucket = u32::from_str_radix(&digest[..8], 16).unwrap_or(0) % 100;
-    if u64::from(bucket) < knowledge_holdout_percent(root) { "holdout" } else { "knowledge" }
+    u64::from(bucket) < holdout_percent(root, config_key)
+}
+
+fn arm_of(root: &Path, key: &str) -> &'static str {
+    if in_holdout(root, key, "knowledge_holdout_percent") { "holdout" } else { "knowledge" }
+}
+
+pub(crate) fn cell_principles(
+    root: &Path,
+    bundle_root: &Path,
+    cell: &Value,
+) -> (&'static str, Vec<String>) {
+    let own = tpl(vget(cell, "id"));
+    let first_dep = match vget(cell, "deps") {
+        Some(Value::Array(deps)) => deps.iter().find_map(|d| d.as_str().map(str::to_string)),
+        _ => None,
+    };
+    let anchor = match (vget(cell, "role").and_then(Value::as_str), first_dep) {
+        (Some("test"), Some(dep)) => dep,
+        _ => own,
+    };
+    if in_holdout(root, &format!("principles:{anchor}"), "principles_holdout_percent") {
+        return ("holdout", Vec::new());
+    }
+    let class = crate::verbs::plan_group::route_class(root, &tpl(vget(cell, "feature")));
+    ("principles", crate::principles::principle_lines(bundle_root, class.as_deref()))
 }
 
 pub(crate) fn knowledge_arm(root: &Path, cell_id: &str) -> &'static str {
@@ -1503,6 +1532,7 @@ pub(crate) fn prompt_body_for(
     // (possibly bundle-less, possibly stale) checkout.
     let bundle_root: &Path = if worktree_root.is_empty() { root } else { Path::new(worktree_root) };
     let learned = cell_learned_context(root, bundle_root, cell)?.1.join("\n");
+    let principles = cell_principles(root, bundle_root, cell).1.join("\n");
     let answered = crate::verbs::cells::park_answers(cell)
         .into_iter()
         .map(|(question, answer)| {
@@ -1537,6 +1567,7 @@ pub(crate) fn prompt_body_for(
             ("feature", &feature),
             ("cell_json", &cell_json),
             ("learned_context", &learned),
+            ("principles", &principles),
             ("expertise", expertise.unwrap_or("")),
             ("advisor", advisor.unwrap_or("")),
             ("prior_rounds", &prior),
@@ -3490,6 +3521,10 @@ pub(crate) fn prepare_dispatch_wire(
         };
         let (arm, lines) = cell_learned_context(root, bundle_root, c)?;
         record.insert("knowledge_arm".into(), Value::String(arm.to_string()));
+        record.insert(
+            "principles_arm".into(),
+            Value::String(cell_principles(root, bundle_root, c).0.to_string()),
+        );
         let (knowledge, code) = split_pack_lines(&lines);
         let paths = |listed: &[String]| {
             Value::Array(listed.iter().map(|l| Value::String(pack_line_path(l))).collect())

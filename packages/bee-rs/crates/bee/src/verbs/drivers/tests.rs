@@ -13034,6 +13034,67 @@ Finish with: .bee/bin/bee cells finish --id c-golden --outcome "<one line>" --fi
         ));
     }
 
+    fn dispatch_principles_cell(percent: &str, cell_id: &str, role: &str, deps: &str) -> (String, Value) {
+        let tmp = tempfile::tempdir().unwrap();
+        let config = format!(
+            r#"{{"models":{{"claude":{{"generation":"sonnet"}}}},"principles_holdout_percent":{percent}}}"#
+        );
+        let root = repo(&tmp, &config);
+        bundle_fixture(&root);
+        w(&root, ".bee/lanes/demo.json", r#"{"feature":"demo","route":{"class":"bugfix"}}"#);
+        w(
+            &root,
+            &format!(".bee/cells/{cell_id}.json"),
+            &format!(
+                r#"{{"id":"{cell_id}","feature":"demo","status":"claimed","trace":{{"worker":"w"}},"lane":"small","role":"{role}","deps":{deps}}}"#
+            ),
+        );
+        let Prepared::Value(v) =
+            prepare_dispatch(&root, "claude", "cell", Some(cell_id), Some("w"), false, None, None, true, None)
+                .unwrap()
+        else {
+            panic!("expected an envelope")
+        };
+        let prompt = v["payload"]["prompt"].as_str().unwrap().to_string();
+        let log = std::fs::read_to_string(root.join(".bee/logs/dispatch.jsonl")).unwrap();
+        let record: Value = serde_json::from_str(log.lines().last().unwrap()).unwrap();
+        (prompt, record)
+    }
+
+    const PRINCIPLES_HEADER: &str = "Principles of this cell's class";
+
+    #[test]
+    fn a_principles_arm_cell_prompt_carries_the_class_principles() {
+        let (prompt, record) = dispatch_principles_cell("0", "c-1", "code", "[]");
+        assert_eq!(record["principles_arm"], json!("principles"));
+        assert!(prompt.contains(PRINCIPLES_HEADER), "{prompt}");
+        assert!(prompt.contains("- Principles (class=bugfix)"), "{prompt}");
+    }
+
+    #[test]
+    fn a_principles_holdout_cell_prompt_carries_none_and_keeps_learned_context() {
+        let (prompt, record) = dispatch_principles_cell("100", "c-2", "code", "[]");
+        assert_eq!(record["principles_arm"], json!("holdout"));
+        assert!(!prompt.contains(PRINCIPLES_HEADER), "{prompt}");
+        assert!(!prompt.contains("{{"), "{prompt}");
+        assert_eq!(record["knowledge_arm"], json!("knowledge"));
+    }
+
+    #[test]
+    fn a_tester_lands_in_its_implementers_principles_arm() {
+        for pair in 0..40 {
+            let implementer = format!("impl-{pair}");
+            let arm = |id: &str, role: &str, deps: &str| {
+                dispatch_principles_cell("50", id, role, deps).1["principles_arm"].clone()
+            };
+            assert_eq!(
+                arm(&implementer, "code", "[]"),
+                arm(&format!("{implementer}t"), "test", &format!(r#"["{implementer}"]"#)),
+                "{implementer}"
+            );
+        }
+    }
+
     #[test]
     fn the_same_cell_id_lands_in_the_same_arm_every_time() {
         for _ in 0..2 {
