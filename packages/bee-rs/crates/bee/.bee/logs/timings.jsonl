@@ -26,6 +26,3 @@
 {"ts":"2026-11-11T14:33:54.108Z","cmd":"dispatch authorize","ms":14,"ok":false,"feature":null}
 {"ts":"2026-11-13T14:48:39.536Z","cmd":"dispatch authorize","ms":12,"ok":false,"feature":null}
 {"ts":"2026-11-13T14:49:47.603Z","cmd":"dispatch authorize","ms":12,"ok":false,"feature":null}
-{"ts":"2026-11-14T08:53:57.531Z","cmd":"dispatch authorize","ms":17,"ok":false,"feature":null}
-{"ts":"2026-11-14T08:55:05.553Z","cmd":"dispatch authorize","ms":12,"ok":false,"feature":null}
-{"ts":"2026-11-14T08:57:15.873Z","cmd":"dispatch authorize","ms":4,"ok":false,"feature":null}
