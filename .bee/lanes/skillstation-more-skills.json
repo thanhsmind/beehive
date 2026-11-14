@@ -11,9 +11,9 @@
     "uat": false
   },
   "summary": "Feature \"skillstation-more-skills\" started at phase \"exploring\" (lane).",
-  "next_action": "Continue bee-exploring for \"skillstation-more-skills\" (lane).",
+  "next_action": "Merged into main at 1f74cf9; capture what settled, then bee close --feature skillstation-more-skills.",
   "created_at": "2026-11-14T12:50:42.718Z",
-  "run_state": "awaiting-approval",
+  "run_state": null,
   "waiting_on": null,
   "route": {
     "class": "feature",
@@ -569,12 +569,5 @@
         }
       ]
     }
-  },
-  "merge_ready": {
-    "since": "2026-11-14T13:14:10.777Z",
-    "branch": "wt/skillstation-more-skills",
-    "worktree_id": "beehive--wt--skillstation-more-skills",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
