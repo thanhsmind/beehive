@@ -124,12 +124,12 @@ pub(crate) fn cell_proof_floor(cell: &Value, class: Option<&str>) -> Option<&'st
         .and_then(Value::as_array)
         .map(|a| a.iter().filter_map(Value::as_str).collect())
         .unwrap_or_default();
+    if !files.is_empty() && files.iter().all(|f| f.ends_with(".md") || f.starts_with("docs/")) {
+        return Some("green:static");
+    }
     match role {
         Some("test") => Some(class_proof_floor(class)),
-        Some("code") if !files.is_empty() && files.iter().all(|f| f.ends_with(".md") || f.starts_with("docs/")) => {
-            Some("green:static")
-        }
-        Some("code") => Some("green:unit"),
+        _ if !files.is_empty() => Some("green:unit"),
         _ => None,
     }
 }

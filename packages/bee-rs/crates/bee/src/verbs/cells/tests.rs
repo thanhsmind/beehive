@@ -6541,6 +6541,27 @@ use std::time::Instant;
     }
 
     #[test]
+    fn the_floor_covers_every_role_and_docs_only_wins_over_a_test_role() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_bee_config(root, &json!({"commands": {"test": "none"}}));
+        std::fs::create_dir_all(root.join(".bee/lanes")).unwrap();
+        std::fs::write(
+            root.join(".bee/lanes/f.json"),
+            json!({"feature": "f", "route": {"class": "bugfix"}}).to_string(),
+        )
+        .unwrap();
+        let stat = floor_report("echo ok — green:static — fixture");
+        floor_cell(root, "test", json!(["docs/history/f/reports/check.md"]));
+        assert!(cap_cell_from_flags(root, &cap_flags_report("fl-1", Some(&stat)), false).is_ok());
+        for role in ["design", "writer"] {
+            floor_cell(root, role, json!(["src/a.rs"]));
+            let refusal = thrown(cap_cell_from_flags(root, &cap_flags_report("fl-1", Some(&stat)), false));
+            assert!(refusal.contains("floor green:unit"), "{role}: {refusal}");
+        }
+    }
+
+    #[test]
     fn an_implementer_code_cell_is_refused_green_static_and_a_docs_cell_is_not() {
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();

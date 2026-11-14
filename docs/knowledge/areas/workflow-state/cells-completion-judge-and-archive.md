@@ -854,6 +854,6 @@ the silent cells.
 Read when: a cap is refused for a missing principle answer, or for a proof result weaker than the cell's floor.
 
 - A cap's principle answer (`--principle-used`, `--no-principle-used`, or a report `principles_used` array) is required only when the cell's latest prepare record in `.bee/logs/dispatch.jsonl` has `principles_arm: principles`. A holdout-arm cell, or one prepared before the key existed, is never refused for silence. The knowledge-used obligation is untouched and stays never-refused.
-- The proof floor binds only `code` and `test` role cells: a test cell takes its route class's floor, a code cell touching only `.md` or `docs/` paths takes static, any other code cell takes unit. Roleless and other-role cells keep no floor, so the historical caps and fixtures stay legal. The accept rule is in `finish_support.rs`; find the class table there rather than copying it here.
-- Rejected: a floor on every cell regardless of role — it flipped caps whose role names no proof discipline.
-- Guess: a docs-only cell with an empty declared file list is treated as code, since vacuous truth would grant it the weakest floor.
+- The proof floor covers every cell with declared files, checked in order: a docs-only cell (every path `.md` or under `docs/`, whatever its role) takes static, a test-role cell takes its route class's floor, any other cell takes unit. A cell with no files and a non-test role keeps no floor, so roleless fixtures stay legal. The accept rule is in `finish_support.rs`; find the class table there rather than copying it here. Decision `2ea86071`.
+- Rejected: keying the floor on roles code and test only — a docs-only checker cell (role test) would refuse its own static parity proof, and a design or writer cell with code files took no floor.
+- Guess: a docs-only cell with an empty declared file list gets no docs-only floor, since vacuous truth would grant it the weakest one.
