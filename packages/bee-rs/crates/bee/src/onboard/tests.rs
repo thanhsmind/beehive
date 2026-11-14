@@ -4179,6 +4179,27 @@ mod principles_on_the_hub {
     }
 
     #[test]
+    fn a_second_switch_apply_keeps_the_bee_how_alias_and_the_hub_replan_plans_nothing_for_it() {
+        let fx = fixture_with_local_copies();
+        with_bee_how(&fx);
+        {
+            let _hub = switching_hub(None);
+            apply(&fx, &["--runtime", "claude", "--skillstation"]);
+        }
+        assert!(claude_how(&fx).contains("skillstation_alias: bee-how"));
+        let _hub = serving_hub(&fx, &["bee-how", IDS[0], IDS[1]], |_, _, _| true);
+        apply(&fx, &["--runtime", "claude", "--skillstation"]);
+        let alias = claude_how(&fx);
+        assert!(alias.contains("skillstation_alias: bee-how"), "{alias}");
+        let again = plan(&fx, &["--runtime", "claude"]);
+        assert!(
+            again["plan"].as_array().unwrap().iter().all(|i| i["skill"] != "bee-how"),
+            "{:?}",
+            again["plan"]
+        );
+    }
+
+    #[test]
     fn a_failed_bee_how_publish_keeps_every_local_copy_and_writes_no_alias() {
         let fx = fixture_with_local_copies();
         with_bee_how(&fx);

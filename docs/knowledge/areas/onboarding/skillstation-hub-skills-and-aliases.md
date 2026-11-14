@@ -73,6 +73,10 @@ cannot change their result (skillstation-onboard-aliases D6).
 - An alias is written only for a skill that is active on the hub. A draft is not
   aliased, because the hub would refuse to serve it (skillstation-aliases D4,
   D7).
+- A re-run of the switch rewrites the alias after the removal, even when the file
+  already equals the alias render, because the `after_publish` removal before it
+  deletes the folder; only a plan without `--skillstation` skips a current alias
+  (skillstation-human-skills D3-D4).
 - `--skillstation` plans a publish for a skill only when the hub has no such
   skill, the hub copy is not active, or its files differ from the engine skill
   rendered for claude. Files compare as (relative path, raw sha256) sets against

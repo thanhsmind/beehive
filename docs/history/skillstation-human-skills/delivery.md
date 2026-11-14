@@ -18,6 +18,11 @@ Red first (before the fix):
 
 Green after the fix: all five, with the rest of `-- skillstation onboard`.
 
+## shs-2: second switch apply keeps the alias
+
+- Red: `a_second_switch_apply_keeps_the_bee_how_alias_and_the_hub_replan_plans_nothing_for_it` failed with the alias file gone after the second `--skillstation` apply.
+- Green after the `hub_alias_items` fix in `plan.rs` (switch path always plans the alias item): the same test, with the rest of `-- skillstation onboard`.
+
 ## Proof
 
 `cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- skillstation onboard` and `bee dev release-manifest --check`.

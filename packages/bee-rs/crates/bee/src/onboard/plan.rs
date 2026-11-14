@@ -133,7 +133,7 @@ fn hub_alias_items(engine: &Engine, repo_root: &Path, after_publish: bool) -> Ve
             let rendered = String::from_utf8_lossy(&render_skill_bytes(&source, "claude")).to_string();
             let content = render_alias(&id, &frontmatter_description(&rendered).unwrap_or_default(), false);
             let rel = format!(".claude/skills/{id}/SKILL.md");
-            if read_text_if_exists(&join_rel(repo_root, &rel)) == content {
+            if !after_publish && read_text_if_exists(&join_rel(repo_root, &rel)) == content {
                 return None;
             }
             let mut item = json!({
