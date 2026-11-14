@@ -26,7 +26,10 @@ Playbook: `skills/bee-planning/playbooks/feature.md` (class `feature`).
 - D4: hub mode adds `mcp__skillstation__skill_get` to the rendered Claude agent `tools:` lines.
 - D5: hub mode changes the principle header line to name `skill_get`; one mode helper in `skillstation_group.rs`.
 - D6: no hat wave; dev skill trees and release out of scope.
-- D7: drop local principles only where the principle index file exists; else one skip row.
+- D7: drop local principles only where the principle index file exists; else one skip row. (superseded by D8)
+- D8: the binary carries the principle index; orient names principles in every project.
+- D9: onboard --skillstation sets hub mode, publishes, and removes local principles in one apply.
+- D10: install.sh --skillstation passes the flag; the recheck runs without it.
 
 ## Load-bearing claims
 
@@ -120,6 +123,9 @@ Waves: ssp-1, then ssp-2, then ssp-3.
 | ssp-1 | Give agents the hub fetch tool and name it in the principle header | `skillstation_group.rs`, `principles.rs`, `onboard/agents.rs`, `onboard/apply.rs` | — | hub mode: worker agents list `skill_get`, orient says where principles live | `cargo test … --bin bee -- principles agents skillstation session_preamble` green |
 | ssp-2 | Serve principles from the hub in onboard | `onboard/skills.rs`, `onboard/plan.rs`, `onboard/apply.rs`, `onboard/tests.rs` | ssp-1 | hub mode: onboard publishes the principles and removes the local copies | `cargo test … --bin bee -- skillstation onboard` green |
 | ssp-4 | Keep local principles where orient cannot name them | `onboard/plan.rs`, `onboard/tests.rs`, `principles.rs`, docs | ssp-2 | a host repo in hub mode keeps its principles and gets one skip row | `cargo test … --bin bee -- skillstation onboard` green |
+| ssp-5 | Name principles in every project from an index built into bee | `principles.rs`, `onboard/plan.rs`, `onboard/tests.rs` | ssp-4 | orient names principles in any project | `cargo test … --bin bee -- principles onboard` green |
+| ssp-6 | Switch a project to hub principles in one onboard --skillstation run | `onboard/plan.rs`, `onboard/apply.rs`, `onboard/tests.rs`, `scripts/install.sh` | ssp-5 | `install.sh --skillstation` switches a project in one run | `cargo test … -- skillstation onboard install` green |
+| ssp-7 | Document the one-step switch to hub principles | `README.md`, `docs/config-reference.md`, `docs/knowledge/**`, delivery.md | ssp-6 | docs match the one-step switch | `.bee/bin/bee knowledge check` green |
 | ssp-3 | Document the skillstation.principles key | `README.md`, `docs/config-reference.md`, `docs/knowledge/**`, delivery.md | ssp-2 | the key is in the config reference | `.bee/bin/bee knowledge check` green |
 
 ```json
@@ -348,6 +354,172 @@ Waves: ssp-1, then ssp-2, then ssp-3.
       "prohibitions": [
         "No code comments",
         "Onboard tests never call the real skillstation"
+      ],
+      "open_choices": []
+    }
+  },
+  {
+    "id": "ssp-5",
+    "feature": "skillstation-principles",
+    "title": "Name principles in every project from an index built into bee",
+    "lane": "standard",
+    "role": "code",
+    "deps": [
+      "ssp-4"
+    ],
+    "affects_skills": [],
+    "affects_specs": [],
+    "decisions": [
+      "D8",
+      "c52e40d8-8044-456b-ab34-ccca85555bb9"
+    ],
+    "files": [
+      "packages/bee-rs/crates/bee/src/principles.rs",
+      "packages/bee-rs/crates/bee/src/onboard/plan.rs",
+      "packages/bee-rs/crates/bee/src/onboard/tests.rs"
+    ],
+    "read_first": [
+      "docs/history/skillstation-principles/CONTEXT.md",
+      "packages/bee-rs/crates/bee/src/principles.rs",
+      "packages/bee-rs/crates/bee/src/onboard/plan.rs",
+      "packages/bee-rs/crates/bee/src/version.rs"
+    ],
+    "action": "D8: compile the principle index into the binary with include_str! of the repo file named by PRINCIPLE_INDEX (path relative to principles.rs is ../../../../../docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md; version.rs:32 is the precedent). principle_lines reads the repo's own file when it exists, else uses the built-in copy, so a project without that file still gets principle lines for its route class (with the hub sentence in hub mode, as ssp-1 made it). Then remove the ssp-4 D7 guard in onboard plan.rs (the `repo_root.join(PRINCIPLE_INDEX).is_file()` branch and its skip row): every repo now has an index. Update the ssp-4 tests: the no-index test now expects the principle drop to follow the hub check alone. Tests: principle_lines in a temp root with no index file returns a non-empty block for class bugfix and names bee-principle-red-before-green; a temp root with its own index file still uses that file (existing test).",
+    "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- principles onboard",
+    "must_haves": {
+      "truths": [
+        "principle_lines in a repo without the index file returns the principle block from the copy built into bee",
+        "principle_lines in a repo with its own index file reads that file",
+        "onboard in hub mode no longer skips the principle drop for a missing index file"
+      ],
+      "artifacts": [
+        {
+          "path": "packages/bee-rs/crates/bee/src/principles.rs",
+          "substantive": "built-in index fallback"
+        }
+      ],
+      "key_links": [
+        "the built-in copy comes from the PRINCIPLE_INDEX file at build time, not a second hand-written list"
+      ],
+      "prohibitions": [
+        "No code comments",
+        "Onboard tests never call the real skillstation"
+      ],
+      "open_choices": []
+    }
+  },
+  {
+    "id": "ssp-6",
+    "feature": "skillstation-principles",
+    "title": "Switch a project to hub principles in one onboard --skillstation run",
+    "lane": "standard",
+    "role": "code",
+    "deps": [
+      "ssp-5"
+    ],
+    "affects_skills": [],
+    "affects_specs": [],
+    "decisions": [
+      "D9",
+      "D10",
+      "8076f811-1199-4e31-b79c-b21c64267a97",
+      "7a5e21b0-85ca-4a61-b65d-f2dfebadd6ef"
+    ],
+    "files": [
+      "packages/bee-rs/crates/bee/src/onboard/plan.rs",
+      "packages/bee-rs/crates/bee/src/onboard/apply.rs",
+      "packages/bee-rs/crates/bee/src/onboard/tests.rs",
+      "scripts/install.sh",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "read_first": [
+      "docs/history/skillstation-principles/CONTEXT.md",
+      "packages/bee-rs/crates/bee/src/onboard/plan.rs",
+      "packages/bee-rs/crates/bee/src/onboard/apply.rs",
+      "scripts/install.sh",
+      "packages/bee-rs/crates/bee/src/devtools/install_support.rs"
+    ],
+    "action": "D9: when `opts.skillstation` and the Claude runtime is in scope, onboard treats the project as hub mode even when skillstation.principles is not hub yet. Plan: (a) when the tracked .bee/config.json does not set skillstation.principles to hub, one item `set_principles_hub` (path .bee/config.json) that apply runs by setting the key to the string hub, keeping every other key, through the existing config write helper; (b) the principle publish items as today; (c) for every local `.claude/skills/bee-principle-*` folder that the hub check does not already remove, a `remove_skill` item carrying `\"after_publish\": true`. Apply runs every after_publish item only after all principle publish items ran, and only when every principle publish succeeded; when one failed it runs none of them and adds one skipped_skills entry {target: \"skillstation-principles\", reason} naming the failed id. The local copies under .agents, .opencode and the plugin trees stay. Without --skillstation nothing here changes: the mode comes from config alone (ssp-2 behavior). D10 in scripts/install.sh: update the --skillstation help text to say it switches the project to principles served from the Skillstation hub and removes the local principle copies; the post-apply RECHECK runs with ONBOARD_FLAGS minus --skillstation (build a second array), so it checks local state and does not plan a publish. install.sh is a release-manifest root: run `bee dev regen` and commit the manifest change. Tests with set_test_hub: --skillstation on a local-mode project plans set_principles_hub, publish items and after_publish removals; apply with every publish succeeding writes hub to config and removes .claude/skills principle folders but keeps .agents ones; apply with one failing publish keeps all and reports one skip row; a plan without --skillstation after a successful switch is up_to_date with the hub reporting every principle active.",
+    "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- skillstation onboard install && .bee/bin/bee dev release-manifest --check",
+    "must_haves": {
+      "truths": [
+        "bee onboard --skillstation --apply on a local-mode project writes skillstation.principles hub into .bee/config.json",
+        "bee onboard --skillstation --apply removes the .claude/skills principle folders in the same run when every principle publish succeeded",
+        "when one principle publish fails onboard keeps every local principle and reports one skipped_skills entry with target skillstation-principles",
+        "scripts/install.sh runs its recheck without --skillstation",
+        "without --skillstation onboard does not change skillstation.principles"
+      ],
+      "artifacts": [
+        {
+          "path": "packages/bee-rs/crates/bee/src/onboard/apply.rs",
+          "substantive": "after_publish removals and set_principles_hub"
+        }
+      ],
+      "key_links": [
+        "the removal reuses the remove_skill item and apply_remove_skill, not a new delete path",
+        "install.sh plan and apply carry --skillstation, the recheck does not"
+      ],
+      "prohibitions": [
+        "No code comments",
+        "Never change the hub without --skillstation",
+        "Onboard tests never call the real skillstation"
+      ],
+      "open_choices": [
+        "How apply defers after_publish items"
+      ]
+    }
+  },
+  {
+    "id": "ssp-7",
+    "feature": "skillstation-principles",
+    "title": "Document the one-step switch to hub principles",
+    "lane": "standard",
+    "role": "writer",
+    "deps": [
+      "ssp-6"
+    ],
+    "affects_skills": [],
+    "affects_specs": [
+      "docs/knowledge/areas/onboarding/skillstation-hub-skills-and-aliases.md",
+      "docs/knowledge/areas/onboarding/installer-entrypoints-and-source-staging.md"
+    ],
+    "decisions": [
+      "D8",
+      "D9",
+      "D10"
+    ],
+    "files": [
+      "README.md",
+      "docs/config-reference.md",
+      "docs/knowledge/**",
+      "docs/history/skillstation-principles/delivery.md"
+    ],
+    "read_first": [
+      "docs/history/skillstation-principles/CONTEXT.md",
+      "docs/knowledge/areas/onboarding/skillstation-hub-skills-and-aliases.md",
+      "docs/knowledge/areas/onboarding/installer-entrypoints-and-source-staging.md",
+      "docs/config-reference.md",
+      "README.md"
+    ],
+    "action": "Rewrite the hub-principles text so it matches D8-D10: one `scripts/install.sh --skillstation` (or `bee onboard --skillstation --apply`) switches a project: it sets skillstation.principles to hub, publishes the 24 principles, and removes the local .claude/skills copies in the same run; a failed publish keeps them. Without the flag install leaves the mode as it is. bee orient names principles in every project from an index built into bee. Remove the D7 text (the guard is gone, superseded by D8). Update README.md § Skillstation, the docs/config-reference.md row, the onboarding concept, and the --skillstation line of installer-entrypoints-and-source-staging.md. Cite `skillstation-principles D<n>`, never raw ids. Append the round to docs/history/skillstation-principles/delivery.md. Run `.bee/bin/bee knowledge check` green. One commit.",
+    "verify": ".bee/bin/bee knowledge check",
+    "must_haves": {
+      "truths": [
+        "README.md says install --skillstation switches a project to hub principles in one run",
+        "no doc still says the local copies are kept for a missing principle index"
+      ],
+      "artifacts": [
+        {
+          "path": "docs/history/skillstation-principles/delivery.md",
+          "substantive": "the second-round delivery record"
+        }
+      ],
+      "key_links": [
+        "the delivery lands in the same merge as the code"
+      ],
+      "prohibitions": [
+        "No restating of code in concepts",
+        "No code comments"
       ],
       "open_choices": []
     }
