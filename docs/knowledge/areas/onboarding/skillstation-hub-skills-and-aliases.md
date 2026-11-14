@@ -11,7 +11,7 @@ bee:
   decisions: ["skillstation-aliases D1-D9 (a bee skillstation verb group checks the hub skills bee relies on and writes a small alias skill so /<id> works; CONTEXT.md)", "skillstation-onboard-aliases D1-D7 (install and onboard write the aliases by default; the hub changes only behind --skillstation; CONTEXT.md)"]
   sources: ["skillstation-aliases cell ssa-1 (2026-11-14; the verb group)", "skillstation-aliases cell ssa-2 (2026-11-14; this concept and the README section)", "skillstation-onboard-aliases cells sooa-1 and sooa-2 (2026-11-14; onboard and install write the aliases)"]
   authoritative_for: "onboarding: the bee skillstation verb group"
-  anchors: [packages/bee-rs/crates/bee/src/verbs/skillstation_group.rs, packages/bee-rs/crates/bee/src/onboard/apply.rs, packages/bee-rs/crates/bee/src/onboard/plan.rs, scripts/install.sh]
+  anchors: [packages/bee-rs/crates/bee/src/verbs/skillstation_group.rs, packages/bee-rs/crates/bee/src/principles.rs, packages/bee-rs/crates/bee/src/onboard/agents.rs, packages/bee-rs/crates/bee/src/onboard/apply.rs, packages/bee-rs/crates/bee/src/onboard/plan.rs, scripts/install.sh]
   verified_at: 2026-11-14
   verified_commit: efc1408fed3c7be37d646ce975dedf8b0e84390e
 ---
@@ -72,6 +72,14 @@ cannot change their result (skillstation-onboard-aliases D6).
 - An alias is written only for a skill that is active on the hub. A draft is not
   aliased, because the hub would refuse to serve it (skillstation-aliases D4,
   D7).
+- `skillstation.principles` set to the string `hub` in the merged config
+  (config.local.json over config.json) is read by one helper,
+  `principles_on_hub`. It makes the principle header line name the MCP tool
+  `skill_get`, and it appends `mcp__skillstation__skill_get` to the `tools:` line
+  of every rendered Claude agent file, so a dispatched subagent can fetch a
+  principle. Any other value or absence leaves both byte-identical. Plan and
+  apply render agent files through the same function, so a hub-mode re-plan
+  carries no `sync_agent_file` item (skillstation-principles D1, D4, D5).
 
 ## Edge Cases Settled
 
