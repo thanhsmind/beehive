@@ -11,10 +11,15 @@
     "uat": false
   },
   "summary": "Feature \"skillstation-aliases\" started at phase \"exploring\" (lane).",
-  "next_action": "Invoke bee-swarming.",
+  "next_action": "Merged into main at 728f36d; reload the product and test \"skillstation-aliases\", then either approve uat (\"bee gate --name uat --approved true --lane skillstation-aliases\") or fix it in the worktree and merge again.",
   "created_at": "2026-11-14T06:41:38.594Z",
   "run_state": "awaiting-approval",
-  "waiting_on": null,
+  "waiting_on": {
+    "kind": "gate",
+    "subject": "uat: skillstation-aliases",
+    "asked_at": "2026-11-14T07:44:23.563Z",
+    "session": "bee-worktree-merge-sessionless"
+  },
   "route": {
     "class": "feature",
     "lane": "standard",
@@ -515,12 +520,5 @@
         }
       ]
     }
-  },
-  "merge_ready": {
-    "since": "2026-11-14T07:43:02.791Z",
-    "branch": "wt/skillstation-aliases",
-    "worktree_id": "beehive--wt--skillstation-aliases",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
