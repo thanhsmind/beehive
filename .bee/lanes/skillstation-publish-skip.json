@@ -11,9 +11,9 @@
     "uat": false
   },
   "summary": "Feature \"skillstation-publish-skip\" started at phase \"exploring\" (lane).",
-  "next_action": "Continue bee-exploring for \"skillstation-publish-skip\" (lane).",
+  "next_action": "Merged into main at 9023b9b; capture what settled, then bee close --feature skillstation-publish-skip.",
   "created_at": "2026-11-14T11:41:40.915Z",
-  "run_state": "awaiting-approval",
+  "run_state": null,
   "waiting_on": null,
   "route": {
     "class": "bugfix",
@@ -415,12 +415,5 @@
         }
       ]
     }
-  },
-  "merge_ready": {
-    "since": "2026-11-14T11:49:19.530Z",
-    "branch": "wt/skillstation-publish-skip",
-    "worktree_id": "beehive--wt--skillstation-publish-skip",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
