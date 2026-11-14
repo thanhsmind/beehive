@@ -11,10 +11,15 @@
     "uat": false
   },
   "summary": "Feature \"pstack-principles\" started at phase \"exploring\" (lane).",
-  "next_action": "Continue bee-exploring for \"pstack-principles\" (lane).",
+  "next_action": "Merged into main at 8a5f22c; reload the product and test \"pstack-principles\", then either approve uat (\"bee gate --name uat --approved true --lane pstack-principles\") or fix it in the worktree and merge again.",
   "created_at": "2026-11-14T04:16:37.328Z",
   "run_state": "awaiting-approval",
-  "waiting_on": null,
+  "waiting_on": {
+    "kind": "gate",
+    "subject": "uat: pstack-principles",
+    "asked_at": "2026-11-14T04:31:59.336Z",
+    "session": "bee-worktree-merge-sessionless"
+  },
   "route": {
     "class": "feature",
     "lane": "standard",
@@ -470,12 +475,5 @@
   },
   "gate_revoked_at": {
     "execution": "2026-11-14T04:29:44.125Z"
-  },
-  "merge_ready": {
-    "since": "2026-11-14T04:25:27.554Z",
-    "branch": "wt/pstack-principles",
-    "worktree_id": "beehive--wt--pstack-principles",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
