@@ -866,6 +866,7 @@
     "contract:claim-clear-identity",
     "contract:skillstation-principles",
     "skillstation",
-    "contract:publish-skip-same-content"
+    "contract:publish-skip-same-content",
+    "contract:hub-served-skills"
   ]
 }
