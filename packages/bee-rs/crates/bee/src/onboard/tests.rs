@@ -3846,14 +3846,14 @@ mod principles_on_the_hub {
         let _hub = switching_hub(None);
         let p = plan(&fx, &["--runtime", "claude", "--skillstation"]);
         let deferred = after_publish(&p);
-        let last = deferred.last().unwrap();
-        assert_eq!(last["action"], "set_principles_hub");
-        assert_eq!(last["path"], ".bee/config.json");
+        let first = deferred.first().unwrap();
+        assert_eq!(first["action"], "set_principles_hub");
+        assert_eq!(first["path"], ".bee/config.json");
         let items = p["plan"].as_array().unwrap();
         let last_publish = items.iter().rposition(|i| i["action"] == "publish_skillstation").unwrap();
         let first_deferred = items.iter().position(|i| i["after_publish"] == true).unwrap();
         assert!(last_publish < first_deferred);
-        let removals: Vec<&str> = deferred[..deferred.len() - 1]
+        let removals: Vec<&str> = deferred[1..]
             .iter()
             .map(|i| {
                 assert_eq!(i["action"], "remove_skill");
@@ -3905,6 +3905,67 @@ mod principles_on_the_hub {
         let skips = principle_skips(&a);
         assert_eq!(skips.len(), 1, "{skips:?}");
         assert!(skips[0]["reason"].as_str().unwrap().contains(IDS[0]));
+    }
+
+    fn with_worker_template(fx: &Fixture) {
+        write(
+            &fx.root.join("packages").join("bee").join("agents").join("bee-worker.md.tmpl"),
+            "---\nname: bee-worker\ntools: Read, Edit\n---\nwork\n",
+        );
+        apply(fx, &["--runtime", "claude"]);
+    }
+
+    fn worker_tools_line(fx: &Fixture) -> String {
+        std::fs::read_to_string(fx.repo.join(".claude").join("agents").join("bee-worker.md"))
+            .unwrap()
+            .lines()
+            .find(|l| l.starts_with("tools:"))
+            .unwrap()
+            .to_string()
+    }
+
+    #[test]
+    fn the_switch_renders_agent_files_in_hub_mode_and_the_replan_has_no_agent_sync() {
+        let fx = fixture_with_local_copies();
+        with_worker_template(&fx);
+        assert!(!worker_tools_line(&fx).ends_with("mcp__skillstation__skill_get"));
+        let _hub = switching_hub(None);
+        apply(&fx, &["--runtime", "claude", "--skillstation"]);
+        assert!(worker_tools_line(&fx).ends_with("mcp__skillstation__skill_get"));
+        let again = plan(&fx, &["--runtime", "claude"]);
+        let syncs: Vec<&Value> = again["plan"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|i| i["action"] == "sync_agent_file")
+            .collect();
+        assert!(syncs.is_empty(), "{syncs:?}");
+        assert_eq!(again["status"], "up_to_date", "{:?}", again["plan"]);
+    }
+
+    #[test]
+    fn the_switch_plan_runs_set_principles_hub_before_the_agent_file_items() {
+        let fx = fixture_with_local_copies();
+        with_worker_template(&fx);
+        let _hub = switching_hub(None);
+        let p = plan(&fx, &["--runtime", "claude", "--skillstation"]);
+        let items = p["plan"].as_array().unwrap();
+        let set = items.iter().position(|i| i["action"] == "set_principles_hub").unwrap();
+        let first_after = items.iter().position(|i| i["after_publish"] == true).unwrap();
+        assert_eq!(set, first_after);
+        let agent = items.iter().position(|i| i["action"] == "sync_agent_file").unwrap();
+        assert!(set < agent);
+        assert_eq!(items[agent]["after_publish"], true);
+    }
+
+    #[test]
+    fn one_failed_publish_leaves_the_agent_files_local_and_the_config_unchanged() {
+        let fx = fixture_with_local_copies();
+        with_worker_template(&fx);
+        let _hub = switching_hub(Some(IDS[0]));
+        apply(&fx, &["--runtime", "claude", "--skillstation"]);
+        assert!(!worker_tools_line(&fx).contains("mcp__skillstation__skill_get"));
+        assert!(!config_text(&fx).contains("hub"));
     }
 
     #[test]

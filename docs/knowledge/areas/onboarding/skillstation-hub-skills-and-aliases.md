@@ -123,6 +123,12 @@ cannot change their result (skillstation-onboard-aliases D6).
 - Claude Code only. Other runtimes are a later row (skillstation-aliases D8).
 - The alias body relies on the host having the skillstation MCP server; when the
   tool is missing the alias tells the user to run `skillstation connect -g`.
+- The `--skillstation` switch renders the Claude agent files in hub mode at plan
+  time, because the plan reads config before `set_principles_hub` has written it.
+  Those `sync_agent_file` items are `after_publish` and sort behind
+  `set_principles_hub`, so apply's own re-render reads hub. Rejected: planning
+  from the old config; the installer recheck then found `sync_agent_file` on all
+  six files and exited 1. A failed principle publish skips them with the config.
 
 ## Pointers (implementation)
 
