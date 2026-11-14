@@ -65,6 +65,8 @@ Adapted from the Seatworks plugin's skill-trigger tests (`docs/history/research/
 - Principle skills have no cases; a fixture keyed on class and flags, judged against the router's output, is filed as backlog.
 - Descriptions the eval shows as confused are not rewritten here; that is a follow-up per skill once the eval has data, filed as backlog.
 - The fence proves coverage and shape, never routing quality; only the paid eval measures that.
+- With haiku, four briefs that expect no skill score zero both before and after the description cut: the bee release, "the slice is finished — merge it", the subsystem spec document, and the AGENTS.md convention. Haiku names some skill for each of them, sometimes one that does not exist. The total moves by about three briefs from run to run, so one run cannot judge a small change (skill-description-trim D3).
+- The eval calls the agent once per brief and run, in series, and prints nothing until the end: about an hour per run. A parallel runner does the same work in about four minutes.
 
 ## Pointers (implementation)
 
