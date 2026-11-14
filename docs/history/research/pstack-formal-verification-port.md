@@ -7,8 +7,8 @@ date: 2026-11-14
 
 ## Outcome
 
-The owner picked the skillstation hub, not a bee pack (decision
-`e9c80ef2`). An earlier decision, `d94edfa6`, already kept
+The owner picked the skillstation hub, not a bee pack
+(formal-verification-pack D1). An earlier decision, `d94edfa6`, already kept
 `statechart` in the hub; this brief missed it. The two formal skills
 are hub drafts tracked upstream, and bee's planning playbooks point at
 them (`docs/history/formal-verification-pack/CONTEXT.md`). The pack
