@@ -197,10 +197,9 @@ use crate::version::BEE_VERSION;
         assert!(text.contains("- Route: class=docs"), "{text}");
         assert!(!text.contains("Principles"), "{text}");
 
-        // No index on disk: a matching class still renders nothing.
         std::fs::remove_file(tmp.path().join(crate::principles::PRINCIPLE_INDEX)).unwrap();
         write(tmp.path(), ".bee/state.json", &route("feature"));
-        assert!(!render(tmp.path()).contains("Principles"));
+        assert!(render(tmp.path()).contains("Principles"));
     }
 
     #[test]

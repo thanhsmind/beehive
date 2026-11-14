@@ -3736,22 +3736,18 @@ mod principles_on_the_hub {
     }
 
     #[test]
-    fn hub_mode_without_the_principle_index_keeps_every_copy_and_names_the_index() {
+    fn hub_mode_without_the_principle_index_still_drops_the_copies() {
         let fx = fixture_with_local_copies();
         go_hub(&fx);
         std::fs::remove_file(fx.repo.join(crate::principles::PRINCIPLE_INDEX)).unwrap();
         let _hub = hub(&all_active());
         let p = plan(&fx, &["--runtime", "claude"]);
-        assert!(principle_removals(&p).is_empty());
-        let skips = principle_skips(&p);
-        assert_eq!(skips.len(), 1, "{skips:?}");
-        assert_eq!(
-            skips[0]["reason"],
-            format!(
-                "{} is absent, so bee orient cannot name principles in this repo",
-                crate::principles::PRINCIPLE_INDEX
-            )
-        );
+        let removed: Vec<(String, String)> = IDS
+            .iter()
+            .map(|id| ("repo-claude".to_string(), id.to_string()))
+            .collect();
+        assert_eq!(principle_removals(&p), removed);
+        assert!(principle_skips(&p).is_empty());
     }
 
     #[test]
@@ -3798,14 +3794,117 @@ mod principles_on_the_hub {
     }
 
     #[test]
-    fn without_the_config_key_the_plan_is_unchanged() {
+    fn without_the_flag_a_local_mode_plan_never_touches_the_hub_mode() {
         let fx = fixture_with_local_copies();
         let _hub = hub(&all_active());
-        let p = plan(&fx, &["--runtime", "claude", "--skillstation"]);
+        let p = plan(&fx, &["--runtime", "claude"]);
         assert!(principle_removals(&p).is_empty());
         assert!(principle_skips(&p).is_empty());
-        let published = publish_items(&p, "plan");
-        assert!(published.iter().all(|i| !i["skill"].as_str().unwrap().starts_with("bee-principle-")));
+        assert!(publish_items(&p, "plan").is_empty());
+        assert!(p["plan"].as_array().unwrap().iter().all(|i| i["action"] != "set_principles_hub"));
+        apply(&fx, &["--runtime", "claude"]);
+        assert!(!config_text(&fx).contains("principles"));
+    }
+
+    fn switching_hub(failing: Option<&'static str>) -> Hub {
+        let published = std::cell::RefCell::new(Vec::<String>::new());
+        set_test_hub(Some(Rc::new(move |args: &[&str]| {
+            if args.get(1) == Some(&"commit") {
+                let path = args.get(2).copied().unwrap_or("");
+                if failing.is_some_and(|id| path.ends_with(id)) {
+                    return Err("hub refused the commit".to_string());
+                }
+                published.borrow_mut().push(path.rsplit('/').next().unwrap_or("").to_string());
+                return Ok(json!({"activated": true}));
+            }
+            let id = args.get(2).copied().unwrap_or("");
+            if published.borrow().iter().any(|p| p == id) {
+                return Ok(json!({"manifest": {"status": "active", "description": "A principle."}}));
+            }
+            Err(format!("skill not found: {id}"))
+        })));
+        Hub
+    }
+
+    fn after_publish(p: &Value) -> Vec<Value> {
+        p["plan"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|i| i["after_publish"] == true)
+            .cloned()
+            .collect()
+    }
+
+    fn config_text(fx: &Fixture) -> String {
+        std::fs::read_to_string(fx.repo.join(".bee").join("config.json")).unwrap()
+    }
+
+    #[test]
+    fn the_skillstation_flag_on_a_local_project_plans_the_switch() {
+        let fx = fixture_with_local_copies();
+        let _hub = switching_hub(None);
+        let p = plan(&fx, &["--runtime", "claude", "--skillstation"]);
+        let deferred = after_publish(&p);
+        let last = deferred.last().unwrap();
+        assert_eq!(last["action"], "set_principles_hub");
+        assert_eq!(last["path"], ".bee/config.json");
+        let items = p["plan"].as_array().unwrap();
+        let last_publish = items.iter().rposition(|i| i["action"] == "publish_skillstation").unwrap();
+        let first_deferred = items.iter().position(|i| i["after_publish"] == true).unwrap();
+        assert!(last_publish < first_deferred);
+        let removals: Vec<&str> = deferred[..deferred.len() - 1]
+            .iter()
+            .map(|i| {
+                assert_eq!(i["action"], "remove_skill");
+                assert_eq!(i["target"], "repo-claude");
+                i["skill"].as_str().unwrap()
+            })
+            .collect();
+        assert_eq!(removals, IDS);
+        let published: Vec<Value> = publish_items(&p, "plan")
+            .into_iter()
+            .filter(|i| i["skill"].as_str().unwrap().starts_with("bee-principle-"))
+            .collect();
+        assert_eq!(published.len(), IDS.len());
+    }
+
+    #[test]
+    fn the_switch_writes_hub_removes_claude_copies_keeps_agents_and_replans_clean() {
+        let fx = fixture_with_local_copies();
+        write(
+            &fx.repo.join(".bee").join("config.json"),
+            r#"{"keep":1,"skillstation":{"other":true}}"#,
+        );
+        let _hub = switching_hub(None);
+        let a = apply(&fx, &["--runtime", "claude", "--skillstation"]);
+        let config: Value = serde_json::from_str(&config_text(&fx)).unwrap();
+        assert_eq!(config["skillstation"]["principles"], "hub");
+        assert_eq!(config["skillstation"]["other"], true);
+        assert_eq!(config["keep"], 1);
+        assert!(principle_skips(&a).is_empty(), "{:?}", a["skills"]);
+        for id in IDS {
+            assert!(!fx.repo.join(".claude").join("skills").join(id).exists(), "{id}");
+            assert!(fx.repo.join(".agents").join("skills").join(id).exists(), "{id}");
+        }
+        let again = plan(&fx, &["--runtime", "claude"]);
+        assert_eq!(again["status"], "up_to_date", "{:?}", again["plan"]);
+        assert!(principle_skips(&again).is_empty());
+    }
+
+    #[test]
+    fn one_failed_publish_keeps_every_copy_and_the_mode_and_gives_one_skip_row() {
+        let fx = fixture_with_local_copies();
+        let _hub = switching_hub(Some(IDS[0]));
+        let a = apply(&fx, &["--runtime", "claude", "--skillstation"]);
+        assert!(!config_text(&fx).contains("hub"));
+        for id in IDS {
+            assert!(fx.repo.join(".claude").join("skills").join(id).exists(), "{id}");
+            assert!(fx.repo.join(".agents").join("skills").join(id).exists(), "{id}");
+        }
+        let skips = principle_skips(&a);
+        assert_eq!(skips.len(), 1, "{skips:?}");
+        assert!(skips[0]["reason"].as_str().unwrap().contains(IDS[0]));
     }
 
     #[test]

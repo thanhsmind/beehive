@@ -365,7 +365,7 @@ fn apply_publish_skillstation(
                 .map_err(|e| format!("could not stage the rendered skill for the hub - {e}"))?;
         }
     }
-    let run = |args: &[&str]| run_skillstation(&stage, args);
+    let run = hub_runner(&stage);
 
     let committed = run(&["skill", "commit", &staged.to_string_lossy(), "--yes", "--json"])
         .map_err(|reason| format!("skill commit - {reason}"))?;
@@ -540,6 +540,8 @@ pub fn apply_computed_plan(
 
     let mut applied: Vec<Value> = Vec::new();
     let mut skipped_skills: Vec<Value> = alias_skips;
+    let mut failed_principle: Option<String> = None;
+    let mut switch_skip_reported = false;
     let mut recorded_verify: Map<String, Value> = Map::new();
 
     // BACKUP ONCE PER FILE PER RUN (4cac0774).
@@ -573,6 +575,18 @@ pub fn apply_computed_plan(
         let action = item["action"].as_str().unwrap_or("");
         let rel = item["path"].as_str().unwrap_or("");
         let target = join_rel(repo_root, rel);
+        if item["after_publish"] == true {
+            if let Some(id) = &failed_principle {
+                if !switch_skip_reported {
+                    switch_skip_reported = true;
+                    skipped_skills.push(json!({
+                        "target": "skillstation-principles",
+                        "reason": format!("{id} did not publish - local principles and config kept")
+                    }));
+                }
+                continue;
+            }
+        }
         match action {
             "create_agents_block" | "append_agents_block" | "update_agents_block" => {
                 let merged = merge_agents_content(
@@ -633,6 +647,9 @@ pub fn apply_computed_plan(
                     item["table"].as_str().unwrap_or("team"),
                     item["runtimes"].as_array().map(Vec::as_slice).unwrap_or_default(),
                 );
+            }
+            "set_principles_hub" => {
+                set_principles_hub(&target);
             }
             "set_design_packs" => {
                 set_design_packs(&target, &item["packs"]);
@@ -945,6 +962,9 @@ pub fn apply_computed_plan(
                 let engine_source = item["source"].as_str().map(Path::new);
                 match apply_publish_skillstation(repo_root, skill, rel, engine_source) {
                     Err(reason) => {
+                        if skill.starts_with(super::skills::PRINCIPLE_PREFIX) && failed_principle.is_none() {
+                            failed_principle = Some(skill.to_string());
+                        }
                         skipped_skills.push(json!({
                             "skill": skill, "target": "skillstation", "reason": reason
                         }));
@@ -1191,6 +1211,14 @@ fn add_design_role(target: &Path, table: &str, runtimes: &[Value]) {
             if let Some(roles) = roster.get_mut(runtime).and_then(Value::as_object_mut) {
                 roles.entry("design").or_insert_with(|| defaults["team"][runtime]["design"].clone());
             }
+        }
+    });
+}
+
+fn set_principles_hub(target: &Path) {
+    edit_config(target, |config| {
+        if let Some(hub) = config.entry("skillstation").or_insert_with(|| json!({})).as_object_mut() {
+            hub.insert("principles".into(), json!("hub"));
         }
     });
 }

@@ -63,8 +63,10 @@ Options:
                           is the default layout.
       --skillstation      Also add the hub skills bee relies on to your
                           Skillstation hub as drafts, and pass --skillstation
-                          through to onboarding. Off by default; the /<id>
-                          alias skills are written locally either way.
+                          through to onboarding. That switches the project to
+                          principles served from the Skillstation hub and
+                          removes the local principle copies. Off by default;
+                          the /<id> alias skills are written locally either way.
       --no-claude-md      Skip writing/extending CLAUDE.md with the bare
                           @AGENTS.md import. By default onboarding writes it
                           (third-belt bootstrap for Claude Code).
@@ -826,7 +828,11 @@ printf '%s' "$STATUS" | "$BEE_BIN" dev install-support assert-parity \
 # `node "" …` (with stderr suppressed) rather than rechecking anything. It now
 # runs the binary just installed into the target, which is the one the host
 # will actually use.
-RECHECK="$( cd "$BEE_SRC" && "$HOST_BEE" onboard --repo-root "$TARGET_DIR" --json ${ONBOARD_FLAGS[@]+"${ONBOARD_FLAGS[@]}"} 2>"$CLEANUP_DIR/recheck.err" )" \
+RECHECK_FLAGS=()
+for flag in ${ONBOARD_FLAGS[@]+"${ONBOARD_FLAGS[@]}"}; do
+  [ "$flag" = "--skillstation" ] || RECHECK_FLAGS+=("$flag")
+done
+RECHECK="$( cd "$BEE_SRC" && "$HOST_BEE" onboard --repo-root "$TARGET_DIR" --json ${RECHECK_FLAGS[@]+"${RECHECK_FLAGS[@]}"} 2>"$CLEANUP_DIR/recheck.err" )" \
   || fail "Verification failed: onboarding recheck did not run. $(sed -n '1,6p' "$CLEANUP_DIR/recheck.err" 2>/dev/null)"
 printf '%s' "$RECHECK" | "$BEE_BIN" dev install-support assert-recheck \
   || fail "Verification failed: onboarding is not up_to_date immediately after apply."

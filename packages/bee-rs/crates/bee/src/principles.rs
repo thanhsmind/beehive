@@ -7,13 +7,12 @@
 // the lines this module returns. A filter written twice is the
 // rule-living-in-N-places trap the parity fence exists to catch.
 //
-// The index is read on demand from the concept file. It is never inlined as a
-// constant here: a Rust copy of the rows would drift from the markdown home the
-// moment somebody edits one and not the other, and the whole point of the
-// section is that it is the single home.
+// The repo's own concept file wins when it exists; otherwise the copy compiled
+// from that same file at build time answers, so no row is ever hand-written
+// here.
 //
 // Silence beats an empty header. No recorded route, a class matching zero rows,
-// an absent section, and an unreadable file all return an EMPTY vector — the
+// and an absent section all return an EMPTY vector — the
 // callers push nothing at all, so a session that triggers no principle pays no
 // bytes.
 
@@ -23,6 +22,10 @@ use std::path::Path;
 /// pins the AGENTS.md rule rows in, one section further down.
 pub(crate) const PRINCIPLE_INDEX: &str =
     "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md";
+
+const BUILT_IN_INDEX: &str = include_str!(
+    "../../../../../docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md"
+);
 
 /// The exact heading the section is found by. Bounded at the next `\n## `, the
 /// same way `parse_agents_rule_homes` bounds its own section.
@@ -105,17 +108,15 @@ fn backticked(item: &str) -> Option<&str> {
 
 /// The block both surfaces show, or nothing at all.
 ///
-/// `class` is the recorded route class. `None`, an empty class, a missing index
-/// file, a missing section, and zero matching rows all return an empty vector —
+/// `class` is the recorded route class. `None`, an empty class, a missing section, and zero matching rows all return an empty vector —
 /// an empty header is worse than silence.
 pub(crate) fn principle_lines(root: &Path, class: Option<&str>) -> Vec<String> {
     let class = class.map(str::trim).filter(|c| !c.is_empty());
     let Some(class) = class else {
         return Vec::new();
     };
-    let Ok(body) = std::fs::read_to_string(root.join(PRINCIPLE_INDEX)) else {
-        return Vec::new();
-    };
+    let body = std::fs::read_to_string(root.join(PRINCIPLE_INDEX))
+        .unwrap_or_else(|_| BUILT_IN_INDEX.to_string());
     render_lines(&body, class, crate::verbs::skillstation_group::principles_on_hub(root))
 }
 
@@ -254,9 +255,12 @@ mod tests {
     }
 
     #[test]
-    fn a_missing_index_file_emits_no_block_at_all() {
-        let root = std::env::temp_dir().join("bee-principles-absent-root");
-        assert!(principle_lines(&root, Some("feature")).is_empty());
+    fn a_repo_without_the_index_file_gets_the_built_in_copy() {
+        let dir = tempfile::tempdir().unwrap();
+        let lines = principle_lines(dir.path(), Some("bugfix"));
+        assert!(!lines.is_empty());
+        assert!(lines.iter().any(|l| l.contains("bee-principle-red-before-green")), "{lines:?}");
+        assert!(!lines[0].contains("skill_get"));
     }
 
     /// The section boundary is the next `## `, exactly where the fence stops.
