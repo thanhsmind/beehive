@@ -1,0 +1,526 @@
+{
+  "schema_version": "1.0",
+  "feature": "skillstation-aliases",
+  "mode": null,
+  "phase": "swarming",
+  "approved_gates": {
+    "context": true,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"skillstation-aliases\" started at phase \"exploring\" (lane).",
+  "next_action": "Invoke bee-swarming.",
+  "created_at": "2026-11-14T06:41:38.594Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null,
+  "route": {
+    "class": "feature",
+    "lane": "standard",
+    "flags": [],
+    "product_files": 6,
+    "rationale": null,
+    "updated_at": "2026-11-14T06:41:32.876Z",
+    "feature": "skillstation-aliases"
+  },
+  "gate_preview": {
+    "feature": "skillstation-aliases",
+    "plan_sha256": "36c262b46bd2f4c1298d4afdf1f67463ef1936593281ef439a53113288ee8d34",
+    "previewed_at": "2026-11-14T06:44:59.958Z",
+    "cells": [
+      {
+        "id": "ssa-1",
+        "feature": "skillstation-aliases",
+        "title": "Add the bee skillstation install and alias verbs",
+        "lane": "standard",
+        "role": "code",
+        "deps": [],
+        "decisions": [
+          "D1",
+          "D2",
+          "D3",
+          "D4",
+          "D5",
+          "D6",
+          "D7",
+          "D8"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/verbs/skillstation_group.rs",
+          "packages/bee-rs/crates/bee/src/verbs/mod.rs",
+          "packages/bee-rs/crates/bee/src/onboard/apply.rs",
+          "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+        ],
+        "read_first": [
+          "docs/history/skillstation-aliases/CONTEXT.md",
+          "docs/history/skillstation-aliases/plan.md",
+          "packages/bee-rs/crates/bee/src/verbs/tmp_group.rs",
+          "packages/bee-rs/crates/bee/src/onboard/apply.rs",
+          "docs/knowledge/areas/rust-runtime/command-surface.md"
+        ],
+        "action": "Add a verb group `bee skillstation` in a new module verbs/skillstation_group.rs, wired into verbs/mod.rs the way tmp_group is (D1). Verbs: `install [--apply] [--json]` and `alias <id> [--force] [--json]`. One const table RELATED_SKILLS holds id, repo `https://github.com/cursor/plugins` and path `pstack/skills/<id>` for statechart, create-formal-verification-skill, maintain-formal-verification-skill (D2). Reuse onboard/apply.rs run_skillstation (make it pub(crate)). install: for each row run `skillstation skill show <id> --json`; state present-active, present-draft, missing or skipped(reason). With --apply: add each missing row via `skillstation skill add <repo> --path <path> --id <id> --yes` and print `skillstation skill review <id>` as the owner's next step (D3); write an alias for each active row whose SKILL.md frontmatter (the `content` field) has `disable-model-invocation: true` (D4). Without --apply nothing is written. alias <id>: `skill show <id> --json`; not active → non-zero exit naming why (D7); else write the alias. Alias = `.claude/skills/<id>/SKILL.md` only, frontmatter name, one-line description from manifest.description, `disable-model-invocation: true` only when the hub skill has it, `metadata:\\n  skillstation_alias: <id>`; body of at most 6 lines telling the agent to call the skillstation MCP tool `skill_get` with skill_id `<id>` and follow the returned content as this skill, and to tell the user to run `skillstation connect -g` when the tool is missing (D5). Ownership: overwrite only a SKILL.md carrying `skillstation_alias: <id>`; any other existing `.claude/skills/<id>/` refuses naming the folder unless --force (D6). Missing binary, non-zero exit or bad JSON = one skip row with reason, exit 0 for install (D7). Claude Code only (D8). Add registry entries for both verbs in generated/registry_payload.json following command-surface.md so `bee skillstation install --help` prints its flags. Tests in the module: drive a fake `skillstation` shell script put first on PATH (cfg(unix)) for present/missing/skip/apply; pure tests for alias render and ownership refusal and --force.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml skillstation",
+        "must_haves": {
+          "truths": [
+            "bee skillstation install without --apply writes nothing and lists every RELATED_SKILLS row",
+            "bee skillstation alias <id> for an active hub skill writes .claude/skills/<id>/SKILL.md containing skill_get and skillstation_alias: <id>",
+            "an existing non-alias .claude/skills/<id>/ is refused without --force",
+            "a missing skillstation binary gives skip rows and exit 0 for install"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/verbs/skillstation_group.rs",
+              "substantive": "install and alias verbs, RELATED_SKILLS, alias render, tests"
+            }
+          ],
+          "key_links": [
+            "verbs/mod.rs calls skillstation_group::try_native",
+            "skillstation_group uses onboard::apply::run_skillstation"
+          ],
+          "prohibitions": [
+            "No code comments",
+            "Never approve hub content or run skill activate",
+            "Never write a hub file directly"
+          ],
+          "open_choices": [
+            "Text report layout, as long as each row names id, state and next step"
+          ]
+        }
+      },
+      {
+        "id": "ssa-2",
+        "feature": "skillstation-aliases",
+        "title": "Document Skillstation in the README and the knowledge bundle",
+        "lane": "standard",
+        "role": "writer",
+        "deps": [
+          "ssa-1"
+        ],
+        "decisions": [
+          "D9"
+        ],
+        "files": [
+          "README.md",
+          "docs/knowledge/**",
+          "docs/history/skillstation-aliases/delivery.md"
+        ],
+        "read_first": [
+          "docs/history/skillstation-aliases/CONTEXT.md",
+          "docs/history/skillstation-aliases/plan.md",
+          "docs/knowledge/areas/onboarding/host-project-artifacts.md",
+          "packages/bee-rs/crates/bee/src/verbs/skillstation_group.rs"
+        ],
+        "action": "Add a short `Skillstation` section to README.md: why hub skills cannot be started with /<id>, what `bee skillstation install [--apply]` and `bee skillstation alias <id> [--force]` do, and that content approval stays with the hub owner (`skillstation skill review <id>`). Write one knowledge concept under docs/knowledge/areas/onboarding/ for the verb group, citing history D-numbers as `skillstation-aliases D<n>` (never raw decision ids), with Pointers to skillstation_group.rs. Run `bee knowledge consolidate --feature skillstation-aliases`, write docs/history/skillstation-aliases/delivery.md listing each concept changed, one line each. Run `.bee/bin/bee knowledge check` green. One commit.",
+        "verify": ".bee/bin/bee knowledge check",
+        "must_haves": {
+          "truths": [
+            "README.md has a Skillstation section naming both commands",
+            "a docs/knowledge/areas/onboarding concept describes the verb group anchored to skillstation_group.rs"
+          ],
+          "artifacts": [
+            {
+              "path": "docs/history/skillstation-aliases/delivery.md",
+              "substantive": "the feature's delivery record"
+            }
+          ],
+          "key_links": [
+            "the delivery lands in the same merge as the code"
+          ],
+          "prohibitions": [
+            "No restating of code in concepts",
+            "No code comments"
+          ],
+          "open_choices": []
+        }
+      }
+    ],
+    "role_plan": {
+      "schema_version": "1.0",
+      "runtime": "claude",
+      "roster_sha256": "d4e696dbde7989d6388dacce3fd7057cb3a6935b46024b79698596a46f6f41d3",
+      "stages": [
+        {
+          "stage": "implementation",
+          "classification": "required",
+          "role": "code",
+          "reason": "ssa-1 adds the Rust verb group and its tests."
+        },
+        {
+          "stage": "test-and-live-proof",
+          "classification": "not-applicable",
+          "role": "test",
+          "reason": "Tests ride ssa-1; the live run is the leader's."
+        },
+        {
+          "stage": "documentation",
+          "classification": "not-applicable",
+          "role": "docs",
+          "reason": "The writer cell owns all docs."
+        },
+        {
+          "stage": "knowledge-consolidation",
+          "classification": "required",
+          "role": "writer",
+          "reason": "ssa-2 writes the README section, the concept and delivery.md."
+        },
+        {
+          "stage": "planning",
+          "classification": "not-applicable",
+          "role": "plan",
+          "reason": "The leader wrote this plan."
+        },
+        {
+          "stage": "deployment",
+          "classification": "not-applicable",
+          "role": "deploy",
+          "reason": "A release is a separate user ask."
+        },
+        {
+          "stage": "read-only-gather",
+          "classification": "conditional",
+          "role": "read",
+          "condition": "a worker report needs a multi-file check",
+          "reason": "Discovery is done."
+        },
+        {
+          "stage": "fact-extraction",
+          "classification": "not-applicable",
+          "role": "extraction",
+          "reason": "Discovery is done."
+        },
+        {
+          "stage": "generation-fallback",
+          "classification": "not-applicable",
+          "role": "generation",
+          "reason": "Every job has a specific role."
+        },
+        {
+          "stage": "independent-review",
+          "classification": "not-applicable",
+          "role": "review",
+          "reason": "Review is user-invoked."
+        },
+        {
+          "stage": "generic-advisor",
+          "classification": "not-applicable",
+          "role": "advisor",
+          "reason": "Plan check runs inline at this size."
+        },
+        {
+          "stage": "supervision",
+          "classification": "not-applicable",
+          "role": "supervisor",
+          "reason": "No unattended loop runs here."
+        },
+        {
+          "stage": "blind-lane-1",
+          "classification": "not-applicable",
+          "role": "lane-1",
+          "reason": "One shape."
+        },
+        {
+          "stage": "blind-lane-2",
+          "classification": "not-applicable",
+          "role": "lane-2",
+          "reason": "One shape."
+        },
+        {
+          "stage": "blind-lane-3",
+          "classification": "not-applicable",
+          "role": "lane-3",
+          "reason": "One shape."
+        },
+        {
+          "stage": "hat-facts-gaps",
+          "classification": "not-applicable",
+          "role": "hat-facts-gaps",
+          "reason": "Standard with ≤5 product files and no hard-gate flag: inline check."
+        },
+        {
+          "stage": "hat-risks",
+          "classification": "not-applicable",
+          "role": "hat-risks",
+          "reason": "Inline check."
+        },
+        {
+          "stage": "hat-value",
+          "classification": "not-applicable",
+          "role": "hat-value",
+          "reason": "Inline check."
+        },
+        {
+          "stage": "hat-alternatives",
+          "classification": "not-applicable",
+          "role": "hat-alternatives",
+          "reason": "Inline check."
+        },
+        {
+          "stage": "hat-user-impact",
+          "classification": "not-applicable",
+          "role": "hat-user-impact",
+          "reason": "Inline check."
+        },
+        {
+          "stage": "design",
+          "classification": "not-applicable",
+          "role": "design",
+          "reason": "No rendered UI changes."
+        }
+      ]
+    }
+  },
+  "approved_cell_packet": {
+    "feature": "skillstation-aliases",
+    "plan_sha256": "36c262b46bd2f4c1298d4afdf1f67463ef1936593281ef439a53113288ee8d34",
+    "previewed_at": "2026-11-14T06:44:59.958Z",
+    "cells": [
+      {
+        "id": "ssa-1",
+        "feature": "skillstation-aliases",
+        "title": "Add the bee skillstation install and alias verbs",
+        "lane": "standard",
+        "role": "code",
+        "deps": [],
+        "decisions": [
+          "D1",
+          "D2",
+          "D3",
+          "D4",
+          "D5",
+          "D6",
+          "D7",
+          "D8"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/verbs/skillstation_group.rs",
+          "packages/bee-rs/crates/bee/src/verbs/mod.rs",
+          "packages/bee-rs/crates/bee/src/onboard/apply.rs",
+          "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+        ],
+        "read_first": [
+          "docs/history/skillstation-aliases/CONTEXT.md",
+          "docs/history/skillstation-aliases/plan.md",
+          "packages/bee-rs/crates/bee/src/verbs/tmp_group.rs",
+          "packages/bee-rs/crates/bee/src/onboard/apply.rs",
+          "docs/knowledge/areas/rust-runtime/command-surface.md"
+        ],
+        "action": "Add a verb group `bee skillstation` in a new module verbs/skillstation_group.rs, wired into verbs/mod.rs the way tmp_group is (D1). Verbs: `install [--apply] [--json]` and `alias <id> [--force] [--json]`. One const table RELATED_SKILLS holds id, repo `https://github.com/cursor/plugins` and path `pstack/skills/<id>` for statechart, create-formal-verification-skill, maintain-formal-verification-skill (D2). Reuse onboard/apply.rs run_skillstation (make it pub(crate)). install: for each row run `skillstation skill show <id> --json`; state present-active, present-draft, missing or skipped(reason). With --apply: add each missing row via `skillstation skill add <repo> --path <path> --id <id> --yes` and print `skillstation skill review <id>` as the owner's next step (D3); write an alias for each active row whose SKILL.md frontmatter (the `content` field) has `disable-model-invocation: true` (D4). Without --apply nothing is written. alias <id>: `skill show <id> --json`; not active → non-zero exit naming why (D7); else write the alias. Alias = `.claude/skills/<id>/SKILL.md` only, frontmatter name, one-line description from manifest.description, `disable-model-invocation: true` only when the hub skill has it, `metadata:\\n  skillstation_alias: <id>`; body of at most 6 lines telling the agent to call the skillstation MCP tool `skill_get` with skill_id `<id>` and follow the returned content as this skill, and to tell the user to run `skillstation connect -g` when the tool is missing (D5). Ownership: overwrite only a SKILL.md carrying `skillstation_alias: <id>`; any other existing `.claude/skills/<id>/` refuses naming the folder unless --force (D6). Missing binary, non-zero exit or bad JSON = one skip row with reason, exit 0 for install (D7). Claude Code only (D8). Add registry entries for both verbs in generated/registry_payload.json following command-surface.md so `bee skillstation install --help` prints its flags. Tests in the module: drive a fake `skillstation` shell script put first on PATH (cfg(unix)) for present/missing/skip/apply; pure tests for alias render and ownership refusal and --force.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml skillstation",
+        "must_haves": {
+          "truths": [
+            "bee skillstation install without --apply writes nothing and lists every RELATED_SKILLS row",
+            "bee skillstation alias <id> for an active hub skill writes .claude/skills/<id>/SKILL.md containing skill_get and skillstation_alias: <id>",
+            "an existing non-alias .claude/skills/<id>/ is refused without --force",
+            "a missing skillstation binary gives skip rows and exit 0 for install"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/verbs/skillstation_group.rs",
+              "substantive": "install and alias verbs, RELATED_SKILLS, alias render, tests"
+            }
+          ],
+          "key_links": [
+            "verbs/mod.rs calls skillstation_group::try_native",
+            "skillstation_group uses onboard::apply::run_skillstation"
+          ],
+          "prohibitions": [
+            "No code comments",
+            "Never approve hub content or run skill activate",
+            "Never write a hub file directly"
+          ],
+          "open_choices": [
+            "Text report layout, as long as each row names id, state and next step"
+          ]
+        }
+      },
+      {
+        "id": "ssa-2",
+        "feature": "skillstation-aliases",
+        "title": "Document Skillstation in the README and the knowledge bundle",
+        "lane": "standard",
+        "role": "writer",
+        "deps": [
+          "ssa-1"
+        ],
+        "decisions": [
+          "D9"
+        ],
+        "files": [
+          "README.md",
+          "docs/knowledge/**",
+          "docs/history/skillstation-aliases/delivery.md"
+        ],
+        "read_first": [
+          "docs/history/skillstation-aliases/CONTEXT.md",
+          "docs/history/skillstation-aliases/plan.md",
+          "docs/knowledge/areas/onboarding/host-project-artifacts.md",
+          "packages/bee-rs/crates/bee/src/verbs/skillstation_group.rs"
+        ],
+        "action": "Add a short `Skillstation` section to README.md: why hub skills cannot be started with /<id>, what `bee skillstation install [--apply]` and `bee skillstation alias <id> [--force]` do, and that content approval stays with the hub owner (`skillstation skill review <id>`). Write one knowledge concept under docs/knowledge/areas/onboarding/ for the verb group, citing history D-numbers as `skillstation-aliases D<n>` (never raw decision ids), with Pointers to skillstation_group.rs. Run `bee knowledge consolidate --feature skillstation-aliases`, write docs/history/skillstation-aliases/delivery.md listing each concept changed, one line each. Run `.bee/bin/bee knowledge check` green. One commit.",
+        "verify": ".bee/bin/bee knowledge check",
+        "must_haves": {
+          "truths": [
+            "README.md has a Skillstation section naming both commands",
+            "a docs/knowledge/areas/onboarding concept describes the verb group anchored to skillstation_group.rs"
+          ],
+          "artifacts": [
+            {
+              "path": "docs/history/skillstation-aliases/delivery.md",
+              "substantive": "the feature's delivery record"
+            }
+          ],
+          "key_links": [
+            "the delivery lands in the same merge as the code"
+          ],
+          "prohibitions": [
+            "No restating of code in concepts",
+            "No code comments"
+          ],
+          "open_choices": []
+        }
+      }
+    ],
+    "role_plan": {
+      "schema_version": "1.0",
+      "runtime": "claude",
+      "roster_sha256": "d4e696dbde7989d6388dacce3fd7057cb3a6935b46024b79698596a46f6f41d3",
+      "stages": [
+        {
+          "stage": "implementation",
+          "classification": "required",
+          "role": "code",
+          "reason": "ssa-1 adds the Rust verb group and its tests."
+        },
+        {
+          "stage": "test-and-live-proof",
+          "classification": "not-applicable",
+          "role": "test",
+          "reason": "Tests ride ssa-1; the live run is the leader's."
+        },
+        {
+          "stage": "documentation",
+          "classification": "not-applicable",
+          "role": "docs",
+          "reason": "The writer cell owns all docs."
+        },
+        {
+          "stage": "knowledge-consolidation",
+          "classification": "required",
+          "role": "writer",
+          "reason": "ssa-2 writes the README section, the concept and delivery.md."
+        },
+        {
+          "stage": "planning",
+          "classification": "not-applicable",
+          "role": "plan",
+          "reason": "The leader wrote this plan."
+        },
+        {
+          "stage": "deployment",
+          "classification": "not-applicable",
+          "role": "deploy",
+          "reason": "A release is a separate user ask."
+        },
+        {
+          "stage": "read-only-gather",
+          "classification": "conditional",
+          "role": "read",
+          "condition": "a worker report needs a multi-file check",
+          "reason": "Discovery is done."
+        },
+        {
+          "stage": "fact-extraction",
+          "classification": "not-applicable",
+          "role": "extraction",
+          "reason": "Discovery is done."
+        },
+        {
+          "stage": "generation-fallback",
+          "classification": "not-applicable",
+          "role": "generation",
+          "reason": "Every job has a specific role."
+        },
+        {
+          "stage": "independent-review",
+          "classification": "not-applicable",
+          "role": "review",
+          "reason": "Review is user-invoked."
+        },
+        {
+          "stage": "generic-advisor",
+          "classification": "not-applicable",
+          "role": "advisor",
+          "reason": "Plan check runs inline at this size."
+        },
+        {
+          "stage": "supervision",
+          "classification": "not-applicable",
+          "role": "supervisor",
+          "reason": "No unattended loop runs here."
+        },
+        {
+          "stage": "blind-lane-1",
+          "classification": "not-applicable",
+          "role": "lane-1",
+          "reason": "One shape."
+        },
+        {
+          "stage": "blind-lane-2",
+          "classification": "not-applicable",
+          "role": "lane-2",
+          "reason": "One shape."
+        },
+        {
+          "stage": "blind-lane-3",
+          "classification": "not-applicable",
+          "role": "lane-3",
+          "reason": "One shape."
+        },
+        {
+          "stage": "hat-facts-gaps",
+          "classification": "not-applicable",
+          "role": "hat-facts-gaps",
+          "reason": "Standard with ≤5 product files and no hard-gate flag: inline check."
+        },
+        {
+          "stage": "hat-risks",
+          "classification": "not-applicable",
+          "role": "hat-risks",
+          "reason": "Inline check."
+        },
+        {
+          "stage": "hat-value",
+          "classification": "not-applicable",
+          "role": "hat-value",
+          "reason": "Inline check."
+        },
+        {
+          "stage": "hat-alternatives",
+          "classification": "not-applicable",
+          "role": "hat-alternatives",
+          "reason": "Inline check."
+        },
+        {
+          "stage": "hat-user-impact",
+          "classification": "not-applicable",
+          "role": "hat-user-impact",
+          "reason": "Inline check."
+        },
+        {
+          "stage": "design",
+          "classification": "not-applicable",
+          "role": "design",
+          "reason": "No rendered UI changes."
+        }
+      ]
+    }
+  },
+  "merge_ready": {
+    "since": "2026-11-14T07:43:02.791Z",
+    "branch": "wt/skillstation-aliases",
+    "worktree_id": "beehive--wt--skillstation-aliases",
+    "uat": "pending",
+    "blocked_by": []
+  }
+}
