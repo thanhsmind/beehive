@@ -1500,7 +1500,17 @@ pub fn compute_plan(engine: &Engine, repo_root: &Path, opts: &Options) -> Comput
     }
 
     // 5d. bee agent files (config-rendered, AO10-safe flat sync)
-    plan.extend(compute_agent_file_plan(engine, repo_root));
+    let claude_in_scope = matches!(opts.runtime.as_str(), "claude" | "both");
+    let switching = opts.skillstation && claude_in_scope;
+    let agent_start = plan.len();
+    plan.extend(compute_agent_file_plan(engine, repo_root, principles_on_hub(repo_root) || switching));
+    if switching {
+        for item in &mut plan[agent_start..] {
+            if item["action"] == "sync_agent_file" {
+                item["after_publish"] = json!(true);
+            }
+        }
+    }
 
     // 5e. OpenCode worker agent files — same source of truth, own frontmatter
     // shape (opencode-support oc-14, D4).
@@ -1541,8 +1551,6 @@ pub fn compute_plan(engine: &Engine, repo_root: &Path, opts: &Options) -> Comput
     // 7. skill sync (D1-D5, per target)
     let mut alias_skips: Vec<Value> = Vec::new();
     let hub_mode = principles_on_hub(repo_root);
-    let claude_in_scope = matches!(opts.runtime.as_str(), "claude" | "both");
-    let switching = opts.skillstation && claude_in_scope;
     let hub_mode = hub_mode || switching;
     let mut principles_from_hub = switching;
     if opts.sync_skills && hub_mode && claude_in_scope && !switching {
@@ -1591,7 +1599,11 @@ pub fn compute_plan(engine: &Engine, repo_root: &Path, opts: &Options) -> Comput
         }
         if switching {
             plan.extend(set_principles_hub_items(repo_root));
-            plan.sort_by_key(|i| i["after_publish"] == true);
+            plan.sort_by_key(|i| match (i["after_publish"] == true, i["action"] == "set_principles_hub") {
+                (false, _) => 0,
+                (true, true) => 1,
+                (true, false) => 2,
+            });
         }
     }
 

@@ -894,7 +894,11 @@ pub fn apply_computed_plan(
                 let agent = item["agent"].as_str().unwrap_or("");
                 // agent-model-unpin D1: no model resolve — the file carries
                 // no pin; the dispatch payload's model param is the authority.
-                if let Some(rendered) = super::agents::render_claude_agent_file(engine, agent, repo_root) {
+                if let Some(rendered) = super::agents::render_claude_agent_file(
+                    engine,
+                    agent,
+                    crate::verbs::skillstation_group::principles_on_hub(repo_root),
+                ) {
                     let _ = write_file_atomic(&target, rendered.as_bytes());
                 }
             }

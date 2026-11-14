@@ -154,11 +154,10 @@ pub fn render_agent_template(engine: &Engine, agent_name: &str, model: &str) -> 
 /// only an agent bee does not know (`AGENT_ROLES_BY_NAME` has no entry) —
 /// that template is never rendered, exactly as before. A `{{TIER_MODEL}}`
 /// line in a stale template copy is dropped rather than shipped verbatim.
-pub fn render_claude_agent_file(engine: &Engine, agent_name: &str, repo_root: &Path) -> Option<String> {
+pub fn render_claude_agent_file(engine: &Engine, agent_name: &str, hub: bool) -> Option<String> {
     roles_for_agent(agent_name)?;
     let source =
         read_text_if_exists(&engine.templates_agents_dir.join(format!("{agent_name}.md.tmpl")));
-    let hub = crate::verbs::skillstation_group::principles_on_hub(repo_root);
     let mut out = String::with_capacity(source.len());
     for line in source.split_inclusive('\n') {
         if line.contains("{{TIER_MODEL}}") {
@@ -220,7 +219,7 @@ pub fn render_opencode_agent_template(engine: &Engine, agent_name: &str, model: 
 /// computeAgentFilePlan (l. 2018): byte-compare each rendered template
 /// against the target; a role list that resolves to no model skips the render
 /// and removes a stale copy.
-pub fn compute_agent_file_plan(engine: &Engine, repo_root: &Path) -> Vec<Value> {
+pub fn compute_agent_file_plan(engine: &Engine, repo_root: &Path, hub: bool) -> Vec<Value> {
     let mut items = Vec::new();
     for tmpl_name in list_template_agents(engine) {
         let agent_name = tmpl_name.trim_end_matches(".md.tmpl").to_string();
@@ -230,7 +229,7 @@ pub fn compute_agent_file_plan(engine: &Engine, repo_root: &Path) -> Vec<Value> 
         // no model resolve, so a herded/cli/null slot keeps the file (the
         // dispatch payload's model param is the authority). Removal is only
         // for a template bee does not know.
-        match render_claude_agent_file(engine, &agent_name, repo_root) {
+        match render_claude_agent_file(engine, &agent_name, hub) {
             Some(rendered) => {
                 if read_text_if_exists(&target) != rendered {
                     items.push(
@@ -363,6 +362,7 @@ pub fn compute_agents_sync_record(engine: &Engine, repo_root: &Path, bee_version
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::verbs::skillstation_group::principles_on_hub;
     use std::path::PathBuf;
 
     fn engine_with_agents(dir: &Path) -> Engine {
@@ -512,7 +512,7 @@ mod tests {
         let repo = dir.path().join("repo");
         std::fs::create_dir_all(&repo).unwrap();
 
-        let items = compute_agent_file_plan(&engine, &repo);
+        let items = compute_agent_file_plan(&engine, &repo, principles_on_hub(&repo));
         let paths: Vec<&str> = items.iter().map(|i| i["path"].as_str().unwrap()).collect();
         assert_eq!(
             paths,
@@ -527,7 +527,7 @@ mod tests {
         // `model: {{TIER_MODEL}}` template line is dropped, never shipped.
         for it in &items {
             let agent = it["agent"].as_str().unwrap();
-            let rendered = render_claude_agent_file(&engine, agent, &repo).unwrap();
+            let rendered = render_claude_agent_file(&engine, agent, principles_on_hub(&repo)).unwrap();
             assert!(
                 !rendered.contains("model:"),
                 "rendered {agent} still carries a model pin: {rendered}"
@@ -536,7 +536,7 @@ mod tests {
             std::fs::create_dir_all(target.parent().unwrap()).unwrap();
             std::fs::write(&target, rendered).unwrap();
         }
-        assert!(compute_agent_file_plan(&engine, &repo).is_empty());
+        assert!(compute_agent_file_plan(&engine, &repo, principles_on_hub(&repo)).is_empty());
 
         // agent-model-unpin D2: a cli-shaped review slot used to remove its
         // file; the file no longer names a model, so the slot's shape is
@@ -547,7 +547,7 @@ mod tests {
             json!({"models":{"claude":{"review":{"kind":"cli","command":"x"}}}}).to_string(),
         )
         .unwrap();
-        assert!(compute_agent_file_plan(&engine, &repo).is_empty());
+        assert!(compute_agent_file_plan(&engine, &repo, principles_on_hub(&repo)).is_empty());
 
         // The regression that motivated D2: a herded generation slot keeps
         // bee-forager.md (it removed it before, stranding the still-native
@@ -558,7 +558,7 @@ mod tests {
                 .to_string(),
         )
         .unwrap();
-        assert!(compute_agent_file_plan(&engine, &repo).is_empty());
+        assert!(compute_agent_file_plan(&engine, &repo, principles_on_hub(&repo)).is_empty());
 
         // gather-reads-the-read-slot D6: the same holds for the slot
         // bee-forager now asks for FIRST. A herding-shaped `read` slot opens a
@@ -571,7 +571,7 @@ mod tests {
                 .to_string(),
         )
         .unwrap();
-        assert!(compute_agent_file_plan(&engine, &repo).is_empty());
+        assert!(compute_agent_file_plan(&engine, &repo, principles_on_hub(&repo)).is_empty());
         assert!(repo.join(".claude").join("agents").join("bee-forager.md").exists());
 
         // An unknown template (no AGENT_ROLES_BY_NAME entry) still renders
@@ -583,7 +583,7 @@ mod tests {
         .unwrap();
         let target = repo.join(".claude").join("agents").join("bee-mystery.md");
         std::fs::write(&target, "stale").unwrap();
-        let items = compute_agent_file_plan(&engine, &repo);
+        let items = compute_agent_file_plan(&engine, &repo, principles_on_hub(&repo));
         assert_eq!(items.len(), 1);
         assert_eq!(items[0]["action"], "remove_agent_file");
         assert_eq!(items[0]["agent"], "bee-mystery");
@@ -606,27 +606,27 @@ mod tests {
         .unwrap();
         let repo = dir.path().join("repo");
         std::fs::create_dir_all(repo.join(".bee")).unwrap();
-        let plain = render_claude_agent_file(&engine, "bee-scout", &repo).unwrap();
+        let plain = render_claude_agent_file(&engine, "bee-scout", principles_on_hub(&repo)).unwrap();
         assert_eq!(plain, "---\nname: bee-scout\ntools: Read, Grep\n---\nbody\n");
         std::fs::write(
             repo.join(".bee/config.json"),
             r#"{"skillstation":{"principles":"hub"}}"#,
         )
         .unwrap();
-        let hub = render_claude_agent_file(&engine, "bee-scout", &repo).unwrap();
+        let hub = render_claude_agent_file(&engine, "bee-scout", principles_on_hub(&repo)).unwrap();
         assert_eq!(
             hub,
             "---\nname: bee-scout\ntools: Read, Grep, mcp__skillstation__skill_get\n---\nbody\n"
         );
-        let bare = render_claude_agent_file(&engine, "bee-guard", &repo).unwrap();
+        let bare = render_claude_agent_file(&engine, "bee-guard", principles_on_hub(&repo)).unwrap();
         assert_eq!(bare, "---\nname: bee-guard\n---\nbody\n");
         for agent in ["bee-scout", "bee-guard"] {
             let target = repo.join(".claude/agents").join(format!("{agent}.md"));
             std::fs::create_dir_all(target.parent().unwrap()).unwrap();
-            std::fs::write(&target, render_claude_agent_file(&engine, agent, &repo).unwrap())
+            std::fs::write(&target, render_claude_agent_file(&engine, agent, principles_on_hub(&repo)).unwrap())
                 .unwrap();
         }
-        assert!(compute_agent_file_plan(&engine, &repo).is_empty());
+        assert!(compute_agent_file_plan(&engine, &repo, principles_on_hub(&repo)).is_empty());
     }
 
     #[test]
@@ -909,7 +909,7 @@ mod tests {
         std::fs::write(repo.join(".claude").join("agents").join("bee-build.md"), "old").unwrap();
         std::fs::write(repo.join(".opencode").join("agent").join("bee-build.md"), "old").unwrap();
 
-        let claude_plan = compute_agent_file_plan(&engine, &repo);
+        let claude_plan = compute_agent_file_plan(&engine, &repo, principles_on_hub(&repo));
         let retired_claude = claude_plan.iter().find(|i| i["agent"] == "bee-build").unwrap();
         assert_eq!(retired_claude["action"], "remove_agent_file");
         assert_eq!(retired_claude["replacement"], "bee-worker");
