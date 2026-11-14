@@ -555,6 +555,7 @@ pub(crate) struct MailboxResult {
     pub files_changed: Vec<String>,
     pub proof: String,
     pub knowledge_used: Option<Vec<String>>,
+    pub principles_used: Option<Vec<String>>,
     pub knowledge_wrong: Option<Vec<String>>,
     /// StopAndAsk (a2affcba): the ways forward the worker offers instead of
     /// guessing — one self-contained sentence each. OPTIONAL at parse and
@@ -851,6 +852,10 @@ pub(crate) fn parse_result_text(round: u32, text: &str) -> Result<MailboxResult,
         arr.iter().map(|v| v.as_str().unwrap_or_default().to_string()).collect()
     });
 
+    let principles_used = obj.get("principles_used").and_then(Value::as_array).map(|arr| {
+        arr.iter().map(|v| v.as_str().unwrap_or_default().to_string()).collect()
+    });
+
     let knowledge_wrong = obj.get("knowledge_wrong").and_then(Value::as_array).map(|arr| {
         arr.iter().map(|v| v.as_str().unwrap_or_default().to_string()).collect()
     });
@@ -862,6 +867,7 @@ pub(crate) fn parse_result_text(round: u32, text: &str) -> Result<MailboxResult,
         files_changed,
         proof,
         knowledge_used,
+        principles_used,
         knowledge_wrong,
         options,
         leaning,

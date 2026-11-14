@@ -3652,6 +3652,8 @@ use std::time::Instant;
             knowledge_used: None,
             knowledge_wrong: None,
             no_knowledge_used: false,
+            principle_used: None,
+            no_principle_used: false,
             session_flag: None,
             force_ownership: false,
             commit_pending: None,
@@ -5747,6 +5749,8 @@ use std::time::Instant;
             knowledge_used: None,
             knowledge_wrong: None,
             no_knowledge_used: false,
+            principle_used: None,
+            no_principle_used: false,
             session_flag: None,
             force_ownership: false,
             commit_pending: None,
@@ -5800,6 +5804,8 @@ use std::time::Instant;
             knowledge_used: None,
             knowledge_wrong: None,
             no_knowledge_used: false,
+            principle_used: None,
+            no_principle_used: false,
             session_flag: None,
             force_ownership: false,
             commit_pending: None,
@@ -5848,6 +5854,8 @@ use std::time::Instant;
             knowledge_used: None,
             knowledge_wrong: None,
             no_knowledge_used: false,
+            principle_used: None,
+            no_principle_used: false,
             session_flag: None,
             force_ownership: false,
             commit_pending: None,
@@ -5929,6 +5937,8 @@ use std::time::Instant;
             knowledge_used: None,
             knowledge_wrong: None,
             no_knowledge_used: false,
+            principle_used: None,
+            no_principle_used: false,
             session_flag: None,
             force_ownership: false,
             commit_pending: None,
@@ -6033,6 +6043,8 @@ use std::time::Instant;
             knowledge_used: None,
             knowledge_wrong: None,
             no_knowledge_used: false,
+            principle_used: None,
+            no_principle_used: false,
             session_flag: None,
             force_ownership: false,
             commit_pending: None,
@@ -6290,6 +6302,8 @@ use std::time::Instant;
             knowledge_used: None,
             knowledge_wrong: None,
             no_knowledge_used: false,
+            principle_used: None,
+            no_principle_used: false,
             session_flag: None,
             force_ownership: false,
             commit_pending: None,
@@ -6494,6 +6508,76 @@ use std::time::Instant;
     /// one: the refusal is the contract a cold worker fixes its cap from, so
     /// a value added or renamed without editing this line is a silent
     /// contract change. Update it with the vocabulary; never delete it.
+    fn floor_report(tests: &str) -> String {
+        format!(
+            r#"{{"outcome":"o","commit":"c","files":[],"tests":"{tests}","deviations":[]}}"#
+        )
+    }
+
+    fn floor_cell(root: &Path, role: &str, files: Value) {
+        let mut body = cell("fl-1", "claimed", "f", json!([]));
+        body["role"] = json!(role);
+        body["files"] = files;
+        write_cell_fixture(root, "fl-1", &body);
+    }
+
+    #[test]
+    fn a_tester_in_a_bugfix_class_is_refused_green_unit_naming_red_first() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_bee_config(root, &json!({"commands": {"test": "none"}}));
+        floor_cell(root, "test", json!(["src/a.rs"]));
+        std::fs::create_dir_all(root.join(".bee/lanes")).unwrap();
+        std::fs::write(
+            root.join(".bee/lanes/f.json"),
+            json!({"feature": "f", "route": {"class": "bugfix"}}).to_string(),
+        )
+        .unwrap();
+        let weak = floor_report("echo ok — green:unit — fixture");
+        let refusal = thrown(cap_cell_from_flags(root, &cap_flags_report("fl-1", Some(&weak)), false));
+        assert!(refusal.contains("floor green:red-first"), "got: {refusal}");
+        let strong = floor_report("echo ok — green:red-first — fixture");
+        assert!(cap_cell_from_flags(root, &cap_flags_report("fl-1", Some(&strong)), false).is_ok());
+    }
+
+    #[test]
+    fn an_implementer_code_cell_is_refused_green_static_and_a_docs_cell_is_not() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_bee_config(root, &json!({"commands": {"test": "none"}}));
+        let weak = floor_report("echo ok — green:static — fixture");
+        floor_cell(root, "code", json!(["src/a.rs"]));
+        let refusal = thrown(cap_cell_from_flags(root, &cap_flags_report("fl-1", Some(&weak)), false));
+        assert!(refusal.contains("floor green:unit"), "got: {refusal}");
+        floor_cell(root, "code", json!(["README.md", "docs/x.txt"]));
+        assert!(cap_cell_from_flags(root, &cap_flags_report("fl-1", Some(&weak)), false).is_ok());
+    }
+
+    #[test]
+    fn a_principles_arm_cap_needs_an_answer_and_a_holdout_arm_cap_does_not() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_bee_config(root, &json!({"commands": {"test": "none"}}));
+        std::fs::create_dir_all(root.join(".bee/logs")).unwrap();
+        std::fs::write(
+            root.join(".bee/logs/dispatch.jsonl"),
+            "{\"cell\":\"fl-1\",\"principles_arm\":\"principles\"}\n{\"cell\":\"fl-2\",\"principles_arm\":\"holdout\"}\n",
+        )
+        .unwrap();
+        let report = floor_report("echo ok — green:unit — fixture");
+        floor_cell(root, "code", json!(["src/a.rs"]));
+        let refusal = thrown(cap_cell_from_flags(root, &cap_flags_report("fl-1", Some(&report)), false));
+        assert!(refusal.contains("--principle-used"), "got: {refusal}");
+        let mut answered = cap_flags_report("fl-1", Some(&report));
+        answered.principle_used = Some("tdd — wrote the test first".to_string());
+        let capped = cap_cell_from_flags(root, &answered, false).unwrap();
+        assert_eq!(capped["trace"]["principles_used"][0]["slug"], json!("tdd"));
+        let mut other = cell("fl-2", "claimed", "f", json!([]));
+        other["role"] = json!("code");
+        write_cell_fixture(root, "fl-2", &other);
+        assert!(cap_cell_from_flags(root, &cap_flags_report("fl-2", Some(&report)), false).is_ok());
+    }
+
     #[test]
     fn report_tests_key_bare_green_is_refused_naming_the_three_strengths() {
         let tmp = tempfile::tempdir().unwrap();
@@ -6506,7 +6590,7 @@ use std::time::Instant;
         let refusal = thrown(cap_cell_from_flags(root, &flags, false));
         assert_eq!(
             refusal,
-            "cells finish: --report key \"tests\" result segment is \"green\" — a cap records HOW the change was shown to work, so the result must be one of green:live, green:unit, green:static (a bare \"green\" no longer says which)."
+            "cells finish: --report key \"tests\" result segment is \"green\" — a cap records HOW the change was shown to work, so the result must be one of green:live, green:unit, green:static, green:red-first (a bare \"green\" no longer says which)."
         );
         // The refused cap wrote nothing: the cell is still claimed.
         let after: serde_json::Value =
@@ -7175,6 +7259,8 @@ use std::time::Instant;
             knowledge_used: None,
             knowledge_wrong: None,
             no_knowledge_used: false,
+            principle_used: None,
+            no_principle_used: false,
             session_flag: None,
             force_ownership: false,
             commit_pending: commit_pending.map(str::to_string),
@@ -7299,6 +7385,8 @@ use std::time::Instant;
             knowledge_used: None,
             knowledge_wrong: None,
             no_knowledge_used: false,
+            principle_used: None,
+            no_principle_used: false,
             session_flag: None,
             force_ownership: false,
             commit_pending: None,
@@ -8446,6 +8534,8 @@ use std::time::Instant;
             knowledge_used: None,
             knowledge_wrong: None,
             no_knowledge_used: false,
+            principle_used: None,
+            no_principle_used: false,
             session_flag: None,
             force_ownership: false,
             commit_pending: None,
@@ -9772,6 +9862,8 @@ use std::time::Instant;
             knowledge_used: None,
             knowledge_wrong: None,
             no_knowledge_used: false,
+            principle_used: None,
+            no_principle_used: false,
             session_flag: None,
             force_ownership: false,
             commit_pending: None,
@@ -10335,6 +10427,8 @@ use std::time::Instant;
             knowledge_used: None,
             knowledge_wrong: None,
             no_knowledge_used: false,
+            principle_used: None,
+            no_principle_used: false,
             session_flag: None,
             force_ownership: false,
             commit_pending: None,
@@ -12086,6 +12180,8 @@ use std::time::Instant;
             knowledge_used: None,
             knowledge_wrong: None,
             no_knowledge_used: false,
+            principle_used: None,
+            no_principle_used: false,
             session_flag: None,
             force_ownership: false,
             commit_pending: None,
@@ -12376,7 +12472,7 @@ use std::time::Instant;
         let flags_no_proof = cap_flags_from_job(cell_id, job_id, None);
         let err2 = thrown(finish_cap_and_release(&main, None, flags_no_proof, None));
         assert!(
-            err2.contains("cells finish: --from-job requires --proof-result <green:unit|green:static|green:live> (FIX: pass --proof-result)"),
+            err2.contains("cells finish: --from-job requires --proof-result <green:unit|green:static|green:live|green:red-first> (FIX: pass --proof-result)"),
             "got: {err2}"
         );
 
