@@ -1,0 +1,282 @@
+{
+  "schema": "bee-usage/v1",
+  "feature": "skillstation-principles",
+  "closed_at": "2026-11-14T11:16:53.357Z",
+  "sessions": [
+    {
+      "session_id": "2e540295-8085-4e00-9266-fe90fb6784c1",
+      "models": {
+        "claude-opus-5-5": {
+          "input": 698,
+          "output": 151888,
+          "cache_write": 690234,
+          "cache_read": 70995383,
+          "new": 842820,
+          "cached": 70995383,
+          "total": 71838203
+        }
+      },
+      "subagent_models": {},
+      "subagent_count": 0,
+      "started_ms": 1794642943629,
+      "ended_ms": 1794655007859,
+      "totals": {
+        "new": 842820,
+        "cached": 70995383,
+        "total": 71838203
+      }
+    }
+  ],
+  "skipped": 0,
+  "totals": {
+    "main": {
+      "new": 842820,
+      "cached": 70995383,
+      "total": 71838203
+    },
+    "subagents": {
+      "new": 0,
+      "cached": 0,
+      "total": 0
+    },
+    "total": {
+      "new": 1386637,
+      "cached": 77636292,
+      "total": 79022929
+    },
+    "herding": {
+      "new": 543817,
+      "cached": 6640909,
+      "total": 7184726,
+      "models": {
+        "claude-sonnet-5-5": {
+          "input": 288,
+          "output": 82184,
+          "cache_write": 461345,
+          "cache_read": 6640909,
+          "new": 543817,
+          "cached": 6640909,
+          "total": 7184726
+        }
+      }
+    }
+  },
+  "herding_sessions": [
+    {
+      "session_id": "0f1ee6c0-95e7-4e38-88ca-8fcd9d424685",
+      "models": {
+        "claude-sonnet-5-5": {
+          "input": 34,
+          "output": 9501,
+          "cache_write": 47702,
+          "cache_read": 692374,
+          "new": 57237,
+          "cached": 692374,
+          "total": 749611
+        }
+      },
+      "subagent_models": {},
+      "subagent_count": 0,
+      "started_ms": 1794644037010,
+      "ended_ms": 1794644532195,
+      "totals": {
+        "new": 57237,
+        "cached": 692374,
+        "total": 749611
+      },
+      "job_id": "job-1794644035466-2359915-1"
+    },
+    {
+      "session_id": "365afe5b-2dd0-47dc-b988-2a66af9dc340",
+      "models": {
+        "claude-sonnet-5-5": {
+          "input": 36,
+          "output": 14947,
+          "cache_write": 88489,
+          "cache_read": 1251517,
+          "new": 103472,
+          "cached": 1251517,
+          "total": 1354989
+        }
+      },
+      "subagent_models": {},
+      "subagent_count": 0,
+      "started_ms": 1794644602778,
+      "ended_ms": 1794644975086,
+      "totals": {
+        "new": 103472,
+        "cached": 1251517,
+        "total": 1354989
+      },
+      "job_id": "job-1794644601212-2528457-1"
+    },
+    {
+      "session_id": "dbc7e8ee-020e-49ac-8f61-c8aabd219e05",
+      "models": {
+        "claude-sonnet-5-5": {
+          "input": 14,
+          "output": 3830,
+          "cache_write": 38020,
+          "cache_read": 209121,
+          "new": 41864,
+          "cached": 209121,
+          "total": 250985
+        }
+      },
+      "subagent_models": {},
+      "subagent_count": 0,
+      "started_ms": 1794645018179,
+      "ended_ms": 1794645049260,
+      "totals": {
+        "new": 41864,
+        "cached": 209121,
+        "total": 250985
+      },
+      "job_id": "job-1794645016646-2623161-1"
+    },
+    {
+      "session_id": "37984025-6ffa-4a01-981a-779dd5521c05",
+      "models": {
+        "claude-sonnet-5-5": {
+          "input": 20,
+          "output": 4731,
+          "cache_write": 32875,
+          "cache_read": 298645,
+          "new": 37626,
+          "cached": 298645,
+          "total": 336271
+        }
+      },
+      "subagent_models": {},
+      "subagent_count": 0,
+      "started_ms": 1794645391077,
+      "ended_ms": 1794645480398,
+      "totals": {
+        "new": 37626,
+        "cached": 298645,
+        "total": 336271
+      },
+      "job_id": "job-1794645389552-2683354-1"
+    },
+    {
+      "session_id": "3a3a6600-f5ca-4a6e-9f64-838de3bdfde9",
+      "models": {
+        "claude-sonnet-5-5": {
+          "input": 24,
+          "output": 5574,
+          "cache_write": 36878,
+          "cache_read": 404866,
+          "new": 42476,
+          "cached": 404866,
+          "total": 447342
+        }
+      },
+      "subagent_models": {},
+      "subagent_count": 0,
+      "started_ms": 1794646352382,
+      "ended_ms": 1794646712243,
+      "totals": {
+        "new": 42476,
+        "cached": 404866,
+        "total": 447342
+      },
+      "job_id": "job-1794646350913-2800577-1"
+    },
+    {
+      "session_id": "96f0a0f5-3fc8-42c2-a4e7-432af76d7685",
+      "models": {
+        "claude-sonnet-5-5": {
+          "input": 62,
+          "output": 20570,
+          "cache_write": 71080,
+          "cache_read": 1586959,
+          "new": 91712,
+          "cached": 1586959,
+          "total": 1678671
+        }
+      },
+      "subagent_models": {},
+      "subagent_count": 0,
+      "started_ms": 1794646765261,
+      "ended_ms": 1794647254229,
+      "totals": {
+        "new": 91712,
+        "cached": 1586959,
+        "total": 1678671
+      },
+      "job_id": "job-1794646763715-2925709-1"
+    },
+    {
+      "session_id": "a87292d3-4028-4888-880c-44f001607c24",
+      "models": {
+        "claude-sonnet-5-5": {
+          "input": 12,
+          "output": 3371,
+          "cache_write": 31811,
+          "cache_read": 164610,
+          "new": 35194,
+          "cached": 164610,
+          "total": 199804
+        }
+      },
+      "subagent_models": {},
+      "subagent_count": 0,
+      "started_ms": 1794647288398,
+      "ended_ms": 1794647315605,
+      "totals": {
+        "new": 35194,
+        "cached": 164610,
+        "total": 199804
+      },
+      "job_id": "job-1794647286854-3017027-1"
+    },
+    {
+      "session_id": "dc75959b-fb76-4e12-a9df-7778b46a6b9a",
+      "models": {
+        "claude-sonnet-5-5": {
+          "input": 40,
+          "output": 8584,
+          "cache_write": 50208,
+          "cache_read": 888399,
+          "new": 58832,
+          "cached": 888399,
+          "total": 947231
+        }
+      },
+      "subagent_models": {},
+      "subagent_count": 0,
+      "started_ms": 1794648819185,
+      "ended_ms": 1794649215675,
+      "totals": {
+        "new": 58832,
+        "cached": 888399,
+        "total": 947231
+      },
+      "job_id": "job-1794648817644-3192284-1"
+    },
+    {
+      "session_id": "dd8468c6-fda0-4679-a824-d800cd4a205e",
+      "models": {
+        "claude-sonnet-5-5": {
+          "input": 46,
+          "output": 11076,
+          "cache_write": 64282,
+          "cache_read": 1144418,
+          "new": 75404,
+          "cached": 1144418,
+          "total": 1219822
+        }
+      },
+      "subagent_models": {},
+      "subagent_count": 0,
+      "started_ms": 1794650274570,
+      "ended_ms": 1794650661005,
+      "totals": {
+        "new": 75404,
+        "cached": 1144418,
+        "total": 1219822
+      },
+      "job_id": "job-1794650273017-3409276-1"
+    }
+  ]
+}

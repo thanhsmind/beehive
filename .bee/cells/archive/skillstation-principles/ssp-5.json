@@ -1,0 +1,156 @@
+{
+  "id": "ssp-5",
+  "feature": "skillstation-principles",
+  "title": "Name principles in every project from an index built into bee",
+  "lane": "standard",
+  "role": "code",
+  "deps": [
+    "ssp-4"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "decisions": [
+    "D8",
+    "c52e40d8-8044-456b-ab34-ccca85555bb9"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/principles.rs",
+    "packages/bee-rs/crates/bee/src/onboard/plan.rs",
+    "packages/bee-rs/crates/bee/src/onboard/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/skillstation-principles/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/principles.rs",
+    "packages/bee-rs/crates/bee/src/onboard/plan.rs",
+    "packages/bee-rs/crates/bee/src/version.rs"
+  ],
+  "action": "D8: compile the principle index into the binary with include_str! of the repo file named by PRINCIPLE_INDEX (path relative to principles.rs is ../../../../../docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md; version.rs:32 is the precedent). principle_lines reads the repo's own file when it exists, else uses the built-in copy, so a project without that file still gets principle lines for its route class (with the hub sentence in hub mode, as ssp-1 made it). Then remove the ssp-4 D7 guard in onboard plan.rs (the `repo_root.join(PRINCIPLE_INDEX).is_file()` branch and its skip row): every repo now has an index. Update the ssp-4 tests: the no-index test now expects the principle drop to follow the hub check alone. Tests: principle_lines in a temp root with no index file returns a non-empty block for class bugfix and names bee-principle-red-before-green; a temp root with its own index file still uses that file (existing test).",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- principles onboard",
+  "must_haves": {
+    "truths": [
+      "principle_lines in a repo without the index file returns the principle block from the copy built into bee",
+      "principle_lines in a repo with its own index file reads that file",
+      "onboard in hub mode no longer skips the principle drop for a missing index file"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/principles.rs",
+        "substantive": "built-in index fallback"
+      }
+    ],
+    "key_links": [
+      "the built-in copy comes from the PRINCIPLE_INDEX file at build time, not a second hand-written list"
+    ],
+    "prohibitions": [
+      "No code comments",
+      "Onboard tests never call the real skillstation"
+    ],
+    "open_choices": []
+  },
+  "status": "capped",
+  "trace": {
+    "worker": "ssp-worker-5",
+    "outcome": "principle_lines falls back to the built-in index and onboard drops the D7 guard; commit c813230c3376a1ea9a08f29212af6eb9b81bd684",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/principles.rs",
+      "packages/bee-rs/crates/bee/src/onboard/plan.rs",
+      "packages/bee-rs/crates/bee/src/onboard/tests.rs",
+      "packages/bee-rs/crates/bee/src/hooks/session_preamble/tests.rs",
+      "docs/knowledge/areas/onboarding/skillstation-hub-skills-and-aliases.md"
+    ],
+    "deviations": [
+      "sync-ack: knowledge sync is cell ssp-7; the onboarding concept edit rides this commit"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-14T08:58:59.244Z",
+    "behavior_change": false,
+    "verification_evidence": "cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml — green:unit — full suite, no failures",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "2e540295-8085-4e00-9266-fe90fb6784c1",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- principles onboard",
+    "claimed_at": "2026-11-14T08:52:26.702Z",
+    "knowledge_delta": [
+      "docs/knowledge/areas/onboarding/skillstation-hub-skills-and-aliases.md"
+    ],
+    "sync_ack": "knowledge sync is cell ssp-7; the onboarding concept edit rides this commit",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "principle_lines falls back to the built-in index and onboard drops the D7 guard; commit c813230c3376a1ea9a08f29212af6eb9b81bd684",
+      "commit": "184fa8e7f63a625eb2f1cf846ae09f61cc9331eb",
+      "files": [
+        "packages/bee-rs/crates/bee/src/principles.rs",
+        "packages/bee-rs/crates/bee/src/onboard/plan.rs",
+        "packages/bee-rs/crates/bee/src/onboard/tests.rs",
+        "packages/bee-rs/crates/bee/src/hooks/session_preamble/tests.rs",
+        "docs/knowledge/areas/onboarding/skillstation-hub-skills-and-aliases.md"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- principles onboard — green:unit — cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml — green:unit — full suite, no failures",
+      "deviations": [],
+      "patch_id": "83128796f9e93b820702dbdda204ac680a32387e"
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "principle_lines in a repo without the index file returns the principle block from the copy built into bee",
+            "artifact": "packages/bee-rs/crates/bee/src/principles.rs"
+          },
+          {
+            "requirement": "principle_lines in a repo with its own index file reads that file",
+            "artifact": "packages/bee-rs/crates/bee/src/principles.rs"
+          },
+          {
+            "requirement": "onboard in hub mode no longer skips the principle drop for a missing index file",
+            "artifact": "packages/bee-rs/crates/bee/src/onboard/plan.rs"
+          },
+          {
+            "requirement": "the built-in copy comes from the PRINCIPLE_INDEX file at build time, not a second hand-written list",
+            "artifact": "packages/bee-rs/crates/bee/src/principles.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/principles.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/principles.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/onboard/plan.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/onboard/plan.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/onboard/tests.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/onboard/tests.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/hooks/session_preamble/tests.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/session_preamble/tests.rs"
+          },
+          {
+            "requirement": "docs/knowledge/areas/onboarding/skillstation-hub-skills-and-aliases.md",
+            "artifact": "docs/knowledge/areas/onboarding/skillstation-hub-skills-and-aliases.md"
+          }
+        ],
+        "recorded_at": "2026-11-14T08:58:59.342Z",
+        "recorded_by": "2e540295-8085-4e00-9266-fe90fb6784c1",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": {
+    "new": 42476,
+    "cached": 404866,
+    "total": 447342,
+    "models": {
+      "claude-sonnet-5-5": {
+        "new": 42476,
+        "cached": 404866,
+        "total": 447342
+      }
+    },
+    "jobs": [
+      "job-1794646350913-2800577-1"
+    ]
+  }
+}

@@ -1,0 +1,159 @@
+{
+  "id": "ssp-3",
+  "feature": "skillstation-principles",
+  "title": "Document the skillstation.principles key",
+  "lane": "standard",
+  "role": "writer",
+  "deps": [
+    "ssp-2"
+  ],
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/onboarding/skillstation-hub-skills-and-aliases.md",
+    "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md"
+  ],
+  "decisions": [
+    "D1",
+    "D2",
+    "D3",
+    "D4",
+    "D5"
+  ],
+  "files": [
+    "README.md",
+    "docs/config-reference.md",
+    "docs/knowledge/**",
+    "docs/history/skillstation-principles/delivery.md"
+  ],
+  "read_first": [
+    "docs/history/skillstation-principles/CONTEXT.md",
+    "docs/knowledge/areas/onboarding/skillstation-hub-skills-and-aliases.md",
+    "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md",
+    "docs/config-reference.md"
+  ],
+  "action": "Document the key: docs/config-reference.md gets `skillstation.principles` (values local and hub, default local, Claude Code only, two onboards to switch). README.md § Skillstation gets one short paragraph. Extend docs/knowledge/areas/onboarding/skillstation-hub-skills-and-aliases.md with a section on hub-served principles (D1-D5) and add one line to the Principle homes section of router-triage-and-the-agents-md-duplication-boundary.md pointing at it (one fact, one home). Cite `skillstation-principles D<n>`, never raw decision ids. Run `bee knowledge consolidate --feature skillstation-principles`, write docs/history/skillstation-principles/delivery.md, run `.bee/bin/bee knowledge check` green. One commit.",
+  "verify": ".bee/bin/bee knowledge check",
+  "must_haves": {
+    "truths": [
+      "docs/config-reference.md names skillstation.principles with its two values",
+      "the skillstation onboarding concept explains hub-served principles"
+    ],
+    "artifacts": [
+      {
+        "path": "docs/history/skillstation-principles/delivery.md",
+        "substantive": "the feature's delivery record"
+      }
+    ],
+    "key_links": [
+      "the delivery lands in the same merge as the code"
+    ],
+    "prohibitions": [
+      "No restating of code in concepts",
+      "No code comments"
+    ],
+    "open_choices": []
+  },
+  "status": "capped",
+  "trace": {
+    "worker": "ssp-worker-3",
+    "outcome": "Documented skillstation.principles in config reference, README, concepts and delivery record; commit 5151dedc2eb261b9d565936d276515f15f7a7e9f",
+    "files_changed": [
+      "README.md",
+      "docs/config-reference.md",
+      "docs/knowledge/areas/onboarding/skillstation-hub-skills-and-aliases.md",
+      "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md",
+      "docs/history/skillstation-principles/delivery.md"
+    ],
+    "deviations": [
+      "sync-ack: README gained one Skillstation paragraph; the project overview concept does not describe that section"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-14T08:31:08.839Z",
+    "behavior_change": false,
+    "verification_evidence": ".bee/bin/bee knowledge check — green:static — docs-only change, 0 OKF and 0 profile errors",
+    "verify_output": "green:static",
+    "verify_passed": true,
+    "claim_session": "2e540295-8085-4e00-9266-fe90fb6784c1",
+    "verify_command": ".bee/bin/bee knowledge check",
+    "claimed_at": "2026-11-14T08:30:10.751Z",
+    "knowledge_delta": [
+      "docs/knowledge/areas/onboarding/skillstation-hub-skills-and-aliases.md",
+      "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md"
+    ],
+    "sync_ack": "README gained one Skillstation paragraph; the project overview concept does not describe that section",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Documented skillstation.principles in config reference, README, concepts and delivery record; commit 5151dedc2eb261b9d565936d276515f15f7a7e9f",
+      "commit": "5151dedc2eb261b9d565936d276515f15f7a7e9f",
+      "files": [
+        "README.md",
+        "docs/config-reference.md",
+        "docs/knowledge/areas/onboarding/skillstation-hub-skills-and-aliases.md",
+        "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md",
+        "docs/history/skillstation-principles/delivery.md"
+      ],
+      "tests": ".bee/bin/bee knowledge check — green:static — .bee/bin/bee knowledge check — green:static — docs-only change, 0 OKF and 0 profile errors",
+      "deviations": [],
+      "patch_id": "bb3114555b73352e560d632c1a3ddbbd5c289efa"
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "docs/config-reference.md names skillstation.principles with its two values",
+            "artifact": "docs/config-reference.md"
+          },
+          {
+            "requirement": "the skillstation onboarding concept explains hub-served principles",
+            "artifact": "docs/knowledge/areas/onboarding/skillstation-hub-skills-and-aliases.md"
+          },
+          {
+            "requirement": "the delivery lands in the same merge as the code",
+            "artifact": "docs/history/skillstation-principles/delivery.md"
+          },
+          {
+            "requirement": "README.md",
+            "artifact": "README.md"
+          },
+          {
+            "requirement": "docs/config-reference.md",
+            "artifact": "docs/config-reference.md"
+          },
+          {
+            "requirement": "docs/knowledge/areas/onboarding/skillstation-hub-skills-and-aliases.md",
+            "artifact": "docs/knowledge/areas/onboarding/skillstation-hub-skills-and-aliases.md"
+          },
+          {
+            "requirement": "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md",
+            "artifact": "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md"
+          },
+          {
+            "requirement": "docs/history/skillstation-principles/delivery.md",
+            "artifact": "docs/history/skillstation-principles/delivery.md"
+          }
+        ],
+        "recorded_at": "2026-11-14T08:31:09.005Z",
+        "recorded_by": "2e540295-8085-4e00-9266-fe90fb6784c1",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": {
+    "new": 41864,
+    "cached": 209121,
+    "total": 250985,
+    "models": {
+      "claude-sonnet-5-5": {
+        "new": 41864,
+        "cached": 209121,
+        "total": 250985
+      }
+    },
+    "jobs": [
+      "job-1794645016646-2623161-1"
+    ]
+  }
+}

@@ -1,0 +1,186 @@
+{
+  "id": "ssp-6",
+  "feature": "skillstation-principles",
+  "title": "Switch a project to hub principles in one onboard --skillstation run",
+  "lane": "standard",
+  "role": "code",
+  "deps": [
+    "ssp-5"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "decisions": [
+    "D9",
+    "D10",
+    "8076f811-1199-4e31-b79c-b21c64267a97",
+    "7a5e21b0-85ca-4a61-b65d-f2dfebadd6ef"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/onboard/plan.rs",
+    "packages/bee-rs/crates/bee/src/onboard/apply.rs",
+    "packages/bee-rs/crates/bee/src/onboard/tests.rs",
+    "scripts/install.sh"
+  ],
+  "read_first": [
+    "docs/history/skillstation-principles/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/onboard/plan.rs",
+    "packages/bee-rs/crates/bee/src/onboard/apply.rs",
+    "scripts/install.sh",
+    "packages/bee-rs/crates/bee/src/devtools/install_support.rs"
+  ],
+  "action": "D9: when `opts.skillstation` and the Claude runtime is in scope, onboard treats the project as hub mode even when skillstation.principles is not hub yet. Plan: (a) when the tracked .bee/config.json does not set skillstation.principles to hub, one item `set_principles_hub` (path .bee/config.json) that apply runs by setting the key to the string hub, keeping every other key, through the existing config write helper; (b) the principle publish items as today; (c) for every local `.claude/skills/bee-principle-*` folder that the hub check does not already remove, a `remove_skill` item carrying `\"after_publish\": true`. Apply runs every after_publish item only after all principle publish items ran, and only when every principle publish succeeded; when one failed it runs none of them and adds one skipped_skills entry {target: \"skillstation-principles\", reason} naming the failed id. The local copies under .agents, .opencode and the plugin trees stay. Without --skillstation nothing here changes: the mode comes from config alone (ssp-2 behavior). D10 in scripts/install.sh: update the --skillstation help text to say it switches the project to principles served from the Skillstation hub and removes the local principle copies; the post-apply RECHECK runs with ONBOARD_FLAGS minus --skillstation (build a second array), so it checks local state and does not plan a publish. install.sh is a release-manifest root: run `bee dev regen` and commit the manifest change. Tests with set_test_hub: --skillstation on a local-mode project plans set_principles_hub, publish items and after_publish removals; apply with every publish succeeding writes hub to config and removes .claude/skills principle folders but keeps .agents ones; apply with one failing publish keeps all and reports one skip row; a plan without --skillstation after a successful switch is up_to_date with the hub reporting every principle active.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- skillstation onboard install",
+  "must_haves": {
+    "truths": [
+      "bee onboard --skillstation --apply on a local-mode project writes skillstation.principles hub into .bee/config.json",
+      "bee onboard --skillstation --apply removes the .claude/skills principle folders in the same run when every principle publish succeeded",
+      "when one principle publish fails onboard keeps every local principle and reports one skipped_skills entry with target skillstation-principles",
+      "scripts/install.sh runs its recheck without --skillstation",
+      "without --skillstation onboard does not change skillstation.principles"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/onboard/apply.rs",
+        "substantive": "after_publish removals and set_principles_hub"
+      }
+    ],
+    "key_links": [
+      "the removal reuses the remove_skill item and apply_remove_skill, not a new delete path",
+      "install.sh plan and apply carry --skillstation, the recheck does not"
+    ],
+    "prohibitions": [
+      "No code comments",
+      "Never change the hub without --skillstation",
+      "Onboard tests never call the real skillstation"
+    ],
+    "open_choices": [
+      "How apply defers after_publish items"
+    ]
+  },
+  "status": "capped",
+  "trace": {
+    "worker": "ssp-worker-6",
+    "outcome": "onboard --skillstation switches a project to hub principles in one run, install.sh recheck drops the flag; commit a323ec5825a9ee71bb5f56b2c85ff4449519f785",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/onboard/plan.rs",
+      "packages/bee-rs/crates/bee/src/onboard/apply.rs",
+      "packages/bee-rs/crates/bee/src/onboard/tests.rs",
+      "scripts/install.sh",
+      "docs/knowledge/areas/onboarding/skillstation-hub-skills-and-aliases.md"
+    ],
+    "deviations": [
+      "sync-ack: knowledge sync is cell ssp-7; the onboarding concept edit rides this commit"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-14T09:07:58.799Z",
+    "behavior_change": false,
+    "verification_evidence": "cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml — green:unit — full suite, 0 failed in every result line",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "2e540295-8085-4e00-9266-fe90fb6784c1",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- skillstation onboard install",
+    "claimed_at": "2026-11-14T08:59:18.751Z",
+    "verified_at": null,
+    "baseline": null,
+    "reaction": null,
+    "skipped": null,
+    "unknowns": null,
+    "found": null,
+    "stopped": null,
+    "knowledge_delta": [
+      "docs/knowledge/areas/onboarding/skillstation-hub-skills-and-aliases.md"
+    ],
+    "sync_ack": "knowledge sync is cell ssp-7; the onboarding concept edit rides this commit",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "onboard --skillstation switches a project to hub principles in one run, install.sh recheck drops the flag; commit a323ec5825a9ee71bb5f56b2c85ff4449519f785",
+      "commit": "a323ec5825a9ee71bb5f56b2c85ff4449519f785",
+      "files": [
+        "packages/bee-rs/crates/bee/src/onboard/plan.rs",
+        "packages/bee-rs/crates/bee/src/onboard/apply.rs",
+        "packages/bee-rs/crates/bee/src/onboard/tests.rs",
+        "scripts/install.sh",
+        "docs/knowledge/areas/onboarding/skillstation-hub-skills-and-aliases.md"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- skillstation onboard install — green:unit — cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml — green:unit — full suite, 0 failed in every result line",
+      "deviations": [],
+      "patch_id": "a6b6587e636c4542fc930aab8c70e86e1032c5a3"
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "bee onboard --skillstation --apply on a local-mode project writes skillstation.principles hub into .bee/config.json",
+            "artifact": "packages/bee-rs/crates/bee/src/onboard/apply.rs"
+          },
+          {
+            "requirement": "bee onboard --skillstation --apply removes the .claude/skills principle folders in the same run when every principle publish succeeded",
+            "artifact": "packages/bee-rs/crates/bee/src/onboard/plan.rs"
+          },
+          {
+            "requirement": "when one principle publish fails onboard keeps every local principle and reports one skipped_skills entry with target skillstation-principles",
+            "artifact": "packages/bee-rs/crates/bee/src/onboard/apply.rs"
+          },
+          {
+            "requirement": "scripts/install.sh runs its recheck without --skillstation",
+            "artifact": "scripts/install.sh"
+          },
+          {
+            "requirement": "without --skillstation onboard does not change skillstation.principles",
+            "artifact": "packages/bee-rs/crates/bee/src/onboard/tests.rs"
+          },
+          {
+            "requirement": "the removal reuses the remove_skill item and apply_remove_skill, not a new delete path",
+            "artifact": "packages/bee-rs/crates/bee/src/onboard/plan.rs"
+          },
+          {
+            "requirement": "install.sh plan and apply carry --skillstation, the recheck does not",
+            "artifact": "scripts/install.sh"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/onboard/plan.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/onboard/plan.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/onboard/apply.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/onboard/apply.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/onboard/tests.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/onboard/tests.rs"
+          },
+          {
+            "requirement": "scripts/install.sh",
+            "artifact": "scripts/install.sh"
+          },
+          {
+            "requirement": "docs/knowledge/areas/onboarding/skillstation-hub-skills-and-aliases.md",
+            "artifact": "docs/knowledge/areas/onboarding/skillstation-hub-skills-and-aliases.md"
+          }
+        ],
+        "recorded_at": "2026-11-14T09:07:58.902Z",
+        "recorded_by": "2e540295-8085-4e00-9266-fe90fb6784c1",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "regen_obligation_ack": "wave-barrier",
+  "usage": {
+    "new": 91712,
+    "cached": 1586959,
+    "total": 1678671,
+    "models": {
+      "claude-sonnet-5-5": {
+        "new": 91712,
+        "cached": 1586959,
+        "total": 1678671
+      }
+    },
+    "jobs": [
+      "job-1794646763715-2925709-1"
+    ]
+  }
+}

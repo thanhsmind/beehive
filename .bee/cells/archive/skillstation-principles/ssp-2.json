@@ -1,0 +1,177 @@
+{
+  "id": "ssp-2",
+  "feature": "skillstation-principles",
+  "title": "Serve principles from the hub in onboard",
+  "lane": "standard",
+  "role": "code",
+  "deps": [
+    "ssp-1"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "decisions": [
+    "D1",
+    "D2",
+    "D3",
+    "4624b57e-a37f-4a4e-b2a2-66a1b4f645b8",
+    "803d608e-c159-41fe-b9c0-e1b3750ae841",
+    "df7e48a5-8da9-4d34-90df-85df82b4fa7a"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/onboard/skills.rs",
+    "packages/bee-rs/crates/bee/src/onboard/plan.rs",
+    "packages/bee-rs/crates/bee/src/onboard/apply.rs",
+    "packages/bee-rs/crates/bee/src/onboard/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/skillstation-principles/CONTEXT.md",
+    "docs/history/skillstation-principles/plan.md",
+    "docs/knowledge/areas/onboarding/host-project-artifacts.md",
+    "packages/bee-rs/crates/bee/src/onboard/skills.rs",
+    "packages/bee-rs/crates/bee/src/onboard/plan.rs",
+    "packages/bee-rs/crates/bee/src/onboard/apply.rs",
+    "packages/bee-rs/crates/bee/src/verbs/skillstation_group.rs"
+  ],
+  "action": "D2: when `principles_on_hub(repo_root)` is true and the Claude runtime is in scope, onboard reads each `bee-principle-*` directory of the engine skills source on the hub with `hub_show` through `hub_runner(repo_root)`. When every one is `active`, the skill sync for the repo Claude target only (target kind repo-claude, `.claude/skills`) leaves every `bee-principle-*` entry out of its source list, so the existing deletion loop plans `remove_skill` for local copies. Codex, opencode, plugin and the legacy global targets are unchanged. When any principle is missing or not active, or the hub read skips, the source list is unchanged and onboard reports exactly one `skipped_skills` entry `{target: \"skillstation-principles\", reason}` naming the first failing id or the skip reason. D3: when `opts.skillstation` and hub mode, plan one `publish_skillstation` item per `bee-principle-*` source skill that stages from the engine source rendered for the claude runtime (the same render the Claude sync uses), not from `.claude/skills`; apply runs the existing commit-then-activate path. Without hub mode, plan and apply output are byte-identical to today; without --skillstation the hub is never written. Tests use `set_test_hub`, never the real binary: hub mode with all active plans removal of local principle folders only under .claude/skills and keeps .agents copies; one draft keeps all and gives one skip row; hub skip gives one skip row; --skillstation in hub mode plans one publish item per principle; key absent leaves the plan unchanged; a re-plan after apply in hub mode with all active is up to date.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- skillstation onboard",
+  "must_haves": {
+    "truths": [
+      "in hub mode with every principle active on the hub onboard removes the local bee-principle folders under .claude/skills only",
+      "in hub mode with one principle not active onboard keeps every local principle and reports one skipped_skills entry with target skillstation-principles",
+      "bee onboard --skillstation in hub mode publishes each bee-principle skill from the engine source",
+      "with skillstation.principles absent the onboard plan is unchanged"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/onboard/skills.rs",
+        "substantive": "Claude target source list without principles in hub mode"
+      }
+    ],
+    "key_links": [
+      "onboard calls principles_on_hub and hub_show from skillstation_group.rs",
+      "the publish stages from the engine source, not .claude/skills"
+    ],
+    "prohibitions": [
+      "No code comments",
+      "Never change the hub without --skillstation",
+      "Onboard tests never call the real skillstation"
+    ],
+    "open_choices": [
+      "Where in compute_skill_sync the Claude target source list is filtered"
+    ]
+  },
+  "status": "capped",
+  "trace": {
+    "worker": "ssp-worker-2",
+    "outcome": "Onboard serves bee-principle skills from the hub in hub mode (claude target only, loud skip fallback, engine-sourced publish); commit b9e332ecb3cc2a56eeb4934e54c8582e136dbc75",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/onboard/skills.rs",
+      "packages/bee-rs/crates/bee/src/onboard/plan.rs",
+      "packages/bee-rs/crates/bee/src/onboard/apply.rs",
+      "packages/bee-rs/crates/bee/src/onboard/tests.rs",
+      "docs/knowledge/areas/onboarding/skillstation-hub-skills-and-aliases.md"
+    ],
+    "deviations": [
+      "sync-ack: knowledge sync is cell ssp-3 of this feature; local mode onboard output is unchanged"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-14T08:29:59.366Z",
+    "behavior_change": false,
+    "verification_evidence": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml — green:unit — full suite, 5102 passed in the bin, 0 failed",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "2e540295-8085-4e00-9266-fe90fb6784c1",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- skillstation onboard",
+    "claimed_at": "2026-11-14T08:23:15.793Z",
+    "knowledge_delta": [
+      "docs/knowledge/areas/onboarding/skillstation-hub-skills-and-aliases.md"
+    ],
+    "sync_ack": "knowledge sync is cell ssp-3 of this feature; local mode onboard output is unchanged",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Onboard serves bee-principle skills from the hub in hub mode (claude target only, loud skip fallback, engine-sourced publish); commit b9e332ecb3cc2a56eeb4934e54c8582e136dbc75",
+      "commit": "de099f73660bba7bc3b0b028d3ec1a2e65380db8",
+      "files": [
+        "packages/bee-rs/crates/bee/src/onboard/skills.rs",
+        "packages/bee-rs/crates/bee/src/onboard/plan.rs",
+        "packages/bee-rs/crates/bee/src/onboard/apply.rs",
+        "packages/bee-rs/crates/bee/src/onboard/tests.rs",
+        "docs/knowledge/areas/onboarding/skillstation-hub-skills-and-aliases.md"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- skillstation onboard — green:unit — PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml — green:unit — full suite, 5102 passed in the bin, 0 failed",
+      "deviations": [],
+      "patch_id": "0ccec01dddc6df7fd94d1a260c87d7ef1aac2fd4"
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "in hub mode with every principle active on the hub onboard removes the local bee-principle folders under .claude/skills only",
+            "artifact": "packages/bee-rs/crates/bee/src/onboard/skills.rs"
+          },
+          {
+            "requirement": "in hub mode with one principle not active onboard keeps every local principle and reports one skipped_skills entry with target skillstation-principles",
+            "artifact": "packages/bee-rs/crates/bee/src/onboard/plan.rs"
+          },
+          {
+            "requirement": "bee onboard --skillstation in hub mode publishes each bee-principle skill from the engine source",
+            "artifact": "packages/bee-rs/crates/bee/src/onboard/apply.rs"
+          },
+          {
+            "requirement": "with skillstation.principles absent the onboard plan is unchanged",
+            "artifact": "packages/bee-rs/crates/bee/src/onboard/tests.rs"
+          },
+          {
+            "requirement": "onboard calls principles_on_hub and hub_show from skillstation_group.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/onboard/plan.rs"
+          },
+          {
+            "requirement": "the publish stages from the engine source, not .claude/skills",
+            "artifact": "packages/bee-rs/crates/bee/src/onboard/apply.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/onboard/skills.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/onboard/skills.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/onboard/plan.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/onboard/plan.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/onboard/apply.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/onboard/apply.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/onboard/tests.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/onboard/tests.rs"
+          },
+          {
+            "requirement": "docs/knowledge/areas/onboarding/skillstation-hub-skills-and-aliases.md",
+            "artifact": "docs/knowledge/areas/onboarding/skillstation-hub-skills-and-aliases.md"
+          }
+        ],
+        "recorded_at": "2026-11-14T08:30:07.644Z",
+        "recorded_by": "2e540295-8085-4e00-9266-fe90fb6784c1",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": {
+    "new": 103472,
+    "cached": 1251517,
+    "total": 1354989,
+    "models": {
+      "claude-sonnet-5-5": {
+        "new": 103472,
+        "cached": 1251517,
+        "total": 1354989
+      }
+    },
+    "jobs": [
+      "job-1794644601212-2528457-1"
+    ]
+  }
+}

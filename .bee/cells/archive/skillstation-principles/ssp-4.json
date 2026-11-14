@@ -1,0 +1,158 @@
+{
+  "id": "ssp-4",
+  "feature": "skillstation-principles",
+  "title": "Keep local principles where orient cannot name them",
+  "lane": "standard",
+  "role": "code",
+  "deps": [
+    "ssp-2"
+  ],
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/onboarding/skillstation-hub-skills-and-aliases.md"
+  ],
+  "decisions": [
+    "D2",
+    "D7",
+    "608d5298-e450-47b0-ac10-6655f4999e04",
+    "803d608e-c159-41fe-b9c0-e1b3750ae841"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/onboard/plan.rs",
+    "packages/bee-rs/crates/bee/src/onboard/tests.rs",
+    "packages/bee-rs/crates/bee/src/principles.rs",
+    "docs/knowledge/areas/onboarding/skillstation-hub-skills-and-aliases.md",
+    "docs/config-reference.md",
+    "README.md"
+  ],
+  "read_first": [
+    "docs/history/skillstation-principles/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/onboard/plan.rs",
+    "packages/bee-rs/crates/bee/src/principles.rs",
+    "docs/knowledge/areas/onboarding/skillstation-hub-skills-and-aliases.md"
+  ],
+  "action": "D7: in onboard plan, hub mode drops the local principles only when the repo root holds the file principles::PRINCIPLE_INDEX (make the constant reachable from onboard, pub(crate) is enough; do not copy the path string). Check this before the hub read: when the file is absent, principles_from_hub stays false, no hub read runs for principles, and onboard adds exactly one skipped_skills entry {target: \"skillstation-principles\", reason: \"<PRINCIPLE_INDEX> is absent, so bee orient cannot name principles in this repo\"}. When the file is present the ssp-2 behavior is unchanged. The --skillstation publish is unchanged. Update the existing ssp-2 hub-mode tests so their repo carries the index file, and add a test: hub mode, every principle active, no index file -> no remove_skill for any bee-principle folder and one skip row naming the index. Docs: say in docs/config-reference.md (the skillstation.principles row), README.md (the Skillstation paragraph; also fix its count: the source has 24 bee-principle skills, not 25) and the onboarding concept that the local copies are removed only in a repo that holds the principle index, which today is the bee repo itself; cite skillstation-principles D7. One commit.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- skillstation onboard",
+  "must_haves": {
+    "truths": [
+      "in hub mode with every principle active but no principle index file onboard keeps every local principle and reports one skipped_skills entry naming the index",
+      "in hub mode with the principle index file and every principle active onboard still removes the local principle folders under .claude/skills"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/onboard/plan.rs",
+        "substantive": "principle index check before the principle drop"
+      }
+    ],
+    "key_links": [
+      "onboard reads the index path from principles::PRINCIPLE_INDEX, not a copy"
+    ],
+    "prohibitions": [
+      "No code comments",
+      "Onboard tests never call the real skillstation"
+    ],
+    "open_choices": []
+  },
+  "status": "capped",
+  "trace": {
+    "worker": "ssp-worker-4",
+    "outcome": "Hub mode keeps local principles and adds one skip row naming the index when PRINCIPLE_INDEX is absent; docs updated; commit a2cfd9bf9fd5e3cf153c1210f1bc8a6a8bdfe4e9",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/onboard/plan.rs",
+      "packages/bee-rs/crates/bee/src/onboard/tests.rs",
+      "docs/knowledge/areas/onboarding/skillstation-hub-skills-and-aliases.md",
+      "docs/config-reference.md",
+      "README.md"
+    ],
+    "deviations": [
+      "sync-ack: the onboarding concept is in this cell's commit; other anchoring concepts describe local-mode behavior, unchanged"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-14T08:38:17.380Z",
+    "behavior_change": false,
+    "verification_evidence": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- skillstation onboard — green:unit — 326 passed, 0 failed, covers the onboard hub-mode tests",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "2e540295-8085-4e00-9266-fe90fb6784c1",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- skillstation onboard",
+    "claimed_at": "2026-11-14T08:36:24.207Z",
+    "knowledge_delta": [
+      "docs/knowledge/areas/onboarding/skillstation-hub-skills-and-aliases.md"
+    ],
+    "sync_ack": "the onboarding concept is in this cell's commit; other anchoring concepts describe local-mode behavior, unchanged",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Hub mode keeps local principles and adds one skip row naming the index when PRINCIPLE_INDEX is absent; docs updated; commit a2cfd9bf9fd5e3cf153c1210f1bc8a6a8bdfe4e9",
+      "commit": "a2cfd9bf9fd5e3cf153c1210f1bc8a6a8bdfe4e9",
+      "files": [
+        "packages/bee-rs/crates/bee/src/onboard/plan.rs",
+        "packages/bee-rs/crates/bee/src/onboard/tests.rs",
+        "docs/knowledge/areas/onboarding/skillstation-hub-skills-and-aliases.md",
+        "docs/config-reference.md",
+        "README.md"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- skillstation onboard — green:unit — cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- skillstation onboard — green:unit — 326 passed, 0 failed, covers the onboard hub-mode tests",
+      "deviations": [],
+      "patch_id": "12447c8403007146b6a090c51c415d8f48f350ea"
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "in hub mode with every principle active but no principle index file onboard keeps every local principle and reports one skipped_skills entry naming the index",
+            "artifact": "packages/bee-rs/crates/bee/src/onboard/plan.rs"
+          },
+          {
+            "requirement": "in hub mode with the principle index file and every principle active onboard still removes the local principle folders under .claude/skills",
+            "artifact": "packages/bee-rs/crates/bee/src/onboard/tests.rs"
+          },
+          {
+            "requirement": "onboard reads the index path from principles::PRINCIPLE_INDEX, not a copy",
+            "artifact": "packages/bee-rs/crates/bee/src/onboard/plan.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/onboard/plan.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/onboard/plan.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/onboard/tests.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/onboard/tests.rs"
+          },
+          {
+            "requirement": "docs/knowledge/areas/onboarding/skillstation-hub-skills-and-aliases.md",
+            "artifact": "docs/knowledge/areas/onboarding/skillstation-hub-skills-and-aliases.md"
+          },
+          {
+            "requirement": "docs/config-reference.md",
+            "artifact": "docs/config-reference.md"
+          },
+          {
+            "requirement": "README.md",
+            "artifact": "README.md"
+          }
+        ],
+        "recorded_at": "2026-11-14T08:38:17.561Z",
+        "recorded_by": "2e540295-8085-4e00-9266-fe90fb6784c1",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": {
+    "new": 37626,
+    "cached": 298645,
+    "total": 336271,
+    "models": {
+      "claude-sonnet-5-5": {
+        "new": 37626,
+        "cached": 298645,
+        "total": 336271
+      }
+    },
+    "jobs": [
+      "job-1794645389552-2683354-1"
+    ]
+  }
+}

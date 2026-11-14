@@ -8,17 +8,17 @@
     "shape": true,
     "execution": true,
     "review": false,
-    "uat": false
+    "uat": true
   },
   "summary": "Feature \"skillstation-principles\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at 4b5f11b; reload the product and test \"skillstation-principles\", then either approve uat (\"bee gate --name uat --approved true --lane skillstation-principles\") or fix it in the worktree and merge again.",
+  "next_action": "Continue bee-exploring for \"skillstation-principles\" (lane).",
   "created_at": "2026-11-14T08:10:27.960Z",
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "gate",
-    "subject": "uat: skillstation-principles",
-    "asked_at": "2026-11-14T10:10:04.292Z",
-    "session": "bee-worktree-merge-sessionless"
+    "subject": "uat for skillstation-principles: survey-platform switched to hub principles, commit 4ee9c04",
+    "asked_at": "2026-11-14T11:13:19.685Z",
+    "session": "2e540295-8085-4e00-9266-fe90fb6784c1"
   },
   "route": {
     "class": "feature",

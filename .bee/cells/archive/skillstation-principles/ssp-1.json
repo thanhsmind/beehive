@@ -1,0 +1,172 @@
+{
+  "id": "ssp-1",
+  "feature": "skillstation-principles",
+  "title": "Give agents the hub fetch tool and name it in the principle header",
+  "lane": "standard",
+  "role": "code",
+  "deps": [],
+  "affects_skills": [],
+  "affects_specs": [],
+  "decisions": [
+    "D1",
+    "D4",
+    "D5"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/skillstation_group.rs",
+    "packages/bee-rs/crates/bee/src/principles.rs",
+    "packages/bee-rs/crates/bee/src/onboard/agents.rs",
+    "packages/bee-rs/crates/bee/src/onboard/apply.rs"
+  ],
+  "read_first": [
+    "docs/history/skillstation-principles/CONTEXT.md",
+    "docs/history/skillstation-principles/plan.md",
+    "docs/knowledge/areas/onboarding/skillstation-hub-skills-and-aliases.md",
+    "packages/bee-rs/crates/bee/src/verbs/skillstation_group.rs",
+    "packages/bee-rs/crates/bee/src/principles.rs",
+    "packages/bee-rs/crates/bee/src/onboard/agents.rs"
+  ],
+  "action": "Add one pub(crate) helper in skillstation_group.rs, `principles_on_hub(root: &Path) -> bool`, true only when the merged config (.bee/config.json overlaid by .bee/config.local.json, through the existing config merge helper) sets `skillstation.principles` to the string `hub`; any other value or absence is false (D1, D5). D5: in principles.rs, when the helper is true for `root`, `principle_lines` appends to the header line the sentence ` Load each one with the skillstation MCP tool skill_get, the slug as skill_id.` (exact text); rows are unchanged, and with the helper false the output is byte-identical to today. D4: the rendered Claude agent file gets `, mcp__skillstation__skill_get` appended to its frontmatter `tools:` line when the helper is true for the repo root; change `render_claude_agent_file` to take the repo root (or a bool) and update both callers, `compute_agent_file_plan` in agents.rs and the `sync_agent_file` arm in apply.rs (around line 870), so plan and apply render the same bytes. A template with no `tools:` line is left as is. With the helper false every rendered agent file is byte-identical to today. Tests: helper true/false/absent/local-overlay cases; header line with and without hub; agent file with and without hub; a re-plan after apply in hub mode carries no sync_agent_file item.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- principles agents skillstation session_preamble",
+  "must_haves": {
+    "truths": [
+      "with skillstation.principles set to hub the principle header line names the skillstation MCP tool skill_get",
+      "with skillstation.principles absent the principle lines are byte-identical to before",
+      "with skillstation.principles set to hub every rendered Claude agent tools line ends with mcp__skillstation__skill_get",
+      "with skillstation.principles absent every rendered Claude agent file is byte-identical to before"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/skillstation_group.rs",
+        "substantive": "principles_on_hub helper"
+      }
+    ],
+    "key_links": [
+      "principles.rs and agents.rs both call principles_on_hub, not a copy of the config read",
+      "plan and apply render agent files through the same function"
+    ],
+    "prohibitions": [
+      "No code comments",
+      "No change to the agent templates under packages/bee/agents"
+    ],
+    "open_choices": [
+      "Whether render_claude_agent_file takes the root or a bool"
+    ]
+  },
+  "status": "capped",
+  "trace": {
+    "worker": "ssp-worker-1",
+    "outcome": "principles_on_hub helper, hub header sentence and skill_get on agent tools line, plan/apply share the render; commit 27ccf7af8",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/skillstation_group.rs",
+      "packages/bee-rs/crates/bee/src/principles.rs",
+      "packages/bee-rs/crates/bee/src/onboard/agents.rs",
+      "packages/bee-rs/crates/bee/src/onboard/apply.rs",
+      "docs/knowledge/areas/onboarding/skillstation-hub-skills-and-aliases.md"
+    ],
+    "deviations": [
+      "sync-ack: knowledge sync is cell ssp-3 of this feature; the anchoring concepts describe behavior that stays byte-identical in local mode"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-14T08:22:45.026Z",
+    "behavior_change": false,
+    "verification_evidence": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml — green:unit — full workspace suite, all results ok",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "2e540295-8085-4e00-9266-fe90fb6784c1",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- principles agents skillstation session_preamble",
+    "claimed_at": "2026-11-14T08:13:47.631Z",
+    "knowledge_delta": [
+      "docs/knowledge/areas/onboarding/skillstation-hub-skills-and-aliases.md"
+    ],
+    "sync_ack": "knowledge sync is cell ssp-3 of this feature; the anchoring concepts describe behavior that stays byte-identical in local mode",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "principles_on_hub helper, hub header sentence and skill_get on agent tools line, plan/apply share the render; commit 27ccf7af8",
+      "commit": "27ccf7af8ee9abb0611c04d29a3a16e45789d3a9",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/skillstation_group.rs",
+        "packages/bee-rs/crates/bee/src/principles.rs",
+        "packages/bee-rs/crates/bee/src/onboard/agents.rs",
+        "packages/bee-rs/crates/bee/src/onboard/apply.rs",
+        "docs/knowledge/areas/onboarding/skillstation-hub-skills-and-aliases.md"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- principles agents skillstation session_preamble — green:unit — PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml — green:unit — full workspace suite, all results ok",
+      "deviations": [],
+      "patch_id": "0b20621b9f291fa61ee184d32ead88bfe360c88a"
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 180 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "with skillstation.principles set to hub the principle header line names the skillstation MCP tool skill_get",
+            "artifact": "packages/bee-rs/crates/bee/src/principles.rs"
+          },
+          {
+            "requirement": "with skillstation.principles absent the principle lines are byte-identical to before",
+            "artifact": "packages/bee-rs/crates/bee/src/principles.rs"
+          },
+          {
+            "requirement": "with skillstation.principles set to hub every rendered Claude agent tools line ends with mcp__skillstation__skill_get",
+            "artifact": "packages/bee-rs/crates/bee/src/onboard/agents.rs"
+          },
+          {
+            "requirement": "with skillstation.principles absent every rendered Claude agent file is byte-identical to before",
+            "artifact": "packages/bee-rs/crates/bee/src/onboard/agents.rs"
+          },
+          {
+            "requirement": "principles.rs and agents.rs both call principles_on_hub, not a copy of the config read",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/skillstation_group.rs"
+          },
+          {
+            "requirement": "plan and apply render agent files through the same function",
+            "artifact": "packages/bee-rs/crates/bee/src/onboard/apply.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/skillstation_group.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/skillstation_group.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/principles.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/principles.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/onboard/agents.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/onboard/agents.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/onboard/apply.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/onboard/apply.rs"
+          },
+          {
+            "requirement": "docs/knowledge/areas/onboarding/skillstation-hub-skills-and-aliases.md",
+            "artifact": "docs/knowledge/areas/onboarding/skillstation-hub-skills-and-aliases.md"
+          }
+        ],
+        "recorded_at": "2026-11-14T08:23:01.865Z",
+        "recorded_by": "2e540295-8085-4e00-9266-fe90fb6784c1",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": {
+    "new": 57237,
+    "cached": 692374,
+    "total": 749611,
+    "models": {
+      "claude-sonnet-5-5": {
+        "new": 57237,
+        "cached": 692374,
+        "total": 749611
+      }
+    },
+    "jobs": [
+      "job-1794644035466-2359915-1"
+    ]
+  }
+}

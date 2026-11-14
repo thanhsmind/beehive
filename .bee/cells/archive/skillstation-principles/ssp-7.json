@@ -1,0 +1,158 @@
+{
+  "id": "ssp-7",
+  "feature": "skillstation-principles",
+  "title": "Document the one-step switch to hub principles",
+  "lane": "standard",
+  "role": "writer",
+  "deps": [
+    "ssp-6"
+  ],
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/onboarding/skillstation-hub-skills-and-aliases.md",
+    "docs/knowledge/areas/onboarding/installer-entrypoints-and-source-staging.md"
+  ],
+  "decisions": [
+    "D8",
+    "D9",
+    "D10"
+  ],
+  "files": [
+    "README.md",
+    "docs/config-reference.md",
+    "docs/knowledge/**",
+    "docs/history/skillstation-principles/delivery.md"
+  ],
+  "read_first": [
+    "docs/history/skillstation-principles/CONTEXT.md",
+    "docs/knowledge/areas/onboarding/skillstation-hub-skills-and-aliases.md",
+    "docs/knowledge/areas/onboarding/installer-entrypoints-and-source-staging.md",
+    "docs/config-reference.md",
+    "README.md"
+  ],
+  "action": "Rewrite the hub-principles text so it matches D8-D10: one `scripts/install.sh --skillstation` (or `bee onboard --skillstation --apply`) switches a project: it sets skillstation.principles to hub, publishes the 24 principles, and removes the local .claude/skills copies in the same run; a failed publish keeps them. Without the flag install leaves the mode as it is. bee orient names principles in every project from an index built into bee. Remove the D7 text (the guard is gone, superseded by D8). Update README.md § Skillstation, the docs/config-reference.md row, the onboarding concept, and the --skillstation line of installer-entrypoints-and-source-staging.md. Cite `skillstation-principles D<n>`, never raw ids. Append the round to docs/history/skillstation-principles/delivery.md. Run `.bee/bin/bee knowledge check` green. One commit.",
+  "verify": ".bee/bin/bee knowledge check",
+  "must_haves": {
+    "truths": [
+      "README.md says install --skillstation switches a project to hub principles in one run",
+      "no doc still says the local copies are kept for a missing principle index"
+    ],
+    "artifacts": [
+      {
+        "path": "docs/history/skillstation-principles/delivery.md",
+        "substantive": "the second-round delivery record"
+      }
+    ],
+    "key_links": [
+      "the delivery lands in the same merge as the code"
+    ],
+    "prohibitions": [
+      "No restating of code in concepts",
+      "No code comments"
+    ],
+    "open_choices": []
+  },
+  "status": "capped",
+  "trace": {
+    "worker": "ssp-worker-7",
+    "outcome": "Docs now describe the one-step hub-principles switch (D8-D10), D7 text removed; commit cda4c228f",
+    "files_changed": [
+      "README.md",
+      "docs/config-reference.md",
+      "docs/knowledge/areas/onboarding/skillstation-hub-skills-and-aliases.md",
+      "docs/knowledge/areas/onboarding/installer-entrypoints-and-source-staging.md",
+      "docs/history/skillstation-principles/delivery.md"
+    ],
+    "deviations": [
+      "sync-ack: docs-only cell; README project overview concept does not describe the Skillstation section"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-14T09:08:49.063Z",
+    "behavior_change": false,
+    "verification_evidence": ".bee/bin/bee knowledge check — green:static — docs-only change; 0 OKF errors, 0 profile errors",
+    "verify_output": "green:static",
+    "verify_passed": true,
+    "claim_session": "2e540295-8085-4e00-9266-fe90fb6784c1",
+    "verify_command": ".bee/bin/bee knowledge check",
+    "claimed_at": "2026-11-14T09:08:02.319Z",
+    "knowledge_delta": [
+      "docs/knowledge/areas/onboarding/skillstation-hub-skills-and-aliases.md",
+      "docs/knowledge/areas/onboarding/installer-entrypoints-and-source-staging.md"
+    ],
+    "sync_ack": "docs-only cell; README project overview concept does not describe the Skillstation section",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Docs now describe the one-step hub-principles switch (D8-D10), D7 text removed; commit cda4c228f",
+      "commit": "cda4c228f5d6d991da70f1ca760346477d90cfad",
+      "files": [
+        "README.md",
+        "docs/config-reference.md",
+        "docs/knowledge/areas/onboarding/skillstation-hub-skills-and-aliases.md",
+        "docs/knowledge/areas/onboarding/installer-entrypoints-and-source-staging.md",
+        "docs/history/skillstation-principles/delivery.md"
+      ],
+      "tests": ".bee/bin/bee knowledge check — green:static — .bee/bin/bee knowledge check — green:static — docs-only change; 0 OKF errors, 0 profile errors",
+      "deviations": [],
+      "patch_id": "f62a6ab912492b082b21b9449df2fe8e4757aa70"
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "README.md says install --skillstation switches a project to hub principles in one run",
+            "artifact": "README.md"
+          },
+          {
+            "requirement": "no doc still says the local copies are kept for a missing principle index",
+            "artifact": "docs/knowledge/areas/onboarding/skillstation-hub-skills-and-aliases.md"
+          },
+          {
+            "requirement": "the delivery lands in the same merge as the code",
+            "artifact": "docs/history/skillstation-principles/delivery.md"
+          },
+          {
+            "requirement": "README.md",
+            "artifact": "README.md"
+          },
+          {
+            "requirement": "docs/config-reference.md",
+            "artifact": "docs/config-reference.md"
+          },
+          {
+            "requirement": "docs/history/skillstation-principles/delivery.md",
+            "artifact": "docs/history/skillstation-principles/delivery.md"
+          },
+          {
+            "requirement": "docs/knowledge/areas/onboarding/installer-entrypoints-and-source-staging.md",
+            "artifact": "docs/knowledge/areas/onboarding/installer-entrypoints-and-source-staging.md"
+          },
+          {
+            "requirement": "docs/knowledge/areas/onboarding/skillstation-hub-skills-and-aliases.md",
+            "artifact": "docs/knowledge/areas/onboarding/skillstation-hub-skills-and-aliases.md"
+          }
+        ],
+        "recorded_at": "2026-11-14T09:08:49.225Z",
+        "recorded_by": "2e540295-8085-4e00-9266-fe90fb6784c1",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": {
+    "new": 35194,
+    "cached": 164610,
+    "total": 199804,
+    "models": {
+      "claude-sonnet-5-5": {
+        "new": 35194,
+        "cached": 164610,
+        "total": 199804
+      }
+    },
+    "jobs": [
+      "job-1794647286854-3017027-1"
+    ]
+  }
+}
