@@ -68,6 +68,20 @@ Gates default to human approval, every time. Once you trust bee in a repo, opt-i
 
 ---
 
+## Skillstation
+
+Skillstation serves hub skills to agents over MCP. A hub skill is not in Claude Code's own skill list, so you cannot start it with `/<id>`, and a skill that agents may not trigger on their own is then out of reach. `bee skillstation` closes that gap.
+
+```bash
+bee skillstation install [--apply] [--json]
+bee skillstation alias <id> [--force] [--json]
+```
+
+- **`install`** checks that the hub has the skills bee relies on (`statechart`, `create-formal-verification-skill`, `maintain-formal-verification-skill`). Without `--apply` it only reports. With `--apply` it adds each missing skill as a draft and writes a `/<id>` alias for every active one that agents may not trigger themselves.
+- **`alias <id>`** writes `.claude/skills/<id>/SKILL.md` for any active hub skill: a few lines that tell the agent to fetch the real skill with the `skill_get` MCP tool. The hub stays the one copy. bee overwrites only an alias it wrote itself; any other folder is refused unless you pass `--force`.
+
+Content approval stays with the hub owner: an added skill is a draft until they run `skillstation skill review <id>`. A missing `skillstation` binary is a skipped row, not an error. Claude Code only.
+
 ## Why bee exists (the idea in plain words)
 
 Letting an AI write code freely is fast until it isn't. The usual failure modes:
