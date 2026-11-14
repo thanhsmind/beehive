@@ -12,7 +12,7 @@ bee:
   decisions: [router-cost D5, router-cost D6, router-cost D7, "pstack-gaps D4/D5 (docs/history/pstack-gaps/CONTEXT.md, 2026-09-01 — every rule id gains a spoken line here and a spoken rule obliges the reply to name what it changed)", "pstack-gaps D6 (docs/history/pstack-gaps/CONTEXT.md, 2026-09-01 — tests/rule_index_parity.rs pins the markers, the index rows and the spoken lines against each other)"]
   sources: [docs/history/router-cost/CONTEXT.md, "docs/history/router-cost/ (cells rc-3, rc-4, capped)"]
   authoritative_for: "doctrine-layer: router triage and the duplication boundary"
-  anchors: [packages/bee-rs/crates/bee/tests/rule_index_parity.rs, packages/bee/AGENTS.block.md, plans/cutover-readiness.md, packages/bee/LEADER.md, packages/bee/playbooks/, skills/bee-hive/references/gates-and-delegation.md, skills/bee-planning/SKILL.md, skills/bee-planning/references/planning-reference.md, skills/bee-shaping/references/mini-brief-template.md, skills/bee-shaping/references/implement-plan-template.md, skills/bee-swarming/references/swarming-reference.md, skills/bee-hive/SKILL.md, skills/bee-swarming/SKILL.md, skills/bee-hive/references/routing-and-contracts.md, skills/bee-hive/references/scout-and-ticks.md, skills/bee-capturing/SKILL.md, skills/bee-hive/references/go-mode.md, skills/bee-swarming/references/worker-details.md, skills/bee-herding/README.md, skills/bee-herding/references/role-dispatch.md, packages/bee/prompts/worker-cell.md, skills/bee-evolving/SKILL.md, expertise/, skills/, skills/bee-principle-red-before-green/SKILL.md, skills/bee-principle-chestertons-fence/SKILL.md, skills/bee-principle-smallest-honest-shape/SKILL.md, skills/bee-principle-split-never-shrink/SKILL.md, skills/bee-principle-the-deletion-test/SKILL.md, skills/bee-principle-single-source-of-truth/SKILL.md, skills/bee-principle-record-at-the-moment-of-settlement/SKILL.md, skills/bee-principle-test-behavior-not-structure/SKILL.md, skills/bee-principle-verify-before-reporting/SKILL.md, skills/bee-principle-the-rebuild-test/SKILL.md, skills/bee-principle-one-fact-one-home/SKILL.md, skills/bee-principle-reproduce-first/SKILL.md, skills/bee-principle-crash-site-versus-fault-site/SKILL.md, skills/bee-principle-never-invent-behavior-neither-side-has/SKILL.md, skills/bee-principle-attack-the-premise/SKILL.md, skills/bee-principle-build-the-lever/SKILL.md, skills/bee-principle-lock-the-contract/SKILL.md, skills/bee-principle-split-on-a-real-dependency/SKILL.md, packages/bee-rs/crates/bee/tests/pointer_integrity.rs]
+  anchors: [packages/bee-rs/crates/bee/tests/rule_index_parity.rs, packages/bee/AGENTS.block.md, plans/cutover-readiness.md, packages/bee/LEADER.md, packages/bee/playbooks/, skills/bee-hive/references/gates-and-delegation.md, skills/bee-planning/SKILL.md, skills/bee-planning/references/planning-reference.md, skills/bee-shaping/references/mini-brief-template.md, skills/bee-shaping/references/implement-plan-template.md, skills/bee-swarming/references/swarming-reference.md, skills/bee-hive/SKILL.md, skills/bee-swarming/SKILL.md, skills/bee-hive/references/routing-and-contracts.md, skills/bee-hive/references/scout-and-ticks.md, skills/bee-capturing/SKILL.md, skills/bee-hive/references/go-mode.md, skills/bee-swarming/references/worker-details.md, skills/bee-herding/README.md, skills/bee-herding/references/role-dispatch.md, packages/bee/prompts/worker-cell.md, skills/bee-evolving/SKILL.md, expertise/, skills/, skills/bee-principle-red-before-green/SKILL.md, skills/bee-principle-chestertons-fence/SKILL.md, skills/bee-principle-smallest-honest-shape/SKILL.md, skills/bee-principle-split-never-shrink/SKILL.md, skills/bee-principle-the-deletion-test/SKILL.md, skills/bee-principle-single-source-of-truth/SKILL.md, skills/bee-principle-record-at-the-moment-of-settlement/SKILL.md, skills/bee-principle-test-behavior-not-structure/SKILL.md, skills/bee-principle-verify-before-reporting/SKILL.md, skills/bee-principle-the-rebuild-test/SKILL.md, skills/bee-principle-one-fact-one-home/SKILL.md, skills/bee-principle-reproduce-first/SKILL.md, skills/bee-principle-crash-site-versus-fault-site/SKILL.md, skills/bee-principle-never-invent-behavior-neither-side-has/SKILL.md, skills/bee-principle-attack-the-premise/SKILL.md, skills/bee-principle-build-the-lever/SKILL.md, skills/bee-principle-lock-the-contract/SKILL.md, skills/bee-principle-split-on-a-real-dependency/SKILL.md, skills/bee-principle-encode-lessons-in-structure/SKILL.md, skills/bee-principle-subtract-before-you-add/SKILL.md, skills/bee-principle-migrate-callers-then-delete/SKILL.md, skills/bee-principle-boundary-discipline/SKILL.md, skills/bee-principle-make-illegal-states-unrepresentable/SKILL.md, skills/bee-principle-separate-before-serializing-shared-state/SKILL.md, packages/bee-rs/crates/bee/tests/pointer_integrity.rs]
   verified_at: 2026-11-10
   verified_commit: 6b4942a0131b8ee1657aa314495e01bb74823e91
 ---
@@ -443,6 +443,42 @@ plugin trees, not just `skills/`.
   classes: feature, refactor, perf
   - applied_at:
     - `skills/bee-principle-split-on-a-real-dependency/SKILL.md`
+
+- `bee-principle-encode-lessons-in-structure` (expertise/knowledge.md § Encode lessons in structure):
+  spoken: a lesson seen twice becomes structure, strongest first — a code change that makes the mistake impossible, then a check, then prose only when it needs judgment; once the structure exists, the prose copy goes
+  classes: docs, bugfix
+  - applied_at:
+    - `skills/bee-principle-encode-lessons-in-structure/SKILL.md`
+
+- `bee-principle-subtract-before-you-add` (expertise/planning.md § Subtract before you add):
+  spoken: put the removal step before the construction step, cut to the minimum before polishing, and build for use you have seen — no guard or stub the contract does not ask for
+  classes: refactor
+  - applied_at:
+    - `skills/bee-principle-subtract-before-you-add/SKILL.md`
+
+- `bee-principle-migrate-callers-then-delete` (expertise/architecture.md § Migrate Callers, Then Delete):
+  spoken: a new internal API ships with every caller moved and the old API deleted in the same change — no compatibility shim unless someone outside the change depends on it
+  classes: refactor
+  - applied_at:
+    - `skills/bee-principle-migrate-callers-then-delete/SKILL.md`
+
+- `bee-principle-boundary-discipline` (expertise/architecture.md § Explicit Boundaries and Contracts):
+  spoken: parse and validate input once where it enters, trust typed data inside, keep decisions in pure functions the thin shell calls, and never leak the boundary's private types
+  classes: feature, refactor
+  - applied_at:
+    - `skills/bee-principle-boundary-discipline/SKILL.md`
+
+- `bee-principle-make-illegal-states-unrepresentable` (expertise/architecture.md § Make Illegal States Unrepresentable):
+  spoken: give each meaning its own type, validate once at creation, parse outside data at the edge and match every variant — so the wrong value fails to compile
+  classes: feature, refactor
+  - applied_at:
+    - `skills/bee-principle-make-illegal-states-unrepresentable/SKILL.md`
+
+- `bee-principle-separate-before-serializing-shared-state` (expertise/architecture.md § One Writer for Shared State):
+  spoken: remove the sharing first — each actor its own file, key or record, merged at read time — and enforce one writer only when one shared target is a real invariant
+  classes: feature, perf
+  - applied_at:
+    - `skills/bee-principle-separate-before-serializing-shared-state/SKILL.md`
 
 ## Open Gaps
 

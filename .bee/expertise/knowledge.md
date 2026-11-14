@@ -16,6 +16,7 @@ yesterday — need to know that reading the code will not tell them cheaply?
 | An entry is agent-written and a reader must judge it | Trust is recorded, never assumed |
 | Tempted to write down a confidence, priority, or importance | Signals, not scores |
 | About to write down something you learned | One fact, one home |
+| The same lesson is being written or corrected a second time | Encode lessons in structure |
 | The base has grown past a comfortable read | Route, never pile |
 | Tempted to write down everything learned | What never enters |
 | Something will be loaded into every session | The always-loaded budget |
@@ -174,6 +175,28 @@ neighbor beside it splits the topic in two, and the next reader finds
 whichever half the index happens to show first — usually not both. The same
 rule holds for a fact that contradicts an existing entry: replace the line,
 never leave both standing for a reader to arbitrate.
+
+## Encode lessons in structure
+
+A lesson that has been seen twice has already cost twice. Writing it down a
+third time as a sentence asks every future reader to remember it, and readers
+forget. Turn the lesson into structure instead, and choose the strongest
+form that fits:
+
+1. **Architecture.** A change to the code or the data shape makes the mistake
+   impossible to write. Nothing needs remembering.
+2. **Check.** A test, hook, guard or doctor row catches the mistake the moment
+   it happens. Someone still has to make the mistake once, but not twice.
+3. **Doctrine.** Prose, and only when the lesson needs judgment that no
+   machine can apply. Then make it prominent and show the failure it
+   prevents, since a rule without its failure case reads as decoration.
+
+This is the same ladder `bee mailbox reflect --fix-at` asks for: name the
+layer that can enforce the correction, and pick the highest one available.
+
+When the structural fix exists, the prose that taught the lesson goes. The
+instruction is the symptom, and a stale sentence beside a working guard
+tells the next reader there is still something to remember.
 
 ## Route, never pile
 
