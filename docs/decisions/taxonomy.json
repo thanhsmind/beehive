@@ -863,6 +863,7 @@
     "pstack-port",
     "formal-verification",
     "contract:drop-ownership",
-    "contract:claim-clear-identity"
+    "contract:claim-clear-identity",
+    "contract:skillstation-principles"
   ]
 }

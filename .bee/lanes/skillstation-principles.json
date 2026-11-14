@@ -1,0 +1,660 @@
+{
+  "schema_version": "1.0",
+  "feature": "skillstation-principles",
+  "mode": null,
+  "phase": "exploring",
+  "approved_gates": {
+    "context": true,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"skillstation-principles\" started at phase \"exploring\" (lane).",
+  "next_action": "Continue bee-exploring for \"skillstation-principles\" (lane).",
+  "created_at": "2026-11-14T08:10:27.960Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null,
+  "route": {
+    "class": "feature",
+    "lane": "standard",
+    "flags": [],
+    "product_files": 6,
+    "rationale": null,
+    "updated_at": "2026-11-14T08:10:24.655Z",
+    "feature": "skillstation-principles"
+  },
+  "gate_preview": {
+    "feature": "skillstation-principles",
+    "plan_sha256": "f6e3df5683b677118a72f3aa41668f32ffc317875c09c916de90b8cb2ca22020",
+    "previewed_at": "2026-11-14T08:13:32.163Z",
+    "cells": [
+      {
+        "id": "ssp-1",
+        "feature": "skillstation-principles",
+        "title": "Give agents the hub fetch tool and name it in the principle header",
+        "lane": "standard",
+        "role": "code",
+        "deps": [],
+        "affects_skills": [],
+        "affects_specs": [],
+        "decisions": [
+          "D1",
+          "D4",
+          "D5"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/verbs/skillstation_group.rs",
+          "packages/bee-rs/crates/bee/src/principles.rs",
+          "packages/bee-rs/crates/bee/src/onboard/agents.rs",
+          "packages/bee-rs/crates/bee/src/onboard/apply.rs"
+        ],
+        "read_first": [
+          "docs/history/skillstation-principles/CONTEXT.md",
+          "docs/history/skillstation-principles/plan.md",
+          "docs/knowledge/areas/onboarding/skillstation-hub-skills-and-aliases.md",
+          "packages/bee-rs/crates/bee/src/verbs/skillstation_group.rs",
+          "packages/bee-rs/crates/bee/src/principles.rs",
+          "packages/bee-rs/crates/bee/src/onboard/agents.rs"
+        ],
+        "action": "Add one pub(crate) helper in skillstation_group.rs, `principles_on_hub(root: &Path) -> bool`, true only when the merged config (.bee/config.json overlaid by .bee/config.local.json, through the existing config merge helper) sets `skillstation.principles` to the string `hub`; any other value or absence is false (D1, D5). D5: in principles.rs, when the helper is true for `root`, `principle_lines` appends to the header line the sentence ` Load each one with the skillstation MCP tool skill_get, the slug as skill_id.` (exact text); rows are unchanged, and with the helper false the output is byte-identical to today. D4: the rendered Claude agent file gets `, mcp__skillstation__skill_get` appended to its frontmatter `tools:` line when the helper is true for the repo root; change `render_claude_agent_file` to take the repo root (or a bool) and update both callers, `compute_agent_file_plan` in agents.rs and the `sync_agent_file` arm in apply.rs (around line 870), so plan and apply render the same bytes. A template with no `tools:` line is left as is. With the helper false every rendered agent file is byte-identical to today. Tests: helper true/false/absent/local-overlay cases; header line with and without hub; agent file with and without hub; a re-plan after apply in hub mode carries no sync_agent_file item.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- principles agents skillstation session_preamble",
+        "must_haves": {
+          "truths": [
+            "with skillstation.principles set to hub the principle header line names the skillstation MCP tool skill_get",
+            "with skillstation.principles absent the principle lines are byte-identical to before",
+            "with skillstation.principles set to hub every rendered Claude agent tools line ends with mcp__skillstation__skill_get",
+            "with skillstation.principles absent every rendered Claude agent file is byte-identical to before"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/verbs/skillstation_group.rs",
+              "substantive": "principles_on_hub helper"
+            }
+          ],
+          "key_links": [
+            "principles.rs and agents.rs both call principles_on_hub, not a copy of the config read",
+            "plan and apply render agent files through the same function"
+          ],
+          "prohibitions": [
+            "No code comments",
+            "No change to the agent templates under packages/bee/agents"
+          ],
+          "open_choices": [
+            "Whether render_claude_agent_file takes the root or a bool"
+          ]
+        }
+      },
+      {
+        "id": "ssp-2",
+        "feature": "skillstation-principles",
+        "title": "Serve principles from the hub in onboard",
+        "lane": "standard",
+        "role": "code",
+        "deps": [
+          "ssp-1"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "decisions": [
+          "D1",
+          "D2",
+          "D3"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/onboard/skills.rs",
+          "packages/bee-rs/crates/bee/src/onboard/plan.rs",
+          "packages/bee-rs/crates/bee/src/onboard/apply.rs",
+          "packages/bee-rs/crates/bee/src/onboard/tests.rs"
+        ],
+        "read_first": [
+          "docs/history/skillstation-principles/CONTEXT.md",
+          "docs/history/skillstation-principles/plan.md",
+          "docs/knowledge/areas/onboarding/host-project-artifacts.md",
+          "packages/bee-rs/crates/bee/src/onboard/skills.rs",
+          "packages/bee-rs/crates/bee/src/onboard/plan.rs",
+          "packages/bee-rs/crates/bee/src/onboard/apply.rs",
+          "packages/bee-rs/crates/bee/src/verbs/skillstation_group.rs"
+        ],
+        "action": "D2: when `principles_on_hub(repo_root)` is true and the Claude runtime is in scope, onboard reads each `bee-principle-*` directory of the engine skills source on the hub with `hub_show` through `hub_runner(repo_root)`. When every one is `active`, the skill sync for the repo Claude target only (target kind repo-claude, `.claude/skills`) leaves every `bee-principle-*` entry out of its source list, so the existing deletion loop plans `remove_skill` for local copies. Codex, opencode, plugin and the legacy global targets are unchanged. When any principle is missing or not active, or the hub read skips, the source list is unchanged and onboard reports exactly one `skipped_skills` entry `{target: \"skillstation-principles\", reason}` naming the first failing id or the skip reason. D3: when `opts.skillstation` and hub mode, plan one `publish_skillstation` item per `bee-principle-*` source skill that stages from the engine source rendered for the claude runtime (the same render the Claude sync uses), not from `.claude/skills`; apply runs the existing commit-then-activate path. Without hub mode, plan and apply output are byte-identical to today; without --skillstation the hub is never written. Tests use `set_test_hub`, never the real binary: hub mode with all active plans removal of local principle folders only under .claude/skills and keeps .agents copies; one draft keeps all and gives one skip row; hub skip gives one skip row; --skillstation in hub mode plans one publish item per principle; key absent leaves the plan unchanged; a re-plan after apply in hub mode with all active is up to date.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- skillstation onboard",
+        "must_haves": {
+          "truths": [
+            "in hub mode with every principle active on the hub onboard removes the local bee-principle folders under .claude/skills only",
+            "in hub mode with one principle not active onboard keeps every local principle and reports one skipped_skills entry with target skillstation-principles",
+            "bee onboard --skillstation in hub mode publishes each bee-principle skill from the engine source",
+            "with skillstation.principles absent the onboard plan is unchanged"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/onboard/skills.rs",
+              "substantive": "Claude target source list without principles in hub mode"
+            }
+          ],
+          "key_links": [
+            "onboard calls principles_on_hub and hub_show from skillstation_group.rs",
+            "the publish stages from the engine source, not .claude/skills"
+          ],
+          "prohibitions": [
+            "No code comments",
+            "Never change the hub without --skillstation",
+            "Onboard tests never call the real skillstation"
+          ],
+          "open_choices": [
+            "Where in compute_skill_sync the Claude target source list is filtered"
+          ]
+        }
+      },
+      {
+        "id": "ssp-3",
+        "feature": "skillstation-principles",
+        "title": "Document the skillstation.principles key",
+        "lane": "standard",
+        "role": "writer",
+        "deps": [
+          "ssp-2"
+        ],
+        "affects_skills": [],
+        "affects_specs": [
+          "docs/knowledge/areas/onboarding/skillstation-hub-skills-and-aliases.md",
+          "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md"
+        ],
+        "decisions": [
+          "D1",
+          "D2",
+          "D3",
+          "D4",
+          "D5"
+        ],
+        "files": [
+          "README.md",
+          "docs/config-reference.md",
+          "docs/knowledge/**",
+          "docs/history/skillstation-principles/delivery.md"
+        ],
+        "read_first": [
+          "docs/history/skillstation-principles/CONTEXT.md",
+          "docs/knowledge/areas/onboarding/skillstation-hub-skills-and-aliases.md",
+          "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md",
+          "docs/config-reference.md"
+        ],
+        "action": "Document the key: docs/config-reference.md gets `skillstation.principles` (values local and hub, default local, Claude Code only, two onboards to switch). README.md § Skillstation gets one short paragraph. Extend docs/knowledge/areas/onboarding/skillstation-hub-skills-and-aliases.md with a section on hub-served principles (D1-D5) and add one line to the Principle homes section of router-triage-and-the-agents-md-duplication-boundary.md pointing at it (one fact, one home). Cite `skillstation-principles D<n>`, never raw decision ids. Run `bee knowledge consolidate --feature skillstation-principles`, write docs/history/skillstation-principles/delivery.md, run `.bee/bin/bee knowledge check` green. One commit.",
+        "verify": ".bee/bin/bee knowledge check",
+        "must_haves": {
+          "truths": [
+            "docs/config-reference.md names skillstation.principles with its two values",
+            "the skillstation onboarding concept explains hub-served principles"
+          ],
+          "artifacts": [
+            {
+              "path": "docs/history/skillstation-principles/delivery.md",
+              "substantive": "the feature's delivery record"
+            }
+          ],
+          "key_links": [
+            "the delivery lands in the same merge as the code"
+          ],
+          "prohibitions": [
+            "No restating of code in concepts",
+            "No code comments"
+          ],
+          "open_choices": []
+        }
+      }
+    ],
+    "role_plan": {
+      "schema_version": "1.0",
+      "runtime": "claude",
+      "roster_sha256": "d4e696dbde7989d6388dacce3fd7057cb3a6935b46024b79698596a46f6f41d3",
+      "stages": [
+        {
+          "stage": "implementation",
+          "classification": "required",
+          "role": "code",
+          "reason": "ssp-1 and ssp-2 change Rust with tests."
+        },
+        {
+          "stage": "test-and-live-proof",
+          "classification": "not-applicable",
+          "role": "test",
+          "reason": "Tests ride the code cells; the live run is the leader's."
+        },
+        {
+          "stage": "documentation",
+          "classification": "not-applicable",
+          "role": "docs",
+          "reason": "The writer cell owns all docs."
+        },
+        {
+          "stage": "knowledge-consolidation",
+          "classification": "required",
+          "role": "writer",
+          "reason": "ssp-3 updates README, config reference, concepts and delivery.md."
+        },
+        {
+          "stage": "planning",
+          "classification": "not-applicable",
+          "role": "plan",
+          "reason": "The leader wrote this plan."
+        },
+        {
+          "stage": "deployment",
+          "classification": "not-applicable",
+          "role": "deploy",
+          "reason": "Release is out of scope (D6)."
+        },
+        {
+          "stage": "read-only-gather",
+          "classification": "conditional",
+          "role": "read",
+          "condition": "a worker report needs a multi-file check",
+          "reason": "Discovery is done."
+        },
+        {
+          "stage": "fact-extraction",
+          "classification": "not-applicable",
+          "role": "extraction",
+          "reason": "Discovery is done."
+        },
+        {
+          "stage": "generation-fallback",
+          "classification": "not-applicable",
+          "role": "generation",
+          "reason": "Every job has a specific role."
+        },
+        {
+          "stage": "independent-review",
+          "classification": "not-applicable",
+          "role": "review",
+          "reason": "Review is user-invoked."
+        },
+        {
+          "stage": "generic-advisor",
+          "classification": "not-applicable",
+          "role": "advisor",
+          "reason": "Plan check runs inline at this size."
+        },
+        {
+          "stage": "supervision",
+          "classification": "not-applicable",
+          "role": "supervisor",
+          "reason": "No unattended loop runs here."
+        },
+        {
+          "stage": "blind-lane-1",
+          "classification": "not-applicable",
+          "role": "lane-1",
+          "reason": "One shape."
+        },
+        {
+          "stage": "blind-lane-2",
+          "classification": "not-applicable",
+          "role": "lane-2",
+          "reason": "One shape."
+        },
+        {
+          "stage": "blind-lane-3",
+          "classification": "not-applicable",
+          "role": "lane-3",
+          "reason": "One shape."
+        },
+        {
+          "stage": "hat-facts-gaps",
+          "classification": "not-applicable",
+          "role": "hat-facts-gaps",
+          "reason": "No hat wave (D6)."
+        },
+        {
+          "stage": "hat-risks",
+          "classification": "not-applicable",
+          "role": "hat-risks",
+          "reason": "No hat wave (D6)."
+        },
+        {
+          "stage": "hat-value",
+          "classification": "not-applicable",
+          "role": "hat-value",
+          "reason": "No hat wave (D6)."
+        },
+        {
+          "stage": "hat-alternatives",
+          "classification": "not-applicable",
+          "role": "hat-alternatives",
+          "reason": "No hat wave (D6)."
+        },
+        {
+          "stage": "hat-user-impact",
+          "classification": "not-applicable",
+          "role": "hat-user-impact",
+          "reason": "No hat wave (D6)."
+        },
+        {
+          "stage": "design",
+          "classification": "not-applicable",
+          "role": "design",
+          "reason": "No rendered UI changes."
+        }
+      ]
+    }
+  },
+  "approved_cell_packet": {
+    "feature": "skillstation-principles",
+    "plan_sha256": "f6e3df5683b677118a72f3aa41668f32ffc317875c09c916de90b8cb2ca22020",
+    "previewed_at": "2026-11-14T08:13:32.163Z",
+    "cells": [
+      {
+        "id": "ssp-1",
+        "feature": "skillstation-principles",
+        "title": "Give agents the hub fetch tool and name it in the principle header",
+        "lane": "standard",
+        "role": "code",
+        "deps": [],
+        "affects_skills": [],
+        "affects_specs": [],
+        "decisions": [
+          "D1",
+          "D4",
+          "D5"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/verbs/skillstation_group.rs",
+          "packages/bee-rs/crates/bee/src/principles.rs",
+          "packages/bee-rs/crates/bee/src/onboard/agents.rs",
+          "packages/bee-rs/crates/bee/src/onboard/apply.rs"
+        ],
+        "read_first": [
+          "docs/history/skillstation-principles/CONTEXT.md",
+          "docs/history/skillstation-principles/plan.md",
+          "docs/knowledge/areas/onboarding/skillstation-hub-skills-and-aliases.md",
+          "packages/bee-rs/crates/bee/src/verbs/skillstation_group.rs",
+          "packages/bee-rs/crates/bee/src/principles.rs",
+          "packages/bee-rs/crates/bee/src/onboard/agents.rs"
+        ],
+        "action": "Add one pub(crate) helper in skillstation_group.rs, `principles_on_hub(root: &Path) -> bool`, true only when the merged config (.bee/config.json overlaid by .bee/config.local.json, through the existing config merge helper) sets `skillstation.principles` to the string `hub`; any other value or absence is false (D1, D5). D5: in principles.rs, when the helper is true for `root`, `principle_lines` appends to the header line the sentence ` Load each one with the skillstation MCP tool skill_get, the slug as skill_id.` (exact text); rows are unchanged, and with the helper false the output is byte-identical to today. D4: the rendered Claude agent file gets `, mcp__skillstation__skill_get` appended to its frontmatter `tools:` line when the helper is true for the repo root; change `render_claude_agent_file` to take the repo root (or a bool) and update both callers, `compute_agent_file_plan` in agents.rs and the `sync_agent_file` arm in apply.rs (around line 870), so plan and apply render the same bytes. A template with no `tools:` line is left as is. With the helper false every rendered agent file is byte-identical to today. Tests: helper true/false/absent/local-overlay cases; header line with and without hub; agent file with and without hub; a re-plan after apply in hub mode carries no sync_agent_file item.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- principles agents skillstation session_preamble",
+        "must_haves": {
+          "truths": [
+            "with skillstation.principles set to hub the principle header line names the skillstation MCP tool skill_get",
+            "with skillstation.principles absent the principle lines are byte-identical to before",
+            "with skillstation.principles set to hub every rendered Claude agent tools line ends with mcp__skillstation__skill_get",
+            "with skillstation.principles absent every rendered Claude agent file is byte-identical to before"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/verbs/skillstation_group.rs",
+              "substantive": "principles_on_hub helper"
+            }
+          ],
+          "key_links": [
+            "principles.rs and agents.rs both call principles_on_hub, not a copy of the config read",
+            "plan and apply render agent files through the same function"
+          ],
+          "prohibitions": [
+            "No code comments",
+            "No change to the agent templates under packages/bee/agents"
+          ],
+          "open_choices": [
+            "Whether render_claude_agent_file takes the root or a bool"
+          ]
+        }
+      },
+      {
+        "id": "ssp-2",
+        "feature": "skillstation-principles",
+        "title": "Serve principles from the hub in onboard",
+        "lane": "standard",
+        "role": "code",
+        "deps": [
+          "ssp-1"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "decisions": [
+          "D1",
+          "D2",
+          "D3"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/onboard/skills.rs",
+          "packages/bee-rs/crates/bee/src/onboard/plan.rs",
+          "packages/bee-rs/crates/bee/src/onboard/apply.rs",
+          "packages/bee-rs/crates/bee/src/onboard/tests.rs"
+        ],
+        "read_first": [
+          "docs/history/skillstation-principles/CONTEXT.md",
+          "docs/history/skillstation-principles/plan.md",
+          "docs/knowledge/areas/onboarding/host-project-artifacts.md",
+          "packages/bee-rs/crates/bee/src/onboard/skills.rs",
+          "packages/bee-rs/crates/bee/src/onboard/plan.rs",
+          "packages/bee-rs/crates/bee/src/onboard/apply.rs",
+          "packages/bee-rs/crates/bee/src/verbs/skillstation_group.rs"
+        ],
+        "action": "D2: when `principles_on_hub(repo_root)` is true and the Claude runtime is in scope, onboard reads each `bee-principle-*` directory of the engine skills source on the hub with `hub_show` through `hub_runner(repo_root)`. When every one is `active`, the skill sync for the repo Claude target only (target kind repo-claude, `.claude/skills`) leaves every `bee-principle-*` entry out of its source list, so the existing deletion loop plans `remove_skill` for local copies. Codex, opencode, plugin and the legacy global targets are unchanged. When any principle is missing or not active, or the hub read skips, the source list is unchanged and onboard reports exactly one `skipped_skills` entry `{target: \"skillstation-principles\", reason}` naming the first failing id or the skip reason. D3: when `opts.skillstation` and hub mode, plan one `publish_skillstation` item per `bee-principle-*` source skill that stages from the engine source rendered for the claude runtime (the same render the Claude sync uses), not from `.claude/skills`; apply runs the existing commit-then-activate path. Without hub mode, plan and apply output are byte-identical to today; without --skillstation the hub is never written. Tests use `set_test_hub`, never the real binary: hub mode with all active plans removal of local principle folders only under .claude/skills and keeps .agents copies; one draft keeps all and gives one skip row; hub skip gives one skip row; --skillstation in hub mode plans one publish item per principle; key absent leaves the plan unchanged; a re-plan after apply in hub mode with all active is up to date.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- skillstation onboard",
+        "must_haves": {
+          "truths": [
+            "in hub mode with every principle active on the hub onboard removes the local bee-principle folders under .claude/skills only",
+            "in hub mode with one principle not active onboard keeps every local principle and reports one skipped_skills entry with target skillstation-principles",
+            "bee onboard --skillstation in hub mode publishes each bee-principle skill from the engine source",
+            "with skillstation.principles absent the onboard plan is unchanged"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/onboard/skills.rs",
+              "substantive": "Claude target source list without principles in hub mode"
+            }
+          ],
+          "key_links": [
+            "onboard calls principles_on_hub and hub_show from skillstation_group.rs",
+            "the publish stages from the engine source, not .claude/skills"
+          ],
+          "prohibitions": [
+            "No code comments",
+            "Never change the hub without --skillstation",
+            "Onboard tests never call the real skillstation"
+          ],
+          "open_choices": [
+            "Where in compute_skill_sync the Claude target source list is filtered"
+          ]
+        }
+      },
+      {
+        "id": "ssp-3",
+        "feature": "skillstation-principles",
+        "title": "Document the skillstation.principles key",
+        "lane": "standard",
+        "role": "writer",
+        "deps": [
+          "ssp-2"
+        ],
+        "affects_skills": [],
+        "affects_specs": [
+          "docs/knowledge/areas/onboarding/skillstation-hub-skills-and-aliases.md",
+          "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md"
+        ],
+        "decisions": [
+          "D1",
+          "D2",
+          "D3",
+          "D4",
+          "D5"
+        ],
+        "files": [
+          "README.md",
+          "docs/config-reference.md",
+          "docs/knowledge/**",
+          "docs/history/skillstation-principles/delivery.md"
+        ],
+        "read_first": [
+          "docs/history/skillstation-principles/CONTEXT.md",
+          "docs/knowledge/areas/onboarding/skillstation-hub-skills-and-aliases.md",
+          "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md",
+          "docs/config-reference.md"
+        ],
+        "action": "Document the key: docs/config-reference.md gets `skillstation.principles` (values local and hub, default local, Claude Code only, two onboards to switch). README.md § Skillstation gets one short paragraph. Extend docs/knowledge/areas/onboarding/skillstation-hub-skills-and-aliases.md with a section on hub-served principles (D1-D5) and add one line to the Principle homes section of router-triage-and-the-agents-md-duplication-boundary.md pointing at it (one fact, one home). Cite `skillstation-principles D<n>`, never raw decision ids. Run `bee knowledge consolidate --feature skillstation-principles`, write docs/history/skillstation-principles/delivery.md, run `.bee/bin/bee knowledge check` green. One commit.",
+        "verify": ".bee/bin/bee knowledge check",
+        "must_haves": {
+          "truths": [
+            "docs/config-reference.md names skillstation.principles with its two values",
+            "the skillstation onboarding concept explains hub-served principles"
+          ],
+          "artifacts": [
+            {
+              "path": "docs/history/skillstation-principles/delivery.md",
+              "substantive": "the feature's delivery record"
+            }
+          ],
+          "key_links": [
+            "the delivery lands in the same merge as the code"
+          ],
+          "prohibitions": [
+            "No restating of code in concepts",
+            "No code comments"
+          ],
+          "open_choices": []
+        }
+      }
+    ],
+    "role_plan": {
+      "schema_version": "1.0",
+      "runtime": "claude",
+      "roster_sha256": "d4e696dbde7989d6388dacce3fd7057cb3a6935b46024b79698596a46f6f41d3",
+      "stages": [
+        {
+          "stage": "implementation",
+          "classification": "required",
+          "role": "code",
+          "reason": "ssp-1 and ssp-2 change Rust with tests."
+        },
+        {
+          "stage": "test-and-live-proof",
+          "classification": "not-applicable",
+          "role": "test",
+          "reason": "Tests ride the code cells; the live run is the leader's."
+        },
+        {
+          "stage": "documentation",
+          "classification": "not-applicable",
+          "role": "docs",
+          "reason": "The writer cell owns all docs."
+        },
+        {
+          "stage": "knowledge-consolidation",
+          "classification": "required",
+          "role": "writer",
+          "reason": "ssp-3 updates README, config reference, concepts and delivery.md."
+        },
+        {
+          "stage": "planning",
+          "classification": "not-applicable",
+          "role": "plan",
+          "reason": "The leader wrote this plan."
+        },
+        {
+          "stage": "deployment",
+          "classification": "not-applicable",
+          "role": "deploy",
+          "reason": "Release is out of scope (D6)."
+        },
+        {
+          "stage": "read-only-gather",
+          "classification": "conditional",
+          "role": "read",
+          "condition": "a worker report needs a multi-file check",
+          "reason": "Discovery is done."
+        },
+        {
+          "stage": "fact-extraction",
+          "classification": "not-applicable",
+          "role": "extraction",
+          "reason": "Discovery is done."
+        },
+        {
+          "stage": "generation-fallback",
+          "classification": "not-applicable",
+          "role": "generation",
+          "reason": "Every job has a specific role."
+        },
+        {
+          "stage": "independent-review",
+          "classification": "not-applicable",
+          "role": "review",
+          "reason": "Review is user-invoked."
+        },
+        {
+          "stage": "generic-advisor",
+          "classification": "not-applicable",
+          "role": "advisor",
+          "reason": "Plan check runs inline at this size."
+        },
+        {
+          "stage": "supervision",
+          "classification": "not-applicable",
+          "role": "supervisor",
+          "reason": "No unattended loop runs here."
+        },
+        {
+          "stage": "blind-lane-1",
+          "classification": "not-applicable",
+          "role": "lane-1",
+          "reason": "One shape."
+        },
+        {
+          "stage": "blind-lane-2",
+          "classification": "not-applicable",
+          "role": "lane-2",
+          "reason": "One shape."
+        },
+        {
+          "stage": "blind-lane-3",
+          "classification": "not-applicable",
+          "role": "lane-3",
+          "reason": "One shape."
+        },
+        {
+          "stage": "hat-facts-gaps",
+          "classification": "not-applicable",
+          "role": "hat-facts-gaps",
+          "reason": "No hat wave (D6)."
+        },
+        {
+          "stage": "hat-risks",
+          "classification": "not-applicable",
+          "role": "hat-risks",
+          "reason": "No hat wave (D6)."
+        },
+        {
+          "stage": "hat-value",
+          "classification": "not-applicable",
+          "role": "hat-value",
+          "reason": "No hat wave (D6)."
+        },
+        {
+          "stage": "hat-alternatives",
+          "classification": "not-applicable",
+          "role": "hat-alternatives",
+          "reason": "No hat wave (D6)."
+        },
+        {
+          "stage": "hat-user-impact",
+          "classification": "not-applicable",
+          "role": "hat-user-impact",
+          "reason": "No hat wave (D6)."
+        },
+        {
+          "stage": "design",
+          "classification": "not-applicable",
+          "role": "design",
+          "reason": "No rendered UI changes."
+        }
+      ]
+    }
+  },
+  "merge_ready": {
+    "since": "2026-11-14T08:31:08.874Z",
+    "branch": "wt/skillstation-principles",
+    "worktree_id": "beehive--wt--skillstation-principles",
+    "uat": "pending",
+    "blocked_by": []
+  }
+}
