@@ -8,7 +8,7 @@ bee:
   lifecycle: active
   areas: [onboarding]
   required_context: [areas/onboarding/overview.md]
-  decisions: ["skillstation-aliases D1-D9 (a bee skillstation verb group checks the hub skills bee relies on and writes a small alias skill so /<id> works; CONTEXT.md)", "skillstation-onboard-aliases D1-D7 (install and onboard write the aliases by default; the hub changes only behind --skillstation; CONTEXT.md)", "skillstation-principles D1-D5 (skillstation.principles hub serves the bee-principle skills to Claude Code; CONTEXT.md)"]
+  decisions: ["skillstation-aliases D1-D9 (a bee skillstation verb group checks the hub skills bee relies on and writes a small alias skill so /<id> works; CONTEXT.md)", "skillstation-onboard-aliases D1-D7 (install and onboard write the aliases by default; the hub changes only behind --skillstation; CONTEXT.md)", "skillstation-principles D1-D5, D7 (skillstation.principles hub serves the bee-principle skills to Claude Code; CONTEXT.md)"]
   sources: ["skillstation-aliases cell ssa-1 (2026-11-14; the verb group)", "skillstation-aliases cell ssa-2 (2026-11-14; this concept and the README section)", "skillstation-onboard-aliases cells sooa-1 and sooa-2 (2026-11-14; onboard and install write the aliases)", "skillstation-principles cells ssp-1 to ssp-3 (2026-11-14; hub-served principles)"]
   authoritative_for: "onboarding: the bee skillstation verb group"
   anchors: [packages/bee-rs/crates/bee/src/verbs/skillstation_group.rs, packages/bee-rs/crates/bee/src/principles.rs, packages/bee-rs/crates/bee/src/onboard/agents.rs, packages/bee-rs/crates/bee/src/onboard/apply.rs, packages/bee-rs/crates/bee/src/onboard/plan.rs, packages/bee-rs/crates/bee/src/onboard/skills.rs, scripts/install.sh]
@@ -88,6 +88,10 @@ cannot change their result (skillstation-onboard-aliases D6).
   the codex, opencode, plugin and legacy global targets keep theirs. A principle
   that is missing or not active, or a hub read that skips, keeps every local
   copy and adds one `skipped_skills` row with target `skillstation-principles`.
+  The hub is not read at all, and the same single skip row names the index, when
+  the repo root lacks the file `principles::PRINCIPLE_INDEX`: without it `bee
+  orient` cannot name principles, so dropping the local copies would leave the
+  agent with none (skillstation-principles D7). Today only the bee repo holds it.
   With `--skillstation`, each principle is published from the engine source
   rendered for claude, never from `.claude/skills`, because that folder is gone
   by the second onboard. The first hub-mode onboard therefore publishes and keeps
