@@ -7717,6 +7717,185 @@ use std::time::Instant;
         assert!(touches_code(&cells[0]) && !touches_code(&cells[1]));
     }
 
+    fn pairing_cell(id: &str, role: &str, status: &str, files: Value, deps: Value, stamped: bool) -> Value {
+        let mut c = json!({
+            "id": id, "feature": "demo", "title": "t", "role": role, "status": status,
+            "files": files, "deps": deps,
+            "trace": {"report": {"outcome": "o", "commit": "c", "files": [], "tests": "echo ok — green:unit — fixture", "deviations": []}},
+        });
+        if stamped {
+            c["tester_rule"] = json!(true);
+        }
+        c
+    }
+
+    fn pairing_root() -> tempfile::TempDir {
+        let tmp = tempfile::tempdir().unwrap();
+        bp28_repo(tmp.path());
+        tmp
+    }
+
+    #[test]
+    fn close_refuses_a_stamped_code_cell_until_a_dependent_tester_is_capped() {
+        let tmp = pairing_root();
+        let root = tmp.path();
+        write_cell_fixture(root, "demo-1", &pairing_cell("demo-1", "code", "capped", json!(["src/a.rs"]), json!([]), true));
+
+        let Out::Emit(_, text, code) =
+            crate::verbs::drivers::close_handler(root, "demo", false, None, None, &HashMap::new()).unwrap()
+        else {
+            panic!("close must emit its refusal")
+        };
+        assert_eq!(code, 1, "{text}");
+        let headline = text.split('\n').next().unwrap();
+        assert_eq!(
+            headline,
+            "Proof debt for \"demo\" — close stops at the tests door: 1 stamped cell(s) have no capped dependent tester or checker on the test role (demo-1)."
+        );
+
+        write_cell_fixture(root, "demo-1t", &pairing_cell("demo-1t", "test", "claimed", json!(["src/a_tests.rs"]), json!(["demo-1"]), true));
+        let check = feature_proof_check(root, "demo").unwrap();
+        assert!(check.blocking, "an uncapped tester does not pair");
+        assert_eq!(check.unpaired, vec!["demo-1".to_string()]);
+
+        write_cell_fixture(root, "demo-1t", &pairing_cell("demo-1t", "test", "capped", json!(["src/a_tests.rs"]), json!(["demo-1"]), true));
+        let check = feature_proof_check(root, "demo").unwrap();
+        assert!(!check.blocking, "a capped test-role dependent pairs the cell");
+        assert!(check.unpaired.is_empty());
+    }
+
+    #[test]
+    fn a_capped_dependent_on_a_non_test_role_does_not_pair() {
+        let tmp = pairing_root();
+        let root = tmp.path();
+        write_cell_fixture(root, "demo-1", &pairing_cell("demo-1", "code", "capped", json!(["src/a.rs"]), json!([]), true));
+        write_cell_fixture(root, "demo-2", &pairing_cell("demo-2", "code", "capped", json!(["src/b.rs"]), json!(["demo-1"]), false));
+        let check = feature_proof_check(root, "demo").unwrap();
+        assert_eq!(check.unpaired, vec!["demo-1".to_string()]);
+    }
+
+    #[test]
+    fn the_merge_refusal_reads_the_same_unpaired_debt_as_close() {
+        let tmp = pairing_root();
+        let root = tmp.path();
+        write_cell_fixture(root, "demo-1", &pairing_cell("demo-1", "code", "capped", json!(["src/a.rs"]), json!([]), true));
+        let check = feature_proof_check(root, "demo").unwrap();
+        assert!(check.blocking);
+        assert!(check.bad_ids.is_empty(), "the refusal is pairing alone, not a bad proof line");
+        assert_eq!(
+            check.debt_summary(),
+            "1 stamped cell(s) have no capped dependent tester or checker on the test role (demo-1)"
+        );
+    }
+
+    #[test]
+    fn an_unstamped_code_cell_with_no_tester_is_not_refused() {
+        let tmp = pairing_root();
+        let root = tmp.path();
+        write_cell_fixture(root, "demo-1", &pairing_cell("demo-1", "code", "capped", json!(["src/a.rs"]), json!([]), false));
+        let check = feature_proof_check(root, "demo").unwrap();
+        assert!(!check.blocking, "a cell added before the upgrade stays closeable");
+        assert!(check.unpaired.is_empty());
+
+        let Out::Emit(_, text, _) =
+            crate::verbs::drivers::close_handler(root, "demo", false, None, None, &HashMap::new()).unwrap()
+        else {
+            panic!("close must emit")
+        };
+        assert!(!text.contains("Proof debt for"), "{text}");
+        assert!(!text.contains("stamped cell(s)"), "{text}");
+    }
+
+    #[test]
+    fn a_docs_only_cell_needs_a_capped_checker_and_close_accepts_it_once_paired() {
+        let tmp = pairing_root();
+        let root = tmp.path();
+        write_cell_fixture(root, "demo-d", &pairing_cell("demo-d", "docs", "capped", json!(["docs/a.md", "README.md"]), json!([]), true));
+        let check = feature_proof_check(root, "demo").unwrap();
+        assert_eq!(check.unpaired, vec!["demo-d".to_string()], "a docs-only stamped cell still needs its checker");
+
+        write_cell_fixture(root, "demo-dc", &pairing_cell("demo-dc", "test", "capped", json!([]), json!(["demo-d"]), true));
+        let check = feature_proof_check(root, "demo").unwrap();
+        assert!(!check.blocking);
+        assert!(check.unpaired.is_empty());
+
+        let Out::Emit(_, text, _) =
+            crate::verbs::drivers::close_handler(root, "demo", false, None, None, &HashMap::new()).unwrap()
+        else {
+            panic!("close must emit")
+        };
+        assert!(!text.contains("Proof debt for"), "{text}");
+    }
+
+    #[test]
+    fn an_inline_cap_is_refused_on_a_tiny_code_cell() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let mut body = cell_body_wp("il-c", "tiny", None);
+        body["role"] = json!("code");
+        body["files"] = json!(["src/a.rs", "docs/a.md"]);
+        write_cell_fixture(root, "il-c", &body);
+        let refusal = thrown(cap_cell_from_flags(root, &cap_flags_wp("il-c", vec!["src/a.rs"], Some("solo")), false));
+        assert!(refusal.contains("cell \"il-c\" refused"), "{refusal}");
+        assert!(refusal.contains("not allowed on a code-touching cell"), "{refusal}");
+        assert_eq!(read_cell_fixture(root, "il-c")["status"], json!("claimed"), "the refusal never caps");
+    }
+
+    #[test]
+    fn cells_add_warns_and_still_adds_a_code_cell_with_no_tester() {
+        let code_cell = json!({
+            "id": "tp-1", "feature": "tp", "title": "edit a", "action": "edit",
+            "verify": "echo ok", "lane": "tiny", "role": "code",
+            "files": ["src/a.rs"], "affects_skills": [], "affects_specs": [],
+        });
+        let tmp = judge_root();
+        let root = tmp.path();
+        let out = cells_add_child_output(root, &code_cell);
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        assert!(
+            stderr.contains("WARNING: cell \"tp-1\" has no dependent tester cell on role test in feature \"tp\""),
+            "stderr: {stderr}"
+        );
+        assert!(stderr.contains("FIX: add a role test cell with deps [\"tp-1\"]"), "stderr: {stderr}");
+        let stored = read_cell_norm(root, "tp-1").unwrap().expect("the warning never refuses");
+        assert_eq!(stored["tester_rule"], json!(true), "add stamps the new cell");
+
+        let tester = json!({
+            "id": "tp-1t", "feature": "tp", "title": "test a", "action": "test",
+            "verify": "echo ok", "lane": "tiny", "role": "test", "deps": ["tp-1"],
+            "files": ["src/a_tests.rs"], "affects_skills": [], "affects_specs": [],
+        });
+        let out = cells_add_child_output(root, &tester);
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        assert!(!stderr.contains("has no dependent"), "a test-role cell never needs a tester: {stderr}");
+
+        let mut sibling = code_cell.clone();
+        sibling["id"] = json!("tp-2");
+        sibling["deps"] = json!(["tp-1"]);
+        let out = cells_add_child_output(root, &sibling);
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        assert!(stderr.contains("cell \"tp-2\" has no dependent tester"), "stderr: {stderr}");
+        assert!(!stderr.contains("cell \"tp-1\""), "only the added cell is checked: {stderr}");
+    }
+
+    #[test]
+    fn cells_add_names_a_checker_for_a_docs_only_cell() {
+        let docs_cell = json!({
+            "id": "tp-d", "feature": "tp", "title": "edit docs", "action": "edit",
+            "verify": "echo ok", "lane": "tiny", "role": "docs",
+            "files": ["docs/a.md"], "affects_skills": [], "affects_specs": [],
+        });
+        let tmp = judge_root();
+        let root = tmp.path();
+        let out = cells_add_child_output(root, &docs_cell);
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        assert!(
+            stderr.contains("WARNING: cell \"tp-d\" has no dependent checker cell on role test"),
+            "stderr: {stderr}"
+        );
+        assert!(read_cell_norm(root, "tp-d").unwrap().is_some(), "the warning never refuses");
+    }
+
     #[test]
     fn tiny_lane_cap_is_never_checked_for_a_registered_worker() {
         let tmp = tempfile::tempdir().unwrap();
