@@ -11,7 +11,7 @@
     "uat": true
   },
   "summary": "Feature \"pstack-rust-checks\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at 87db31b; reload the product and test \"pstack-rust-checks\", then either approve uat (\"bee gate --name uat --approved true --lane pstack-rust-checks\") or fix it in the worktree and merge again.",
+  "next_action": "Merged into main at 3f16153; capture what settled, then bee close --feature pstack-rust-checks.",
   "created_at": "2026-11-14T04:16:42.616Z",
   "run_state": "done",
   "waiting_on": null,
