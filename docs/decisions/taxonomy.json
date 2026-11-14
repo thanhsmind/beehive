@@ -867,6 +867,8 @@
     "contract:skillstation-principles",
     "skillstation",
     "contract:publish-skip-same-content",
-    "contract:hub-served-skills"
+    "contract:hub-served-skills",
+    "token-budget",
+    "contract:skill-description-budget"
   ]
 }
