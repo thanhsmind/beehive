@@ -12,6 +12,7 @@ const MIN_EXPECT: usize = 3;
 const MIN_NEAR: usize = 2;
 const EVAL_RUNS: usize = 3;
 const EVAL_PASS_AT: usize = 2;
+const DESCRIPTION_BUDGET: usize = 300;
 
 fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).ancestors().nth(4).unwrap().to_path_buf()
@@ -220,6 +221,25 @@ fn skill_triggers_fixture_is_complete() {
          must open it and {MIN_NEAR} that must not. FIX: add or correct the cases above in \
          {FIXTURE}.",
         findings.join("\n  "),
+    );
+}
+
+#[test]
+fn skill_descriptions_fit_the_budget() {
+    let over: Vec<String> = in_scope_skills()
+        .iter()
+        .map(|(name, desc)| (name, desc.chars().count()))
+        .filter(|(_, len)| *len > DESCRIPTION_BUDGET)
+        .map(|(name, len)| format!("{name}: {len} chars"))
+        .collect();
+    assert!(
+        over.is_empty(),
+        "{} skill description(s) run past the {DESCRIPTION_BUDGET}-character budget:\n\n  {}\n\n\
+         Every description loads into every session, so its length is paid on every turn. FIX: \
+         cut trigger prose to the purpose sentence plus the trigger words the fixture briefs in \
+         {FIXTURE} need; keep a skill's never-automatic or self-trigger boundary.",
+        over.len(),
+        over.join("\n  "),
     );
 }
 
