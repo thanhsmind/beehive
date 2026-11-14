@@ -4109,6 +4109,135 @@ mod principles_on_the_hub {
         }
     }
 
+    const HUB_DESCRIPTION: &str = "Answer how a part of this repo runs.";
+
+    fn with_bee_how(fx: &Fixture) {
+        write(
+            &fx.root.join("skills").join("bee-how").join("SKILL.md"),
+            "---\nname: bee-how\ndescription: >-\n  Answer how a part\n  of this repo runs.\n---\nlocal body\n",
+        );
+        apply(fx, &["--runtime", "claude"]);
+        assert!(fx.repo.join(".claude").join("skills").join("bee-how").join("SKILL.md").exists());
+    }
+
+    fn how_items(p: &Value, action: &str) -> Vec<Value> {
+        p["plan"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|i| i["action"] == action && i["skill"] == "bee-how")
+            .cloned()
+            .collect()
+    }
+
+    fn claude_how(fx: &Fixture) -> String {
+        std::fs::read_to_string(fx.repo.join(".claude").join("skills").join("bee-how").join("SKILL.md"))
+            .unwrap_or_default()
+    }
+
+    #[test]
+    fn the_switch_plan_publishes_removes_and_aliases_bee_how_in_that_order() {
+        let fx = fixture_with_local_copies();
+        with_bee_how(&fx);
+        let _hub = switching_hub(None);
+        let p = plan(&fx, &["--runtime", "claude", "--skillstation"]);
+        assert_eq!(how_items(&p, "publish_skillstation").len(), 1);
+        let removals = how_items(&p, "remove_skill");
+        assert_eq!(removals.len(), 1, "{:?}", p["plan"]);
+        assert_eq!(removals[0]["target"], "repo-claude");
+        assert_eq!(removals[0]["after_publish"], true);
+        let aliases = how_items(&p, "skillstation_alias");
+        assert_eq!(aliases.len(), 1, "{:?}", p["plan"]);
+        assert_eq!(aliases[0]["path"], ".claude/skills/bee-how/SKILL.md");
+        assert_eq!(aliases[0]["after_publish"], true);
+        let content = aliases[0]["content"].as_str().unwrap();
+        assert!(content.contains("skillstation_alias: bee-how"));
+        assert!(content.contains(HUB_DESCRIPTION));
+        assert!(!content.contains("disable-model-invocation"));
+        let items = p["plan"].as_array().unwrap();
+        let removal_at = items.iter().position(|i| i["action"] == "remove_skill" && i["skill"] == "bee-how").unwrap();
+        let alias_at = items.iter().position(|i| i["action"] == "skillstation_alias" && i["skill"] == "bee-how").unwrap();
+        assert!(removal_at < alias_at);
+        assert!(items.iter().all(|i| !(i["action"] == "skillstation_alias" && i["skill"].as_str().unwrap().starts_with("bee-principle-"))));
+    }
+
+    #[test]
+    fn a_full_switch_leaves_bee_how_as_an_alias_and_the_replan_plans_nothing_for_it() {
+        let fx = fixture_with_local_copies();
+        with_bee_how(&fx);
+        let _hub = switching_hub(None);
+        apply(&fx, &["--runtime", "claude", "--skillstation"]);
+        let alias = claude_how(&fx);
+        assert!(alias.contains("skillstation_alias: bee-how"), "{alias}");
+        assert!(alias.contains(HUB_DESCRIPTION));
+        assert!(!alias.contains("local body"));
+        let again = plan(&fx, &["--runtime", "claude"]);
+        for action in ["remove_skill", "sync_skill", "skillstation_alias"] {
+            assert!(how_items(&again, action).is_empty(), "{action}: {:?}", again["plan"]);
+        }
+        assert_eq!(again["status"], "up_to_date", "{:?}", again["plan"]);
+    }
+
+    #[test]
+    fn a_second_switch_apply_keeps_the_bee_how_alias_and_the_hub_replan_plans_nothing_for_it() {
+        let fx = fixture_with_local_copies();
+        with_bee_how(&fx);
+        {
+            let _hub = switching_hub(None);
+            apply(&fx, &["--runtime", "claude", "--skillstation"]);
+        }
+        assert!(claude_how(&fx).contains("skillstation_alias: bee-how"));
+        let _hub = serving_hub(&fx, &["bee-how", IDS[0], IDS[1]], |_, _, _| true);
+        apply(&fx, &["--runtime", "claude", "--skillstation"]);
+        let alias = claude_how(&fx);
+        assert!(alias.contains("skillstation_alias: bee-how"), "{alias}");
+        let again = plan(&fx, &["--runtime", "claude"]);
+        assert!(
+            again["plan"].as_array().unwrap().iter().all(|i| i["skill"] != "bee-how"),
+            "{:?}",
+            again["plan"]
+        );
+    }
+
+    #[test]
+    fn a_failed_bee_how_publish_keeps_every_local_copy_and_writes_no_alias() {
+        let fx = fixture_with_local_copies();
+        with_bee_how(&fx);
+        let _hub = switching_hub(Some("bee-how"));
+        let a = apply(&fx, &["--runtime", "claude", "--skillstation"]);
+        let local = claude_how(&fx);
+        assert!(local.contains("local body") && !local.contains("skillstation_alias"), "{local}");
+        for id in IDS {
+            assert!(fx.repo.join(".claude").join("skills").join(id).exists(), "{id}");
+        }
+        assert!(!config_text(&fx).contains("hub"));
+        let skips = principle_skips(&a);
+        assert_eq!(skips.len(), 1, "{skips:?}");
+        assert!(skips[0]["reason"].as_str().unwrap().contains("bee-how"));
+    }
+
+    #[test]
+    fn hub_mode_with_an_unreadable_hub_keeps_bee_how_and_plans_no_alias() {
+        let fx = fixture_with_local_copies();
+        with_bee_how(&fx);
+        go_hub(&fx);
+        let p = plan(&fx, &["--runtime", "claude"]);
+        assert!(how_items(&p, "remove_skill").is_empty());
+        assert!(how_items(&p, "skillstation_alias").is_empty());
+        assert!(claude_how(&fx).contains("local body"));
+    }
+
+    #[test]
+    fn the_switch_keeps_bee_how_for_the_agents_target() {
+        let fx = fixture_with_local_copies();
+        with_bee_how(&fx);
+        let _hub = switching_hub(None);
+        let p = plan(&fx, &["--runtime", "claude", "--skillstation"]);
+        assert!(how_items(&p, "remove_skill").iter().all(|i| i["target"] == "repo-claude"));
+        apply(&fx, &["--runtime", "claude", "--skillstation"]);
+        assert!(fx.repo.join(".agents").join("skills").join("bee-how").join("SKILL.md").exists());
+    }
+
     fn with_worker_template(fx: &Fixture) {
         write(
             &fx.root.join("packages").join("bee").join("agents").join("bee-worker.md.tmpl"),

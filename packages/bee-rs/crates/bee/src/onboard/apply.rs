@@ -342,13 +342,7 @@ fn skillstation_commit_hash(v: &Value) -> Option<String> {
 }
 
 fn principle_routing_flags(staged: &Path) -> Vec<String> {
-    let source = read_text_if_exists(&staged.join("SKILL.md"));
-    let (front, _) = crate::textutil::split_frontmatter(&source);
-    let trigger = front
-        .lines()
-        .find_map(|line| line.strip_prefix("description:"))
-        .map(|d| d.trim().trim_matches('"').split_whitespace().collect::<Vec<_>>().join(" "))
-        .filter(|d| !d.is_empty());
+    let trigger = super::skills::frontmatter_description(&read_text_if_exists(&staged.join("SKILL.md")));
     let mut flags = Vec::new();
     if let Some(trigger) = trigger {
         flags.extend(["--trigger".to_string(), trigger]);
@@ -389,7 +383,7 @@ fn apply_publish_skillstation(
     let staged_text = staged.to_string_lossy().to_string();
     let mut commit_argv: Vec<String> =
         ["skill", "commit", staged_text.as_str(), "--yes", "--json"].map(String::from).to_vec();
-    if skill.starts_with(super::skills::PRINCIPLE_PREFIX) {
+    if super::skills::is_hub_served(skill) {
         commit_argv.extend(principle_routing_flags(&staged));
     }
     let commit_refs: Vec<&str> = commit_argv.iter().map(String::as_str).collect();
@@ -991,7 +985,7 @@ pub fn apply_computed_plan(
                 let engine_source = item["source"].as_str().map(Path::new);
                 match apply_publish_skillstation(repo_root, skill, rel, engine_source) {
                     Err(reason) => {
-                        if skill.starts_with(super::skills::PRINCIPLE_PREFIX) && failed_principle.is_none() {
+                        if super::skills::is_hub_served(skill) && failed_principle.is_none() {
                             failed_principle = Some(skill.to_string());
                         }
                         skipped_skills.push(json!({

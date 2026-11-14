@@ -8,7 +8,7 @@ bee:
   lifecycle: active
   areas: [onboarding]
   required_context: [areas/onboarding/overview.md]
-  decisions: ["skillstation-aliases D1-D9 (a bee skillstation verb group checks the hub skills bee relies on and writes a small alias skill so /<id> works; CONTEXT.md)", "skillstation-onboard-aliases D1-D7 (install and onboard write the aliases by default; the hub changes only behind --skillstation; CONTEXT.md)", "skillstation-principles D1-D5, D8-D10, D12-D14 (skillstation.principles hub serves the bee-principle skills to Claude Code; CONTEXT.md)"]
+  decisions: ["skillstation-aliases D1-D9 (a bee skillstation verb group checks the hub skills bee relies on and writes a small alias skill so /<id> works; CONTEXT.md)", "skillstation-onboard-aliases D1-D7 (install and onboard write the aliases by default; the hub changes only behind --skillstation; CONTEXT.md)", "skillstation-principles D1-D5, D8-D10, D12-D14 (skillstation.principles hub serves the bee-principle skills to Claude Code; CONTEXT.md)", "skillstation-human-skills D1-D5 (five human-started bee skills join the hub-served set and get /<id> aliases; CONTEXT.md)"]
   sources: ["skillstation-aliases cell ssa-1 (2026-11-14; the verb group)", "skillstation-aliases cell ssa-2 (2026-11-14; this concept and the README section)", "skillstation-onboard-aliases cells sooa-1 and sooa-2 (2026-11-14; onboard and install write the aliases)", "skillstation-principles cells ssp-1 to ssp-3, ssp-6, ssp-7, ssp-9 (2026-11-14; hub-served principles)"]
   authoritative_for: "onboarding: the bee skillstation verb group"
   anchors: [packages/bee-rs/crates/bee/src/verbs/skillstation_group.rs, packages/bee-rs/crates/bee/src/principles.rs, packages/bee-rs/crates/bee/src/onboard/agents.rs, packages/bee-rs/crates/bee/src/onboard/apply.rs, packages/bee-rs/crates/bee/src/onboard/plan.rs, packages/bee-rs/crates/bee/src/onboard/skills.rs, scripts/install.sh]
@@ -73,6 +73,10 @@ cannot change their result (skillstation-onboard-aliases D6).
 - An alias is written only for a skill that is active on the hub. A draft is not
   aliased, because the hub would refuse to serve it (skillstation-aliases D4,
   D7).
+- A re-run of the switch rewrites the alias after the removal, even when the file
+  already equals the alias render, because the `after_publish` removal before it
+  deletes the folder; only a plan without `--skillstation` skips a current alias
+  (skillstation-human-skills D3-D4).
 - `--skillstation` plans a publish for a skill only when the hub has no such
   skill, the hub copy is not active, or its files differ from the engine skill
   rendered for claude. Files compare as (relative path, raw sha256) sets against
@@ -112,6 +116,26 @@ cannot change their result (skillstation-onboard-aliases D6).
   principles would point every session at a hub that cannot serve them.
   `scripts/install.sh` rechecks without `--skillstation`, so the recheck reads
   local state and plans no publish (skillstation-principles D9, D10).
+
+- The hub-served set is the `bee-principle-*` skills plus five human-started
+  skills, `bee-how`, `bee-teach`, `bee-technical-writing`, `bee-why` and
+  `bee-writing-skills`. One constant and one predicate in `onboard/skills.rs`
+  name it; every rule above (engine-rendered publish with routing flags,
+  publish skip, drop only when every member is active, the `after_publish` gate)
+  applies to all members, under the same hub mode and `--skillstation` switch
+  (skillstation-human-skills D1, D2).
+- A removed local copy of one of the five is replaced by a `/<id>` alias at
+  `.claude/skills/<id>/SKILL.md`, rendered with the engine skill's own
+  description and without `disable-model-invocation`, so the agent still lists
+  it and a human can type `/<id>`. Principles get no alias. In the switch the
+  alias items are `after_publish` and follow the removals, so a failed publish
+  writes none (skillstation-human-skills D3).
+- The repo-claude deletion domain leaves a hub-served `bee-*` directory alone
+  when its SKILL.md carries the alias marker for its own name and hub mode drops
+  it from the sources. Without that exception each onboard deleted the alias and
+  the next wrote it again, and the installer recheck never reached `up_to_date`
+  (skillstation-human-skills D4). Codex, opencode, the plugin trees and the
+  legacy global targets keep the five (skillstation-human-skills D5).
 
 ## Edge Cases Settled
 
