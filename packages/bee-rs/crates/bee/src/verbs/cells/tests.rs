@@ -6498,16 +6498,6 @@ use std::time::Instant;
         assert!(refusal.contains("fix-first"), "{refusal}");
     }
 
-    /// D1 (docs/history/proof-strength-and-expiry/CONTEXT.md): the result
-    /// segment is closed over the three strength values. A bare `green` —
-    /// every cap's form until this change — is REFUSED at the write path,
-    /// and the refusal names the whole legal set.
-    ///
-    /// The message assertion below is pinned on the FULL set, the way
-    /// `route_set_validation_names_every_bad_value` pins the route-class
-    /// one: the refusal is the contract a cold worker fixes its cap from, so
-    /// a value added or renamed without editing this line is a silent
-    /// contract change. Update it with the vocabulary; never delete it.
     fn floor_report(tests: &str) -> String {
         format!(
             r#"{{"outcome":"o","commit":"c","files":[],"tests":"{tests}","deviations":[]}}"#
@@ -6599,6 +6589,184 @@ use std::time::Instant;
         assert!(cap_cell_from_flags(root, &cap_flags_report("fl-2", Some(&report)), false).is_ok());
     }
 
+    fn floor_lane(root: &Path, class: Option<&str>) {
+        std::fs::create_dir_all(root.join(".bee/lanes")).unwrap();
+        let lane = root.join(".bee/lanes/f.json");
+        match class {
+            Some(c) => std::fs::write(&lane, json!({"feature": "f", "route": {"class": c}}).to_string()).unwrap(),
+            None => {
+                let _ = std::fs::remove_file(&lane);
+            }
+        }
+    }
+
+    fn floor_cap(root: &Path, role: &str, files: Value, result: &str) -> MR<Value> {
+        floor_cell(root, role, files);
+        let reason = if result == "green:live" { "/tmp/evidence/run-1" } else { "fixture" };
+        let report = floor_report(&format!("echo ok — {result} — {reason}"));
+        cap_cell_from_flags(root, &cap_flags_report("fl-1", Some(&report)), false)
+    }
+
+    #[test]
+    fn every_tester_class_row_meets_its_floor_and_refuses_the_value_below_it() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_bee_config(root, &json!({"commands": {"test": "none"}}));
+        let rows: [(Option<&str>, &str, Option<&str>); 11] = [
+            (Some("bugfix"), "green:red-first", Some("green:unit")),
+            (Some("release"), "green:live", Some("green:unit")),
+            (Some("feature"), "green:unit", Some("green:static")),
+            (Some("refactor"), "green:unit", Some("green:static")),
+            (Some("perf"), "green:unit", Some("green:static")),
+            (Some("docs"), "green:static", None),
+            (Some("research"), "green:static", None),
+            (Some("spike"), "green:static", None),
+            (Some("content"), "green:static", None),
+            (Some("no-such-class"), "green:unit", Some("green:static")),
+            (None, "green:unit", Some("green:static")),
+        ];
+        for (class, floor, below) in rows {
+            floor_lane(root, class);
+            if let Some(weak) = below {
+                let refusal = thrown(floor_cap(root, "test", json!(["src/a.rs"]), weak));
+                assert!(refusal.contains(&format!("floor {floor}")), "{class:?}: {refusal}");
+                assert!(refusal.contains(&format!("\"{weak}\"")), "{class:?}: {refusal}");
+            }
+            let capped = floor_cap(root, "test", json!(["src/a.rs"]), floor);
+            assert!(capped.is_ok(), "{class:?} at {floor}: {}", capped.err().map(|e| thrown::<()>(Err(e))).unwrap_or_default());
+        }
+    }
+
+    #[test]
+    fn the_acceptance_ladder_static_takes_all_unit_takes_three_red_first_and_live_take_themselves() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_bee_config(root, &json!({"commands": {"test": "none"}}));
+        let all = ["green:static", "green:unit", "green:live", "green:red-first"];
+        let ladder: [(&str, &[&str]); 4] = [
+            ("green:static", &all),
+            ("green:unit", &["green:unit", "green:live", "green:red-first"]),
+            ("green:red-first", &["green:red-first"]),
+            ("green:live", &["green:live"]),
+        ];
+        for (floor, accepted) in ladder {
+            for result in all {
+                assert_eq!(
+                    proof_meets_floor(floor, result),
+                    accepted.contains(&result),
+                    "floor {floor} result {result}"
+                );
+            }
+        }
+        floor_lane(root, Some("bugfix"));
+        let refusal = thrown(floor_cap(root, "test", json!(["src/a.rs"]), "green:live"));
+        assert!(refusal.contains("floor green:red-first"), "{refusal}");
+        floor_lane(root, Some("release"));
+        let refusal = thrown(floor_cap(root, "test", json!(["src/a.rs"]), "green:red-first"));
+        assert!(refusal.contains("floor green:live"), "{refusal}");
+        floor_lane(root, None);
+        for strong in ["green:live", "green:red-first"] {
+            let capped = floor_cap(root, "code", json!(["src/a.rs"]), strong);
+            assert!(capped.is_ok(), "code at {strong}: {}", capped.err().map(|e| thrown::<()>(Err(e))).unwrap_or_default());
+        }
+    }
+
+    #[test]
+    fn a_cell_with_no_files_and_no_test_role_has_no_floor() {
+        assert_eq!(cell_proof_floor(&json!({"role": "code", "files": []}), Some("bugfix")), None);
+        assert_eq!(cell_proof_floor(&json!({"role": "code"}), None), None);
+        assert_eq!(cell_proof_floor(&json!({"role": "test", "files": []}), Some("bugfix")), Some("green:red-first"));
+        assert_eq!(
+            cell_proof_floor(&json!({"role": "code", "files": ["docs/a.rs", "b.md"]}), Some("release")),
+            Some("green:static")
+        );
+        assert_eq!(
+            cell_proof_floor(&json!({"role": "code", "files": ["docs/a.md", "src/b.rs"]}), None),
+            Some("green:unit")
+        );
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_bee_config(root, &json!({"commands": {"test": "none"}}));
+        assert!(floor_cap(root, "code", json!([]), "green:static").is_ok());
+    }
+
+    #[test]
+    fn no_principle_used_answers_a_principles_arm_cap_and_records_it() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_bee_config(root, &json!({"commands": {"test": "none"}}));
+        std::fs::create_dir_all(root.join(".bee/logs")).unwrap();
+        std::fs::write(
+            root.join(".bee/logs/dispatch.jsonl"),
+            "{\"cell\":\"fl-1\",\"principles_arm\":\"principles\"}\n",
+        )
+        .unwrap();
+        let report = floor_report("echo ok — green:unit — fixture");
+        floor_cell(root, "code", json!(["src/a.rs"]));
+        let mut flags = cap_flags_report("fl-1", Some(&report));
+        flags.no_principle_used = true;
+        let capped = cap_cell_from_flags(root, &flags, false).unwrap();
+        assert_eq!(capped["trace"]["no_principles_used"], json!(true));
+        assert!(capped["trace"].get("principles_used").is_none());
+
+        floor_cell(root, "code", json!(["src/a.rs"]));
+        let empty = r#"{"outcome":"o","commit":"c","files":[],"tests":"echo ok — green:unit — fixture","deviations":[],"principles_used":[]}"#;
+        let capped = cap_cell_from_flags(root, &cap_flags_report("fl-1", Some(empty)), false).unwrap();
+        assert_eq!(capped["trace"]["no_principles_used"], json!(true));
+
+        floor_cell(root, "code", json!(["src/a.rs"]));
+        let listed = r#"{"outcome":"o","commit":"c","files":[],"tests":"echo ok — green:unit — fixture","deviations":[],"principles_used":["tdd — wrote the test first"]}"#;
+        let capped = cap_cell_from_flags(root, &cap_flags_report("fl-1", Some(listed)), false).unwrap();
+        assert_eq!(
+            capped["trace"]["principles_used"],
+            json!([{"slug": "tdd", "changed": "wrote the test first"}])
+        );
+
+        floor_cell(root, "code", json!(["src/a.rs"]));
+        let bad = r#"{"outcome":"o","commit":"c","files":[],"tests":"echo ok — green:unit — fixture","deviations":[],"principles_used":"tdd"}"#;
+        let refusal = thrown(cap_cell_from_flags(root, &cap_flags_report("fl-1", Some(bad)), false));
+        assert!(refusal.contains("\"principles_used\" must be an array"), "{refusal}");
+    }
+
+    #[test]
+    fn an_older_prepare_record_or_none_at_all_never_asks_for_a_principle_answer() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_bee_config(root, &json!({"commands": {"test": "none"}}));
+        let report = floor_report("echo ok — green:unit — fixture");
+        floor_cell(root, "code", json!(["src/a.rs"]));
+        let capped = cap_cell_from_flags(root, &cap_flags_report("fl-1", Some(&report)), false).unwrap();
+        assert!(capped["trace"].get("no_principles_used").is_none());
+
+        std::fs::create_dir_all(root.join(".bee/logs")).unwrap();
+        std::fs::write(
+            root.join(".bee/logs/dispatch.jsonl"),
+            "{\"cell\":\"fl-1\",\"kind\":\"cell\"}\nnot json\n{\"cell\":\"fl-9\",\"principles_arm\":\"principles\"}\n",
+        )
+        .unwrap();
+        floor_cell(root, "code", json!(["src/a.rs"]));
+        assert!(cap_cell_from_flags(root, &cap_flags_report("fl-1", Some(&report)), false).is_ok());
+
+        std::fs::write(
+            root.join(".bee/logs/dispatch.jsonl"),
+            "{\"cell\":\"fl-1\",\"principles_arm\":\"holdout\"}\n{\"cell\":\"fl-1\",\"principles_arm\":\"principles\"}\n",
+        )
+        .unwrap();
+        floor_cell(root, "code", json!(["src/a.rs"]));
+        let refusal = thrown(cap_cell_from_flags(root, &cap_flags_report("fl-1", Some(&report)), false));
+        assert!(refusal.contains("--principle-used"), "latest record wins: {refusal}");
+    }
+
+    /// D1 (docs/history/proof-strength-and-expiry/CONTEXT.md): the result
+    /// segment is closed over the three strength values. A bare `green` —
+    /// every cap's form until this change — is REFUSED at the write path,
+    /// and the refusal names the whole legal set.
+    ///
+    /// The message assertion below is pinned on the FULL set, the way
+    /// `route_set_validation_names_every_bad_value` pins the route-class
+    /// one: the refusal is the contract a cold worker fixes its cap from, so
+    /// a value added or renamed without editing this line is a silent
+    /// contract change. Update it with the vocabulary; never delete it.
     #[test]
     fn report_tests_key_bare_green_is_refused_naming_the_three_strengths() {
         let tmp = tempfile::tempdir().unwrap();
@@ -12341,6 +12509,96 @@ use std::time::Instant;
         );
         assert_eq!(result_val["trace"]["verify_passed"], json!(true));
         assert_eq!(result_val["trace"]["verify_command"], json!("cargo test --bin bee"));
+    }
+
+    #[test]
+    fn a_herded_finish_in_the_principles_arm_needs_principles_used_and_meets_the_floor() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (main, wt) = setup_from_job_fixture(tmp.path(), "myfeat");
+        let cell_id = "job-p1";
+        let job_id = "job-p01";
+        std::fs::write(wt.join("file.txt"), "updated\n").unwrap();
+        git_ok(&wt, &["commit", "-qam", &format!("worker commit\n\ncell: {cell_id}")]);
+        write_from_job_mailbox(&main, job_id, cell_id, &wt, "done", &["file.txt"], "cargo test", None);
+        std::fs::create_dir_all(main.join(".bee/logs")).unwrap();
+        std::fs::write(
+            main.join(".bee/logs/dispatch.jsonl"),
+            format!("{{\"cell\":\"{cell_id}\",\"principles_arm\":\"principles\"}}\n"),
+        )
+        .unwrap();
+        let cell_val = json!({
+            "id": cell_id,
+            "feature": "myfeat",
+            "title": "herded principles cell",
+            "action": "do work",
+            "verify": "cargo test",
+            "lane": "tiny",
+            "role": "code",
+            "status": "claimed",
+            "deps": [],
+            "files": ["file.txt"],
+            "trace": { "worker": "w-worker" },
+        });
+        write_cell_fixture(&main, cell_id, &cell_val);
+
+        let weak = thrown(finish_cap_and_release(&main, None, cap_flags_from_job(cell_id, job_id, Some("green:static")), None));
+        assert!(weak.contains("floor green:unit"), "{weak}");
+
+        let silent = thrown(finish_cap_and_release(&main, None, cap_flags_from_job(cell_id, job_id, Some("green:unit")), None));
+        assert!(silent.contains("--principle-used"), "{silent}");
+        assert!(silent.contains("principles_used"), "{silent}");
+
+        let result_path = main.join(".bee/mailbox").join(job_id).join("result-1.json");
+        let mut res: Value = serde_json::from_str(&std::fs::read_to_string(&result_path).unwrap()).unwrap();
+        res["principles_used"] = json!(["small-diff — kept the change to one file"]);
+        std::fs::write(&result_path, jsjson::stringify_pretty(&res)).unwrap();
+        let out = finish_cap_and_release(&main, None, cap_flags_from_job(cell_id, job_id, Some("green:unit")), None).unwrap();
+        let Out::Emit(result_val, _, 0) = out else {
+            panic!("expected Out::Emit");
+        };
+        assert_eq!(result_val["status"], json!("capped"));
+        assert_eq!(
+            result_val["trace"]["principles_used"],
+            json!([{"slug": "small-diff", "changed": "kept the change to one file"}])
+        );
+    }
+
+    #[test]
+    fn a_herded_finish_in_the_holdout_arm_is_not_refused_for_silence() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (main, wt) = setup_from_job_fixture(tmp.path(), "myfeat");
+        let cell_id = "job-p2";
+        let job_id = "job-p02";
+        std::fs::write(wt.join("file.txt"), "updated\n").unwrap();
+        git_ok(&wt, &["commit", "-qam", &format!("worker commit\n\ncell: {cell_id}")]);
+        write_from_job_mailbox(&main, job_id, cell_id, &wt, "done", &["file.txt"], "cargo test", None);
+        std::fs::create_dir_all(main.join(".bee/logs")).unwrap();
+        std::fs::write(
+            main.join(".bee/logs/dispatch.jsonl"),
+            format!("{{\"cell\":\"{cell_id}\",\"principles_arm\":\"holdout\"}}\n"),
+        )
+        .unwrap();
+        let cell_val = json!({
+            "id": cell_id,
+            "feature": "myfeat",
+            "title": "herded holdout cell",
+            "action": "do work",
+            "verify": "cargo test",
+            "lane": "tiny",
+            "role": "code",
+            "status": "claimed",
+            "deps": [],
+            "files": ["file.txt"],
+            "trace": { "worker": "w-worker" },
+        });
+        write_cell_fixture(&main, cell_id, &cell_val);
+        let out = finish_cap_and_release(&main, None, cap_flags_from_job(cell_id, job_id, Some("green:unit")), None).unwrap();
+        let Out::Emit(result_val, _, 0) = out else {
+            panic!("expected Out::Emit");
+        };
+        assert_eq!(result_val["status"], json!("capped"));
+        assert!(result_val["trace"].get("principles_used").is_none());
+        assert!(result_val["trace"].get("no_principles_used").is_none());
     }
 
     #[test]
