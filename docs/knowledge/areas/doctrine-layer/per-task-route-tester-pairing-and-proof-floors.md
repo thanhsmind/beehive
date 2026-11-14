@@ -9,7 +9,7 @@ bee:
   lifecycle: active
   areas: [doctrine-layer]
   required_context: [areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md]
-  decisions: ["per-task-router D1-D5 (docs/history/per-task-router/CONTEXT.md, 2026-11-14; store 676a73b1, 70c3387f, eb8842b0)", "58d7b2a7 (planning choices after the hat wave)"]
+  decisions: ["per-task-router D1-D5 (docs/history/per-task-router/CONTEXT.md, 2026-11-14)", "per-task-router planning choices after the hat wave (docs/history/per-task-router/reports/hat-wave.md)"]
   sources: [docs/history/per-task-router/CONTEXT.md, docs/history/per-task-router/plan.md, docs/history/per-task-router/reports/hat-wave.md, docs/history/per-task-router/delivery.md]
   authoritative_for: "doctrine-layer: per-task route, tester pairing and proof floors"
   anchors: [packages/bee-rs/crates/bee/src/principles.rs, packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs, packages/bee-rs/crates/bee/src/verbs/status_full/orient.rs, packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs, packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs, packages/bee-rs/crates/bee/src/verbs/cells/proof.rs, packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs, packages/bee/LEADER.md, packages/bee/prompts/worker-cell.md, skills/bee-planning/SKILL.md, skills/bee-swarming/SKILL.md]
