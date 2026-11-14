@@ -29,6 +29,8 @@
     "branch": "wt/claim-clear-identity",
     "worktree_id": "beehive--wt--claim-clear-identity",
     "uat": "pending",
-    "blocked_by": []
+    "blocked_by": [
+      "leader-check"
+    ]
   }
 }
