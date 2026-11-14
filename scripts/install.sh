@@ -66,10 +66,17 @@ Options:
                           through to onboarding. That switches the project to
                           principles served from the Skillstation hub and
                           removes the local principle copies. The hub also
-                          serves bee-how, bee-teach, bee-technical-writing,
-                          bee-why and bee-writing-skills; each local copy is
-                          replaced by a /<id> alias (/bee-how, /bee-teach, ...)
-                          so you can still start it by name. Off by default;
+                          serves three groups of skills: the principles; the
+                          human-started skills bee-how, bee-teach,
+                          bee-technical-writing, bee-why and
+                          bee-writing-skills; and the added skills bee-unslop,
+                          bee-researching, bee-knowledge-setup,
+                          bee-knowledge-upkeep, bee-verifying,
+                          bee-verify-upkeep, bee-wayfinding, bee-grooming and
+                          bee-deploying. Each local copy is replaced by a /<id>
+                          alias (/bee-how, /bee-verifying, ...) that keeps the
+                          skill's disable-model-invocation setting, so you can
+                          still start it by name. Off by default;
                           the other /<id> alias skills are written locally
                           either way.
       --no-claude-md      Skip writing/extending CLAUDE.md with the bare

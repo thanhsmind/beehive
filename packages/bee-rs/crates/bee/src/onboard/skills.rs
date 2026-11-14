@@ -78,8 +78,22 @@ pub struct SkillSources {
 
 pub const PRINCIPLE_PREFIX: &str = "bee-principle-";
 
-pub const HUB_SERVED_SKILLS: [&str; 5] =
-    ["bee-how", "bee-teach", "bee-technical-writing", "bee-why", "bee-writing-skills"];
+pub const HUB_SERVED_SKILLS: [&str; 14] = [
+    "bee-how",
+    "bee-teach",
+    "bee-technical-writing",
+    "bee-why",
+    "bee-writing-skills",
+    "bee-unslop",
+    "bee-researching",
+    "bee-knowledge-setup",
+    "bee-knowledge-upkeep",
+    "bee-verifying",
+    "bee-verify-upkeep",
+    "bee-wayfinding",
+    "bee-grooming",
+    "bee-deploying",
+];
 
 pub fn is_hub_served(name: &str) -> bool {
     name.starts_with(PRINCIPLE_PREFIX) || HUB_SERVED_SKILLS.contains(&name)
@@ -101,13 +115,25 @@ pub fn frontmatter_description(skill_md: &str) -> Option<String> {
     (!text.is_empty()).then_some(text)
 }
 
+pub fn frontmatter_disables_model(skill_md: &str) -> bool {
+    let (front, _) = crate::textutil::split_frontmatter(skill_md);
+    front
+        .lines()
+        .find_map(|line| line.strip_prefix("disable-model-invocation:"))
+        .is_some_and(|v| v.trim().trim_matches(|c| c == '"' || c == '\'') == "true")
+}
+
+pub fn design_picked(design_packs: &[String], name: &str) -> bool {
+    !design_packs.is_empty()
+        && (name == "bee-design"
+            || name
+                .strip_prefix("bee-design-")
+                .is_some_and(|pack| design_packs.iter().any(|p| p == pack)))
+}
+
 impl SkillSources {
     fn picks(&self, name: &str) -> bool {
-        !self.design_packs.is_empty()
-            && (name == "bee-design"
-                || name
-                    .strip_prefix("bee-design-")
-                    .is_some_and(|pack| self.design_packs.iter().any(|p| p == pack)))
+        design_picked(&self.design_packs, name)
     }
 
     fn entries(&self) -> Vec<(&Path, Dirent)> {
@@ -117,7 +143,7 @@ impl SkillSources {
             .map(|e| (self.skills_root.as_path(), e));
         let design = list_bee_skill_entries(&self.design_root)
             .into_iter()
-            .filter(|e| self.picks(&e.name))
+            .filter(|e| self.picks(&e.name) && !self.without_principles)
             .map(|e| (self.design_root.as_path(), e));
         skills.chain(design).collect()
     }
@@ -290,7 +316,7 @@ pub fn compute_skill_items(sources: &SkillSources, target_root: &Path, runtime: 
         if sources.without_principles
             && entry.is_dir
             && !entry.is_symlink
-            && HUB_SERVED_SKILLS.contains(&name.as_str())
+            && (HUB_SERVED_SKILLS.contains(&name.as_str()) || sources.picks(name))
             && carries_alias_marker(
                 &read_text_if_exists(&target_root.join(name).join("SKILL.md")),
                 name,
@@ -833,12 +859,18 @@ pub fn compute_skill_sync(
     SkillSync { source_root, targets, blocked, legacy_refresh }
 }
 
-pub fn compute_design_sync(engine: &Engine, repo_root: &Path, design_packs: &[String]) -> SkillSync {
+pub fn compute_design_sync(
+    engine: &Engine,
+    repo_root: &Path,
+    design_packs: &[String],
+    principles_on_hub: bool,
+) -> SkillSync {
     let sources = SkillSources {
         design_root: engine.design_root.clone(),
         design_packs: design_packs.to_vec(),
         ..SkillSources::default()
     };
+    let claude_sources = SkillSources { without_principles: principles_on_hub, ..sources.clone() };
     let real_repo =
         realpath(repo_root).unwrap_or_else(|| path_resolve(&repo_root.to_string_lossy()));
     let targets = skill_sync_targets(repo_root, false)
@@ -867,7 +899,7 @@ pub fn compute_design_sync(engine: &Engine, repo_root: &Path, design_packs: &[St
                 return target;
             }
             target.items = compute_skill_items(
-                &sources,
+                if target.kind == "repo-claude" { &claude_sources } else { &sources },
                 &target.target_root,
                 runtime_for_target_kind(&target.kind),
             )
@@ -1174,7 +1206,7 @@ mod tests {
         std::fs::create_dir_all(repo.join(".claude")).unwrap();
         std::fs::create_dir_all(&outside).unwrap();
         std::os::unix::fs::symlink(&outside, repo.join(".claude").join("skills")).unwrap();
-        let sync = compute_design_sync(&engine, &repo, &["web".to_string()]);
+        let sync = compute_design_sync(&engine, &repo, &["web".to_string()], false);
         let kind = |k: &str| sync.targets.iter().find(|t| t.kind == k).unwrap();
         assert!(kind("repo-claude").blocked.is_some());
         assert!(kind("repo-claude").items.is_empty());

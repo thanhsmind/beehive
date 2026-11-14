@@ -383,7 +383,7 @@ fn apply_publish_skillstation(
     let staged_text = staged.to_string_lossy().to_string();
     let mut commit_argv: Vec<String> =
         ["skill", "commit", staged_text.as_str(), "--yes", "--json"].map(String::from).to_vec();
-    if super::skills::is_hub_served(skill) {
+    if super::skills::is_hub_served(skill) || engine_source.is_some() {
         commit_argv.extend(principle_routing_flags(&staged));
     }
     let commit_refs: Vec<&str> = commit_argv.iter().map(String::as_str).collect();
@@ -985,7 +985,9 @@ pub fn apply_computed_plan(
                 let engine_source = item["source"].as_str().map(Path::new);
                 match apply_publish_skillstation(repo_root, skill, rel, engine_source) {
                     Err(reason) => {
-                        if super::skills::is_hub_served(skill) && failed_principle.is_none() {
+                        if (super::skills::is_hub_served(skill) || engine_source.is_some())
+                            && failed_principle.is_none()
+                        {
                             failed_principle = Some(skill.to_string());
                         }
                         skipped_skills.push(json!({
