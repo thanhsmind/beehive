@@ -1,0 +1,137 @@
+{
+  "id": "cci-1",
+  "feature": "claim-clear-identity",
+  "title": "Clear only the exact claim seen under the cell lock",
+  "lane": "small",
+  "role": "code",
+  "decisions": [
+    "32d0cb36-fa9e-4de1-bba3-221db3c3f11f"
+  ],
+  "action": "Fix the late owner-blind claim clear (claim-clear-identity D1, D2; contract claim-clear-identity). Today release_claim_file_best_effort(root, id) in packages/bee-rs/crates/bee/src/verbs/cells/claims.rs removes whatever claim file exists, and its callers run it after the cells:<id> lock is released: mutate_cell and cap_cell_from_flags in handlers_close.rs, and the NEEDS_REVISION reopen in handlers_meta.rs (record judge verdict). Change it so the caller reads the claim's acquired_at while it still holds the cells:<id> lock, and the clear (under the existing claim gate, re-reading the file) removes the file only when it still carries that same acquired_at. A claim absent under the lock clears nothing. Keep it best-effort: every failure is swallowed as today. Every caller passes what it read under its lock; find all callers with rg and change each. Tests in the cells test module, written and run red first against the current code before the fix: (1) a cell claimed by s1 whose claim file is replaced, after the snapshot, by a newer claim (different acquired_at) keeps the newer file after the clear; (2) the same claim with only claimed_at changed (a renew) is removed; (3) no claim at snapshot time and a claim written afterwards survives; (4) end to end, cells cap / unclaim / reopen on a cell still remove the cell's own claim file as before. No code comments.",
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/cells/claims.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/handlers_meta.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+  ],
+  "deps": [],
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- claim",
+  "must_haves": {
+    "truths": [
+      "a claim written after the under-lock read survives the clear",
+      "the claim seen under the lock is removed, also after a renew changed claimed_at",
+      "a claim absent under the lock means the clear removes nothing",
+      "cap, unclaim and reopen still remove the cell's own claim file"
+    ]
+  },
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/workflow-state/claims-and-ownership.md"
+  ],
+  "status": "capped",
+  "read_first": [],
+  "trace": {
+    "worker": "cci-1-worker",
+    "outcome": "Claim clear now removes only the claim whose acquired_at was read under the cells:<id> lock; callers cap, mutate_cell and judge reopen updated; 4 tests red-then-green; commit 721148d9e",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/cells/claims.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/handlers_meta.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+      "docs/knowledge/areas/workflow-state/claims-and-ownership.md"
+    ],
+    "deviations": [
+      "sync-ack: the fix changes which claim file a close removes; no skill text describes the claim clear"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-14T05:00:52.699Z",
+    "behavior_change": false,
+    "verification_evidence": "cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml — green:unit — full bee-rs suite, 5044 passed 0 failed in the main bin; commit 721148d9e",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "13f19473-d0d2-477e-a03d-e74a456583e9",
+    "verify_command": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- claim",
+    "claimed_at": "2026-11-14T04:52:43.385Z",
+    "knowledge_delta": [
+      "docs/knowledge/areas/workflow-state/claims-and-ownership.md"
+    ],
+    "sync_ack": "the fix changes which claim file a close removes; no skill text describes the claim clear",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Claim clear now removes only the claim whose acquired_at was read under the cells:<id> lock; callers cap, mutate_cell and judge reopen updated; 4 tests red-then-green; commit 721148d9e",
+      "commit": "721148d9eb1b0b256465f26927027e79da7d3554",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/cells/claims.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/handlers_meta.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+        "docs/knowledge/areas/workflow-state/claims-and-ownership.md"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- claim — green:unit — cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml — green:unit — full bee-rs suite, 5044 passed 0 failed in the main bin; commit 721148d9e",
+      "deviations": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "a claim written after the under-lock read survives the clear",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+          },
+          {
+            "requirement": "the claim seen under the lock is removed, also after a renew changed claimed_at",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+          },
+          {
+            "requirement": "a claim absent under the lock means the clear removes nothing",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/claims.rs"
+          },
+          {
+            "requirement": "cap, unclaim and reopen still remove the cell's own claim file",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/cells/claims.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/claims.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/cells/handlers_meta.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/handlers_meta.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+          },
+          {
+            "requirement": "docs/knowledge/areas/workflow-state/claims-and-ownership.md",
+            "artifact": "docs/knowledge/areas/workflow-state/claims-and-ownership.md"
+          }
+        ],
+        "recorded_at": "2026-11-14T05:04:34.089Z",
+        "recorded_by": "13f19473-d0d2-477e-a03d-e74a456583e9",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": {
+    "new": 71370,
+    "cached": 916437,
+    "total": 987807,
+    "models": {
+      "claude-sonnet-5-5": {
+        "new": 71370,
+        "cached": 916437,
+        "total": 987807
+      }
+    },
+    "jobs": [
+      "job-1794631968900-660730-1"
+    ]
+  }
+}

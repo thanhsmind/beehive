@@ -1,0 +1,90 @@
+{
+  "schema": "bee-usage/v1",
+  "feature": "claim-clear-identity",
+  "closed_at": "2026-11-14T05:04:38.965Z",
+  "sessions": [
+    {
+      "session_id": "13f19473-d0d2-477e-a03d-e74a456583e9",
+      "models": {
+        "claude-opus-5-5": {
+          "input": 554,
+          "output": 149426,
+          "cache_write": 366424,
+          "cache_read": 56789609,
+          "new": 516404,
+          "cached": 56789609,
+          "total": 57306013
+        }
+      },
+      "subagent_models": {},
+      "subagent_count": 0,
+      "started_ms": 1794624575323,
+      "ended_ms": 1794632676163,
+      "totals": {
+        "new": 516404,
+        "cached": 56789609,
+        "total": 57306013
+      }
+    }
+  ],
+  "skipped": 0,
+  "totals": {
+    "main": {
+      "new": 516404,
+      "cached": 56789609,
+      "total": 57306013
+    },
+    "subagents": {
+      "new": 0,
+      "cached": 0,
+      "total": 0
+    },
+    "total": {
+      "new": 587774,
+      "cached": 57706046,
+      "total": 58293820
+    },
+    "herding": {
+      "new": 71370,
+      "cached": 916437,
+      "total": 987807,
+      "models": {
+        "claude-sonnet-5-5": {
+          "input": 40,
+          "output": 11787,
+          "cache_write": 59543,
+          "cache_read": 916437,
+          "new": 71370,
+          "cached": 916437,
+          "total": 987807
+        }
+      }
+    }
+  },
+  "herding_sessions": [
+    {
+      "session_id": "e32fe5a7-465c-4e03-b27f-c8bb87843d45",
+      "models": {
+        "claude-sonnet-5-5": {
+          "input": 40,
+          "output": 11787,
+          "cache_write": 59543,
+          "cache_read": 916437,
+          "new": 71370,
+          "cached": 916437,
+          "total": 987807
+        }
+      },
+      "subagent_models": {},
+      "subagent_count": 0,
+      "started_ms": 1794631970477,
+      "ended_ms": 1794632403555,
+      "totals": {
+        "new": 71370,
+        "cached": 916437,
+        "total": 987807
+      },
+      "job_id": "job-1794631968900-660730-1"
+    }
+  ]
+}
