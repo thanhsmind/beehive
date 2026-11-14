@@ -1,7 +1,7 @@
 ---
 name: bee-writing-skills
 description: >-
-  Build and pressure-test bee skills with TDD-for-skills discipline. Use when creating or editing a skill, or checking it holds up under pressure. Not for project AGENTS.md conventions, one-off instructions or documents (bee-technical-writing).
+  Build and pressure-test bee skills with the TDD-for-skills discipline. Use when creating a new bee skill, editing an existing one, or verifying a skill holds up under pressure. Do NOT use for project-specific AGENTS.md conventions or one-off instructions.
 metadata:
   version: '0.1'
   ecosystem: bee

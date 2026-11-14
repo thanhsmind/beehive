@@ -8,7 +8,7 @@
     },
     {
       "name": "bee-deploying",
-      "sha256": "d797b5cc720b2b359c9ea3ad9dfe331fb25ecc9db341a29d71abe4640150f287"
+      "sha256": "b75e79301a01303ad5d72b7c8546e206992989197e946954a3ad7a05ad437cf0"
     },
     {
       "name": "bee-evolving",
@@ -188,7 +188,7 @@
     },
     {
       "name": "bee-writing-skills",
-      "sha256": "c5fc4b0a4954b3674bfcf7460cdea19e2adfb640747ff4bebb422bd6c5f8e19e"
+      "sha256": "a8aed8b5d1ea50b8de09183f550e056ee964fcdfa7b8a8c78fb3767f71043916"
     }
   ]
 }

@@ -1,7 +1,7 @@
 ---
 name: bee-deploying
 description: >-
-  Learn, record and replay how one project deploys, stopping before any live-environment step. Use when the user says deploy, release, ship, or asks to record how this project deploys. Not for the bee repo's own release (scripts/release.sh) or for building a CI pipeline from scratch.
+  Learn, record and replay how one host project deploys, stopping before any live step. Use when the user says deploy, release or ship for their project, or asks to record how it deploys. Not for the bee repo's own release, which scripts/release.sh owns.
 ---
 
 # bee-deploying

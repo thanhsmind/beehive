@@ -15,7 +15,11 @@ session: 58 skills cost about 4,400 tokens before any work starts.
   needs it. `bee-capturing` keeps its self-trigger line. `bee-reviewing`
   keeps its never-automatic boundary.
 - **D3.** The paid routing eval must not score below its pre-change
-  baseline, and no brief may score zero.
+  baseline, and no brief that the baseline passes may score zero. Measured
+  with haiku, three runs per brief: the baseline scored 111 and 114 of 119,
+  the trimmed descriptions 114, 113 and 110. Four briefs that expect no
+  skill score zero on both sides; they stay open in the trigger-cases
+  concept.
 - **D4.** The work runs as a small lane. It touches about 24 skill files, but
   the edit is one front-matter field, and one eval measures the whole effect.
 
