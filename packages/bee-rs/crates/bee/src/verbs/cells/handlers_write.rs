@@ -136,7 +136,7 @@ pub(crate) fn emit_tester_pairing_warnings(root: &Path, cells: &[Value]) {
         if has_dependent_with_role_test(&all, id, false) {
             continue;
         }
-        let kind = if cell.get("role").and_then(Value::as_str) == Some("docs") { "checker" } else { "tester" };
+        let kind = if touches_code(cell) { "tester" } else { "checker" };
         eprintln!(
             "WARNING: cell \"{id}\" has no dependent {kind} cell on role test in feature \"{feature}\" — bee close and bee worktree merge refuse the feature until a separate test-role cell that depends on it is capped. FIX: add a role test cell with deps [\"{id}\"]."
         );
@@ -3181,7 +3181,7 @@ mod tests {
         let cell_json = tmp.path().join("cell.json");
         std::fs::write(
             &cell_json,
-            "{\"id\":\"demo-1\",\"feature\":\"demo\",\"title\":\"t\",\"lane\":\"standard\",\"role\":\"docs\",\"action\":\"act\",\"files\":[\"src/main.rs\"],\"read_first\":[],\"must_haves\":{\"truths\":[\"ok\"]},\"verify\":\"true\",\"affects_skills\":[],\"affects_specs\":[]}\n",
+            "{\"id\":\"demo-1\",\"feature\":\"demo\",\"title\":\"t\",\"lane\":\"standard\",\"role\":\"docs\",\"action\":\"act\",\"files\":[\"docs/a.md\"],\"read_first\":[],\"must_haves\":{\"truths\":[\"ok\"]},\"verify\":\"true\",\"affects_skills\":[],\"affects_specs\":[]}\n",
         )
         .unwrap();
 

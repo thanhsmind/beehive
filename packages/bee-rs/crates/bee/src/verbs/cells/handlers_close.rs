@@ -529,7 +529,7 @@ pub(crate) fn cap_cell_from_flags(root: &Path, f: &CapFlags, finish: bool) -> MR
             next.push(Value::Object(entry));
             trace.insert("judge_overrides".into(), Value::Array(next));
         }
-        if f.inline_reason.is_some() && cell_map.get("role").and_then(Value::as_str) == Some("code") {
+        if f.inline_reason.is_some() && touches_code(&Value::Object(cell_map.clone())) {
             return Err(Fail::Thrown(format!(
                 "capCell: cell \"{id}\" refused — an inline cap (--inline-reason) is not allowed on a code-touching cell: the worker that writes the code and the tester that verifies it are separate dispatched workers. FIX: dispatch the cell with `bee dispatch prepare --claim`, then cap it from that worker."
             )));

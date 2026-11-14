@@ -7679,6 +7679,45 @@ use std::time::Instant;
     }
 
     #[test]
+    fn an_inline_cap_is_refused_on_writer_and_design_cells_with_code_files() {
+        for (n, role) in ["writer", "design"].iter().enumerate() {
+            let tmp = tempfile::tempdir().unwrap();
+            let root = tmp.path();
+            let id = format!("il-{n}");
+            let mut body = cell_body_wp(&id, "standard", Some("kevin"));
+            body["role"] = json!(role);
+            body["files"] = json!(["ui/page.rs"]);
+            write_cell_fixture(root, &id, &body);
+            let refusal = thrown(cap_cell_from_flags(root, &cap_flags_wp(&id, vec!["ui/page.rs"], Some("solo")), false));
+            assert!(refusal.contains("not allowed on a code-touching cell"), "{role}: {refusal}");
+        }
+    }
+
+    #[test]
+    fn an_inline_cap_is_allowed_on_a_docs_only_cell() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let mut body = cell_body_wp("il-d", "standard", Some("kevin"));
+        body["role"] = json!("writer");
+        body["files"] = json!(["docs/a.txt", "README.md"]);
+        write_cell_fixture(root, "il-d", &body);
+        let capped = cap_cell_from_flags(root, &cap_flags_wp("il-d", vec!["README.md"], Some("solo")), false).unwrap();
+        assert_eq!(capped["status"], json!("capped"));
+    }
+
+    #[test]
+    fn the_pairing_warning_names_tester_for_code_and_checker_for_docs_only() {
+        let tmp = tempfile::tempdir().unwrap();
+        let cells = vec![
+            json!({"id": "w-1", "feature": "f", "role": "design", "tester_rule": true, "files": ["a.rs"]}),
+            json!({"id": "w-2", "feature": "f", "role": "writer", "tester_rule": true, "files": ["docs/a.md"]}),
+        ];
+        emit_tester_pairing_warnings(tmp.path(), &cells);
+        assert!(needs_tester(&cells[0]) && needs_tester(&cells[1]));
+        assert!(touches_code(&cells[0]) && !touches_code(&cells[1]));
+    }
+
+    #[test]
     fn tiny_lane_cap_is_never_checked_for_a_registered_worker() {
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();

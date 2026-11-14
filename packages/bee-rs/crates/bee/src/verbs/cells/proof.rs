@@ -70,9 +70,23 @@ impl ProofCheck {
     }
 }
 
+fn cell_files(cell: &Value) -> Vec<&str> {
+    cell.get("files").and_then(Value::as_array).map(|a| a.iter().filter_map(Value::as_str).collect()).unwrap_or_default()
+}
+
+pub(crate) fn is_docs_path(path: &str) -> bool {
+    path.ends_with(".md") || path.starts_with("docs/")
+}
+
+pub(crate) fn touches_code(cell: &Value) -> bool {
+    let files = cell_files(cell);
+    !files.is_empty() && !files.iter().all(|f| is_docs_path(f))
+}
+
 pub(crate) fn needs_tester(cell: &Value) -> bool {
     cell.get("tester_rule").and_then(Value::as_bool) == Some(true)
-        && matches!(cell.get("role").and_then(Value::as_str), Some("code" | "docs"))
+        && cell.get("role").and_then(Value::as_str) != Some("test")
+        && !cell_files(cell).is_empty()
 }
 
 pub(crate) fn has_dependent_with_role_test(cells: &[Value], id: &str, capped_only: bool) -> bool {
@@ -375,5 +389,29 @@ mod tests {
         let check = feature_proof_check(root, "demo").unwrap();
         assert!(check.blocking, "an archived cap with an empty proof must still refuse");
         assert_eq!(check.bad_ids, vec!["demo-1".to_string()]);
+    }
+}
+
+#[cfg(test)]
+mod tester_rule_tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn the_rule_keys_on_files_not_role_names() {
+        for role in ["code", "design", "writer", "docs", "generation"] {
+            let cell = json!({"role": role, "tester_rule": true, "files": ["a.rs"]});
+            assert!(needs_tester(&cell), "{role}");
+        }
+        assert!(!needs_tester(&json!({"role": "test", "tester_rule": true, "files": ["a.rs"]})));
+        assert!(!needs_tester(&json!({"role": "code", "tester_rule": true, "files": []})));
+        assert!(!needs_tester(&json!({"role": "code", "files": ["a.rs"]})));
+    }
+
+    #[test]
+    fn docs_only_files_are_not_code_touching() {
+        assert!(touches_code(&json!({"files": ["docs/a.txt", "b.rs"]})));
+        assert!(!touches_code(&json!({"files": ["docs/a.txt", "README.md"]})));
+        assert!(!touches_code(&json!({"files": []})));
     }
 }
