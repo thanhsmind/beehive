@@ -904,5 +904,12 @@
         }
       ]
     }
+  },
+  "merge_ready": {
+    "since": "2026-11-14T04:56:54.297Z",
+    "branch": "wt/pstack-rust-checks",
+    "worktree_id": "beehive--wt--pstack-rust-checks",
+    "uat": "pending",
+    "blocked_by": []
   }
 }

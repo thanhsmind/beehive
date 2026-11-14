@@ -862,6 +862,7 @@
     "contract:upkeep-due",
     "pstack-port",
     "formal-verification",
-    "contract:drop-ownership"
+    "contract:drop-ownership",
+    "contract:claim-clear-identity"
   ]
 }
