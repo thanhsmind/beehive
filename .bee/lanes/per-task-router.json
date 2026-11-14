@@ -11,10 +11,15 @@
     "uat": false
   },
   "summary": "Feature \"per-task-router\" started at phase \"exploring\" (lane).",
-  "next_action": "Invoke bee-swarming.",
+  "next_action": "Merged into main at 9459a0a; reload the product and test \"per-task-router\", then either approve uat (\"bee gate --name uat --approved true --lane per-task-router\") or fix it in the worktree and merge again.",
   "created_at": "2026-11-14T15:16:52.411Z",
   "run_state": "awaiting-approval",
-  "waiting_on": null,
+  "waiting_on": {
+    "kind": "gate",
+    "subject": "uat: per-task-router",
+    "asked_at": "2026-11-14T17:59:45.584Z",
+    "session": "bee-worktree-merge-sessionless"
+  },
   "route": {
     "class": "feature",
     "lane": "standard",
@@ -1433,14 +1438,5 @@
         }
       ]
     }
-  },
-  "merge_ready": {
-    "since": "2026-11-14T17:55:36.500Z",
-    "branch": "wt/per-task-router",
-    "worktree_id": "beehive--wt--per-task-router",
-    "uat": "pending",
-    "blocked_by": [
-      "dissent-debt"
-    ]
   }
 }
