@@ -11,7 +11,7 @@ bee:
   decisions: ["skillstation-aliases D1-D9 (a bee skillstation verb group checks the hub skills bee relies on and writes a small alias skill so /<id> works; CONTEXT.md)", "skillstation-onboard-aliases D1-D7 (install and onboard write the aliases by default; the hub changes only behind --skillstation; CONTEXT.md)"]
   sources: ["skillstation-aliases cell ssa-1 (2026-11-14; the verb group)", "skillstation-aliases cell ssa-2 (2026-11-14; this concept and the README section)", "skillstation-onboard-aliases cells sooa-1 and sooa-2 (2026-11-14; onboard and install write the aliases)"]
   authoritative_for: "onboarding: the bee skillstation verb group"
-  anchors: [packages/bee-rs/crates/bee/src/verbs/skillstation_group.rs, packages/bee-rs/crates/bee/src/principles.rs, packages/bee-rs/crates/bee/src/onboard/agents.rs, packages/bee-rs/crates/bee/src/onboard/apply.rs, packages/bee-rs/crates/bee/src/onboard/plan.rs, scripts/install.sh]
+  anchors: [packages/bee-rs/crates/bee/src/verbs/skillstation_group.rs, packages/bee-rs/crates/bee/src/principles.rs, packages/bee-rs/crates/bee/src/onboard/agents.rs, packages/bee-rs/crates/bee/src/onboard/apply.rs, packages/bee-rs/crates/bee/src/onboard/plan.rs, packages/bee-rs/crates/bee/src/onboard/skills.rs, scripts/install.sh]
   verified_at: 2026-11-14
   verified_commit: efc1408fed3c7be37d646ce975dedf8b0e84390e
 ---
@@ -80,6 +80,17 @@ cannot change their result (skillstation-onboard-aliases D6).
   principle. Any other value or absence leaves both byte-identical. Plan and
   apply render agent files through the same function, so a hub-mode re-plan
   carries no `sync_agent_file` item (skillstation-principles D1, D4, D5).
+- In hub mode with the Claude runtime in scope, onboard reads every
+  `bee-principle-*` directory of the engine skills source on the hub. Only when
+  all are active does the repo-claude target (`.claude/skills`) drop them from
+  its source list, so the ordinary deletion domain removes the local copies;
+  the codex, opencode, plugin and legacy global targets keep theirs. A principle
+  that is missing or not active, or a hub read that skips, keeps every local
+  copy and adds one `skipped_skills` row with target `skillstation-principles`.
+  With `--skillstation`, each principle is published from the engine source
+  rendered for claude, never from `.claude/skills`, because that folder is gone
+  by the second onboard. The first hub-mode onboard therefore publishes and keeps
+  the local copies; the next one removes them (skillstation-principles D2, D3).
 
 ## Edge Cases Settled
 
@@ -108,6 +119,9 @@ cannot change their result (skillstation-onboard-aliases D6).
   `skillstation_alias` arm.
 - `packages/bee-rs/crates/bee/src/onboard/plan.rs` — find the planning of the
   alias items by searching for `skillstation_items`.
+- `packages/bee-rs/crates/bee/src/onboard/skills.rs` — `without_principles` on
+  `SkillSources` is the one filter; find where the repo-claude target picks it by
+  searching for `claude_sources` in `compute_skill_sync`.
 - `scripts/install.sh` — the `--skillstation` flag is forwarded to onboard
   through `ONBOARD_FLAGS`.
 - The hub CLI shape is not frozen by bee; list the current flags with

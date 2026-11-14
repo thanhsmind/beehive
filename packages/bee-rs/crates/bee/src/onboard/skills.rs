@@ -71,7 +71,10 @@ pub struct SkillSources {
     pub skills_root: PathBuf,
     pub design_root: PathBuf,
     pub design_packs: Vec<String>,
+    pub without_principles: bool,
 }
+
+pub const PRINCIPLE_PREFIX: &str = "bee-principle-";
 
 impl SkillSources {
     fn picks(&self, name: &str) -> bool {
@@ -85,6 +88,7 @@ impl SkillSources {
     fn entries(&self) -> Vec<(&Path, Dirent)> {
         let skills = list_bee_skill_entries(&self.skills_root)
             .into_iter()
+            .filter(|e| !(self.without_principles && e.name.starts_with(PRINCIPLE_PREFIX)))
             .map(|e| (self.skills_root.as_path(), e));
         let design = list_bee_skill_entries(&self.design_root)
             .into_iter()
@@ -677,13 +681,16 @@ pub fn compute_skill_sync(
     repo_root: &Path,
     global_skills: bool,
     design_packs: &[String],
+    principles_on_hub: bool,
 ) -> SkillSync {
     let source_root = engine.skills_root.clone();
     let sources = SkillSources {
         skills_root: source_root.clone(),
         design_root: engine.design_root.clone(),
         design_packs: design_packs.to_vec(),
+        without_principles: false,
     };
+    let claude_sources = SkillSources { without_principles: principles_on_hub, ..sources.clone() };
     let target_specs = skill_sync_targets(repo_root, global_skills);
 
     let block_all = |reason: String, status: &str| -> SkillSync {
@@ -765,7 +772,7 @@ pub fn compute_skill_sync(
     for (kind, target_root) in &target_specs {
         targets.push(compute_skill_sync_target(TargetInput {
             real_repo: &real_repo,
-            sources: &sources,
+            sources: if kind.as_str() == "repo-claude" { &claude_sources } else { &sources },
             real_source: &real_source,
             source_version: &source_version,
             host_version: &host_version,
@@ -1044,6 +1051,7 @@ mod tests {
             skills_root: src,
             design_root: design,
             design_packs: packs.iter().map(|p| p.to_string()).collect(),
+            without_principles: false,
         }
     }
 
@@ -1504,6 +1512,7 @@ mod tests {
             skills_root: source_root.clone(),
             design_root: root.join("packages").join("bee").join("design"),
             design_packs: packs,
+            without_principles: false,
         };
         let drift = compute_skill_items(&sources, &target_root, "opencode");
         assert!(

@@ -345,16 +345,26 @@ fn apply_publish_skillstation(
     repo_root: &Path,
     skill: &str,
     item_path: &str,
+    engine_source: Option<&Path>,
 ) -> Result<Option<String>, String> {
-    let source_dir = join_rel(repo_root, item_path);
-    if !lstat_if_exists(&source_dir).is_some_and(|s| !s.is_symlink && s.is_dir) {
-        return Err("rendered skill folder is absent - run the skill sync first".to_string());
-    }
     let stage = repo_root.join(SKILLSTATION_PUBLISH_STAGE);
     let staged = stage.join(skill);
     let _ = std::fs::remove_dir_all(&staged);
-    copy_tree(&source_dir, &staged)
-        .map_err(|e| format!("could not stage the rendered skill for the hub - {e}"))?;
+    match engine_source {
+        Some(source_root) => {
+            if let Some(reason) = apply_sync_skill(source_root, &stage, skill, "claude") {
+                return Err(format!("could not stage the engine skill for the hub - {reason}"));
+            }
+        }
+        None => {
+            let source_dir = join_rel(repo_root, item_path);
+            if !lstat_if_exists(&source_dir).is_some_and(|s| !s.is_symlink && s.is_dir) {
+                return Err("rendered skill folder is absent - run the skill sync first".to_string());
+            }
+            copy_tree(&source_dir, &staged)
+                .map_err(|e| format!("could not stage the rendered skill for the hub - {e}"))?;
+        }
+    }
     let run = |args: &[&str]| run_skillstation(&stage, args);
 
     let committed = run(&["skill", "commit", &staged.to_string_lossy(), "--yes", "--json"])
@@ -932,7 +942,8 @@ pub fn apply_computed_plan(
             }
             "publish_skillstation" => {
                 let skill = item["skill"].as_str().unwrap_or("");
-                match apply_publish_skillstation(repo_root, skill, rel) {
+                let engine_source = item["source"].as_str().map(Path::new);
+                match apply_publish_skillstation(repo_root, skill, rel, engine_source) {
                     Err(reason) => {
                         skipped_skills.push(json!({
                             "skill": skill, "target": "skillstation", "reason": reason
