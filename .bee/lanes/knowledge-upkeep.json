@@ -11,9 +11,9 @@
     "uat": false
   },
   "summary": "Feature \"knowledge-upkeep\" started at phase \"exploring\" (lane).",
-  "next_action": "Continue bee-exploring for \"knowledge-upkeep\" (lane).",
+  "next_action": "Merged into main at 5a8821a; capture what settled, then bee close --feature knowledge-upkeep.",
   "created_at": "2026-11-14T00:22:19.523Z",
-  "run_state": "awaiting-approval",
+  "run_state": null,
   "waiting_on": null,
   "route": {
     "class": "docs",
@@ -23,12 +23,5 @@
     "rationale": null,
     "updated_at": "2026-11-14T00:22:15.332Z",
     "feature": "knowledge-upkeep"
-  },
-  "merge_ready": {
-    "since": "2026-11-14T00:25:28.657Z",
-    "branch": "wt/knowledge-upkeep",
-    "worktree_id": "beehive--wt--knowledge-upkeep",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
