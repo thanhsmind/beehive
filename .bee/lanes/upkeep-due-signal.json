@@ -11,10 +11,15 @@
     "uat": false
   },
   "summary": "Feature \"upkeep-due-signal\" started at phase \"exploring\" (lane).",
-  "next_action": "Continue bee-exploring for \"upkeep-due-signal\" (lane).",
+  "next_action": "Merged into main at e692b65; reload the product and test \"upkeep-due-signal\", then either approve uat (\"bee gate --name uat --approved true --lane upkeep-due-signal\") or fix it in the worktree and merge again.",
   "created_at": "2026-11-14T01:34:19.637Z",
   "run_state": "awaiting-approval",
-  "waiting_on": null,
+  "waiting_on": {
+    "kind": "gate",
+    "subject": "uat: upkeep-due-signal",
+    "asked_at": "2026-11-14T01:50:29.920Z",
+    "session": "bee-worktree-merge-sessionless"
+  },
   "route": {
     "class": "feature",
     "lane": "standard",
@@ -501,12 +506,5 @@
         }
       ]
     }
-  },
-  "merge_ready": {
-    "since": "2026-11-14T01:48:56.504Z",
-    "branch": "wt/upkeep-due-signal",
-    "worktree_id": "beehive--wt--upkeep-due-signal",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
