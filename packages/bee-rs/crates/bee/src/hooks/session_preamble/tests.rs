@@ -202,6 +202,85 @@ use crate::version::BEE_VERSION;
         assert!(render(tmp.path()).contains("Principles"));
     }
 
+    const UNOWNED_ROUTE_HINT: &str = "- Route: not bound to this session — classify the task, then run `bee orient --class <c>` for its playbook and principles";
+    const FEATURE_PRINCIPLES: &str =
+        "- Principles (class=feature) — name each one you apply and the decision it changed:";
+
+    fn routed_record(feature: &str, class: &str) -> String {
+        format!(
+            r#"{{"feature":"{feature}","phase":"swarming","mode":"standard","route":{{"class":"{class}","lane":"standard","flags":[],"product_files":1}}}}"#
+        )
+    }
+
+    fn repo_with_stale_default_route() -> tempfile::TempDir {
+        let tmp = minimal_repo();
+        write(tmp.path(), crate::principles::PRINCIPLE_INDEX, crate::principles::TEST_INDEX);
+        write(tmp.path(), ".bee/state.json", &routed_record("stale", "docs"));
+        tmp
+    }
+
+    #[test]
+    fn a_session_bound_through_its_record_shows_its_own_lane_route_and_principles() {
+        let tmp = repo_with_stale_default_route();
+        let root = tmp.path();
+        write(root, ".bee/sessions/s1.json", r#"{"id":"s1","lane":"f1"}"#);
+        write(root, ".bee/lanes/f1.json", &routed_record("f1", "feature"));
+        write(root, ".bee/lanes/f2.json", &routed_record("f2", "docs"));
+        let text = build_session_preamble(root, Some("s1"), None);
+        assert!(text.contains("- Route: class=feature | lane=standard | flags=0 [] | files=1"), "{text}");
+        assert!(text.contains(FEATURE_PRINCIPLES), "{text}");
+        assert!(!text.contains("class=docs"), "{text}");
+        assert!(!text.contains(UNOWNED_ROUTE_HINT), "{text}");
+    }
+
+    #[test]
+    fn a_session_bound_only_through_session_binding_shows_its_lane_route_not_the_default() {
+        let tmp = repo_with_stale_default_route();
+        let root = tmp.path();
+        let sid = fixture_session_id(root);
+        write(
+            root,
+            &format!(".bee/sessions/{sid}.json"),
+            &format!(
+                r#"{{"id":"{sid}","lane":"f-bound","last_heartbeat":"{}"}}"#,
+                crate::verbs::reservations::now_iso()
+            ),
+        );
+        write(root, ".bee/lanes/f-bound.json", &routed_record("f-bound", "feature"));
+        let text = build_session_preamble(root, None, None);
+        assert!(text.contains("Feature: stale"), "{text}");
+        assert!(text.contains("- Route: class=feature | lane=standard | flags=0 [] | files=1"), "{text}");
+        assert!(text.contains(FEATURE_PRINCIPLES), "{text}");
+        assert!(!text.contains("class=docs"), "{text}");
+        assert!(!text.contains(UNOWNED_ROUTE_HINT), "{text}");
+    }
+
+    #[test]
+    fn a_lane_less_repo_keeps_the_default_route_and_principles_without_the_hint() {
+        let tmp = minimal_repo();
+        let root = tmp.path();
+        write(root, crate::principles::PRINCIPLE_INDEX, crate::principles::TEST_INDEX);
+        write(root, ".bee/state.json", &routed_record("solo", "feature"));
+        let text = render(root);
+        assert!(text.contains("- Route: class=feature | lane=standard | flags=0 [] | files=1"), "{text}");
+        assert!(text.contains(FEATURE_PRINCIPLES), "{text}");
+        assert!(!text.contains(UNOWNED_ROUTE_HINT), "{text}");
+    }
+
+    #[test]
+    fn an_unbound_session_in_a_laned_repo_gets_the_hint_and_no_principles() {
+        let tmp = minimal_repo();
+        let root = tmp.path();
+        write(root, crate::principles::PRINCIPLE_INDEX, crate::principles::TEST_INDEX);
+        write(root, ".bee/state.json", &routed_record("stale", "feature"));
+        write(root, ".bee/lanes/f2.json", &routed_record("f2", "feature"));
+        let text = render(root);
+        assert_eq!(text.matches(UNOWNED_ROUTE_HINT).count(), 1, "{text}");
+        assert_eq!(text.matches("- Route:").count(), 1, "{text}");
+        assert!(!text.contains("class=feature"), "{text}");
+        assert!(!text.contains("Principles"), "{text}");
+    }
+
     #[test]
     fn the_standard_commands_block_is_omitted_with_no_recorded_commands() {
         let tmp = minimal_repo();
