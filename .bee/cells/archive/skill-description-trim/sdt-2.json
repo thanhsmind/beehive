@@ -1,0 +1,194 @@
+{
+  "id": "sdt-2",
+  "feature": "skill-description-trim",
+  "lane": "small",
+  "role": "docs",
+  "title": "Trim descriptions of bee-capturing through bee-planning",
+  "files": [
+    "skills/bee-capturing/SKILL.md",
+    "skills/bee-deploying/SKILL.md",
+    "skills/bee-evolving/SKILL.md",
+    "skills/bee-grooming/SKILL.md",
+    "skills/bee-herding/SKILL.md",
+    "skills/bee-herdr/SKILL.md",
+    "skills/bee-hive/SKILL.md",
+    "skills/bee-how/SKILL.md",
+    "skills/bee-knowledge-setup/SKILL.md",
+    "skills/bee-knowledge-upkeep/SKILL.md",
+    "skills/bee-planning/SKILL.md"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/tests/fixtures/skill-triggers.json",
+    "skills/bee-writing-skills/SKILL.md"
+  ],
+  "decisions": [
+    "ac64bd4f-5309-447e-8e04-2d0cc0725254"
+  ],
+  "action": "Rewrite only the front-matter description: of each listed skill to at most 300 characters. Form: one purpose clause, then 'Use when' with the trigger words that the fixture briefs expecting this skill rely on (read every brief whose expect or near names the skill), then a short 'Not for X (skill-y)' only where a near case needs it. Never summarize the workflow steps. Keep the user's exact trigger words (any language) that fixture briefs or the old text list, e.g. deploy/release/ship for bee-deploying. bee-capturing keeps the SELF-TRIGGERING idea: invoke unprompted the moment a rule or value settles. bee-herding keeps its role names (bootstrap, dispatch, merge, route). Do not edit anything below the front matter. Do not run any regen; the orchestrator runs bee dev regen once at wave close.",
+  "must_haves": [
+    "each listed description <= 300 chars",
+    "no workflow summary",
+    "bee-capturing self-trigger kept",
+    "body untouched"
+  ],
+  "acceptance": "Each listed skill is under budget and still names the triggers its fixture briefs use.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test skill_triggers -- --nocapture (the budget fence lists none of this cell's skills)",
+  "affects_skills": [
+    "skills/bee-capturing/SKILL.md",
+    "skills/bee-deploying/SKILL.md",
+    "skills/bee-evolving/SKILL.md",
+    "skills/bee-grooming/SKILL.md",
+    "skills/bee-herding/SKILL.md",
+    "skills/bee-herdr/SKILL.md",
+    "skills/bee-hive/SKILL.md",
+    "skills/bee-how/SKILL.md",
+    "skills/bee-knowledge-setup/SKILL.md",
+    "skills/bee-knowledge-upkeep/SKILL.md",
+    "skills/bee-planning/SKILL.md"
+  ],
+  "affects_specs": [],
+  "deps": [
+    "sdt-1"
+  ],
+  "regen_obligation_ack": "wave-barrier",
+  "status": "capped",
+  "trace": {
+    "worker": "sdt-2-worker",
+    "outcome": "Trimmed 11 skill descriptions to <=300 chars keeping fixture triggers; skill_triggers passes; full suite fails only 2 projection-staleness tests awaiting wave-close regen. Commit d73a6dee9262125b384f260ec9c813d959a3a9fd",
+    "files_changed": [
+      "skills/bee-capturing/SKILL.md",
+      "skills/bee-deploying/SKILL.md",
+      "skills/bee-evolving/SKILL.md",
+      "skills/bee-grooming/SKILL.md",
+      "skills/bee-herding/SKILL.md",
+      "skills/bee-herdr/SKILL.md",
+      "skills/bee-hive/SKILL.md",
+      "skills/bee-how/SKILL.md",
+      "skills/bee-knowledge-setup/SKILL.md",
+      "skills/bee-knowledge-upkeep/SKILL.md",
+      "skills/bee-planning/SKILL.md"
+    ],
+    "deviations": [
+      "sync-ack: only front-matter descriptions changed, no skill body or behavior; the trigger-cases concept gains the budget rule at capture"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-14T13:58:08.554Z",
+    "behavior_change": false,
+    "verification_evidence": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test skill_triggers — green:static — description budget and fixture fences cover these skills; full suite 5132 passed, 2 failed (skill-tree projection staleness, regen reserved for wave close)",
+    "verify_output": "green:static",
+    "verify_passed": true,
+    "claim_session": "d54f71c8-5bcf-4d9a-914b-e1871dc3d789",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test skill_triggers -- --nocapture (the budget fence lists none of this cell's skills)",
+    "claimed_at": "2026-11-14T13:53:09.619Z",
+    "knowledge_delta": [],
+    "sync_ack": "only front-matter descriptions changed, no skill body or behavior; the trigger-cases concept gains the budget rule at capture",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Trimmed 11 skill descriptions to <=300 chars keeping fixture triggers; skill_triggers passes; full suite fails only 2 projection-staleness tests awaiting wave-close regen. Commit d73a6dee9262125b384f260ec9c813d959a3a9fd",
+      "commit": "d73a6dee9262125b384f260ec9c813d959a3a9fd",
+      "files": [
+        "skills/bee-capturing/SKILL.md",
+        "skills/bee-deploying/SKILL.md",
+        "skills/bee-evolving/SKILL.md",
+        "skills/bee-grooming/SKILL.md",
+        "skills/bee-herding/SKILL.md",
+        "skills/bee-herdr/SKILL.md",
+        "skills/bee-hive/SKILL.md",
+        "skills/bee-how/SKILL.md",
+        "skills/bee-knowledge-setup/SKILL.md",
+        "skills/bee-knowledge-upkeep/SKILL.md",
+        "skills/bee-planning/SKILL.md"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test skill_triggers -- --nocapture (the budget fence lists none of this cell's skills) — green:static — cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test skill_triggers — green:static — description budget and fixture fences cover these skills; full suite 5132 passed, 2 failed (skill-tree projection staleness, regen reserved for wave close)",
+      "deviations": [],
+      "patch_id": "5c3a257cba8f20d3e617dab83f9259c44f651106"
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "each listed description <= 300 chars",
+            "artifact": "skills/bee-capturing/SKILL.md"
+          },
+          {
+            "requirement": "no workflow summary",
+            "artifact": "skills/bee-capturing/SKILL.md"
+          },
+          {
+            "requirement": "bee-capturing self-trigger kept",
+            "artifact": "skills/bee-capturing/SKILL.md"
+          },
+          {
+            "requirement": "body untouched",
+            "artifact": "skills/bee-capturing/SKILL.md"
+          },
+          {
+            "requirement": "skills/bee-capturing/SKILL.md",
+            "artifact": "skills/bee-capturing/SKILL.md"
+          },
+          {
+            "requirement": "skills/bee-deploying/SKILL.md",
+            "artifact": "skills/bee-deploying/SKILL.md"
+          },
+          {
+            "requirement": "skills/bee-evolving/SKILL.md",
+            "artifact": "skills/bee-evolving/SKILL.md"
+          },
+          {
+            "requirement": "skills/bee-grooming/SKILL.md",
+            "artifact": "skills/bee-grooming/SKILL.md"
+          },
+          {
+            "requirement": "skills/bee-herding/SKILL.md",
+            "artifact": "skills/bee-herding/SKILL.md"
+          },
+          {
+            "requirement": "skills/bee-herdr/SKILL.md",
+            "artifact": "skills/bee-herdr/SKILL.md"
+          },
+          {
+            "requirement": "skills/bee-hive/SKILL.md",
+            "artifact": "skills/bee-hive/SKILL.md"
+          },
+          {
+            "requirement": "skills/bee-how/SKILL.md",
+            "artifact": "skills/bee-how/SKILL.md"
+          },
+          {
+            "requirement": "skills/bee-knowledge-setup/SKILL.md",
+            "artifact": "skills/bee-knowledge-setup/SKILL.md"
+          },
+          {
+            "requirement": "skills/bee-knowledge-upkeep/SKILL.md",
+            "artifact": "skills/bee-knowledge-upkeep/SKILL.md"
+          },
+          {
+            "requirement": "skills/bee-planning/SKILL.md",
+            "artifact": "skills/bee-planning/SKILL.md"
+          }
+        ],
+        "recorded_at": "2026-11-14T13:58:08.729Z",
+        "recorded_by": "d54f71c8-5bcf-4d9a-914b-e1871dc3d789",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": {
+    "new": 44579,
+    "cached": 355973,
+    "total": 400552,
+    "models": {
+      "claude-sonnet-5-5": {
+        "new": 44579,
+        "cached": 355973,
+        "total": 400552
+      }
+    },
+    "jobs": [
+      "job-1794664395472-1550646-1"
+    ]
+  }
+}

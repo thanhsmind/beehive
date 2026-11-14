@@ -1,0 +1,202 @@
+{
+  "id": "sdt-3",
+  "feature": "skill-description-trim",
+  "lane": "small",
+  "role": "docs",
+  "title": "Trim descriptions of bee-researching through bee-writing-skills",
+  "files": [
+    "skills/bee-researching/SKILL.md",
+    "skills/bee-reviewing/SKILL.md",
+    "skills/bee-shaping/SKILL.md",
+    "skills/bee-swarming/SKILL.md",
+    "skills/bee-teach/SKILL.md",
+    "skills/bee-technical-writing/SKILL.md",
+    "skills/bee-unslop/SKILL.md",
+    "skills/bee-verify-upkeep/SKILL.md",
+    "skills/bee-verifying/SKILL.md",
+    "skills/bee-wayfinding/SKILL.md",
+    "skills/bee-why/SKILL.md",
+    "skills/bee-writing-skills/SKILL.md"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/tests/fixtures/skill-triggers.json",
+    "skills/bee-writing-skills/SKILL.md"
+  ],
+  "decisions": [
+    "ac64bd4f-5309-447e-8e04-2d0cc0725254"
+  ],
+  "action": "Rewrite only the front-matter description: of each listed skill to at most 300 characters. Form: one purpose clause, then 'Use when' with the trigger words that the fixture briefs expecting this skill rely on (read every brief whose expect or near names the skill), then a short 'Not for X (skill-y)' only where a near case needs it. Never summarize the workflow steps. Keep the user's exact trigger words in any language (bee-researching keeps xia/distill/port from; bee-wayfinding keeps brainstorm/explore this idea/wayfinding). bee-reviewing keeps: only on an explicit user review request, never automatic, and merge/ship/release alone is not a trigger. In bee-writing-skills also change the checklist row that says the description is <=1024 chars to say <=300 chars, enforced by the budget fence in tests/skill_triggers.rs. Do not run any regen; the orchestrator runs bee dev regen once at wave close.",
+  "must_haves": [
+    "each listed description <= 300 chars",
+    "no workflow summary",
+    "bee-reviewing never-automatic boundary kept",
+    "writing-skills checklist row names 300 and the fence"
+  ],
+  "acceptance": "Each listed skill is under budget and still names the triggers its fixture briefs use.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test skill_triggers -- --nocapture (the budget fence lists none of this cell's skills)",
+  "affects_skills": [
+    "skills/bee-researching/SKILL.md",
+    "skills/bee-reviewing/SKILL.md",
+    "skills/bee-shaping/SKILL.md",
+    "skills/bee-swarming/SKILL.md",
+    "skills/bee-teach/SKILL.md",
+    "skills/bee-technical-writing/SKILL.md",
+    "skills/bee-unslop/SKILL.md",
+    "skills/bee-verify-upkeep/SKILL.md",
+    "skills/bee-verifying/SKILL.md",
+    "skills/bee-wayfinding/SKILL.md",
+    "skills/bee-why/SKILL.md",
+    "skills/bee-writing-skills/SKILL.md"
+  ],
+  "affects_specs": [],
+  "deps": [
+    "sdt-1"
+  ],
+  "regen_obligation_ack": "wave-barrier",
+  "status": "capped",
+  "trace": {
+    "worker": "sdt-3-worker",
+    "outcome": "Trimmed 12 skill descriptions to <=300 chars and updated the writing-skills checklist row to 300 + fence; commit b32b4260beb03eb2c62435d98f55828d3c6db733",
+    "files_changed": [
+      "skills/bee-researching/SKILL.md",
+      "skills/bee-reviewing/SKILL.md",
+      "skills/bee-shaping/SKILL.md",
+      "skills/bee-swarming/SKILL.md",
+      "skills/bee-teach/SKILL.md",
+      "skills/bee-technical-writing/SKILL.md",
+      "skills/bee-unslop/SKILL.md",
+      "skills/bee-verify-upkeep/SKILL.md",
+      "skills/bee-verifying/SKILL.md",
+      "skills/bee-wayfinding/SKILL.md",
+      "skills/bee-why/SKILL.md",
+      "skills/bee-writing-skills/SKILL.md"
+    ],
+    "deviations": [
+      "sync-ack: only front-matter descriptions changed, no skill body or behavior; these concepts anchor skill bodies; the trigger-cases concept gains the budget rule at capture"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-14T13:54:22.226Z",
+    "behavior_change": false,
+    "verification_evidence": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test skill_triggers -- --nocapture — green:static — budget fence lists none of this cell's skills (it still fails on 9 other cells' skills); fixture test passes",
+    "verify_output": "green:static",
+    "verify_passed": true,
+    "claim_session": "d54f71c8-5bcf-4d9a-914b-e1871dc3d789",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test skill_triggers -- --nocapture (the budget fence lists none of this cell's skills)",
+    "claimed_at": "2026-11-14T13:53:10.512Z",
+    "knowledge_delta": [],
+    "sync_ack": "only front-matter descriptions changed, no skill body or behavior; these concepts anchor skill bodies; the trigger-cases concept gains the budget rule at capture",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Trimmed 12 skill descriptions to <=300 chars and updated the writing-skills checklist row to 300 + fence; commit b32b4260beb03eb2c62435d98f55828d3c6db733",
+      "commit": "b32b4260beb03eb2c62435d98f55828d3c6db733",
+      "files": [
+        "skills/bee-researching/SKILL.md",
+        "skills/bee-reviewing/SKILL.md",
+        "skills/bee-shaping/SKILL.md",
+        "skills/bee-swarming/SKILL.md",
+        "skills/bee-teach/SKILL.md",
+        "skills/bee-technical-writing/SKILL.md",
+        "skills/bee-unslop/SKILL.md",
+        "skills/bee-verify-upkeep/SKILL.md",
+        "skills/bee-verifying/SKILL.md",
+        "skills/bee-wayfinding/SKILL.md",
+        "skills/bee-why/SKILL.md",
+        "skills/bee-writing-skills/SKILL.md"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test skill_triggers -- --nocapture (the budget fence lists none of this cell's skills) — green:static — cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test skill_triggers -- --nocapture — green:static — budget fence lists none of this cell's skills (it still fails on 9 other cells' skills); fixture test passes",
+      "deviations": [],
+      "patch_id": "2f890c966a35d692c29988305049fad233ce9e14"
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "each listed description <= 300 chars",
+            "artifact": "skills/bee-reviewing/SKILL.md"
+          },
+          {
+            "requirement": "no workflow summary",
+            "artifact": "skills/bee-reviewing/SKILL.md"
+          },
+          {
+            "requirement": "bee-reviewing never-automatic boundary kept",
+            "artifact": "skills/bee-reviewing/SKILL.md"
+          },
+          {
+            "requirement": "writing-skills checklist row names 300 and the fence",
+            "artifact": "skills/bee-writing-skills/SKILL.md"
+          },
+          {
+            "requirement": "skills/bee-researching/SKILL.md",
+            "artifact": "skills/bee-researching/SKILL.md"
+          },
+          {
+            "requirement": "skills/bee-reviewing/SKILL.md",
+            "artifact": "skills/bee-reviewing/SKILL.md"
+          },
+          {
+            "requirement": "skills/bee-shaping/SKILL.md",
+            "artifact": "skills/bee-shaping/SKILL.md"
+          },
+          {
+            "requirement": "skills/bee-swarming/SKILL.md",
+            "artifact": "skills/bee-swarming/SKILL.md"
+          },
+          {
+            "requirement": "skills/bee-teach/SKILL.md",
+            "artifact": "skills/bee-teach/SKILL.md"
+          },
+          {
+            "requirement": "skills/bee-technical-writing/SKILL.md",
+            "artifact": "skills/bee-technical-writing/SKILL.md"
+          },
+          {
+            "requirement": "skills/bee-unslop/SKILL.md",
+            "artifact": "skills/bee-unslop/SKILL.md"
+          },
+          {
+            "requirement": "skills/bee-verify-upkeep/SKILL.md",
+            "artifact": "skills/bee-verify-upkeep/SKILL.md"
+          },
+          {
+            "requirement": "skills/bee-verifying/SKILL.md",
+            "artifact": "skills/bee-verifying/SKILL.md"
+          },
+          {
+            "requirement": "skills/bee-wayfinding/SKILL.md",
+            "artifact": "skills/bee-wayfinding/SKILL.md"
+          },
+          {
+            "requirement": "skills/bee-why/SKILL.md",
+            "artifact": "skills/bee-why/SKILL.md"
+          },
+          {
+            "requirement": "skills/bee-writing-skills/SKILL.md",
+            "artifact": "skills/bee-writing-skills/SKILL.md"
+          }
+        ],
+        "recorded_at": "2026-11-14T13:54:22.340Z",
+        "recorded_by": "d54f71c8-5bcf-4d9a-914b-e1871dc3d789",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": {
+    "new": 35923,
+    "cached": 252573,
+    "total": 288496,
+    "models": {
+      "claude-sonnet-5-5": {
+        "new": 35923,
+        "cached": 252573,
+        "total": 288496
+      }
+    },
+    "jobs": [
+      "job-1794664397180-1551042-1"
+    ]
+  }
+}
