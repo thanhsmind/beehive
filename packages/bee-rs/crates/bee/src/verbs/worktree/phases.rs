@@ -109,33 +109,15 @@ fn stale_proof_cells(
     proof
         .commits
         .iter()
-        .filter(|(_, commit)| {
-            run_git(main_root, &["merge-base", "--is-ancestor", &base, commit]).status == Some(1)
+        .filter(|(id, commit)| {
+            let status =
+                run_git(main_root, &["merge-base", "--is-ancestor", &base, commit]).status;
+            status == Some(1)
+                || (status.is_some_and(|code| code != 0)
+                    && proof.patch_ids.iter().any(|(cell, _)| cell == id))
         })
         .map(|(id, _)| id.clone())
         .collect()
-}
-
-fn commit_patch_id(main_root: &Path, commit: &str) -> Option<String> {
-    let shown = run_git(main_root, &["show", commit]);
-    if shown.status != Some(0) {
-        return None;
-    }
-    let diff = shown.stdout.unwrap_or_default();
-    if diff.is_empty() {
-        return None;
-    }
-    let filtered = run_git_stdin(main_root, &["patch-id", "--stable"], diff.as_bytes());
-    if filtered.status != Some(0) {
-        return None;
-    }
-    let out = filtered.stdout.unwrap_or_default();
-    let id = out.split_whitespace().next().unwrap_or("").to_string();
-    if id.is_empty() {
-        None
-    } else {
-        Some(id)
-    }
 }
 
 type PatchIdPair = (String, String);
@@ -203,15 +185,23 @@ fn split_carried_proof(
             .iter()
             .find(|(cell, _)| cell == &id)
             .map(|(_, commit)| commit.clone());
-        let matched = commit
-            .as_deref()
-            .and_then(|commit| commit_patch_id(main_root, commit).map(|pid| (pid, commit)))
-            .map(|(pid, commit)| {
-                branch_ids
-                    .iter()
-                    .any(|(branch_pid, branch_commit)| branch_pid == &pid && branch_commit != commit)
-            })
-            .unwrap_or(false);
+        let stored = proof
+            .patch_ids
+            .iter()
+            .find(|(cell, _)| cell == &id)
+            .map(|(_, pid)| pid.clone());
+        let matched = match stored {
+            Some(pid) => branch_ids.iter().any(|(branch_pid, _)| branch_pid == &pid),
+            None => commit
+                .as_deref()
+                .and_then(|commit| commit_patch_id(main_root, commit).map(|pid| (pid, commit)))
+                .map(|(pid, commit)| {
+                    branch_ids
+                        .iter()
+                        .any(|(branch_pid, branch_commit)| branch_pid == &pid && branch_commit != commit)
+                })
+                .unwrap_or(false),
+        };
         if matched {
             carried.push(id);
         } else {

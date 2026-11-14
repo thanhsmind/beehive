@@ -45,6 +45,7 @@ pub(crate) struct ProofCheck {
     /// Store data only: whether a commit is old is a git question, and this
     /// module runs no git.
     pub(crate) commits: Vec<(String, String)>,
+    pub(crate) patch_ids: Vec<(String, String)>,
 }
 
 /// The D8 proof-check itself: every `status: "capped"` cell for `feature`
@@ -60,6 +61,7 @@ pub(crate) fn feature_proof_check(
 ) -> Result<ProofCheck, crate::verbs::drivers::Delegate> {
     let mut bad_ids: Vec<String> = Vec::new();
     let mut commits: Vec<(String, String)> = Vec::new();
+    let mut patch_ids: Vec<(String, String)> = Vec::new();
     let mut proven_count = 0usize;
     let mut legacy_count = 0usize;
     for cell in crate::verbs::drivers::list_cells_including_archive(root, feature, Some("capped"))? {
@@ -79,6 +81,9 @@ pub(crate) fn feature_proof_check(
                 .trim()
                 .to_string();
             if !id.is_empty() && !commit.is_empty() && commit != "none" {
+                if let Some(pid) = report.get("patch_id").and_then(Value::as_str).filter(|p| !p.is_empty()) {
+                    patch_ids.push((id.clone(), pid.to_string()));
+                }
                 commits.push((id, commit));
             }
             continue;
@@ -87,7 +92,7 @@ pub(crate) fn feature_proof_check(
             bad_ids.push(id);
         }
     }
-    Ok(ProofCheck { blocking: !bad_ids.is_empty(), bad_ids, proven_count, legacy_count, commits })
+    Ok(ProofCheck { blocking: !bad_ids.is_empty(), bad_ids, proven_count, legacy_count, commits, patch_ids })
 }
 
 #[cfg(test)]

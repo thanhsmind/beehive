@@ -191,6 +191,13 @@ worktree to emit exit-before-merge transition intent (c47fa930, 85d85ede, 0b4ff5
   The patch text is handed to the patch-id filter on its own thread while the door reads the
   answer, so a long branch whose patch text exceeds the pipe buffer cannot deadlock the merge
   (run-git-stdin-thread, decision `0154bcb7`, cell rgst-1); the fail-open rule above is unchanged.
+  A cap now stores the patch-id of its report commit as `trace.report.patch_id` when the commit
+  resolves (pstack-rust-checks D3, decision `77258729`, cell psrc-3), because a rewritten history
+  can garbage-collect the commit and leave nothing to hash. The door reads the stored id first:
+  found in the branch set reads carried even when the commit object is gone, absent reads stale;
+  a cell with no stored id keeps the compute-from-commit path above. A cell with a stored id is
+  flagged on any non-zero ancestry answer, not only a clean "not an ancestor", since a missing
+  object answers differently. The shared helper is `commit_patch_id` in `worktree/git.rs`.
 - **Keeping the worktree is the default outcome now; teardown is the opt-in
   (worktree-keep-on-merge D1, supersedes worktree-reclaim D1).** On a merge that stages and
   commits something, the worktree, its branch, and its registration all stay in place, and the

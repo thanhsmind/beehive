@@ -5679,6 +5679,107 @@ use std::time::Instant;
     }
 
     #[test]
+    fn a_cap_with_a_resolving_commit_stores_its_patch_id() {
+        let cap_flags = |id: &str, report: String| CapFlags {
+            id: id.to_string(),
+            outcome: None,
+            friction: None,
+            files_changed: Vec::new(),
+            deviations: Vec::new(),
+            deviation: None,
+            override_reason: String::new(),
+            mistake: None,
+            fix_at: None,
+            no_mistakes: false,
+            knowledge_used: None,
+            knowledge_wrong: None,
+            no_knowledge_used: false,
+            session_flag: None,
+            force_ownership: false,
+            commit_pending: None,
+            inline_reason: None,
+            report: Some(report),
+            sync_ack: None,
+            from_job: None,
+            proof_result: None,
+            proof_reason: None,
+        };
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        commit_history_repo(root);
+        write_bee_config(root, &json!({"commands": {"test": "none"}}));
+        write_cell_fixture(
+            root,
+            "pid-1",
+            &json!({
+                "id": "pid-1", "feature": "f", "title": "t", "action": "a",
+                "verify": "none", "lane": "tiny", "status": "claimed",
+                "deps": [], "files": [], "trace": {},
+            }),
+        );
+        let commit = crate::verbs::worktree::run_git(root, &["rev-parse", "HEAD"])
+            .stdout
+            .unwrap()
+            .trim()
+            .to_string();
+        let report = format!(
+            r#"{{"outcome":"o","commit":"{commit}","files":[],"tests":"none — green:static — fixture","deviations":[]}}"#
+        );
+        let capped = cap_cell_from_flags(root, &cap_flags("pid-1", report), false).unwrap();
+        assert_eq!(capped["status"], json!("capped"));
+        let expected = crate::verbs::worktree::commit_patch_id(root, &commit).unwrap();
+        assert_eq!(capped["trace"]["report"]["patch_id"], json!(expected));
+    }
+
+    #[test]
+    fn a_cap_with_commit_none_stores_no_patch_id() {
+        let cap_flags = |id: &str, report: String| CapFlags {
+            id: id.to_string(),
+            outcome: None,
+            friction: None,
+            files_changed: Vec::new(),
+            deviations: Vec::new(),
+            deviation: None,
+            override_reason: String::new(),
+            mistake: None,
+            fix_at: None,
+            no_mistakes: false,
+            knowledge_used: None,
+            knowledge_wrong: None,
+            no_knowledge_used: false,
+            session_flag: None,
+            force_ownership: false,
+            commit_pending: None,
+            inline_reason: None,
+            report: Some(report),
+            sync_ack: None,
+            from_job: None,
+            proof_result: None,
+            proof_reason: None,
+        };
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        commit_history_repo(root);
+        write_bee_config(root, &json!({"commands": {"test": "none"}}));
+        write_cell_fixture(
+            root,
+            "pid-1",
+            &json!({
+                "id": "pid-1", "feature": "f", "title": "t", "action": "a",
+                "verify": "none", "lane": "tiny", "status": "claimed",
+                "deps": [], "files": [], "trace": {},
+            }),
+        );
+        let commit = "none".to_string();
+        let report = format!(
+            r#"{{"outcome":"o","commit":"{commit}","files":[],"tests":"none — green:static — fixture","deviations":[]}}"#
+        );
+        let capped = cap_cell_from_flags(root, &cap_flags("pid-1", report), false).unwrap();
+        assert_eq!(capped["status"], json!("capped"));
+        assert!(capped["trace"]["report"].get("patch_id").is_none(), "{capped}");
+    }
+
+    #[test]
     fn capping_in_a_no_test_repo_and_a_declared_test_repo_both_run_no_tests_at_cap() {
         let cap_flags = |id: &str| CapFlags {
             id: id.to_string(),
