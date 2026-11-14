@@ -11,9 +11,9 @@
     "uat": false
   },
   "summary": "Feature \"claim-clear-identity\" started at phase \"exploring\" (lane).",
-  "next_action": "Continue bee-exploring for \"claim-clear-identity\" (lane).",
+  "next_action": "Merged into main at ab10cf5; capture what settled, then bee close --feature claim-clear-identity.",
   "created_at": "2026-11-14T04:52:10.652Z",
-  "run_state": "awaiting-approval",
+  "run_state": null,
   "waiting_on": null,
   "route": {
     "class": "bugfix",
@@ -23,14 +23,5 @@
     "rationale": null,
     "updated_at": "2026-11-14T04:52:06.987Z",
     "feature": "claim-clear-identity"
-  },
-  "merge_ready": {
-    "since": "2026-11-14T05:00:52.765Z",
-    "branch": "wt/claim-clear-identity",
-    "worktree_id": "beehive--wt--claim-clear-identity",
-    "uat": "pending",
-    "blocked_by": [
-      "leader-check"
-    ]
   }
 }
