@@ -4,7 +4,7 @@ description: >-
   Periodic audit that keeps a project-local `verify-app` skill and its feature map honest: parallel source readers per feature, one live session driving every feature, at most one worktree and one cell of proven corrections. Use PERIODICALLY, when a repo already carries a verification skill and its map may have drifted — after a release, after user-facing churn, when a drive recipe stops matching the app, or when the user asks to audit the verify skill. Not for creating one where none exists — that is bee-verifying.
 disable-model-invocation: true
 metadata:
-  version: '0.1'
+  version: '0.2'
   ecosystem: bee
   dependencies:
     bee-cli:
@@ -32,6 +32,13 @@ Pick one, and say which:
   corrections.
 - **blocked** — coverage could not finish or a proven fix could not ship safely.
   Say exactly what blocked it.
+
+## When a run is due
+
+`bee upkeep due --kind verify --json` says whether a run is due and exits 10 when
+it is. It gives two reasons: `never_run` (the verification skill exists and no
+run was ever recorded) and `release_since_last_run` (a release tag is newer than
+the last recorded run).
 
 ## Edit scope
 
@@ -118,6 +125,11 @@ call, not yours.
    every changed file first, re-render with `bee onboard --verify-only --apply` (no bee checkout needed) so
    the runtime copies ship in the same change, and land it with `bee worktree merge`. For
    clean or blocked: no worktree, report the outcome and the coverage honestly.
+
+8. **Record the run.** Last, on every outcome — clean, changed or blocked:
+   `bee audit log --kind verify-upkeep --feature <feature or upkeep> --note "<outcome> — <one line>"`.
+   The newest row of this kind is the run's last-run mark. Without it the run
+   stays due. Keep the dated line under Upkeep log in the feature map as well.
 
 Keep concise run notes (features covered, unreachable prerequisites, confirmed
 drift, outcome) in a scratch location; don't commit them.

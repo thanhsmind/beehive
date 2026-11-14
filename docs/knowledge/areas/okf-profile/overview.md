@@ -13,7 +13,7 @@ bee:
   owns.code: [packages/bee-rs/crates/bee/src/verbs/knowledge/*]
   owns.skills: []
   owns.tests: [packages/bee-rs/crates/bee/src/verbs/knowledge/tests.rs, packages/bee-rs/crates/bee/tests/specs_fence.rs, packages/bee-rs/crates/bee/tests/pointer_integrity.rs]
-  anchors: [scripts/, skills/bee-knowledge-setup/SKILL.md, skills/bee-knowledge-upkeep/SKILL.md]
+  anchors: [scripts/, skills/bee-knowledge-setup/SKILL.md, skills/bee-knowledge-upkeep/SKILL.md, skills/bee-verify-upkeep/SKILL.md]
   verified_at: 2026-11-10
   verified_commit: f1c771b12fbf1a9b491a54191cb1f6423e911ec3
 ---
@@ -108,6 +108,21 @@ under:
 - Migration authoring (the D20 loop: read a legacy source, split it into concepts, carry its
   frontmatter across per D33, replace it with a pointer stub per D37) is the human/agent trigger
   that populates the bundle the checker then grades. The checker itself performs no writes (D2).
+
+## Scheduled upkeep
+
+Both upkeep skills keep `disable-model-invocation: true`, so nothing starts them
+by itself; the slash command is how a run starts (upkeep-due-signal D6). The
+owner's periodic waggledance job runs `.bee/bin/bee upkeep due --json` in the
+project. Exit 0 means nothing is due. On exit 10, for each item with `due` true,
+the job dispatches that item's `invoke` text (`/bee-knowledge-upkeep` or
+`/bee-verify-upkeep`) to the project leader as the task:
+
+`waggledance dispatch --project <id> --leader --request-id <id> --task "<invoke>"`
+
+The verb is read-only (upkeep-due-signal D1, D2). A run clears its own signal by ending with a
+`knowledge-upkeep` or `verify-upkeep` audit row (D3); the reasons that make each
+kind due are D4 and D5 of the same context. bee gives the signal and owns no scheduler.
 
 ## Actors & Access
 
