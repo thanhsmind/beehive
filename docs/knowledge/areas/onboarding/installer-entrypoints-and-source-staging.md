@@ -97,6 +97,12 @@ carries a forbidden character, a reserved device name, or a trailing dot/space.
   the installer (installer-probe-quiet-1 4799236 + release 1.7.5 c46a9e4;
   supersedes the earlier "probe failure is fatal" reading, 2026-07-20).
 
+**Forward `--skillstation` to onboard.** `scripts/install.sh --skillstation` is
+passed through to `bee onboard`, so install and onboard share one switch for adding
+missing skills to the Skillstation hub. Without it install still gets the local
+`/<id>` aliases, because onboard writes those by default (skillstation-onboard-aliases
+D5). Find the current flag list with `scripts/install.sh --help`.
+
 ## Edge Cases Settled
 
 - A non-interactive install run (no usable terminal) without the explicit accept-all option fails safe: it stops with guidance naming that option, never a crash — the terminal probe performs a real open, not a permission-bit check.

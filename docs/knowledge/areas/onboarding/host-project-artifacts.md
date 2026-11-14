@@ -156,6 +156,13 @@ no item and no skip appear (locked in `docs/history/bee-deploying-skill/CONTEXT.
 D2 and D3; the staging copy is the execution-time decision recorded against
 that feature, which touches D2 and changes nothing above).
 
+With `--skillstation` the plan also gains one `skillstation_add` item per related
+hub skill the hub lacks, which adds it as a draft. Separately, with no flag at all,
+onboard plans `skillstation_alias` items that write the local `/<id>` aliases; that
+step and its skips are owned by
+[Skillstation hub skills and the /<id> alias](skillstation-hub-skills-and-aliases.md)
+(skillstation-onboard-aliases D1, D4).
+
 ## Business Rules
 
 - **R13** — The assistant-instructions import artifact is created by default on
