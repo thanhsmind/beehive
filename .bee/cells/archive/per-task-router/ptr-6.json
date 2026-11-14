@@ -1,0 +1,168 @@
+{
+  "id": "ptr-6",
+  "feature": "per-task-router",
+  "title": "Teach the leader per-task routing and the two-worker rule",
+  "lane": "standard",
+  "role": "docs",
+  "deps": [
+    "ptr-3t"
+  ],
+  "decisions": [
+    "676a73b1-60d8-4063-9def-f466bb4322a2",
+    "c5c00e89-1653-403f-8924-92d58fcaba18",
+    "95e310df-fee8-43a6-8b62-5ce0d9771afb",
+    "70c3387f-2c87-4e62-bc1b-546f8ecef03b",
+    "eb8842b0-a532-4846-9200-e42db5ade0f9",
+    "58d7b2a7-e0da-4b39-9038-58a9325fbad9",
+    "0ada9257-4397-4b11-ab9a-bcf0b857535a"
+  ],
+  "files": [
+    ".bee/verify/verify-app/SKILL.md",
+    "docs/history/codex-harness-hardening/release-manifest.json",
+    "packages/bee/LEADER.md",
+    "skills/bee-hive/references/gates-and-delegation.md",
+    "skills/bee-hive/references/go-mode.md",
+    "skills/bee-hive/references/routing-and-contracts.md",
+    "skills/bee-planning/SKILL.md",
+    "skills/bee-planning/playbooks/bugfix.md",
+    "skills/bee-planning/playbooks/content.md",
+    "skills/bee-planning/playbooks/docs.md",
+    "skills/bee-planning/playbooks/feature.md",
+    "skills/bee-planning/playbooks/perf.md",
+    "skills/bee-planning/playbooks/refactor.md",
+    "skills/bee-planning/playbooks/release.md",
+    "skills/bee-planning/playbooks/research.md",
+    "skills/bee-planning/playbooks/spike.md",
+    "skills/bee-swarming/SKILL.md"
+  ],
+  "read_first": [
+    "docs/history/per-task-router/CONTEXT.md",
+    "docs/history/per-task-router/plan.md",
+    "docs/history/per-task-router/reports/hat-wave.md",
+    "packages/bee/LEADER.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "In packages/bee/LEADER.md: add the per-task route step (classify the task, run bee orient --class <c>, seed the session todo list with that playbook's steps, a skipped step kept with skip: and its reason) and a trigger index of at most ten lines that points from a situation to the owning skill, never restating it; rewrite the agents-never-zero-execution-workers rule so every code cell has a dispatched implementer and a separate tester and tiny no longer runs inline. In bee-planning SKILL.md replace 'The writer owns tests' with tester cells per D1-D3. In bee-swarming SKILL.md state the tester contract and the red-tester path (BLOCKED, leader reopens the implementer, fresh dispatch) and the principle answer at cap. Note in routing-and-contracts.md that playbook steps seed the todo list as a projection. Update the tiny row in gates-and-delegation.md. In each playbook's Proof line, point to the cap floor table (bee cells finish --help) without copying values. Run bee dev regen.",
+  "verify": ".bee/bin/bee dev regen && .bee/bin/bee dev release-manifest --check",
+  "must_haves": {
+    "truths": [
+      "LEADER.md carries the per-task route step and the trigger index",
+      "No doctrine line still lets a code cell certify itself or run tiny inline",
+      "Each playbook points to the floor table"
+    ],
+    "prohibitions": [
+      "Never restate a skill's description in the trigger index",
+      "Never copy floor values into playbooks"
+    ]
+  },
+  "status": "capped",
+  "trace": {
+    "worker": "w-ptr-6",
+    "outcome": "Removed the remaining tiny-runs-inline doctrine lines in routing-and-contracts, go-mode and verify-app; regen run. Commit 601a09246ca3d377d57a0120516d7ef1ffc73d7e",
+    "files_changed": [
+      "skills/bee-hive/references/routing-and-contracts.md",
+      "skills/bee-hive/references/go-mode.md",
+      ".bee/verify/verify-app/SKILL.md",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [
+      "sync-ack: anchored concepts graded suspect on 2026-11-10, before this feature; ptr-7 re-grades them"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-14T17:48:46.835Z",
+    "behavior_change": false,
+    "verification_evidence": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml — green:static — Markdown-only change; bee dev regen and release-manifest --check also green; all test results 0 failed",
+    "verify_output": "green:static",
+    "verify_passed": true,
+    "claim_session": "d5666677-acb1-4a34-a356-ce378948b498",
+    "verify_command": ".bee/bin/bee dev regen && .bee/bin/bee dev release-manifest --check",
+    "claimed_at": "2026-11-14T17:45:28.975Z",
+    "verified_at": null,
+    "baseline": null,
+    "reaction": null,
+    "skipped": null,
+    "unknowns": null,
+    "found": null,
+    "stopped": null,
+    "knowledge_delta": [],
+    "sync_ack": "anchored concepts graded suspect on 2026-11-10, before this feature; ptr-7 re-grades them",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Removed the remaining tiny-runs-inline doctrine lines in routing-and-contracts, go-mode and verify-app; regen run. Commit 601a09246ca3d377d57a0120516d7ef1ffc73d7e",
+      "commit": "601a09246ca3d377d57a0120516d7ef1ffc73d7e",
+      "files": [
+        "skills/bee-hive/references/routing-and-contracts.md",
+        "skills/bee-hive/references/go-mode.md",
+        ".bee/verify/verify-app/SKILL.md",
+        "docs/history/codex-harness-hardening/release-manifest.json"
+      ],
+      "tests": ".bee/bin/bee dev regen && .bee/bin/bee dev release-manifest --check — green:static — PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml — green:static — Markdown-only change; bee dev regen and release-manifest --check also green; all test results 0 failed",
+      "deviations": [],
+      "patch_id": "1609b846a717c19fdbcfa7d98652d458653500ec"
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "gap",
+        "answers": [
+          {
+            "requirement": "LEADER.md carries the per-task route step and the trigger index",
+            "artifact": "packages/bee/LEADER.md sections Route each task and Trigger index (nine pointer lines)"
+          },
+          {
+            "requirement": "No doctrine line still lets a code cell certify itself or run tiny inline",
+            "artifact": "skills/bee-hive/references/routing-and-contracts.md:173 still says Implementation runs inline in-session for tiny; go-mode.md:7, the swarming Orchestrate paragraph and .bee/verify/verify-app/SKILL.md:233 still describe tiny inline — GAP"
+          },
+          {
+            "requirement": "Each playbook points to the floor table",
+            "artifact": "skills/bee-planning/playbooks/feature.md and the eight other playbooks updated"
+          }
+        ],
+        "recorded_at": "2026-11-14T17:45:25.816Z",
+        "recorded_by": "d5666677-acb1-4a34-a356-ce378948b498"
+      },
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "LEADER.md carries the per-task route step and the trigger index",
+            "artifact": "skills/bee-hive/references/routing-and-contracts.md now matches packages/bee/LEADER.md (Route each task, Trigger index, round 1 commit 85cc301ae)"
+          },
+          {
+            "requirement": "No doctrine line still lets a code cell certify itself or run tiny inline",
+            "artifact": "skills/bee-hive/references/routing-and-contracts.md, skills/bee-hive/references/go-mode.md and .bee/verify/verify-app/SKILL.md fixed in 601a09246; leader rg sweep finds only non-execution inline wording"
+          },
+          {
+            "requirement": "Each playbook points to the floor table",
+            "artifact": "docs/history/codex-harness-hardening/release-manifest.json regenerated over the nine playbooks updated in round 1 (85cc301ae)"
+          }
+        ],
+        "recorded_at": "2026-11-14T17:50:23.551Z",
+        "recorded_by": "d5666677-acb1-4a34-a356-ce378948b498",
+        "commit_diff": "checked"
+      }
+    ],
+    "blocked_reason": null,
+    "dropped_reason": null,
+    "reopened_at": "2026-11-14T17:45:25.816Z",
+    "reopened_reason": "LEADER.md carries the per-task route step and the trigger index: packages/bee/LEADER.md sections Route each task and Trigger index (nine pointer lines); No doctrine line still lets a code cell certify itself or run tiny inline: skills/bee-hive/references/routing-and-contracts.md:173 still says Implementation runs inline in-session for tiny; go-mode.md:7, the swarming Orchestrate paragraph and .bee/verify/verify-app/SKILL.md:233 still describe tiny inline — GAP; Each playbook points to the floor table: skills/bee-planning/playbooks/feature.md and the eight other playbooks updated"
+  },
+  "usage": {
+    "new": 134753,
+    "cached": 2464665,
+    "total": 2599418,
+    "models": {
+      "claude-sonnet-5-5": {
+        "new": 134753,
+        "cached": 2464665,
+        "total": 2599418
+      }
+    },
+    "jobs": [
+      "job-1794677808522-3724270-1",
+      "job-1794678330180-3868694-1"
+    ]
+  }
+}

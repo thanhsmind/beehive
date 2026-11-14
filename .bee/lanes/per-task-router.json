@@ -2,24 +2,19 @@
   "schema_version": "1.0",
   "feature": "per-task-router",
   "mode": null,
-  "phase": "swarming",
+  "phase": "compounding",
   "approved_gates": {
     "context": true,
     "shape": true,
     "execution": true,
     "review": false,
-    "uat": false
+    "uat": true
   },
   "summary": "Feature \"per-task-router\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at 9459a0a; reload the product and test \"per-task-router\", then either approve uat (\"bee gate --name uat --approved true --lane per-task-router\") or fix it in the worktree and merge again.",
+  "next_action": "close",
   "created_at": "2026-11-14T15:16:52.411Z",
-  "run_state": "awaiting-approval",
-  "waiting_on": {
-    "kind": "gate",
-    "subject": "uat: per-task-router",
-    "asked_at": "2026-11-14T17:59:45.584Z",
-    "session": "bee-worktree-merge-sessionless"
-  },
+  "run_state": "done",
+  "waiting_on": null,
   "route": {
     "class": "feature",
     "lane": "standard",
@@ -1438,5 +1433,17 @@
         }
       ]
     }
+  },
+  "last_scribing_run": {
+    "feature": "per-task-router",
+    "date": "2026-11-14",
+    "at": "2026-11-14T17:59:45.717Z",
+    "areas_synced": [
+      "doctrine-layer",
+      "workflow-state",
+      "verify-pipeline",
+      "rust-runtime"
+    ],
+    "next_action": "close"
   }
 }

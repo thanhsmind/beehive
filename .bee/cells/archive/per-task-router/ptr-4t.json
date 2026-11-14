@@ -1,0 +1,104 @@
+{
+  "id": "ptr-4t",
+  "feature": "per-task-router",
+  "title": "Test principle answers and proof floors",
+  "lane": "standard",
+  "role": "test",
+  "deps": [
+    "ptr-4"
+  ],
+  "decisions": [
+    "eb8842b0-a532-4846-9200-e42db5ade0f9",
+    "58d7b2a7-e0da-4b39-9038-58a9325fbad9",
+    "c5c00e89-1653-403f-8924-92d58fcaba18",
+    "2ea86071-7941-46d7-bb75-02d976c4fc47"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/per-task-router/CONTEXT.md",
+    "docs/history/per-task-router/plan.md",
+    "docs/history/per-task-router/reports/hat-wave.md",
+    "packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Independently verify ptr-4. Add tests for each floor row, the acceptance ladder, the herded path, and the holdout and older-record exemptions.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee cells",
+  "must_haves": {
+    "truths": [
+      "Each ptr-4 truth has a test"
+    ],
+    "prohibitions": [
+      "Never edit product code; only test files listed in files",
+      "On a defect return [BLOCKED] with the red output; never weaken an assertion to pass"
+    ]
+  },
+  "status": "capped",
+  "trace": {
+    "worker": "w-ptr-4t",
+    "outcome": "Added 7 tests for every ptr-4 floor row, the acceptance ladder, the no-floor case, the principle answers, the older/missing prepare records and the herded finish in both arms; no ptr-4 defect found; commit bc99aae6a194f3ad218b62bab3e3c6c1faa49290",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+    ],
+    "deviations": [
+      "sync-ack: test-only cell; anchored concepts graded suspect on 2026-11-10, before this feature; ptr-7 re-grades them"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-14T16:43:07.125Z",
+    "behavior_change": false,
+    "verification_evidence": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml — green:unit — tester for ptr-4; full suite exit 0 (bee bin 5163 passed 0 failed), cells filter 553 passed 0 failed",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "d5666677-acb1-4a34-a356-ce378948b498",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee cells",
+    "claimed_at": "2026-11-14T16:36:29.996Z",
+    "knowledge_delta": [],
+    "sync_ack": "test-only cell; anchored concepts graded suspect on 2026-11-10, before this feature; ptr-7 re-grades them",
+    "no_mistakes": true,
+    "no_knowledge_used": true,
+    "report": {
+      "outcome": "Added 7 tests for every ptr-4 floor row, the acceptance ladder, the no-floor case, the principle answers, the older/missing prepare records and the herded finish in both arms; no ptr-4 defect found; commit bc99aae6a194f3ad218b62bab3e3c6c1faa49290",
+      "commit": "bc99aae6a194f3ad218b62bab3e3c6c1faa49290",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee cells — green:unit — PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml — green:unit — tester for ptr-4; full suite exit 0 (bee bin 5163 passed 0 failed), cells filter 553 passed 0 failed",
+      "deviations": [],
+      "knowledge_used": [],
+      "patch_id": "bfd07b97016abcdd72eedd7d308e3ff05a73f10d"
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "Each ptr-4 truth has a test",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs seven new tests: every floor row, the acceptance ladder, the no-floor case, principle answers, older and missing prepare records, herded finish in both arms; cells filter 553 passed"
+          }
+        ],
+        "recorded_at": "2026-11-14T16:43:07.221Z",
+        "recorded_by": "d5666677-acb1-4a34-a356-ce378948b498",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": {
+    "new": 88488,
+    "cached": 1117457,
+    "total": 1205945,
+    "models": {
+      "claude-opus-5-5": {
+        "new": 88488,
+        "cached": 1117457,
+        "total": 1205945
+      }
+    },
+    "jobs": [
+      "job-1794674190434-3173347-1"
+    ]
+  }
+}

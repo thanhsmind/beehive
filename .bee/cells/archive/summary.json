@@ -2258,5 +2258,10 @@
     "capped": 1,
     "dropped": 0,
     "archived_at": "2026-11-14T14:53:27.523Z"
+  },
+  "per-task-router": {
+    "capped": 14,
+    "dropped": 0,
+    "archived_at": "2026-11-14T22:32:32.173Z"
   }
 }

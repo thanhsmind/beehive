@@ -1,0 +1,104 @@
+{
+  "id": "ptr-5t",
+  "feature": "per-task-router",
+  "title": "Test tester pairing",
+  "lane": "standard",
+  "role": "test",
+  "deps": [
+    "ptr-5"
+  ],
+  "decisions": [
+    "676a73b1-60d8-4063-9def-f466bb4322a2",
+    "95e310df-fee8-43a6-8b62-5ce0d9771afb",
+    "58d7b2a7-e0da-4b39-9038-58a9325fbad9",
+    "da23be74-143d-435b-ad25-0be437466cb0"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/per-task-router/CONTEXT.md",
+    "docs/history/per-task-router/plan.md",
+    "docs/history/per-task-router/reports/hat-wave.md",
+    "packages/bee-rs/crates/bee/src/verbs/cells/proof.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Independently verify ptr-5. Add tests for the add warning, the close refusal, the docs checker path, the unstamped exemption and the inline refusal.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee cells",
+  "must_haves": {
+    "truths": [
+      "Each ptr-5 truth has a test"
+    ],
+    "prohibitions": [
+      "Never edit product code; only test files listed in files",
+      "On a defect return [BLOCKED] with the red output; never weaken an assertion to pass"
+    ]
+  },
+  "status": "capped",
+  "trace": {
+    "worker": "w-ptr-5t",
+    "outcome": "Added 8 tests pinning ptr-5's add warning, close refusal, merge debt line, unstamped exemption, docs checker path and inline refusal; no defect found — 1f187dfa71824c58c919cd0f4b968bd03905596e",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+    ],
+    "deviations": [
+      "sync-ack: test-only cell; anchored concepts graded suspect on 2026-11-10, before this feature; ptr-7 re-grades them"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-14T17:17:15.717Z",
+    "behavior_change": false,
+    "verification_evidence": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml — green:unit — tester for ptr-5 (5763 passed, 0 failed; cells filter 566 passed)",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "d5666677-acb1-4a34-a356-ce378948b498",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee cells",
+    "claimed_at": "2026-11-14T17:12:19.286Z",
+    "knowledge_delta": [],
+    "sync_ack": "test-only cell; anchored concepts graded suspect on 2026-11-10, before this feature; ptr-7 re-grades them",
+    "no_mistakes": true,
+    "no_knowledge_used": true,
+    "report": {
+      "outcome": "Added 8 tests pinning ptr-5's add warning, close refusal, merge debt line, unstamped exemption, docs checker path and inline refusal; no defect found — 1f187dfa71824c58c919cd0f4b968bd03905596e",
+      "commit": "1f187dfa71824c58c919cd0f4b968bd03905596e",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee cells — green:unit — PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml — green:unit — tester for ptr-5 (5763 passed, 0 failed; cells filter 566 passed)",
+      "deviations": [],
+      "knowledge_used": [],
+      "patch_id": "6469dddbd661aef83fb76b3a72e7da40e1ecb1ff"
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "Each ptr-5 truth has a test",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs eight new tests: add warning text on stderr, close refusal, merge debt line, unstamped exemption, docs checker path, inline refusal; cells filter 566 passed"
+          }
+        ],
+        "recorded_at": "2026-11-14T17:17:15.818Z",
+        "recorded_by": "d5666677-acb1-4a34-a356-ce378948b498",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": {
+    "new": 69867,
+    "cached": 874509,
+    "total": 944376,
+    "models": {
+      "claude-opus-5-5": {
+        "new": 69867,
+        "cached": 874509,
+        "total": 944376
+      }
+    },
+    "jobs": [
+      "job-1794676339438-3581164-1"
+    ]
+  }
+}

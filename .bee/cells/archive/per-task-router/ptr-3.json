@@ -1,0 +1,136 @@
+{
+  "id": "ptr-3",
+  "feature": "per-task-router",
+  "title": "Hand every worker the principles of its class",
+  "lane": "standard",
+  "role": "code",
+  "deps": [
+    "ptr-2t"
+  ],
+  "decisions": [
+    "eb8842b0-a532-4846-9200-e42db5ade0f9",
+    "58d7b2a7-e0da-4b39-9038-58a9325fbad9",
+    "676a73b1-60d8-4063-9def-f466bb4322a2",
+    "86f8cc14-35fe-434d-afee-30d63ca8fcd6"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prompt.rs",
+    "packages/bee/prompts/worker-cell.md",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/per-task-router/CONTEXT.md",
+    "docs/history/per-task-router/plan.md",
+    "docs/history/per-task-router/reports/hat-wave.md",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "For kind cell, render a Principles block from principle_lines for the cell's lane route class: names and one-line rules only. Add a holdout under its own config key (default share 10, same hash-bucket pattern as knowledge_holdout_percent). A role test cell hashes the id of its first dependency so a pair shares an arm. Record the arm on the prepare dispatch record as principles_arm. Update existing drivers tests your change flips.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee drivers",
+  "must_haves": {
+    "truths": [
+      "A principles-arm cell prompt carries a Principles block",
+      "A holdout-arm prompt carries none",
+      "The dispatch record names principles_arm",
+      "A tester shares its implementer's arm"
+    ],
+    "prohibitions": [
+      "No change to the Learned context holdout"
+    ]
+  },
+  "regen_obligation_ack": "ptr-6 owns the shared release manifest and runs the full regen chain after this cell; two cells writing one manifest would collide",
+  "status": "capped",
+  "trace": {
+    "worker": "w-ptr-3",
+    "outcome": "Cell workers now get a Principles block for their route class with a principles holdout and principles_arm on the prepare record; tester shares implementer arm. Commit ff41734ed5e2e1b3298137e8b19e9a3e3a6e7747",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/prompt.rs",
+      "packages/bee/prompts/worker-cell.md",
+      ".bee/bin/prompts/worker-cell.md",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+      "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md"
+    ],
+    "deviations": [
+      "sync-ack: anchored concepts graded suspect on 2026-11-10, before this feature; ptr-3 updated the owning router-triage concept; ptr-7 re-grades the rest"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-14T16:17:34.087Z",
+    "behavior_change": false,
+    "verification_evidence": "cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml — green:unit — full suite, no FAILED lines; drivers 547 passed",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "d5666677-acb1-4a34-a356-ce378948b498",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee drivers",
+    "claimed_at": "2026-11-14T16:11:22.036Z",
+    "knowledge_delta": [
+      "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md"
+    ],
+    "sync_ack": "anchored concepts graded suspect on 2026-11-10, before this feature; ptr-3 updated the owning router-triage concept; ptr-7 re-grades the rest",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Cell workers now get a Principles block for their route class with a principles holdout and principles_arm on the prepare record; tester shares implementer arm. Commit ff41734ed5e2e1b3298137e8b19e9a3e3a6e7747",
+      "commit": "ff41734ed5e2e1b3298137e8b19e9a3e3a6e7747",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/prompt.rs",
+        "packages/bee/prompts/worker-cell.md",
+        ".bee/bin/prompts/worker-cell.md",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+        "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee drivers — green:unit — cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml — green:unit — full suite, no FAILED lines; drivers 547 passed",
+      "deviations": [],
+      "patch_id": "20fd1780660ce0886660ca47874dc5ebc095a5f7"
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "A principles-arm cell prompt carries a Principles block",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs cell_principles returns principle_lines for the lane route class; packages/bee/prompts/worker-cell.md renders the principles block"
+          },
+          {
+            "requirement": "A holdout-arm prompt carries none",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs in_holdout under principles_holdout_percent returns (holdout, empty)"
+          },
+          {
+            "requirement": "The dispatch record names principles_arm",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs record.insert principles_arm"
+          },
+          {
+            "requirement": "A tester shares its implementer's arm",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs anchor is the first dep id when role is test"
+          },
+          {
+            "requirement": "No change to the Learned context holdout",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs arm_of still reads knowledge_holdout_percent with the same bucket"
+          }
+        ],
+        "recorded_at": "2026-11-14T16:17:34.185Z",
+        "recorded_by": "d5666677-acb1-4a34-a356-ce378948b498",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": {
+    "new": 73061,
+    "cached": 825970,
+    "total": 899031,
+    "models": {
+      "claude-sonnet-5-5": {
+        "new": 73061,
+        "cached": 825970,
+        "total": 899031
+      }
+    },
+    "jobs": [
+      "job-1794672682610-2868021-1"
+    ]
+  }
+}

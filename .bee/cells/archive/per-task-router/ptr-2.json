@@ -1,0 +1,121 @@
+{
+  "id": "ptr-2",
+  "feature": "per-task-router",
+  "title": "Route the task in hand with bee orient --class",
+  "lane": "standard",
+  "role": "code",
+  "deps": [
+    "ptr-1t"
+  ],
+  "decisions": [
+    "70c3387f-2c87-4e62-bc1b-546f8ecef03b",
+    "eb8842b0-a532-4846-9200-e42db5ade0f9",
+    "58d7b2a7-e0da-4b39-9038-58a9325fbad9",
+    "27c0905a-a91c-4efe-89e6-632205468849"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/status_full/orient.rs",
+    "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+    "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/per-task-router/CONTEXT.md",
+    "docs/history/per-task-router/plan.md",
+    "docs/history/per-task-router/reports/hat-wave.md",
+    "packages/bee-rs/crates/bee/src/principles.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Use the ptr-1 helper so orient prints principles only for a route the session owns. Add a `--class <c>` flag (declared in registry_payload.json) that prints the class playbook path skills/bee-planning/playbooks/<c>.md and that class's principle lines, writing nothing; an unknown class is refused naming the valid ones. Update existing orient tests your change flips.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee status_full",
+  "must_haves": {
+    "truths": [
+      "bee orient --class research prints the research playbook path and its principles",
+      "orient in an unbound session with lanes prints no principles",
+      "--class writes no state"
+    ],
+    "prohibitions": [
+      "--class never records a route"
+    ]
+  },
+  "status": "capped",
+  "trace": {
+    "worker": "w-ptr-2",
+    "outcome": "orient gates principles on route ownership and gains --class <c> (playbook path + principles, no writes, unknown class refused); commit 454ab66b342087863215b13d4103af79fefcdbaa",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/status_full/orient.rs",
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+      "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs",
+      "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md"
+    ],
+    "deviations": [
+      "sync-ack: anchored concepts were graded suspect on 2026-11-10, before this feature; ptr-2 updated the owning router-triage concept; ptr-7 re-grades the rest"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-14T16:07:59.651Z",
+    "behavior_change": false,
+    "verification_evidence": "cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml — green:unit — whole workspace, no failures; status_full 124 passed",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "d5666677-acb1-4a34-a356-ce378948b498",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee status_full",
+    "claimed_at": "2026-11-14T16:00:12.175Z",
+    "knowledge_delta": [
+      "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md"
+    ],
+    "sync_ack": "anchored concepts were graded suspect on 2026-11-10, before this feature; ptr-2 updated the owning router-triage concept; ptr-7 re-grades the rest",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "orient gates principles on route ownership and gains --class <c> (playbook path + principles, no writes, unknown class refused); commit 454ab66b342087863215b13d4103af79fefcdbaa",
+      "commit": "454ab66b342087863215b13d4103af79fefcdbaa",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/status_full/orient.rs",
+        "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+        "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs",
+        "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee status_full — green:unit — cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml — green:unit — whole workspace, no failures; status_full 124 passed",
+      "deviations": [],
+      "patch_id": "cdcf76d46b5ce9beb520b1eefff693df368824eb"
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "bee orient --class research prints the research playbook path and its principles",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/status_full/orient.rs class_packet + render_class_text: playbook skills/bee-planning/playbooks/<c>.md plus principle_lines(root, class)"
+          },
+          {
+            "requirement": "orient in an unbound session with lanes prints no principles",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/status_full/orient.rs session_bound (lane pipeline or session_binding lane) fed to principles::route_is_session_owned with list_lanes count; class only read when owned"
+          },
+          {
+            "requirement": "--class writes no state",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/status_full/orient.rs run_class resolves roots and prints the packet only; no state write; unknown class refused naming ROUTE_CLASS_VALUES"
+          }
+        ],
+        "recorded_at": "2026-11-14T16:08:05.649Z",
+        "recorded_by": "d5666677-acb1-4a34-a356-ce378948b498",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": {
+    "new": 70101,
+    "cached": 1123295,
+    "total": 1193396,
+    "models": {
+      "claude-sonnet-5-5": {
+        "new": 70101,
+        "cached": 1123295,
+        "total": 1193396
+      }
+    },
+    "jobs": [
+      "job-1794672012723-2757696-1"
+    ]
+  }
+}

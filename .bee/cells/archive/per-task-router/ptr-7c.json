@@ -1,0 +1,100 @@
+{
+  "id": "ptr-7c",
+  "feature": "per-task-router",
+  "title": "Check the consolidated knowledge",
+  "lane": "standard",
+  "role": "test",
+  "deps": [
+    "ptr-7"
+  ],
+  "decisions": [
+    "95e310df-fee8-43a6-8b62-5ce0d9771afb",
+    "c75ee651-7123-4a5a-9fe2-1d48032df70c"
+  ],
+  "files": [
+    "docs/history/per-task-router/reports/ptr-7c.md"
+  ],
+  "read_first": [
+    "docs/history/per-task-router/CONTEXT.md",
+    "docs/history/per-task-router/plan.md",
+    "docs/history/per-task-router/reports/hat-wave.md",
+    "docs/history/per-task-router/delivery.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Run bee knowledge check. Write only the check output to your report file; on a red return [BLOCKED] with the output.",
+  "verify": ".bee/bin/bee knowledge check",
+  "must_haves": {
+    "truths": [
+      "bee knowledge check is green"
+    ],
+    "prohibitions": [
+      "Edit no file except your report"
+    ]
+  },
+  "status": "capped",
+  "trace": {
+    "worker": "w-ptr-7c",
+    "outcome": "bee knowledge check green (exit 0, 0 OKF/profile errors, 583 warnings); output recorded in ptr-7c report, commit 506cd2f0e0ff35faaa81889d16eca37c7d3da8e0",
+    "files_changed": [
+      "docs/history/per-task-router/reports/ptr-7c.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-11-14T17:55:35.757Z",
+    "behavior_change": false,
+    "verification_evidence": "cell verify; 0 OKF errors, 0 profile errors, exit 0",
+    "verify_output": "green:static",
+    "verify_passed": true,
+    "claim_session": "d5666677-acb1-4a34-a356-ce378948b498",
+    "verify_command": ".bee/bin/bee knowledge check",
+    "claimed_at": "2026-11-14T17:54:59.256Z",
+    "knowledge_delta": [],
+    "no_mistakes": true,
+    "no_knowledge_used": true,
+    "report": {
+      "outcome": "bee knowledge check green (exit 0, 0 OKF/profile errors, 583 warnings); output recorded in ptr-7c report, commit 506cd2f0e0ff35faaa81889d16eca37c7d3da8e0",
+      "commit": "506cd2f0e0ff35faaa81889d16eca37c7d3da8e0",
+      "files": [
+        "docs/history/per-task-router/reports/ptr-7c.md"
+      ],
+      "tests": ".bee/bin/bee knowledge check — green:static — cell verify; 0 OKF errors, 0 profile errors, exit 0",
+      "deviations": [],
+      "knowledge_used": [],
+      "patch_id": "d975caaebd7ba8bd3eb0fdbffbe8353170baf76f"
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 590 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "bee knowledge check is green",
+            "artifact": "docs/history/per-task-router/reports/ptr-7c.md records bee knowledge check exit 0, 0 OKF errors, 0 profile errors; the leader's own run matches"
+          }
+        ],
+        "recorded_at": "2026-11-14T17:55:41.584Z",
+        "recorded_by": "d5666677-acb1-4a34-a356-ce378948b498",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": {
+    "new": 20242,
+    "cached": 96791,
+    "total": 117033,
+    "models": {
+      "claude-opus-5-5": {
+        "new": 20242,
+        "cached": 96791,
+        "total": 117033
+      }
+    },
+    "jobs": [
+      "job-1794678899720-4046007-1"
+    ]
+  }
+}

@@ -1,0 +1,105 @@
+{
+  "id": "ptr-1t",
+  "feature": "per-task-router",
+  "title": "Test preamble route ownership",
+  "lane": "standard",
+  "role": "test",
+  "deps": [
+    "ptr-1"
+  ],
+  "decisions": [
+    "70c3387f-2c87-4e62-bc1b-546f8ecef03b",
+    "58d7b2a7-e0da-4b39-9038-58a9325fbad9",
+    "c5c00e89-1653-403f-8924-92d58fcaba18",
+    "cba3cc5b-e9d2-4755-81da-a3da6e39f347"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/hooks/session_preamble/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/per-task-router/CONTEXT.md",
+    "docs/history/per-task-router/plan.md",
+    "docs/history/per-task-router/reports/hat-wave.md",
+    "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs",
+    "packages/bee-rs/crates/bee/src/principles.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Independently verify ptr-1 against its truths. Add tests for: bound via session record, bound via session_binding only, lane-less repo, unbound session in a repo with lanes (hint line, no principles). Run the scoped proof.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee session_preamble",
+  "must_haves": {
+    "truths": [
+      "Each of the four cases has a test that fails if the behavior regresses"
+    ],
+    "prohibitions": [
+      "Never edit product code; only test files listed in files",
+      "On a defect return [BLOCKED] with the red output; never weaken an assertion to pass"
+    ]
+  },
+  "status": "capped",
+  "trace": {
+    "worker": "w-ptr-1t",
+    "outcome": "Added four mutation-checked tests pinning preamble route ownership (record bind, session_binding bind, lane-less repo, unbound hint); ptr-1 verified, no defect; commit 2e15057d93bb3c49e3e98d070d8d8cb4828df6a9",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/hooks/session_preamble/tests.rs"
+    ],
+    "deviations": [
+      "sync-ack: test-only cell; the anchored concepts were graded suspect on 2026-11-10, before this feature; ptr-7 consolidation re-grades them"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-14T16:00:07.109Z",
+    "behavior_change": false,
+    "verification_evidence": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee session_preamble — green:unit — tester for ptr-1; 78 passed, and each new test goes red under a matching mutation of budget.rs/principles.rs",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "d5666677-acb1-4a34-a356-ce378948b498",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee session_preamble",
+    "claimed_at": "2026-11-14T15:51:19.752Z",
+    "knowledge_delta": [],
+    "sync_ack": "test-only cell; the anchored concepts were graded suspect on 2026-11-10, before this feature; ptr-7 consolidation re-grades them",
+    "no_mistakes": true,
+    "no_knowledge_used": true,
+    "report": {
+      "outcome": "Added four mutation-checked tests pinning preamble route ownership (record bind, session_binding bind, lane-less repo, unbound hint); ptr-1 verified, no defect; commit 2e15057d93bb3c49e3e98d070d8d8cb4828df6a9",
+      "commit": "2e15057d93bb3c49e3e98d070d8d8cb4828df6a9",
+      "files": [
+        "packages/bee-rs/crates/bee/src/hooks/session_preamble/tests.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee session_preamble — green:unit — PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee session_preamble — green:unit — tester for ptr-1; 78 passed, and each new test goes red under a matching mutation of budget.rs/principles.rs",
+      "deviations": [],
+      "knowledge_used": [],
+      "patch_id": "a4d23aff692f2e511bb0a8461a3574b4cf568655"
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "Each of the four cases has a test that fails if the behavior regresses",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/session_preamble/tests.rs four new tests (record bind, session_binding bind, lane-less repo, unbound hint), each red under a matching mutation per the tester report; 78 session_preamble tests pass"
+          }
+        ],
+        "recorded_at": "2026-11-14T16:00:07.203Z",
+        "recorded_by": "d5666677-acb1-4a34-a356-ce378948b498",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": {
+    "new": 55353,
+    "cached": 585004,
+    "total": 640357,
+    "models": {
+      "claude-opus-5-5": {
+        "new": 55353,
+        "cached": 585004,
+        "total": 640357
+      }
+    },
+    "jobs": [
+      "job-1794671479910-2723706-1"
+    ]
+  }
+}

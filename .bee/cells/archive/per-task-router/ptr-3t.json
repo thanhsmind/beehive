@@ -1,0 +1,103 @@
+{
+  "id": "ptr-3t",
+  "feature": "per-task-router",
+  "title": "Test the worker Principles block and its holdout",
+  "lane": "standard",
+  "role": "test",
+  "deps": [
+    "ptr-3"
+  ],
+  "decisions": [
+    "eb8842b0-a532-4846-9200-e42db5ade0f9",
+    "c5c00e89-1653-403f-8924-92d58fcaba18",
+    "86f8cc14-35fe-434d-afee-30d63ca8fcd6"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/per-task-router/CONTEXT.md",
+    "docs/history/per-task-router/plan.md",
+    "docs/history/per-task-router/reports/hat-wave.md",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Independently verify ptr-3. Add tests for the block, the holdout arm, the record field and pair hashing.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee drivers",
+  "must_haves": {
+    "truths": [
+      "Each ptr-3 truth has a test"
+    ],
+    "prohibitions": [
+      "Never edit product code; only test files listed in files",
+      "On a defect return [BLOCKED] with the red output; never weaken an assertion to pass"
+    ]
+  },
+  "status": "capped",
+  "trace": {
+    "worker": "w-ptr-3t",
+    "outcome": "Six new tests pin the ptr-3 Principles block, the default/invalid holdout share, first-dep pair hashing against a sha256 oracle, independence from the learned-context holdout, and the classless lane; no defect found; 6a204209833b3b20dce871e3a2fd97582cc98934",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+    ],
+    "deviations": [
+      "sync-ack: test-only cell; anchored concepts graded suspect on 2026-11-10, before this feature; ptr-7 re-grades them"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-14T16:21:52.441Z",
+    "behavior_change": false,
+    "verification_evidence": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml — green:unit — tester for ptr-3 (drivers 553 passed; full workspace exit 0, bee 5152 passed)",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "d5666677-acb1-4a34-a356-ce378948b498",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee drivers",
+    "claimed_at": "2026-11-14T16:17:35.170Z",
+    "knowledge_delta": [],
+    "sync_ack": "test-only cell; anchored concepts graded suspect on 2026-11-10, before this feature; ptr-7 re-grades them",
+    "no_mistakes": true,
+    "no_knowledge_used": true,
+    "report": {
+      "outcome": "Six new tests pin the ptr-3 Principles block, the default/invalid holdout share, first-dep pair hashing against a sha256 oracle, independence from the learned-context holdout, and the classless lane; no defect found; 6a204209833b3b20dce871e3a2fd97582cc98934",
+      "commit": "6a204209833b3b20dce871e3a2fd97582cc98934",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee drivers — green:unit — PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml — green:unit — tester for ptr-3 (drivers 553 passed; full workspace exit 0, bee 5152 passed)",
+      "deviations": [],
+      "knowledge_used": [],
+      "patch_id": "34d8ee433e18192db2581799ab18177525b7901f"
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "Each ptr-3 truth has a test",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs six new tests: Principles block, default and invalid holdout share, first-dep pair hashing against a sha256 oracle, independence from the learned-context holdout, classless lane; drivers 553 passed"
+          }
+        ],
+        "recorded_at": "2026-11-14T16:21:52.540Z",
+        "recorded_by": "d5666677-acb1-4a34-a356-ce378948b498",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": {
+    "new": 48521,
+    "cached": 275024,
+    "total": 323545,
+    "models": {
+      "claude-opus-5-5": {
+        "new": 48521,
+        "cached": 275024,
+        "total": 323545
+      }
+    },
+    "jobs": [
+      "job-1794673055616-2960030-1"
+    ]
+  }
+}

@@ -1,0 +1,127 @@
+{
+  "id": "ptr-7",
+  "feature": "per-task-router",
+  "title": "Consolidate per-task-router knowledge",
+  "lane": "standard",
+  "role": "writer",
+  "deps": [
+    "ptr-5t",
+    "ptr-6c"
+  ],
+  "decisions": [
+    "676a73b1-60d8-4063-9def-f466bb4322a2",
+    "70c3387f-2c87-4e62-bc1b-546f8ecef03b",
+    "eb8842b0-a532-4846-9200-e42db5ade0f9",
+    "58d7b2a7-e0da-4b39-9038-58a9325fbad9"
+  ],
+  "files": [
+    "docs/history/per-task-router/delivery.md",
+    "docs/knowledge/",
+    "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md",
+    "docs/knowledge/areas/workflow-state/cells-completion-judge-and-archive.md"
+  ],
+  "read_first": [
+    "docs/history/per-task-router/CONTEXT.md",
+    "docs/history/per-task-router/plan.md",
+    "docs/history/per-task-router/reports/hat-wave.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Run bee knowledge consolidate --feature per-task-router, write the deduped knowledge and docs/history/per-task-router/delivery.md.",
+  "verify": ".bee/bin/bee knowledge check",
+  "must_haves": {
+    "truths": [
+      "Knowledge concepts name the per-task route, the tester pairing and the proof floors"
+    ],
+    "prohibitions": []
+  },
+  "status": "capped",
+  "trace": {
+    "worker": "w-ptr-7",
+    "outcome": "Linked the per-task-route concept from two sibling concepts so it is no longer an orphan; cd20ce6f92f774f954502d04d77cb64b8af855a1",
+    "files_changed": [
+      "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md",
+      "docs/knowledge/areas/workflow-state/cells-completion-judge-and-archive.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-11-14T17:54:40.794Z",
+    "behavior_change": false,
+    "verification_evidence": "docs-only change; 0 errors, concept absent from profile.orphans",
+    "verify_output": "green:static",
+    "verify_passed": true,
+    "claim_session": "d5666677-acb1-4a34-a356-ce378948b498",
+    "verify_command": ".bee/bin/bee knowledge check",
+    "claimed_at": "2026-11-14T17:54:04.593Z",
+    "knowledge_delta": [
+      "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md",
+      "docs/knowledge/areas/workflow-state/cells-completion-judge-and-archive.md"
+    ],
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Linked the per-task-route concept from two sibling concepts so it is no longer an orphan; cd20ce6f92f774f954502d04d77cb64b8af855a1",
+      "commit": "cd20ce6f92f774f954502d04d77cb64b8af855a1",
+      "files": [
+        "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md",
+        "docs/knowledge/areas/workflow-state/cells-completion-judge-and-archive.md"
+      ],
+      "tests": ".bee/bin/bee knowledge check — green:static — docs-only change; 0 errors, concept absent from profile.orphans",
+      "deviations": [],
+      "patch_id": "25b121ffaff3110372f2a6f252ef6717fad739ca"
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "gap",
+        "answers": [
+          {
+            "requirement": "Knowledge concepts name the per-task route, the tester pairing and the proof floors",
+            "artifact": "docs/knowledge/areas/doctrine-layer/per-task-route-tester-pairing-and-proof-floors.md exists and is indexed, but bee knowledge check --json lists it under profile.orphans: no sibling concept links to it — GAP"
+          }
+        ],
+        "recorded_at": "2026-11-14T17:54:04.428Z",
+        "recorded_by": "d5666677-acb1-4a34-a356-ce378948b498"
+      },
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "Knowledge concepts name the per-task route, the tester pairing and the proof floors",
+            "artifact": "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md and docs/knowledge/areas/workflow-state/cells-completion-judge-and-archive.md now link the new per-task-route concept; knowledge check lists no per-task-route orphan; check OK with 0 errors"
+          }
+        ],
+        "recorded_at": "2026-11-14T17:54:53.841Z",
+        "recorded_by": "d5666677-acb1-4a34-a356-ce378948b498",
+        "commit_diff": "checked"
+      }
+    ],
+    "verified_at": null,
+    "baseline": null,
+    "reaction": null,
+    "skipped": null,
+    "unknowns": null,
+    "found": null,
+    "stopped": null,
+    "blocked_reason": null,
+    "dropped_reason": null,
+    "reopened_at": "2026-11-14T17:54:04.428Z",
+    "reopened_reason": "Knowledge concepts name the per-task route, the tester pairing and the proof floors: docs/knowledge/areas/doctrine-layer/per-task-route-tester-pairing-and-proof-floors.md exists and is indexed, but bee knowledge check --json lists it under profile.orphans: no sibling concept links to it — GAP"
+  },
+  "usage": {
+    "new": 87005,
+    "cached": 610795,
+    "total": 697800,
+    "models": {
+      "claude-sonnet-5-5": {
+        "new": 87005,
+        "cached": 610795,
+        "total": 697800
+      }
+    },
+    "jobs": [
+      "job-1794678627394-3958434-1",
+      "job-1794678845272-4040609-1"
+    ]
+  }
+}

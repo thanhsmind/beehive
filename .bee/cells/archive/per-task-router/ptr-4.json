@@ -1,0 +1,165 @@
+{
+  "id": "ptr-4",
+  "feature": "per-task-router",
+  "title": "Make the cap name its principles and meet its proof floor",
+  "lane": "standard",
+  "role": "code",
+  "deps": [
+    "ptr-3t"
+  ],
+  "decisions": [
+    "eb8842b0-a532-4846-9200-e42db5ade0f9",
+    "58d7b2a7-e0da-4b39-9038-58a9325fbad9",
+    "676a73b1-60d8-4063-9def-f466bb4322a2",
+    "2ea86071-7941-46d7-bb75-02d976c4fc47"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+    "packages/bee-rs/crates/bee/src/herding/run.rs",
+    "packages/bee-rs/crates/bee/src/herding/mailbox.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/tests.rs",
+    "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+  ],
+  "read_first": [
+    "docs/history/per-task-router/CONTEXT.md",
+    "docs/history/per-task-router/plan.md",
+    "docs/history/per-task-router/reports/hat-wave.md",
+    "packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs",
+    "packages/bee-rs/crates/bee/src/herding/run.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Add --principle-used \"<slug> — <decision>\" and --no-principle-used to cap and finish, required only when the cell's prepare record has principles_arm principles; the herded result contract gains an optional principles_used key and run.rs passes it. Add green:red-first (a test seen red on the implementer's base commit and green on head) to PROOF_RESULT_VALUES. Add one floor table per decision 58d7b2a7 (a): implementer code cell green:unit, docs-only cell green:static, role test cell its class floor (bugfix green:red-first, release green:live, feature/refactor/perf green:unit, docs/research/spike/content green:static); static accepts any, unit accepts unit/live/red-first, red-first and live accept only themselves. Docs-only means every path in files ends .md or is under docs/. Refuse a weaker proof naming the floor. Update every CapFlags literal and existing test your change flips.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee cells",
+  "must_haves": {
+    "truths": [
+      "A principles-arm cap with no answer is refused on native and herded paths",
+      "A holdout-arm or older cap is not refused for silence",
+      "A bugfix tester capped green:unit is refused naming green:red-first",
+      "An implementer code cell capped green:static is refused"
+    ],
+    "prohibitions": [
+      "No change to the knowledge-used obligation"
+    ]
+  },
+  "status": "capped",
+  "trace": {
+    "worker": "w-ptr-4",
+    "outcome": "Floor now covers every cell with files, docs-only first, then test class floor, then unit; commit 8046ec9aef56af38072dafe778c36c0a5a7f805a",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+      "docs/knowledge/areas/workflow-state/cells-completion-judge-and-archive.md"
+    ],
+    "deviations": [
+      "sync-ack: anchored concepts graded suspect on 2026-11-10, before this feature; ptr-4 updated the owning cells-completion concept; ptr-7 re-grades the rest"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-14T16:36:29.057Z",
+    "behavior_change": false,
+    "verification_evidence": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml — green:unit — full workspace 5743 passed 0 failed",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "d5666677-acb1-4a34-a356-ce378948b498",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee cells",
+    "claimed_at": "2026-11-14T16:32:45.760Z",
+    "knowledge_delta": [
+      "docs/knowledge/areas/workflow-state/cells-completion-judge-and-archive.md"
+    ],
+    "sync_ack": "anchored concepts graded suspect on 2026-11-10, before this feature; ptr-4 updated the owning cells-completion concept; ptr-7 re-grades the rest",
+    "no_mistakes": true,
+    "no_knowledge_used": true,
+    "report": {
+      "outcome": "Floor now covers every cell with files, docs-only first, then test class floor, then unit; commit 8046ec9aef56af38072dafe778c36c0a5a7f805a",
+      "commit": "8046ec9aef56af38072dafe778c36c0a5a7f805a",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+        "docs/knowledge/areas/workflow-state/cells-completion-judge-and-archive.md"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee cells — green:unit — PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml — green:unit — full workspace 5743 passed 0 failed",
+      "deviations": [],
+      "patch_id": "12236f743f94619a3bf118c2d6b7893ce0b98e2e"
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "gap",
+        "answers": [
+          {
+            "requirement": "A principles-arm cap with no answer is refused on native and herded paths",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs principles_used report key; packages/bee-rs/crates/bee/src/herding/run.rs passes it"
+          },
+          {
+            "requirement": "A bugfix tester capped green:unit is refused naming green:red-first",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs class_proof_floor bugfix green:red-first"
+          },
+          {
+            "requirement": "Floors cover every cell per contract:cap-principles-and-proof-floor",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs cell_proof_floor keys only on roles code and test: a docs-only role test cell takes the class floor, and a design or writer cell with code files takes none — GAP against contract 2ea86071"
+          }
+        ],
+        "recorded_at": "2026-11-14T16:32:38.967Z",
+        "recorded_by": "d5666677-acb1-4a34-a356-ce378948b498"
+      },
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "A principles-arm cap with no answer is refused on native and herded paths",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs principles_used report key; herding/run.rs passes it (round 1, commit 5bcdd0aee)"
+          },
+          {
+            "requirement": "A bugfix tester capped green:unit is refused naming green:red-first",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs class_proof_floor bugfix green:red-first"
+          },
+          {
+            "requirement": "Floors cover every cell per contract 2ea86071",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs cell_proof_floor: docs-only first green:static, then role test class floor, then any cell with files green:unit (commit 8046ec9ae)"
+          },
+          {
+            "requirement": "An implementer code cell capped green:static is refused",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs proof_meets_floor unit rejects static"
+          },
+          {
+            "requirement": "A holdout-arm or older cap is not refused for silence",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs principle answer required only when the prepare record has principles_arm principles; ptr-4t pins holdout and older-record exemptions"
+          }
+        ],
+        "recorded_at": "2026-11-14T17:50:23.539Z",
+        "recorded_by": "d5666677-acb1-4a34-a356-ce378948b498",
+        "commit_diff": "checked"
+      }
+    ],
+    "verified_at": null,
+    "baseline": null,
+    "reaction": null,
+    "skipped": null,
+    "unknowns": null,
+    "found": null,
+    "stopped": null,
+    "blocked_reason": null,
+    "dropped_reason": null,
+    "reopened_at": "2026-11-14T16:32:38.967Z",
+    "reopened_reason": "A principles-arm cap with no answer is refused on native and herded paths: packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs principles_used report key; packages/bee-rs/crates/bee/src/herding/run.rs passes it; A bugfix tester capped green:unit is refused naming green:red-first: packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs class_proof_floor bugfix green:red-first; Floors cover every cell per contract:cap-principles-and-proof-floor: packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs cell_proof_floor keys only on roles code and test: a docs-only role test cell takes the class floor, and a design or writer cell with code files takes none — GAP against contract 2ea86071"
+  },
+  "usage": {
+    "new": 166862,
+    "cached": 3315614,
+    "total": 3482476,
+    "models": {
+      "claude-sonnet-5-5": {
+        "new": 166862,
+        "cached": 3315614,
+        "total": 3482476
+      }
+    },
+    "jobs": [
+      "job-1794673316556-3013665-1",
+      "job-1794673966457-3122466-1"
+    ]
+  }
+}

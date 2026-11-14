@@ -1,0 +1,103 @@
+{
+  "id": "ptr-2t",
+  "feature": "per-task-router",
+  "title": "Test orient class routing",
+  "lane": "standard",
+  "role": "test",
+  "deps": [
+    "ptr-2"
+  ],
+  "decisions": [
+    "70c3387f-2c87-4e62-bc1b-546f8ecef03b",
+    "c5c00e89-1653-403f-8924-92d58fcaba18",
+    "27c0905a-a91c-4efe-89e6-632205468849"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/per-task-router/CONTEXT.md",
+    "docs/history/per-task-router/plan.md",
+    "docs/history/per-task-router/reports/hat-wave.md",
+    "packages/bee-rs/crates/bee/src/verbs/status_full/orient.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Independently verify ptr-2. Add tests for --class output, the unknown-class refusal, no state write, and the unowned-route case.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee status_full",
+  "must_haves": {
+    "truths": [
+      "Each ptr-2 truth has a test"
+    ],
+    "prohibitions": [
+      "Never edit product code; only test files listed in files",
+      "On a defect return [BLOCKED] with the red output; never weaken an assertion to pass"
+    ]
+  },
+  "status": "capped",
+  "trace": {
+    "worker": "w-ptr-2t",
+    "outcome": "Verified ptr-2 independently and added 3 tests: --class research and unknown-class refusal via the real bee binary with byte-level no-write snapshots, plus an owned-route positive control; commit 7e8ec8f27a9aba71ac91c7eeb5c73fd867e599a8",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs"
+    ],
+    "deviations": [
+      "sync-ack: test-only cell; anchored concepts graded suspect on 2026-11-10, before this feature; ptr-7 re-grades them"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-14T16:11:21.043Z",
+    "behavior_change": false,
+    "verification_evidence": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee status_full — green:unit — tester for ptr-2, 127 passed 0 failed",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "d5666677-acb1-4a34-a356-ce378948b498",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee status_full",
+    "claimed_at": "2026-11-14T16:08:06.461Z",
+    "knowledge_delta": [],
+    "sync_ack": "test-only cell; anchored concepts graded suspect on 2026-11-10, before this feature; ptr-7 re-grades them",
+    "no_mistakes": true,
+    "no_knowledge_used": true,
+    "report": {
+      "outcome": "Verified ptr-2 independently and added 3 tests: --class research and unknown-class refusal via the real bee binary with byte-level no-write snapshots, plus an owned-route positive control; commit 7e8ec8f27a9aba71ac91c7eeb5c73fd867e599a8",
+      "commit": "7e8ec8f27a9aba71ac91c7eeb5c73fd867e599a8",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee status_full — green:unit — PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee status_full — green:unit — tester for ptr-2, 127 passed 0 failed",
+      "deviations": [],
+      "knowledge_used": [],
+      "patch_id": "b6f7a59f0a2ab89d178ad90e4cce372164decde3"
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "Each ptr-2 truth has a test",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs three new tests: --class research output, unknown-class refusal, both through the real binary with byte-level no-write snapshots, plus an owned-route positive control; ptr-2 own tests cover the unowned case; 127 status_full passed"
+          }
+        ],
+        "recorded_at": "2026-11-14T16:11:21.129Z",
+        "recorded_by": "d5666677-acb1-4a34-a356-ce378948b498",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": {
+    "new": 57310,
+    "cached": 545691,
+    "total": 603001,
+    "models": {
+      "claude-opus-5-5": {
+        "new": 57310,
+        "cached": 545691,
+        "total": 603001
+      }
+    },
+    "jobs": [
+      "job-1794672486621-2854217-1"
+    ]
+  }
+}

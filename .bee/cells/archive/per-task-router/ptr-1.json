@@ -1,0 +1,121 @@
+{
+  "id": "ptr-1",
+  "feature": "per-task-router",
+  "title": "Show the preamble route only when the session owns it",
+  "lane": "standard",
+  "role": "code",
+  "deps": [],
+  "decisions": [
+    "70c3387f-2c87-4e62-bc1b-546f8ecef03b",
+    "58d7b2a7-e0da-4b39-9038-58a9325fbad9",
+    "cba3cc5b-e9d2-4755-81da-a3da6e39f347"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs",
+    "packages/bee-rs/crates/bee/src/principles.rs",
+    "packages/bee-rs/crates/bee/src/hooks/session_preamble/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/per-task-router/CONTEXT.md",
+    "docs/history/per-task-router/plan.md",
+    "docs/history/per-task-router/reports/hat-wave.md",
+    "packages/bee-rs/crates/bee/src/hooks/session_preamble/state.rs",
+    "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Add one helper in principles.rs that says whether a route belongs to the session: bound through the session record lane (Pipeline source lane) or through session_binding (budget.rs active_record path), or the repo has no lane records. Gate the Route line and principle_lines in budget.rs on it. When it is false, print one hint line naming `bee orient --class <c>` instead. Update any existing preamble test your change flips; new tests belong to ptr-1t.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee session_preamble",
+  "must_haves": {
+    "truths": [
+      "A session bound by either path sees the Route line and principles",
+      "A repo with no lane records keeps its default-record Route line",
+      "An unbound session in a repo with lanes sees one hint line and no principles"
+    ],
+    "prohibitions": [
+      "No change to which record the knowledge lines read"
+    ]
+  },
+  "status": "capped",
+  "trace": {
+    "worker": "w-ptr-1",
+    "outcome": "Route line and principles now gate on session ownership via route_is_session_owned; unbound session in a laned repo gets one bee orient --class hint line. Commit 780afb3ff",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs",
+      "packages/bee-rs/crates/bee/src/principles.rs",
+      "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md"
+    ],
+    "deviations": [
+      "sync-ack: the 12 concepts were already graded suspect on 2026-11-10, before this cell; ptr-1 updated the owning concept (doctrine-layer router-triage); ptr-7 consolidation re-grades the rest"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-14T15:49:59.845Z",
+    "behavior_change": false,
+    "verification_evidence": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee session_preamble — green:unit — 74 preamble tests pass; full suite has 1 unrelated failure (cli_shape guard on an unclosed quote in docs/history/per-task-router/plan.md)",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "d5666677-acb1-4a34-a356-ce378948b498",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee session_preamble",
+    "claimed_at": "2026-11-14T15:34:31.803Z",
+    "knowledge_delta": [
+      "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md"
+    ],
+    "sync_ack": "the 12 concepts were already graded suspect on 2026-11-10, before this cell; ptr-1 updated the owning concept (doctrine-layer router-triage); ptr-7 consolidation re-grades the rest",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Route line and principles now gate on session ownership via route_is_session_owned; unbound session in a laned repo gets one bee orient --class hint line. Commit 780afb3ff",
+      "commit": "780afb3ff124a9da72385daabaa0718e5c2c6ae6",
+      "files": [
+        "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs",
+        "packages/bee-rs/crates/bee/src/principles.rs",
+        "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee session_preamble — green:unit — cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee session_preamble — green:unit — 74 preamble tests pass; full suite has 1 unrelated failure (cli_shape guard on an unclosed quote in docs/history/per-task-router/plan.md)",
+      "deviations": [],
+      "patch_id": "4a015efdd377b05c0a4eb7b7e613beae0fbe9330"
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "A session bound by either path sees the Route line and principles",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs active_record now returns (record, bound) true for pipeline source lane and for a session_binding lane; route_owned gates the Route block on it (commit 780afb3ff)"
+          },
+          {
+            "requirement": "A repo with no lane records keeps its default-record Route line",
+            "artifact": "packages/bee-rs/crates/bee/src/principles.rs route_is_session_owned returns true when lane_records == 0; budget.rs passes list_lanes(...).len(); worker report: 74 session_preamble tests pass, none flipped"
+          },
+          {
+            "requirement": "An unbound session in a repo with lanes sees one hint line and no principles",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs pushes one '- Route: not bound to this session' line naming bee orient --class when !route_owned, and skips principle_lines"
+          },
+          {
+            "requirement": "No change to which record the knowledge lines read",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs active_record still returns the same record; only a bound flag was added to its return"
+          }
+        ],
+        "recorded_at": "2026-11-14T15:51:09.328Z",
+        "recorded_by": "d5666677-acb1-4a34-a356-ce378948b498",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": {
+    "new": 72750,
+    "cached": 752028,
+    "total": 824778,
+    "models": {
+      "claude-sonnet-5-5": {
+        "new": 72750,
+        "cached": 752028,
+        "total": 824778
+      }
+    },
+    "jobs": [
+      "job-1794670478575-2589383-1"
+    ]
+  }
+}
