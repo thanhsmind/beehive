@@ -26,7 +26,8 @@ use super::render::{
 };
 use super::skills::{
     blocked_source_identity_skill_sync, compute_design_sync, compute_skill_sync,
-    frontmatter_description, frontmatter_disables_model, is_hub_served, SkillSync, HUB_SERVED_SKILLS,
+    design_picked, frontmatter_description, frontmatter_disables_model, is_hub_served, SkillSync,
+    PRINCIPLE_PREFIX,
 };
 use super::source::{read_source_release_identity, Engine};
 use super::templates as T;
@@ -100,12 +101,17 @@ fn hub_needs_publish(run: Run, source_dir: &Path, id: &str) -> bool {
     staged != served
 }
 
-fn publish_skillstation_items(engine: &Engine, run: Run, hub_mode: bool) -> Vec<Value> {
+fn publish_skillstation_items(
+    engine: &Engine,
+    run: Run,
+    hub_mode: bool,
+    design_packs: &[String],
+) -> Vec<Value> {
     let root = repo_claude_root();
-    let served = if hub_mode { principle_ids(engine) } else { Vec::new() };
+    let served = if hub_mode { principle_ids(engine, design_packs) } else { Vec::new() };
     HUB_SKILLS
         .iter()
-        .filter(|skill| !served.iter().any(|id| id == *skill))
+        .filter(|skill| !served.iter().any(|(id, _)| id == *skill))
         .filter(|skill| engine.skills_root.join(skill).is_dir())
         .filter(|skill| hub_needs_publish(run, &engine.skills_root.join(skill), skill))
         .map(|skill| {
@@ -119,20 +125,29 @@ fn publish_skillstation_items(engine: &Engine, run: Run, hub_mode: bool) -> Vec<
         .collect()
 }
 
-fn principle_ids(engine: &Engine) -> Vec<String> {
-    super::render::list_bee_skill_entries(&engine.skills_root)
+fn principle_ids(engine: &Engine, design_packs: &[String]) -> Vec<(String, PathBuf)> {
+    let engine_ids = super::render::list_bee_skill_entries(&engine.skills_root)
         .into_iter()
         .filter(|e| e.is_dir && !e.is_symlink && is_hub_served(&e.name))
-        .map(|e| e.name)
-        .collect()
+        .map(|e| (e.name, engine.skills_root.clone()));
+    let design_ids = super::render::list_bee_skill_entries(&engine.design_root)
+        .into_iter()
+        .filter(|e| e.is_dir && !e.is_symlink && design_picked(design_packs, &e.name))
+        .map(|e| (e.name, engine.design_root.clone()));
+    engine_ids.chain(design_ids).collect()
 }
 
-fn hub_alias_items(engine: &Engine, repo_root: &Path, after_publish: bool) -> Vec<Value> {
-    principle_ids(engine)
+fn hub_alias_items(
+    engine: &Engine,
+    repo_root: &Path,
+    design_packs: &[String],
+    after_publish: bool,
+) -> Vec<Value> {
+    principle_ids(engine, design_packs)
         .into_iter()
-        .filter(|id| HUB_SERVED_SKILLS.contains(&id.as_str()))
-        .filter_map(|id| {
-            let source = std::fs::read(engine.skills_root.join(&id).join("SKILL.md")).ok()?;
+        .filter(|(id, _)| !id.starts_with(PRINCIPLE_PREFIX))
+        .filter_map(|(id, root)| {
+            let source = std::fs::read(root.join(&id).join("SKILL.md")).ok()?;
             let rendered = String::from_utf8_lossy(&render_skill_bytes(&source, "claude")).to_string();
             let disable_model = frontmatter_disables_model(&rendered);
             let content =
@@ -155,18 +170,18 @@ fn hub_alias_items(engine: &Engine, repo_root: &Path, after_publish: bool) -> Ve
         .collect()
 }
 
-fn publish_principle_items(engine: &Engine, run: Run) -> Vec<Value> {
+fn publish_principle_items(engine: &Engine, run: Run, design_packs: &[String]) -> Vec<Value> {
     let root = repo_claude_root();
-    principle_ids(engine)
+    principle_ids(engine, design_packs)
         .into_iter()
-        .filter(|skill| hub_needs_publish(run, &engine.skills_root.join(skill), skill))
-        .map(|skill| {
+        .filter(|(skill, source)| hub_needs_publish(run, &source.join(skill), skill))
+        .map(|(skill, source)| {
             json!({
                 "action": "publish_skillstation",
                 "skill": skill,
                 "path": format!("{root}/{skill}"),
                 "target": "skillstation",
-                "source": engine.skills_root.to_string_lossy(),
+                "source": source.to_string_lossy(),
             })
         })
         .collect()
@@ -186,10 +201,10 @@ fn set_principles_hub_items(repo_root: &Path) -> Vec<Value> {
     vec![json!({"action": "set_principles_hub", "path": ".bee/config.json", "after_publish": true})]
 }
 
-fn principle_removal_items(engine: &Engine) -> Vec<Value> {
-    principle_ids(engine)
+fn principle_removal_items(engine: &Engine, design_packs: &[String]) -> Vec<Value> {
+    principle_ids(engine, design_packs)
         .into_iter()
-        .map(|skill| {
+        .map(|(skill, _)| {
             json!({
                 "action": "remove_skill",
                 "skill": skill,
@@ -202,9 +217,13 @@ fn principle_removal_items(engine: &Engine) -> Vec<Value> {
         .collect()
 }
 
-fn principles_served_by_hub(engine: &Engine, run: Run) -> Result<bool, String> {
-    let ids = principle_ids(engine);
-    for id in &ids {
+fn principles_served_by_hub(
+    engine: &Engine,
+    run: Run,
+    design_packs: &[String],
+) -> Result<bool, String> {
+    let ids = principle_ids(engine, design_packs);
+    for (id, _) in &ids {
         match hub_show(run, id) {
             Ok(hub) if hub.status == "active" => {}
             Ok(hub) => return Err(format!("{id} is {} on the hub", hub.status)),
@@ -1609,7 +1628,7 @@ pub fn compute_plan(engine: &Engine, repo_root: &Path, opts: &Options) -> Comput
     let hub_mode = hub_mode || switching;
     let mut principles_from_hub = false;
     if opts.sync_skills && hub_mode && claude_in_scope && !switching {
-        match principles_served_by_hub(engine, &*hub_runner(repo_root)) {
+        match principles_served_by_hub(engine, &*hub_runner(repo_root), &design_packs) {
             Ok(served) => principles_from_hub = served,
             Err(reason) => {
                 alias_skips.push(json!({"target": "skillstation-principles", "reason": reason}))
@@ -1625,7 +1644,7 @@ pub fn compute_plan(engine: &Engine, repo_root: &Path, opts: &Options) -> Comput
             principles_from_hub,
         )
     } else if opts.design_packs.is_some() || recorded_packs.is_some() {
-        compute_design_sync(engine, repo_root, &design_packs)
+        compute_design_sync(engine, repo_root, &design_packs, principles_from_hub)
     } else {
         SkillSync {
             source_root: engine.skills_root.join("bee-hive"),
@@ -1638,10 +1657,10 @@ pub fn compute_plan(engine: &Engine, repo_root: &Path, opts: &Options) -> Comput
         for target in &skill_sync.targets {
             plan.extend(target.items.iter().cloned());
             if switching && target.kind == "repo-claude" {
-                plan.extend(principle_removal_items(engine));
-                plan.extend(hub_alias_items(engine, repo_root, true));
+                plan.extend(principle_removal_items(engine, &design_packs));
+                plan.extend(hub_alias_items(engine, repo_root, &design_packs, true));
             } else if principles_from_hub && target.kind == "repo-claude" {
-                plan.extend(hub_alias_items(engine, repo_root, false));
+                plan.extend(hub_alias_items(engine, repo_root, &design_packs, false));
             }
         }
         if let Some(lr) = &skill_sync.legacy_refresh {
@@ -1651,9 +1670,9 @@ pub fn compute_plan(engine: &Engine, repo_root: &Path, opts: &Options) -> Comput
 
     if opts.skillstation && opts.sync_skills && skill_sync.blocked.is_none() {
         let run = hub_runner(repo_root);
-        plan.extend(publish_skillstation_items(engine, &*run, hub_mode));
+        plan.extend(publish_skillstation_items(engine, &*run, hub_mode, &design_packs));
         if hub_mode {
-            plan.extend(publish_principle_items(engine, &*run));
+            plan.extend(publish_principle_items(engine, &*run, &design_packs));
         }
         if switching {
             plan.extend(set_principles_hub_items(repo_root));

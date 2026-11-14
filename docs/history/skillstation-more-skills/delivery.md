@@ -31,3 +31,27 @@ Green after the fix: all five, with the rest of `-- skillstation onboard` (352 p
 ### Proof
 
 `cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- skillstation onboard` and `bee dev release-manifest --check`.
+
+## sms-2 — Serve the design core and the picked design packs from the hub
+
+### What changed
+
+- `onboard/plan.rs`: `principle_ids` returns each hub-served id with its source root: the engine skills root for engine skills, and `engine.design_root` for `bee-design` and each picked pack. Publish items, removals, aliases and the hub readiness check all follow it, and the publish item carries that root as `source`.
+- `onboard/skills.rs`: new `design_picked` is the one pick rule behind `SkillSources::picks`. In hub mode `SkillSources::entries` drops the picked design skills as it drops engine ones, and the deletion-domain alias exception covers them. `compute_design_sync` takes the hub flag and applies it to the repo-claude target only.
+- `onboard/apply.rs`: a publish item that carries a `source` root counts as hub-served for the routing flags on `skill commit` and for the failed-publish gate. The failed-design-publish test proved this was needed: without it the design failure did not stop the `after_publish` removals.
+- `README.md` and the onboarding concept name the design core and picked packs as hub-served (skillstation-more-skills D4-D6) and state that sibling-pack links stay as written.
+
+### Tests
+
+Red first, new tests in `onboard/tests.rs` (`principles_on_the_hub`), with a design root of `bee-design`, `bee-design-web`, `bee-design-charts` and `bee-design-motion` and packs `web,charts`:
+
+- `the_switch_plan_publishes_removes_and_aliases_the_design_core_and_picked_packs` failed (no publish for `bee-design`).
+- `a_full_switch_aliases_the_design_skills_and_the_hub_replan_plans_nothing_for_them` failed (the local copy stayed a full skill).
+- `a_failed_design_publish_keeps_every_local_copy_and_writes_no_alias` failed (the principles lost their local copies).
+- `hub_mode_without_a_pack_pick_plans_no_design_hub_item` and `codex_and_agents_targets_keep_the_design_skills_through_the_switch` passed before and after as guards.
+
+The failed-publish test failed a second time after the plan fix (the design alias was written) until the `apply.rs` change.
+
+### Proof
+
+`cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml`.

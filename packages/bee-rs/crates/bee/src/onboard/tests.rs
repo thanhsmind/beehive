@@ -4404,6 +4404,125 @@ mod principles_on_the_hub {
         assert!(!config_text(&fx).contains("hub"));
     }
 
+    const DESIGN_SERVED: [&str; 3] = ["bee-design", "bee-design-web", "bee-design-charts"];
+
+    fn design_skill_md(id: &str) -> String {
+        format!("---\nname: {id}\ndescription: Design skill {id}.\n---\nbody\n")
+    }
+
+    fn with_design(fx: &Fixture) {
+        for id in ["bee-design", "bee-design-web", "bee-design-charts", "bee-design-motion"] {
+            write(
+                &fx.root.join("packages").join("bee").join("design").join(id).join("SKILL.md"),
+                &design_skill_md(id),
+            );
+        }
+        apply(fx, &["--runtime", "claude", "--design-packs", "web,charts"]);
+    }
+
+    fn claude_skill(fx: &Fixture, id: &str) -> PathBuf {
+        fx.repo.join(".claude").join("skills").join(id).join("SKILL.md")
+    }
+
+    #[test]
+    fn the_switch_plan_publishes_removes_and_aliases_the_design_core_and_picked_packs() {
+        let fx = fixture_with_local_copies();
+        with_design(&fx);
+        let _hub = switching_hub(None);
+        let p = plan(&fx, &["--runtime", "claude", "--skillstation"]);
+        let design_root = fx.root.join("packages").join("bee").join("design");
+        for id in DESIGN_SERVED {
+            let publishes = skill_items(&p, "publish_skillstation", id);
+            assert_eq!(publishes.len(), 1, "{id}: {:?}", p["plan"]);
+            assert_eq!(publishes[0]["source"], design_root.to_string_lossy().as_ref());
+            let removals = skill_items(&p, "remove_skill", id);
+            assert_eq!(removals.len(), 1, "{id}: {:?}", p["plan"]);
+            assert_eq!(removals[0]["target"], "repo-claude");
+            assert_eq!(removals[0]["after_publish"], true);
+            let aliases = skill_items(&p, "skillstation_alias", id);
+            assert_eq!(aliases.len(), 1, "{id}: {:?}", p["plan"]);
+            assert_eq!(aliases[0]["after_publish"], true);
+        }
+        for action in ["publish_skillstation", "remove_skill", "skillstation_alias"] {
+            assert!(skill_items(&p, action, "bee-design-motion").is_empty(), "{action}");
+        }
+    }
+
+    #[test]
+    fn a_failed_design_publish_keeps_every_local_copy_and_writes_no_alias() {
+        let fx = fixture_with_local_copies();
+        with_design(&fx);
+        let _hub = switching_hub(Some("bee-design-web"));
+        apply(&fx, &["--runtime", "claude", "--skillstation"]);
+        for id in DESIGN_SERVED.iter().copied().chain(IDS) {
+            let text = std::fs::read_to_string(claude_skill(&fx, id)).unwrap_or_default();
+            assert!(!text.is_empty(), "{id} lost its local copy");
+            assert!(!text.contains("skillstation_alias"), "{id}: {text}");
+        }
+        assert!(!config_text(&fx).contains("hub"));
+    }
+
+    #[test]
+    fn a_full_switch_aliases_the_design_skills_and_the_hub_replan_plans_nothing_for_them() {
+        let fx = fixture_with_local_copies();
+        with_design(&fx);
+        let _hub = switching_hub(None);
+        apply(&fx, &["--runtime", "claude", "--skillstation"]);
+        for id in DESIGN_SERVED {
+            let alias = std::fs::read_to_string(claude_skill(&fx, id)).unwrap();
+            assert!(alias.contains(&format!("skillstation_alias: {id}")), "{id}: {alias}");
+        }
+        assert!(claude_skill(&fx, "bee-design").parent().unwrap().is_dir());
+        assert!(!claude_skill(&fx, "bee-design-motion").exists());
+        let again = plan(&fx, &["--runtime", "claude"]);
+        for id in DESIGN_SERVED {
+            assert!(
+                again["plan"].as_array().unwrap().iter().all(|i| i["skill"] != id),
+                "{id}: {:?}",
+                again["plan"]
+            );
+        }
+    }
+
+    #[test]
+    fn hub_mode_without_a_pack_pick_plans_no_design_hub_item() {
+        let fx = fixture_with_local_copies();
+        for id in ["bee-design", "bee-design-web"] {
+            write(
+                &fx.root.join("packages").join("bee").join("design").join(id).join("SKILL.md"),
+                &design_skill_md(id),
+            );
+        }
+        let _hub = switching_hub(None);
+        let p = plan(&fx, &["--runtime", "claude", "--skillstation"]);
+        assert!(
+            p["plan"].as_array().unwrap().iter().all(|i| {
+                !i["skill"].as_str().unwrap_or("").starts_with("bee-design")
+            }),
+            "{:?}",
+            p["plan"]
+        );
+    }
+
+    #[test]
+    fn codex_and_agents_targets_keep_the_design_skills_through_the_switch() {
+        let fx = fixture_with_local_copies();
+        with_design(&fx);
+        let _hub = switching_hub(None);
+        let codex = plan(&fx, &["--runtime", "codex", "--skillstation"]);
+        for id in DESIGN_SERVED {
+            for action in ["remove_skill", "skillstation_alias"] {
+                assert!(skill_items(&codex, action, id).is_empty(), "{action} {id}");
+            }
+        }
+        apply(&fx, &["--runtime", "claude", "--skillstation"]);
+        for id in DESIGN_SERVED {
+            let kept = fx.repo.join(".agents").join("skills").join(id).join("SKILL.md");
+            assert!(kept.exists(), "{id}");
+            assert!(!std::fs::read_to_string(kept).unwrap().contains("skillstation_alias"), "{id}");
+        }
+    }
+
     #[test]
     fn a_codex_only_run_never_reads_the_principles_on_the_hub() {
         let fx = fixture_with_local_copies();

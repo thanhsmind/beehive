@@ -83,6 +83,18 @@ cannot change their result (skillstation-onboard-aliases D6).
   `skill show --json` `manifest.resources`. A hub read that fails keeps the
   publish, and the `after_publish` removals and `set_principles_hub` are planned
   even when no publish is (skillstation-publish-skip D1-D3).
+- The design core `bee-design` and each design pack in the project's pick
+  (`design.packs`, the same pick `SkillSources::picks` reads) are hub-served
+  like the engine skills: published from the design root, removed from
+  repo-claude after the publish, aliased, and dropped from the repo-claude
+  target of both `compute_skill_sync` and `compute_design_sync` in hub mode.
+  A pack the project did not pick is neither published nor aliased. A publish
+  item that carries a `source` root counts as hub-served for the routing flags
+  and for the failed-publish gate in apply. Pack files that link a sibling pack
+  with `../bee-design-<pack>/` stay byte-equal to the engine render, so those
+  links are as unresolved for a reader without that pack as they were before;
+  `bee doctor`'s `design_skill` row stays ok because an alias folder is a
+  directory (skillstation-more-skills D4-D6).
 - `skillstation.principles` set to the string `hub` in the merged config
   (config.local.json over config.json) is read by one helper,
   `principles_on_hub`. It makes the principle header line name the MCP tool
