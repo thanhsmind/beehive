@@ -117,7 +117,7 @@ find_tools
 status=0
 report "current code" CellLifecycle.cfg pass || status=$?
 if [ "$variants" = 1 ]; then
-  report "fixed variant" Fixed.cfg pass || status=1
+  report "owner-blind-clear variant" OwnerBlindClear.cfg ClaimedCellHoldsItsOwnersClaimFile || status=1
   report "no-ownership-check variant" NoOwnershipCheck.cfg NoForeignCloseOfALiveClaim || status=1
 fi
 exit "$status"

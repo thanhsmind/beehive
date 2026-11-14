@@ -3,7 +3,7 @@ EXTENDS Naturals, FiniteSets
 
 CONSTANTS Sessions, None, Variant, MaxClaims
 
-Variants == {"code", "fixed", "no-ownership-check"}
+Variants == {"code", "owner-blind-clear", "no-ownership-check"}
 
 Statuses == {"open", "claimed", "blocked", "capped", "dropped"}
 Ops == {"claim", "cap", "block", "unclaim", "reopen", "drop", "sweep"}
@@ -100,7 +100,7 @@ CloseCellUnderLock(s) ==
 
 ClearClaimFile(s) ==
     /\ pc[s] = "clear"
-    /\ token' = IF Variant = "fixed" /\ (token = None \/ claimNo # seen[s]) THEN token ELSE None
+    /\ token' = IF Variant # "owner-blind-clear" /\ (token = None \/ claimNo # seen[s]) THEN token ELSE None
     /\ seen' = [seen EXCEPT ![s] = 0]
     /\ Finish(s)
     /\ UNCHANGED <<status, owner, claimNo, stale, revoked, swept, foreign>>

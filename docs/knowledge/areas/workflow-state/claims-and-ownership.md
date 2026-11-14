@@ -306,8 +306,12 @@ red.
   `acquired_at` is written once at claim creation and survives renew and
   adoption, so it names one claim; an owner-name check is not enough because
   the same session can claim again in between. Find the callers with
-  `rg release_claim_file_best_effort`. The model and its rerun live in the
-  `formal-cell-lifecycle` verify skill. Dropping a unit takes the same
+  `rg release_claim_file_best_effort`. A legacy claim file with no
+  `acquired_at` is never cleared by a close; the sweep frees it once stale.
+  The model and its rerun live in the `formal-cell-lifecycle` verify skill,
+  which now models this fixed clear and keeps the owner-blind one as a
+  variant that must still fail (formal-cell-lifecycle D1/D2/D3/D4;
+  claim-clear-identity D3). Dropping a unit takes the same
   ownership check and `--force-ownership` rescue as the other closing verbs
   (drop-ownership D1/D2/D3), because a drop discards another session's work,
   which B23 protects.
