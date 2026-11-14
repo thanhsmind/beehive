@@ -861,6 +861,7 @@
     "upkeep",
     "contract:upkeep-due",
     "pstack-port",
-    "formal-verification"
+    "formal-verification",
+    "contract:drop-ownership"
   ]
 }
