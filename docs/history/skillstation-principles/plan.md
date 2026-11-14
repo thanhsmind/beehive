@@ -129,6 +129,8 @@ Waves: ssp-1, then ssp-2, then ssp-3.
     "lane": "standard",
     "role": "code",
     "deps": [],
+    "affects_skills": [],
+    "affects_specs": [],
     "decisions": ["D1", "D4", "D5"],
     "files": [
       "packages/bee-rs/crates/bee/src/verbs/skillstation_group.rs",
@@ -176,6 +178,8 @@ Waves: ssp-1, then ssp-2, then ssp-3.
     "lane": "standard",
     "role": "code",
     "deps": ["ssp-1"],
+    "affects_skills": [],
+    "affects_specs": [],
     "decisions": ["D1", "D2", "D3"],
     "files": [
       "packages/bee-rs/crates/bee/src/onboard/skills.rs",
@@ -225,6 +229,8 @@ Waves: ssp-1, then ssp-2, then ssp-3.
     "lane": "standard",
     "role": "writer",
     "deps": ["ssp-2"],
+    "affects_skills": [],
+    "affects_specs": ["docs/knowledge/areas/onboarding/skillstation-hub-skills-and-aliases.md", "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md"],
     "decisions": ["D1", "D2", "D3", "D4", "D5"],
     "files": [
       "README.md",
