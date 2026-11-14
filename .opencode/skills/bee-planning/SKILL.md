@@ -120,7 +120,9 @@ Before the question, on a lane: `bee state plan-conflicts derive`, then one
 execution approval while any candidate is unverdicted or the review is stale
 by `plan_rev` (see `docs/knowledge/areas/workflow-state/gates.md` R138).
 
-**Pre-flight the claims table yourself, before you present anything.** The
+**Pre-flight the claims table yourself, before you present anything.** Run `bee plan check`
+first: it checks sections, the cited playbook, D-number coverage and read-row
+evidence, and exits 10 with findings; fix them before the question. The
 leader walks the same checklist the binary runs: the `## Load-bearing claims`
 table exists, every row carries label, anchor, and evidence, every label is
 `read`/`ran`/`guessed`, no row is still `guessed`, and no load-bearing claim

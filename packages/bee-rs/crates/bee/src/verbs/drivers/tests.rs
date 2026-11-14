@@ -12908,6 +12908,101 @@ Finish with: .bee/bin/bee cells finish --id c-golden --outcome "<one line>" --fi
         (prompt, record)
     }
 
+    fn upstream_fixture(root: &Path, id: &str, status: &str, report: &str) {
+        w(
+            root,
+            &format!(".bee/cells/{id}.json"),
+            &format!(
+                r#"{{"id":"{id}","feature":"demo","title":"Title of {id}","status":"{status}","trace":{{"report":{report}}}}}"#
+            ),
+        );
+    }
+
+    #[test]
+    fn upstream_capped_dep_renders_all_fields() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, "{}");
+        upstream_fixture(
+            &root,
+            "d-1",
+            "capped",
+            r#"{"outcome":"did it","commit":"abc123","files":["a.rs","b.rs"],"deviations":["took a shortcut"]}"#,
+        );
+        let lines = upstream_lines(&root, &json!({"deps": ["d-1"]}));
+        assert_eq!(
+            lines,
+            vec![
+                "- d-1 — Title of d-1: outcome did it; commit abc123; files a.rs, b.rs".to_string(),
+                "  - took a shortcut".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn upstream_uncapped_dep_renders_its_status_only() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, "{}");
+        upstream_fixture(&root, "d-2", "claimed", r#"{"outcome":"x","commit":"y","files":[],"deviations":["z"]}"#);
+        assert_eq!(upstream_lines(&root, &json!({"deps": ["d-2"]})), vec!["- d-2 — claimed".to_string()]);
+    }
+
+    #[test]
+    fn upstream_truncates_files_past_twenty_and_deviations_past_300() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, "{}");
+        let files: Vec<String> = (0..23).map(|i| format!("f{i}.rs")).collect();
+        let long = "x".repeat(400);
+        let report = json!({"outcome": "o", "commit": "c", "files": files, "deviations": [long]});
+        upstream_fixture(&root, "d-3", "capped", &report.to_string());
+        let lines = upstream_lines(&root, &json!({"deps": ["d-3"]}));
+        assert!(lines[0].ends_with("f19.rs (+3 more)"), "{}", lines[0]);
+        assert!(!lines[0].contains("f20.rs"), "{}", lines[0]);
+        assert_eq!(lines[1], format!("  - {}...", "x".repeat(297)));
+    }
+
+    #[test]
+    fn upstream_no_deps_renders_byte_identically_to_before() {
+        let template = load_prompt("worker-cell").unwrap();
+        let base = [
+            ("worker", "w"),
+            ("cell_id", "c-1"),
+            ("feature", "f"),
+            ("cell_json", "{}"),
+            ("learned_context", ""),
+            ("prior_rounds", ""),
+        ];
+        let mut with = base.to_vec();
+        with.push(("upstream", ""));
+        assert_eq!(render(&template, &base).unwrap(), render(&template, &with).unwrap());
+        assert!(!render(&template, &with).unwrap().contains("Upstream cells"));
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, "{}");
+        assert!(upstream_lines(&root, &json!({"id": "c-1"})).is_empty());
+    }
+
+    #[test]
+    fn upstream_block_renders_in_the_holdout_arm() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, &holdout_config(Some("100")));
+        bundle_fixture(&root);
+        upstream_fixture(&root, "d-4", "capped", r#"{"outcome":"did it","commit":"abc","files":["a.rs"],"deviations":[]}"#);
+        w(
+            &root,
+            ".bee/cells/c-9.json",
+            r#"{"id":"c-9","feature":"demo","status":"claimed","deps":["d-4"],"trace":{"worker":"w"},"lane":"small"}"#,
+        );
+        let Prepared::Value(v) =
+            prepare_dispatch(&root, "claude", "cell", Some("c-9"), Some("w"), false, None, None, true, None)
+                .unwrap()
+        else {
+            panic!("expected an envelope")
+        };
+        let prompt = v["payload"]["prompt"].as_str().unwrap();
+        assert!(!prompt.contains(LEARNED_HEADER), "{prompt}");
+        assert!(prompt.contains("Upstream cells"), "{prompt}");
+        assert!(prompt.contains("- d-4 — Title of d-4: outcome did it; commit abc; files a.rs"), "{prompt}");
+    }
+
     const LEARNED_HEADER: &str = "Learned context (machine-assembled";
 
     #[test]

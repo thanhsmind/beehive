@@ -2,6 +2,7 @@ use serde_json::{Map, Value};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
+use std::sync::mpsc;
 
 const HERDING_COMMAND: &str = "bee herding run";
 
@@ -11,6 +12,76 @@ pub(crate) struct Spawn {
 }
 
 pub(crate) type Runner<'a> = &'a (dyn Fn(&str, &str, &Path) -> Spawn + Sync);
+
+pub(crate) type Fill<'a> = &'a mut dyn FnMut(usize, &mut Vec<Value>) -> Vec<(String, Value)>;
+
+pub(crate) fn run_rolling(root: &Path, limit: Option<usize>, fill: Fill<'_>) -> (Value, u8) {
+    run_rolling_with(root, limit, fill, &shell_runner)
+}
+
+pub(crate) fn run_rolling_with(
+    root: &Path,
+    limit: Option<usize>,
+    fill: Fill<'_>,
+    runner: Runner<'_>,
+) -> (Value, u8) {
+    let mut native: Vec<Value> = Vec::new();
+    let mut skipped: Vec<Value> = Vec::new();
+    let mut rows: Vec<Value> = Vec::new();
+    std::thread::scope(|scope| {
+        let (tx, rx) = mpsc::channel::<(String, Spawn)>();
+        let mut live = 0usize;
+        loop {
+            let slots = limit.map_or(usize::MAX, |n| n.saturating_sub(live));
+            if slots > 0 {
+                for (id, item) in fill(slots, &mut skipped) {
+                    if !is_herding(&item) {
+                        native.push(item);
+                        continue;
+                    }
+                    let command = payload_text(&item, "command").to_string();
+                    let stdin = payload_text(&item, "stdin").to_string();
+                    let tx = tx.clone();
+                    live += 1;
+                    scope.spawn(move || {
+                        let spawn = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                            runner(&command, &stdin, root)
+                        }))
+                        .unwrap_or(Spawn { exit: None, stdout: String::new() });
+                        let _ = tx.send((id, spawn));
+                    });
+                }
+            }
+            if live == 0 {
+                break;
+            }
+            let Ok((id, spawn)) = rx.recv() else { break };
+            live -= 1;
+            rows.push(save_row(root, &id, &spawn));
+        }
+    });
+    finish_value(rows, native, &skipped)
+}
+
+fn save_row(root: &Path, id: &str, spawn: &Spawn) -> Value {
+    let path = envelope_path(root, id);
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    let _ = std::fs::write(&path, spawn.stdout.as_bytes());
+    row(id, spawn, &path)
+}
+
+fn finish_value(rows: Vec<Value>, native: Vec<Value>, skipped: &[Value]) -> (Value, u8) {
+    let all_done = rows
+        .iter()
+        .all(|r| r.get("outcome").and_then(Value::as_str) == Some("done"));
+    let mut out = Map::new();
+    out.insert("ran".into(), Value::Array(rows));
+    out.insert("native".into(), Value::Array(native));
+    out.insert("skipped".into(), Value::Array(skipped.to_vec()));
+    (Value::Object(out), if all_done { 0 } else { 1 })
+}
 
 pub(crate) fn run_wave(root: &Path, items: &[(String, Value)], skipped: &[Value]) -> (Value, u8) {
     run_wave_with(root, items, skipped, &shell_runner)
@@ -51,27 +122,15 @@ pub(crate) fn run_wave_with(
             .collect()
     });
 
-    let mut rows: Vec<Value> = Vec::new();
-    for ((id, _), spawn) in herding.iter().zip(spawned.iter()) {
-        let path = envelope_path(root, id);
-        if let Some(parent) = path.parent() {
-            let _ = std::fs::create_dir_all(parent);
-        }
-        let _ = std::fs::write(&path, spawn.stdout.as_bytes());
-        rows.push(row(id, spawn, &path));
-    }
-
-    let all_done = rows
+    let rows: Vec<Value> = herding
         .iter()
-        .all(|r| r.get("outcome").and_then(Value::as_str) == Some("done"));
-    let mut out = Map::new();
-    out.insert("ran".into(), Value::Array(rows));
-    out.insert("native".into(), Value::Array(native));
-    out.insert("skipped".into(), Value::Array(skipped.to_vec()));
-    (Value::Object(out), if all_done { 0 } else { 1 })
+        .zip(spawned.iter())
+        .map(|((id, _), spawn)| save_row(root, id, spawn))
+        .collect();
+    finish_value(rows, native, skipped)
 }
 
-fn is_herding(item: &Value) -> bool {
+pub(crate) fn is_herding(item: &Value) -> bool {
     let tool = item.get("tool").and_then(Value::as_str);
     tool == Some("Bash") && payload_text(item, "command").contains(HERDING_COMMAND)
 }
@@ -286,5 +345,116 @@ mod tests {
                 "{value}"
             );
         }
+    }
+
+    fn ready_fill<'a>(
+        order: &'a [&'a str],
+        deps: &'a [(&'a str, &'a str)],
+        capped: &'a std::sync::Mutex<Vec<String>>,
+        started: &'a std::sync::Mutex<Vec<String>>,
+        natives: &'a [&'a str],
+    ) -> impl FnMut(usize, &mut Vec<Value>) -> Vec<(String, Value)> + 'a {
+        move |slots, _skipped| {
+            let mut out = Vec::new();
+            let mut herding = 0;
+            for id in order {
+                if herding >= slots {
+                    break;
+                }
+                let mut started = started.lock().unwrap();
+                if started.iter().any(|s| s == id) {
+                    continue;
+                }
+                let capped = capped.lock().unwrap();
+                let blocked = deps
+                    .iter()
+                    .any(|(cell, dep)| cell == id && !capped.iter().any(|c| c == dep));
+                if blocked {
+                    continue;
+                }
+                started.push(id.to_string());
+                if natives.contains(id) {
+                    out.push(agent_item(id));
+                } else {
+                    herding += 1;
+                    out.push(herding_item(id));
+                }
+            }
+            out
+        }
+    }
+
+    #[test]
+    fn rolling_keeps_at_most_limit_live_and_starts_the_third_when_one_ends() {
+        let tmp = tempfile::tempdir().unwrap();
+        let capped = std::sync::Mutex::new(Vec::new());
+        let started = std::sync::Mutex::new(Vec::new());
+        let live = std::sync::atomic::AtomicUsize::new(0);
+        let peak = std::sync::atomic::AtomicUsize::new(0);
+        let runner = |_c: &str, stdin: &str, _cwd: &Path| {
+            use std::sync::atomic::Ordering::SeqCst;
+            let now = live.fetch_add(1, SeqCst) + 1;
+            peak.fetch_max(now, SeqCst);
+            let id = stdin.trim_start_matches("brief for ").to_string();
+            if id == "c-3" {
+                assert_eq!(started.lock().unwrap().len(), 3);
+            }
+            std::thread::sleep(std::time::Duration::from_millis(if id == "c-1" { 20 } else { 120 }));
+            live.fetch_sub(1, SeqCst);
+            Spawn { exit: Some(0), stdout: done_envelope(&id) }
+        };
+        let mut fill = ready_fill(&["c-1", "c-2", "c-3"], &[], &capped, &started, &[]);
+        let (value, code) = run_rolling_with(tmp.path(), Some(2), &mut fill, &runner);
+        assert_eq!(code, 0, "{value}");
+        assert_eq!(value["ran"].as_array().unwrap().len(), 3, "{value}");
+        assert_eq!(peak.load(std::sync::atomic::Ordering::SeqCst), 2, "{value}");
+    }
+
+    #[test]
+    fn rolling_starts_a_cell_whose_dependency_a_finished_run_capped() {
+        let tmp = tempfile::tempdir().unwrap();
+        let capped = std::sync::Mutex::new(Vec::new());
+        let started = std::sync::Mutex::new(Vec::new());
+        let runner = |_c: &str, stdin: &str, _cwd: &Path| {
+            let id = stdin.trim_start_matches("brief for ").to_string();
+            capped.lock().unwrap().push(id.clone());
+            Spawn { exit: Some(0), stdout: done_envelope(&id) }
+        };
+        let mut fill = ready_fill(&["a", "b"], &[("b", "a")], &capped, &started, &[]);
+        let (value, code) = run_rolling_with(tmp.path(), Some(2), &mut fill, &runner);
+        assert_eq!(code, 0, "{value}");
+        let ids: Vec<&str> = value["ran"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|r| r["id"].as_str().unwrap())
+            .collect();
+        assert_eq!(ids, vec!["a", "b"], "{value}");
+    }
+
+    #[test]
+    fn rolling_returns_native_items_once_and_never_refills_them() {
+        let tmp = tempfile::tempdir().unwrap();
+        let capped = std::sync::Mutex::new(Vec::new());
+        let started = std::sync::Mutex::new(Vec::new());
+        let runner = |_c: &str, stdin: &str, _cwd: &Path| {
+            let id = stdin.trim_start_matches("brief for ").to_string();
+            Spawn { exit: Some(0), stdout: done_envelope(&id) }
+        };
+        let mut fill = ready_fill(&["n-1", "h-1", "h-2"], &[], &capped, &started, &["n-1"]);
+        let (value, _code) = run_rolling_with(tmp.path(), Some(1), &mut fill, &runner);
+        assert_eq!(value["native"].as_array().unwrap().len(), 1, "{value}");
+        assert_eq!(value["native"][0], agent_item("n-1").1, "{value}");
+        assert_eq!(value["ran"].as_array().unwrap().len(), 2, "{value}");
+    }
+
+    #[test]
+    fn rolling_ends_at_once_when_nothing_is_ready() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut fill = |_slots: usize, _s: &mut Vec<Value>| Vec::new();
+        let runner = |_c: &str, _i: &str, _p: &Path| -> Spawn { panic!("nothing runs") };
+        let (value, code) = run_rolling_with(tmp.path(), Some(2), &mut fill, &runner);
+        assert_eq!(code, 0, "{value}");
+        assert_eq!(value["ran"], json!([]), "{value}");
     }
 }

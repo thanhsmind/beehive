@@ -107,6 +107,7 @@ fn supported_vars_for(name: &str) -> Option<&'static [&'static str]> {
             "expertise",
             "advisor",
             "prior_rounds",
+            "upstream",
             "worktree_root",
             "control_root",
             "original_request",

@@ -1392,6 +1392,47 @@ pub(crate) fn resolve_cell_advisor(
     Some(line)
 }
 
+pub(crate) fn upstream_lines(root: &Path, cell: &Value) -> Vec<String> {
+    let deps = match vget(cell, "deps") {
+        Some(Value::Array(items)) => items.clone(),
+        _ => Vec::new(),
+    };
+    let mut lines = Vec::new();
+    for dep in deps {
+        let Value::String(id) = dep else { continue };
+        let Some(loaded) = read_cell(root, &id).ok().flatten() else {
+            lines.push(format!("- {id} — missing"));
+            continue;
+        };
+        let status = tpl(vget(&loaded, "status"));
+        let report = vget(&loaded, "trace").and_then(|t| vget(t, "report")).filter(|r| is_plain_object(r));
+        let (true, Some(report)) = (status == "capped", report) else {
+            lines.push(format!("- {id} — {status}"));
+            continue;
+        };
+        let files: Vec<String> = match vget(report, "files") {
+            Some(Value::Array(items)) => items.iter().map(jsjson::js_to_string).collect(),
+            _ => Vec::new(),
+        };
+        let mut listed = files.iter().take(20).cloned().collect::<Vec<_>>().join(", ");
+        if files.len() > 20 {
+            listed.push_str(&format!(" (+{} more)", files.len() - 20));
+        }
+        lines.push(format!(
+            "- {id} — {}: outcome {}; commit {}; files {listed}",
+            one_line(vget(&loaded, "title"), usize::MAX),
+            one_line(vget(report, "outcome"), usize::MAX),
+            one_line(vget(report, "commit"), usize::MAX),
+        ));
+        if let Some(Value::Array(deviations)) = vget(report, "deviations") {
+            for deviation in deviations {
+                lines.push(format!("  - {}", one_line(Some(deviation), 300)));
+            }
+        }
+    }
+    lines
+}
+
 pub(crate) fn prompt_body_for(
     root: &Path,
     kind: &str,
@@ -1472,6 +1513,7 @@ pub(crate) fn prompt_body_for(
             )
         });
     let prior = prior_round_event_lines(cell).into_iter().chain(answered).collect::<Vec<_>>().join("\n");
+    let upstream = upstream_lines(root, cell).join("\n");
     let cell_json = jsjson::stringify_pretty(cell);
     let feature = tpl(vget(cell, "feature"));
     let cell_id = tpl(vget(cell, "id"));
@@ -1498,6 +1540,7 @@ pub(crate) fn prompt_body_for(
             ("expertise", expertise.unwrap_or("")),
             ("advisor", advisor.unwrap_or("")),
             ("prior_rounds", &prior),
+            ("upstream", &upstream),
             ("worktree_root", worktree_root),
             ("control_root", control_root),
             ("original_request", &original_request),
@@ -4596,7 +4639,7 @@ pub(crate) fn unwind_wave_claim(root: &Path, topo: Option<(&Path, &str)>, worker
 pub(crate) fn run_dispatch_wave(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
     if !crate::verbs::reservations::keys_known(
         &flags,
-        &["runtime", "feature", "session-id", "limit", "run"],
+        &["runtime", "feature", "session-id", "limit", "run", "rolling"],
     ) {
         return None;
     }
@@ -4616,6 +4659,13 @@ pub(crate) fn run_dispatch_wave(flags: Flags, use_json: bool, t0: Instant) -> Op
         Some(FlagV::Present) => return None,
     };
     let run_flag = match flags.get("run") {
+        None => false,
+        Some(FlagV::Present) => true,
+        Some(FlagV::S(s)) if s == "true" => true,
+        Some(FlagV::S(s)) if s == "false" => false,
+        Some(FlagV::S(_)) => return None,
+    };
+    let rolling_flag = match flags.get("rolling") {
         None => false,
         Some(FlagV::Present) => true,
         Some(FlagV::S(s)) if s == "true" => true,
@@ -4697,6 +4747,69 @@ pub(crate) fn run_dispatch_wave(flags: Flags, use_json: bool, t0: Instant) -> Op
         },
     };
 
+    if rolling_flag && !run_flag {
+        return finish(
+            &ctx,
+            Err(Err2::Msg(
+                "dispatch wave: refused — --rolling refills slots from finished runs, so it \
+                 needs --run. FIX: pass --run with --rolling, or drop --rolling."
+                    .to_string(),
+            )),
+        );
+    }
+
+    if rolling_flag {
+        let topo = topology.as_ref().map(|(m, h)| (m.as_path(), h.as_str()));
+        let mut attempted: HashSet<String> = HashSet::new();
+        let mut fill = |slots: usize, skipped: &mut Vec<Value>| {
+            let mut items: Vec<(String, Value)> = Vec::new();
+            let mut herding = 0usize;
+            let mut economics: Vec<Value> = Vec::new();
+            while herding < slots {
+                let Ok(cells) =
+                    crate::verbs::cells::list_cells(&ctx.root, Some(feature.as_str()), None)
+                else {
+                    break;
+                };
+                let schedule = crate::verbs::cells::compute_schedule(&cells);
+                let open = |id: &String| {
+                    cells.iter().any(|c| {
+                        c.get("id").and_then(Value::as_str) == Some(id.as_str())
+                            && c.get("status").and_then(Value::as_str) == Some("open")
+                    })
+                };
+                let Some(id) = schedule
+                    .waves
+                    .first()
+                    .and_then(|w| w.iter().find(|id| !attempted.contains(*id) && open(id)))
+                    .cloned()
+                else {
+                    break;
+                };
+                attempted.insert(id.clone());
+                let before = items.len();
+                claim_wave_cell(
+                    &ctx.root,
+                    topo,
+                    &runtime,
+                    classification,
+                    session_flag.as_deref(),
+                    &id,
+                    &mut items,
+                    skipped,
+                    &mut economics,
+                );
+                if items.len() > before && wave_run::is_herding(&items[items.len() - 1].1) {
+                    herding += 1;
+                }
+            }
+            items
+        };
+        let (value, code) = wave_run::run_rolling(&ctx.root, limit, &mut fill);
+        let text = jsjson::stringify_pretty(&value);
+        return finish(&ctx, Ok(Out::Emit(value, text, code)));
+    }
+
     let cells = match crate::verbs::cells::list_cells(&ctx.root, Some(feature.as_str()), None) {
         Ok(cells) => cells,
         Err(crate::verbs::cells::Delegate) => return finish(&ctx, Err(Err2::Ex)),
@@ -4721,130 +4834,17 @@ pub(crate) fn run_dispatch_wave(flags: Flags, use_json: bool, t0: Instant) -> Op
     let mut economics: Vec<Value> = Vec::new();
 
     for id in &wave_ids {
-        let worker = auto_wave_worker_name(id);
-        match claim_and_reserve_for_dispatch(&ctx.root, topo, id, &worker, session_flag.as_deref())
-        {
-            Err((_e, claim_taken)) if claim_taken => {
-                // dispatch review P2: `claim_and_reserve_for_dispatch`'s own
-                // `?`-propagated Err never reaches ITS internal unwind, so
-                // the claim (and any reservations it already took) may
-                // still stand — best-effort undo it here rather than leak
-                // it, and name the cell in the detail either way.
-                let note = unwind_wave_claim(&ctx.root, topo, &worker, id);
-                let unwind_failed = note.contains("UNWIND FAILED");
-                skipped.push(wave_skip(
-                    id,
-                    if unwind_failed { "unwind_failed" } else { "unsupported" },
-                    format!(
-                        "cell \"{id}\" hit an unproven shape mid-wave — run \
-                         `bee dispatch prepare --cell {id} --worker {worker} --runtime {runtime} --claim` \
-                         for it directly. ({note})"
-                    ),
-                ));
-            }
-            Err((_e, _claim_taken)) => {
-                // dispatch review delta (hpf-3): the claim door itself never
-                // took this cell — an exotic-shape delegate fired ahead of
-                // the claim (handlers_write.rs:904/915), possibly over a
-                // cell ALREADY claimed by a live agent. Nothing here to
-                // unwind, and force-unclaiming would write straight through
-                // whatever the cell already held (open, or that other
-                // agent's claim) rather than something THIS call put there.
-                // Report the real reason; no unwind note — there is nothing
-                // to report an unwind of.
-                skipped.push(wave_skip(
-                    id,
-                    "claim_refused",
-                    format!(
-                        "cell \"{id}\" hit an unproven shape mid-wave before any claim was \
-                         taken — run `bee dispatch prepare --cell {id} --worker {worker} \
-                         --runtime {runtime} --claim` for it directly."
-                    ),
-                ));
-            }
-            Ok(Err(message)) => {
-                let reason = wave_skip_reason(&message);
-                skipped.push(wave_skip(id, reason, message));
-            }
-            Ok(Ok((_cell, reserved, worker_registered, registration_error))) => {
-                match prepare_dispatch(
-                    &ctx.root,
-                    &runtime,
-                    "cell",
-                    Some(id.as_str()),
-                    Some(worker.as_str()),
-                    false,
-                    classification,
-                    None,
-                    true,
-                    None,
-                ) {
-                    // pi-support D5 in the WAVE door: the same refusal
-                    // `dispatch prepare` emits, and the claim this loop just
-                    // took is unwound rather than left standing on a cell
-                    // nothing can dispatch. Every cell of a pi wave resolves
-                    // the same `team.pi` table, so this fires for the whole
-                    // wave or for none of it — the operator gets a `skipped`
-                    // row per cell naming the slot and the herding shape,
-                    // instead of a `wave` array of refusals holding claims.
-                    Ok(Prepared::Value(result))
-                        if result.get("reason").and_then(Value::as_str)
-                            == Some(PI_HERDING_ONLY_REASON) =>
-                    {
-                        let note = unwind_wave_claim(&ctx.root, topo, &worker, id);
-                        let fix =
-                            result.get("fix").and_then(Value::as_str).unwrap_or_default();
-                        skipped.push(wave_skip(
-                            id,
-                            PI_HERDING_ONLY_REASON,
-                            format!("cell \"{id}\": {fix} — {note}"),
-                        ));
-                    }
-                    Ok(Prepared::Value(result)) => {
-                        let mut m = match result {
-                            Value::Object(m) => m,
-                            // kind "cell" always renders an object envelope
-                            // (either the full payload or a typed refusal);
-                            // this arm is unreached in practice.
-                            other => {
-                                wave_items.push((id.clone(), other));
-                                continue;
-                            }
-                        };
-                        m.insert("claimed".into(), Value::Bool(true));
-                        m.insert("reserved".into(), Value::Array(reserved));
-                        m.insert("worker_registered".into(), Value::Bool(worker_registered));
-                        if let Some(err) = &registration_error {
-                            m.insert("registration_error".into(), Value::String(err.clone()));
-                        }
-                        if let Some(Value::Object(econ)) = m.get("economics") {
-                            let mut e = econ.clone();
-                            e.insert("id".into(), Value::String(id.clone()));
-                            economics.push(Value::Object(e));
-                        }
-                        wave_items.push((id.clone(), Value::Object(m)));
-                    }
-                    Ok(Prepared::Thrown(msg)) => {
-                        let note = unwind_wave_claim(&ctx.root, topo, &worker, id);
-                        skipped.push(wave_skip(
-                            id,
-                            "prepare_failed",
-                            format!("cell \"{id}\": {msg} — {note}"),
-                        ));
-                    }
-                    Err(Delegate) => {
-                        let note = unwind_wave_claim(&ctx.root, topo, &worker, id);
-                        skipped.push(wave_skip(
-                            id,
-                            "prepare_failed",
-                            format!(
-                                "cell \"{id}\": prepare_dispatch hit an unproven shape mid-wave — {note}"
-                            ),
-                        ));
-                    }
-                }
-            }
-        }
+        claim_wave_cell(
+            &ctx.root,
+            topo,
+            &runtime,
+            classification,
+            session_flag.as_deref(),
+            id,
+            &mut wave_items,
+            &mut skipped,
+            &mut economics,
+        );
     }
 
     if run_flag {
@@ -4863,6 +4863,144 @@ pub(crate) fn run_dispatch_wave(flags: Flags, use_json: bool, t0: Instant) -> Op
     let result = Value::Object(result);
     let text = jsjson::stringify_pretty(&result);
     finish(&ctx, Ok(Out::Emit(result, text, 0)))
+}
+
+#[allow(clippy::too_many_arguments)]
+fn claim_wave_cell(
+    root: &Path,
+    topo: Option<(&Path, &str)>,
+    runtime: &str,
+    classification: Option<&str>,
+    session: Option<&str>,
+    id: &String,
+    wave_items: &mut Vec<(String, Value)>,
+    skipped: &mut Vec<Value>,
+    economics: &mut Vec<Value>,
+) {
+    let worker = auto_wave_worker_name(id);
+    match claim_and_reserve_for_dispatch(root, topo, id, &worker, session)
+    {
+        Err((_e, claim_taken)) if claim_taken => {
+            // dispatch review P2: `claim_and_reserve_for_dispatch`'s own
+            // `?`-propagated Err never reaches ITS internal unwind, so
+            // the claim (and any reservations it already took) may
+            // still stand — best-effort undo it here rather than leak
+            // it, and name the cell in the detail either way.
+            let note = unwind_wave_claim(root, topo, &worker, id);
+            let unwind_failed = note.contains("UNWIND FAILED");
+            skipped.push(wave_skip(
+                id,
+                if unwind_failed { "unwind_failed" } else { "unsupported" },
+                format!(
+                    "cell \"{id}\" hit an unproven shape mid-wave — run \
+                     `bee dispatch prepare --cell {id} --worker {worker} --runtime {runtime} --claim` \
+                     for it directly. ({note})"
+                ),
+            ));
+        }
+        Err((_e, _claim_taken)) => {
+            // dispatch review delta (hpf-3): the claim door itself never
+            // took this cell — an exotic-shape delegate fired ahead of
+            // the claim (handlers_write.rs:904/915), possibly over a
+            // cell ALREADY claimed by a live agent. Nothing here to
+            // unwind, and force-unclaiming would write straight through
+            // whatever the cell already held (open, or that other
+            // agent's claim) rather than something THIS call put there.
+            // Report the real reason; no unwind note — there is nothing
+            // to report an unwind of.
+            skipped.push(wave_skip(
+                id,
+                "claim_refused",
+                format!(
+                    "cell \"{id}\" hit an unproven shape mid-wave before any claim was \
+                     taken — run `bee dispatch prepare --cell {id} --worker {worker} \
+                     --runtime {runtime} --claim` for it directly."
+                ),
+            ));
+        }
+        Ok(Err(message)) => {
+            let reason = wave_skip_reason(&message);
+            skipped.push(wave_skip(id, reason, message));
+        }
+        Ok(Ok((_cell, reserved, worker_registered, registration_error))) => {
+            match prepare_dispatch(
+                root,
+                &runtime,
+                "cell",
+                Some(id.as_str()),
+                Some(worker.as_str()),
+                false,
+                classification,
+                None,
+                true,
+                None,
+            ) {
+                // pi-support D5 in the WAVE door: the same refusal
+                // `dispatch prepare` emits, and the claim this loop just
+                // took is unwound rather than left standing on a cell
+                // nothing can dispatch. Every cell of a pi wave resolves
+                // the same `team.pi` table, so this fires for the whole
+                // wave or for none of it — the operator gets a `skipped`
+                // row per cell naming the slot and the herding shape,
+                // instead of a `wave` array of refusals holding claims.
+                Ok(Prepared::Value(result))
+                    if result.get("reason").and_then(Value::as_str)
+                        == Some(PI_HERDING_ONLY_REASON) =>
+                {
+                    let note = unwind_wave_claim(root, topo, &worker, id);
+                    let fix =
+                        result.get("fix").and_then(Value::as_str).unwrap_or_default();
+                    skipped.push(wave_skip(
+                        id,
+                        PI_HERDING_ONLY_REASON,
+                        format!("cell \"{id}\": {fix} — {note}"),
+                    ));
+                }
+                Ok(Prepared::Value(result)) => {
+                    let mut m = match result {
+                        Value::Object(m) => m,
+                        // kind "cell" always renders an object envelope
+                        // (either the full payload or a typed refusal);
+                        // this arm is unreached in practice.
+                        other => {
+                            wave_items.push((id.clone(), other));
+                            return;
+                        }
+                    };
+                    m.insert("claimed".into(), Value::Bool(true));
+                    m.insert("reserved".into(), Value::Array(reserved));
+                    m.insert("worker_registered".into(), Value::Bool(worker_registered));
+                    if let Some(err) = &registration_error {
+                        m.insert("registration_error".into(), Value::String(err.clone()));
+                    }
+                    if let Some(Value::Object(econ)) = m.get("economics") {
+                        let mut e = econ.clone();
+                        e.insert("id".into(), Value::String(id.clone()));
+                        economics.push(Value::Object(e));
+                    }
+                    wave_items.push((id.clone(), Value::Object(m)));
+                }
+                Ok(Prepared::Thrown(msg)) => {
+                    let note = unwind_wave_claim(root, topo, &worker, id);
+                    skipped.push(wave_skip(
+                        id,
+                        "prepare_failed",
+                        format!("cell \"{id}\": {msg} — {note}"),
+                    ));
+                }
+                Err(Delegate) => {
+                    let note = unwind_wave_claim(root, topo, &worker, id);
+                    skipped.push(wave_skip(
+                        id,
+                        "prepare_failed",
+                        format!(
+                            "cell \"{id}\": prepare_dispatch hit an unproven shape mid-wave — {note}"
+                        ),
+                    ));
+                }
+            }
+        }
+    }
 }
 
 pub(crate) fn authorize_dispatch_permit(

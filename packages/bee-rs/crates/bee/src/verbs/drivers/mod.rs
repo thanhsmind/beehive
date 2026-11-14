@@ -213,6 +213,7 @@ mod wave_run;
 mod brief_lint;
 mod context_table;
 mod close;
+mod proof_pointers;
 pub(crate) use self::jsprim::*;
 pub(crate) use self::prompt::*;
 pub(crate) use self::models::*;

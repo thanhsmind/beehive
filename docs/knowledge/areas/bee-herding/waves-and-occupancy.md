@@ -11,7 +11,7 @@ bee:
   decisions: ["herding-orchestration D2/D5 (the choreography is generic, behind a compiler-enforced boundary)", herding-orchestration D7 (unverifiable is one of five worker states), "herding-orchestration D9 (blocking threads, not an event runtime)", "herding-orchestration D10 (the wave ledger, written at spawn)", "herding-orchestration D11 (a wave is one value, not a sequence of calls)", herding-orchestration D18 (dispatch records its own ledger row at spawn), tmux-herding-cockpit D1 (the whole cockpit — occupancy and waves included — selects its transport from the same herding.transport key), "tmux-herding-cockpit D4 (waves and occupancy build the tmux backend from that key; ONE screen classifier, living in fleet, serves both crates)", herding-cockpit-completeness 1ef811f7 (2026-09-06 — retryable bit on wave bucket rows and ledger worker rows; true only for send_failed and flipped_before_send), herding-cockpit-completeness d5a1f7e1 (2026-09-06 — orphan sweep in status and occupancy marks dead-pane jobs without result as interrupted with reason process_restarted; relaunches nothing), "herding-cockpit-completeness 9615be76 (2026-09-06 — no automatic behavior: no auto-retry, no orphan relaunch)", herding-cockpit-completeness afec9446 (2026-09-06 — D8 word list and envelope no-new-key law)]
   sources: [docs/history/herding-orchestration/CONTEXT.md, "the first live D6 run on Linux, 2026-08-19", docs/history/tmux-herding-transport/CONTEXT.md, docs/history/herding-cockpit-completeness/CONTEXT.md, docs/history/herding-cockpit-completeness/plan.md, "herding-cockpit-completeness cells hcc-5, hcc-7, hcc-9 (commits f487054d, 9895e008, c6537633)"]
   authoritative_for: "bee-herding: waves, the wave ledger, and occupancy"
-  anchors: [packages/bee-rs/crates/bee/src/herding/wave.rs, packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs, packages/bee-rs/crates/bee/src/herding.rs, packages/bee-rs/crates/bee/src/devtools/statusline.rs, packages/bee-rs/crates/bee/src/hooks/activity.rs, packages/bee-rs/crates/fleet/, packages/bee-rs/crates/fleet/src/backend/herdr.rs, packages/bee-rs/crates/fleet/src/backend/tmux.rs, packages/bee-rs/crates/fleet/src/screen.rs, packages/bee-rs/crates/fleet/tests/tmux_backend.rs]
+  anchors: [packages/bee-rs/crates/bee/src/verbs/drivers/wave_run.rs, packages/bee-rs/crates/bee/src/herding/wave.rs, packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs, packages/bee-rs/crates/bee/src/herding.rs, packages/bee-rs/crates/bee/src/devtools/statusline.rs, packages/bee-rs/crates/bee/src/hooks/activity.rs, packages/bee-rs/crates/fleet/, packages/bee-rs/crates/fleet/src/backend/herdr.rs, packages/bee-rs/crates/fleet/src/backend/tmux.rs, packages/bee-rs/crates/fleet/src/screen.rs, packages/bee-rs/crates/fleet/tests/tmux_backend.rs]
   verified_at: 2026-11-10
   verified_commit: 2f0495d24e30048da79fa3d5dcc287605cf6869c
 ---
@@ -264,3 +264,26 @@ at all, so neither the closing record nor the empty-fleet verdict reaches them.
   `wave.rs`'s `run_wave_for_transport`; the shared classifier is
   `packages/bee-rs/crates/fleet/src/screen.rs`, tested from
   `packages/bee-rs/crates/fleet/tests/tmux_backend.rs`.
+
+## `dispatch wave --run --rolling` refills slots as runs end
+
+(pstack-rust-checks D5, cell psrc-5.)
+
+Read when: a `dispatch wave --run` leaves cells unstarted behind `--limit`, or a dependent cell waits for a run you already finished.
+
+Without `--rolling`, `--limit N` claims only the first N cells of wave one and the
+call ends when those runs end; a cell that becomes ready afterwards waits for the
+next call. `--rolling` (which refuses without `--run`) keeps the call open instead:
+each finished run frees a slot, the schedule is recomputed from the store, and the
+next open cell of the first wave is claimed, prepared and started.
+
+- A dependent starts only after its dependency is capped in the store. bee never caps
+  here, so the cap comes from whoever closes the cell during the run; a dependency
+  that is never capped leaves its dependents unstarted and the call ends.
+- Agent-tool items are claimed and returned under `native` once. They take no slot
+  and are never refilled, so a native dependency never unblocks its dependents here.
+- Every cell is attempted once per call, so a refused claim lands in `skipped` and is
+  not retried in a later refill.
+- Workers report over a channel and the loop blocks on it, so no polling runs.
+- Rejected: one fixed batch per `--limit` (the existing mode), which leaves slots idle
+  while the slowest run in the batch finishes.

@@ -742,7 +742,18 @@ pub(crate) fn cap_cell_from_flags(root: &Path, f: &CapFlags, finish: bool) -> MR
         // D8: the validated --report object — stored verbatim
         // (`parse_report_flag` already proved the exact five keys). Always
         // present now that --report is required on every cap path.
-        trace.insert("report".into(), report_value.clone());
+        let mut stored_report = report_value.clone();
+        if let Some(Value::String(commit)) = report_value.get("commit") {
+            let commit = commit.trim();
+            if !commit.is_empty() && commit != "none" {
+                if let Some(pid) = crate::verbs::worktree::commit_patch_id(root, commit) {
+                    if let Value::Object(map) = &mut stored_report {
+                        map.insert("patch_id".into(), Value::String(pid));
+                    }
+                }
+            }
+        }
+        trace.insert("report".into(), stored_report);
         let outcome_value = match &f.outcome {
             Some(o) if !js_trim(o).is_empty() => Value::String(o.clone()),
             _ => trace.get("outcome").cloned().unwrap_or(Value::Null),

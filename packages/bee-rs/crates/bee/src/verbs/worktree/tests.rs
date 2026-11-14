@@ -1033,6 +1033,124 @@ use std::time::Instant;
         assert!(!printed.contains("proof-stale"), "{printed}");
     }
 
+    #[test]
+    fn a_stored_patch_id_reads_carried_when_the_commit_object_is_gone() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let mut lock_busy = None;
+        let created = create_feature_worktree(&main, "pid", None, CompanionSpec::default(), &mut lock_busy)
+            .unwrap_or_else(|_| panic!("plain worktree creation must succeed"));
+        let wt = created.worktree_root.clone();
+        git_ok(&wt, &["config", "user.email", "a@b.c"]);
+        git_ok(&wt, &["config", "user.name", "t"]);
+        std::fs::write(wt.join("f.txt"), "y").unwrap();
+        git_ok(&wt, &["commit", "-qam", "work"]);
+        let proved_at = head_sha(&wt);
+        let stored = crate::verbs::worktree::commit_patch_id(&main, &proved_at).unwrap();
+        std::fs::write(main.join("m.txt"), "m").unwrap();
+        git_ok(&main, &["add", "m.txt"]);
+        git_ok(&main, &["commit", "-qm", "main moves"]);
+        git_ok(&wt, &["rebase", "main"]);
+        git_ok(&main, &["reflog", "expire", "--expire=now", "--all"]);
+        git_ok(&main, &["gc", "-q", "--prune=now"]);
+        assert!(!run_git(&main, &["cat-file", "-e", &proved_at]).status.is_some_and(|c| c == 0));
+        let mut report = json!({
+            "outcome": "did the thing",
+            "commit": proved_at,
+            "files": ["src/a.rs"],
+            "tests": "cargo test -p bee — green:unit — touched a.rs",
+            "deviations": [],
+        });
+        report["patch_id"] = Value::String(stored);
+        write_capped_cell(&main, "pid-1", "pid", Some(report));
+        let answer = merge_feature_worktree(&main, &created.id, false, None, true, None)
+            .unwrap_or_else(|e| match e {
+                MErr::Thrown(m) => panic!("the advisory must never refuse a merge: {m}"),
+                MErr::Ex => panic!("merge delegated"),
+            });
+        assert!(answer.ok, "{:?}", answer.result);
+        assert_eq!(answer.result["merged"], Value::Bool(true));
+        assert_eq!(answer.result["proof_carried"]["cells"], json!(["pid-1"]), "{:?}", answer.result);
+    }
+
+    #[test]
+    fn a_stored_patch_id_missing_from_the_branch_reads_stale() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let mut lock_busy = None;
+        let created = create_feature_worktree(&main, "pid", None, CompanionSpec::default(), &mut lock_busy)
+            .unwrap_or_else(|_| panic!("plain worktree creation must succeed"));
+        let wt = created.worktree_root.clone();
+        git_ok(&wt, &["config", "user.email", "a@b.c"]);
+        git_ok(&wt, &["config", "user.name", "t"]);
+        std::fs::write(wt.join("f.txt"), "y").unwrap();
+        git_ok(&wt, &["commit", "-qam", "work"]);
+        let proved_at = head_sha(&wt);
+        let stored = crate::verbs::worktree::commit_patch_id(&main, &proved_at).unwrap();
+        std::fs::write(main.join("m.txt"), "m").unwrap();
+        git_ok(&main, &["add", "m.txt"]);
+        git_ok(&main, &["commit", "-qm", "main moves"]);
+        git_ok(&wt, &["rebase", "main"]);
+        
+        let mut report = json!({
+            "outcome": "did the thing",
+            "commit": proved_at,
+            "files": ["src/a.rs"],
+            "tests": "cargo test -p bee — green:unit — touched a.rs",
+            "deviations": [],
+        });
+        report["patch_id"] = Value::String("0".repeat(40));
+        write_capped_cell(&main, "pid-1", "pid", Some(report));
+        let answer = merge_feature_worktree(&main, &created.id, false, None, true, None)
+            .unwrap_or_else(|e| match e {
+                MErr::Thrown(m) => panic!("the advisory must never refuse a merge: {m}"),
+                MErr::Ex => panic!("merge delegated"),
+            });
+        assert!(answer.ok, "{:?}", answer.result);
+        assert_eq!(answer.result["merged"], Value::Bool(true));
+        let stale = jsjson::js_to_string(&answer.result["proof_stale"]["cells"]);
+        assert!(stale.contains("pid-1"), "{:?}", answer.result);
+        assert!(answer.result.get("proof_carried").is_none(), "{:?}", answer.result);
+    }
+
+    #[test]
+    fn a_cap_without_a_stored_patch_id_keeps_the_commit_path_for_patch_id() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let mut lock_busy = None;
+        let created = create_feature_worktree(&main, "pid", None, CompanionSpec::default(), &mut lock_busy)
+            .unwrap_or_else(|_| panic!("plain worktree creation must succeed"));
+        let wt = created.worktree_root.clone();
+        git_ok(&wt, &["config", "user.email", "a@b.c"]);
+        git_ok(&wt, &["config", "user.name", "t"]);
+        std::fs::write(wt.join("f.txt"), "y").unwrap();
+        git_ok(&wt, &["commit", "-qam", "work"]);
+        let proved_at = head_sha(&wt);
+        let stored = crate::verbs::worktree::commit_patch_id(&main, &proved_at).unwrap();
+        std::fs::write(main.join("m.txt"), "m").unwrap();
+        git_ok(&main, &["add", "m.txt"]);
+        git_ok(&main, &["commit", "-qm", "main moves"]);
+        git_ok(&wt, &["rebase", "main"]);
+        
+        let mut report = json!({
+            "outcome": "did the thing",
+            "commit": proved_at,
+            "files": ["src/a.rs"],
+            "tests": "cargo test -p bee — green:unit — touched a.rs",
+            "deviations": [],
+        });
+        let _ = &stored;
+        write_capped_cell(&main, "pid-1", "pid", Some(report));
+        let answer = merge_feature_worktree(&main, &created.id, false, None, true, None)
+            .unwrap_or_else(|e| match e {
+                MErr::Thrown(m) => panic!("the advisory must never refuse a merge: {m}"),
+                MErr::Ex => panic!("merge delegated"),
+            });
+        assert!(answer.ok, "{:?}", answer.result);
+        assert_eq!(answer.result["merged"], Value::Bool(true));
+        assert_eq!(answer.result["proof_carried"]["cells"], json!(["pid-1"]), "{:?}", answer.result);
+    }
+
     /// D4: the ordinary merge — every cap was proven on the line that
     /// descends from the merge base — says nothing at all. An advisory that
     /// fires on a clean merge is noise, so this is the case that matters

@@ -487,3 +487,25 @@ pub(crate) fn sync_worktree_skills(main_root: &Path, worktree_root: &Path) -> Va
         "skipped": skipped,
     })
 }
+
+pub(crate) fn commit_patch_id(main_root: &Path, commit: &str) -> Option<String> {
+    let shown = run_git(main_root, &["show", commit]);
+    if shown.status != Some(0) {
+        return None;
+    }
+    let diff = shown.stdout.unwrap_or_default();
+    if diff.is_empty() {
+        return None;
+    }
+    let filtered = run_git_stdin(main_root, &["patch-id", "--stable"], diff.as_bytes());
+    if filtered.status != Some(0) {
+        return None;
+    }
+    let out = filtered.stdout.unwrap_or_default();
+    let id = out.split_whitespace().next().unwrap_or("").to_string();
+    if id.is_empty() {
+        None
+    } else {
+        Some(id)
+    }
+}
