@@ -26,6 +26,7 @@ Playbook: `skills/bee-planning/playbooks/feature.md` (class `feature`).
 - D4: hub mode adds `mcp__skillstation__skill_get` to the rendered Claude agent `tools:` lines.
 - D5: hub mode changes the principle header line to name `skill_get`; one mode helper in `skillstation_group.rs`.
 - D6: no hat wave; dev skill trees and release out of scope.
+- D7: drop local principles only where the principle index file exists; else one skip row.
 
 ## Load-bearing claims
 
@@ -118,6 +119,7 @@ Waves: ssp-1, then ssp-2, then ssp-3.
 |---|---|---|---|---|---|
 | ssp-1 | Give agents the hub fetch tool and name it in the principle header | `skillstation_group.rs`, `principles.rs`, `onboard/agents.rs`, `onboard/apply.rs` | — | hub mode: worker agents list `skill_get`, orient says where principles live | `cargo test … --bin bee -- principles agents skillstation session_preamble` green |
 | ssp-2 | Serve principles from the hub in onboard | `onboard/skills.rs`, `onboard/plan.rs`, `onboard/apply.rs`, `onboard/tests.rs` | ssp-1 | hub mode: onboard publishes the principles and removes the local copies | `cargo test … --bin bee -- skillstation onboard` green |
+| ssp-4 | Keep local principles where orient cannot name them | `onboard/plan.rs`, `onboard/tests.rs`, `principles.rs`, docs | ssp-2 | a host repo in hub mode keeps its principles and gets one skip row | `cargo test … --bin bee -- skillstation onboard` green |
 | ssp-3 | Document the skillstation.principles key | `README.md`, `docs/config-reference.md`, `docs/knowledge/**`, delivery.md | ssp-2 | the key is in the config reference | `.bee/bin/bee knowledge check` green |
 
 ```json
@@ -131,7 +133,11 @@ Waves: ssp-1, then ssp-2, then ssp-3.
     "deps": [],
     "affects_skills": [],
     "affects_specs": [],
-    "decisions": ["D1", "D4", "D5"],
+    "decisions": [
+      "D1",
+      "D4",
+      "D5"
+    ],
     "files": [
       "packages/bee-rs/crates/bee/src/verbs/skillstation_group.rs",
       "packages/bee-rs/crates/bee/src/principles.rs",
@@ -156,7 +162,10 @@ Waves: ssp-1, then ssp-2, then ssp-3.
         "with skillstation.principles absent every rendered Claude agent file is byte-identical to before"
       ],
       "artifacts": [
-        {"path": "packages/bee-rs/crates/bee/src/verbs/skillstation_group.rs", "substantive": "principles_on_hub helper"}
+        {
+          "path": "packages/bee-rs/crates/bee/src/verbs/skillstation_group.rs",
+          "substantive": "principles_on_hub helper"
+        }
       ],
       "key_links": [
         "principles.rs and agents.rs both call principles_on_hub, not a copy of the config read",
@@ -177,10 +186,16 @@ Waves: ssp-1, then ssp-2, then ssp-3.
     "title": "Serve principles from the hub in onboard",
     "lane": "standard",
     "role": "code",
-    "deps": ["ssp-1"],
+    "deps": [
+      "ssp-1"
+    ],
     "affects_skills": [],
     "affects_specs": [],
-    "decisions": ["D1", "D2", "D3"],
+    "decisions": [
+      "D1",
+      "D2",
+      "D3"
+    ],
     "files": [
       "packages/bee-rs/crates/bee/src/onboard/skills.rs",
       "packages/bee-rs/crates/bee/src/onboard/plan.rs",
@@ -206,7 +221,10 @@ Waves: ssp-1, then ssp-2, then ssp-3.
         "with skillstation.principles absent the onboard plan is unchanged"
       ],
       "artifacts": [
-        {"path": "packages/bee-rs/crates/bee/src/onboard/skills.rs", "substantive": "Claude target source list without principles in hub mode"}
+        {
+          "path": "packages/bee-rs/crates/bee/src/onboard/skills.rs",
+          "substantive": "Claude target source list without principles in hub mode"
+        }
       ],
       "key_links": [
         "onboard calls principles_on_hub and hub_show from skillstation_group.rs",
@@ -228,10 +246,21 @@ Waves: ssp-1, then ssp-2, then ssp-3.
     "title": "Document the skillstation.principles key",
     "lane": "standard",
     "role": "writer",
-    "deps": ["ssp-2"],
+    "deps": [
+      "ssp-2"
+    ],
     "affects_skills": [],
-    "affects_specs": ["docs/knowledge/areas/onboarding/skillstation-hub-skills-and-aliases.md", "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md"],
-    "decisions": ["D1", "D2", "D3", "D4", "D5"],
+    "affects_specs": [
+      "docs/knowledge/areas/onboarding/skillstation-hub-skills-and-aliases.md",
+      "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md"
+    ],
+    "decisions": [
+      "D1",
+      "D2",
+      "D3",
+      "D4",
+      "D5"
+    ],
     "files": [
       "README.md",
       "docs/config-reference.md",
@@ -252,10 +281,74 @@ Waves: ssp-1, then ssp-2, then ssp-3.
         "the skillstation onboarding concept explains hub-served principles"
       ],
       "artifacts": [
-        {"path": "docs/history/skillstation-principles/delivery.md", "substantive": "the feature's delivery record"}
+        {
+          "path": "docs/history/skillstation-principles/delivery.md",
+          "substantive": "the feature's delivery record"
+        }
       ],
-      "key_links": ["the delivery lands in the same merge as the code"],
-      "prohibitions": ["No restating of code in concepts", "No code comments"],
+      "key_links": [
+        "the delivery lands in the same merge as the code"
+      ],
+      "prohibitions": [
+        "No restating of code in concepts",
+        "No code comments"
+      ],
+      "open_choices": []
+    }
+  },
+  {
+    "id": "ssp-4",
+    "feature": "skillstation-principles",
+    "title": "Keep local principles where orient cannot name them",
+    "lane": "standard",
+    "role": "code",
+    "deps": [
+      "ssp-2"
+    ],
+    "affects_skills": [],
+    "affects_specs": [
+      "docs/knowledge/areas/onboarding/skillstation-hub-skills-and-aliases.md"
+    ],
+    "decisions": [
+      "D2",
+      "D7",
+      "608d5298-e450-47b0-ac10-6655f4999e04",
+      "803d608e-c159-41fe-b9c0-e1b3750ae841"
+    ],
+    "files": [
+      "packages/bee-rs/crates/bee/src/onboard/plan.rs",
+      "packages/bee-rs/crates/bee/src/onboard/tests.rs",
+      "packages/bee-rs/crates/bee/src/principles.rs",
+      "docs/knowledge/areas/onboarding/skillstation-hub-skills-and-aliases.md",
+      "docs/config-reference.md",
+      "README.md"
+    ],
+    "read_first": [
+      "docs/history/skillstation-principles/CONTEXT.md",
+      "packages/bee-rs/crates/bee/src/onboard/plan.rs",
+      "packages/bee-rs/crates/bee/src/principles.rs",
+      "docs/knowledge/areas/onboarding/skillstation-hub-skills-and-aliases.md"
+    ],
+    "action": "D7: in onboard plan, hub mode drops the local principles only when the repo root holds the file principles::PRINCIPLE_INDEX (make the constant reachable from onboard, pub(crate) is enough; do not copy the path string). Check this before the hub read: when the file is absent, principles_from_hub stays false, no hub read runs for principles, and onboard adds exactly one skipped_skills entry {target: \"skillstation-principles\", reason: \"<PRINCIPLE_INDEX> is absent, so bee orient cannot name principles in this repo\"}. When the file is present the ssp-2 behavior is unchanged. The --skillstation publish is unchanged. Update the existing ssp-2 hub-mode tests so their repo carries the index file, and add a test: hub mode, every principle active, no index file -> no remove_skill for any bee-principle folder and one skip row naming the index. Docs: say in docs/config-reference.md (the skillstation.principles row), README.md (the Skillstation paragraph; also fix its count: the source has 24 bee-principle skills, not 25) and the onboarding concept that the local copies are removed only in a repo that holds the principle index, which today is the bee repo itself; cite skillstation-principles D7. One commit.",
+    "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- skillstation onboard",
+    "must_haves": {
+      "truths": [
+        "in hub mode with every principle active but no principle index file onboard keeps every local principle and reports one skipped_skills entry naming the index",
+        "in hub mode with the principle index file and every principle active onboard still removes the local principle folders under .claude/skills"
+      ],
+      "artifacts": [
+        {
+          "path": "packages/bee-rs/crates/bee/src/onboard/plan.rs",
+          "substantive": "principle index check before the principle drop"
+        }
+      ],
+      "key_links": [
+        "onboard reads the index path from principles::PRINCIPLE_INDEX, not a copy"
+      ],
+      "prohibitions": [
+        "No code comments",
+        "Onboard tests never call the real skillstation"
+      ],
       "open_choices": []
     }
   }
