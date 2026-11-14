@@ -1,0 +1,129 @@
+{
+  "id": "shs-2",
+  "feature": "skillstation-human-skills",
+  "title": "Keep the /<id> alias when the --skillstation switch runs again",
+  "lane": "small",
+  "role": "code",
+  "deps": [
+    "shs-1"
+  ],
+  "decisions": [
+    "D2",
+    "D3",
+    "D4",
+    "3eadc5cf-685e-4f43-b312-41d8489c4e9c"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/onboard/plan.rs",
+    "packages/bee-rs/crates/bee/src/onboard/tests.rs",
+    "docs/knowledge/areas/onboarding/skillstation-hub-skills-and-aliases.md",
+    "docs/history/skillstation-human-skills/delivery.md"
+  ],
+  "read_first": [
+    "docs/history/skillstation-human-skills/CONTEXT.md",
+    "docs/history/skillstation-human-skills/delivery.md",
+    "packages/bee-rs/crates/bee/src/onboard/plan.rs",
+    "packages/bee-rs/crates/bee/src/onboard/tests.rs"
+  ],
+  "action": "DEFECT: in a project that already holds the bee-how alias at .claude/skills/bee-how/SKILL.md, a second `bee onboard --skillstation --apply` (what a re-run of scripts/install.sh --skillstation does) plans the after_publish remove_skill for bee-how from principle_removal_items, but hub_alias_items returns no item because the current file already equals the alias render. Apply deletes the alias and never writes it back; the installer recheck then plans the alias again. RED FIRST in packages/bee-rs/crates/bee/src/onboard/tests.rs beside the shs-1 tests: run the full switch apply with every publish succeeding, then run a second switch apply with the hub now reporting every hub-served skill active with the same files; assert .claude/skills/bee-how/SKILL.md still exists and carries `skillstation_alias: bee-how`, and that a plan without --skillstation (hub mode, all served) plans no item naming bee-how. Watch it fail for the reported reason and record the red output. FIX in plan.rs, smallest change: during the switch (after_publish true) hub_alias_items always plans the alias item, because the removal before it deletes the folder; the equal-content skip stays only for the non-switch path. Add one sentence to the Business Rules of docs/knowledge/areas/onboarding/skillstation-hub-skills-and-aliases.md that a re-run of the switch rewrites the alias after the removal, citing skillstation-human-skills D3-D4. Add the red and green test names to docs/history/skillstation-human-skills/delivery.md. One commit.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- skillstation onboard",
+  "must_haves": {
+    "truths": [
+      "a second --skillstation apply on a project that already holds the five aliases leaves every alias in place",
+      "after that second apply, a plan without --skillstation plans no item for the five"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/onboard/plan.rs",
+        "substantive": "the switch alias items are planned even when the file is current"
+      }
+    ],
+    "key_links": [
+      "the alias item still sorts after the remove_skill item for the same id"
+    ],
+    "prohibitions": [
+      "No code comments",
+      "Onboard tests never call the real skillstation"
+    ]
+  },
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/onboarding/skillstation-hub-skills-and-aliases.md"
+  ],
+  "status": "capped",
+  "trace": {
+    "worker": "shs-worker-2",
+    "outcome": "A second --skillstation apply now rewrites the bee-how alias after the removal; commit 3105dbaf6692941d018a67cb742924c027a2be4f",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/onboard/plan.rs",
+      "packages/bee-rs/crates/bee/src/onboard/tests.rs",
+      "docs/knowledge/areas/onboarding/skillstation-hub-skills-and-aliases.md",
+      "docs/history/skillstation-human-skills/delivery.md"
+    ],
+    "deviations": [
+      "sync-ack: owning concept onboarding/skillstation-hub-skills-and-aliases.md updated in the commit; other anchoring concepts cover unrelated subjects of plan.rs"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-14T12:22:41.389Z",
+    "behavior_change": false,
+    "verification_evidence": "cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml — green:unit — whole workspace after a plan.rs change; the new test failed red with the fix reverted",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "f0c35ee6-a31c-4a9f-86d1-a88219947a72",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- skillstation onboard",
+    "claimed_at": "2026-11-14T12:13:22.203Z",
+    "knowledge_delta": [
+      "docs/knowledge/areas/onboarding/skillstation-hub-skills-and-aliases.md"
+    ],
+    "sync_ack": "owning concept onboarding/skillstation-hub-skills-and-aliases.md updated in the commit; other anchoring concepts cover unrelated subjects of plan.rs",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "A second --skillstation apply now rewrites the bee-how alias after the removal; commit 3105dbaf6692941d018a67cb742924c027a2be4f",
+      "commit": "3105dbaf6692941d018a67cb742924c027a2be4f",
+      "files": [
+        "packages/bee-rs/crates/bee/src/onboard/plan.rs",
+        "packages/bee-rs/crates/bee/src/onboard/tests.rs",
+        "docs/knowledge/areas/onboarding/skillstation-hub-skills-and-aliases.md",
+        "docs/history/skillstation-human-skills/delivery.md"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- skillstation onboard — green:unit — cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml — green:unit — whole workspace after a plan.rs change; the new test failed red with the fix reverted",
+      "deviations": [],
+      "patch_id": "5c2769895756e31453cb021bf25808c8e2099a16"
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "a second --skillstation apply on a project that already holds the five aliases leaves every alias in place",
+            "artifact": "packages/bee-rs/crates/bee/src/onboard/plan.rs"
+          },
+          {
+            "requirement": "after that second apply, a plan without --skillstation plans no item for the five",
+            "artifact": "packages/bee-rs/crates/bee/src/onboard/tests.rs"
+          }
+        ],
+        "recorded_at": "2026-11-14T12:24:29.290Z",
+        "recorded_by": "f0c35ee6-a31c-4a9f-86d1-a88219947a72",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": {
+    "new": 60061,
+    "cached": 1116894,
+    "total": 1176955,
+    "models": {
+      "claude-sonnet-5-5": {
+        "new": 60061,
+        "cached": 1116894,
+        "total": 1176955
+      }
+    },
+    "jobs": [
+      "job-1794658410070-668315-1"
+    ]
+  }
+}

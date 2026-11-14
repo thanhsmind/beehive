@@ -2243,5 +2243,10 @@
     "capped": 1,
     "dropped": 0,
     "archived_at": "2026-11-14T11:52:31.276Z"
+  },
+  "skillstation-human-skills": {
+    "capped": 2,
+    "dropped": 0,
+    "archived_at": "2026-11-14T12:37:14.888Z"
   }
 }
