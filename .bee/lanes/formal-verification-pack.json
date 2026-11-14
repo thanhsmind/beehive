@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "formal-verification-pack",
   "mode": null,
-  "phase": "exploring",
+  "phase": "idle",
   "approved_gates": {
     "context": false,
     "shape": true,
@@ -11,9 +11,9 @@
     "uat": false
   },
   "summary": "Feature \"formal-verification-pack\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at e017ddc; capture what settled, then bee close --feature formal-verification-pack.",
+  "next_action": "bee close finished \"formal-verification-pack\" — feature is closed.",
   "created_at": "2026-11-14T02:54:51.709Z",
-  "run_state": null,
+  "run_state": "awaiting-approval",
   "waiting_on": null,
   "route": {
     "class": "docs",
