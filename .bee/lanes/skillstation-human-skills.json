@@ -11,9 +11,9 @@
     "uat": false
   },
   "summary": "Feature \"skillstation-human-skills\" started at phase \"exploring\" (lane).",
-  "next_action": "Continue bee-exploring for \"skillstation-human-skills\" (lane).",
+  "next_action": "Merged into main at 3257e38; capture what settled, then bee close --feature skillstation-human-skills.",
   "created_at": "2026-11-14T12:02:24.806Z",
-  "run_state": "awaiting-approval",
+  "run_state": null,
   "waiting_on": null,
   "route": {
     "class": "feature",
@@ -542,12 +542,5 @@
   },
   "gate_revoked_at": {
     "execution": "2026-11-14T12:13:01.864Z"
-  },
-  "merge_ready": {
-    "since": "2026-11-14T12:12:38.746Z",
-    "branch": "wt/skillstation-human-skills",
-    "worktree_id": "beehive--wt--skillstation-human-skills",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
