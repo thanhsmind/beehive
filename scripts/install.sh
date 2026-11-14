@@ -796,6 +796,9 @@ APPLY_STATUS="$(plan_field "$APPLY_JSON" status)"
 case "$APPLY_STATUS" in
   up_to_date) log "onboard  already current — no managed files rewritten" ;;
   changes_needed)
+    if [ "$SKILLSTATION" -eq 1 ]; then
+      log "skillstation publishing bee skills to your Skillstation hub - about a minute per skill, the apply prints nothing until it ends"
+    fi
     APPLY_OUTPUT="$( cd "$BEE_SRC" && "$BEE_BIN" onboard --repo-root "$TARGET_DIR" --apply ${ONBOARD_FLAGS[@]+"${ONBOARD_FLAGS[@]}"} 2>&1 )" || {
       printf '%s\n' "$APPLY_OUTPUT" >&2
       apply_failure_fix_options

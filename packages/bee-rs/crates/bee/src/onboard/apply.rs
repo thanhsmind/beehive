@@ -341,6 +341,25 @@ fn skillstation_commit_hash(v: &Value) -> Option<String> {
         .map(str::to_string)
 }
 
+fn principle_routing_flags(staged: &Path) -> Vec<String> {
+    let source = read_text_if_exists(&staged.join("SKILL.md"));
+    let (front, _) = crate::textutil::split_frontmatter(&source);
+    let trigger = front
+        .lines()
+        .find_map(|line| line.strip_prefix("description:"))
+        .map(|d| d.trim().trim_matches('"').split_whitespace().collect::<Vec<_>>().join(" "))
+        .filter(|d| !d.is_empty());
+    let mut flags = Vec::new();
+    if let Some(trigger) = trigger {
+        flags.extend(["--trigger".to_string(), trigger]);
+    }
+    flags.extend(
+        ["--not-for", "a task bee orient did not route to this principle", "--min-scope", "multi_step"]
+            .map(String::from),
+    );
+    flags
+}
+
 fn apply_publish_skillstation(
     repo_root: &Path,
     skill: &str,
@@ -367,8 +386,14 @@ fn apply_publish_skillstation(
     }
     let run = hub_runner(&stage);
 
-    let committed = run(&["skill", "commit", &staged.to_string_lossy(), "--yes", "--json"])
-        .map_err(|reason| format!("skill commit - {reason}"))?;
+    let staged_text = staged.to_string_lossy().to_string();
+    let mut commit_argv: Vec<String> =
+        ["skill", "commit", staged_text.as_str(), "--yes", "--json"].map(String::from).to_vec();
+    if skill.starts_with(super::skills::PRINCIPLE_PREFIX) {
+        commit_argv.extend(principle_routing_flags(&staged));
+    }
+    let commit_refs: Vec<&str> = commit_argv.iter().map(String::as_str).collect();
+    let committed = run(&commit_refs).map_err(|reason| format!("skill commit - {reason}"))?;
     let hub_commit = skillstation_commit_hash(&committed);
     let activated = committed.get("activated").and_then(Value::as_bool) == Some(true);
 

@@ -3907,6 +3907,83 @@ mod principles_on_the_hub {
         assert!(skips[0]["reason"].as_str().unwrap().contains(IDS[0]));
     }
 
+    fn recording_hub(commits: Rc<std::cell::RefCell<Vec<Vec<String>>>>) -> Hub {
+        set_test_hub(Some(Rc::new(move |args: &[&str]| {
+            if args.get(1) == Some(&"commit") {
+                commits.borrow_mut().push(args.iter().map(|a| a.to_string()).collect());
+                return Ok(json!({"activated": true}));
+            }
+            Err("skill not found".to_string())
+        })));
+        Hub
+    }
+
+    fn flag_value<'a>(argv: &'a [String], flag: &str) -> Option<&'a str> {
+        argv.iter().position(|a| a == flag).and_then(|i| argv.get(i + 1)).map(String::as_str)
+    }
+
+    #[test]
+    fn a_principle_commit_carries_the_routing_flags_and_bee_deploying_carries_none() {
+        let fx = fixture_with_local_copies();
+        with_bee_deploying(&fx);
+        write(
+            &fx.root.join("skills").join(IDS[0]).join("SKILL.md"),
+            "---\nname: x\ndescription:  \"Apply when   a second fix fails.\"  \n---\nbody\n",
+        );
+        let commits = Rc::new(std::cell::RefCell::new(Vec::new()));
+        let _hub = recording_hub(commits.clone());
+        apply(&fx, &["--runtime", "claude", "--skillstation"]);
+        let commits = commits.borrow();
+        let principle = commits.iter().find(|c| c[2].ends_with(IDS[0])).unwrap();
+        assert_eq!(flag_value(principle, "--trigger"), Some("Apply when a second fix fails."));
+        assert_eq!(
+            flag_value(principle, "--not-for"),
+            Some("a task bee orient did not route to this principle")
+        );
+        assert_eq!(flag_value(principle, "--min-scope"), Some("multi_step"));
+        let deploying = commits.iter().find(|c| c[2].ends_with("bee-deploying")).unwrap();
+        for flag in ["--trigger", "--not-for", "--min-scope"] {
+            assert!(!deploying.iter().any(|a| a == flag), "{flag}");
+        }
+    }
+
+    fn stale_principles(fx: &Fixture) {
+        for id in IDS {
+            write(&fx.repo.join(".claude").join("skills").join(id).join("SKILL.md"), "stale\n");
+        }
+    }
+
+    #[test]
+    fn a_failed_publish_leaves_the_local_principle_folders_matching_the_source() {
+        let fx = fixture_with_local_copies();
+        stale_principles(&fx);
+        let _hub = switching_hub(Some(IDS[0]));
+        apply(&fx, &["--runtime", "claude", "--skillstation"]);
+        for id in IDS {
+            let local = fx.repo.join(".claude").join("skills").join(id).join("SKILL.md");
+            assert_eq!(std::fs::read_to_string(local).unwrap(), "principle\n", "{id}");
+        }
+        let again = plan(&fx, &["--runtime", "claude"]);
+        let syncs: Vec<&Value> = again["plan"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|i| i["action"] == "sync_skill" && i["skill"].as_str().unwrap().starts_with("bee-principle-"))
+            .collect();
+        assert!(syncs.is_empty(), "{syncs:?}");
+    }
+
+    #[test]
+    fn a_fully_published_switch_leaves_no_claude_principle_folder() {
+        let fx = fixture_with_local_copies();
+        stale_principles(&fx);
+        let _hub = switching_hub(None);
+        apply(&fx, &["--runtime", "claude", "--skillstation"]);
+        for id in IDS {
+            assert!(!fx.repo.join(".claude").join("skills").join(id).exists(), "{id}");
+        }
+    }
+
     fn with_worker_template(fx: &Fixture) {
         write(
             &fx.root.join("packages").join("bee").join("agents").join("bee-worker.md.tmpl"),
