@@ -1,7 +1,7 @@
 ---
 name: bee-reviewing
 description: >-
-  Run the multi-agent review gate — severity findings, artifact verification, and user acceptance — over an immutable scope the user explicitly asked to review. Use only when the user requests an independent review: "review this", "review today's work", "review feature A and B", "review the diff from X to Y", "review everything unreviewed before release". A finished cell, slice, or feature is never a trigger by itself, and neither is "merge"/"ship"/"release" alone.
+  Independent multi-agent review gate over a fixed scope. Use ONLY on an explicit user review request: "review this", "review today's work", "review the diff from X to Y", "review everything unreviewed". Never automatic; a finished cell/slice, or merge/ship/release alone, is not a trigger.
 metadata:
   version: '0.2'
   ecosystem: bee
