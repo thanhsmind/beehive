@@ -13409,3 +13409,68 @@ use std::time::Instant;
             json!([{"path": "docs/knowledge/areas/x.md", "wrong": "named a path that moved"}])
         );
     }
+
+    #[test]
+    fn clear_keeps_a_newer_claim_written_after_the_snapshot() {
+        let tmp = cn_root();
+        let root = tmp.path();
+        write_claim_fixture(root, "ci-1", Some("s1"), 3600.0, "2026-11-14T01:00:00.000Z");
+        let seen = read_claim_acquired_at(root, "ci-1");
+        write_claim_fixture(root, "ci-1", Some("s1"), 3600.0, "2026-11-14T02:00:00.000Z");
+        release_claim_file_best_effort(root, "ci-1", seen.as_deref());
+        let kept = read_claim(root, "ci-1").unwrap().expect("the newer claim must survive");
+        assert_eq!(kept["acquired_at"], json!("2026-11-14T02:00:00.000Z"));
+    }
+
+    #[test]
+    fn clear_removes_the_seen_claim_after_a_renew_changed_claimed_at() {
+        let tmp = cn_root();
+        let root = tmp.path();
+        write_claim_fixture(root, "ci-2", Some("s1"), 3600.0, "2026-11-14T01:00:00.000Z");
+        let seen = read_claim_acquired_at(root, "ci-2");
+        let file = claims_dir(root).join("ci-2.json");
+        let mut renewed: Value = serde_json::from_str(&std::fs::read_to_string(&file).unwrap()).unwrap();
+        renewed["claimed_at"] = json!("2026-11-14T03:00:00.000Z");
+        std::fs::write(&file, jsjson::stringify_pretty(&renewed)).unwrap();
+        release_claim_file_best_effort(root, "ci-2", seen.as_deref());
+        assert!(!file.exists(), "a renewed claim is still the claim the caller saw");
+    }
+
+    #[test]
+    fn clear_with_no_claim_at_snapshot_keeps_a_claim_written_afterwards() {
+        let tmp = cn_root();
+        let root = tmp.path();
+        let seen = read_claim_acquired_at(root, "ci-3");
+        assert_eq!(seen, None);
+        write_claim_fixture(root, "ci-3", Some("s2"), 3600.0, "2026-11-14T02:00:00.000Z");
+        release_claim_file_best_effort(root, "ci-3", seen.as_deref());
+        assert!(claims_dir(root).join("ci-3.json").exists());
+    }
+
+    #[test]
+    fn cap_unclaim_reopen_and_block_still_remove_the_cells_own_claim_file() {
+        let tmp = cn_root();
+        let root = tmp.path();
+        write_lane_record_routed(root, "demo", "execution", Some("tiny"), true);
+        for id in ["ci-cap", "ci-unclaim", "ci-block"] {
+            write_cell_fixture(root, id, &json!({
+                "id": id, "feature": "demo", "title": "t", "action": "a",
+                "verify": "echo ok", "lane": "tiny", "status": "claimed", "deps": [], "files": [], "trace": {},
+            }));
+            write_claim_fixture(root, id, None, 3600.0, "2026-11-14T01:00:00.000Z");
+        }
+        let claim_file = |id: &str| claims_dir(root).join(format!("{id}.json"));
+
+        cap_cell_from_flags(root, &wf_boundary_cap_flags("ci-cap"), false).unwrap();
+        assert!(!claim_file("ci-cap").exists(), "cap clears its own claim");
+
+        unclaim_cell(root, "ci-unclaim", None, false).unwrap();
+        assert!(!claim_file("ci-unclaim").exists(), "unclaim clears its own claim");
+
+        block_cell(root, "ci-block", "stuck", None, false).unwrap();
+        assert!(!claim_file("ci-block").exists(), "block clears its own claim");
+
+        write_claim_fixture(root, "ci-cap", None, 3600.0, "2026-11-14T01:00:00.000Z");
+        reopen_cell(root, "ci-cap", "rework", None, false).unwrap();
+        assert!(!claim_file("ci-cap").exists(), "reopen clears its own claim");
+    }
