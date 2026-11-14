@@ -97,7 +97,7 @@ pub(crate) const HANDOFF_ACTION_CHARS: usize = 400;
 /// two-line header; this bounds it so a future verb explosion is caught
 /// here rather than silently paid for on every session.
 #[cfg_attr(not(test), allow(dead_code))]
-pub(crate) const COMMAND_SURFACE_BUDGET_CHARS: usize = 2750;
+pub(crate) const COMMAND_SURFACE_BUDGET_CHARS: usize = 2800;
 
 /// One line per command GROUP, path-sorted (dotted name, ascending) for
 /// byte-stability across regenerations that reorder the source array. A

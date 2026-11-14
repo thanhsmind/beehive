@@ -4,7 +4,7 @@ description: >-
   Periodic audit that keeps a project's `docs/knowledge/` bundle honest: read the recorded signals, pick at most 5 concepts, one read-only source reader per concept, revise in place, one worktree and one cell of proven corrections. Use PERIODICALLY, when a repo already carries a knowledge bundle — after a release, when a loaded concept was reported wrong, when a concept grades orphan, or when a concept is loaded often and never used. Not for creating a bundle where none exists — that is bee-knowledge-setup — and not for the in-flow write of one settled fact, which stays with bee-capturing.
 disable-model-invocation: true
 metadata:
-  version: '0.1'
+  version: '0.2'
   ecosystem: bee
   dependencies:
     bee-cli:
@@ -49,6 +49,11 @@ never hand-edit them.
 A run is due after a release, or when any signal below shows. The numbers are
 starting defaults, not measured thresholds: change them here when they prove
 wrong.
+
+`bee upkeep due --kind knowledge --json` computes this table in one read-only
+check and exits 10 when a run is due. Each reason it returns names one row
+below; the table stays as the human statement of the same signals. A run that
+was never recorded counts as due.
 
 | Signal | Command that prints it |
 |---|---|
@@ -114,6 +119,11 @@ weight.
    corrections, landed with `bee worktree merge`. For clean or blocked: no
    worktree; report the outcome and the coverage honestly, the candidates left
    over included.
+
+7. **Record the run.** Last, on every outcome — clean, changed or blocked:
+   `bee audit log --kind knowledge-upkeep --feature <feature or upkeep> --note "<outcome> — <one line>"`.
+   The newest row of this kind is the run's last-run mark. Without it the run
+   stays due.
 
 Keep concise run notes (concepts picked, held or drift, outcome) in a scratch
 location; don't commit them.
