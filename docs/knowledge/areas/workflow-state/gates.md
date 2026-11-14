@@ -506,9 +506,9 @@ a malformed record has earned none.
   peek/lock record race (named deviation from the twins' two-site shape).
   The refusal cannot judge a quote against its anchor (that stayed a second
   reader's job), so `bee plan check` and the `bee gate --preview` warning lines
-  (pstack-rust-checks D1, cell psrc-1) report what the door cannot: section
+  (pstack-rust-checks D1, cell psrc-1) run four checks the door cannot: section
   order, the class playbook citation, missing D-numbers, and a `read` row whose
-  evidence is not a byte substring of the anchored bytes. They share one pure
+  evidence is not a byte substring of the anchored bytes; it exits 10 on findings. They share one pure
   function in `verbs/plan_group.rs`, reuse the claims-row parse in
   `plan_claims.rs`, and never refuse: promoting one to a door waits until it
   has run clean on real plans. Find the check list in the verb's registry

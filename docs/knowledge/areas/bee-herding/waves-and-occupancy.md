@@ -267,6 +267,8 @@ at all, so neither the closing record nor the empty-fleet verdict reaches them.
 
 ## `dispatch wave --run --rolling` refills slots as runs end
 
+(pstack-rust-checks D5, cell psrc-5.)
+
 Read when: a `dispatch wave --run` leaves cells unstarted behind `--limit`, or a dependent cell waits for a run you already finished.
 
 Without `--rolling`, `--limit N` claims only the first N cells of wave one and the

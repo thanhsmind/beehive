@@ -192,7 +192,7 @@ worktree to emit exit-before-merge transition intent (c47fa930, 85d85ede, 0b4ff5
   answer, so a long branch whose patch text exceeds the pipe buffer cannot deadlock the merge
   (run-git-stdin-thread, decision `0154bcb7`, cell rgst-1); the fail-open rule above is unchanged.
   A cap now stores the patch-id of its report commit as `trace.report.patch_id` when the commit
-  resolves (pstack-rust-checks D3, decision `77258729`, cell psrc-3), because a rewritten history
+  resolves (pstack-rust-checks D3, cell psrc-3), because a rewritten history
   can garbage-collect the commit and leave nothing to hash. The door reads the stored id first:
   found in the branch set reads carried even when the commit object is gone, absent reads stale;
   a cell with no stored id keeps the compute-from-commit path above. A cell with a stored id is
