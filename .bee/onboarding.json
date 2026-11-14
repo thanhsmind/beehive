@@ -120,6 +120,30 @@
         "fixtures/demo-note-1.json": "3538908bce51abe4ce9df6f2bb485ad6158f175962475d96df7afbcb31f3f960",
         "fixtures/demo-note-plan.md": "f964e923caae9f6a4d13492011191fb27d36d54043068447d1b90bb14bbe9533",
         "fixtures/role-plan-v2.md": "05f99d5afeaad84a43de714a90ab388ba7073ff93e83a783764faba4d0c49965"
+      },
+      ".claude/skills/formal-cell-lifecycle": {
+        "CellLifecycle.cfg": "3209f713e8aa4863b20ed49df13cfd2deabbce0ce16b0ba682c99c4db14f299b",
+        "CellLifecycle.tla": "9ca8b37990cae86a4c0bdb0afe6bf43df80ca9056e5004f122f5a9094bbda6a3",
+        "Fixed.cfg": "f23da116867271a398a24486bbebefeb100b1ec2f752835eeb38ce3fe787bc01",
+        "NoOwnershipCheck.cfg": "ab8640bc04a6bad0ca81cc50b8f309273306437681f52602ab1885e7dabef42d",
+        "SKILL.md": "f2a704872fc61f5a883147f41272fc43e118917533661bfc38784d2620a626af",
+        "check": "aeb99f83dd20a187bd0f08d1b6e58403eeb720a2baba9978a5f9e5fd96a46b2a"
+      },
+      ".agents/skills/formal-cell-lifecycle": {
+        "CellLifecycle.cfg": "3209f713e8aa4863b20ed49df13cfd2deabbce0ce16b0ba682c99c4db14f299b",
+        "CellLifecycle.tla": "9ca8b37990cae86a4c0bdb0afe6bf43df80ca9056e5004f122f5a9094bbda6a3",
+        "Fixed.cfg": "f23da116867271a398a24486bbebefeb100b1ec2f752835eeb38ce3fe787bc01",
+        "NoOwnershipCheck.cfg": "ab8640bc04a6bad0ca81cc50b8f309273306437681f52602ab1885e7dabef42d",
+        "SKILL.md": "f2a704872fc61f5a883147f41272fc43e118917533661bfc38784d2620a626af",
+        "check": "aeb99f83dd20a187bd0f08d1b6e58403eeb720a2baba9978a5f9e5fd96a46b2a"
+      },
+      ".opencode/skills/formal-cell-lifecycle": {
+        "CellLifecycle.cfg": "3209f713e8aa4863b20ed49df13cfd2deabbce0ce16b0ba682c99c4db14f299b",
+        "CellLifecycle.tla": "9ca8b37990cae86a4c0bdb0afe6bf43df80ca9056e5004f122f5a9094bbda6a3",
+        "Fixed.cfg": "f23da116867271a398a24486bbebefeb100b1ec2f752835eeb38ce3fe787bc01",
+        "NoOwnershipCheck.cfg": "ab8640bc04a6bad0ca81cc50b8f309273306437681f52602ab1885e7dabef42d",
+        "SKILL.md": "f2a704872fc61f5a883147f41272fc43e118917533661bfc38784d2620a626af",
+        "check": "aeb99f83dd20a187bd0f08d1b6e58403eeb720a2baba9978a5f9e5fd96a46b2a"
       }
     }
   },
