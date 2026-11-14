@@ -306,7 +306,7 @@ red.
   own token alone does not hold (formal-cell-lifecycle D1/D2/D3/D4). The model and its rerun live in the `formal-cell-lifecycle` verify
   skill; the fix is a filed P2 finding. Dropping a unit now takes the same
   ownership check and `--force-ownership` rescue as the other closing verbs
-  (drop-ownership D1/D2); it was the one closing verb without it, and a drop
+  (drop-ownership D1/D2/D3, the model guarding it too); it was the one closing verb without it, and a drop
   discards another session's work, which B23 protects.
 
 ## Pointers (implementation)
