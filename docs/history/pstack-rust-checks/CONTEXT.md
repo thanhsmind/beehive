@@ -59,5 +59,4 @@ Every new check is advisory or additive: none adds a new refusal.
 
 ## Out of scope
 
-New refusals of any kind. Each check here reports; a later feature may
-promote one to a door once it has run clean on real plans.
+New refusals of any kind. Each check here reports and never refuses.

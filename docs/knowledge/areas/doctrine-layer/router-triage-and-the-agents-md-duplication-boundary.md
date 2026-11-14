@@ -444,6 +444,9 @@ plugin trees, not just `skills/`.
   - applied_at:
     - `skills/bee-principle-split-on-a-real-dependency/SKILL.md`
 
+The six rows from encode-lessons-in-structure to separate-before-serializing-shared-state
+port pstack Slice 3 (pstack-principles D1, D2, D3: skill shape, homes, classes).
+
 - `bee-principle-encode-lessons-in-structure` (expertise/knowledge.md § Encode lessons in structure):
   spoken: a lesson seen twice becomes structure, strongest first — a code change that makes the mistake impossible, then a check, then prose only when it needs judgment; once the structure exists, the prose copy goes
   classes: docs, bugfix

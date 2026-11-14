@@ -247,4 +247,4 @@ Read when: a `bee close` prints `warning: dead proof pointer: <cell>: <path>` or
 
 Close reads each capped cell's proof line and checks every token that names a repo-relative path (has a slash; not a URL, flag, absolute path, glob, or an expansion/assignment; a trailing `:N` or `:N-M` is stripped first). A path missing under the repo root prints one warning and lands in `dead_proof_pointers [{cell, path}]`, always present and `[]` when clean. It is attached by a wrapper around the close handler, so every outcome carries it and no outcome depends on it (pstack-rust-checks D4, cell psrc-4). Find the tokenizer rules in `verbs/drivers/proof_pointers.rs`.
 
-Why a warning: a proof line may legitimately name a path that moved or was deleted later, so a missing path is a prompt to re-read the evidence, not proof it was fake. Promoting it to a refusal waits until it has run clean on real plans.
+Why a warning: a proof line may legitimately name a path that moved or was deleted later, so a missing path is a prompt to re-read the evidence, not proof it was fake.
