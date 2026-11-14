@@ -1,0 +1,90 @@
+{
+  "schema": "bee-usage/v1",
+  "feature": "release-2-103-0",
+  "closed_at": "2026-11-14T22:44:55.672Z",
+  "sessions": [
+    {
+      "session_id": "d5666677-acb1-4a34-a356-ce378948b498",
+      "models": {
+        "claude-opus-5-5": {
+          "input": 702,
+          "output": 169641,
+          "cache_write": 723056,
+          "cache_read": 78387783,
+          "new": 893399,
+          "cached": 78387783,
+          "total": 79281182
+        }
+      },
+      "subagent_models": {},
+      "subagent_count": 0,
+      "started_ms": 1794668207807,
+      "ended_ms": 1794696293747,
+      "totals": {
+        "new": 893399,
+        "cached": 78387783,
+        "total": 79281182
+      }
+    }
+  ],
+  "skipped": 0,
+  "totals": {
+    "main": {
+      "new": 893399,
+      "cached": 78387783,
+      "total": 79281182
+    },
+    "subagents": {
+      "new": 0,
+      "cached": 0,
+      "total": 0
+    },
+    "total": {
+      "new": 939443,
+      "cached": 78701351,
+      "total": 79640794
+    },
+    "herding": {
+      "new": 46044,
+      "cached": 313568,
+      "total": 359612,
+      "models": {
+        "claude-haiku-5-5": {
+          "input": 24,
+          "output": 9204,
+          "cache_write": 36816,
+          "cache_read": 313568,
+          "new": 46044,
+          "cached": 313568,
+          "total": 359612
+        }
+      }
+    }
+  },
+  "herding_sessions": [
+    {
+      "session_id": "4471c514-3811-4659-8faa-9517c4d19b98",
+      "models": {
+        "claude-haiku-5-5": {
+          "input": 24,
+          "output": 9204,
+          "cache_write": 36816,
+          "cache_read": 313568,
+          "new": 46044,
+          "cached": 313568,
+          "total": 359612
+        }
+      },
+      "subagent_models": {},
+      "subagent_count": 0,
+      "started_ms": 1794695636840,
+      "ended_ms": 1794696253699,
+      "totals": {
+        "new": 46044,
+        "cached": 313568,
+        "total": 359612
+      },
+      "job_id": "job-1794695635303-918198-1"
+    }
+  ]
+}

@@ -14,7 +14,12 @@
   "next_action": "Dispatch the deploy stage",
   "created_at": "2026-11-14T22:33:13.536Z",
   "run_state": "awaiting-approval",
-  "waiting_on": null,
+  "waiting_on": {
+    "kind": "turn-end",
+    "subject": "Đã tạo quyền phát hành cho role deploy. Đang chạy worker deploy.",
+    "asked_at": "2026-11-14T22:33:57.246Z",
+    "session": "d5666677-acb1-4a34-a356-ce378948b498"
+  },
   "route": {
     "class": "release",
     "lane": "tiny",
