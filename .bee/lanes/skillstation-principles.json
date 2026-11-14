@@ -11,14 +11,14 @@
     "uat": false
   },
   "summary": "Feature \"skillstation-principles\" started at phase \"exploring\" (lane).",
-  "next_action": "Continue bee-exploring for \"skillstation-principles\" (lane).",
+  "next_action": "Merged into main at 4b5f11b; reload the product and test \"skillstation-principles\", then either approve uat (\"bee gate --name uat --approved true --lane skillstation-principles\") or fix it in the worktree and merge again.",
   "created_at": "2026-11-14T08:10:27.960Z",
   "run_state": "awaiting-approval",
   "waiting_on": {
-    "kind": "question",
-    "subject": "survey-platform install --skillstation blocked by its cross-project guard: user runs the command or allows the beehive path",
-    "asked_at": "2026-11-14T09:47:45.513Z",
-    "session": "2e540295-8085-4e00-9266-fe90fb6784c1"
+    "kind": "gate",
+    "subject": "uat: skillstation-principles",
+    "asked_at": "2026-11-14T10:10:04.292Z",
+    "session": "bee-worktree-merge-sessionless"
   },
   "route": {
     "class": "feature",
@@ -1324,12 +1324,5 @@
         }
       ]
     }
-  },
-  "merge_ready": {
-    "since": "2026-11-14T10:07:50.116Z",
-    "branch": "wt/skillstation-principles",
-    "worktree_id": "beehive--wt--skillstation-principles",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
