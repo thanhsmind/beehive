@@ -293,6 +293,19 @@ red.
 - A caller presenting no `presentedEpoch` (every production caller today) is
   wholly unaffected by fencing — the `CLAIM_FENCE_STALE` check never runs
   for it (multisession-native D4/D9 invariant 10, msn-12).
+- **Known gap, model-checked: the claim-clearing release is owner-blind and
+  runs after the unit's lock is let go.** A claim writes its exclusive token
+  first and takes the unit's lock second, and never checks its token again.
+  So a close that started earlier can delete a newer claimant's token, and
+  the unit then reads as claimed with no token behind it: the ownership check
+  (B23, R39) lets any session through, and the expired-claim sweep never sees
+  the unit. A TLA+ model of one unit, three sessions and the five closing
+  verbs finds the path; a variant that both releases only the exact token it
+  saw under the lock and re-checks the claimant's own token under the lock
+  holds both rules, and either change alone does not (formal-cell-lifecycle
+  D1–D4). The model and its rerun live in the `formal-cell-lifecycle` verify
+  skill; the fix is a filed P2 finding. Dropping a unit takes no ownership
+  check at all, which B23's list of guarded operations leaves open.
 
 ## Pointers (implementation)
 
