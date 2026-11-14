@@ -1,0 +1,90 @@
+{
+  "schema": "bee-usage/v1",
+  "feature": "release-2-102-0",
+  "closed_at": "2026-11-14T14:53:27.573Z",
+  "sessions": [
+    {
+      "session_id": "d54f71c8-5bcf-4d9a-914b-e1871dc3d789",
+      "models": {
+        "claude-opus-5-5": {
+          "input": 386,
+          "output": 73801,
+          "cache_write": 205076,
+          "cache_read": 24997463,
+          "new": 279263,
+          "cached": 24997463,
+          "total": 25276726
+        }
+      },
+      "subagent_models": {},
+      "subagent_count": 0,
+      "started_ms": 1794663823795,
+      "ended_ms": 1794668005691,
+      "totals": {
+        "new": 279263,
+        "cached": 24997463,
+        "total": 25276726
+      }
+    }
+  ],
+  "skipped": 0,
+  "totals": {
+    "main": {
+      "new": 279263,
+      "cached": 24997463,
+      "total": 25276726
+    },
+    "subagents": {
+      "new": 0,
+      "cached": 0,
+      "total": 0
+    },
+    "total": {
+      "new": 315084,
+      "cached": 25446130,
+      "total": 25761214
+    },
+    "herding": {
+      "new": 35821,
+      "cached": 448667,
+      "total": 484488,
+      "models": {
+        "claude-haiku-5-5": {
+          "input": 32,
+          "output": 6628,
+          "cache_write": 29161,
+          "cache_read": 448667,
+          "new": 35821,
+          "cached": 448667,
+          "total": 484488
+        }
+      }
+    }
+  },
+  "herding_sessions": [
+    {
+      "session_id": "67eb1957-ba75-43cb-8202-fa2b6e0f8fb2",
+      "models": {
+        "claude-haiku-5-5": {
+          "input": 32,
+          "output": 6628,
+          "cache_write": 29161,
+          "cache_read": 448667,
+          "new": 35821,
+          "cached": 448667,
+          "total": 484488
+        }
+      },
+      "subagent_models": {},
+      "subagent_count": 0,
+      "started_ms": 1794667312845,
+      "ended_ms": 1794667959826,
+      "totals": {
+        "new": 35821,
+        "cached": 448667,
+        "total": 484488
+      },
+      "job_id": "job-1794667311259-2128391-1"
+    }
+  ]
+}
