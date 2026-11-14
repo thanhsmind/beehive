@@ -84,7 +84,7 @@ bee skillstation alias <id> [--force] [--json]
 
 Content approval stays with the hub owner: an added skill is a draft until they run `skillstation skill review <id>`. A missing `skillstation` binary is a skipped row, not an error. Claude Code only.
 
-To stop paying for the 25 `bee-principle-*` skill descriptions in every Claude Code session, run `bee config set --key skillstation.principles --value hub --string`, then `bee onboard --skillstation --apply` twice: the first run publishes the principles to the hub, the second removes the local copies. `bee orient` then tells the agent to load each named principle with `skill_get`. The default is `local`; if the hub lacks a principle, onboard keeps the local copies and reports a skipped entry with target `skillstation-principles`.
+To stop paying for the 24 `bee-principle-*` skill descriptions in every Claude Code session, run `bee config set --key skillstation.principles --value hub --string`, then `bee onboard --skillstation --apply` twice: the first run publishes the principles to the hub, the second removes the local copies. `bee orient` then tells the agent to load each named principle with `skill_get`. The default is `local`; if the hub lacks a principle, onboard keeps the local copies and reports a skipped entry with target `skillstation-principles`. The local copies are removed only in a repo that holds the principle index, which today is the bee repo itself; anywhere else onboard keeps them and reports one skipped entry naming the index (skillstation-principles D7).
 
 ## Why bee exists (the idea in plain words)
 
