@@ -20,9 +20,11 @@ use super::source::{
 };
 use super::templates::SKILLS_VERSION_STAMP;
 use super::util::{
-    entry_identity, exists, is_under, join_rel, lstat_if_exists, path_resolve, realpath,
+    entry_identity, exists, is_under, join_rel, lstat_if_exists, path_resolve, read_text_if_exists,
+    realpath,
     write_file_atomic_random, Dirent, EntryId,
 };
+use crate::verbs::skillstation_group::carries_alias_marker;
 use serde_json::{json, Map, Value};
 use std::path::{Path, PathBuf};
 
@@ -76,6 +78,29 @@ pub struct SkillSources {
 
 pub const PRINCIPLE_PREFIX: &str = "bee-principle-";
 
+pub const HUB_SERVED_SKILLS: [&str; 5] =
+    ["bee-how", "bee-teach", "bee-technical-writing", "bee-why", "bee-writing-skills"];
+
+pub fn is_hub_served(name: &str) -> bool {
+    name.starts_with(PRINCIPLE_PREFIX) || HUB_SERVED_SKILLS.contains(&name)
+}
+
+pub fn frontmatter_description(skill_md: &str) -> Option<String> {
+    let (front, _) = crate::textutil::split_frontmatter(skill_md);
+    let mut lines = front.lines();
+    let head = lines.find_map(|line| line.strip_prefix("description:"))?.trim();
+    let text = if matches!(head, ">" | ">-" | ">+" | "|" | "|-" | "|+") {
+        lines
+            .take_while(|l| l.starts_with(' ') || l.starts_with('\t') || l.is_empty())
+            .collect::<Vec<_>>()
+            .join(" ")
+    } else {
+        head.trim_matches(|c| c == '"' || c == '\'').to_string()
+    };
+    let text = text.split_whitespace().collect::<Vec<_>>().join(" ");
+    (!text.is_empty()).then_some(text)
+}
+
 impl SkillSources {
     fn picks(&self, name: &str) -> bool {
         !self.design_packs.is_empty()
@@ -88,7 +113,7 @@ impl SkillSources {
     fn entries(&self) -> Vec<(&Path, Dirent)> {
         let skills = list_bee_skill_entries(&self.skills_root)
             .into_iter()
-            .filter(|e| !(self.without_principles && e.name.starts_with(PRINCIPLE_PREFIX)))
+            .filter(|e| !(self.without_principles && is_hub_served(&e.name)))
             .map(|e| (self.skills_root.as_path(), e));
         let design = list_bee_skill_entries(&self.design_root)
             .into_iter()
@@ -260,6 +285,17 @@ pub fn compute_skill_items(sources: &SkillSources, target_root: &Path, runtime: 
     for entry in list_bee_skill_entries(target_root) {
         let name = &entry.name;
         if source_names.contains(name) {
+            continue;
+        }
+        if sources.without_principles
+            && entry.is_dir
+            && !entry.is_symlink
+            && HUB_SERVED_SKILLS.contains(&name.as_str())
+            && carries_alias_marker(
+                &read_text_if_exists(&target_root.join(name).join("SKILL.md")),
+                name,
+            )
+        {
             continue;
         }
         if alias_collisions.contains(name) {

@@ -25,8 +25,8 @@ use super::render::{
     render_skill_bytes, runtime_for_target_kind, validate_skill_markers, walk_skill_tree, Walk,
 };
 use super::skills::{
-    blocked_source_identity_skill_sync, compute_design_sync, compute_skill_sync, SkillSync,
-    PRINCIPLE_PREFIX,
+    blocked_source_identity_skill_sync, compute_design_sync, compute_skill_sync, frontmatter_description,
+    is_hub_served, SkillSync, HUB_SERVED_SKILLS,
 };
 use super::source::{read_source_release_identity, Engine};
 use super::templates as T;
@@ -119,8 +119,34 @@ fn publish_skillstation_items(engine: &Engine, run: Run) -> Vec<Value> {
 fn principle_ids(engine: &Engine) -> Vec<String> {
     super::render::list_bee_skill_entries(&engine.skills_root)
         .into_iter()
-        .filter(|e| e.is_dir && !e.is_symlink && e.name.starts_with(PRINCIPLE_PREFIX))
+        .filter(|e| e.is_dir && !e.is_symlink && is_hub_served(&e.name))
         .map(|e| e.name)
+        .collect()
+}
+
+fn hub_alias_items(engine: &Engine, repo_root: &Path, after_publish: bool) -> Vec<Value> {
+    principle_ids(engine)
+        .into_iter()
+        .filter(|id| HUB_SERVED_SKILLS.contains(&id.as_str()))
+        .filter_map(|id| {
+            let source = std::fs::read(engine.skills_root.join(&id).join("SKILL.md")).ok()?;
+            let rendered = String::from_utf8_lossy(&render_skill_bytes(&source, "claude")).to_string();
+            let content = render_alias(&id, &frontmatter_description(&rendered).unwrap_or_default(), false);
+            let rel = format!(".claude/skills/{id}/SKILL.md");
+            if read_text_if_exists(&join_rel(repo_root, &rel)) == content {
+                return None;
+            }
+            let mut item = json!({
+                "action": "skillstation_alias",
+                "skill": id,
+                "path": rel,
+                "content": content,
+            });
+            if after_publish {
+                item["after_publish"] = json!(true);
+            }
+            Some(item)
+        })
         .collect()
 }
 
@@ -1608,6 +1634,9 @@ pub fn compute_plan(engine: &Engine, repo_root: &Path, opts: &Options) -> Comput
             plan.extend(target.items.iter().cloned());
             if switching && target.kind == "repo-claude" {
                 plan.extend(principle_removal_items(engine));
+                plan.extend(hub_alias_items(engine, repo_root, true));
+            } else if principles_from_hub && target.kind == "repo-claude" {
+                plan.extend(hub_alias_items(engine, repo_root, false));
             }
         }
         if let Some(lr) = &skill_sync.legacy_refresh {
