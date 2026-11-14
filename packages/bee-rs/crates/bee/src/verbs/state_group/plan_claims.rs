@@ -172,7 +172,7 @@ fn cell(cells: &[String], idx: usize) -> &str {
 /// heading up to the next heading of any level. Heading matching ignores the
 /// hash count and letter case so a level slip is not a refusal; the words must
 /// match.
-fn claims_section(text: &str) -> Option<&str> {
+pub(crate) fn claims_section(text: &str) -> Option<&str> {
     let mut start: Option<usize> = None;
     let mut end = text.len();
     let mut offset = 0usize;
@@ -198,7 +198,7 @@ fn claims_section(text: &str) -> Option<&str> {
 
 /// `## Some title` → `Some title`, for 1-6 hashes followed by whitespace.
 /// Anything else is not a heading line.
-fn heading_title(line: &str) -> Option<&str> {
+pub(crate) fn heading_title(line: &str) -> Option<&str> {
     let t = line.trim();
     let hashes = t.len() - t.trim_start_matches('#').len();
     if hashes == 0 || hashes > 6 {
@@ -226,7 +226,7 @@ fn is_separator_row(line: &str) -> bool {
 /// A table row's cells, outer pipes dropped, each cell trimmed. A `\|` is a
 /// literal pipe inside a cell, not a separator — the escape survives into the
 /// cell text, which only ever feeds messages and comparisons.
-fn split_row(line: &str) -> Vec<String> {
+pub(crate) fn split_row(line: &str) -> Vec<String> {
     let t = line.trim();
     let t = t.strip_prefix('|').unwrap_or(t);
     let t = t.strip_suffix('|').unwrap_or(t);
@@ -275,11 +275,64 @@ fn anchor_path(anchor: &str) -> Option<&str> {
 }
 
 /// The contents of the first `` `…` `` span in a cell.
-fn first_backticked(cell: &str) -> Option<&str> {
+pub(crate) fn first_backticked(cell: &str) -> Option<&str> {
     let open = cell.find('`')?;
     let rest = &cell[open + 1..];
     let close = rest.find('`')?;
     Some(rest[..close].trim())
+}
+
+
+pub(crate) struct ClaimRow {
+    pub(crate) n: usize,
+    pub(crate) label: String,
+    pub(crate) anchor: String,
+    pub(crate) evidence: String,
+}
+
+pub(crate) fn claims_rows(text: &str) -> Vec<ClaimRow> {
+    let Some(section) = claims_section(text) else { return Vec::new() };
+    let lines: Vec<&str> = section.lines().map(str::trim).filter(|l| l.starts_with('|')).collect();
+    if lines.len() < 3 || !is_separator_row(lines[1]) {
+        return Vec::new();
+    }
+    let header = split_row(lines[0]);
+    let col = |keyword: &str| header.iter().position(|c| c.to_ascii_lowercase().contains(keyword));
+    let (Some(label), Some(anchor), Some(evidence)) = (col("label"), col("anchor"), col("evidence")) else {
+        return Vec::new();
+    };
+    lines[2..]
+        .iter()
+        .map(|l| split_row(l))
+        .filter(|cells| cells.iter().any(|c| !c.is_empty()))
+        .enumerate()
+        .map(|(i, cells)| ClaimRow {
+            n: i + 1,
+            label: cell(&cells, label).to_string(),
+            anchor: cell(&cells, anchor).to_string(),
+            evidence: cell(&cells, evidence).to_string(),
+        })
+        .collect()
+}
+
+pub(crate) enum AnchorTarget<'a> {
+    Whole(&'a str),
+    Lines(&'a str, usize, usize),
+}
+
+pub(crate) fn anchor_target(anchor: &str) -> Option<AnchorTarget<'_>> {
+    let cand = first_backticked(anchor).unwrap_or_else(|| anchor.trim());
+    if let Some((path, spec)) = cand.rsplit_once(':') {
+        let (path, spec) = (path.trim(), spec.trim());
+        let (from, to) = spec.split_once('-').unwrap_or((spec, spec));
+        if let (false, Ok(a), Ok(b)) = (path.is_empty(), from.parse::<usize>(), to.parse::<usize>()) {
+            return Some(AnchorTarget::Lines(path, a, b));
+        }
+    }
+    if cand.contains('/') && !cand.contains(char::is_whitespace) {
+        return Some(AnchorTarget::Whole(cand));
+    }
+    None
 }
 
 // ─── the message ───────────────────────────────────────────────────────────

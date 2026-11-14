@@ -92,6 +92,7 @@ pub const PORTED: &[&str] = &[
     "knowledge check|index|list|context",
     "tmp sweep",
     "upkeep due [--kind knowledge|verify] [--root <path>] [--json]",
+    "plan check [--feature <slug>] [--json]",
     "design gate [--write] [--json]",
     // R3 wave 3
     "close (incl. --dry-run; lane and non-lane features alike)",

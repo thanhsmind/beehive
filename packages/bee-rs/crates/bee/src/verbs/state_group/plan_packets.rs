@@ -552,8 +552,19 @@ pub(crate) fn run_gate_preview_body(root: &Path, flags: &Flags, _use_json: bool)
     write_through_projection(root, &target, &record, &[])?;
     drop(locks);
 
+    let class = target
+        .record()
+        .get("route")
+        .and_then(|r| r.get("class"))
+        .and_then(Value::as_str)
+        .map(str::to_string);
+    let warnings = crate::verbs::plan_group::warning_lines(&crate::verbs::plan_group::plan_report(
+        &plan_path,
+        &text,
+        class.as_deref(),
+    ));
     let text_out = format!(
-        "{}{lane_note}",
+        "{}{lane_note}{warnings}",
         render_preview_text(&feature, &cells, &plan_sha256, role_plan.as_ref())
     );
     Ok(Out::Emit(preview_val, text_out, 0))
