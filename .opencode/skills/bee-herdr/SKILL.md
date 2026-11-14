@@ -1,14 +1,7 @@
 ---
 name: bee-herdr
 description: >-
-  Drive the herdr terminal-pane transport correctly: delivering a prompt to an
-  agent pane, proving it was submitted, recovering a stall, and reading the
-  worker's outcome. Use when sending a task to a tmux/agent pane, when a pane
-  shows text typed into the input box but never submitted, when a dispatched
-  worker's outcome must be reported, when a pane id from a note or an earlier
-  session is about to be targeted, or when tempted to run tmux send-keys,
-  paste-buffer, or hand-typed text against an agent pane. Not for cockpit
-  roles (bootstrap/dispatch/merge) — that is bee-herding.
+  Drive the herdr terminal-pane transport: deliver a prompt to an agent pane, prove it was submitted, recover a stall, read the outcome. Use when sending a task to a tmux/agent pane, or text sits typed in the input box unsubmitted. Not for cockpit roles (bee-herding).
 metadata:
   version: '0.1'
   ecosystem: bee

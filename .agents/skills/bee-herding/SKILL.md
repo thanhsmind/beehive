@@ -1,7 +1,7 @@
 ---
 name: bee-herding
 description: >-
-  Drive the bee-herding cockpit's four roles — bootstrap (one-shot human setup that pre-flights and turns the cockpit on), dispatch (one cold control-loop iteration that starts safe backlog work in a fresh worktree), merge (an owner gesture, single-shot, that lands finished worktrees in main), and route (one cold control-loop iteration that reads finished worktrees and reports them). Use when a human invokes bootstrap directly (no --role given), or when bee herding control-loop runs exactly one iteration as --role dispatch|merge|route — each invocation is fresh, with no memory of any earlier one. Not for feature work inside a worktree — that belongs to the working agent's own bee chain.
+  Drive the herding cockpit's four roles: bootstrap, dispatch, merge, route. Use when a human invokes bootstrap, or when bee herding control-loop runs one iteration as --role dispatch|merge|route, to work the backlog unattended in fresh worktrees. Not for feature work inside a worktree (bee-swarming).
 metadata:
   version: '0.2'
   ecosystem: bee

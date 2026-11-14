@@ -1,7 +1,7 @@
 ---
 name: bee-swarming
 description: >-
-  Run approved cells to done — orchestrate bounded workers over gate-approved cells, or execute exactly one assigned cell inside a dispatched worker. Use when the merged shape+execution gate is approved and current-slice cells are open, or when running as a worker that received an assigned cell id.
+  Run approved cells to done with bounded workers. Use when the gate is approved and cells are open ("run them to done", "fan the workers out"), or when you are a worker given one assigned cell id. Not for the unattended backlog loop (bee-herding) or pane delivery (bee-herdr).
 metadata:
   version: '0.2'
   ecosystem: bee

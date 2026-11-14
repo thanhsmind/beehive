@@ -1,6 +1,6 @@
 ---
 name: bee-teach
-description: "Explain a body of work plainly so a person understands it, at their pace. Use when the user asks to understand rather than change something — 'teach me', 'explain this', 'help me understand', 'I don't get X'. Not for the recorded reason, with evidence, behind a rule or design (bee-why), a traced answer to how a part of the repo runs (bee-how), status reports, gate questions the user has not asked to understand, or changing code."
+description: "Explain a body of work plainly, at the person's pace. Use when the user wants to understand rather than change something: \"teach me\", \"explain this\", \"help me understand\", \"I don't get X\", \"giải thích\". Not for recorded reasons (bee-why) or traced code paths (bee-how)."
 metadata:
   skillstation_alias: bee-teach
 ---

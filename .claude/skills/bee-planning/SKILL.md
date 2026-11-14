@@ -1,7 +1,7 @@
 ---
 name: bee-planning
 description: >-
-  Shape approved-scope work into an executable plan — classify the lane, research just enough, draft the smallest honest shape, gate it, and prepare current-slice cells. Use when shaping has locked CONTEXT.md, or a clear-scope task needs a lane and a work shape before execution. Not for locking product decisions (bee-shaping) or executing approved cells (bee-swarming).
+  Shape approved-scope work into an executable plan: lane, work shape, cells. Use when shaping has locked CONTEXT.md, or clear-scope work needs a lane and shape before execution (lên kế hoạch). Not for locking product decisions (bee-shaping) or running approved cells (bee-swarming).
 metadata:
   version: '0.3'
   ecosystem: bee

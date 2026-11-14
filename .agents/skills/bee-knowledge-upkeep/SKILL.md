@@ -1,7 +1,7 @@
 ---
 name: bee-knowledge-upkeep
 description: >-
-  Periodic audit that keeps a project's `docs/knowledge/` bundle honest: read the recorded signals, pick at most 5 concepts, one read-only source reader per concept, revise in place, one worktree and one cell of proven corrections. Use PERIODICALLY, when a repo already carries a knowledge bundle — after a release, when a loaded concept was reported wrong, when a concept grades orphan, or when a concept is loaded often and never used. Not for creating a bundle where none exists — that is bee-knowledge-setup — and not for the in-flow write of one settled fact, which stays with bee-capturing.
+  Periodic audit that keeps an existing docs/knowledge/ bundle honest. Use periodically, when a bundle exists: after a release, when a concept was reported wrong, grades orphan, or loads often unused. Not for creating a bundle (bee-knowledge-setup) or recording one fact (bee-capturing).
 disable-model-invocation: true
 metadata:
   version: '0.2'

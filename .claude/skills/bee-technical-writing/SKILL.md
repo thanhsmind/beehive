@@ -1,6 +1,6 @@
 ---
 name: bee-technical-writing
-description: "The layered standard for technical documents: document mode, reader-facing sentences, one-reading instructions, and plain global English. Use when writing or reviewing a document, RFC, README, spec, plan, PR description or commit message. Not for chat replies, which bee-unslop covers, or product UI copy."
+description: "Layered standard for technical documents. Use when writing or reviewing a README, RFC, spec, plan, handbook page, PR description or commit message. Not for chat replies or machine-sounding prose (bee-unslop), nor for writing skills (bee-writing-skills)."
 metadata:
   skillstation_alias: bee-technical-writing
 ---
