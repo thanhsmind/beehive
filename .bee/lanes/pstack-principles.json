@@ -8,18 +8,13 @@
     "shape": true,
     "execution": true,
     "review": false,
-    "uat": false
+    "uat": true
   },
   "summary": "Feature \"pstack-principles\" started at phase \"exploring\" (lane).",
   "next_action": "Merged into main at 8a5f22c; reload the product and test \"pstack-principles\", then either approve uat (\"bee gate --name uat --approved true --lane pstack-principles\") or fix it in the worktree and merge again.",
   "created_at": "2026-11-14T04:16:37.328Z",
-  "run_state": "awaiting-approval",
-  "waiting_on": {
-    "kind": "gate",
-    "subject": "uat: pstack-principles",
-    "asked_at": "2026-11-14T04:31:59.336Z",
-    "session": "bee-worktree-merge-sessionless"
-  },
+  "run_state": "done",
+  "waiting_on": null,
   "route": {
     "class": "feature",
     "lane": "standard",

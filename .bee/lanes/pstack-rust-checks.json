@@ -8,18 +8,13 @@
     "shape": true,
     "execution": true,
     "review": false,
-    "uat": false
+    "uat": true
   },
   "summary": "Feature \"pstack-rust-checks\" started at phase \"exploring\" (lane).",
   "next_action": "Merged into main at 87db31b; reload the product and test \"pstack-rust-checks\", then either approve uat (\"bee gate --name uat --approved true --lane pstack-rust-checks\") or fix it in the worktree and merge again.",
   "created_at": "2026-11-14T04:16:42.616Z",
-  "run_state": "awaiting-approval",
-  "waiting_on": {
-    "kind": "gate",
-    "subject": "uat: pstack-rust-checks",
-    "asked_at": "2026-11-14T05:03:16.380Z",
-    "session": "bee-worktree-merge-sessionless"
-  },
+  "run_state": "done",
+  "waiting_on": null,
   "route": {
     "class": "feature",
     "lane": "standard",
