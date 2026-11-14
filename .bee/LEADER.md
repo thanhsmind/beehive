@@ -104,6 +104,33 @@ verb: when you are routing, starting, or resuming work — and only then —
 run `bee orient`; it names the phase, the blockers, and the next skill.
 A plain question needs neither.
 
+## Route each task
+
+The class belongs to the task in front of you, never to the session. A
+session the preamble has not bound to a record holds no route and no
+principles until you classify. For each new task that writes something:
+classify it into one of the nine classes (bugfix, feature, refactor, perf,
+docs, research, spike, content, release); run `bee orient --class <c>`,
+which prints that class's playbook path and principles and writes nothing;
+read the playbook; then open the session todo list with the playbook's
+numbered steps before any other work. A step you skip stays on the list,
+marked `skip:` with its reason. The list is a projection of the playbook,
+which stays the one home of the steps.
+
+## Trigger index
+
+A situation, then the skill that owns it. The skill states the rest.
+
+- Fuzzy ask, no nameable outcome — `bee-wayfinding`.
+- Gray areas to lock before planning — `bee-shaping`.
+- Approved scope to shape into cells — `bee-planning`.
+- Approved cells to run, or one cell handed to you — `bee-swarming`.
+- Unfamiliar or version-sensitive ground — `bee-researching`.
+- A rule or value just settled — `bee-capturing`.
+- A report or answer that reads machine-made — `bee-unslop`.
+- A pane that holds typed, unsubmitted text — `bee-herdr`.
+- Debt, dead code, stale docs — `bee-grooming`.
+
 When `WORKSPACE_PROTOCOL.md` exists at the repo root, read it in full before
 you route work. Copy the boundaries a cell touches into that cell's brief,
 and name each listed boundary the plan touches in the Gate 2 message (under
@@ -213,13 +240,16 @@ never read the file, and `bee protocol check` reports its state.
   Procedure home: `bee-hive/references/gates-and-delegation.md`
   ("Hat wave").
 <!-- rule: agents-never-zero-execution-workers -->
-- From `small` up, cells run through dispatched workers — never zero
-  *execution* workers; a tiny cell (one hand-authored file plus mechanical
-  companions, no test rewritten) may run inline. The owner prefers team
-  delegation for all work that is not genuinely tiny because each role
-  runs its own configured model. This rule counts execution workers only:
-  the "zero subagents" of a small lane means zero *ceremony* helpers,
-  and I/O helpers are exempt from both counts.
+- Every code cell runs through dispatched workers in every lane, `tiny`
+  included — never zero *execution* workers, and never one worker for
+  both halves: a dispatched implementer writes the code, then a separate
+  dispatched tester, sharing no context with it, verifies the result and
+  adds the new tests. A code cell never certifies itself, and nothing
+  runs inline. A docs-only cell needs no tester; a second worker runs its
+  parity and pointer checks. The owner prefers team delegation because
+  each role runs its own configured model. This rule counts execution
+  workers only: the "zero subagents" of a small lane means zero
+  *ceremony* helpers, and I/O helpers are exempt from both counts.
 <!-- /rule -->
 - A leader watches a worker through `bee herding status --job <id>` (one line),
   never by reading its transcript, pane log or activity stream; workers write the notes.

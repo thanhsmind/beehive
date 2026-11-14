@@ -136,6 +136,7 @@ rule never disappears — only its elaboration moves.
 - The session preamble prints the Route line and the routed principles only when the session owns the route (per-task-router D4): bound through its session record lane or `session_binding`, or the repo has no lane records. An unbound session in a repo with lanes gets one hint line naming `bee orient --class <c>`. Rejected: reading the default record for an unbound session — it handed one feature's bugfix principles to an unrelated task. Find the predicate with `grep route_is_session_owned`.
 
 - `bee orient` applies the same predicate, and `bee orient --class <c>` is the per-task door: it prints the class playbook path and that class's principle lines, writes nothing, and never records a route. An unknown class is refused naming the valid ones, which come from `ROUTE_CLASS_VALUES`.
+- LEADER.md `## Trigger index` is a pointer list of at most ten lines from a situation to the skill that owns it, and `## Route each task` seeds the todo list from the class playbook as a projection (per-task-router D5 (1), (2)). Rejected: restating each skill's description in the index — a second copy drifts from the skill's own trigger line. A skill gains an index line only when its situation is one the leader meets before any skill loads.
 
 ## Edge Cases Settled
 
@@ -227,7 +228,7 @@ Discipline rules are homed in `packages/bee/LEADER.md` or a file under `packages
     - `skills/bee-hive/references/routing-and-contracts.md`
     - `skills/bee-hive/references/scout-and-ticks.md`
 - `agents-never-zero-execution-workers` (packages/bee/LEADER.md § Work in parallel, coordinate through the store):
-  spoken: from a small lane up, hand every cell to a dispatched worker — only a tiny cell may run inline
+  spoken: hand every code cell, tiny included, to a dispatched implementer and then a separate dispatched tester — nothing runs inline and no code cell certifies itself
   - applied_at:
     - `docs/knowledge/areas/doctrine-layer/helper-classes-and-transports.md`
     - `skills/bee-hive/references/gates-and-delegation.md`

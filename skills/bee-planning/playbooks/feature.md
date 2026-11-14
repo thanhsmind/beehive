@@ -28,3 +28,4 @@
 A green unit behind a path nobody can walk is not a result.
 
 Proof line: the user-visible path driven, with its evidence (`green:live`).
+Proof floor: the cap refuses a result weaker than this class's floor and names it; the table is the cap's own (`bee cells finish --help`).

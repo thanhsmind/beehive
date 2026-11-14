@@ -25,3 +25,4 @@ it means pivot the hypothesis, not give up.
 
 Proof line: the baseline, the after, the delta, the command, and the
 artifact path.
+Proof floor: the cap refuses a result weaker than this class's floor and names it; the table is the cap's own (`bee cells finish --help`).

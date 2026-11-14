@@ -28,3 +28,4 @@ deciding fact took a deep dig to find, propose the cheap, always-on signal
 that would have shown it at first look.
 
 Proof line: the reproduction's output, red and then green, verbatim.
+Proof floor: the cap refuses a result weaker than this class's floor and names it; the table is the cap's own (`bee cells finish --help`).

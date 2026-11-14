@@ -18,3 +18,4 @@ Proof line: the artifact checked against the project's own
 style/fact/brand rule when the project has one (name it), otherwise a
 documented second read naming what was checked —
 `<check> — <result> — <scope reason>`.
+Proof floor: the cap refuses a result weaker than this class's floor and names it; the table is the cap's own (`bee cells finish --help`).
