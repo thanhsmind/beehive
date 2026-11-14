@@ -1,0 +1,120 @@
+---
+artifact_contract: bee-plan/v2
+mode: standard
+---
+
+# Plan: Upkeep says when it is due
+
+## Summary
+
+bee gets one read-only verb, `bee upkeep due`. It says, for the knowledge
+bundle and for the verify-app skill, whether an upkeep run is due and why. It
+prints JSON and exits 10 when a run is due, so a periodic waggledance check
+can branch on it. Each upkeep run writes one audit row, so a clean run clears
+the signal. The two upkeep skills name the verb and the record step.
+
+Mode: `standard` — 2 risk flags: public contract (a new verb and two audit
+kinds every host gets), multi-domain (Rust code, skills, knowledge).
+
+## Requirements (from CONTEXT.md)
+
+- D1: verb `bee upkeep due`, schema `bee-upkeep-due/v1`, `--kind`, `--root`, read-only.
+- D2: exit 0 nothing due, 10 due.
+- D3: audit kinds `knowledge-upkeep` and `verify-upkeep`; newest row is `last_run`; skills record it on every outcome.
+- D4: knowledge reasons `never_run`, `release_since_last_run`, `reported_wrong`, `orphan`, `suspect_loaded`; never-used under `info` only.
+- D5: verify reasons `never_run`, `release_since_last_run`.
+- D6: skills keep `disable-model-invocation: true`; how-to in the okf-profile overview.
+
+## Load-bearing claims
+
+| # | Claim | Label | Anchor | Verbatim evidence |
+|---|-------|-------|--------|-------------------|
+| 1 | Audit kinds are one closed constant | read | packages/bee-rs/crates/bee/src/audit.rs:6 | `pub(crate) const KINDS: [&str; 16] = [` |
+| 2 | A small verb group routes and preludes in one file the new verb can mirror | read | packages/bee-rs/crates/bee/src/verbs/tmp_group.rs:483 | `let ctx = match g_prelude("tmp sweep", json, pre_json, t0)? {` |
+| 3 | `--root` reading of another store already exists in knowledge report | read | packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs:751 | `let ctx = match g_prelude_at("knowledge report", json, pre_json, t0, target.as_deref())? {` |
+| 4 | The freshness grades and the orphan count print from the knowledge check | ran | .bee/bin/bee knowledge check --json | `"orphan": 0` |
+| 5 | The report carries `knowledge_wrong` and `knowledge_used.loaded` | ran | .bee/bin/bee knowledge report --json | `'knowledge_used', 'knowledge_wrong'` |
+| 6 | No upkeep run is recorded anywhere today | ran | rg -n -i upkeep packages scripts | only the skill-triggers fixture matches |
+
+## Approach
+
+Two cells, run at the same time; their files do not overlap.
+
+- **uds-1 (code):** the verb, the two audit kinds, the registry entry, tests.
+  It reuses the knowledge report and check builders in-process; it never
+  shells out to `bee`.
+- **uds-2 (docs):** both upkeep skills (the due section names the verb; a
+  final step writes the audit row), the okf-profile overview how-to, and
+  the regen of the rendered skill trees.
+
+Rejected: removing `disable-model-invocation` (weakens a guard, a human
+boundary); a scheduler inside bee (waggledance owns scheduling); a
+`bee knowledge upkeep` verb that runs the pass (the pass is judgment).
+
+## Role assignments
+
+```json
+{
+  "schema_version": "1.0",
+  "runtime": "claude",
+  "roster_sha256": "d4e696dbde7989d6388dacce3fd7057cb3a6935b46024b79698596a46f6f41d3",
+  "stages": [
+    {"stage": "implementation", "classification": "required", "role": "code", "reason": "uds-1 writes the Rust verb and its tests."},
+    {"stage": "docs", "classification": "required", "role": "docs", "reason": "uds-2 edits two skills and one concept and runs the regen chain."},
+    {"stage": "slice-judge", "classification": "required", "role": "review", "reason": "Standard lane: one read-only checklist judge covers the behavior-change cell uds-1. Independent review stays user-invoked."},
+    {"stage": "hat-facts-gaps", "classification": "not-applicable", "role": "hat-facts-gaps", "reason": "Every claim row was opened or ran this session; the decisions are the owner's own ask."},
+    {"stage": "hat-alternatives", "classification": "not-applicable", "role": "hat-alternatives", "reason": "The Approach names the three rejected paths; a read-only verb is already the smallest signal."},
+    {"stage": "hat-user-impact", "classification": "not-applicable", "role": "hat-user-impact", "reason": "Additive verb and two audit kinds; no existing behavior changes."},
+    {"stage": "hat-risks", "classification": "not-applicable", "role": "hat-risks", "reason": "Read-only verb; no door, guard or state write changes."},
+    {"stage": "hat-value", "classification": "not-applicable", "role": "hat-value", "reason": "The owner asked for this signal directly."},
+    {"stage": "deployment", "classification": "not-applicable", "role": "deploy", "reason": "No release in this feature."},
+    {"stage": "planning", "classification": "not-applicable", "role": "plan", "reason": "The leader wrote the plan."},
+    {"stage": "test-and-live-proof", "classification": "not-applicable", "role": "test", "reason": "Each cell carries its own tests; bee test runs once before merge."},
+    {"stage": "read-only-gather", "classification": "not-applicable", "role": "read", "reason": "The leader read the anchors directly."},
+    {"stage": "fact-extraction", "classification": "not-applicable", "role": "extraction", "reason": "No extraction stage."},
+    {"stage": "generation-fallback", "classification": "not-applicable", "role": "generation", "reason": "Both cells have a configured role."},
+    {"stage": "writing", "classification": "not-applicable", "role": "writer", "reason": "uds-2 runs as docs."},
+    {"stage": "generic-advisor", "classification": "not-applicable", "role": "advisor", "reason": "Standard lane; no high-risk advisor consult."},
+    {"stage": "supervision", "classification": "not-applicable", "role": "supervisor", "reason": "Attended session."},
+    {"stage": "blind-lane-1", "classification": "not-applicable", "role": "lane-1", "reason": "No blind lanes."},
+    {"stage": "blind-lane-2", "classification": "not-applicable", "role": "lane-2", "reason": "No blind lanes."},
+    {"stage": "blind-lane-3", "classification": "not-applicable", "role": "lane-3", "reason": "No blind lanes."},
+    {"stage": "design-ui", "classification": "not-applicable", "role": "design", "reason": "No rendered UI."}
+  ]
+}
+```
+
+## Risk map
+
+| Risk | Guard |
+|---|---|
+| The verb is slow because freshness reads git | It runs once per scheduler tick; no hook calls it |
+| A stale audit row keeps `due` true forever | The skills write the row on every outcome, clean included |
+
+## Cells — current slice (preview)
+
+| id | title | files | deps | you see | proof |
+|---|---|---|---|---|---|
+| uds-1 | Add bee upkeep due and the two upkeep audit kinds | new upkeep verb, audit.rs, registry, knowledge report | — | `bee upkeep due --json` prints both items and exits 10 when one is due | upkeep, audit and registry_contracts tests |
+| uds-2 | Make the upkeep skills name bee upkeep due and record each run | two upkeep skills, okf-profile overview, rendered copies | — | the skills name the verb and end with the audit row; the overview tells the waggledance setup | knowledge check, release-manifest check, skill_triggers |
+
+```json
+[
+{"id":"uds-1","feature":"upkeep-due-signal","title":"Add bee upkeep due and the two upkeep audit kinds","lane":"standard","role":"code","deps":[],
+"verify":"PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml upkeep && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml audit && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test registry_contracts",
+"must_haves":{"truths":["bee upkeep due --json in a store with no bundle and no verify skill exits 0 and prints both items with present false","bee upkeep due --json in a store with a bundle and no knowledge-upkeep audit row exits 10 with reason never_run","a knowledge-upkeep audit row newer than every v* tag clears never_run and release_since_last_run","bee audit log accepts --kind knowledge-upkeep and --kind verify-upkeep","bee upkeep due writes no file"]},
+"decisions":["e05b2de3-8ff5-4a34-bc0e-ffda1182e911","a69de382-6875-4fea-b893-d313e7fcb645","d4fc0607-8b16-4f91-832f-b631ea8e2421","5ced4e9d-83f3-4a47-aeb9-1310141bc05e","d489fc4b-33ca-4410-a525-6c81cc745b1b"],
+"files":["packages/bee-rs/crates/bee/src/verbs/upkeep_group.rs","packages/bee-rs/crates/bee/src/verbs/mod.rs","packages/bee-rs/crates/bee/src/router.rs","packages/bee-rs/crates/bee/src/audit.rs","packages/bee-rs/crates/bee/src/generated/registry_payload.json","packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs","packages/bee-rs/crates/bee/src/verbs/knowledge/mod.rs","packages/bee-rs/crates/bee/src/verbs/knowledge/check.rs","packages/bee-rs/crates/bee/tests/registry_contracts.rs"],
+"read_first":["docs/history/upkeep-due-signal/CONTEXT.md","docs/history/upkeep-due-signal/plan.md","packages/bee-rs/crates/bee/src/verbs/tmp_group.rs","packages/bee-rs/crates/bee/src/audit.rs","packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs"],
+"affects_skills":[],"affects_specs":["docs/knowledge/areas/okf-profile/overview.md"],
+"action":"Implement CONTEXT.md D1-D5 in Rust. (1) audit.rs KINDS gains \"knowledge-upkeep\" and \"verify-upkeep\" (array length 18); update every test or help text that lists the closed set (rg the existing kind \"dissent-deferral\" to find them). (2) New verb group `bee upkeep due`, modeled on verbs/tmp_group.rs (routing, g_prelude, json flag) and on knowledge report's --root handling (g_prelude_at). Flags: --kind knowledge|verify (other value refuses, naming both), --root <path>. Register it in generated/registry_payload.json with a full description (hand-edited; tests/registry_contracts.rs pins the shape) so `bee upkeep due --help` and the CLI-shape guard know it. (3) Output JSON exactly: {schema:\"bee-upkeep-due/v1\", any_due:bool, items:[{kind, skill:\"bee-knowledge-upkeep\"|\"bee-verify-upkeep\", invoke:\"/bee-knowledge-upkeep\"|\"/bee-verify-upkeep\", present:bool, due:bool, reasons:[{code, detail}], info:[{code, detail}], last_run:{at, outcome, note}|null}]}. last_run = newest .bee/audit.jsonl row of kind knowledge-upkeep / verify-upkeep; outcome = first word of the note. Text output: one line per item (kind, due or not due, reason codes) then the invoke command when due. Exit 0 when no reported item is due, 10 when any is; errors keep their normal non-zero codes. (4) Knowledge item: present = docs/knowledge holds a bundle (root index.md exists). Not present => due false, no reasons. Reasons: never_run (no row); release_since_last_run (newest tag matching v* by creator date, read with git for-each-ref, newer than last_run.at; skip silently when not a git repo or no tag); reported_wrong (concepts in the knowledge report knowledge_wrong data whose reporting cell was capped after last_run.at, or all when never run; detail names count and up to 3 paths; you may extend the report builder to expose per-cell capped time); orphan (knowledge check freshness orphan > 0); suspect_loaded (a concept graded suspect in freshness whose loads in knowledge_used.loaded >= 5; one const SUSPECT_LOAD_MIN = 5). Loaded-never-used concepts with loads >= 5 go to info with code loaded_never_used and never set due. Call the existing builders in-process; never spawn bee. (5) Verify item: present = .bee/verify/verify-app/SKILL.md exists; reasons never_run and release_since_last_run only. (6) Strictly read-only: no write to any file, no timing log. Tests (behavior, temp-dir stores): no bundle and no verify skill => exit 0, both present false; bundle with no audit row => knowledge due with never_run, exit 10; a knowledge-upkeep row newer than every tag and no other signal => not due; --kind verify narrows items to one; bad --kind refuses; audit log accepts the two new kinds. No code comments. Proof: cargo test filtered to the new and touched modules, plus registry_contracts and the audit tests; quote the counts."},
+{"id":"uds-2","feature":"upkeep-due-signal","title":"Make the upkeep skills name bee upkeep due and record each run","lane":"standard","role":"docs","deps":[],
+"verify":".bee/bin/bee knowledge check && .bee/bin/bee dev release-manifest --check && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test skill_triggers",
+"must_haves":{"truths":["skills/bee-knowledge-upkeep/SKILL.md names bee upkeep due and ends its pass with bee audit log --kind knowledge-upkeep on every outcome","skills/bee-verify-upkeep/SKILL.md names bee upkeep due --kind verify and ends with bee audit log --kind verify-upkeep","both skills still carry disable-model-invocation: true","docs/knowledge/areas/okf-profile/overview.md tells how a waggledance job starts a run from the invoke field","the rendered skill trees match skills/ (release-manifest --check clean)"]},
+"decisions":["d4fc0607-8b16-4f91-832f-b631ea8e2421","5ced4e9d-83f3-4a47-aeb9-1310141bc05e","d489fc4b-33ca-4410-a525-6c81cc745b1b","f88a51a3-8e0e-4064-b6ab-512c0229a946"],
+"files":["skills/bee-knowledge-upkeep/SKILL.md","skills/bee-verify-upkeep/SKILL.md","docs/knowledge/areas/okf-profile/overview.md",".claude/skills/*",".agents/skills/*",".opencode/skills/*",".claude-plugin/skills/*",".codex-plugin/skills/*",".bee/onboarding.json","skills-lock.json","docs/history/codex-harness-hardening/release-manifest.json"],
+"read_first":["docs/history/upkeep-due-signal/CONTEXT.md","skills/bee-knowledge-upkeep/SKILL.md","skills/bee-verify-upkeep/SKILL.md","docs/knowledge/areas/okf-profile/overview.md"],
+"affects_skills":["skills/bee-knowledge-upkeep/SKILL.md","skills/bee-verify-upkeep/SKILL.md"],"affects_specs":["docs/knowledge/areas/okf-profile/overview.md"],
+"action":"Implement CONTEXT.md D3-D6 in docs. (1) skills/bee-knowledge-upkeep/SKILL.md: in 'When a run is due', add that `bee upkeep due --kind knowledge --json` computes this table (one machine check; exit 10 = due) and keep the table as the human statement of the same signals; add, as the last step of the pass for every outcome (clean, changed, blocked), `bee audit log --kind knowledge-upkeep --feature <feature or upkeep> --note \"<outcome> — <one line>\"`, and say that without this row the run stays due. Keep `disable-model-invocation: true`. (2) skills/bee-verify-upkeep/SKILL.md: add a short 'When a run is due' section naming `bee upkeep due --kind verify --json` (never_run, release_since_last_run) and the same final audit step with --kind verify-upkeep; keep the existing Upkeep log line in the feature map as well. Keep `disable-model-invocation: true`. Bump metadata.version of both skills to '0.2'. (3) docs/knowledge/areas/okf-profile/overview.md: one short subsection 'Scheduled upkeep': a periodic job (the owner's waggledance setup) runs `.bee/bin/bee upkeep due --json` in the project; on exit 10, for each item with due true it dispatches the item's `invoke` text (`/bee-knowledge-upkeep` or `/bee-verify-upkeep`) as the task to the project leader with `waggledance dispatch --project <id> --leader --request-id <id> --task \"<invoke>\"`; the skills keep disable-model-invocation, so the slash command is how the run starts. Cite the decisions by the history D-numbers of docs/history/upkeep-due-signal/CONTEXT.md, not raw ids. Run `bee knowledge check` after. (4) Run `bee dev regen` so the rendered skill trees, onboarding ledger, skills lock and release manifest follow. Write with the bee-technical-writing standard, plain English, no code comments. Proof: `bee knowledge check` clean, `bee dev regen` clean, and the skill tests (`cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test skill_triggers` plus any skill frontmatter or render test it names); quote the counts."}
+]
+```
