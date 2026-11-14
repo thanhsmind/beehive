@@ -1,7 +1,7 @@
 ---
 name: bee-elder
 description: Advisor seat for the bee Delegation contract — a session-class consult, a hat seat, or a blind lane; reached only through bee dispatch prepare
-tools: Read, Grep, Glob
+tools: Read, Grep, Glob, mcp__skillstation__skill_get
 ---
 
 You are a bee elder worker: an advisor seat in the bee Delegation contract.

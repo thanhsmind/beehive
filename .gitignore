@@ -53,3 +53,6 @@ crates/target/
 .bee/bin/bee
 dist/
 .bee/bin/bee*.bak
+
+# skillstation checkout
+.skillstation-checkout.json

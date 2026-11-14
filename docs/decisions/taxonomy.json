@@ -864,6 +864,8 @@
     "formal-verification",
     "contract:drop-ownership",
     "contract:claim-clear-identity",
-    "contract:skillstation-principles"
+    "contract:skillstation-principles",
+    "skillstation",
+    "contract:publish-skip-same-content"
   ]
 }
