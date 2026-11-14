@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "per-task-router",
   "mode": null,
-  "phase": "compounding",
+  "phase": "idle",
   "approved_gates": {
     "context": true,
     "shape": true,
@@ -11,9 +11,9 @@
     "uat": true
   },
   "summary": "Feature \"per-task-router\" started at phase \"exploring\" (lane).",
-  "next_action": "close",
+  "next_action": "bee close finished \"per-task-router\" — feature is closed.",
   "created_at": "2026-11-14T15:16:52.411Z",
-  "run_state": "done",
+  "run_state": "shaping",
   "waiting_on": null,
   "route": {
     "class": "feature",
