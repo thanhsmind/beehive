@@ -1,0 +1,170 @@
+{
+  "id": "psrc-5",
+  "feature": "pstack-rust-checks",
+  "title": "Refill wave slots as herding runs finish",
+  "lane": "standard",
+  "role": "code",
+  "deps": [
+    "psrc-2"
+  ],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml rolling && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml wave_run && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test registry_contracts",
+  "must_haves": {
+    "truths": [
+      "dispatch wave --run --rolling --limit 2 over three independent ready cells keeps at most two runs live and starts the third when one ends",
+      "a cell whose dep is capped by a finished run is started in the same rolling call",
+      "the loop ends when no cell is ready and no run is live",
+      "native Agent-tool items are returned under native once and never refilled",
+      "--rolling without --run refuses naming --run",
+      "without --rolling the existing wave tests stay green unchanged"
+    ],
+    "prohibitions": [
+      "bee never caps a cell here",
+      "No code comments"
+    ]
+  },
+  "decisions": [
+    "806c6687-d629-419c-b643-14248562650e"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/wave_run.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+    "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+  ],
+  "read_first": [
+    "docs/history/pstack-rust-checks/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/wave_run.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+    "docs/knowledge/areas/bee-herding/waves-and-occupancy.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/bee-herding/waves-and-occupancy.md"
+  ],
+  "action": "Implement CONTEXT.md D5. Add flag --rolling (boolean) to dispatch wave (registry entry in generated/registry_payload.json, one sentence). --rolling without --run => typed refusal naming --run. With --run --rolling: run_dispatch_wave (prepare.rs:4596) and wave_run.rs run_wave_with (:19) become a loop: claim+prepare up to --limit (default: no cap) ready cells of the current wave exactly as today; start each herding item on its own thread; return native items under native once; when any run ends, record its row, recompute the schedule (compute_schedule, the same call as now), skip cells already claimed or capped, and claim+prepare+start the next ready herding cell until live < limit; end when no ready cell is left and no run is live. Use a channel from the worker threads to the loop; never busy-wait. Output keeps the {ran, native, skipped} shape with every ran row. Make the run-one-item step injectable the way run_wave_with already is so tests use a fake runner (names contain rolling): three independent cells with limit 2 => max two live at once, third starts after the first ends; a dep chain A->B where the fake run of A marks A capped => B starts; loop ends; native returned once; --rolling without --run refuses. Existing wave_run tests stay green unchanged. No code comments. Proof: the verify command; quote the counts.",
+  "status": "capped",
+  "trace": {
+    "worker": "w-psrc-5",
+    "outcome": "Added dispatch wave --rolling refill loop, tests and knowledge; one unrelated template-drift test fails (af4f1abb2)",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/drivers/wave_run.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+      "packages/bee-rs/crates/bee/src/verbs/reservations/flags.rs",
+      "packages/bee-rs/crates/bee/src/catalog.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+      "docs/knowledge/areas/bee-herding/waves-and-occupancy.md"
+    ],
+    "deviations": [
+      "touched three files beyond the plan list as mechanical companions: catalog.rs boolean-flag list gains rolling, reservations/flags.rs pinned flag count 247 to 248, cells/tests.rs holds the two wave-door rolling tests",
+      "sync-ack: the owned skill update is cell psrc-6, which depends on this cell"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-14T04:54:16.757Z",
+    "behavior_change": false,
+    "verification_evidence": "cargo test --release rolling && wave_run && --test registry_contracts — green:unit — 6, 7 and 12 passed; full suite 5650 passed, 1 failed (worker-cell.md template drift, not from this change)",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "3e008fc0-ad34-4948-b38d-92cce97e5d1d",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml rolling && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml wave_run && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test registry_contracts",
+    "claimed_at": "2026-11-14T04:42:08.867Z",
+    "knowledge_delta": [
+      "docs/knowledge/areas/bee-herding/waves-and-occupancy.md"
+    ],
+    "sync_ack": "the owned skill update is cell psrc-6, which depends on this cell",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Added dispatch wave --rolling refill loop, tests and knowledge; one unrelated template-drift test fails (af4f1abb2)",
+      "commit": "ff0c2d767ff39b2a3d7442b672bc53f3d17bf888",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/drivers/wave_run.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+        "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+        "packages/bee-rs/crates/bee/src/verbs/reservations/flags.rs",
+        "packages/bee-rs/crates/bee/src/catalog.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+        "docs/knowledge/areas/bee-herding/waves-and-occupancy.md"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml rolling && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml wave_run && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test registry_contracts — green:unit — cargo test --release rolling && wave_run && --test registry_contracts — green:unit — 6, 7 and 12 passed; full suite 5650 passed, 1 failed (worker-cell.md template drift, not from this change)",
+      "deviations": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "dispatch wave --run --rolling --limit 2 over three independent ready cells keeps at most two runs live and starts the third when one ends",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/wave_run.rs"
+          },
+          {
+            "requirement": "a cell whose dep is capped by a finished run is started in the same rolling call",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/wave_run.rs"
+          },
+          {
+            "requirement": "the loop ends when no cell is ready and no run is live",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/wave_run.rs"
+          },
+          {
+            "requirement": "native Agent-tool items are returned under native once and never refilled",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/wave_run.rs"
+          },
+          {
+            "requirement": "--rolling without --run refuses naming --run",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/wave_run.rs"
+          },
+          {
+            "requirement": "without --rolling the existing wave tests stay green unchanged",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/wave_run.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/drivers/wave_run.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/wave_run.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+            "artifact": "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/reservations/flags.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/reservations/flags.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/catalog.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/catalog.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+          },
+          {
+            "requirement": "docs/knowledge/areas/bee-herding/waves-and-occupancy.md",
+            "artifact": "docs/knowledge/areas/bee-herding/waves-and-occupancy.md"
+          }
+        ],
+        "recorded_at": "2026-11-14T04:54:35.697Z",
+        "recorded_by": "3e008fc0-ad34-4948-b38d-92cce97e5d1d",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": {
+    "new": 97877,
+    "cached": 1746428,
+    "total": 1844305,
+    "models": {
+      "claude-sonnet-5-5": {
+        "new": 97877,
+        "cached": 1746428,
+        "total": 1844305
+      }
+    },
+    "jobs": [
+      "job-1794631329317-497306-1"
+    ]
+  }
+}

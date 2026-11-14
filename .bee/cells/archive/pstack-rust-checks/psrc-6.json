@@ -1,0 +1,140 @@
+{
+  "id": "psrc-6",
+  "feature": "pstack-rust-checks",
+  "title": "Sync knowledge and the planning pre-flight for the five checks",
+  "lane": "standard",
+  "role": "writer",
+  "deps": [
+    "psrc-1",
+    "psrc-2",
+    "psrc-3",
+    "psrc-4",
+    "psrc-5"
+  ],
+  "verify": ".bee/bin/bee knowledge check && .bee/bin/bee dev release-manifest --check && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test skill_triggers",
+  "must_haves": {
+    "truths": [
+      "docs/knowledge/areas/workflow-state/gates.md names bee plan check and its four checks",
+      "docs/knowledge/areas/workflow-state/dispatch.md names the Upstream cells block",
+      "docs/knowledge/areas/worktree-parallelism/returning-and-the-merge-gate.md names the stored patch_id",
+      "docs/knowledge/areas/workflow-state/merge-readiness.md names dead_proof_pointers",
+      "docs/knowledge/areas/bee-herding/waves-and-occupancy.md names --rolling",
+      "skills/bee-planning/SKILL.md Gate section tells the leader to run bee plan check before presenting the gate",
+      "docs/history/pstack-rust-checks/delivery.md exists"
+    ],
+    "prohibitions": [
+      "No code comments"
+    ]
+  },
+  "decisions": [
+    "c9ae60cb-5d2b-4b6f-b9d2-3c52a14bbe18",
+    "03da9d9b-9d59-4bcc-93d4-2891538da070",
+    "77258729-68bc-4667-9170-327760c0fa64",
+    "682e3531-bba9-4042-92cf-8accca31a67f",
+    "806c6687-d629-419c-b643-14248562650e"
+  ],
+  "files": [
+    "docs/knowledge/areas/workflow-state/gates.md",
+    "docs/knowledge/areas/workflow-state/dispatch.md",
+    "docs/knowledge/areas/worktree-parallelism/returning-and-the-merge-gate.md",
+    "docs/knowledge/areas/workflow-state/merge-readiness.md",
+    "docs/knowledge/areas/bee-herding/waves-and-occupancy.md",
+    "skills/bee-planning/SKILL.md",
+    "docs/history/pstack-rust-checks/delivery.md",
+    ".claude/skills/*",
+    ".agents/skills/*",
+    ".opencode/skills/*",
+    ".claude-plugin/skills/*",
+    ".codex-plugin/skills/*",
+    ".bee/onboarding.json",
+    "skills-lock.json",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/pstack-rust-checks/CONTEXT.md",
+    "docs/history/pstack-rust-checks/plan.md",
+    "skills/bee-planning/SKILL.md"
+  ],
+  "affects_skills": [
+    "skills/bee-planning/SKILL.md"
+  ],
+  "affects_specs": [
+    "docs/knowledge/areas/workflow-state/gates.md",
+    "docs/knowledge/areas/workflow-state/dispatch.md",
+    "docs/knowledge/areas/worktree-parallelism/returning-and-the-merge-gate.md",
+    "docs/knowledge/areas/workflow-state/merge-readiness.md",
+    "docs/knowledge/areas/bee-herding/waves-and-occupancy.md"
+  ],
+  "action": "Run `.bee/bin/bee knowledge consolidate --feature pstack-rust-checks`. Then sync the five knowledge concepts from the capped cells' commits (read each cell's report): one short paragraph each, citing the history D-numbers of docs/history/pstack-rust-checks/CONTEXT.md (D1..D5), never raw decision ids, with anchors to the new code. In skills/bee-planning/SKILL.md § Gate, in the 'Pre-flight the claims table yourself' paragraph, add one sentence: run `bee plan check` first; it checks sections, the cited playbook, D-number coverage and read-row evidence, and exits 10 with findings — fix them before the question. Run `.bee/bin/bee dev regen` so rendered skill trees follow. Write docs/history/pstack-rust-checks/delivery.md: what shipped per decision, the proofs each cell recorded, what was skipped. Plain global English, bee-technical-writing standard. Proof: the verify command; quote the results.",
+  "status": "capped",
+  "trace": {
+    "worker": "w-psrc-6",
+    "outcome": "Synced five knowledge concepts, added bee plan check to the bee-planning Gate, regenerated skill trees, wrote delivery.md; commit 149360ec4",
+    "files_changed": [
+      "docs/knowledge/areas/workflow-state/gates.md",
+      "docs/knowledge/areas/workflow-state/dispatch.md",
+      "docs/knowledge/areas/worktree-parallelism/returning-and-the-merge-gate.md",
+      "docs/knowledge/areas/workflow-state/merge-readiness.md",
+      "docs/knowledge/areas/bee-herding/waves-and-occupancy.md",
+      "skills/bee-planning/SKILL.md",
+      "docs/history/pstack-rust-checks/delivery.md",
+      ".bee/onboarding.json",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [
+      "sync-ack: one added sentence in bee-planning § Gate naming bee plan check; the broad suspect concepts anchor the whole skills tree and none describes the planning pre-flight, which gates.md now carries"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-14T04:56:54.260Z",
+    "behavior_change": false,
+    "verification_evidence": ".bee/bin/bee knowledge check && .bee/bin/bee dev release-manifest --check && cargo test --release --test skill_triggers — green:static — knowledge, manifest and skill fixture checks cover a docs and skill-text change",
+    "verify_output": "green:static",
+    "verify_passed": true,
+    "claim_session": "3e008fc0-ad34-4948-b38d-92cce97e5d1d",
+    "verify_command": ".bee/bin/bee knowledge check && .bee/bin/bee dev release-manifest --check && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test skill_triggers",
+    "claimed_at": "2026-11-14T04:55:34.538Z",
+    "knowledge_delta": [
+      "docs/knowledge/areas/workflow-state/gates.md",
+      "docs/knowledge/areas/workflow-state/dispatch.md",
+      "docs/knowledge/areas/worktree-parallelism/returning-and-the-merge-gate.md",
+      "docs/knowledge/areas/workflow-state/merge-readiness.md",
+      "docs/knowledge/areas/bee-herding/waves-and-occupancy.md"
+    ],
+    "sync_ack": "one added sentence in bee-planning § Gate naming bee plan check; the broad suspect concepts anchor the whole skills tree and none describes the planning pre-flight, which gates.md now carries",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Synced five knowledge concepts, added bee plan check to the bee-planning Gate, regenerated skill trees, wrote delivery.md; commit 149360ec4",
+      "commit": "149360ec4d8a6b607776e4681402651e5e3ac4bb",
+      "files": [
+        "docs/knowledge/areas/workflow-state/gates.md",
+        "docs/knowledge/areas/workflow-state/dispatch.md",
+        "docs/knowledge/areas/worktree-parallelism/returning-and-the-merge-gate.md",
+        "docs/knowledge/areas/workflow-state/merge-readiness.md",
+        "docs/knowledge/areas/bee-herding/waves-and-occupancy.md",
+        "skills/bee-planning/SKILL.md",
+        "docs/history/pstack-rust-checks/delivery.md",
+        ".bee/onboarding.json",
+        "docs/history/codex-harness-hardening/release-manifest.json"
+      ],
+      "tests": ".bee/bin/bee knowledge check && .bee/bin/bee dev release-manifest --check && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test skill_triggers — green:static — .bee/bin/bee knowledge check && .bee/bin/bee dev release-manifest --check && cargo test --release --test skill_triggers — green:static — knowledge, manifest and skill fixture checks cover a docs and skill-text change",
+      "deviations": []
+    },
+    "warnings": [],
+    "tests": "boundary"
+  },
+  "usage": {
+    "new": 52138,
+    "cached": 434010,
+    "total": 486148,
+    "models": {
+      "claude-sonnet-5-5": {
+        "new": 52138,
+        "cached": 434010,
+        "total": 486148
+      }
+    },
+    "jobs": [
+      "job-1794632135636-674701-1"
+    ]
+  }
+}

@@ -1,0 +1,175 @@
+{
+  "id": "psrc-3",
+  "feature": "pstack-rust-checks",
+  "title": "Store a patch-id at cap and read it at merge",
+  "lane": "standard",
+  "role": "code",
+  "deps": [],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml patch_id && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml verbs::worktree",
+  "must_haves": {
+    "truths": [
+      "a cap whose report commit resolves stores trace.report.patch_id equal to the stable patch-id of that commit",
+      "a cap whose commit does not resolve or is none stores no patch_id and still succeeds",
+      "at merge, a cell whose stored patch_id is in the branch patch-id set reads carried even when its commit object is gone",
+      "at merge, a cell whose stored patch_id is not in the branch set reads stale",
+      "a cell with no stored patch_id keeps the old compute-from-commit path",
+      "the merge preflight never refuses on this check",
+      "the three existing carried-proof tests in verbs/worktree/tests.rs stay green"
+    ],
+    "prohibitions": [
+      "No new refusal",
+      "No code comments"
+    ]
+  },
+  "decisions": [
+    "77258729-68bc-4667-9170-327760c0fa64"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/proof.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/pstack-rust-checks/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/proof.rs",
+    "docs/knowledge/areas/worktree-parallelism/returning-and-the-merge-gate.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/worktree-parallelism/returning-and-the-merge-gate.md"
+  ],
+  "action": "Implement CONTEXT.md D3. (1) At cap (find where handlers_close.rs writes trace.report), when report.commit is a non-'none' value that resolves in the repo, compute its stable patch-id with the same command shape phases.rs:119 commit_patch_id uses (move that helper to a shared pub(crate) place both modules can call, never a second copy) and store it as trace.report.patch_id; failure to resolve stores nothing and never fails the cap. (2) In phases.rs split_carried_proof (around :178), for each flagged cell read trace.report.patch_id first; when present compare it with branch_patch_ids; when absent fall back to commit_patch_id(commit) as today. Found => carried, not found => stale. Keep the preflight advisory (phases.rs:672-686). Tests (behavior; names contain patch_id): cap stores patch_id; cap with commit none stores none; merge with stored patch_id whose commit object is unreachable (create the commit, record the id, rewrite history so the sha differs) reads carried; stored id not in branch reads stale; no stored id keeps the old path. Existing tests a_proof_taken_before_the_merge_base_is_named_and_the_merge_still_lands, a_proof_carried_across_a_rebase_is_named_and_the_merge_still_lands, a_proof_that_descends_from_the_merge_base_is_silent stay green unchanged. No code comments. Proof: the verify command; quote the counts.",
+  "status": "capped",
+  "trace": {
+    "worker": "w-psrc-3",
+    "outcome": "Cap stores trace.report.patch_id; merge reads it first, falls back to commit compute; commit 0e2f4d230",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/proof.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+      "packages/bee-rs/crates/bee/src/verbs/worktree/git.rs",
+      "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs",
+      "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs",
+      "docs/knowledge/areas/worktree-parallelism/returning-and-the-merge-gate.md"
+    ],
+    "deviations": [
+      "sync-ack: the owned skill update for all five checks is cell psrc-6 (bee-planning pre-flight line), which depends on this cell"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-14T04:36:30.501Z",
+    "behavior_change": false,
+    "verification_evidence": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml patch_id && ... verbs::worktree — green:unit — 8 patch_id tests passed, 237 verbs::worktree passed, 0 failed",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "3e008fc0-ad34-4948-b38d-92cce97e5d1d",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml patch_id && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml verbs::worktree",
+    "claimed_at": "2026-11-14T04:26:26.585Z",
+    "knowledge_delta": [
+      "docs/knowledge/areas/worktree-parallelism/returning-and-the-merge-gate.md"
+    ],
+    "sync_ack": "the owned skill update for all five checks is cell psrc-6 (bee-planning pre-flight line), which depends on this cell",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Cap stores trace.report.patch_id; merge reads it first, falls back to commit compute; commit 0e2f4d230",
+      "commit": "ac8555d869d42096ee56ddf03420fd268131218a",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/proof.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+        "packages/bee-rs/crates/bee/src/verbs/worktree/git.rs",
+        "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs",
+        "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs",
+        "docs/knowledge/areas/worktree-parallelism/returning-and-the-merge-gate.md"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml patch_id && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml verbs::worktree — green:unit — cargo test --release --manifest-path packages/bee-rs/Cargo.toml patch_id && ... verbs::worktree — green:unit — 8 patch_id tests passed, 237 verbs::worktree passed, 0 failed",
+      "deviations": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "a cap whose report commit resolves stores trace.report.patch_id equal to the stable patch-id of that commit",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs"
+          },
+          {
+            "requirement": "a cap whose commit does not resolve or is none stores no patch_id and still succeeds",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs"
+          },
+          {
+            "requirement": "at merge, a cell whose stored patch_id is in the branch patch-id set reads carried even when its commit object is gone",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs"
+          },
+          {
+            "requirement": "at merge, a cell whose stored patch_id is not in the branch set reads stale",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs"
+          },
+          {
+            "requirement": "a cell with no stored patch_id keeps the old compute-from-commit path",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs"
+          },
+          {
+            "requirement": "the merge preflight never refuses on this check",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs"
+          },
+          {
+            "requirement": "the three existing carried-proof tests in verbs/worktree/tests.rs stay green",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/cells/proof.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/proof.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/worktree/git.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/worktree/git.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs"
+          },
+          {
+            "requirement": "docs/knowledge/areas/worktree-parallelism/returning-and-the-merge-gate.md",
+            "artifact": "docs/knowledge/areas/worktree-parallelism/returning-and-the-merge-gate.md"
+          }
+        ],
+        "recorded_at": "2026-11-14T04:37:00.936Z",
+        "recorded_by": "3e008fc0-ad34-4948-b38d-92cce97e5d1d",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": {
+    "new": 64342,
+    "cached": 888102,
+    "total": 952444,
+    "models": {
+      "claude-sonnet-5-5": {
+        "new": 64342,
+        "cached": 888102,
+        "total": 952444
+      }
+    },
+    "jobs": [
+      "job-1794630387598-12782-1"
+    ]
+  }
+}

@@ -1,0 +1,148 @@
+{
+  "id": "psrc-4",
+  "feature": "pstack-rust-checks",
+  "title": "Warn at bee close on proof lines that name missing paths",
+  "lane": "standard",
+  "role": "code",
+  "deps": [],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml dead_proof",
+  "must_haves": {
+    "truths": [
+      "bee close on a feature whose capped cell proof line names docs/missing/file.md prints one warning line naming the cell and that path",
+      "the close JSON carries dead_proof_pointers [{cell, path}]",
+      "a proof line naming only existing paths, URLs, flags and command words yields no warning and an empty dead_proof_pointers",
+      "the warning never changes whether close succeeds or refuses"
+    ],
+    "prohibitions": [
+      "No new refusal",
+      "Do not edit generated/registry_payload.json",
+      "No code comments"
+    ]
+  },
+  "decisions": [
+    "682e3531-bba9-4042-92cf-8accca31a67f"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/proof_pointers.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/mod.rs"
+  ],
+  "read_first": [
+    "docs/history/pstack-rust-checks/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/proof.rs",
+    "docs/knowledge/areas/workflow-state/merge-readiness.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/workflow-state/merge-readiness.md"
+  ],
+  "action": "Implement CONTEXT.md D4. New module verbs/drivers/proof_pointers.rs (declare it in drivers/mod.rs) with a pure function that takes a proof line (trace.report.tests, the '<command> — <result> — <scope reason>' string parsed by finish_support.rs parse_tests_proof) and returns candidate repo-relative paths: tokens split on whitespace, trimmed of surrounding quotes, backticks, commas, parentheses and a trailing colon or period; a candidate contains '/', does not start with http:// or https:// or '-', is not absolute, contains no '$', '*', '{' or '=' and is not a path:line form (strip a trailing ':N' or ':N-M' before checking). A second function checks each candidate under the repo root and returns the missing ones. In close.rs near the feature_proof_check call (:2675), for every capped cell of the feature collect missing paths; print 'warning: dead proof pointer: <cell>: <path>' per item in text mode and add dead_proof_pointers [{cell, path}] (always present, [] when none) to the JSON output. It never changes the close outcome. Unit tests live in proof_pointers.rs #[cfg(test)] (names contain dead_proof): tokenizer cases (URL, flag, path:line, glob, real path), the missing-path check in a temp dir, and one close-level test if the existing close test harness is reachable without editing drivers/tests.rs; otherwise test the collection function over a temp store. No code comments. Proof: the verify command; quote the counts.",
+  "status": "capped",
+  "trace": {
+    "worker": "w-psrc-4",
+    "outcome": "bee close now warns on proof lines naming missing paths and adds dead_proof_pointers to its JSON, never changing the outcome; commit 583351553",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/proof_pointers.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/mod.rs",
+      "docs/knowledge/areas/workflow-state/merge-readiness.md"
+    ],
+    "deviations": [
+      "sync-ack: the owned skill update for all five checks is cell psrc-6 (bee-planning pre-flight line), which depends on this cell"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-14T04:36:30.689Z",
+    "behavior_change": false,
+    "verification_evidence": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml dead_proof — green:unit — 5 passed; 0 failed, covering tokenizer, missing-path check and two close-level cases",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "3e008fc0-ad34-4948-b38d-92cce97e5d1d",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml dead_proof",
+    "claimed_at": "2026-11-14T04:26:27.179Z",
+    "verified_at": null,
+    "baseline": null,
+    "reaction": null,
+    "skipped": null,
+    "unknowns": null,
+    "found": null,
+    "stopped": null,
+    "knowledge_delta": [
+      "docs/knowledge/areas/workflow-state/merge-readiness.md"
+    ],
+    "sync_ack": "the owned skill update for all five checks is cell psrc-6 (bee-planning pre-flight line), which depends on this cell",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "bee close now warns on proof lines naming missing paths and adds dead_proof_pointers to its JSON, never changing the outcome; commit 583351553",
+      "commit": "ac8555d869d42096ee56ddf03420fd268131218a",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/proof_pointers.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/mod.rs",
+        "docs/knowledge/areas/workflow-state/merge-readiness.md"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml dead_proof — green:unit — PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml dead_proof — green:unit — 5 passed; 0 failed, covering tokenizer, missing-path check and two close-level cases",
+      "deviations": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "bee close on a feature whose capped cell proof line names docs/missing/file.md prints one warning line naming the cell and that path",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/proof_pointers.rs"
+          },
+          {
+            "requirement": "the close JSON carries dead_proof_pointers [{cell, path}]",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/proof_pointers.rs"
+          },
+          {
+            "requirement": "a proof line naming only existing paths, URLs, flags and command words yields no warning and an empty dead_proof_pointers",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/proof_pointers.rs"
+          },
+          {
+            "requirement": "the warning never changes whether close succeeds or refuses",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/proof_pointers.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/drivers/proof_pointers.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/proof_pointers.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/drivers/mod.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/mod.rs"
+          },
+          {
+            "requirement": "docs/knowledge/areas/workflow-state/merge-readiness.md",
+            "artifact": "docs/knowledge/areas/workflow-state/merge-readiness.md"
+          }
+        ],
+        "recorded_at": "2026-11-14T04:37:00.946Z",
+        "recorded_by": "3e008fc0-ad34-4948-b38d-92cce97e5d1d",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": {
+    "new": 65128,
+    "cached": 803255,
+    "total": 868383,
+    "models": {
+      "claude-sonnet-5-5": {
+        "new": 65128,
+        "cached": 803255,
+        "total": 868383
+      }
+    },
+    "jobs": [
+      "job-1794630387598-12784-1"
+    ]
+  }
+}

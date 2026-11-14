@@ -1,0 +1,186 @@
+{
+  "id": "psrc-1",
+  "feature": "pstack-rust-checks",
+  "title": "Add bee plan check and print its findings in gate preview",
+  "lane": "standard",
+  "role": "code",
+  "deps": [],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml plan_group && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml plan_claims && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test registry_contracts",
+  "must_haves": {
+    "truths": [
+      "bee plan check --json on a standard plan with every section in order, a cited playbook, every D-number and matching evidence prints ok true and exits 0",
+      "a standard plan missing Risk map gets a sections finding and exit 10",
+      "a plan whose sections are out of order gets a sections finding",
+      "a plan with no skills/bee-planning/playbooks/<class>.md citation gets a playbook finding",
+      "a D-number of CONTEXT.md absent from plan.md gets a decisions finding naming it",
+      "a read row whose evidence is not a byte substring of the anchored line gets an evidence finding naming the row",
+      "bee gate --preview prints each finding as a warning line and still succeeds",
+      "bee plan check writes no file"
+    ],
+    "prohibitions": [
+      "No new refusal anywhere",
+      "No code comments"
+    ]
+  },
+  "decisions": [
+    "c9ae60cb-5d2b-4b6f-b9d2-3c52a14bbe18"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/plan_group.rs",
+    "packages/bee-rs/crates/bee/src/verbs/mod.rs",
+    "packages/bee-rs/crates/bee/src/router.rs",
+    "packages/bee-rs/crates/bee/src/catalog.rs",
+    "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/plan_claims.rs",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/plan_packets.rs",
+    "packages/bee-rs/crates/bee/tests/registry_contracts.rs"
+  ],
+  "read_first": [
+    "docs/history/pstack-rust-checks/CONTEXT.md",
+    "docs/history/pstack-rust-checks/plan.md",
+    "packages/bee-rs/crates/bee/src/verbs/upkeep_group.rs",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/plan_claims.rs",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/plan_packets.rs",
+    "docs/history/upkeep-due-signal/plan.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/workflow-state/gates.md"
+  ],
+  "action": "Implement CONTEXT.md D1. New verb group `bee plan check`, modeled on verbs/upkeep_group.rs (try_native wiring in verbs/mod.rs, the usage line in router.rs, the registry entry in generated/registry_payload.json with a full description; tests/registry_contracts.rs pins the shape). Flags: --feature <slug> (omitted: the calling session's bound lane, then the state record's feature; none resolves => typed refusal naming --feature), --json. Read docs/history/<feature>/plan.md (missing => typed error naming the path) and docs/history/<feature>/CONTEXT.md (missing => the decisions check reports one finding, not an error). mode = plan.md frontmatter `mode`. Route class = the lane record's route class for the feature (read it the way bee orient/route reads it); unknown class => the playbook check accepts any skills/bee-planning/playbooks/*.md citation. Checks, each producing findings {check, detail}: sections (standard|high-risk: '## Summary', '## Requirements', '## Load-bearing claims', '## Approach', '## Role assignments', '## Risk map', '## Cells' as heading prefixes, present and in that order; other modes: Summary, Load-bearing claims, Cells present); playbook; decisions (D-numbers from rows of the '## Locked Decisions' table whose first cell is D<n>; each must appear in plan.md as a whole word); evidence (parse the claims table with the existing plan_claims.rs parser — expose a pub(crate) row parse if needed; for label read: anchor 'path:N' or 'path:N-M' or 'path'; evidence cell with one outer backtick pair stripped; the evidence must be a byte substring of line N, of lines N..=M joined by newline, or of the whole file; path missing or line out of range => finding). Output JSON {schema:'bee-plan-check/v1', ok, feature, mode, findings:[...]}; text mode prints one line per finding then a summary line. Exit 0 when no finding, 10 when any. In plan_packets.rs run_gate_preview_body, run the same checks (one shared pure function, never shelling out) and print each finding as a 'warning: plan check: <check>: <detail>' line; it never changes the preview result. Read-only: no write. Tests (behavior, temp-dir repos; name them so the filter plan_group matches): clean plan exits 0; missing Risk map; out-of-order sections; missing playbook; missing D-number; evidence mismatch; evidence match on a range; preview prints the warning and still succeeds. No code comments. Proof: the verify command; quote the counts.",
+  "status": "capped",
+  "trace": {
+    "worker": "w-psrc-1",
+    "outcome": "bee plan check verb and gate-preview warning lines added; verify green (plan_group 8, plan_claims 21, registry_contracts 12 passed); commit ac8555d869d42096ee56ddf03420fd268131218a",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/plan_group.rs",
+      "packages/bee-rs/crates/bee/src/verbs/mod.rs",
+      "packages/bee-rs/crates/bee/src/router.rs",
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+      "packages/bee-rs/crates/bee/src/verbs/state_group/plan_claims.rs",
+      "packages/bee-rs/crates/bee/src/verbs/state_group/plan_packets.rs",
+      "docs/knowledge/areas/workflow-state/gates.md"
+    ],
+    "deviations": [
+      "sync-ack: the owned skill update for all five checks is cell psrc-6 (bee-planning pre-flight line), which depends on this cell"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-14T04:36:30.308Z",
+    "behavior_change": false,
+    "verification_evidence": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml plan_group && ... plan_claims && ... --test registry_contracts — green:unit — the cell's own verify command (8, 21 and 12 tests passed)",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "3e008fc0-ad34-4948-b38d-92cce97e5d1d",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml plan_group && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml plan_claims && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test registry_contracts",
+    "claimed_at": "2026-11-14T04:26:25.847Z",
+    "knowledge_delta": [
+      "docs/knowledge/areas/workflow-state/gates.md"
+    ],
+    "sync_ack": "the owned skill update for all five checks is cell psrc-6 (bee-planning pre-flight line), which depends on this cell",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "bee plan check verb and gate-preview warning lines added; verify green (plan_group 8, plan_claims 21, registry_contracts 12 passed); commit ac8555d869d42096ee56ddf03420fd268131218a",
+      "commit": "ac8555d869d42096ee56ddf03420fd268131218a",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/plan_group.rs",
+        "packages/bee-rs/crates/bee/src/verbs/mod.rs",
+        "packages/bee-rs/crates/bee/src/router.rs",
+        "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+        "packages/bee-rs/crates/bee/src/verbs/state_group/plan_claims.rs",
+        "packages/bee-rs/crates/bee/src/verbs/state_group/plan_packets.rs",
+        "docs/knowledge/areas/workflow-state/gates.md"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml plan_group && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml plan_claims && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test registry_contracts — green:unit — cargo test --release --manifest-path packages/bee-rs/Cargo.toml plan_group && ... plan_claims && ... --test registry_contracts — green:unit — the cell's own verify command (8, 21 and 12 tests passed)",
+      "deviations": []
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 536 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "bee plan check --json on a standard plan with every section in order, a cited playbook, every D-number and matching evidence prints ok true and exits 0",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/plan_group.rs"
+          },
+          {
+            "requirement": "a standard plan missing Risk map gets a sections finding and exit 10",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/plan_group.rs"
+          },
+          {
+            "requirement": "a plan whose sections are out of order gets a sections finding",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/plan_group.rs"
+          },
+          {
+            "requirement": "a plan with no skills/bee-planning/playbooks/<class>.md citation gets a playbook finding",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/plan_group.rs"
+          },
+          {
+            "requirement": "a D-number of CONTEXT.md absent from plan.md gets a decisions finding naming it",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/plan_group.rs"
+          },
+          {
+            "requirement": "a read row whose evidence is not a byte substring of the anchored line gets an evidence finding naming the row",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/plan_group.rs"
+          },
+          {
+            "requirement": "bee gate --preview prints each finding as a warning line and still succeeds",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/plan_group.rs"
+          },
+          {
+            "requirement": "bee plan check writes no file",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/plan_group.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/plan_group.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/plan_group.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/mod.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/mod.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/router.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/router.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+            "artifact": "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/state_group/plan_claims.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/state_group/plan_claims.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/state_group/plan_packets.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/state_group/plan_packets.rs"
+          },
+          {
+            "requirement": "docs/knowledge/areas/workflow-state/gates.md",
+            "artifact": "docs/knowledge/areas/workflow-state/gates.md"
+          }
+        ],
+        "recorded_at": "2026-11-14T04:37:00.926Z",
+        "recorded_by": "3e008fc0-ad34-4948-b38d-92cce97e5d1d",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": {
+    "new": 136940,
+    "cached": 2312900,
+    "total": 2449840,
+    "models": {
+      "claude-sonnet-5-5": {
+        "new": 136940,
+        "cached": 2312900,
+        "total": 2449840
+      }
+    },
+    "jobs": [
+      "job-1794630387599-12783-1"
+    ]
+  }
+}

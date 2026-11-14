@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "pstack-principles",
   "mode": null,
-  "phase": "exploring",
+  "phase": "idle",
   "approved_gates": {
     "context": true,
     "shape": true,
@@ -11,9 +11,9 @@
     "uat": true
   },
   "summary": "Feature \"pstack-principles\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at 8a5f22c; reload the product and test \"pstack-principles\", then either approve uat (\"bee gate --name uat --approved true --lane pstack-principles\") or fix it in the worktree and merge again.",
+  "next_action": "bee close finished \"pstack-principles\" — feature is closed.",
   "created_at": "2026-11-14T04:16:37.328Z",
-  "run_state": "done",
+  "run_state": "shaping",
   "waiting_on": null,
   "route": {
     "class": "feature",

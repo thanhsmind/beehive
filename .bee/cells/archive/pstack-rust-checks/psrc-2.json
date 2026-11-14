@@ -1,0 +1,209 @@
+{
+  "id": "psrc-2",
+  "feature": "pstack-rust-checks",
+  "title": "Relay capped dependency outcomes into the worker prompt",
+  "lane": "standard",
+  "role": "code",
+  "deps": [
+    "psrc-1"
+  ],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml upstream && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml prior_round && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test registry_contracts && .bee/bin/bee onboard --repo-root . --json && .bee/bin/bee dev release-manifest --check",
+  "must_haves": {
+    "truths": [
+      "dispatch prepare --kind cell for a cell with one capped dep renders an Upstream cells block naming the dep's id, title, outcome, commit, files and deviations",
+      "a dep that is not capped is listed by id with its status and no report fields",
+      "files past 20 render as a count line; each deviation is cut to 300 characters",
+      "a cell with no deps renders a prompt byte-identical to before this change",
+      "the holdout arm still renders the Upstream block"
+    ],
+    "prohibitions": [
+      "No code comments"
+    ]
+  },
+  "decisions": [
+    "03da9d9b-9d59-4bcc-93d4-2891538da070"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+    "packages/bee/prompts/worker-cell.md",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+    "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+    ".bee/prompts/worker-cell.md",
+    ".bee/onboarding.json",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/pstack-rust-checks/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+    "packages/bee/prompts/worker-cell.md",
+    "packages/bee-rs/crates/bee/src/verbs/cells/proof.rs",
+    "docs/knowledge/areas/workflow-state/dispatch.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/workflow-state/dispatch.md"
+  ],
+  "action": "Implement CONTEXT.md D2. In prepare.rs kind-cell rendering (around :1454-1509, beside prior_round_event_lines :808), build upstream lines from the cell's deps: load each dep cell from the store; capped => '- <id> — <title>: outcome <outcome>; commit <commit>; files <comma list, first 20, then (+N more)>' plus one indented line per deviation cut to 300 characters; not capped => '- <id> — <status>'. Feed it to the template as `upstream` and add to packages/bee/prompts/worker-cell.md an `{{#if upstream}}` block titled 'Upstream cells' placed after the prior rounds block, mirroring that block's form. A cell with no deps must render byte-identically to before: pin with a test that compares against the render without the field. The block is not part of the knowledge holdout (both arms render it). Update the dispatch prepare description in generated/registry_payload.json to name the block in one sentence. Run `.bee/bin/bee dev regen` so the vendored prompt copy, the onboarding ledger and the release manifest follow. Tests (names contain upstream): capped dep renders all fields; uncapped dep renders status; truncation of files and deviations; no-deps byte-identical. No code comments. Proof: the verify command; quote the counts.",
+  "status": "capped",
+  "trace": {
+    "worker": "w-psrc-2b",
+    "outcome": "Verify chain and the template-vars test pass at the leader's fix; cap with ff0c2d767",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/drivers/prompt.rs"
+    ],
+    "deviations": [
+      "sync-ack: the owned skill update is cell psrc-6"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-14T04:55:26.829Z",
+    "behavior_change": false,
+    "verification_evidence": "cargo test --release upstream && prior_round && --test registry_contracts && bee onboard --json && bee dev release-manifest --check, plus --bin bee every_template_carries_the_original_request_block — green:unit — 6 upstream, 3 prior_round, 12 registry_contracts, 1 template test pass; onboard up_to_date; manifest 614 files match",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "3e008fc0-ad34-4948-b38d-92cce97e5d1d",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml upstream && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml prior_round && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test registry_contracts && .bee/bin/bee onboard --repo-root . --json && .bee/bin/bee dev release-manifest --check",
+    "claimed_at": "2026-11-14T04:54:20.935Z",
+    "knowledge_delta": [],
+    "sync_ack": "the owned skill update is cell psrc-6",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Verify chain and the template-vars test pass at the leader's fix; cap with ff0c2d767",
+      "commit": "ff0c2d767ff39b2a3d7442b672bc53f3d17bf888",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/drivers/prompt.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml upstream && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml prior_round && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test registry_contracts && .bee/bin/bee onboard --repo-root . --json && .bee/bin/bee dev release-manifest --check — green:unit — cargo test --release upstream && prior_round && --test registry_contracts && bee onboard --json && bee dev release-manifest --check, plus --bin bee every_template_carries_the_original_request_block — green:unit — 6 upstream, 3 prior_round, 12 registry_contracts, 1 template test pass; onboard up_to_date; manifest 614 files match",
+      "deviations": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "dispatch prepare --kind cell for a cell with one capped dep renders an Upstream cells block naming the dep's id, title, outcome, commit, files and deviations",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+          },
+          {
+            "requirement": "a dep that is not capped is listed by id with its status and no report fields",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+          },
+          {
+            "requirement": "files past 20 render as a count line; each deviation is cut to 300 characters",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+          },
+          {
+            "requirement": "a cell with no deps renders a prompt byte-identical to before this change",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+          },
+          {
+            "requirement": "the holdout arm still renders the Upstream block",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+          },
+          {
+            "requirement": "packages/bee/prompts/worker-cell.md",
+            "artifact": "packages/bee/prompts/worker-cell.md"
+          },
+          {
+            "requirement": ".bee/bin/prompts/worker-cell.md",
+            "artifact": ".bee/bin/prompts/worker-cell.md"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+            "artifact": "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+          },
+          {
+            "requirement": ".bee/onboarding.json",
+            "artifact": ".bee/onboarding.json"
+          },
+          {
+            "requirement": "docs/history/codex-harness-hardening/release-manifest.json",
+            "artifact": "docs/history/codex-harness-hardening/release-manifest.json"
+          },
+          {
+            "requirement": "docs/knowledge/areas/workflow-state/dispatch.md",
+            "artifact": "docs/knowledge/areas/workflow-state/dispatch.md"
+          }
+        ],
+        "recorded_at": "2026-11-14T04:42:06.555Z",
+        "recorded_by": "3e008fc0-ad34-4948-b38d-92cce97e5d1d",
+        "commit_diff": "checked"
+      },
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "dispatch prepare --kind cell for a cell with one capped dep renders an Upstream cells block naming the dep's id, title, outcome, commit, files and deviations",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/prompt.rs"
+          },
+          {
+            "requirement": "a dep that is not capped is listed by id with its status and no report fields",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/prompt.rs"
+          },
+          {
+            "requirement": "files past 20 render as a count line; each deviation is cut to 300 characters",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/prompt.rs"
+          },
+          {
+            "requirement": "a cell with no deps renders a prompt byte-identical to before this change",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/prompt.rs"
+          },
+          {
+            "requirement": "the holdout arm still renders the Upstream block",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/prompt.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/drivers/prompt.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/prompt.rs"
+          }
+        ],
+        "recorded_at": "2026-11-14T04:55:33.056Z",
+        "recorded_by": "3e008fc0-ad34-4948-b38d-92cce97e5d1d",
+        "commit_diff": "checked"
+      }
+    ],
+    "verified_at": null,
+    "baseline": null,
+    "reaction": null,
+    "skipped": null,
+    "unknowns": null,
+    "found": null,
+    "stopped": null,
+    "blocked_reason": null,
+    "dropped_reason": null,
+    "reopened_at": "2026-11-14T04:52:28.676Z",
+    "reopened_reason": "the full suite is red: every_template_carries_the_original_request_block_and_matches_disk fails because worker-cell.md now uses {{upstream}} but supported_vars_for(worker-cell) in prompt.rs does not list upstream",
+    "mistakes": [
+      {
+        "wrong": "psrc-2 added the upstream placeholder to worker-cell.md without adding it to supported_vars_for in prompt.rs; its scoped tests passed and only the full suite saw it",
+        "better": "a prompt template change should carry the template render test in its cell verify",
+        "fix_at": "check"
+      }
+    ]
+  },
+  "usage": {
+    "new": 85901,
+    "cached": 951824,
+    "total": 1037725,
+    "models": {
+      "claude-sonnet-5-5": {
+        "new": 85901,
+        "cached": 951824,
+        "total": 1037725
+      }
+    },
+    "jobs": [
+      "job-1794631003374-382660-1",
+      "job-1794632069875-669046-1"
+    ]
+  }
+}
