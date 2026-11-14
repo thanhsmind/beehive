@@ -79,7 +79,7 @@
 //     interpreter's wording.
 
 mod agents;
-mod apply;
+pub(crate) mod apply;
 pub(crate) mod hooks_wiring;
 mod merge;
 mod migration;
