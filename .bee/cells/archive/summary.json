@@ -2203,5 +2203,10 @@
     "capped": 1,
     "dropped": 0,
     "archived_at": "2026-11-14T00:25:55.560Z"
+  },
+  "upkeep-due-signal": {
+    "capped": 2,
+    "dropped": 0,
+    "archived_at": "2026-11-14T02:17:10.419Z"
   }
 }

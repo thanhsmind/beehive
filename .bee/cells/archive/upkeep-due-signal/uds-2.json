@@ -1,0 +1,142 @@
+{
+  "id": "uds-2",
+  "feature": "upkeep-due-signal",
+  "title": "Make the upkeep skills name bee upkeep due and record each run",
+  "lane": "standard",
+  "role": "docs",
+  "deps": [],
+  "verify": ".bee/bin/bee knowledge check && .bee/bin/bee dev release-manifest --check && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test skill_triggers",
+  "must_haves": {
+    "truths": [
+      "skills/bee-knowledge-upkeep/SKILL.md names bee upkeep due and ends its pass with bee audit log --kind knowledge-upkeep on every outcome",
+      "skills/bee-verify-upkeep/SKILL.md names bee upkeep due --kind verify and ends with bee audit log --kind verify-upkeep",
+      "both skills still carry disable-model-invocation: true",
+      "docs/knowledge/areas/okf-profile/overview.md tells how a waggledance job starts a run from the invoke field",
+      "the rendered skill trees match skills/ (release-manifest --check clean)"
+    ]
+  },
+  "decisions": [
+    "d4fc0607-8b16-4f91-832f-b631ea8e2421",
+    "5ced4e9d-83f3-4a47-aeb9-1310141bc05e",
+    "d489fc4b-33ca-4410-a525-6c81cc745b1b",
+    "f88a51a3-8e0e-4064-b6ab-512c0229a946"
+  ],
+  "files": [
+    "skills/bee-knowledge-upkeep/SKILL.md",
+    "skills/bee-verify-upkeep/SKILL.md",
+    "docs/knowledge/areas/okf-profile/overview.md",
+    ".claude/skills/*",
+    ".agents/skills/*",
+    ".opencode/skills/*",
+    ".claude-plugin/skills/*",
+    ".codex-plugin/skills/*",
+    ".bee/onboarding.json",
+    "skills-lock.json",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/upkeep-due-signal/CONTEXT.md",
+    "skills/bee-knowledge-upkeep/SKILL.md",
+    "skills/bee-verify-upkeep/SKILL.md",
+    "docs/knowledge/areas/okf-profile/overview.md"
+  ],
+  "affects_skills": [
+    "skills/bee-knowledge-upkeep/SKILL.md",
+    "skills/bee-verify-upkeep/SKILL.md"
+  ],
+  "affects_specs": [
+    "docs/knowledge/areas/okf-profile/overview.md"
+  ],
+  "action": "Implement CONTEXT.md D3-D6 in docs. (1) skills/bee-knowledge-upkeep/SKILL.md: in 'When a run is due', add that `bee upkeep due --kind knowledge --json` computes this table (one machine check; exit 10 = due) and keep the table as the human statement of the same signals; add, as the last step of the pass for every outcome (clean, changed, blocked), `bee audit log --kind knowledge-upkeep --feature <feature or upkeep> --note \"<outcome> — <one line>\"`, and say that without this row the run stays due. Keep `disable-model-invocation: true`. (2) skills/bee-verify-upkeep/SKILL.md: add a short 'When a run is due' section naming `bee upkeep due --kind verify --json` (never_run, release_since_last_run) and the same final audit step with --kind verify-upkeep; keep the existing Upkeep log line in the feature map as well. Keep `disable-model-invocation: true`. Bump metadata.version of both skills to '0.2'. (3) docs/knowledge/areas/okf-profile/overview.md: one short subsection 'Scheduled upkeep': a periodic job (the owner's waggledance setup) runs `.bee/bin/bee upkeep due --json` in the project; on exit 10, for each item with due true it dispatches the item's `invoke` text (`/bee-knowledge-upkeep` or `/bee-verify-upkeep`) as the task to the project leader with `waggledance dispatch --project <id> --leader --request-id <id> --task \"<invoke>\"`; the skills keep disable-model-invocation, so the slash command is how the run starts. Cite the decisions by the history D-numbers of docs/history/upkeep-due-signal/CONTEXT.md, not raw ids. Run `bee knowledge check` after. (4) Run `bee dev regen` so the rendered skill trees, onboarding ledger, skills lock and release manifest follow. Write with the bee-technical-writing standard, plain English, no code comments. Proof: `bee knowledge check` clean, `bee dev regen` clean, and the skill tests (`cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test skill_triggers` plus any skill frontmatter or render test it names); quote the counts.",
+  "status": "capped",
+  "trace": {
+    "worker": "uds-2-worker",
+    "outcome": "Both upkeep skills name bee upkeep due and end with an audit row, okf-profile has a Scheduled upkeep section, regen is clean; commit b0b3557d8",
+    "files_changed": [
+      ".agents/skills/.bee-render.json",
+      ".agents/skills/bee-knowledge-upkeep/SKILL.md",
+      ".agents/skills/bee-verify-upkeep/SKILL.md",
+      ".bee/onboarding.json",
+      ".claude-plugin/skills/.bee-render.json",
+      ".claude-plugin/skills/bee-knowledge-upkeep/SKILL.md",
+      ".claude-plugin/skills/bee-verify-upkeep/SKILL.md",
+      ".claude/skills/.bee-render.json",
+      ".claude/skills/bee-knowledge-upkeep/SKILL.md",
+      ".claude/skills/bee-verify-upkeep/SKILL.md",
+      ".codex-plugin/skills/.bee-render.json",
+      ".codex-plugin/skills/bee-knowledge-upkeep/SKILL.md",
+      ".codex-plugin/skills/bee-verify-upkeep/SKILL.md",
+      ".opencode/skills/.bee-render.json",
+      ".opencode/skills/bee-knowledge-upkeep/SKILL.md",
+      ".opencode/skills/bee-verify-upkeep/SKILL.md",
+      "docs/history/codex-harness-hardening/release-manifest.json",
+      "docs/knowledge/areas/okf-profile/overview.md",
+      "skills/bee-knowledge-upkeep/SKILL.md",
+      "skills/bee-verify-upkeep/SKILL.md"
+    ],
+    "deviations": [
+      "sync-ack: the 14 concepts anchor whole skill trees; this cell adds a due paragraph and a record step to the two upkeep skills only, which none of them describe; okf-profile overview was updated in the cell"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-14T01:41:36.910Z",
+    "behavior_change": false,
+    "verification_evidence": ".bee/bin/bee knowledge check && .bee/bin/bee dev release-manifest --check && cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test skill_triggers — green:static — docs-only change; knowledge check 0 errors, manifest 614 files match, skill_triggers 1 passed 0 failed 1 ignored",
+    "verify_output": "green:static",
+    "verify_passed": true,
+    "claim_session": "1f9e2a2b-415f-4056-b7f5-6ea1fa4fb055",
+    "verify_command": ".bee/bin/bee knowledge check && .bee/bin/bee dev release-manifest --check && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test skill_triggers",
+    "claimed_at": "2026-11-14T01:38:32.748Z",
+    "knowledge_delta": [
+      "docs/knowledge/areas/okf-profile/overview.md"
+    ],
+    "sync_ack": "the 14 concepts anchor whole skill trees; this cell adds a due paragraph and a record step to the two upkeep skills only, which none of them describe; okf-profile overview was updated in the cell",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Both upkeep skills name bee upkeep due and end with an audit row, okf-profile has a Scheduled upkeep section, regen is clean; commit b0b3557d8",
+      "commit": "b0b3557d87d20497f87703748e0d0c9947187276",
+      "files": [
+        ".agents/skills/.bee-render.json",
+        ".agents/skills/bee-knowledge-upkeep/SKILL.md",
+        ".agents/skills/bee-verify-upkeep/SKILL.md",
+        ".bee/onboarding.json",
+        ".claude-plugin/skills/.bee-render.json",
+        ".claude-plugin/skills/bee-knowledge-upkeep/SKILL.md",
+        ".claude-plugin/skills/bee-verify-upkeep/SKILL.md",
+        ".claude/skills/.bee-render.json",
+        ".claude/skills/bee-knowledge-upkeep/SKILL.md",
+        ".claude/skills/bee-verify-upkeep/SKILL.md",
+        ".codex-plugin/skills/.bee-render.json",
+        ".codex-plugin/skills/bee-knowledge-upkeep/SKILL.md",
+        ".codex-plugin/skills/bee-verify-upkeep/SKILL.md",
+        ".opencode/skills/.bee-render.json",
+        ".opencode/skills/bee-knowledge-upkeep/SKILL.md",
+        ".opencode/skills/bee-verify-upkeep/SKILL.md",
+        "docs/history/codex-harness-hardening/release-manifest.json",
+        "docs/knowledge/areas/okf-profile/overview.md",
+        "skills/bee-knowledge-upkeep/SKILL.md",
+        "skills/bee-verify-upkeep/SKILL.md"
+      ],
+      "tests": ".bee/bin/bee knowledge check && .bee/bin/bee dev release-manifest --check && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test skill_triggers — green:static — .bee/bin/bee knowledge check && .bee/bin/bee dev release-manifest --check && cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test skill_triggers — green:static — docs-only change; knowledge check 0 errors, manifest 614 files match, skill_triggers 1 passed 0 failed 1 ignored",
+      "deviations": []
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 211 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
+  },
+  "usage": {
+    "new": 55963,
+    "cached": 587742,
+    "total": 643705,
+    "models": {
+      "claude-sonnet-5-5": {
+        "new": 55963,
+        "cached": 587742,
+        "total": 643705
+      }
+    },
+    "jobs": [
+      "job-1794620348474-2954443-1"
+    ]
+  }
+}

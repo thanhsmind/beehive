@@ -1,0 +1,191 @@
+{
+  "id": "uds-1",
+  "feature": "upkeep-due-signal",
+  "title": "Add bee upkeep due and the two upkeep audit kinds",
+  "lane": "standard",
+  "role": "code",
+  "deps": [],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml upkeep && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml audit && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test registry_contracts",
+  "must_haves": {
+    "truths": [
+      "bee upkeep due --json in a store with no bundle and no verify skill exits 0 and prints both items with present false",
+      "bee upkeep due --json in a store with a bundle and no knowledge-upkeep audit row exits 10 with reason never_run",
+      "a knowledge-upkeep audit row newer than every v* tag clears never_run and release_since_last_run",
+      "bee audit log accepts --kind knowledge-upkeep and --kind verify-upkeep",
+      "bee upkeep due writes no file"
+    ]
+  },
+  "decisions": [
+    "e05b2de3-8ff5-4a34-bc0e-ffda1182e911",
+    "a69de382-6875-4fea-b893-d313e7fcb645",
+    "d4fc0607-8b16-4f91-832f-b631ea8e2421",
+    "5ced4e9d-83f3-4a47-aeb9-1310141bc05e",
+    "d489fc4b-33ca-4410-a525-6c81cc745b1b",
+    "1977d1cd-b69f-43c9-8730-92477636ed8e"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/upkeep_group.rs",
+    "packages/bee-rs/crates/bee/src/verbs/mod.rs",
+    "packages/bee-rs/crates/bee/src/router.rs",
+    "packages/bee-rs/crates/bee/src/audit.rs",
+    "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs",
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/mod.rs",
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/check.rs",
+    "packages/bee-rs/crates/bee/tests/registry_contracts.rs"
+  ],
+  "read_first": [
+    "docs/history/upkeep-due-signal/CONTEXT.md",
+    "docs/history/upkeep-due-signal/plan.md",
+    "packages/bee-rs/crates/bee/src/verbs/tmp_group.rs",
+    "packages/bee-rs/crates/bee/src/audit.rs",
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/okf-profile/overview.md"
+  ],
+  "action": "Implement CONTEXT.md D1-D5 in Rust. (1) audit.rs KINDS gains \"knowledge-upkeep\" and \"verify-upkeep\" (array length 18); update every test or help text that lists the closed set (rg the existing kind \"dissent-deferral\" to find them). (2) New verb group `bee upkeep due`, modeled on verbs/tmp_group.rs (routing, g_prelude, json flag) and on knowledge report's --root handling (g_prelude_at). Flags: --kind knowledge|verify (other value refuses, naming both), --root <path>. Register it in generated/registry_payload.json with a full description (hand-edited; tests/registry_contracts.rs pins the shape) so `bee upkeep due --help` and the CLI-shape guard know it. (3) Output JSON exactly: {schema:\"bee-upkeep-due/v1\", any_due:bool, items:[{kind, skill:\"bee-knowledge-upkeep\"|\"bee-verify-upkeep\", invoke:\"/bee-knowledge-upkeep\"|\"/bee-verify-upkeep\", present:bool, due:bool, reasons:[{code, detail}], info:[{code, detail}], last_run:{at, outcome, note}|null}]}. last_run = newest .bee/audit.jsonl row of kind knowledge-upkeep / verify-upkeep; outcome = first word of the note. Text output: one line per item (kind, due or not due, reason codes) then the invoke command when due. Exit 0 when no reported item is due, 10 when any is; errors keep their normal non-zero codes. (4) Knowledge item: present = docs/knowledge holds a bundle (root index.md exists). Not present => due false, no reasons. Reasons: never_run (no row); release_since_last_run (newest tag matching v* by creator date, read with git for-each-ref, newer than last_run.at; skip silently when not a git repo or no tag); reported_wrong (concepts in the knowledge report knowledge_wrong data whose reporting cell was capped after last_run.at, or all when never run; detail names count and up to 3 paths; you may extend the report builder to expose per-cell capped time); orphan (knowledge check freshness orphan > 0); suspect_loaded (a concept graded suspect in freshness whose loads in knowledge_used.loaded >= 5; one const SUSPECT_LOAD_MIN = 5). Loaded-never-used concepts with loads >= 5 go to info with code loaded_never_used and never set due. Call the existing builders in-process; never spawn bee. (5) Verify item: present = .bee/verify/verify-app/SKILL.md exists; reasons never_run and release_since_last_run only. (6) Strictly read-only: no write to any file, no timing log. Tests (behavior, temp-dir stores): no bundle and no verify skill => exit 0, both present false; bundle with no audit row => knowledge due with never_run, exit 10; a knowledge-upkeep row newer than every tag and no other signal => not due; --kind verify narrows items to one; bad --kind refuses; audit log accepts the two new kinds. No code comments. Proof: cargo test filtered to the new and touched modules, plus registry_contracts and the audit tests; quote the counts.",
+  "status": "capped",
+  "trace": {
+    "worker": "uds-1-worker",
+    "outcome": "Added bee upkeep due, the two upkeep audit kinds, registry entry and tests; full suite 5622 passed, commit d909a2335",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/upkeep_group.rs",
+      "packages/bee-rs/crates/bee/src/verbs/mod.rs",
+      "packages/bee-rs/crates/bee/src/router.rs",
+      "packages/bee-rs/crates/bee/src/audit.rs",
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+      "packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs",
+      "packages/bee-rs/crates/bee/tests/audit_log.rs",
+      "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs",
+      "docs/knowledge/areas/decision-memory/audit-log.md"
+    ],
+    "deviations": [
+      "sync-ack: the suspect concepts anchor router.rs, verbs/mod.rs and registry_payload.json as wholes; this cell adds one verb group and two audit kinds, and updated the concept that owns the audit kinds (decision-memory/audit-log.md); the okf-profile overview carries the verb (uds-2)"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-14T01:48:56.467Z",
+    "behavior_change": false,
+    "verification_evidence": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml — green:unit — 5622 passed, 0 failed, covering upkeep (12+1), audit and registry_contracts (12)",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "1f9e2a2b-415f-4056-b7f5-6ea1fa4fb055",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml upkeep && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml audit && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test registry_contracts",
+    "claimed_at": "2026-11-14T01:38:46.500Z",
+    "knowledge_delta": [
+      "docs/knowledge/areas/decision-memory/audit-log.md"
+    ],
+    "sync_ack": "the suspect concepts anchor router.rs, verbs/mod.rs and registry_payload.json as wholes; this cell adds one verb group and two audit kinds, and updated the concept that owns the audit kinds (decision-memory/audit-log.md); the okf-profile overview carries the verb (uds-2)",
+    "no_mistakes": true,
+    "knowledge_used": [
+      {
+        "path": "docs/knowledge/areas/decision-memory/audit-log.md",
+        "changed": "kept the new kinds off the -deferral suffix so no door reads them as an escape"
+      }
+    ],
+    "report": {
+      "outcome": "Added bee upkeep due, the two upkeep audit kinds, registry entry and tests; full suite 5622 passed, commit d909a2335",
+      "commit": "d909a2335d25a81ef0b018335704ce2e8d283e82",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/upkeep_group.rs",
+        "packages/bee-rs/crates/bee/src/verbs/mod.rs",
+        "packages/bee-rs/crates/bee/src/router.rs",
+        "packages/bee-rs/crates/bee/src/audit.rs",
+        "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+        "packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs",
+        "packages/bee-rs/crates/bee/tests/audit_log.rs",
+        "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs",
+        "docs/knowledge/areas/decision-memory/audit-log.md"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml upkeep && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml audit && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test registry_contracts — green:unit — PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml — green:unit — 5622 passed, 0 failed, covering upkeep (12+1), audit and registry_contracts (12)",
+      "deviations": [],
+      "knowledge_used": [
+        "docs/knowledge/areas/decision-memory/audit-log.md — kept the new kinds off the -deferral suffix so no door reads them as an escape"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "bee upkeep due --json in a store with no bundle and no verify skill exits 0 and prints both items with present false",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/upkeep_group.rs"
+          },
+          {
+            "requirement": "bee upkeep due --json in a store with a bundle and no knowledge-upkeep audit row exits 10 with reason never_run",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/upkeep_group.rs"
+          },
+          {
+            "requirement": "a knowledge-upkeep audit row newer than every v* tag clears never_run and release_since_last_run",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/upkeep_group.rs"
+          },
+          {
+            "requirement": "bee audit log accepts --kind knowledge-upkeep and --kind verify-upkeep",
+            "artifact": "packages/bee-rs/crates/bee/tests/audit_log.rs"
+          },
+          {
+            "requirement": "bee upkeep due writes no file",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/upkeep_group.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/upkeep_group.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/upkeep_group.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/mod.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/mod.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/router.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/router.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/audit.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/audit.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+            "artifact": "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/tests/audit_log.rs",
+            "artifact": "packages/bee-rs/crates/bee/tests/audit_log.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs"
+          },
+          {
+            "requirement": "docs/knowledge/areas/decision-memory/audit-log.md",
+            "artifact": "docs/knowledge/areas/decision-memory/audit-log.md"
+          }
+        ],
+        "recorded_at": "2026-11-14T01:49:06.717Z",
+        "recorded_by": "1f9e2a2b-415f-4056-b7f5-6ea1fa4fb055",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": {
+    "new": 149817,
+    "cached": 2886220,
+    "total": 3036037,
+    "models": {
+      "claude-sonnet-5-5": {
+        "new": 149817,
+        "cached": 2886220,
+        "total": 3036037
+      }
+    },
+    "jobs": [
+      "job-1794620346977-2954159-1"
+    ]
+  }
+}
