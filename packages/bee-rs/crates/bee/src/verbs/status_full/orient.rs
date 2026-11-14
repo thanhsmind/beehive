@@ -630,8 +630,21 @@ pub(crate) fn build_orient(ctx: &mut Ctx) -> R<JMap> {
         packet.insert("worktree".into(), Value::Object(worktree.clone()));
     }
     {
+        let control_root = crate::hooks::session_preamble::control_root_for(&ctx.root);
+        let session_bound = (pipeline.ok && pipeline.source == "lane")
+            || crate::verbs::state_group::session_binding(session_id.as_deref(), &control_root)
+                .ok()
+                .and_then(|(_, bound)| bound)
+                .is_some_and(|feature| {
+                    crate::hooks::session_preamble::read_lane(&control_root, Some(&json!(feature)))
+                        .is_some()
+                });
+        let owned = crate::principles::route_is_session_owned(
+            session_bound,
+            crate::hooks::session_preamble::list_lanes(&control_root).len(),
+        );
         let class = match status.get("route") {
-            Some(route) if truthy(route) => vget(route, "class").and_then(Value::as_str),
+            Some(route) if owned && truthy(route) => vget(route, "class").and_then(Value::as_str),
             _ => None,
         };
         let principles = crate::principles::principle_lines(&ctx.root, class);
@@ -722,6 +735,22 @@ pub(crate) fn build_orient(ctx: &mut Ctx) -> R<JMap> {
 
 /// bee.mjs renderOrientText — at most six lines plus the conditional
 /// blockers/worktree lines.
+pub(crate) fn class_packet(root: &Path, class: &str) -> JMap {
+    let mut packet = JMap::new();
+    packet.insert("class".into(), json!(class));
+    packet.insert("playbook".into(), json!(format!("skills/bee-planning/playbooks/{class}.md")));
+    packet.insert("principles".into(), json!(crate::principles::principle_lines(root, Some(class))));
+    packet
+}
+
+pub(crate) fn render_class_text(packet: &JMap) -> String {
+    let mut lines = vec![format!("playbook: {}", tpl(packet.get("playbook")))];
+    if let Some(Value::Array(principles)) = packet.get("principles") {
+        lines.extend(principles.iter().filter_map(Value::as_str).map(str::to_string));
+    }
+    lines.join("\n")
+}
+
 pub(crate) fn render_orient_text(packet: &JMap) -> String {
     let where_ = packet.get("where").cloned().unwrap_or(Value::Null);
     let gates = GATE_NAMES
@@ -834,9 +863,38 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
         ["status", "--lanes-full", "--json"] => (Verb::Status, true, true),
         ["orient"] => (Verb::Orient, false, false),
         ["orient", "--json"] => (Verb::Orient, false, true),
+        ["orient", "--class", class] => return run_class(class, false, t0),
+        ["orient", "--class", class, "--json"] | ["orient", "--json", "--class", class] => {
+            return run_class(class, true, t0)
+        }
         _ => return None,
     };
     run(verb, lanes_full, use_json, t0)
+}
+
+fn run_class(class: &str, use_json: bool, t0: Instant) -> Option<ExitCode> {
+    let cwd = std::env::current_dir().ok()?;
+    let roots = match resolve_store_root_worktree(&cwd) {
+        RootsWt::Go(r) => r,
+        RootsWt::Unsupported(why) => {
+            return Some(emit_unsupported_root(&cwd, "orient", use_json, t0, &why))
+        }
+        RootsWt::None => return Some(emit_no_root_error(&cwd, "orient", use_json, t0)),
+    };
+    if !crate::verbs::state_group::ROUTE_CLASS_VALUES.contains(&class) {
+        eprintln!(
+            "bee orient: unknown class \"{class}\" — valid classes: {}",
+            crate::verbs::state_group::ROUTE_CLASS_VALUES.join(", ")
+        );
+        return Some(ExitCode::from(1));
+    }
+    let packet = class_packet(&roots.root, class);
+    if use_json {
+        println!("{}", jsjson::stringify_pretty(&Value::Object(packet)));
+    } else {
+        println!("{}", render_class_text(&packet));
+    }
+    Some(ExitCode::SUCCESS)
 }
 
 pub(crate) fn run(verb: Verb, lanes_full: bool, use_json: bool, t0: Instant) -> Option<ExitCode> {

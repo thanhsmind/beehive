@@ -408,6 +408,53 @@ use crate::version::BEE_VERSION;
     }
 
     #[test]
+    fn orient_in_an_unbound_session_with_lanes_prints_no_principles() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write(root, ".bee/onboarding.json", &format!(r#"{{"bee_version":"{BEE_VERSION}"}}"#));
+        write(root, crate::principles::PRINCIPLE_INDEX, crate::principles::TEST_INDEX);
+        write(
+            root,
+            ".bee/state.json",
+            r#"{"phase":"swarming","feature":"stale","route":{"class":"refactor","lane":"standard"}}"#,
+        );
+        write(root, ".bee/lanes/other.json", r#"{"feature":"other","phase":"swarming"}"#);
+        let packet = build_orient(&mut ctx_for(root)).unwrap();
+        assert!(!packet.contains_key("principles"));
+        assert!(!render_orient_text(&packet).contains("Principles"));
+    }
+
+    fn walk_count(dir: &Path) -> usize {
+        std::fs::read_dir(dir)
+            .unwrap()
+            .map(|e| {
+                let path = e.unwrap().path();
+                1 + if path.is_dir() { walk_count(&path) } else { 0 }
+            })
+            .sum()
+    }
+
+    #[test]
+    fn orient_class_names_the_playbook_and_the_class_principles_and_writes_nothing() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write(root, crate::principles::PRINCIPLE_INDEX, crate::principles::TEST_INDEX);
+        let before = walk_count(root);
+        let packet = class_packet(root, "refactor");
+        assert_eq!(
+            render_class_text(&packet),
+            [
+                "playbook: skills/bee-planning/playbooks/refactor.md",
+                "- Principles (class=refactor) — name each one you apply and the decision it changed:",
+                "  - `bee-principle-red-before-green` — watch it fail for the reported reason before you fix it",
+                "  - `bee-principle-one-home` — a rule lives in one place and every other surface points at it",
+            ]
+            .join("\n")
+        );
+        assert_eq!(walk_count(root), before);
+    }
+
+    #[test]
     fn status_text_renderer_minimal_repo() {
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
