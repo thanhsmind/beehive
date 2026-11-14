@@ -859,6 +859,8 @@
     "contract:knowledge-wrong",
     "design",
     "upkeep",
-    "contract:upkeep-due"
+    "contract:upkeep-due",
+    "pstack-port",
+    "formal-verification"
   ]
 }

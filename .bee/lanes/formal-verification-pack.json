@@ -1,0 +1,27 @@
+{
+  "schema_version": "1.0",
+  "feature": "formal-verification-pack",
+  "mode": null,
+  "phase": "exploring",
+  "approved_gates": {
+    "context": false,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"formal-verification-pack\" started at phase \"exploring\" (lane).",
+  "next_action": "Continue bee-exploring for \"formal-verification-pack\" (lane).",
+  "created_at": "2026-11-14T02:54:51.709Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null,
+  "route": {
+    "class": "docs",
+    "lane": "docs",
+    "flags": [],
+    "product_files": 2,
+    "rationale": "user picked the skillstation hub; bee only edits two playbook pointers",
+    "updated_at": "2026-11-14T03:51:04.811Z",
+    "feature": "formal-verification-pack"
+  }
+}
