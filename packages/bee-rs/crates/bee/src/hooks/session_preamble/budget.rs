@@ -442,15 +442,18 @@ fn active_record(
     session_id: Option<&str>,
     pipeline: &Pipeline,
     default_record: &JMap,
-) -> JMap {
+) -> (JMap, bool) {
     if pipeline.ok && pipeline.source == "lane" {
-        return pipeline.record.clone();
+        return (pipeline.record.clone(), true);
     }
     let control_root = control_root_for(root);
     let (_sid, bound) = session_binding(session_id, &control_root).unwrap_or((None, None));
-    let Some(feature) = bound else { return default_record.clone() };
+    let Some(feature) = bound else { return (default_record.clone(), false) };
     let feature_val = json!(feature);
-    read_lane(&control_root, Some(&feature_val)).unwrap_or_else(|| default_record.clone())
+    match read_lane(&control_root, Some(&feature_val)) {
+        Some(record) => (record, true),
+        None => (default_record.clone(), false),
+    }
 }
 
 /// D4 (wayfinding-flow, docs/history/wayfinding-flow/CONTEXT.md): open
@@ -603,7 +606,11 @@ pub fn build_session_preamble_within(
     // D2 (kf-1): the ACTIVE feature — never the default record
     // unconditionally — that the knowledge bridge and the digest below both
     // read.
-    let active = active_record(root, session_id, &pipeline, &pipeline_record);
+    let (active, session_bound) = active_record(root, session_id, &pipeline, &pipeline_record);
+    let route_owned = crate::principles::route_is_session_owned(
+        session_bound,
+        list_lanes(&control_root_for(root)).len(),
+    );
     // okf-integration-close-f4 D1/D2/D3: the ONE predicate, resolved once and
     // handed to every section that branches on it (G12). Fail-safe direction
     // is the legacy branch — orientation never fails a session.
@@ -657,7 +664,11 @@ pub fn build_session_preamble_within(
     }
     // explicit-triage D2: zero preamble cost when absent — only a recorded
     // route (bee state route --set) adds a line.
-    if let Some(route) = pipeline_record.get("route").filter(|r| truthy(r)) {
+    if !route_owned {
+        lines.push(
+            "- Route: not bound to this session — classify the task, then run `bee orient --class <c>` for its playbook and principles".to_string(),
+        );
+    } else if let Some(route) = active.get("route").filter(|r| truthy(r)) {
         let flags = vget(route, "flags");
         let (flag_count, flag_list) = match flags {
             Some(Value::Array(items)) => (items.len().to_string(), js_join(items, ",")),

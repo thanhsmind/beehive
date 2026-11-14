@@ -106,6 +106,10 @@ fn backticked(item: &str) -> Option<&str> {
     (!id.is_empty()).then_some(id)
 }
 
+pub(crate) fn route_is_session_owned(session_bound: bool, lane_records: usize) -> bool {
+    session_bound || lane_records == 0
+}
+
 /// The block both surfaces show, or nothing at all.
 ///
 /// `class` is the recorded route class. `None`, an empty class, a missing section, and zero matching rows all return an empty vector —
