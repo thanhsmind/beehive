@@ -124,6 +124,29 @@ fn publish_principle_items(engine: &Engine) -> Vec<Value> {
         .collect()
 }
 
+fn tracked_principles_are_hub(repo_root: &Path) -> bool {
+    serde_json::from_str::<Value>(&read_text_if_exists(&repo_root.join(".bee").join("config.json")))
+        .ok()
+        .and_then(|c| c["skillstation"]["principles"].as_str().map(|m| m == "hub"))
+        .unwrap_or(false)
+}
+
+fn set_principles_hub_items(repo_root: &Path) -> Vec<Value> {
+    if tracked_principles_are_hub(repo_root) {
+        return Vec::new();
+    }
+    vec![json!({"action": "set_principles_hub", "path": ".bee/config.json", "after_publish": true})]
+}
+
+fn defer_principle_removals(items: &mut [Value]) {
+    for item in items {
+        let is_principle = item["skill"].as_str().is_some_and(|s| s.starts_with(PRINCIPLE_PREFIX));
+        if item["action"] == "remove_skill" && is_principle {
+            item["after_publish"] = json!(true);
+        }
+    }
+}
+
 fn principles_served_by_hub(engine: &Engine, run: Run) -> Result<bool, String> {
     let ids = principle_ids(engine);
     for id in &ids {
@@ -1519,8 +1542,10 @@ pub fn compute_plan(engine: &Engine, repo_root: &Path, opts: &Options) -> Comput
     let mut alias_skips: Vec<Value> = Vec::new();
     let hub_mode = principles_on_hub(repo_root);
     let claude_in_scope = matches!(opts.runtime.as_str(), "claude" | "both");
-    let mut principles_from_hub = false;
-    if opts.sync_skills && hub_mode && claude_in_scope {
+    let switching = opts.skillstation && claude_in_scope;
+    let hub_mode = hub_mode || switching;
+    let mut principles_from_hub = switching;
+    if opts.sync_skills && hub_mode && claude_in_scope && !switching {
         match principles_served_by_hub(engine, &*hub_runner(repo_root)) {
             Ok(served) => principles_from_hub = served,
             Err(reason) => {
@@ -1548,7 +1573,11 @@ pub fn compute_plan(engine: &Engine, repo_root: &Path, opts: &Options) -> Comput
     };
     if skill_sync.blocked.is_none() {
         for target in &skill_sync.targets {
+            let start = plan.len();
             plan.extend(target.items.iter().cloned());
+            if switching {
+                defer_principle_removals(&mut plan[start..]);
+            }
         }
         if let Some(lr) = &skill_sync.legacy_refresh {
             plan.extend(lr.items.iter().cloned());
@@ -1559,6 +1588,10 @@ pub fn compute_plan(engine: &Engine, repo_root: &Path, opts: &Options) -> Comput
         plan.extend(publish_skillstation_items());
         if hub_mode {
             plan.extend(publish_principle_items(engine));
+        }
+        if switching {
+            plan.extend(set_principles_hub_items(repo_root));
+            plan.sort_by_key(|i| i["after_publish"] == true);
         }
     }
 
