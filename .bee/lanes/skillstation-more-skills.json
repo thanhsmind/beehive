@@ -11,10 +11,15 @@
     "uat": false
   },
   "summary": "Feature \"skillstation-more-skills\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at 1f74cf9; capture what settled, then bee close --feature skillstation-more-skills.",
+  "next_action": "Continue bee-exploring for \"skillstation-more-skills\" (lane).",
   "created_at": "2026-11-14T12:50:42.718Z",
-  "run_state": null,
-  "waiting_on": null,
+  "run_state": "awaiting-approval",
+  "waiting_on": {
+    "kind": "turn-end",
+    "subject": "Thông báo vừa rồi chỉ là monitor cũ hết hạn: installer đã chạy xong từ trước, exit 0. Không có gì thay đổi, và câu hỏi vẫn chờ bạn: có gửi l",
+    "asked_at": "2026-11-14T14:18:09.754Z",
+    "session": "3939d826-d6b4-48f4-99dc-f19b96b3780d"
+  },
   "route": {
     "class": "feature",
     "lane": "small",
