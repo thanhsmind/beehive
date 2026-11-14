@@ -302,8 +302,8 @@ red.
   the unit. A TLA+ model of one unit, three sessions and the five closing
   verbs finds the path; a variant that both releases only the exact token it
   saw under the lock and re-checks the claimant's own token under the lock
-  holds both rules, and either change alone does not (formal-cell-lifecycle
-  D1/D2/D3/D4). The model and its rerun live in the `formal-cell-lifecycle` verify
+  holds both rules, and either change alone does not
+  (formal-cell-lifecycle D1/D2/D3/D4). The model and its rerun live in the `formal-cell-lifecycle` verify
   skill; the fix is a filed P2 finding. Dropping a unit takes no ownership
   check at all, which B23's list of guarded operations leaves open.
 
