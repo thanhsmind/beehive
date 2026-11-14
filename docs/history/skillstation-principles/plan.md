@@ -29,6 +29,9 @@ Playbook: `skills/bee-planning/playbooks/feature.md` (class `feature`).
 - D7: drop local principles only where the principle index file exists; else one skip row. (superseded by D8)
 - D8: the binary carries the principle index; orient names principles in every project.
 - D9: onboard --skillstation sets hub mode, publishes, and removes local principles in one apply.
+- D10: install.sh --skillstation passes the flag; the recheck runs without it. (superseded by D8)
+- D8: the binary carries the principle index; orient names principles in every project.
+- D9: onboard --skillstation sets hub mode, publishes, and removes local principles in one apply.
 - D10: install.sh --skillstation passes the flag; the recheck runs without it.
 
 ## Load-bearing claims
@@ -126,6 +129,7 @@ Waves: ssp-1, then ssp-2, then ssp-3.
 | ssp-5 | Name principles in every project from an index built into bee | `principles.rs`, `onboard/plan.rs`, `onboard/tests.rs` | ssp-4 | orient names principles in any project | `cargo test … --bin bee -- principles onboard` green |
 | ssp-6 | Switch a project to hub principles in one onboard --skillstation run | `onboard/plan.rs`, `onboard/apply.rs`, `onboard/tests.rs`, `scripts/install.sh` | ssp-5 | `install.sh --skillstation` switches a project in one run | `cargo test … -- skillstation onboard install` green |
 | ssp-7 | Document the one-step switch to hub principles | `README.md`, `docs/config-reference.md`, `docs/knowledge/**`, delivery.md | ssp-6 | docs match the one-step switch | `.bee/bin/bee knowledge check` green |
+| ssp-8 | Render agent files in hub mode during the --skillstation switch | `onboard/plan.rs`, `onboard/agents.rs`, `onboard/apply.rs`, `onboard/tests.rs` | ssp-6 | `install.sh --skillstation` exits 0 on an installed project | `cargo test … -- skillstation onboard agents` green |
 | ssp-3 | Document the skillstation.principles key | `README.md`, `docs/config-reference.md`, `docs/knowledge/**`, delivery.md | ssp-2 | the key is in the config reference | `.bee/bin/bee knowledge check` green |
 
 ```json
@@ -522,6 +526,59 @@ Waves: ssp-1, then ssp-2, then ssp-3.
         "No code comments"
       ],
       "open_choices": []
+    }
+  },
+  {
+    "id": "ssp-8",
+    "feature": "skillstation-principles",
+    "title": "Render agent files in hub mode during the --skillstation switch",
+    "lane": "standard",
+    "role": "code",
+    "deps": [
+      "ssp-6"
+    ],
+    "affects_skills": [],
+    "affects_specs": [],
+    "decisions": [
+      "D11",
+      "bdd71343-d97d-49ef-9304-3e7f81a3e0c4"
+    ],
+    "files": [
+      "packages/bee-rs/crates/bee/src/onboard/plan.rs",
+      "packages/bee-rs/crates/bee/src/onboard/agents.rs",
+      "packages/bee-rs/crates/bee/src/onboard/apply.rs",
+      "packages/bee-rs/crates/bee/src/onboard/tests.rs"
+    ],
+    "read_first": [
+      "docs/history/skillstation-principles/CONTEXT.md",
+      "packages/bee-rs/crates/bee/src/onboard/plan.rs",
+      "packages/bee-rs/crates/bee/src/onboard/agents.rs",
+      "packages/bee-rs/crates/bee/src/onboard/apply.rs"
+    ],
+    "action": "Bug, reproduced live: on a project installed in local mode, `PATH=<fake skillstation>:$PATH scripts/install.sh --source <bee> -d <repo> -y --skillstation` exits 1 because the recheck finds `sync_agent_file` for all six .claude/agents files: the agent items were planned and applied from the old local config, before `set_principles_hub` ran. Red first: add a test that runs the onboard plan+apply with --skillstation on a local-mode repo (set_test_hub, every publish succeeding), then plans again without --skillstation, and asserts no sync_agent_file item and that .claude/agents/bee-worker.md's tools line ends with mcp__skillstation__skill_get; watch it fail for this reason. Then fix (D11): when the --skillstation switch is active, plan the Claude agent file items as hub-mode renders (give compute_agent_file_plan / render_claude_agent_file an explicit hub override instead of the config read only), mark them `after_publish`, and make apply run `set_principles_hub` before any other after_publish item, and the agent items after it, so apply's re-render reads hub. When a principle publish failed, the agent items do not run. Also add a test: one failing principle publish leaves the agent files local and the config unchanged.",
+    "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- skillstation onboard agents",
+    "must_haves": {
+      "truths": [
+        "after bee onboard --skillstation --apply on a local-mode project a plain onboard plan has no sync_agent_file item",
+        "after a successful switch every rendered Claude agent tools line ends with mcp__skillstation__skill_get",
+        "when one principle publish fails the agent files and config stay local"
+      ],
+      "artifacts": [
+        {
+          "path": "packages/bee-rs/crates/bee/src/onboard/tests.rs",
+          "substantive": "switch then re-plan regression test"
+        }
+      ],
+      "key_links": [
+        "apply runs set_principles_hub before the agent file items"
+      ],
+      "prohibitions": [
+        "No code comments",
+        "Onboard tests never call the real skillstation"
+      ],
+      "open_choices": [
+        "How the hub override reaches the agent render"
+      ]
     }
   }
 ]
