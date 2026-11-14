@@ -13,11 +13,13 @@ bee:
   sources: [docs/history/cli-output-spill/CONTEXT.md, packages/bee-rs/crates/bee/src/output_spill.rs, packages/bee-rs/crates/bee/src/main.rs, packages/bee-rs/crates/bee/tests/output_spill.rs]
   authoritative_for: "rust-runtime: when a bee command's stdout is spilled to a file and what the caller sees instead"
   anchors: [packages/bee-rs/crates/bee/src/output_spill.rs, packages/bee-rs/crates/bee/src/main.rs, packages/bee-rs/crates/bee/tests/output_spill.rs]
-  verified_at: 2026-11-03
-  verified_commit: f3cdc2977941300c3869477f38c8243ab42d97b3
+  verified_at: 2026-11-14
+  verified_commit: cdefa65590c37a8f7f9a716d23cd23df9a082c54
 ---
 
 # Compiled runtime — output spill
+
+Read when: a bee command prints a `[bee] output spilled` marker, or you add a verb to the spill list.
 
 An agent reads every byte a command prints. Some read verbs print more than an
 agent needs at once: `bee status` prints about 12 KB and `bee --help --all`

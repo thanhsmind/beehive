@@ -12,11 +12,13 @@ bee:
   sources: [docs/history/workspace-protocol/CONTEXT.md (D1-D12), docs/history/workspace-protocol/plan.md, workspace-protocol cells wsp-1..wsp-4, docs/history/protocol-init-from-project/CONTEXT.md (D1-D8), docs/history/onboard-workspace-protocol/CONTEXT.md (D1-D3), cell owp-2]
   authoritative_for: "workflow-state: WORKSPACE_PROTOCOL.md, bee protocol, the prepare digests, bee dispatch verify, the purpose leaning lint"
   anchors: [packages/bee/prompts/worker-cell.md, packages/bee/prompts/advisor.md, packages/bee-rs/crates/bee/src/verbs/protocol.rs, packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs, packages/bee-rs/crates/bee/src/verbs/drivers/brief_lint.rs, packages/bee-rs/crates/bee/src/doctor.rs, packages/bee-rs/crates/bee/src/onboard/notices.rs, packages/bee-rs/crates/bee/src/onboard/mod.rs]
-  verified_at: 2026-11-10
-  verified_commit: 2f0495d24e30048da79fa3d5dcc287605cf6869c
+  verified_at: 2026-11-14
+  verified_commit: cdefa65590c37a8f7f9a716d23cd23df9a082c54
 ---
 
 # Workflow State — the workspace protocol file, dispatch receipts, and brief discipline
+
+Read when: you write or check `WORKSPACE_PROTOCOL.md`, verify a dispatch receipt, or a brief is flagged for leaning language.
 
 A leader must not guess three facts: what a human must decide, who merges, and
 who deploys. A host project writes them once, in one root file. bee reads the
@@ -63,19 +65,24 @@ that one fact does not live in two files.
 file. It exits 0 for every state, because it reports and never gates. `bee
 protocol init` writes the starter template to the repo root only when no file
 exists. An existing file gives a typed refusal (`protocol_exists`) that names
-the file. `init` never overwrites. The template ships filled, so `init` then
-`check` gives `valid`: version 1, criticality `medium`, both owners `human`, six
-boundaries, and one protected area `none`. The template holds no placeholder.
-`init` ends with one line: review and edit the file, because the defaults are
-bee's guess and not the owner's choice.
+the file. `init` never overwrites. The fixed template D4 first described is
+gone: the next paragraph says what `init` renders now. What stays from D4 is
+the refusal, the no-overwrite rule and `check` exiting 0.
 
 **`bee protocol init` renders from the project (protocol-init-from-project
 D1-D7).** protocol-init-from-project D1-D8 narrow the fixed template of D4: `init` now
 renders from the control root. `PROJECT_ID`, `DEFAULT_BRANCH` and
 `REPOSITORY_REMOTE` come from git. `MERGE_OWNER` comes from `.bee/config.json`
-`uat_stop`. `DEPLOY_OWNER` names the first release entry found. The boundaries
-start from bee's base set, and `PROTECTED_AREAS` lists the vendored skill trees
-that exist. The prose above the block holds a `## Sources` list, and `--json`
+`uat_stop`: with `merge` the human approves uat and then the agent merges;
+otherwise the agent merges after a green `bee test` and the owner accepts at
+the uat door. `DEPLOY_OWNER` is `human`, and names the first release entry
+found. The boundaries start from bee's base set. `PROTECTED_AREAS` always
+starts with `.bee/*.json and .bee/*.jsonl change only through the bee CLI`,
+then one line per vendored skill tree that exists. A written file prints
+`wrote <path>` and then one `next:` line: read the review files, add the
+project's own boundaries, protected areas and anti-patterns, set
+`PROJECT_CRITICALITY`, never add a test command, then run `bee protocol
+check`. The prose above the block holds a `## Sources` list, and `--json`
 adds `facts` (key, value, source) and `review` (the project's rule files).
 `--print` renders to stdout and writes nothing, also when a file exists. An
 existing file is still the `protocol_exists` refusal without `--print`. The
