@@ -11,14 +11,14 @@
     "uat": false
   },
   "summary": "Feature \"skillstation-principles\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at 1763e73; reload the product and test \"skillstation-principles\", then either approve uat (\"bee gate --name uat --approved true --lane skillstation-principles\") or fix it in the worktree and merge again.",
+  "next_action": "Continue bee-exploring for \"skillstation-principles\" (lane).",
   "created_at": "2026-11-14T08:10:27.960Z",
   "run_state": "awaiting-approval",
   "waiting_on": {
-    "kind": "gate",
-    "subject": "uat: skillstation-principles",
-    "asked_at": "2026-11-14T09:43:14.070Z",
-    "session": "bee-worktree-merge-sessionless"
+    "kind": "question",
+    "subject": "survey-platform install --skillstation blocked by its cross-project guard: user runs the command or allows the beehive path",
+    "asked_at": "2026-11-14T09:47:45.513Z",
+    "session": "2e540295-8085-4e00-9266-fe90fb6784c1"
   },
   "route": {
     "class": "feature",
@@ -31,8 +31,8 @@
   },
   "gate_preview": {
     "feature": "skillstation-principles",
-    "plan_sha256": "4267523ce97e1d219b15f6dda7f96e9016a6ce314cbb79120c013658e299a67a",
-    "previewed_at": "2026-11-14T09:33:29.356Z",
+    "plan_sha256": "8278d1b84b18ab5157de2e6336bbfdebdd2555bd3474fb2b0ebf3994b8cd6b09",
+    "previewed_at": "2026-11-14T09:57:44.861Z",
     "cells": [
       {
         "id": "ssp-1",
@@ -478,6 +478,66 @@
           ],
           "open_choices": [
             "How the hub override reaches the agent render"
+          ]
+        }
+      },
+      {
+        "id": "ssp-9",
+        "feature": "skillstation-principles",
+        "title": "Make the principle publish activate on a real hub and keep local copies fresh",
+        "lane": "standard",
+        "role": "code",
+        "deps": [
+          "ssp-8"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "decisions": [
+          "D12",
+          "D13",
+          "D14",
+          "097ba39f-a78d-4583-8410-ba3d5cc50210"
+        ],
+        "regen_obligation_ack": "wave-barrier",
+        "files": [
+          "packages/bee-rs/crates/bee/src/onboard/plan.rs",
+          "packages/bee-rs/crates/bee/src/onboard/apply.rs",
+          "packages/bee-rs/crates/bee/src/onboard/tests.rs",
+          "packages/bee-rs/crates/bee/src/onboard/skills.rs",
+          "scripts/install.sh"
+        ],
+        "read_first": [
+          "docs/history/skillstation-principles/CONTEXT.md",
+          "packages/bee-rs/crates/bee/src/onboard/plan.rs",
+          "packages/bee-rs/crates/bee/src/onboard/apply.rs",
+          "packages/bee-rs/crates/bee/src/onboard/skills.rs",
+          "scripts/install.sh"
+        ],
+        "action": "Three bugs found live on survey-platform (real hub, skillstation 2026 CLI). Red first for 1 and 2. (1) D12: the real hub refuses to activate a skill whose routing has no trigger: `skillstation skill review bee-principle-attack-the-premise --json` says 'Not ready for activation: missing trigger'; an active skill needs a trigger, a --not-for entry (or a rationale) and --min-scope (`skillstation help skill activate`). For bee-principle-* publish items only, apply_publish_skillstation must add to the `skill commit` argv: `--trigger <the principle's SKILL.md frontmatter description, whitespace collapsed>`, `--not-for \"a task bee orient did not route to this principle\"`, `--min-scope multi_step`. bee-deploying's argv is unchanged. Test with the injected hub runner: record the argv of the commit call for a principle and assert the three flags and values; assert bee-deploying's argv has none. (2) D13: during the --skillstation switch the repo-claude target must sync the principles exactly like local mode (sync_skill items for missing or changed ones), and the after_publish remove_skill items must cover every principle the source has, so on success apply syncs then removes, and on a failed publish the local copies are current. Test: a repo with 2 stale local principle folders, --skillstation, one publish failing: after apply the local principle folders match the source and a plain re-plan (local mode) has no sync_skill item; with every publish succeeding: no .claude/skills principle folder remains. (3) D14 in scripts/install.sh: when SKILLSTATION is 1, right before the onboard apply, log one line: `skillstation publishing bee skills to your Skillstation hub - about a minute per skill, the apply prints nothing until it ends` (use the existing log helper). install.sh is a release-manifest root, but do NOT run bee dev regen and do not touch the release manifest; the leader runs it at merge (regen_obligation_ack wave-barrier).",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- skillstation onboard install",
+        "must_haves": {
+          "truths": [
+            "the skill commit call for a bee-principle skill carries --trigger, --not-for and --min-scope multi_step",
+            "the skill commit call for bee-deploying carries no routing flag",
+            "after a --skillstation apply with a failed publish the local .claude/skills principle folders match the source",
+            "scripts/install.sh with --skillstation logs the hub publish line before the onboard apply"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/onboard/apply.rs",
+              "substantive": "principle routing flags on skill commit"
+            }
+          ],
+          "key_links": [
+            "the trigger text comes from the principle's own SKILL.md description, not a hand-written list"
+          ],
+          "prohibitions": [
+            "No code comments",
+            "Onboard tests never call the real skillstation",
+            "No release manifest or regen change"
+          ],
+          "open_choices": [
+            "Where the description is read for the trigger"
           ]
         }
       }
@@ -619,8 +679,8 @@
   },
   "approved_cell_packet": {
     "feature": "skillstation-principles",
-    "plan_sha256": "4267523ce97e1d219b15f6dda7f96e9016a6ce314cbb79120c013658e299a67a",
-    "previewed_at": "2026-11-14T09:33:29.356Z",
+    "plan_sha256": "8278d1b84b18ab5157de2e6336bbfdebdd2555bd3474fb2b0ebf3994b8cd6b09",
+    "previewed_at": "2026-11-14T09:57:44.861Z",
     "cells": [
       {
         "id": "ssp-1",
@@ -1068,6 +1128,66 @@
             "How the hub override reaches the agent render"
           ]
         }
+      },
+      {
+        "id": "ssp-9",
+        "feature": "skillstation-principles",
+        "title": "Make the principle publish activate on a real hub and keep local copies fresh",
+        "lane": "standard",
+        "role": "code",
+        "deps": [
+          "ssp-8"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "decisions": [
+          "D12",
+          "D13",
+          "D14",
+          "097ba39f-a78d-4583-8410-ba3d5cc50210"
+        ],
+        "regen_obligation_ack": "wave-barrier",
+        "files": [
+          "packages/bee-rs/crates/bee/src/onboard/plan.rs",
+          "packages/bee-rs/crates/bee/src/onboard/apply.rs",
+          "packages/bee-rs/crates/bee/src/onboard/tests.rs",
+          "packages/bee-rs/crates/bee/src/onboard/skills.rs",
+          "scripts/install.sh"
+        ],
+        "read_first": [
+          "docs/history/skillstation-principles/CONTEXT.md",
+          "packages/bee-rs/crates/bee/src/onboard/plan.rs",
+          "packages/bee-rs/crates/bee/src/onboard/apply.rs",
+          "packages/bee-rs/crates/bee/src/onboard/skills.rs",
+          "scripts/install.sh"
+        ],
+        "action": "Three bugs found live on survey-platform (real hub, skillstation 2026 CLI). Red first for 1 and 2. (1) D12: the real hub refuses to activate a skill whose routing has no trigger: `skillstation skill review bee-principle-attack-the-premise --json` says 'Not ready for activation: missing trigger'; an active skill needs a trigger, a --not-for entry (or a rationale) and --min-scope (`skillstation help skill activate`). For bee-principle-* publish items only, apply_publish_skillstation must add to the `skill commit` argv: `--trigger <the principle's SKILL.md frontmatter description, whitespace collapsed>`, `--not-for \"a task bee orient did not route to this principle\"`, `--min-scope multi_step`. bee-deploying's argv is unchanged. Test with the injected hub runner: record the argv of the commit call for a principle and assert the three flags and values; assert bee-deploying's argv has none. (2) D13: during the --skillstation switch the repo-claude target must sync the principles exactly like local mode (sync_skill items for missing or changed ones), and the after_publish remove_skill items must cover every principle the source has, so on success apply syncs then removes, and on a failed publish the local copies are current. Test: a repo with 2 stale local principle folders, --skillstation, one publish failing: after apply the local principle folders match the source and a plain re-plan (local mode) has no sync_skill item; with every publish succeeding: no .claude/skills principle folder remains. (3) D14 in scripts/install.sh: when SKILLSTATION is 1, right before the onboard apply, log one line: `skillstation publishing bee skills to your Skillstation hub - about a minute per skill, the apply prints nothing until it ends` (use the existing log helper). install.sh is a release-manifest root, but do NOT run bee dev regen and do not touch the release manifest; the leader runs it at merge (regen_obligation_ack wave-barrier).",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- skillstation onboard install",
+        "must_haves": {
+          "truths": [
+            "the skill commit call for a bee-principle skill carries --trigger, --not-for and --min-scope multi_step",
+            "the skill commit call for bee-deploying carries no routing flag",
+            "after a --skillstation apply with a failed publish the local .claude/skills principle folders match the source",
+            "scripts/install.sh with --skillstation logs the hub publish line before the onboard apply"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/onboard/apply.rs",
+              "substantive": "principle routing flags on skill commit"
+            }
+          ],
+          "key_links": [
+            "the trigger text comes from the principle's own SKILL.md description, not a hand-written list"
+          ],
+          "prohibitions": [
+            "No code comments",
+            "Onboard tests never call the real skillstation",
+            "No release manifest or regen change"
+          ],
+          "open_choices": [
+            "Where the description is read for the trigger"
+          ]
+        }
       }
     ],
     "role_plan": {
@@ -1204,5 +1324,12 @@
         }
       ]
     }
+  },
+  "merge_ready": {
+    "since": "2026-11-14T10:07:50.116Z",
+    "branch": "wt/skillstation-principles",
+    "worktree_id": "beehive--wt--skillstation-principles",
+    "uat": "pending",
+    "blocked_by": []
   }
 }
