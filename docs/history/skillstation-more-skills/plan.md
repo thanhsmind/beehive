@@ -83,7 +83,7 @@ Waves: sms-1, then sms-2 (same files).
 {
   "schema_version": "1.0",
   "runtime": "claude",
-  "roster_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+  "roster_sha256": "d4e696dbde7989d6388dacce3fd7057cb3a6935b46024b79698596a46f6f41d3",
   "stages": [
     {"stage":"implementation","classification":"required","role":"code","reason":"sms-1 and sms-2 change onboard planning with a red test first."},
     {"stage":"test-and-live-proof","classification":"not-applicable","role":"test","reason":"Tests ride each cell; the live run is the leader's."},
