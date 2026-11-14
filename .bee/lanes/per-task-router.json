@@ -1,0 +1,1446 @@
+{
+  "schema_version": "1.0",
+  "feature": "per-task-router",
+  "mode": null,
+  "phase": "swarming",
+  "approved_gates": {
+    "context": true,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"per-task-router\" started at phase \"exploring\" (lane).",
+  "next_action": "Invoke bee-swarming.",
+  "created_at": "2026-11-14T15:16:52.411Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null,
+  "route": {
+    "class": "feature",
+    "lane": "standard",
+    "flags": [],
+    "product_files": 8,
+    "rationale": null,
+    "updated_at": "2026-11-14T15:16:49.410Z",
+    "feature": "per-task-router"
+  },
+  "gate_preview": {
+    "feature": "per-task-router",
+    "plan_sha256": "87b24ec70cf64ae2421286393311531be9fa53baefc2e4579240af219b2b21ba",
+    "previewed_at": "2026-11-14T15:50:49.723Z",
+    "cells": [
+      {
+        "id": "ptr-1",
+        "feature": "per-task-router",
+        "title": "Show the preamble route only when the session owns it",
+        "lane": "standard",
+        "role": "code",
+        "deps": [],
+        "decisions": [
+          "70c3387f-2c87-4e62-bc1b-546f8ecef03b",
+          "58d7b2a7-e0da-4b39-9038-58a9325fbad9"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs",
+          "packages/bee-rs/crates/bee/src/principles.rs",
+          "packages/bee-rs/crates/bee/src/hooks/session_preamble/tests.rs"
+        ],
+        "read_first": [
+          "docs/history/per-task-router/CONTEXT.md",
+          "docs/history/per-task-router/plan.md",
+          "docs/history/per-task-router/reports/hat-wave.md",
+          "packages/bee-rs/crates/bee/src/hooks/session_preamble/state.rs",
+          "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Add one helper in principles.rs that says whether a route belongs to the session: bound through the session record lane (Pipeline source lane) or through session_binding (budget.rs active_record path), or the repo has no lane records. Gate the Route line and principle_lines in budget.rs on it. When it is false, print one hint line naming `bee orient --class <c>` instead. Update any existing preamble test your change flips; new tests belong to ptr-1t.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee session_preamble",
+        "must_haves": {
+          "truths": [
+            "A session bound by either path sees the Route line and principles",
+            "A repo with no lane records keeps its default-record Route line",
+            "An unbound session in a repo with lanes sees one hint line and no principles"
+          ],
+          "prohibitions": [
+            "No change to which record the knowledge lines read"
+          ]
+        }
+      },
+      {
+        "id": "ptr-1t",
+        "feature": "per-task-router",
+        "title": "Test preamble route ownership",
+        "lane": "standard",
+        "role": "test",
+        "deps": [
+          "ptr-1"
+        ],
+        "decisions": [
+          "70c3387f-2c87-4e62-bc1b-546f8ecef03b",
+          "58d7b2a7-e0da-4b39-9038-58a9325fbad9",
+          "c5c00e89-1653-403f-8924-92d58fcaba18"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/hooks/session_preamble/tests.rs"
+        ],
+        "read_first": [
+          "docs/history/per-task-router/CONTEXT.md",
+          "docs/history/per-task-router/plan.md",
+          "docs/history/per-task-router/reports/hat-wave.md",
+          "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs",
+          "packages/bee-rs/crates/bee/src/principles.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Independently verify ptr-1 against its truths. Add tests for: bound via session record, bound via session_binding only, lane-less repo, unbound session in a repo with lanes (hint line, no principles). Run the scoped proof.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee session_preamble",
+        "must_haves": {
+          "truths": [
+            "Each of the four cases has a test that fails if the behavior regresses"
+          ],
+          "prohibitions": [
+            "Never edit product code; only test files listed in files",
+            "On a defect return [BLOCKED] with the red output; never weaken an assertion to pass"
+          ]
+        }
+      },
+      {
+        "id": "ptr-2",
+        "feature": "per-task-router",
+        "title": "Route the task in hand with bee orient --class",
+        "lane": "standard",
+        "role": "code",
+        "deps": [
+          "ptr-1t"
+        ],
+        "decisions": [
+          "70c3387f-2c87-4e62-bc1b-546f8ecef03b",
+          "eb8842b0-a532-4846-9200-e42db5ade0f9",
+          "58d7b2a7-e0da-4b39-9038-58a9325fbad9"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/verbs/status_full/orient.rs",
+          "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+          "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs"
+        ],
+        "read_first": [
+          "docs/history/per-task-router/CONTEXT.md",
+          "docs/history/per-task-router/plan.md",
+          "docs/history/per-task-router/reports/hat-wave.md",
+          "packages/bee-rs/crates/bee/src/principles.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Use the ptr-1 helper so orient prints principles only for a route the session owns. Add a `--class <c>` flag (declared in registry_payload.json) that prints the class playbook path skills/bee-planning/playbooks/<c>.md and that class's principle lines, writing nothing; an unknown class is refused naming the valid ones. Update existing orient tests your change flips.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee status_full",
+        "must_haves": {
+          "truths": [
+            "bee orient --class research prints the research playbook path and its principles",
+            "orient in an unbound session with lanes prints no principles",
+            "--class writes no state"
+          ],
+          "prohibitions": [
+            "--class never records a route"
+          ]
+        }
+      },
+      {
+        "id": "ptr-2t",
+        "feature": "per-task-router",
+        "title": "Test orient class routing",
+        "lane": "standard",
+        "role": "test",
+        "deps": [
+          "ptr-2"
+        ],
+        "decisions": [
+          "70c3387f-2c87-4e62-bc1b-546f8ecef03b",
+          "c5c00e89-1653-403f-8924-92d58fcaba18"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs"
+        ],
+        "read_first": [
+          "docs/history/per-task-router/CONTEXT.md",
+          "docs/history/per-task-router/plan.md",
+          "docs/history/per-task-router/reports/hat-wave.md",
+          "packages/bee-rs/crates/bee/src/verbs/status_full/orient.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Independently verify ptr-2. Add tests for --class output, the unknown-class refusal, no state write, and the unowned-route case.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee status_full",
+        "must_haves": {
+          "truths": [
+            "Each ptr-2 truth has a test"
+          ],
+          "prohibitions": [
+            "Never edit product code; only test files listed in files",
+            "On a defect return [BLOCKED] with the red output; never weaken an assertion to pass"
+          ]
+        }
+      },
+      {
+        "id": "ptr-3",
+        "feature": "per-task-router",
+        "title": "Hand every worker the principles of its class",
+        "lane": "standard",
+        "role": "code",
+        "deps": [
+          "ptr-2t"
+        ],
+        "decisions": [
+          "eb8842b0-a532-4846-9200-e42db5ade0f9",
+          "58d7b2a7-e0da-4b39-9038-58a9325fbad9",
+          "676a73b1-60d8-4063-9def-f466bb4322a2"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+          "packages/bee-rs/crates/bee/src/verbs/drivers/prompt.rs",
+          "packages/bee/prompts/worker-cell.md",
+          "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+        ],
+        "read_first": [
+          "docs/history/per-task-router/CONTEXT.md",
+          "docs/history/per-task-router/plan.md",
+          "docs/history/per-task-router/reports/hat-wave.md",
+          "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "For kind cell, render a Principles block from principle_lines for the cell's lane route class: names and one-line rules only. Add a holdout under its own config key (default share 10, same hash-bucket pattern as knowledge_holdout_percent). A role test cell hashes the id of its first dependency so a pair shares an arm. Record the arm on the prepare dispatch record as principles_arm. Update existing drivers tests your change flips.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee drivers",
+        "must_haves": {
+          "truths": [
+            "A principles-arm cell prompt carries a Principles block",
+            "A holdout-arm prompt carries none",
+            "The dispatch record names principles_arm",
+            "A tester shares its implementer's arm"
+          ],
+          "prohibitions": [
+            "No change to the Learned context holdout"
+          ]
+        },
+        "regen_obligation_ack": "ptr-6 owns the shared release manifest and runs the full regen chain after this cell; two cells writing one manifest would collide"
+      },
+      {
+        "id": "ptr-3t",
+        "feature": "per-task-router",
+        "title": "Test the worker Principles block and its holdout",
+        "lane": "standard",
+        "role": "test",
+        "deps": [
+          "ptr-3"
+        ],
+        "decisions": [
+          "eb8842b0-a532-4846-9200-e42db5ade0f9",
+          "c5c00e89-1653-403f-8924-92d58fcaba18"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+        ],
+        "read_first": [
+          "docs/history/per-task-router/CONTEXT.md",
+          "docs/history/per-task-router/plan.md",
+          "docs/history/per-task-router/reports/hat-wave.md",
+          "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Independently verify ptr-3. Add tests for the block, the holdout arm, the record field and pair hashing.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee drivers",
+        "must_haves": {
+          "truths": [
+            "Each ptr-3 truth has a test"
+          ],
+          "prohibitions": [
+            "Never edit product code; only test files listed in files",
+            "On a defect return [BLOCKED] with the red output; never weaken an assertion to pass"
+          ]
+        }
+      },
+      {
+        "id": "ptr-4",
+        "feature": "per-task-router",
+        "title": "Make the cap name its principles and meet its proof floor",
+        "lane": "standard",
+        "role": "code",
+        "deps": [
+          "ptr-3t"
+        ],
+        "decisions": [
+          "eb8842b0-a532-4846-9200-e42db5ade0f9",
+          "58d7b2a7-e0da-4b39-9038-58a9325fbad9",
+          "676a73b1-60d8-4063-9def-f466bb4322a2"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs",
+          "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+          "packages/bee-rs/crates/bee/src/herding/run.rs",
+          "packages/bee-rs/crates/bee/src/herding/mailbox.rs",
+          "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+          "packages/bee-rs/crates/bee/src/verbs/knowledge/tests.rs",
+          "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+        ],
+        "read_first": [
+          "docs/history/per-task-router/CONTEXT.md",
+          "docs/history/per-task-router/plan.md",
+          "docs/history/per-task-router/reports/hat-wave.md",
+          "packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs",
+          "packages/bee-rs/crates/bee/src/herding/run.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Add --principle-used \"<slug> — <decision>\" and --no-principle-used to cap and finish, required only when the cell's prepare record has principles_arm principles; the herded result contract gains an optional principles_used key and run.rs passes it. Add green:red-first (a test seen red on the implementer's base commit and green on head) to PROOF_RESULT_VALUES. Add one floor table per decision 58d7b2a7 (a): implementer code cell green:unit, docs-only cell green:static, role test cell its class floor (bugfix green:red-first, release green:live, feature/refactor/perf green:unit, docs/research/spike/content green:static); static accepts any, unit accepts unit/live/red-first, red-first and live accept only themselves. Docs-only means every path in files ends .md or is under docs/. Refuse a weaker proof naming the floor. Update every CapFlags literal and existing test your change flips.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee cells",
+        "must_haves": {
+          "truths": [
+            "A principles-arm cap with no answer is refused on native and herded paths",
+            "A holdout-arm or older cap is not refused for silence",
+            "A bugfix tester capped green:unit is refused naming green:red-first",
+            "An implementer code cell capped green:static is refused"
+          ],
+          "prohibitions": [
+            "No change to the knowledge-used obligation"
+          ]
+        }
+      },
+      {
+        "id": "ptr-4t",
+        "feature": "per-task-router",
+        "title": "Test principle answers and proof floors",
+        "lane": "standard",
+        "role": "test",
+        "deps": [
+          "ptr-4"
+        ],
+        "decisions": [
+          "eb8842b0-a532-4846-9200-e42db5ade0f9",
+          "58d7b2a7-e0da-4b39-9038-58a9325fbad9",
+          "c5c00e89-1653-403f-8924-92d58fcaba18"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+        ],
+        "read_first": [
+          "docs/history/per-task-router/CONTEXT.md",
+          "docs/history/per-task-router/plan.md",
+          "docs/history/per-task-router/reports/hat-wave.md",
+          "packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Independently verify ptr-4. Add tests for each floor row, the acceptance ladder, the herded path, and the holdout and older-record exemptions.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee cells",
+        "must_haves": {
+          "truths": [
+            "Each ptr-4 truth has a test"
+          ],
+          "prohibitions": [
+            "Never edit product code; only test files listed in files",
+            "On a defect return [BLOCKED] with the red output; never weaken an assertion to pass"
+          ]
+        }
+      },
+      {
+        "id": "ptr-5",
+        "feature": "per-task-router",
+        "title": "Require a separate tester before close and merge",
+        "lane": "standard",
+        "role": "code",
+        "deps": [
+          "ptr-4t"
+        ],
+        "decisions": [
+          "676a73b1-60d8-4063-9def-f466bb4322a2",
+          "c5c00e89-1653-403f-8924-92d58fcaba18",
+          "95e310df-fee8-43a6-8b62-5ce0d9771afb",
+          "58d7b2a7-e0da-4b39-9038-58a9325fbad9",
+          "0ada9257-4397-4b11-ab9a-bcf0b857535a"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/verbs/cells/validate.rs",
+          "packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs",
+          "packages/bee-rs/crates/bee/src/verbs/cells/proof.rs",
+          "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+          "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+        ],
+        "read_first": [
+          "docs/history/per-task-router/CONTEXT.md",
+          "docs/history/per-task-router/plan.md",
+          "docs/history/per-task-router/reports/hat-wave.md",
+          "packages/bee-rs/crates/bee/src/verbs/cells/proof.rs",
+          "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+          "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "At cells add, stamp each new cell with tester_rule true and print a warning when a code-touching cell has no dependent role test cell, or a docs-only cell has no dependent checker, in the feature. In feature_proof_check, refuse a feature whose stamped cell lacks a capped dependent tester or checker, naming the cell; unstamped cells are exempt. Refuse an inline cap (--inline-reason) on a code-touching cell. Rewrite the existing tiny inline cap tests your change flips.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee cells",
+        "must_haves": {
+          "truths": [
+            "bee close and bee worktree merge refuse a stamped code cell with no capped tester",
+            "An unstamped cell is not refused",
+            "An inline cap on a code-touching cell is refused",
+            "cells add warns, never refuses, for a missing tester"
+          ],
+          "prohibitions": [
+            "Never refuse at cells add"
+          ]
+        }
+      },
+      {
+        "id": "ptr-5t",
+        "feature": "per-task-router",
+        "title": "Test tester pairing",
+        "lane": "standard",
+        "role": "test",
+        "deps": [
+          "ptr-5"
+        ],
+        "decisions": [
+          "676a73b1-60d8-4063-9def-f466bb4322a2",
+          "95e310df-fee8-43a6-8b62-5ce0d9771afb",
+          "58d7b2a7-e0da-4b39-9038-58a9325fbad9"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+        ],
+        "read_first": [
+          "docs/history/per-task-router/CONTEXT.md",
+          "docs/history/per-task-router/plan.md",
+          "docs/history/per-task-router/reports/hat-wave.md",
+          "packages/bee-rs/crates/bee/src/verbs/cells/proof.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Independently verify ptr-5. Add tests for the add warning, the close refusal, the docs checker path, the unstamped exemption and the inline refusal.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee cells",
+        "must_haves": {
+          "truths": [
+            "Each ptr-5 truth has a test"
+          ],
+          "prohibitions": [
+            "Never edit product code; only test files listed in files",
+            "On a defect return [BLOCKED] with the red output; never weaken an assertion to pass"
+          ]
+        }
+      },
+      {
+        "id": "ptr-6",
+        "feature": "per-task-router",
+        "title": "Teach the leader per-task routing and the two-worker rule",
+        "lane": "standard",
+        "role": "docs",
+        "deps": [
+          "ptr-3t"
+        ],
+        "decisions": [
+          "676a73b1-60d8-4063-9def-f466bb4322a2",
+          "c5c00e89-1653-403f-8924-92d58fcaba18",
+          "95e310df-fee8-43a6-8b62-5ce0d9771afb",
+          "70c3387f-2c87-4e62-bc1b-546f8ecef03b",
+          "eb8842b0-a532-4846-9200-e42db5ade0f9",
+          "58d7b2a7-e0da-4b39-9038-58a9325fbad9",
+          "0ada9257-4397-4b11-ab9a-bcf0b857535a"
+        ],
+        "files": [
+          "packages/bee/LEADER.md",
+          "skills/bee-planning/SKILL.md",
+          "skills/bee-swarming/SKILL.md",
+          "skills/bee-hive/references/routing-and-contracts.md",
+          "skills/bee-hive/references/gates-and-delegation.md",
+          "docs/history/codex-harness-hardening/release-manifest.json",
+          "skills/bee-planning/playbooks/bugfix.md",
+          "skills/bee-planning/playbooks/content.md",
+          "skills/bee-planning/playbooks/docs.md",
+          "skills/bee-planning/playbooks/feature.md",
+          "skills/bee-planning/playbooks/perf.md",
+          "skills/bee-planning/playbooks/refactor.md",
+          "skills/bee-planning/playbooks/release.md",
+          "skills/bee-planning/playbooks/research.md",
+          "skills/bee-planning/playbooks/spike.md"
+        ],
+        "read_first": [
+          "docs/history/per-task-router/CONTEXT.md",
+          "docs/history/per-task-router/plan.md",
+          "docs/history/per-task-router/reports/hat-wave.md",
+          "packages/bee/LEADER.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "In packages/bee/LEADER.md: add the per-task route step (classify the task, run bee orient --class <c>, seed the session todo list with that playbook's steps, a skipped step kept with skip: and its reason) and a trigger index of at most ten lines that points from a situation to the owning skill, never restating it; rewrite the agents-never-zero-execution-workers rule so every code cell has a dispatched implementer and a separate tester and tiny no longer runs inline. In bee-planning SKILL.md replace 'The writer owns tests' with tester cells per D1-D3. In bee-swarming SKILL.md state the tester contract and the red-tester path (BLOCKED, leader reopens the implementer, fresh dispatch) and the principle answer at cap. Note in routing-and-contracts.md that playbook steps seed the todo list as a projection. Update the tiny row in gates-and-delegation.md. In each playbook's Proof line, point to the cap floor table (printed by the finish verb's help) without copying values. Run bee dev regen.",
+        "verify": ".bee/bin/bee dev regen && .bee/bin/bee dev release-manifest --check",
+        "must_haves": {
+          "truths": [
+            "LEADER.md carries the per-task route step and the trigger index",
+            "No doctrine line still lets a code cell certify itself or run tiny inline",
+            "Each playbook points to the floor table"
+          ],
+          "prohibitions": [
+            "Never restate a skill's description in the trigger index",
+            "Never copy floor values into playbooks"
+          ]
+        }
+      },
+      {
+        "id": "ptr-6c",
+        "feature": "per-task-router",
+        "title": "Check doctrine parity and pointers",
+        "lane": "standard",
+        "role": "test",
+        "deps": [
+          "ptr-6"
+        ],
+        "decisions": [
+          "95e310df-fee8-43a6-8b62-5ce0d9771afb"
+        ],
+        "files": [
+          "docs/history/per-task-router/reports/ptr-6c.md"
+        ],
+        "read_first": [
+          "docs/history/per-task-router/CONTEXT.md",
+          "docs/history/per-task-router/plan.md",
+          "docs/history/per-task-router/reports/hat-wave.md",
+          "packages/bee/LEADER.md",
+          "skills/bee-planning/SKILL.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Run the parity and pointer checks on ptr-6's files: bee dev release-manifest --check, the rule_index_parity and pointer_integrity tests. Write only the check output to your report file; on a red return [BLOCKED] with the output.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee parity",
+        "must_haves": {
+          "truths": [
+            "Rule index, pointer and manifest checks are green"
+          ],
+          "prohibitions": [
+            "Edit no file except your report"
+          ]
+        }
+      },
+      {
+        "id": "ptr-7",
+        "feature": "per-task-router",
+        "title": "Consolidate per-task-router knowledge",
+        "lane": "standard",
+        "role": "writer",
+        "deps": [
+          "ptr-5t",
+          "ptr-6c"
+        ],
+        "decisions": [
+          "676a73b1-60d8-4063-9def-f466bb4322a2",
+          "70c3387f-2c87-4e62-bc1b-546f8ecef03b",
+          "eb8842b0-a532-4846-9200-e42db5ade0f9",
+          "58d7b2a7-e0da-4b39-9038-58a9325fbad9"
+        ],
+        "files": [
+          "docs/knowledge/",
+          "docs/history/per-task-router/delivery.md"
+        ],
+        "read_first": [
+          "docs/history/per-task-router/CONTEXT.md",
+          "docs/history/per-task-router/plan.md",
+          "docs/history/per-task-router/reports/hat-wave.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Run bee knowledge consolidate --feature per-task-router, write the deduped knowledge and docs/history/per-task-router/delivery.md.",
+        "verify": ".bee/bin/bee knowledge check",
+        "must_haves": {
+          "truths": [
+            "Knowledge concepts name the per-task route, the tester pairing and the proof floors"
+          ],
+          "prohibitions": []
+        }
+      },
+      {
+        "id": "ptr-7c",
+        "feature": "per-task-router",
+        "title": "Check the consolidated knowledge",
+        "lane": "standard",
+        "role": "test",
+        "deps": [
+          "ptr-7"
+        ],
+        "decisions": [
+          "95e310df-fee8-43a6-8b62-5ce0d9771afb"
+        ],
+        "files": [
+          "docs/history/per-task-router/reports/ptr-7c.md"
+        ],
+        "read_first": [
+          "docs/history/per-task-router/CONTEXT.md",
+          "docs/history/per-task-router/plan.md",
+          "docs/history/per-task-router/reports/hat-wave.md",
+          "docs/history/per-task-router/delivery.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Run bee knowledge check. Write only the check output to your report file; on a red return [BLOCKED] with the output.",
+        "verify": ".bee/bin/bee knowledge check",
+        "must_haves": {
+          "truths": [
+            "bee knowledge check is green"
+          ],
+          "prohibitions": [
+            "Edit no file except your report"
+          ]
+        }
+      }
+    ],
+    "role_plan": {
+      "schema_version": "1.0",
+      "runtime": "claude",
+      "roster_sha256": "d4e696dbde7989d6388dacce3fd7057cb3a6935b46024b79698596a46f6f41d3",
+      "stages": [
+        {
+          "stage": "implementation",
+          "classification": "required",
+          "role": "code",
+          "reason": "ptr-1 to ptr-5 write Rust."
+        },
+        {
+          "stage": "testing",
+          "classification": "required",
+          "role": "test",
+          "reason": "D1: every tester and checker cell runs on the test role, separate from the implementer."
+        },
+        {
+          "stage": "documentation",
+          "classification": "required",
+          "role": "docs",
+          "reason": "ptr-6 edits doctrine and playbooks."
+        },
+        {
+          "stage": "consolidation",
+          "classification": "required",
+          "role": "writer",
+          "reason": "ptr-7 consolidates knowledge."
+        },
+        {
+          "stage": "read-only-gather",
+          "classification": "conditional",
+          "role": "read",
+          "condition": "a leader lookup needs more than three files",
+          "reason": "Cheap reads."
+        },
+        {
+          "stage": "hat-facts-gaps",
+          "classification": "required",
+          "role": "hat-facts-gaps",
+          "reason": "Standard lane plan-step hat wave."
+        },
+        {
+          "stage": "hat-alternatives",
+          "classification": "required",
+          "role": "hat-alternatives",
+          "reason": "Default hat seat."
+        },
+        {
+          "stage": "hat-user-impact",
+          "classification": "required",
+          "role": "hat-user-impact",
+          "reason": "Default hat seat."
+        },
+        {
+          "stage": "hat-risks",
+          "classification": "not-applicable",
+          "role": "hat-risks",
+          "reason": "Five seats only on high-risk."
+        },
+        {
+          "stage": "hat-value",
+          "classification": "not-applicable",
+          "role": "hat-value",
+          "reason": "Five seats only on high-risk."
+        },
+        {
+          "stage": "planning",
+          "classification": "not-applicable",
+          "role": "plan",
+          "reason": "The leader writes this plan."
+        },
+        {
+          "stage": "deployment",
+          "classification": "not-applicable",
+          "role": "deploy",
+          "reason": "No release rides this feature."
+        },
+        {
+          "stage": "fact-extraction",
+          "classification": "not-applicable",
+          "role": "extraction",
+          "reason": "Gathers use read."
+        },
+        {
+          "stage": "generation-fallback",
+          "classification": "not-applicable",
+          "role": "generation",
+          "reason": "Every job has a specific role."
+        },
+        {
+          "stage": "independent-review",
+          "classification": "not-applicable",
+          "role": "review",
+          "reason": "Independent review stays user-invoked."
+        },
+        {
+          "stage": "generic-advisor",
+          "classification": "not-applicable",
+          "role": "advisor",
+          "reason": "The hat wave is the consult."
+        },
+        {
+          "stage": "supervision",
+          "classification": "not-applicable",
+          "role": "supervisor",
+          "reason": "No unattended loop."
+        },
+        {
+          "stage": "blind-lane-1",
+          "classification": "not-applicable",
+          "role": "lane-1",
+          "reason": "One clear design."
+        },
+        {
+          "stage": "blind-lane-2",
+          "classification": "not-applicable",
+          "role": "lane-2",
+          "reason": "One clear design."
+        },
+        {
+          "stage": "blind-lane-3",
+          "classification": "not-applicable",
+          "role": "lane-3",
+          "reason": "One clear design."
+        },
+        {
+          "stage": "design-ui",
+          "classification": "not-applicable",
+          "role": "design",
+          "reason": "No rendered UI."
+        }
+      ]
+    }
+  },
+  "advisor_ref": {
+    "consulted_at": "2026-11-14T15:33:37.898Z",
+    "feature": "per-task-router",
+    "newest_decision_id": "58d7b2a7-e0da-4b39-9038-58a9325fbad9",
+    "plan_sha256": "28ac90b029f044c0629e4ac38ed70d84d74a5dfda51aa0c709ef8ae9d404717d",
+    "advisor": "hat-wave:facts-gaps,alternatives,user-impact",
+    "digest_head": "# per-task-router — hat wave synthesis\n\nThree seats ran on the first plan.md draft, each as a read-only herded\nadvisor. Full digests:\n\n- hat-facts-gaps: `.bee/mailbox/job-1794669953669-2533589-1/report-1.md` (confidence 85)\n- hat-alternatives: `.bee/mailbox/job-1794669957388-2534045-1/report-1.md` (confidence 70)\n- hat-user-impact: `.bee/mailbox/job-1794669960939-2535202-1/report-1.md` (confidence 70)\n\nNo seat dropped. All three recommended re-shaping before the gate.\n\n## Findings and what the p"
+  },
+  "approved_cell_packet": {
+    "feature": "per-task-router",
+    "plan_sha256": "87b24ec70cf64ae2421286393311531be9fa53baefc2e4579240af219b2b21ba",
+    "previewed_at": "2026-11-14T15:50:49.723Z",
+    "cells": [
+      {
+        "id": "ptr-1",
+        "feature": "per-task-router",
+        "title": "Show the preamble route only when the session owns it",
+        "lane": "standard",
+        "role": "code",
+        "deps": [],
+        "decisions": [
+          "70c3387f-2c87-4e62-bc1b-546f8ecef03b",
+          "58d7b2a7-e0da-4b39-9038-58a9325fbad9"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs",
+          "packages/bee-rs/crates/bee/src/principles.rs",
+          "packages/bee-rs/crates/bee/src/hooks/session_preamble/tests.rs"
+        ],
+        "read_first": [
+          "docs/history/per-task-router/CONTEXT.md",
+          "docs/history/per-task-router/plan.md",
+          "docs/history/per-task-router/reports/hat-wave.md",
+          "packages/bee-rs/crates/bee/src/hooks/session_preamble/state.rs",
+          "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Add one helper in principles.rs that says whether a route belongs to the session: bound through the session record lane (Pipeline source lane) or through session_binding (budget.rs active_record path), or the repo has no lane records. Gate the Route line and principle_lines in budget.rs on it. When it is false, print one hint line naming `bee orient --class <c>` instead. Update any existing preamble test your change flips; new tests belong to ptr-1t.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee session_preamble",
+        "must_haves": {
+          "truths": [
+            "A session bound by either path sees the Route line and principles",
+            "A repo with no lane records keeps its default-record Route line",
+            "An unbound session in a repo with lanes sees one hint line and no principles"
+          ],
+          "prohibitions": [
+            "No change to which record the knowledge lines read"
+          ]
+        }
+      },
+      {
+        "id": "ptr-1t",
+        "feature": "per-task-router",
+        "title": "Test preamble route ownership",
+        "lane": "standard",
+        "role": "test",
+        "deps": [
+          "ptr-1"
+        ],
+        "decisions": [
+          "70c3387f-2c87-4e62-bc1b-546f8ecef03b",
+          "58d7b2a7-e0da-4b39-9038-58a9325fbad9",
+          "c5c00e89-1653-403f-8924-92d58fcaba18"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/hooks/session_preamble/tests.rs"
+        ],
+        "read_first": [
+          "docs/history/per-task-router/CONTEXT.md",
+          "docs/history/per-task-router/plan.md",
+          "docs/history/per-task-router/reports/hat-wave.md",
+          "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs",
+          "packages/bee-rs/crates/bee/src/principles.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Independently verify ptr-1 against its truths. Add tests for: bound via session record, bound via session_binding only, lane-less repo, unbound session in a repo with lanes (hint line, no principles). Run the scoped proof.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee session_preamble",
+        "must_haves": {
+          "truths": [
+            "Each of the four cases has a test that fails if the behavior regresses"
+          ],
+          "prohibitions": [
+            "Never edit product code; only test files listed in files",
+            "On a defect return [BLOCKED] with the red output; never weaken an assertion to pass"
+          ]
+        }
+      },
+      {
+        "id": "ptr-2",
+        "feature": "per-task-router",
+        "title": "Route the task in hand with bee orient --class",
+        "lane": "standard",
+        "role": "code",
+        "deps": [
+          "ptr-1t"
+        ],
+        "decisions": [
+          "70c3387f-2c87-4e62-bc1b-546f8ecef03b",
+          "eb8842b0-a532-4846-9200-e42db5ade0f9",
+          "58d7b2a7-e0da-4b39-9038-58a9325fbad9"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/verbs/status_full/orient.rs",
+          "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+          "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs"
+        ],
+        "read_first": [
+          "docs/history/per-task-router/CONTEXT.md",
+          "docs/history/per-task-router/plan.md",
+          "docs/history/per-task-router/reports/hat-wave.md",
+          "packages/bee-rs/crates/bee/src/principles.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Use the ptr-1 helper so orient prints principles only for a route the session owns. Add a `--class <c>` flag (declared in registry_payload.json) that prints the class playbook path skills/bee-planning/playbooks/<c>.md and that class's principle lines, writing nothing; an unknown class is refused naming the valid ones. Update existing orient tests your change flips.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee status_full",
+        "must_haves": {
+          "truths": [
+            "bee orient --class research prints the research playbook path and its principles",
+            "orient in an unbound session with lanes prints no principles",
+            "--class writes no state"
+          ],
+          "prohibitions": [
+            "--class never records a route"
+          ]
+        }
+      },
+      {
+        "id": "ptr-2t",
+        "feature": "per-task-router",
+        "title": "Test orient class routing",
+        "lane": "standard",
+        "role": "test",
+        "deps": [
+          "ptr-2"
+        ],
+        "decisions": [
+          "70c3387f-2c87-4e62-bc1b-546f8ecef03b",
+          "c5c00e89-1653-403f-8924-92d58fcaba18"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs"
+        ],
+        "read_first": [
+          "docs/history/per-task-router/CONTEXT.md",
+          "docs/history/per-task-router/plan.md",
+          "docs/history/per-task-router/reports/hat-wave.md",
+          "packages/bee-rs/crates/bee/src/verbs/status_full/orient.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Independently verify ptr-2. Add tests for --class output, the unknown-class refusal, no state write, and the unowned-route case.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee status_full",
+        "must_haves": {
+          "truths": [
+            "Each ptr-2 truth has a test"
+          ],
+          "prohibitions": [
+            "Never edit product code; only test files listed in files",
+            "On a defect return [BLOCKED] with the red output; never weaken an assertion to pass"
+          ]
+        }
+      },
+      {
+        "id": "ptr-3",
+        "feature": "per-task-router",
+        "title": "Hand every worker the principles of its class",
+        "lane": "standard",
+        "role": "code",
+        "deps": [
+          "ptr-2t"
+        ],
+        "decisions": [
+          "eb8842b0-a532-4846-9200-e42db5ade0f9",
+          "58d7b2a7-e0da-4b39-9038-58a9325fbad9",
+          "676a73b1-60d8-4063-9def-f466bb4322a2"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+          "packages/bee-rs/crates/bee/src/verbs/drivers/prompt.rs",
+          "packages/bee/prompts/worker-cell.md",
+          "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+        ],
+        "read_first": [
+          "docs/history/per-task-router/CONTEXT.md",
+          "docs/history/per-task-router/plan.md",
+          "docs/history/per-task-router/reports/hat-wave.md",
+          "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "For kind cell, render a Principles block from principle_lines for the cell's lane route class: names and one-line rules only. Add a holdout under its own config key (default share 10, same hash-bucket pattern as knowledge_holdout_percent). A role test cell hashes the id of its first dependency so a pair shares an arm. Record the arm on the prepare dispatch record as principles_arm. Update existing drivers tests your change flips.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee drivers",
+        "must_haves": {
+          "truths": [
+            "A principles-arm cell prompt carries a Principles block",
+            "A holdout-arm prompt carries none",
+            "The dispatch record names principles_arm",
+            "A tester shares its implementer's arm"
+          ],
+          "prohibitions": [
+            "No change to the Learned context holdout"
+          ]
+        },
+        "regen_obligation_ack": "ptr-6 owns the shared release manifest and runs the full regen chain after this cell; two cells writing one manifest would collide"
+      },
+      {
+        "id": "ptr-3t",
+        "feature": "per-task-router",
+        "title": "Test the worker Principles block and its holdout",
+        "lane": "standard",
+        "role": "test",
+        "deps": [
+          "ptr-3"
+        ],
+        "decisions": [
+          "eb8842b0-a532-4846-9200-e42db5ade0f9",
+          "c5c00e89-1653-403f-8924-92d58fcaba18"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+        ],
+        "read_first": [
+          "docs/history/per-task-router/CONTEXT.md",
+          "docs/history/per-task-router/plan.md",
+          "docs/history/per-task-router/reports/hat-wave.md",
+          "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Independently verify ptr-3. Add tests for the block, the holdout arm, the record field and pair hashing.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee drivers",
+        "must_haves": {
+          "truths": [
+            "Each ptr-3 truth has a test"
+          ],
+          "prohibitions": [
+            "Never edit product code; only test files listed in files",
+            "On a defect return [BLOCKED] with the red output; never weaken an assertion to pass"
+          ]
+        }
+      },
+      {
+        "id": "ptr-4",
+        "feature": "per-task-router",
+        "title": "Make the cap name its principles and meet its proof floor",
+        "lane": "standard",
+        "role": "code",
+        "deps": [
+          "ptr-3t"
+        ],
+        "decisions": [
+          "eb8842b0-a532-4846-9200-e42db5ade0f9",
+          "58d7b2a7-e0da-4b39-9038-58a9325fbad9",
+          "676a73b1-60d8-4063-9def-f466bb4322a2"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs",
+          "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+          "packages/bee-rs/crates/bee/src/herding/run.rs",
+          "packages/bee-rs/crates/bee/src/herding/mailbox.rs",
+          "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+          "packages/bee-rs/crates/bee/src/verbs/knowledge/tests.rs",
+          "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+        ],
+        "read_first": [
+          "docs/history/per-task-router/CONTEXT.md",
+          "docs/history/per-task-router/plan.md",
+          "docs/history/per-task-router/reports/hat-wave.md",
+          "packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs",
+          "packages/bee-rs/crates/bee/src/herding/run.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Add --principle-used \"<slug> — <decision>\" and --no-principle-used to cap and finish, required only when the cell's prepare record has principles_arm principles; the herded result contract gains an optional principles_used key and run.rs passes it. Add green:red-first (a test seen red on the implementer's base commit and green on head) to PROOF_RESULT_VALUES. Add one floor table per decision 58d7b2a7 (a): implementer code cell green:unit, docs-only cell green:static, role test cell its class floor (bugfix green:red-first, release green:live, feature/refactor/perf green:unit, docs/research/spike/content green:static); static accepts any, unit accepts unit/live/red-first, red-first and live accept only themselves. Docs-only means every path in files ends .md or is under docs/. Refuse a weaker proof naming the floor. Update every CapFlags literal and existing test your change flips.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee cells",
+        "must_haves": {
+          "truths": [
+            "A principles-arm cap with no answer is refused on native and herded paths",
+            "A holdout-arm or older cap is not refused for silence",
+            "A bugfix tester capped green:unit is refused naming green:red-first",
+            "An implementer code cell capped green:static is refused"
+          ],
+          "prohibitions": [
+            "No change to the knowledge-used obligation"
+          ]
+        }
+      },
+      {
+        "id": "ptr-4t",
+        "feature": "per-task-router",
+        "title": "Test principle answers and proof floors",
+        "lane": "standard",
+        "role": "test",
+        "deps": [
+          "ptr-4"
+        ],
+        "decisions": [
+          "eb8842b0-a532-4846-9200-e42db5ade0f9",
+          "58d7b2a7-e0da-4b39-9038-58a9325fbad9",
+          "c5c00e89-1653-403f-8924-92d58fcaba18"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+        ],
+        "read_first": [
+          "docs/history/per-task-router/CONTEXT.md",
+          "docs/history/per-task-router/plan.md",
+          "docs/history/per-task-router/reports/hat-wave.md",
+          "packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Independently verify ptr-4. Add tests for each floor row, the acceptance ladder, the herded path, and the holdout and older-record exemptions.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee cells",
+        "must_haves": {
+          "truths": [
+            "Each ptr-4 truth has a test"
+          ],
+          "prohibitions": [
+            "Never edit product code; only test files listed in files",
+            "On a defect return [BLOCKED] with the red output; never weaken an assertion to pass"
+          ]
+        }
+      },
+      {
+        "id": "ptr-5",
+        "feature": "per-task-router",
+        "title": "Require a separate tester before close and merge",
+        "lane": "standard",
+        "role": "code",
+        "deps": [
+          "ptr-4t"
+        ],
+        "decisions": [
+          "676a73b1-60d8-4063-9def-f466bb4322a2",
+          "c5c00e89-1653-403f-8924-92d58fcaba18",
+          "95e310df-fee8-43a6-8b62-5ce0d9771afb",
+          "58d7b2a7-e0da-4b39-9038-58a9325fbad9",
+          "0ada9257-4397-4b11-ab9a-bcf0b857535a"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/verbs/cells/validate.rs",
+          "packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs",
+          "packages/bee-rs/crates/bee/src/verbs/cells/proof.rs",
+          "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+          "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+        ],
+        "read_first": [
+          "docs/history/per-task-router/CONTEXT.md",
+          "docs/history/per-task-router/plan.md",
+          "docs/history/per-task-router/reports/hat-wave.md",
+          "packages/bee-rs/crates/bee/src/verbs/cells/proof.rs",
+          "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+          "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "At cells add, stamp each new cell with tester_rule true and print a warning when a code-touching cell has no dependent role test cell, or a docs-only cell has no dependent checker, in the feature. In feature_proof_check, refuse a feature whose stamped cell lacks a capped dependent tester or checker, naming the cell; unstamped cells are exempt. Refuse an inline cap (--inline-reason) on a code-touching cell. Rewrite the existing tiny inline cap tests your change flips.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee cells",
+        "must_haves": {
+          "truths": [
+            "bee close and bee worktree merge refuse a stamped code cell with no capped tester",
+            "An unstamped cell is not refused",
+            "An inline cap on a code-touching cell is refused",
+            "cells add warns, never refuses, for a missing tester"
+          ],
+          "prohibitions": [
+            "Never refuse at cells add"
+          ]
+        }
+      },
+      {
+        "id": "ptr-5t",
+        "feature": "per-task-router",
+        "title": "Test tester pairing",
+        "lane": "standard",
+        "role": "test",
+        "deps": [
+          "ptr-5"
+        ],
+        "decisions": [
+          "676a73b1-60d8-4063-9def-f466bb4322a2",
+          "95e310df-fee8-43a6-8b62-5ce0d9771afb",
+          "58d7b2a7-e0da-4b39-9038-58a9325fbad9"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+        ],
+        "read_first": [
+          "docs/history/per-task-router/CONTEXT.md",
+          "docs/history/per-task-router/plan.md",
+          "docs/history/per-task-router/reports/hat-wave.md",
+          "packages/bee-rs/crates/bee/src/verbs/cells/proof.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Independently verify ptr-5. Add tests for the add warning, the close refusal, the docs checker path, the unstamped exemption and the inline refusal.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee cells",
+        "must_haves": {
+          "truths": [
+            "Each ptr-5 truth has a test"
+          ],
+          "prohibitions": [
+            "Never edit product code; only test files listed in files",
+            "On a defect return [BLOCKED] with the red output; never weaken an assertion to pass"
+          ]
+        }
+      },
+      {
+        "id": "ptr-6",
+        "feature": "per-task-router",
+        "title": "Teach the leader per-task routing and the two-worker rule",
+        "lane": "standard",
+        "role": "docs",
+        "deps": [
+          "ptr-3t"
+        ],
+        "decisions": [
+          "676a73b1-60d8-4063-9def-f466bb4322a2",
+          "c5c00e89-1653-403f-8924-92d58fcaba18",
+          "95e310df-fee8-43a6-8b62-5ce0d9771afb",
+          "70c3387f-2c87-4e62-bc1b-546f8ecef03b",
+          "eb8842b0-a532-4846-9200-e42db5ade0f9",
+          "58d7b2a7-e0da-4b39-9038-58a9325fbad9",
+          "0ada9257-4397-4b11-ab9a-bcf0b857535a"
+        ],
+        "files": [
+          "packages/bee/LEADER.md",
+          "skills/bee-planning/SKILL.md",
+          "skills/bee-swarming/SKILL.md",
+          "skills/bee-hive/references/routing-and-contracts.md",
+          "skills/bee-hive/references/gates-and-delegation.md",
+          "docs/history/codex-harness-hardening/release-manifest.json",
+          "skills/bee-planning/playbooks/bugfix.md",
+          "skills/bee-planning/playbooks/content.md",
+          "skills/bee-planning/playbooks/docs.md",
+          "skills/bee-planning/playbooks/feature.md",
+          "skills/bee-planning/playbooks/perf.md",
+          "skills/bee-planning/playbooks/refactor.md",
+          "skills/bee-planning/playbooks/release.md",
+          "skills/bee-planning/playbooks/research.md",
+          "skills/bee-planning/playbooks/spike.md"
+        ],
+        "read_first": [
+          "docs/history/per-task-router/CONTEXT.md",
+          "docs/history/per-task-router/plan.md",
+          "docs/history/per-task-router/reports/hat-wave.md",
+          "packages/bee/LEADER.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "In packages/bee/LEADER.md: add the per-task route step (classify the task, run bee orient --class <c>, seed the session todo list with that playbook's steps, a skipped step kept with skip: and its reason) and a trigger index of at most ten lines that points from a situation to the owning skill, never restating it; rewrite the agents-never-zero-execution-workers rule so every code cell has a dispatched implementer and a separate tester and tiny no longer runs inline. In bee-planning SKILL.md replace 'The writer owns tests' with tester cells per D1-D3. In bee-swarming SKILL.md state the tester contract and the red-tester path (BLOCKED, leader reopens the implementer, fresh dispatch) and the principle answer at cap. Note in routing-and-contracts.md that playbook steps seed the todo list as a projection. Update the tiny row in gates-and-delegation.md. In each playbook's Proof line, point to the cap floor table (printed by the finish verb's help) without copying values. Run bee dev regen.",
+        "verify": ".bee/bin/bee dev regen && .bee/bin/bee dev release-manifest --check",
+        "must_haves": {
+          "truths": [
+            "LEADER.md carries the per-task route step and the trigger index",
+            "No doctrine line still lets a code cell certify itself or run tiny inline",
+            "Each playbook points to the floor table"
+          ],
+          "prohibitions": [
+            "Never restate a skill's description in the trigger index",
+            "Never copy floor values into playbooks"
+          ]
+        }
+      },
+      {
+        "id": "ptr-6c",
+        "feature": "per-task-router",
+        "title": "Check doctrine parity and pointers",
+        "lane": "standard",
+        "role": "test",
+        "deps": [
+          "ptr-6"
+        ],
+        "decisions": [
+          "95e310df-fee8-43a6-8b62-5ce0d9771afb"
+        ],
+        "files": [
+          "docs/history/per-task-router/reports/ptr-6c.md"
+        ],
+        "read_first": [
+          "docs/history/per-task-router/CONTEXT.md",
+          "docs/history/per-task-router/plan.md",
+          "docs/history/per-task-router/reports/hat-wave.md",
+          "packages/bee/LEADER.md",
+          "skills/bee-planning/SKILL.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Run the parity and pointer checks on ptr-6's files: bee dev release-manifest --check, the rule_index_parity and pointer_integrity tests. Write only the check output to your report file; on a red return [BLOCKED] with the output.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee parity",
+        "must_haves": {
+          "truths": [
+            "Rule index, pointer and manifest checks are green"
+          ],
+          "prohibitions": [
+            "Edit no file except your report"
+          ]
+        }
+      },
+      {
+        "id": "ptr-7",
+        "feature": "per-task-router",
+        "title": "Consolidate per-task-router knowledge",
+        "lane": "standard",
+        "role": "writer",
+        "deps": [
+          "ptr-5t",
+          "ptr-6c"
+        ],
+        "decisions": [
+          "676a73b1-60d8-4063-9def-f466bb4322a2",
+          "70c3387f-2c87-4e62-bc1b-546f8ecef03b",
+          "eb8842b0-a532-4846-9200-e42db5ade0f9",
+          "58d7b2a7-e0da-4b39-9038-58a9325fbad9"
+        ],
+        "files": [
+          "docs/knowledge/",
+          "docs/history/per-task-router/delivery.md"
+        ],
+        "read_first": [
+          "docs/history/per-task-router/CONTEXT.md",
+          "docs/history/per-task-router/plan.md",
+          "docs/history/per-task-router/reports/hat-wave.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Run bee knowledge consolidate --feature per-task-router, write the deduped knowledge and docs/history/per-task-router/delivery.md.",
+        "verify": ".bee/bin/bee knowledge check",
+        "must_haves": {
+          "truths": [
+            "Knowledge concepts name the per-task route, the tester pairing and the proof floors"
+          ],
+          "prohibitions": []
+        }
+      },
+      {
+        "id": "ptr-7c",
+        "feature": "per-task-router",
+        "title": "Check the consolidated knowledge",
+        "lane": "standard",
+        "role": "test",
+        "deps": [
+          "ptr-7"
+        ],
+        "decisions": [
+          "95e310df-fee8-43a6-8b62-5ce0d9771afb"
+        ],
+        "files": [
+          "docs/history/per-task-router/reports/ptr-7c.md"
+        ],
+        "read_first": [
+          "docs/history/per-task-router/CONTEXT.md",
+          "docs/history/per-task-router/plan.md",
+          "docs/history/per-task-router/reports/hat-wave.md",
+          "docs/history/per-task-router/delivery.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Run bee knowledge check. Write only the check output to your report file; on a red return [BLOCKED] with the output.",
+        "verify": ".bee/bin/bee knowledge check",
+        "must_haves": {
+          "truths": [
+            "bee knowledge check is green"
+          ],
+          "prohibitions": [
+            "Edit no file except your report"
+          ]
+        }
+      }
+    ],
+    "role_plan": {
+      "schema_version": "1.0",
+      "runtime": "claude",
+      "roster_sha256": "d4e696dbde7989d6388dacce3fd7057cb3a6935b46024b79698596a46f6f41d3",
+      "stages": [
+        {
+          "stage": "implementation",
+          "classification": "required",
+          "role": "code",
+          "reason": "ptr-1 to ptr-5 write Rust."
+        },
+        {
+          "stage": "testing",
+          "classification": "required",
+          "role": "test",
+          "reason": "D1: every tester and checker cell runs on the test role, separate from the implementer."
+        },
+        {
+          "stage": "documentation",
+          "classification": "required",
+          "role": "docs",
+          "reason": "ptr-6 edits doctrine and playbooks."
+        },
+        {
+          "stage": "consolidation",
+          "classification": "required",
+          "role": "writer",
+          "reason": "ptr-7 consolidates knowledge."
+        },
+        {
+          "stage": "read-only-gather",
+          "classification": "conditional",
+          "role": "read",
+          "condition": "a leader lookup needs more than three files",
+          "reason": "Cheap reads."
+        },
+        {
+          "stage": "hat-facts-gaps",
+          "classification": "required",
+          "role": "hat-facts-gaps",
+          "reason": "Standard lane plan-step hat wave."
+        },
+        {
+          "stage": "hat-alternatives",
+          "classification": "required",
+          "role": "hat-alternatives",
+          "reason": "Default hat seat."
+        },
+        {
+          "stage": "hat-user-impact",
+          "classification": "required",
+          "role": "hat-user-impact",
+          "reason": "Default hat seat."
+        },
+        {
+          "stage": "hat-risks",
+          "classification": "not-applicable",
+          "role": "hat-risks",
+          "reason": "Five seats only on high-risk."
+        },
+        {
+          "stage": "hat-value",
+          "classification": "not-applicable",
+          "role": "hat-value",
+          "reason": "Five seats only on high-risk."
+        },
+        {
+          "stage": "planning",
+          "classification": "not-applicable",
+          "role": "plan",
+          "reason": "The leader writes this plan."
+        },
+        {
+          "stage": "deployment",
+          "classification": "not-applicable",
+          "role": "deploy",
+          "reason": "No release rides this feature."
+        },
+        {
+          "stage": "fact-extraction",
+          "classification": "not-applicable",
+          "role": "extraction",
+          "reason": "Gathers use read."
+        },
+        {
+          "stage": "generation-fallback",
+          "classification": "not-applicable",
+          "role": "generation",
+          "reason": "Every job has a specific role."
+        },
+        {
+          "stage": "independent-review",
+          "classification": "not-applicable",
+          "role": "review",
+          "reason": "Independent review stays user-invoked."
+        },
+        {
+          "stage": "generic-advisor",
+          "classification": "not-applicable",
+          "role": "advisor",
+          "reason": "The hat wave is the consult."
+        },
+        {
+          "stage": "supervision",
+          "classification": "not-applicable",
+          "role": "supervisor",
+          "reason": "No unattended loop."
+        },
+        {
+          "stage": "blind-lane-1",
+          "classification": "not-applicable",
+          "role": "lane-1",
+          "reason": "One clear design."
+        },
+        {
+          "stage": "blind-lane-2",
+          "classification": "not-applicable",
+          "role": "lane-2",
+          "reason": "One clear design."
+        },
+        {
+          "stage": "blind-lane-3",
+          "classification": "not-applicable",
+          "role": "lane-3",
+          "reason": "One clear design."
+        },
+        {
+          "stage": "design-ui",
+          "classification": "not-applicable",
+          "role": "design",
+          "reason": "No rendered UI."
+        }
+      ]
+    }
+  },
+  "merge_ready": {
+    "since": "2026-11-14T17:55:36.500Z",
+    "branch": "wt/per-task-router",
+    "worktree_id": "beehive--wt--per-task-router",
+    "uat": "pending",
+    "blocked_by": [
+      "dissent-debt"
+    ]
+  }
+}

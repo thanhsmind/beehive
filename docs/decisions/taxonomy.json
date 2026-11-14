@@ -869,6 +869,17 @@
     "contract:publish-skip-same-content",
     "contract:hub-served-skills",
     "token-budget",
-    "contract:skill-description-budget"
+    "contract:skill-description-budget",
+    "worker-contract",
+    "test-separation",
+    "peer-quality",
+    "session-preamble",
+    "per-task-router",
+    "contract:preamble-route-ownership",
+    "contract:orient-class",
+    "contract:worker-principles-block",
+    "contract:cap-principles-and-proof-floor",
+    "contract:tester-pairing",
+    "contract:docs-checker"
   ]
 }
