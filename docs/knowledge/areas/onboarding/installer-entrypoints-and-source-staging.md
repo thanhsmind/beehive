@@ -98,8 +98,12 @@ carries a forbidden character, a reserved device name, or a trailing dot/space.
   supersedes the earlier "probe failure is fatal" reading, 2026-07-20).
 
 **Forward `--skillstation` to onboard.** `scripts/install.sh --skillstation` is
-passed through to `bee onboard`, so install and onboard share one switch for adding
-missing skills to the Skillstation hub. Without it install still gets the local
+passed through to the onboard plan and apply, so install and onboard share one switch
+for the Skillstation hub: it adds missing skills as drafts and switches the project to
+hub principles in that one run. The post-apply recheck runs without the flag, because a
+recheck that carried it would plan a publish every time and never report `up_to_date`
+(skillstation-principles D10). Without the flag install does not change the principles
+mode, and it still gets the local
 `/<id>` aliases, because onboard writes those by default (skillstation-onboard-aliases
 D5). Find the current flag list with `scripts/install.sh --help`.
 
