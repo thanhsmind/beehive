@@ -319,7 +319,8 @@ body homes, and these rules are homed in those files, not here.
 Craft principles stay homed in the `expertise/` guides and ship as thin
 `bee-principle-<slug>` skills on top (expertise-principles D1). `bee orient`
 names the candidates for a task from its route class, so this index is read on
-the way in, never always-loaded (expertise-principles D2). Rows use the same
+the way in, never always-loaded (expertise-principles D2). Which route the leader loads, and when a session
+prints no route at all, is owned by [per-task route, tester pairing and proof floors](per-task-route-tester-pairing-and-proof-floors.md). Rows use the same
 grammar as the section above: `spoken:` and `classes:` both sit ABOVE
 `applied_at:`, because the indented block after `applied_at:` is read as paths.
 
