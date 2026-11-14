@@ -218,3 +218,15 @@ fn gate_actor_auto_writes_one_gate_bypass_audit_row_and_no_decision() {
     assert!(ok, "{text}");
     assert_eq!(audit_rows(&repo).len(), 1, "a user approval writes no audit row");
 }
+
+#[test]
+fn audit_log_accepts_the_two_upkeep_kinds() {
+    let tmp = tempfile::tempdir().unwrap();
+    let repo = scratch_repo(tmp.path(), "upkeep-kinds");
+    for kind in ["knowledge-upkeep", "verify-upkeep"] {
+        let (ok, text) = bee(&repo, &["audit", "log", "--kind", kind, "--feature", "upkeep", "--note", "clean — nothing to do"]);
+        assert!(ok, "{kind}: {text}");
+    }
+    let kinds: Vec<String> = audit_rows(&repo).iter().map(|r| r["kind"].as_str().unwrap().to_string()).collect();
+    assert_eq!(kinds, ["knowledge-upkeep", "verify-upkeep"]);
+}

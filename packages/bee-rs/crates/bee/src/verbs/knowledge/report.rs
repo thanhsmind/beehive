@@ -604,6 +604,7 @@ pub(crate) fn build_knowledge_wrong(root: &Path) -> (Value, Vec<String>) {
     struct Wrong {
         count: usize,
         notes: Vec<(String, String, String)>,
+        stamps: Vec<String>,
     }
     let mut concepts: std::collections::HashMap<String, Wrong> = std::collections::HashMap::new();
     let mut cells = 0usize;
@@ -618,8 +619,9 @@ pub(crate) fn build_knowledge_wrong(root: &Path) -> (Value, Vec<String>) {
             let Some(path) = entry.get("path").and_then(Value::as_str).map(js_trim).filter(|p| !p.is_empty()) else { continue };
             let note = entry.get("wrong").and_then(Value::as_str).map(js_trim).unwrap_or_default();
             counted = true;
-            let slot = concepts.entry(path.to_string()).or_insert(Wrong { count: 0, notes: Vec::new() });
+            let slot = concepts.entry(path.to_string()).or_insert(Wrong { count: 0, notes: Vec::new(), stamps: Vec::new() });
             slot.count += 1;
+            slot.stamps.push(stamp.clone());
             if !note.is_empty() {
                 slot.notes.push((stamp.clone(), id.clone(), note.to_string()));
             }
@@ -631,6 +633,7 @@ pub(crate) fn build_knowledge_wrong(root: &Path) -> (Value, Vec<String>) {
     ranked.sort_by(|a, b| b.1.count.cmp(&a.1.count).then_with(|| a.0.cmp(&b.0)));
     for (_, wrong) in ranked.iter_mut() {
         wrong.notes.sort();
+        wrong.stamps.sort();
     }
 
     let mut lines = vec![format!("reported wrong: {} concept(s) in {cells} cell(s)", ranked.len())];
@@ -651,7 +654,7 @@ pub(crate) fn build_knowledge_wrong(root: &Path) -> (Value, Vec<String>) {
                 .iter()
                 .map(|(path, wrong)| {
                     let notes: Vec<&String> = wrong.notes.iter().map(|(_, _, n)| n).collect();
-                    json!({"path": path, "wrong_count": wrong.count, "notes": notes})
+                    json!({"path": path, "wrong_count": wrong.count, "notes": notes, "reported_at": wrong.stamps})
                 })
                 .collect(),
         ),
