@@ -1,0 +1,173 @@
+{
+  "id": "kup-1",
+  "feature": "knowledge-upkeep",
+  "title": "Correct three drifted concepts and add the project orientation file",
+  "role": "docs",
+  "lane": "small",
+  "action": "Knowledge upkeep run (skills/bee-knowledge-upkeep). Five suspect-and-loaded concepts were audited by read-only source readers. Fix the three that drifted against their own sources: advisor-protocol/consult-loop (worker re-runs related tests, leader never re-runs recorded proof; Advisor line condition; P1 pointer to swarming-reference.md), workflow-state/workspace-protocol (D4 fixed-template text replaced by the current init render: MERGE_OWNER from uat_stop, PROTECTED_AREAS first line, wrote+next output), okf-profile/freshness-and-document-homes (pull rate counts knowledge pack, (unbound) row, --root). Confirm the two that held (rust-runtime/output-spill, bee-herding/thin-peer-boot). Add a Read when line to each touched concept that lacked one. Write the orientation file docs/knowledge/areas/project/overview.md per knowledge-skill-pair D8 (e). Regenerate the indexes.",
+  "files": [
+    "docs/knowledge/areas/advisor-protocol/consult-loop.md",
+    "docs/knowledge/areas/workflow-state/workspace-protocol.md",
+    "docs/knowledge/areas/okf-profile/freshness-and-document-homes.md",
+    "docs/knowledge/areas/rust-runtime/output-spill.md",
+    "docs/knowledge/areas/bee-herding/thin-peer-boot.md",
+    "docs/knowledge/areas/project/overview.md",
+    "docs/knowledge/index.md",
+    "docs/knowledge/areas/index.md",
+    "docs/knowledge/areas/project/index.md"
+  ],
+  "verify": ".bee/bin/bee knowledge index --check && .bee/bin/bee knowledge check",
+  "must_haves": [
+    "Every changed claim matches the source line the audit cited",
+    "No profile error and no profile warning on any touched concept",
+    "knowledge index --check reports 0 stale"
+  ],
+  "read_first": [],
+  "deps": [],
+  "decisions": [],
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/advisor-protocol/consult-loop.md",
+    "docs/knowledge/areas/workflow-state/workspace-protocol.md",
+    "docs/knowledge/areas/okf-profile/freshness-and-document-homes.md",
+    "docs/knowledge/areas/rust-runtime/output-spill.md",
+    "docs/knowledge/areas/bee-herding/thin-peer-boot.md",
+    "docs/knowledge/areas/project/overview.md"
+  ],
+  "status": "capped",
+  "trace": {
+    "worker": "leader",
+    "outcome": "3 drifted concepts corrected, 2 confirmed, project orientation file added",
+    "files_changed": [
+      "docs/knowledge/areas/advisor-protocol/consult-loop.md",
+      "docs/knowledge/areas/workflow-state/workspace-protocol.md",
+      "docs/knowledge/areas/okf-profile/freshness-and-document-homes.md",
+      "docs/knowledge/areas/rust-runtime/output-spill.md",
+      "docs/knowledge/areas/bee-herding/thin-peer-boot.md",
+      "docs/knowledge/areas/project/overview.md",
+      "docs/knowledge/areas/project/index.md",
+      "docs/knowledge/areas/index.md",
+      "docs/knowledge/index.md"
+    ],
+    "deviations": [
+      "leader ran this docs cell inline: the upkeep skill has the leader revise after the read-only source wave",
+      "readers could not see git diff since each verified_commit: the read-only herded run refused all Bash (bee issue 170)"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-14T00:25:27.971Z",
+    "behavior_change": false,
+    "verification_evidence": "docs-only change; 0 stale indexes, 0 errors, no warning on the six touched concepts; check --strict stays red on 569 older bundle warnings, as on main before this cell (578)",
+    "verify_output": "green:static",
+    "verify_passed": true,
+    "claim_session": "10c2bcf5-1e07-41a8-bf61-64b5434e9a2e",
+    "verify_command": ".bee/bin/bee knowledge index --check && .bee/bin/bee knowledge check",
+    "claimed_at": "2026-11-14T00:24:51.450Z",
+    "knowledge_delta": [
+      "docs/knowledge/areas/advisor-protocol/consult-loop.md",
+      "docs/knowledge/areas/workflow-state/workspace-protocol.md",
+      "docs/knowledge/areas/okf-profile/freshness-and-document-homes.md",
+      "docs/knowledge/areas/rust-runtime/output-spill.md",
+      "docs/knowledge/areas/bee-herding/thin-peer-boot.md",
+      "docs/knowledge/areas/project/overview.md",
+      "docs/knowledge/areas/project/index.md",
+      "docs/knowledge/areas/index.md",
+      "docs/knowledge/index.md"
+    ],
+    "mistakes": [
+      {
+        "wrong": "wrote docs/knowledge/areas/project/overview.md in the main checkout before opening the feature worktree",
+        "better": "open the worktree with bee feature start before the first docs write",
+        "fix_at": "doctrine"
+      }
+    ],
+    "no_knowledge_used": true,
+    "inline_reason": "docs-only knowledge upkeep: the upkeep skill has the leader revise in place after the read-only source wave, and the edits were checked line by line against the sources the readers cited",
+    "report": {
+      "outcome": "done: 3 drifted concepts corrected, 2 held concepts confirmed, project orientation file added, indexes regenerated",
+      "commit": "da5f07d2c",
+      "files": [
+        "docs/knowledge/areas/advisor-protocol/consult-loop.md",
+        "docs/knowledge/areas/workflow-state/workspace-protocol.md",
+        "docs/knowledge/areas/okf-profile/freshness-and-document-homes.md",
+        "docs/knowledge/areas/rust-runtime/output-spill.md",
+        "docs/knowledge/areas/bee-herding/thin-peer-boot.md",
+        "docs/knowledge/areas/project/overview.md",
+        "docs/knowledge/areas/project/index.md",
+        "docs/knowledge/areas/index.md",
+        "docs/knowledge/index.md"
+      ],
+      "tests": ".bee/bin/bee knowledge index --check && .bee/bin/bee knowledge check — green:static — docs-only change; 0 stale indexes, 0 errors, no warning on the six touched concepts; check --strict stays red on 569 older bundle warnings, as on main before this cell (578)",
+      "deviations": [
+        "leader ran this docs cell inline: the upkeep skill has the leader revise after the read-only source wave",
+        "readers could not see git diff since each verified_commit: the read-only herded run refused all Bash (bee issue 170)"
+      ],
+      "mistakes": [
+        "wrote docs/knowledge/areas/project/overview.md in the main checkout before opening the feature worktree — open the worktree with bee feature start before the first docs write — doctrine"
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 213 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "docs/knowledge/areas/advisor-protocol/consult-loop.md",
+            "artifact": "docs/knowledge/areas/advisor-protocol/consult-loop.md"
+          },
+          {
+            "requirement": "docs/knowledge/areas/workflow-state/workspace-protocol.md",
+            "artifact": "docs/knowledge/areas/workflow-state/workspace-protocol.md"
+          },
+          {
+            "requirement": "docs/knowledge/areas/okf-profile/freshness-and-document-homes.md",
+            "artifact": "docs/knowledge/areas/okf-profile/freshness-and-document-homes.md"
+          },
+          {
+            "requirement": "docs/knowledge/areas/rust-runtime/output-spill.md",
+            "artifact": "docs/knowledge/areas/rust-runtime/output-spill.md"
+          },
+          {
+            "requirement": "docs/knowledge/areas/bee-herding/thin-peer-boot.md",
+            "artifact": "docs/knowledge/areas/bee-herding/thin-peer-boot.md"
+          },
+          {
+            "requirement": "docs/knowledge/areas/project/overview.md",
+            "artifact": "docs/knowledge/areas/project/overview.md"
+          },
+          {
+            "requirement": "docs/knowledge/areas/project/index.md",
+            "artifact": "docs/knowledge/areas/project/index.md"
+          },
+          {
+            "requirement": "docs/knowledge/areas/index.md",
+            "artifact": "docs/knowledge/areas/index.md"
+          },
+          {
+            "requirement": "docs/knowledge/index.md",
+            "artifact": "docs/knowledge/index.md"
+          },
+          {
+            "requirement": "Every changed claim matches the source line the audit cited",
+            "artifact": "docs/knowledge/areas/workflow-state/workspace-protocol.md"
+          },
+          {
+            "requirement": "No profile error and no profile warning on any touched concept",
+            "artifact": "docs/knowledge/areas/advisor-protocol/consult-loop.md"
+          },
+          {
+            "requirement": "knowledge index --check reports 0 stale",
+            "artifact": "docs/knowledge/index.md"
+          }
+        ],
+        "recorded_at": "2026-11-14T00:25:48.619Z",
+        "recorded_by": "10c2bcf5-1e07-41a8-bf61-64b5434e9a2e",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": null,
+  "usage_reason": "no herding job names this cell: no session is attributable to it"
+}
