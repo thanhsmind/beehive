@@ -8,8 +8,8 @@ bee:
   lifecycle: active
   areas: [onboarding]
   required_context: [areas/onboarding/overview.md]
-  decisions: ["skillstation-aliases D1-D9 (a bee skillstation verb group checks the hub skills bee relies on and writes a small alias skill so /<id> works; CONTEXT.md)", "skillstation-onboard-aliases D1-D7 (install and onboard write the aliases by default; the hub changes only behind --skillstation; CONTEXT.md)", "skillstation-principles D1-D5, D8-D10 (skillstation.principles hub serves the bee-principle skills to Claude Code; CONTEXT.md)"]
-  sources: ["skillstation-aliases cell ssa-1 (2026-11-14; the verb group)", "skillstation-aliases cell ssa-2 (2026-11-14; this concept and the README section)", "skillstation-onboard-aliases cells sooa-1 and sooa-2 (2026-11-14; onboard and install write the aliases)", "skillstation-principles cells ssp-1 to ssp-3, ssp-6, ssp-7 (2026-11-14; hub-served principles)"]
+  decisions: ["skillstation-aliases D1-D9 (a bee skillstation verb group checks the hub skills bee relies on and writes a small alias skill so /<id> works; CONTEXT.md)", "skillstation-onboard-aliases D1-D7 (install and onboard write the aliases by default; the hub changes only behind --skillstation; CONTEXT.md)", "skillstation-principles D1-D5, D8-D10, D12-D14 (skillstation.principles hub serves the bee-principle skills to Claude Code; CONTEXT.md)"]
+  sources: ["skillstation-aliases cell ssa-1 (2026-11-14; the verb group)", "skillstation-aliases cell ssa-2 (2026-11-14; this concept and the README section)", "skillstation-onboard-aliases cells sooa-1 and sooa-2 (2026-11-14; onboard and install write the aliases)", "skillstation-principles cells ssp-1 to ssp-3, ssp-6, ssp-7, ssp-9 (2026-11-14; hub-served principles)"]
   authoritative_for: "onboarding: the bee skillstation verb group"
   anchors: [packages/bee-rs/crates/bee/src/verbs/skillstation_group.rs, packages/bee-rs/crates/bee/src/principles.rs, packages/bee-rs/crates/bee/src/onboard/agents.rs, packages/bee-rs/crates/bee/src/onboard/apply.rs, packages/bee-rs/crates/bee/src/onboard/plan.rs, packages/bee-rs/crates/bee/src/onboard/skills.rs, scripts/install.sh]
   verified_at: 2026-11-14
@@ -147,3 +147,11 @@ cannot change their result (skillstation-onboard-aliases D6).
   through `ONBOARD_FLAGS`.
 - The hub CLI shape is not frozen by bee; list the current flags with
   `skillstation help skill add` before changing a call.
+
+## Activating a principle on a real hub
+
+Read when: a principle publish commits but the hub says "Not ready for activation: missing trigger", or a failed switch leaves stale local principle copies.
+
+- The real hub refuses to activate a skill with no trigger, no `--not-for` entry and no `--min-scope`. Only `bee-principle-*` publishes add those flags to `skill commit`; the trigger is the principle's own SKILL.md description, read from the staged folder, so no second list exists. `bee-deploying` keeps its plain commit. A principle with no description commits without `--trigger` and the hub refuses it loudly.
+- During the `--skillstation` switch the repo-claude target syncs principles exactly like local mode, and one `after_publish` removal is planned for every principle the source has. A failed publish therefore leaves current local copies; a full success removes them. Rejected: skipping the principle sync during the switch, which left stale copies after a failed publish.
+- `install.sh` logs one line before the apply under `--skillstation`, because the apply prints nothing for about a minute per published skill.
