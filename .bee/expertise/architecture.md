@@ -16,12 +16,15 @@ is about a known trade-off rather than taste.
 | Callers know things they will break on | Information Hiding |
 | Files grouped by kind, not by change-reason | Cohesion over Convenience |
 | Components blur into each other at the edges | Explicit Boundaries and Contracts |
+| Validation is scattered through code that already trusts its input | Explicit Boundaries and Contracts |
 | An import reaches into another module's guts | Depend on Interfaces, Not Internals |
 | Stable code imports from churning code | Dependency Direction |
 | A class hierarchy is bending to share behavior | Composition over Inheritance |
 | The same fact lives in two places | Single Source of Truth |
 | Code is littered with "this can't happen" checks | Make Illegal States Unrepresentable |
 | Two actors write the same mutable state | One Writer for Shared State |
+| Two ids or flags of the same primitive type get swapped | Make Illegal States Unrepresentable |
+| A new internal API ships while old callers remain | Migrate Callers, Then Delete |
 | Tempted to extract on the second occurrence | The Rule of Three |
 | Judging whether a suspect module earns its complexity | The Deletion Test |
 | Wrapping a dependency behind an interface "just in case" | One Adapter, Two Adapters |
@@ -115,6 +118,22 @@ change hits one translation layer instead of bleeding through the
 codebase. A boundary nobody wrote down is a boundary that erodes one
 convenient shortcut at a time.
 
+Put the checking at the edge and nowhere else. Anything that enters
+from outside — CLI arguments, config, files, network, another
+process — is parsed and validated once, where it arrives; past that
+point the data is typed and the code trusts it, so a null check three
+calls deep is a sign the edge did not do its job. Keep decisions in
+pure functions that take typed data and return a result, and let the
+shell around them stay thin: read input, call the function, write
+output. The decision can then be tested without the framework. Never
+let the boundary's private types — a wire format, a storage row, a
+framework object — leak through the public surface; expose the
+domain's own words.
+
+Two questions settle most cases. *Is this data crossing a boundary
+right now?* If not, validating it again is noise. *Can this be a pure
+function the shell calls?* If so, extract it.
+
 ### Depend on Interfaces, Not Internals
 
 When an import path reads like a directory tour —
@@ -176,6 +195,16 @@ everywhere, and required constructor arguments over half-built
 objects patched up later. Every state the structure cannot express
 is a class of bug that cannot be written.
 
+Four habits carry most of the weight. Give each meaning its own type:
+two ids that are both strings underneath get a newtype each, validated
+once at creation, so passing one where the other belongs fails to
+compile. Parse outside data into those types at the boundary, so the
+inside never handles raw input. Match every variant of a sum type
+without a catch-all arm, so adding a variant breaks every place that
+must now decide. And when a schema owns a shape — a protocol file, a
+migration, an API spec — derive the type from it instead of writing a
+parallel one that drifts.
+
 ### One Writer for Shared State
 
 When two actors — threads, workers, sessions, services — touch the
@@ -188,6 +217,15 @@ held by one component, a store with a single write path — never a
 convention every caller must remember. Two writers coordinated by
 care produce the bug that only shows up under load, and no test
 written in a quiet room catches it.
+
+Work in this order. List the shared mutable things first. For each,
+try to remove the sharing: each actor gets its own file, key or
+record, and the pieces are merged where they are read. Note that two
+writers of different fields in one JSON file still share it; the
+separation has to reach the file, not just the field. Only when one
+shared target is a real invariant — a single counter that must be
+globally ordered — enforce one writer structurally. Treat "we need a
+lock" as a smell to check, not an answer to reach for.
 
 ### The Rule of Three
 
@@ -256,6 +294,19 @@ decides the strategy, not habit:
 - **True external** — a third party you do not control (a payment
   processor, an SMS gateway). Inject the dependency as a port and
   mock only that port at the seam; never mock a collaborator you own.
+
+### Migrate Callers, Then Delete
+
+When a new internal API ships while old callers still exist → move
+every caller and delete the old API in the same change. Leaving the
+old one beside the new one makes two ways to do a thing, and the
+second is never removed because nobody owns the removal. The tests
+move with the callers: they now assert the new contract, and tests
+that only pinned the old internals are deleted, not ported. Add no
+compatibility shim unless a user outside this change depends on the
+old surface; inside one repo the compiler finds every caller. This
+is the code-side twin of Replace, Don't Layer,
+which says the same about tests behind a deepened interface.
 
 ### Replace, Don't Layer
 
