@@ -1,0 +1,90 @@
+{
+  "schema": "bee-usage/v1",
+  "feature": "pstack-principles",
+  "closed_at": "2026-11-14T05:07:25.845Z",
+  "sessions": [
+    {
+      "session_id": "3e008fc0-ad34-4948-b38d-92cce97e5d1d",
+      "models": {
+        "claude-opus-5-5": {
+          "input": 556,
+          "output": 121189,
+          "cache_write": 297701,
+          "cache_read": 51476287,
+          "new": 419446,
+          "cached": 51476287,
+          "total": 51895733
+        }
+      },
+      "subagent_models": {},
+      "subagent_count": 0,
+      "started_ms": 1794629526272,
+      "ended_ms": 1794632843213,
+      "totals": {
+        "new": 419446,
+        "cached": 51476287,
+        "total": 51895733
+      }
+    }
+  ],
+  "skipped": 0,
+  "totals": {
+    "main": {
+      "new": 419446,
+      "cached": 51476287,
+      "total": 51895733
+    },
+    "subagents": {
+      "new": 0,
+      "cached": 0,
+      "total": 0
+    },
+    "total": {
+      "new": 498682,
+      "cached": 52307959,
+      "total": 52806641
+    },
+    "herding": {
+      "new": 79236,
+      "cached": 831672,
+      "total": 910908,
+      "models": {
+        "claude-sonnet-5-5": {
+          "input": 38,
+          "output": 12845,
+          "cache_write": 66353,
+          "cache_read": 831672,
+          "new": 79236,
+          "cached": 831672,
+          "total": 910908
+        }
+      }
+    }
+  },
+  "herding_sessions": [
+    {
+      "session_id": "82a19d22-3c8c-4245-ae0f-f00acbe6fc7d",
+      "models": {
+        "claude-sonnet-5-5": {
+          "input": 38,
+          "output": 12845,
+          "cache_write": 66353,
+          "cache_read": 831672,
+          "new": 79236,
+          "cached": 831672,
+          "total": 910908
+        }
+      },
+      "subagent_models": {},
+      "subagent_count": 0,
+      "started_ms": 1794630086026,
+      "ended_ms": 1794630220086,
+      "totals": {
+        "new": 79236,
+        "cached": 831672,
+        "total": 910908
+      },
+      "job_id": "job-1794630084428-4144648-1"
+    }
+  ]
+}
