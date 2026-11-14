@@ -373,6 +373,14 @@ decision 80b64c20).
   before the record carried an arm has none and is never given one after the fact
   (plan D5). `bee knowledge report` reads these records
   (`areas/okf-profile/critical-bar.md`, B6).
+- R22 — Upstream cells relay (pstack-rust-checks D2). A cell prompt for a cell
+  with `deps` carries an Upstream cells block after Prior rounds: a capped
+  dependency shows its title, outcome, commit, files and deviations from its
+  `trace.report`; any other dependency shows only its status. A cell with no
+  deps renders as before. The block sits outside the holdout, so both arms
+  see it: it is the previous worker's own report, not a knowledge claim the
+  holdout measures. Limits (file count, deviation length) live in
+  `upstream_lines` in `drivers/prepare.rs`.
 
 
 ## Edge Cases Settled

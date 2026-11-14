@@ -56,6 +56,11 @@ Prior rounds (machine-assembled from the cell record):
 {{prior_rounds}}
 Address what blocked the last round before anything else.
 {{/if}}
+{{#if upstream}}
+
+Upstream cells (machine-assembled from the capped dependencies' reports):
+{{upstream}}
+{{/if}}
 
 Contract:
 {{#if native_bookkeeping}}

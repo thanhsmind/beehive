@@ -1392,6 +1392,47 @@ pub(crate) fn resolve_cell_advisor(
     Some(line)
 }
 
+pub(crate) fn upstream_lines(root: &Path, cell: &Value) -> Vec<String> {
+    let deps = match vget(cell, "deps") {
+        Some(Value::Array(items)) => items.clone(),
+        _ => Vec::new(),
+    };
+    let mut lines = Vec::new();
+    for dep in deps {
+        let Value::String(id) = dep else { continue };
+        let Some(loaded) = read_cell(root, &id).ok().flatten() else {
+            lines.push(format!("- {id} — missing"));
+            continue;
+        };
+        let status = tpl(vget(&loaded, "status"));
+        let report = vget(&loaded, "trace").and_then(|t| vget(t, "report")).filter(|r| is_plain_object(r));
+        let (true, Some(report)) = (status == "capped", report) else {
+            lines.push(format!("- {id} — {status}"));
+            continue;
+        };
+        let files: Vec<String> = match vget(report, "files") {
+            Some(Value::Array(items)) => items.iter().map(jsjson::js_to_string).collect(),
+            _ => Vec::new(),
+        };
+        let mut listed = files.iter().take(20).cloned().collect::<Vec<_>>().join(", ");
+        if files.len() > 20 {
+            listed.push_str(&format!(" (+{} more)", files.len() - 20));
+        }
+        lines.push(format!(
+            "- {id} — {}: outcome {}; commit {}; files {listed}",
+            one_line(vget(&loaded, "title"), usize::MAX),
+            one_line(vget(report, "outcome"), usize::MAX),
+            one_line(vget(report, "commit"), usize::MAX),
+        ));
+        if let Some(Value::Array(deviations)) = vget(report, "deviations") {
+            for deviation in deviations {
+                lines.push(format!("  - {}", one_line(Some(deviation), 300)));
+            }
+        }
+    }
+    lines
+}
+
 pub(crate) fn prompt_body_for(
     root: &Path,
     kind: &str,
@@ -1472,6 +1513,7 @@ pub(crate) fn prompt_body_for(
             )
         });
     let prior = prior_round_event_lines(cell).into_iter().chain(answered).collect::<Vec<_>>().join("\n");
+    let upstream = upstream_lines(root, cell).join("\n");
     let cell_json = jsjson::stringify_pretty(cell);
     let feature = tpl(vget(cell, "feature"));
     let cell_id = tpl(vget(cell, "id"));
@@ -1498,6 +1540,7 @@ pub(crate) fn prompt_body_for(
             ("expertise", expertise.unwrap_or("")),
             ("advisor", advisor.unwrap_or("")),
             ("prior_rounds", &prior),
+            ("upstream", &upstream),
             ("worktree_root", worktree_root),
             ("control_root", control_root),
             ("original_request", &original_request),
