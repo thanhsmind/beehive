@@ -857,6 +857,8 @@
     "contract:deploy-verify-notice",
     "contract:onboard-workspace-protocol-report",
     "contract:knowledge-wrong",
-    "design"
+    "design",
+    "upkeep",
+    "contract:upkeep-due"
   ]
 }
