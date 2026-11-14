@@ -61,6 +61,10 @@ Options:
                           default — onboarding's per-project sync (layer 2)
                           into <repo>/.claude/skills and <repo>/.agents/skills
                           is the default layout.
+      --skillstation      Also add the hub skills bee relies on to your
+                          Skillstation hub as drafts, and pass --skillstation
+                          through to onboarding. Off by default; the /<id>
+                          alias skills are written locally either way.
       --no-claude-md      Skip writing/extending CLAUDE.md with the bare
                           @AGENTS.md import. By default onboarding writes it
                           (third-belt bootstrap for Claude Code).
@@ -145,6 +149,7 @@ REF="main"
 BUILD_FROM_SOURCE=0
 REPO_HOOKS=1
 GLOBAL_SKILLS=0
+SKILLSTATION=0
 NO_CLAUDE_MD=0
 NO_STATUSLINE=0
 NO_CLAUDE_SETTINGS=0
@@ -165,6 +170,7 @@ while [ $# -gt 0 ]; do
     --build-from-source) BUILD_FROM_SOURCE=1; shift ;;
     --no-hooks)     REPO_HOOKS=0; shift ;;
     --global-skills) GLOBAL_SKILLS=1; shift ;;
+    --skillstation) SKILLSTATION=1; shift ;;
     --no-claude-md) NO_CLAUDE_MD=1; shift ;;
     --claude-md)    shift ;;
     --no-statusline) NO_STATUSLINE=1; shift ;;
@@ -500,6 +506,9 @@ if [ -n "$DESIGN_PACKS" ]; then
 fi
 if [ "$GLOBAL_SKILLS" -eq 1 ]; then
   ONBOARD_FLAGS+=("--global-skills")
+fi
+if [ "$SKILLSTATION" -eq 1 ]; then
+  ONBOARD_FLAGS+=("--skillstation")
 fi
 
 runtime_active() { case "$RUNTIME" in "$1"|both) return 0 ;; *) return 1 ;; esac; }

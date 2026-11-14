@@ -33,6 +33,7 @@ use super::util::{
     exists, join_rel, lstat_if_exists, read_json_if_exists, read_text_if_exists, write_file_atomic,
 };
 use crate::jsjson;
+use crate::verbs::skillstation_group::{carries_alias_marker, hub_runner};
 use serde_json::{json, Map, Value};
 use std::path::{Path, PathBuf};
 
@@ -406,6 +407,7 @@ pub fn apply_computed_plan(
         rendered_gitattributes_block,
         desired_managed,
         skill_sync,
+        alias_skips,
         codex_hybrid,
         worktree_migration,
     } = computed;
@@ -527,7 +529,7 @@ pub fn apply_computed_plan(
     };
 
     let mut applied: Vec<Value> = Vec::new();
-    let mut skipped_skills: Vec<Value> = Vec::new();
+    let mut skipped_skills: Vec<Value> = alias_skips;
     let mut recorded_verify: Map<String, Value> = Map::new();
 
     // BACKUP ONCE PER FILE PER RUN (4cac0774).
@@ -984,6 +986,43 @@ pub fn apply_computed_plan(
                             files.into_iter().map(|(rel, h)| (rel, json!(h))).collect();
                         recorded_verify.insert(rel.to_string(), Value::Object(hashes));
                     }
+                }
+            }
+            "skillstation_alias" => {
+                let skill = item["skill"].as_str().unwrap_or("");
+                let current = read_text_if_exists(&target);
+                let foreign = lstat_if_exists(&target).is_some()
+                    && !carries_alias_marker(&current, skill);
+                if foreign {
+                    skipped_skills.push(json!({
+                        "skill": skill, "target": "skillstation-alias",
+                        "reason": format!("{rel} is not a skillstation alias - left unchanged")
+                    }));
+                    continue;
+                }
+                let content = item["content"].as_str().unwrap_or("");
+                if let Err(e) = write_file_atomic(&target, content.as_bytes()) {
+                    skipped_skills.push(json!({
+                        "skill": skill, "target": "skillstation-alias",
+                        "reason": format!("could not write {rel} - {e}")
+                    }));
+                    continue;
+                }
+            }
+            "skillstation_add" => {
+                let skill = item["skill"].as_str().unwrap_or("");
+                let repo = item["repo"].as_str().unwrap_or("");
+                let source_path = item["source_path"].as_str().unwrap_or("");
+                let run = hub_runner(repo_root);
+                let added = run(&[
+                    "skill", "add", repo, "--path", source_path, "--id", skill, "--yes", "--json",
+                ]);
+                if let Err(reason) = added {
+                    skipped_skills.push(json!({
+                        "skill": skill, "target": "skillstation",
+                        "reason": format!("skill add - {reason}")
+                    }));
+                    continue;
                 }
             }
             "blocked_symlink" | "blocked_alias" | "blocked_verify_skill" => {
