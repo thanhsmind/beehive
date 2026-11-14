@@ -1,6 +1,6 @@
 ---
 name: bee-unslop
-description: "Remove the patterns that make prose read as machine-generated. Use when writing or editing user-facing prose — a reply, a document, a plan, a spec, a README, a PR description or a commit message — and when asked to make text read like a person wrote it. Not for progress ticks, red or refusal lines, command output, quoted evidence, ids, or code, which stay verbatim."
+description: "Remove the patterns that make prose read as machine-generated. Use when editing a reply, user-facing copy or any text to sound like a person wrote it, or when it \"reads like a machine\". Not for document structure (bee-technical-writing), nor command output or code."
 metadata:
   skillstation_alias: bee-unslop
 ---

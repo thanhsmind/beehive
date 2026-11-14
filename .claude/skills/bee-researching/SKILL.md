@@ -1,6 +1,6 @@
 ---
 name: bee-researching
-description: "Evidence-labeled research into unfamiliar, ambiguous, or version-sensitive territory. Use when the user asks to research a topic, library, or approach; when planning discovery lands on L2 or deeper; before high-risk work in a repo with no precedent for it; or when the request names an external repo or source to distill or bring in (triggers: \"xia\", \"distill from\", \"port from\", \"like how X does it\", \"mang feature về\", \"học từ repo X\"). Not for locking product decisions, proving feasibility, or writing code."
+description: "Evidence-labeled research into unfamiliar or version-sensitive territory. Use when asked to research, look into or learn about a library or approach, or to distill/port from an external repo (xia, distill from, port from, mang feature về, học từ repo X, tìm hiểu). Not for locking decisions."
 metadata:
   skillstation_alias: bee-researching
 ---
