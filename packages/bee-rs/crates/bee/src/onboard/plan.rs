@@ -85,10 +85,26 @@ fn repo_claude_root() -> String {
         .unwrap_or_default()
 }
 
-fn publish_skillstation_items() -> Vec<Value> {
+fn hub_needs_publish(run: Run, source_dir: &Path, id: &str) -> bool {
+    let Ok(hub) = hub_show(run, id) else {
+        return true;
+    };
+    if hub.status != "active" {
+        return true;
+    }
+    let render = |buf: &[u8]| render_skill_bytes(buf, "claude");
+    let mut staged = walk_skill_tree(source_dir, Some(&render)).files;
+    let mut served = hub.files;
+    staged.sort();
+    served.sort();
+    staged != served
+}
+
+fn publish_skillstation_items(engine: &Engine, run: Run) -> Vec<Value> {
     let root = repo_claude_root();
     HUB_SKILLS
         .iter()
+        .filter(|skill| hub_needs_publish(run, &engine.skills_root.join(skill), skill))
         .map(|skill| {
             json!({
                 "action": "publish_skillstation",
@@ -108,10 +124,11 @@ fn principle_ids(engine: &Engine) -> Vec<String> {
         .collect()
 }
 
-fn publish_principle_items(engine: &Engine) -> Vec<Value> {
+fn publish_principle_items(engine: &Engine, run: Run) -> Vec<Value> {
     let root = repo_claude_root();
     principle_ids(engine)
         .into_iter()
+        .filter(|skill| hub_needs_publish(run, &engine.skills_root.join(skill), skill))
         .map(|skill| {
             json!({
                 "action": "publish_skillstation",
@@ -1599,9 +1616,10 @@ pub fn compute_plan(engine: &Engine, repo_root: &Path, opts: &Options) -> Comput
     }
 
     if opts.skillstation && opts.sync_skills && skill_sync.blocked.is_none() {
-        plan.extend(publish_skillstation_items());
+        let run = hub_runner(repo_root);
+        plan.extend(publish_skillstation_items(engine, &*run));
         if hub_mode {
-            plan.extend(publish_principle_items(engine));
+            plan.extend(publish_principle_items(engine, &*run));
         }
         if switching {
             plan.extend(set_principles_hub_items(repo_root));

@@ -3907,6 +3907,131 @@ mod principles_on_the_hub {
         assert!(skips[0]["reason"].as_str().unwrap().contains(IDS[0]));
     }
 
+    fn engine_files(fx: &Fixture, id: &str) -> Vec<(String, String)> {
+        let render = |b: &[u8]| crate::onboard::render::render_skill_bytes(b, "claude");
+        crate::onboard::render::walk_skill_tree(&fx.root.join("skills").join(id), Some(&render)).files
+    }
+
+    fn serving_hub(
+        fx: &Fixture,
+        ids: &[&str],
+        tweak: impl Fn(&str, &mut &'static str, &mut Vec<(String, String)>) -> bool + 'static,
+    ) -> Hub {
+        let mut served: Vec<(String, Value)> = Vec::new();
+        for id in ids {
+            let mut status = "active";
+            let mut files = engine_files(fx, id);
+            if !tweak(id, &mut status, &mut files) {
+                continue;
+            }
+            let resources: Vec<Value> = files
+                .iter()
+                .map(|(rel, hex)| {
+                    json!({"path": format!("skills/default/{id}/{rel}"), "digest": format!("sha256:{hex}")})
+                })
+                .collect();
+            served.push((
+                id.to_string(),
+                json!({"manifest": {"status": status, "description": "d", "resources": resources}}),
+            ));
+        }
+        set_test_hub(Some(Rc::new(move |args: &[&str]| {
+            let id = args.get(2).copied().unwrap_or("");
+            match served.iter().find(|(k, _)| k == id) {
+                Some((_, v)) => Ok(v.clone()),
+                None => Err(format!("skill not found: {id}")),
+            }
+        })));
+        Hub
+    }
+
+    const SERVED: [&str; 3] = ["bee-deploying", IDS[0], IDS[1]];
+
+    fn switch_fixture() -> Fixture {
+        let fx = fixture_with_local_copies();
+        with_bee_deploying(&fx);
+        fx
+    }
+
+    fn published_ids(p: &Value) -> Vec<String> {
+        publish_items(p, "plan").iter().map(|i| i["skill"].as_str().unwrap().to_string()).collect()
+    }
+
+    #[test]
+    fn publish_skip_plans_no_publish_for_skills_served_with_the_same_files() {
+        let fx = switch_fixture();
+        let _hub = serving_hub(&fx, &SERVED, |_, _, _| true);
+        let p = plan(&fx, &["--runtime", "claude", "--skillstation"]);
+        assert!(published_ids(&p).is_empty(), "{:?}", p["plan"]);
+        let deferred = after_publish(&p);
+        assert_eq!(deferred[0]["action"], "set_principles_hub");
+        let removals: Vec<&str> = deferred[1..].iter().map(|i| i["skill"].as_str().unwrap()).collect();
+        assert_eq!(removals, IDS);
+    }
+
+    #[test]
+    fn publish_skip_keeps_only_the_principle_whose_digest_differs() {
+        let fx = switch_fixture();
+        let _hub = serving_hub(&fx, &SERVED, |id, _, files| {
+            if id == IDS[1] {
+                files[0].1 = "0".repeat(64);
+            }
+            true
+        });
+        let p = plan(&fx, &["--runtime", "claude", "--skillstation"]);
+        assert_eq!(published_ids(&p), vec![IDS[1].to_string()]);
+    }
+
+    #[test]
+    fn publish_skip_keeps_a_skill_with_an_extra_or_missing_hub_file() {
+        let fx = switch_fixture();
+        let _hub = serving_hub(&fx, &SERVED, |id, _, files| {
+            if id == "bee-deploying" {
+                files.push(("extra.md".to_string(), "1".repeat(64)));
+            }
+            if id == IDS[0] {
+                files.clear();
+            }
+            true
+        });
+        let p = plan(&fx, &["--runtime", "claude", "--skillstation"]);
+        assert_eq!(published_ids(&p), vec!["bee-deploying".to_string(), IDS[0].to_string()]);
+    }
+
+    #[test]
+    fn publish_skip_keeps_a_skill_missing_from_the_hub() {
+        let fx = switch_fixture();
+        let _hub = serving_hub(&fx, &SERVED, |id, _, _| id != IDS[0]);
+        let p = plan(&fx, &["--runtime", "claude", "--skillstation"]);
+        assert_eq!(published_ids(&p), vec![IDS[0].to_string()]);
+    }
+
+    #[test]
+    fn publish_skip_keeps_a_draft_skill() {
+        let fx = switch_fixture();
+        let _hub = serving_hub(&fx, &SERVED, |id, status, _| {
+            if id == "bee-deploying" {
+                *status = "draft";
+            }
+            true
+        });
+        let p = plan(&fx, &["--runtime", "claude", "--skillstation"]);
+        assert_eq!(published_ids(&p), vec!["bee-deploying".to_string()]);
+    }
+
+    #[test]
+    fn publish_skip_keeps_every_item_when_the_hub_read_fails() {
+        let fx = switch_fixture();
+        set_test_hub(Some(Rc::new(|_: &[&str]| Err("hub is unreachable".to_string()))));
+        let _hub = Hub;
+        let p = plan(&fx, &["--runtime", "claude", "--skillstation"]);
+        assert_eq!(
+            published_ids(&p),
+            vec!["bee-deploying".to_string(), IDS[0].to_string(), IDS[1].to_string()]
+        );
+        assert_eq!(after_publish(&p).len(), 1 + IDS.len());
+    }
+
     fn recording_hub(commits: Rc<std::cell::RefCell<Vec<Vec<String>>>>) -> Hub {
         set_test_hub(Some(Rc::new(move |args: &[&str]| {
             if args.get(1) == Some(&"commit") {

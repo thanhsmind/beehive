@@ -67,6 +67,7 @@ pub(crate) struct Hub {
     pub(crate) status: String,
     pub(crate) description: String,
     pub(crate) disable_model: bool,
+    pub(crate) files: Vec<(String, String)>,
 }
 
 pub(crate) enum HubErr {
@@ -115,7 +116,22 @@ pub(crate) fn hub_show(run: Run, id: &str) -> Result<Hub, HubErr> {
         .get("content")
         .and_then(Value::as_str)
         .is_some_and(frontmatter_disables_model);
-    Ok(Hub { status, description, disable_model })
+    let files = v
+        .pointer("/manifest/resources")
+        .and_then(Value::as_array)
+        .map(|resources| {
+            resources
+                .iter()
+                .filter_map(|r| {
+                    let path = r.get("path").and_then(Value::as_str)?;
+                    let digest = r.get("digest").and_then(Value::as_str)?;
+                    let rel = path.split_once(&format!("/{id}/"))?.1;
+                    Some((rel.to_string(), digest.strip_prefix("sha256:").unwrap_or(digest).to_string()))
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    Ok(Hub { status, description, disable_model, files })
 }
 
 pub(crate) fn render_alias(id: &str, description: &str, disable_model: bool) -> String {
