@@ -6,15 +6,40 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::time::Instant;
 
-struct Related {
-    id: &'static str,
-    repo: &'static str,
-    path: &'static str,
+#[cfg(not(test))]
+pub(crate) fn hub_runner(root: &Path) -> Box<dyn Fn(&[&str]) -> Result<Value, String>> {
+    let root = root.to_path_buf();
+    Box::new(move |args| run_skillstation(&root, args))
+}
+
+#[cfg(test)]
+thread_local! {
+    static TEST_HUB: std::cell::RefCell<Option<std::rc::Rc<dyn Fn(&[&str]) -> Result<Value, String>>>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+#[cfg(test)]
+pub(crate) fn set_test_hub(run: Option<std::rc::Rc<dyn Fn(&[&str]) -> Result<Value, String>>>) {
+    TEST_HUB.with(|h| *h.borrow_mut() = run);
+}
+
+#[cfg(test)]
+pub(crate) fn hub_runner(_root: &Path) -> Box<dyn Fn(&[&str]) -> Result<Value, String>> {
+    match TEST_HUB.with(|h| h.borrow().clone()) {
+        Some(run) => Box::new(move |args| run(args)),
+        None => Box::new(|_| Err("skillstation is not on PATH".to_string())),
+    }
+}
+
+pub(crate) struct Related {
+    pub(crate) id: &'static str,
+    pub(crate) repo: &'static str,
+    pub(crate) path: &'static str,
 }
 
 const PLUGINS_REPO: &str = "https://github.com/cursor/plugins";
 
-const RELATED_SKILLS: [Related; 3] = [
+pub(crate) const RELATED_SKILLS: [Related; 3] = [
     Related { id: "statechart", repo: PLUGINS_REPO, path: "pstack/skills/statechart" },
     Related {
         id: "create-formal-verification-skill",
@@ -28,15 +53,15 @@ const RELATED_SKILLS: [Related; 3] = [
     },
 ];
 
-type Run<'a> = &'a dyn Fn(&[&str]) -> Result<Value, String>;
+pub(crate) type Run<'a> = &'a dyn Fn(&[&str]) -> Result<Value, String>;
 
-struct Hub {
-    status: String,
-    description: String,
-    disable_model: bool,
+pub(crate) struct Hub {
+    pub(crate) status: String,
+    pub(crate) description: String,
+    pub(crate) disable_model: bool,
 }
 
-enum HubErr {
+pub(crate) enum HubErr {
     Missing,
     Skip(String),
 }
@@ -58,7 +83,7 @@ fn frontmatter_disables_model(content: &str) -> bool {
     false
 }
 
-fn hub_show(run: Run, id: &str) -> Result<Hub, HubErr> {
+pub(crate) fn hub_show(run: Run, id: &str) -> Result<Hub, HubErr> {
     let v = run(&["skill", "show", id, "--json"]).map_err(|reason| {
         if reason.contains("skill not found") {
             HubErr::Missing
@@ -85,7 +110,7 @@ fn hub_show(run: Run, id: &str) -> Result<Hub, HubErr> {
     Ok(Hub { status, description, disable_model })
 }
 
-fn render_alias(id: &str, description: &str, disable_model: bool) -> String {
+pub(crate) fn render_alias(id: &str, description: &str, disable_model: bool) -> String {
     let quoted = serde_json::to_string(description).unwrap_or_else(|_| "\"\"".to_string());
     let disable = if disable_model { "disable-model-invocation: true\n" } else { "" };
     format!(
@@ -97,7 +122,7 @@ If the tool is missing, tell the user to run `skillstation connect -g`.\n"
     )
 }
 
-fn carries_alias_marker(skill_md: &str, id: &str) -> bool {
+pub(crate) fn carries_alias_marker(skill_md: &str, id: &str) -> bool {
     let marker = format!("skillstation_alias: {id}");
     skill_md.lines().any(|l| l.trim() == marker)
 }

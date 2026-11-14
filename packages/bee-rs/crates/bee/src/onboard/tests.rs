@@ -3474,3 +3474,149 @@ fn workspace_protocol_invalid_file_names_its_issue() {
     }
     assert_eq!(protocol_bytes(&fx), Some(before), "onboard left the file untouched");
 }
+
+mod skillstation_alias {
+    use super::*;
+    use crate::verbs::skillstation_group::set_test_hub;
+    use std::rc::Rc;
+    use std::sync::Mutex;
+
+    struct Hub(Rc<Mutex<Vec<String>>>);
+
+    fn hub(active: &[(&'static str, bool)]) -> Hub {
+        let calls = Rc::new(Mutex::new(Vec::new()));
+        let log = calls.clone();
+        let active: Vec<(&'static str, bool)> = active.to_vec();
+        set_test_hub(Some(Rc::new(move |args: &[&str]| {
+            log.lock().unwrap().push(args.join(" "));
+            if args.get(1) == Some(&"add") {
+                return Ok(json!({"status": "ok"}));
+            }
+            let id = args.get(2).copied().unwrap_or("");
+            match active.iter().find(|(k, _)| *k == id) {
+                Some((_, disable)) => {
+                    let fm = if *disable { "disable-model-invocation: true\n" } else { "" };
+                    Ok(json!({
+                        "manifest": {"status": "active", "description": "A hub skill."},
+                        "content": format!("---\nname: x\n{fm}---\nbody\n"),
+                    }))
+                }
+                None => Err(format!("skill not found: {id}")),
+            }
+        })));
+        Hub(calls)
+    }
+
+    impl Drop for Hub {
+        fn drop(&mut self) {
+            set_test_hub(None);
+        }
+    }
+
+    fn alias_items(p: &Value, key: &str) -> Vec<Value> {
+        p[key]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|i| i["action"] == "skillstation_alias")
+            .cloned()
+            .collect()
+    }
+
+    fn skipped(p: &Value) -> Vec<Value> {
+        p["skills"]["skipped"]
+            .as_array()
+            .map(|a| a.iter().filter(|s| s["target"] == "skillstation-alias").cloned().collect())
+            .unwrap_or_default()
+    }
+
+    fn alias_file(fx: &Fixture, id: &str) -> PathBuf {
+        fx.repo.join(".claude").join("skills").join(id).join("SKILL.md")
+    }
+
+    #[test]
+    fn an_active_user_started_row_is_planned_written_and_replans_clean() {
+        let fx = fixture();
+        let _hub = hub(&[("statechart", true)]);
+        let p = plan(&fx, &["--runtime", "claude"]);
+        let items = alias_items(&p, "plan");
+        assert_eq!(items.len(), 1, "{:?}", p["plan"]);
+        assert_eq!(items[0]["skill"], "statechart");
+        assert_eq!(items[0]["path"], ".claude/skills/statechart/SKILL.md");
+        let a = apply(&fx, &["--runtime", "claude"]);
+        let written = std::fs::read_to_string(alias_file(&fx, "statechart")).unwrap();
+        assert!(written.contains("skillstation_alias: statechart"));
+        assert!(written.contains("disable-model-invocation: true"));
+        assert!(alias_items(&a, "recheck_plan").is_empty(), "{:?}", a["recheck_plan"]);
+        assert!(alias_items(&plan(&fx, &["--runtime", "claude"]), "plan").is_empty());
+    }
+
+    #[test]
+    fn a_model_invoked_row_gets_no_item() {
+        let fx = fixture();
+        let _hub = hub(&[("statechart", false)]);
+        let p = plan(&fx, &["--runtime", "claude"]);
+        assert!(alias_items(&p, "plan").is_empty());
+    }
+
+    #[test]
+    fn a_stale_alias_is_rewritten_and_a_foreign_folder_is_left_alone() {
+        let fx = fixture();
+        let _hub = hub(&[("statechart", true), ("create-formal-verification-skill", true)]);
+        write(&alias_file(&fx, "statechart"), "---\nmetadata:\n  skillstation_alias: statechart\n---\nold\n");
+        write(&alias_file(&fx, "create-formal-verification-skill"), "mine\n");
+        let a = apply(&fx, &["--runtime", "claude"]);
+        let rewritten = std::fs::read_to_string(alias_file(&fx, "statechart")).unwrap();
+        assert!(rewritten.contains("skill_get"));
+        assert_eq!(
+            std::fs::read_to_string(alias_file(&fx, "create-formal-verification-skill")).unwrap(),
+            "mine\n"
+        );
+        let skips = skipped(&a);
+        assert_eq!(skips.len(), 1, "{skips:?}");
+        assert_eq!(skips[0]["skill"], "create-formal-verification-skill");
+        assert!(skips[0]["reason"].as_str().unwrap().contains(".claude/skills/create-formal-verification-skill"));
+        assert_eq!(a["recheck"], "up_to_date");
+    }
+
+    #[test]
+    fn an_absent_skillstation_gives_one_skip_and_the_normal_result() {
+        let fx = fixture();
+        assert_eq!(skipped(&plan(&fx, &["--runtime", "claude"])).len(), 1);
+        let a = apply(&fx, &["--runtime", "claude"]);
+        assert_eq!(a["status"], "applied");
+        let skips = skipped(&a);
+        assert_eq!(skips.len(), 1, "{skips:?}");
+        assert_eq!(skips[0]["reason"], "skillstation is not on PATH");
+        assert!(!fx.repo.join(".claude").join("skills").join("statechart").exists());
+        assert_eq!(a["recheck"], "up_to_date");
+    }
+
+    #[test]
+    fn the_hub_is_added_to_only_under_the_flag() {
+        let fx = fixture();
+        let hub = hub(&[("statechart", true)]);
+        let without = plan(&fx, &["--runtime", "claude"]);
+        assert!(!actions(&without, "plan").contains(&"skillstation_add".to_string()));
+        let with = plan(&fx, &["--runtime", "claude", "--skillstation"]);
+        let adds: Vec<&Value> =
+            with["plan"].as_array().unwrap().iter().filter(|i| i["action"] == "skillstation_add").collect();
+        assert_eq!(adds.len(), 2, "{:?}", with["plan"]);
+        assert!(hub.0.lock().unwrap().iter().all(|c| !c.contains("skill add")));
+        apply(&fx, &["--runtime", "claude", "--skillstation"]);
+        let calls = hub.0.lock().unwrap();
+        assert!(calls.contains(
+            &"skill add https://github.com/cursor/plugins --path pstack/skills/create-formal-verification-skill --id create-formal-verification-skill --yes --json".to_string()
+        ));
+        assert!(calls.iter().all(|c| !c.contains("--force")));
+    }
+
+    #[test]
+    fn a_codex_only_run_never_reads_the_hub() {
+        let fx = fixture();
+        let hub = hub(&[("statechart", true)]);
+        let p = plan(&fx, &["--runtime", "codex"]);
+        assert!(alias_items(&p, "plan").is_empty());
+        assert!(hub.0.lock().unwrap().is_empty());
+    }
+}

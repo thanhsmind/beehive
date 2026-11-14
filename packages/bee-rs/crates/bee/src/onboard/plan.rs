@@ -34,6 +34,9 @@ use super::util::{
     read_dir_sorted_checked, read_json_if_exists, read_text_if_exists, realpath, sha256_str,
 };
 use crate::jsjson;
+use crate::verbs::skillstation_group::{
+    carries_alias_marker, hub_runner, hub_show, render_alias, HubErr, Run, RELATED_SKILLS,
+};
 use serde_json::{json, Map, Value};
 use std::path::{Path, PathBuf};
 
@@ -65,6 +68,7 @@ pub struct ComputedPlan {
     pub rendered_gitattributes_block: String,
     pub desired_managed: Value,
     pub skill_sync: SkillSync,
+    pub alias_skips: Vec<Value>,
     pub codex_hybrid: bool,
     pub worktree_migration: WorktreeMigration,
 }
@@ -92,6 +96,64 @@ fn publish_skillstation_items() -> Vec<Value> {
             })
         })
         .collect()
+}
+
+fn alias_skip(skill: &str, reason: &str) -> Value {
+    json!({"skill": skill, "target": "skillstation-alias", "reason": reason})
+}
+
+fn skillstation_items(repo_root: &Path, run: Run, add_missing: bool) -> (Vec<Value>, Vec<Value>) {
+    let mut items = Vec::new();
+    let mut skips = Vec::new();
+    for rel in RELATED_SKILLS.iter() {
+        let id = rel.id;
+        let hub = match hub_show(run, id) {
+            Ok(hub) => hub,
+            Err(HubErr::Skip(reason)) => {
+                return (Vec::new(), vec![alias_skip("skillstation", &reason)]);
+            }
+            Err(HubErr::Missing) => {
+                if add_missing {
+                    items.push(json!({
+                        "action": "skillstation_add",
+                        "skill": id,
+                        "path": format!("skillstation:{id}"),
+                        "target": "skillstation",
+                        "repo": rel.repo,
+                        "source_path": rel.path,
+                    }));
+                }
+                continue;
+            }
+        };
+        if hub.status != "active" || !hub.disable_model {
+            continue;
+        }
+        let dir = repo_root.join(".claude").join("skills").join(id);
+        let dir_rel = format!(".claude/skills/{id}");
+        let file = dir.join("SKILL.md");
+        let content = render_alias(id, &hub.description, true);
+        if let Some(st) = lstat_if_exists(&dir) {
+            let current = read_text_if_exists(&file);
+            if st.is_symlink || !carries_alias_marker(&current, id) {
+                skips.push(alias_skip(
+                    id,
+                    &format!("{dir_rel} is not a skillstation alias - left unchanged"),
+                ));
+                continue;
+            }
+            if current == content {
+                continue;
+            }
+        }
+        items.push(json!({
+            "action": "skillstation_alias",
+            "skill": id,
+            "path": format!("{dir_rel}/SKILL.md"),
+            "content": content,
+        }));
+    }
+    (items, skips)
 }
 
 fn plan_item(action: &str, path: &str) -> Value {
@@ -870,6 +932,7 @@ pub fn compute_plan(engine: &Engine, repo_root: &Path, opts: &Options) -> Comput
                 opts.global_skills,
                 &release_identity,
             ),
+            alias_skips: Vec::new(),
             codex_hybrid,
             worktree_migration,
         };
@@ -1439,6 +1502,14 @@ pub fn compute_plan(engine: &Engine, repo_root: &Path, opts: &Options) -> Comput
         plan.extend(publish_skillstation_items());
     }
 
+    let mut alias_skips: Vec<Value> = Vec::new();
+    if matches!(opts.runtime.as_str(), "claude" | "both") {
+        let run = hub_runner(repo_root);
+        let (items, skips) = skillstation_items(repo_root, &*run, opts.skillstation);
+        plan.extend(items);
+        alias_skips = skips;
+    }
+
     // 8. host-generated verification skills (verification-ships-to-hosts D3).
     //
     // Appended AFTER section 7 and computed independently of it: these items
@@ -1457,6 +1528,7 @@ pub fn compute_plan(engine: &Engine, repo_root: &Path, opts: &Options) -> Comput
         rendered_gitattributes_block,
         desired_managed,
         skill_sync,
+        alias_skips,
         codex_hybrid,
         worktree_migration,
     }

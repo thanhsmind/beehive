@@ -565,6 +565,7 @@ does run a POSIX shell."
             json!({
                 "source_root": computed.skill_sync.source_root.to_string_lossy(),
                 "targets": computed.skill_sync.targets.iter().map(|t| t.to_json()).collect::<Vec<_>>(),
+                "skipped": computed.alias_skips,
             }),
         );
         payload.insert("notices".into(), build_notices(&computed.plan));

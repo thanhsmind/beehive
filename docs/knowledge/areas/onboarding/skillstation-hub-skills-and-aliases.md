@@ -8,10 +8,10 @@ bee:
   lifecycle: active
   areas: [onboarding]
   required_context: [areas/onboarding/overview.md]
-  decisions: ["skillstation-aliases D1-D9 (a bee skillstation verb group checks the hub skills bee relies on and writes a small alias skill so /<id> works; CONTEXT.md)"]
-  sources: ["skillstation-aliases cell ssa-1 (2026-11-14; the verb group)", "skillstation-aliases cell ssa-2 (2026-11-14; this concept and the README section)"]
+  decisions: ["skillstation-aliases D1-D9 (a bee skillstation verb group checks the hub skills bee relies on and writes a small alias skill so /<id> works; CONTEXT.md)", "skillstation-onboard-aliases D1-D7 (install and onboard write the aliases by default; the hub changes only behind --skillstation; CONTEXT.md)"]
+  sources: ["skillstation-aliases cell ssa-1 (2026-11-14; the verb group)", "skillstation-aliases cell ssa-2 (2026-11-14; this concept and the README section)", "skillstation-onboard-aliases cells sooa-1 and sooa-2 (2026-11-14; onboard and install write the aliases)"]
   authoritative_for: "onboarding: the bee skillstation verb group"
-  anchors: [packages/bee-rs/crates/bee/src/verbs/skillstation_group.rs, packages/bee-rs/crates/bee/src/onboard/apply.rs]
+  anchors: [packages/bee-rs/crates/bee/src/verbs/skillstation_group.rs, packages/bee-rs/crates/bee/src/onboard/apply.rs, packages/bee-rs/crates/bee/src/onboard/plan.rs, scripts/install.sh]
   verified_at: 2026-11-14
   verified_commit: efc1408fed3c7be37d646ce975dedf8b0e84390e
 ---
@@ -46,6 +46,19 @@ tells the agent to fetch the real skill from the hub through the MCP
 themselves; `alias <id>` aliases any active hub skill (skillstation-aliases
 D4).
 
+**Onboard and install write the aliases themselves.** `bee onboard` plans one
+`skillstation_alias` item per related skill that is active on the hub, is not
+model-triggerable, and whose local alias is missing or differs from a fresh
+render; `scripts/install.sh` gets it by running onboard. It runs with no flag
+when the Claude runtime is in scope. Planning only a missing or changed alias
+keeps the recheck after apply at `up_to_date` (skillstation-onboard-aliases D1).
+`--skillstation`, on `install.sh` and on onboard, additionally adds each missing
+related skill to the hub as a draft; without it onboard never changes the hub
+(skillstation-onboard-aliases D4, D5). Onboard reuses the alias render, the
+ownership check and the hub read of the verb module rather than copying them,
+and its tests inject the hub runner so a machine with skillstation on PATH
+cannot change their result (skillstation-onboard-aliases D6).
+
 ## Business Rules
 
 - Content approval stays with the hub owner. `skill add --yes` never approves
@@ -62,6 +75,13 @@ D4).
 
 ## Edge Cases Settled
 
+- During onboard, a `.claude/skills/<id>/` without the alias marker gets no item
+  and one `skipped_skills` entry naming the folder; onboard never forces
+  (skillstation-onboard-aliases D2). A missing binary, non-zero exit or unreadable
+  JSON gives one `skipped_skills` entry with target `skillstation-alias` for the
+  whole check, not one per skill, and the onboard result is otherwise normal
+  (skillstation-onboard-aliases D3).
+
 - No `skillstation` binary, a non-zero exit or unreadable JSON: `install` prints
   one skip row per skill with the reason and exits 0, the same contract as the
   onboard publish skip. `alias <id>` exits non-zero instead, because an explicit
@@ -76,6 +96,11 @@ D4).
   find the related-skill constant, the alias render and the ownership check by
   searching for `RELATED_SKILLS`, `render_alias` and `carries_alias_marker`.
 - `packages/bee-rs/crates/bee/src/onboard/apply.rs` — `run_skillstation`, the
-  CLI runner shared with the onboard `--skillstation` publish.
+  CLI runner shared with the onboard `--skillstation` publish, and the
+  `skillstation_alias` arm.
+- `packages/bee-rs/crates/bee/src/onboard/plan.rs` — find the planning of the
+  alias items by searching for `skillstation_items`.
+- `scripts/install.sh` — the `--skillstation` flag is forwarded to onboard
+  through `ONBOARD_FLAGS`.
 - The hub CLI shape is not frozen by bee; list the current flags with
   `skillstation help skill add` before changing a call.
