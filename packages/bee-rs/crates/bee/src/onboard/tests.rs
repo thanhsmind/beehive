@@ -3928,7 +3928,7 @@ mod principles_on_the_hub {
         with_bee_deploying(&fx);
         write(
             &fx.root.join("skills").join(IDS[0]).join("SKILL.md"),
-            "---\nname: x\ndescription:  Apply when   a second fix fails.  \n---\nbody\n",
+            "---\nname: x\ndescription:  \"Apply when   a second fix fails.\"  \n---\nbody\n",
         );
         let commits = Rc::new(std::cell::RefCell::new(Vec::new()));
         let _hub = recording_hub(commits.clone());

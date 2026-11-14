@@ -347,7 +347,7 @@ fn principle_routing_flags(staged: &Path) -> Vec<String> {
     let trigger = front
         .lines()
         .find_map(|line| line.strip_prefix("description:"))
-        .map(|d| d.split_whitespace().collect::<Vec<_>>().join(" "))
+        .map(|d| d.trim().trim_matches('"').split_whitespace().collect::<Vec<_>>().join(" "))
         .filter(|d| !d.is_empty());
     let mut flags = Vec::new();
     if let Some(trigger) = trigger {
