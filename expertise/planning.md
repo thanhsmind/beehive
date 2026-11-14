@@ -15,6 +15,7 @@ amount of careful coding can recover. This guide is about choosing well.
 | Breaking a plan into pickable, provable pieces | What makes a good unit of work |
 | Writing what a unit must keep versus how it is built | Lock the contract |
 | Ordering units; deciding what to verify first | Build order versus discovery order |
+| Sequencing an addition, refactor or rewrite | Subtract before you add |
 | A plan proposes phases, slices or expand-migrate-contract | Split only on a real dependency |
 | An interface is genuinely open on a standard or high-risk shape | Design it twice |
 | A discovery-order unit needs a written answer before others proceed | Spike craft |
@@ -241,6 +242,26 @@ each stating the outcome, enough to prove the sequence is sane and the
 current slice isn't painting anything into a corner. "Slice 3: replace
 the polling loop with the webhook, remove the poller" is a fine headline.
 Its unit breakdown, written today, is waste with a due date.
+
+## Subtract before you add
+
+When a change would add to a system, look first at what can leave it. Removal
+is the cheapest work in the plan and it makes every later step smaller.
+
+- **Remove before you build.** Put the deletion step ahead of the
+  construction step, so the new work lands on the simpler base.
+- **Reach the minimum before you polish.** Get the smallest version working,
+  then decide what quality it deserves. Polish on a version that later shrinks
+  is lost.
+- **Build for use you have seen.** An edge case nobody has hit is a guess; wait
+  until it appears.
+- **Add no guard or parser the contract does not ask for.** Each one is code
+  to read, test and keep true for a case the contract never named.
+- **Delete a stub with no content.** A reference that holds nothing the reader
+  cannot already find elsewhere is removed, not left as a placeholder.
+
+Leave the design a little simpler than you found it: the same capability
+behind the same surface or a smaller one.
 
 ## Build the lever
 

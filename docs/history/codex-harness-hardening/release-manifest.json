@@ -20,7 +20,7 @@
     },
     {
       "path": ".bee/expertise/architecture.md",
-      "sha256": "0df001a4c6bfddd67c26517acc83c92cd0bbb3783b135e3c7a4ce7c76a1f4e83",
+      "sha256": "1c4f0d5a77863d05bea1c7397c10cd5e6812ec84e9fbab03b1d8a2fc024c9e9f",
       "mode": "644",
       "role": "runtime_expertise"
     },
@@ -62,7 +62,7 @@
     },
     {
       "path": ".bee/expertise/knowledge.md",
-      "sha256": "958da265dd957b2fa80647f331862e9aec374086890fce858fa332d05a2c5717",
+      "sha256": "23ab9373261a9fe0e9c93fe28c892f3578a048e0f840ff6230b06b0db4d09e3c",
       "mode": "644",
       "role": "runtime_expertise"
     },
@@ -86,7 +86,7 @@
     },
     {
       "path": ".bee/expertise/planning.md",
-      "sha256": "2fb019904d455b9cdb7d117d15be3709b31921cea643a9754b3bbba7d96062a8",
+      "sha256": "3e0f7ea2cbee6b94cb4a15ced1b2c94c527b3929467fb205f682c09cd0a5345a",
       "mode": "644",
       "role": "runtime_expertise"
     },
@@ -142,7 +142,7 @@
     },
     {
       "path": ".claude-plugin/skills/.bee-render.json",
-      "sha256": "7e16770ffcc4e21cee73f6686950b99b87f54f1b88fc5fb1f80dc4e5930c1b3f",
+      "sha256": "5c9903c33dafef4b1d2c6192eacf68ff182fbf6c632ac6f4dc2be4152fc5ae01",
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/.bee-render.json"
@@ -554,6 +554,13 @@
       "packagePath": ".claude-plugin/skills/bee-principle-attack-the-premise/SKILL.md"
     },
     {
+      "path": ".claude-plugin/skills/bee-principle-boundary-discipline/SKILL.md",
+      "sha256": "97260ff90b4a398a4edf0c31dcd12ec4adf8809addff748623d7b3d92412c270",
+      "mode": "644",
+      "role": "plugin_skill_claude_render",
+      "packagePath": ".claude-plugin/skills/bee-principle-boundary-discipline/SKILL.md"
+    },
+    {
       "path": ".claude-plugin/skills/bee-principle-build-the-lever/SKILL.md",
       "sha256": "9011542fb55aefd9ca156f4838a6d01533e06f6bf7372a18cce002daaa72eb3c",
       "mode": "644",
@@ -575,11 +582,32 @@
       "packagePath": ".claude-plugin/skills/bee-principle-crash-site-versus-fault-site/SKILL.md"
     },
     {
+      "path": ".claude-plugin/skills/bee-principle-encode-lessons-in-structure/SKILL.md",
+      "sha256": "8dba1ae2b443de7870d7ddf341a3218080b006f419f706cfc533d5d9094f1313",
+      "mode": "644",
+      "role": "plugin_skill_claude_render",
+      "packagePath": ".claude-plugin/skills/bee-principle-encode-lessons-in-structure/SKILL.md"
+    },
+    {
       "path": ".claude-plugin/skills/bee-principle-lock-the-contract/SKILL.md",
       "sha256": "f94353bc00d6e4b27677ac2b0ba590add142aa00c1f4f01c7b0b234da8653e78",
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/bee-principle-lock-the-contract/SKILL.md"
+    },
+    {
+      "path": ".claude-plugin/skills/bee-principle-make-illegal-states-unrepresentable/SKILL.md",
+      "sha256": "3b78380e9f62b1147b25248f42e7fe0d706b4a6b2a03a73fc4fa3185ae0de6d5",
+      "mode": "644",
+      "role": "plugin_skill_claude_render",
+      "packagePath": ".claude-plugin/skills/bee-principle-make-illegal-states-unrepresentable/SKILL.md"
+    },
+    {
+      "path": ".claude-plugin/skills/bee-principle-migrate-callers-then-delete/SKILL.md",
+      "sha256": "b3d214f6d2e5b604ad2f5f6fba16d0168f06050851992401bbb684de141de778",
+      "mode": "644",
+      "role": "plugin_skill_claude_render",
+      "packagePath": ".claude-plugin/skills/bee-principle-migrate-callers-then-delete/SKILL.md"
     },
     {
       "path": ".claude-plugin/skills/bee-principle-never-invent-behavior-neither-side-has/SKILL.md",
@@ -617,6 +645,13 @@
       "packagePath": ".claude-plugin/skills/bee-principle-reproduce-first/SKILL.md"
     },
     {
+      "path": ".claude-plugin/skills/bee-principle-separate-before-serializing-shared-state/SKILL.md",
+      "sha256": "55bba1763c774ed758442d158aa852f270564c3a452421e4145f6bc6d02794a5",
+      "mode": "644",
+      "role": "plugin_skill_claude_render",
+      "packagePath": ".claude-plugin/skills/bee-principle-separate-before-serializing-shared-state/SKILL.md"
+    },
+    {
       "path": ".claude-plugin/skills/bee-principle-single-source-of-truth/SKILL.md",
       "sha256": "e3bf9d8abd6c43c252ed985311cfddd9f1c9d0808ff43e1c1aff48c18523931e",
       "mode": "644",
@@ -643,6 +678,13 @@
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/bee-principle-split-on-a-real-dependency/SKILL.md"
+    },
+    {
+      "path": ".claude-plugin/skills/bee-principle-subtract-before-you-add/SKILL.md",
+      "sha256": "b4932a85557a394d70e7b157f50992034b5e7c2cb608fe60b3825870a9e39cf2",
+      "mode": "644",
+      "role": "plugin_skill_claude_render",
+      "packagePath": ".claude-plugin/skills/bee-principle-subtract-before-you-add/SKILL.md"
     },
     {
       "path": ".claude-plugin/skills/bee-principle-test-behavior-not-structure/SKILL.md",
@@ -1024,7 +1066,7 @@
     },
     {
       "path": ".codex-plugin/skills/.bee-render.json",
-      "sha256": "6e6b4ecb498f12c96912a33502858dfa59826db821d5f76d21500acdc01cf58f",
+      "sha256": "998108783f6f714b57fbb34e33ecb8cd360e949e16be24b9fc9aa6321e9d65df",
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/.bee-render.json"
@@ -1436,6 +1478,13 @@
       "packagePath": ".codex-plugin/skills/bee-principle-attack-the-premise/SKILL.md"
     },
     {
+      "path": ".codex-plugin/skills/bee-principle-boundary-discipline/SKILL.md",
+      "sha256": "97260ff90b4a398a4edf0c31dcd12ec4adf8809addff748623d7b3d92412c270",
+      "mode": "644",
+      "role": "plugin_skill_codex_render",
+      "packagePath": ".codex-plugin/skills/bee-principle-boundary-discipline/SKILL.md"
+    },
+    {
       "path": ".codex-plugin/skills/bee-principle-build-the-lever/SKILL.md",
       "sha256": "9011542fb55aefd9ca156f4838a6d01533e06f6bf7372a18cce002daaa72eb3c",
       "mode": "644",
@@ -1457,11 +1506,32 @@
       "packagePath": ".codex-plugin/skills/bee-principle-crash-site-versus-fault-site/SKILL.md"
     },
     {
+      "path": ".codex-plugin/skills/bee-principle-encode-lessons-in-structure/SKILL.md",
+      "sha256": "8dba1ae2b443de7870d7ddf341a3218080b006f419f706cfc533d5d9094f1313",
+      "mode": "644",
+      "role": "plugin_skill_codex_render",
+      "packagePath": ".codex-plugin/skills/bee-principle-encode-lessons-in-structure/SKILL.md"
+    },
+    {
       "path": ".codex-plugin/skills/bee-principle-lock-the-contract/SKILL.md",
       "sha256": "f94353bc00d6e4b27677ac2b0ba590add142aa00c1f4f01c7b0b234da8653e78",
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/bee-principle-lock-the-contract/SKILL.md"
+    },
+    {
+      "path": ".codex-plugin/skills/bee-principle-make-illegal-states-unrepresentable/SKILL.md",
+      "sha256": "3b78380e9f62b1147b25248f42e7fe0d706b4a6b2a03a73fc4fa3185ae0de6d5",
+      "mode": "644",
+      "role": "plugin_skill_codex_render",
+      "packagePath": ".codex-plugin/skills/bee-principle-make-illegal-states-unrepresentable/SKILL.md"
+    },
+    {
+      "path": ".codex-plugin/skills/bee-principle-migrate-callers-then-delete/SKILL.md",
+      "sha256": "b3d214f6d2e5b604ad2f5f6fba16d0168f06050851992401bbb684de141de778",
+      "mode": "644",
+      "role": "plugin_skill_codex_render",
+      "packagePath": ".codex-plugin/skills/bee-principle-migrate-callers-then-delete/SKILL.md"
     },
     {
       "path": ".codex-plugin/skills/bee-principle-never-invent-behavior-neither-side-has/SKILL.md",
@@ -1499,6 +1569,13 @@
       "packagePath": ".codex-plugin/skills/bee-principle-reproduce-first/SKILL.md"
     },
     {
+      "path": ".codex-plugin/skills/bee-principle-separate-before-serializing-shared-state/SKILL.md",
+      "sha256": "55bba1763c774ed758442d158aa852f270564c3a452421e4145f6bc6d02794a5",
+      "mode": "644",
+      "role": "plugin_skill_codex_render",
+      "packagePath": ".codex-plugin/skills/bee-principle-separate-before-serializing-shared-state/SKILL.md"
+    },
+    {
       "path": ".codex-plugin/skills/bee-principle-single-source-of-truth/SKILL.md",
       "sha256": "e3bf9d8abd6c43c252ed985311cfddd9f1c9d0808ff43e1c1aff48c18523931e",
       "mode": "644",
@@ -1525,6 +1602,13 @@
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/bee-principle-split-on-a-real-dependency/SKILL.md"
+    },
+    {
+      "path": ".codex-plugin/skills/bee-principle-subtract-before-you-add/SKILL.md",
+      "sha256": "b4932a85557a394d70e7b157f50992034b5e7c2cb608fe60b3825870a9e39cf2",
+      "mode": "644",
+      "role": "plugin_skill_codex_render",
+      "packagePath": ".codex-plugin/skills/bee-principle-subtract-before-you-add/SKILL.md"
     },
     {
       "path": ".codex-plugin/skills/bee-principle-test-behavior-not-structure/SKILL.md",
@@ -2031,7 +2115,7 @@
     },
     {
       "path": "expertise/architecture.md",
-      "sha256": "0df001a4c6bfddd67c26517acc83c92cd0bbb3783b135e3c7a4ce7c76a1f4e83",
+      "sha256": "1c4f0d5a77863d05bea1c7397c10cd5e6812ec84e9fbab03b1d8a2fc024c9e9f",
       "mode": "644",
       "role": "expertise_guide"
     },
@@ -2073,7 +2157,7 @@
     },
     {
       "path": "expertise/knowledge.md",
-      "sha256": "958da265dd957b2fa80647f331862e9aec374086890fce858fa332d05a2c5717",
+      "sha256": "23ab9373261a9fe0e9c93fe28c892f3578a048e0f840ff6230b06b0db4d09e3c",
       "mode": "644",
       "role": "expertise_guide"
     },
@@ -2097,7 +2181,7 @@
     },
     {
       "path": "expertise/planning.md",
-      "sha256": "2fb019904d455b9cdb7d117d15be3709b31921cea643a9754b3bbba7d96062a8",
+      "sha256": "3e0f7ea2cbee6b94cb4a15ced1b2c94c527b3929467fb205f682c09cd0a5345a",
       "mode": "644",
       "role": "expertise_guide"
     },
@@ -3809,6 +3893,13 @@
       "packagePath": "skills/bee-principle-attack-the-premise/SKILL.md"
     },
     {
+      "path": "skills/bee-principle-boundary-discipline/SKILL.md",
+      "sha256": "97260ff90b4a398a4edf0c31dcd12ec4adf8809addff748623d7b3d92412c270",
+      "mode": "644",
+      "role": "plugin_skill",
+      "packagePath": "skills/bee-principle-boundary-discipline/SKILL.md"
+    },
+    {
       "path": "skills/bee-principle-build-the-lever/SKILL.md",
       "sha256": "9011542fb55aefd9ca156f4838a6d01533e06f6bf7372a18cce002daaa72eb3c",
       "mode": "644",
@@ -3830,11 +3921,32 @@
       "packagePath": "skills/bee-principle-crash-site-versus-fault-site/SKILL.md"
     },
     {
+      "path": "skills/bee-principle-encode-lessons-in-structure/SKILL.md",
+      "sha256": "8dba1ae2b443de7870d7ddf341a3218080b006f419f706cfc533d5d9094f1313",
+      "mode": "644",
+      "role": "plugin_skill",
+      "packagePath": "skills/bee-principle-encode-lessons-in-structure/SKILL.md"
+    },
+    {
       "path": "skills/bee-principle-lock-the-contract/SKILL.md",
       "sha256": "f94353bc00d6e4b27677ac2b0ba590add142aa00c1f4f01c7b0b234da8653e78",
       "mode": "644",
       "role": "plugin_skill",
       "packagePath": "skills/bee-principle-lock-the-contract/SKILL.md"
+    },
+    {
+      "path": "skills/bee-principle-make-illegal-states-unrepresentable/SKILL.md",
+      "sha256": "3b78380e9f62b1147b25248f42e7fe0d706b4a6b2a03a73fc4fa3185ae0de6d5",
+      "mode": "644",
+      "role": "plugin_skill",
+      "packagePath": "skills/bee-principle-make-illegal-states-unrepresentable/SKILL.md"
+    },
+    {
+      "path": "skills/bee-principle-migrate-callers-then-delete/SKILL.md",
+      "sha256": "b3d214f6d2e5b604ad2f5f6fba16d0168f06050851992401bbb684de141de778",
+      "mode": "644",
+      "role": "plugin_skill",
+      "packagePath": "skills/bee-principle-migrate-callers-then-delete/SKILL.md"
     },
     {
       "path": "skills/bee-principle-never-invent-behavior-neither-side-has/SKILL.md",
@@ -3872,6 +3984,13 @@
       "packagePath": "skills/bee-principle-reproduce-first/SKILL.md"
     },
     {
+      "path": "skills/bee-principle-separate-before-serializing-shared-state/SKILL.md",
+      "sha256": "55bba1763c774ed758442d158aa852f270564c3a452421e4145f6bc6d02794a5",
+      "mode": "644",
+      "role": "plugin_skill",
+      "packagePath": "skills/bee-principle-separate-before-serializing-shared-state/SKILL.md"
+    },
+    {
       "path": "skills/bee-principle-single-source-of-truth/SKILL.md",
       "sha256": "e3bf9d8abd6c43c252ed985311cfddd9f1c9d0808ff43e1c1aff48c18523931e",
       "mode": "644",
@@ -3898,6 +4017,13 @@
       "mode": "644",
       "role": "plugin_skill",
       "packagePath": "skills/bee-principle-split-on-a-real-dependency/SKILL.md"
+    },
+    {
+      "path": "skills/bee-principle-subtract-before-you-add/SKILL.md",
+      "sha256": "b4932a85557a394d70e7b157f50992034b5e7c2cb608fe60b3825870a9e39cf2",
+      "mode": "644",
+      "role": "plugin_skill",
+      "packagePath": "skills/bee-principle-subtract-before-you-add/SKILL.md"
     },
     {
       "path": "skills/bee-principle-test-behavior-not-structure/SKILL.md",

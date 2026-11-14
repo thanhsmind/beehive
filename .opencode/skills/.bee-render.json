@@ -51,6 +51,10 @@
       "sha256": "5c3197e9d317c95a797327e1bf99e2be901168d7be01c684854a33b7221d0713"
     },
     {
+      "name": "bee-principle-boundary-discipline",
+      "sha256": "0e2e4287cb94bd3ec7fe64bcd071d9a8eae5f1521d1a8d8dd326abfd6bbecfd1"
+    },
+    {
       "name": "bee-principle-build-the-lever",
       "sha256": "04debd13c174163abd05b9f304c95a627398594551a8b9cccb6b4a3981a95fd4"
     },
@@ -63,8 +67,20 @@
       "sha256": "ff446600bed647741133fbba1b715d9a36a74cdc2375553bfe6eb7d6efa22fa5"
     },
     {
+      "name": "bee-principle-encode-lessons-in-structure",
+      "sha256": "2b52522f5168bcf933ad7b5feb4a49d68c7e97b9b26c7e58b9accbfcf4cbe171"
+    },
+    {
       "name": "bee-principle-lock-the-contract",
       "sha256": "8292e4aa3ce5542fc4c542a9c6b8af2e675e1500d9bf8263c37f4ef2da2ff0fd"
+    },
+    {
+      "name": "bee-principle-make-illegal-states-unrepresentable",
+      "sha256": "2e06df6002f1a752b3df91de5f92bee4c4d2334e11b54af84c2d82d8ffc77046"
+    },
+    {
+      "name": "bee-principle-migrate-callers-then-delete",
+      "sha256": "19116b6f8fb7577f0f3473cd4b0950549272d7fa867e08e30cfe89693ff44822"
     },
     {
       "name": "bee-principle-never-invent-behavior-neither-side-has",
@@ -87,6 +103,10 @@
       "sha256": "8d6b1e464137a2f91f0abb4e5cc3a26952b13f7f96d514b952c6dc794f386b0d"
     },
     {
+      "name": "bee-principle-separate-before-serializing-shared-state",
+      "sha256": "78065b6d0553fa74322243f208090141628561c30ae29f91f4514a4699a814e7"
+    },
+    {
       "name": "bee-principle-single-source-of-truth",
       "sha256": "f43d6c3fad67fb606e435c1d302ab9e8a1b5a7309b4e806d830c74f4f776bbfe"
     },
@@ -101,6 +121,10 @@
     {
       "name": "bee-principle-split-on-a-real-dependency",
       "sha256": "72da3b99be0d77f63c6c70c0f9f3306e83fe2b33f43ee269deeeab1d510704eb"
+    },
+    {
+      "name": "bee-principle-subtract-before-you-add",
+      "sha256": "24edbdaf3a47e627c2620d9e725d757e494bcaf7af162b6dec147a4e3091c9f9"
     },
     {
       "name": "bee-principle-test-behavior-not-structure",

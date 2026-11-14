@@ -1,0 +1,90 @@
+{
+  "schema": "bee-usage/v1",
+  "feature": "formal-cell-lifecycle",
+  "closed_at": "2026-11-14T04:24:07.693Z",
+  "sessions": [
+    {
+      "session_id": "13f19473-d0d2-477e-a03d-e74a456583e9",
+      "models": {
+        "claude-opus-5-5": {
+          "input": 384,
+          "output": 104969,
+          "cache_write": 284714,
+          "cache_read": 29337265,
+          "new": 390067,
+          "cached": 29337265,
+          "total": 29727332
+        }
+      },
+      "subagent_models": {},
+      "subagent_count": 0,
+      "started_ms": 1794624575323,
+      "ended_ms": 1794630245577,
+      "totals": {
+        "new": 390067,
+        "cached": 29337265,
+        "total": 29727332
+      }
+    }
+  ],
+  "skipped": 0,
+  "totals": {
+    "main": {
+      "new": 390067,
+      "cached": 29337265,
+      "total": 29727332
+    },
+    "subagents": {
+      "new": 0,
+      "cached": 0,
+      "total": 0
+    },
+    "total": {
+      "new": 509600,
+      "cached": 29896487,
+      "total": 30406087
+    },
+    "herding": {
+      "new": 119533,
+      "cached": 559222,
+      "total": 678755,
+      "models": {
+        "claude-haiku-5-5": {
+          "input": 22,
+          "output": 12926,
+          "cache_write": 106585,
+          "cache_read": 559222,
+          "new": 119533,
+          "cached": 559222,
+          "total": 678755
+        }
+      }
+    }
+  },
+  "herding_sessions": [
+    {
+      "session_id": "dc986a07-18b1-41f9-9595-e5a3f6851835",
+      "models": {
+        "claude-haiku-5-5": {
+          "input": 22,
+          "output": 12926,
+          "cache_write": 106585,
+          "cache_read": 559222,
+          "new": 119533,
+          "cached": 559222,
+          "total": 678755
+        }
+      },
+      "subagent_models": {},
+      "subagent_count": 0,
+      "started_ms": 1794628840689,
+      "ended_ms": 1794628907553,
+      "totals": {
+        "new": 119533,
+        "cached": 559222,
+        "total": 678755
+      },
+      "job_id": "job-1794628838777-4014910-1"
+    }
+  ]
+}

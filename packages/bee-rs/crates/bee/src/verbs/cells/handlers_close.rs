@@ -1993,25 +1993,46 @@ fn record_block_in_mailbox(root: &Path, blocked: &Value, reason: &str, session_f
     mailbox::record_stop(root, &run, &entry);
 }
 
+pub(crate) fn drop_cell(
+    root: &Path,
+    id: &str,
+    reason: &str,
+    session_flag: Option<&str>,
+    force: bool,
+) -> MR<Value> {
+    if js_trim(reason).is_empty() {
+        return Err(Fail::Thrown("dropCell: a reason is required.".into()));
+    }
+    let root2 = root.to_path_buf();
+    let id2 = id.to_string();
+    let reason2 = reason.to_string();
+    let session_flag = session_flag.map(str::to_string);
+    mutate_cell(root, id, "dropCell", Some("dropCell"), true, move |cell_map| {
+        let trace = merge_trace(cell_map.get("trace"))?;
+        let mut trace = guard_claim_ownership(
+            &root2,
+            &id2,
+            trace,
+            "dropCell",
+            session_flag.as_deref(),
+            force,
+        )?;
+        cell_map.insert("status".into(), Value::String("dropped".into()));
+        trace.insert("dropped_reason".into(), Value::String(reason2.clone()));
+        cell_map.insert("trace".into(), Value::Object(trace));
+        Ok(())
+    })
+}
+
 pub(crate) fn run_drop(flags: rsv::Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
-    if !rsv::keys_known(&flags, &["id", "reason"]) {
+    if !rsv::keys_known(&flags, &["id", "reason", "session-id", "force-ownership"]) {
         return None;
     }
     let id = flags.req_str("id")?.to_string();
     let reason = flags.req_str("reason")?.to_string();
+    let (session_flag, force) = ownership_args(&flags)?;
     dispatch("cells drop", use_json, t0, move |ctx| {
-        let root = ctx.root.clone();
-        if js_trim(&reason).is_empty() {
-            return Err(Fail::Thrown("dropCell: a reason is required.".into()));
-        }
-        let reason2 = reason.clone();
-        let cell = mutate_cell(&root, &id, "dropCell", Some("dropCell"), true, move |cell_map| {
-            let mut trace = merge_trace(cell_map.get("trace"))?;
-            cell_map.insert("status".into(), Value::String("dropped".into()));
-            trace.insert("dropped_reason".into(), Value::String(reason2.clone()));
-            cell_map.insert("trace".into(), Value::Object(trace));
-            Ok(())
-        })?;
+        let cell = drop_cell(&ctx.root, &id, &reason, session_flag.as_deref(), force)?;
         let text = format!("Dropped {}.", js_string_or_undefined(cell.get("id")));
         Ok(Out::Emit(cell, text, 0))
     })
