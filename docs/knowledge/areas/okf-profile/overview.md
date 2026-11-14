@@ -122,7 +122,7 @@ the job dispatches that item's `invoke` text (`/bee-knowledge-upkeep` or
 
 The verb is read-only (upkeep-due-signal D1, D2). A run clears its own signal by ending with a
 `knowledge-upkeep` or `verify-upkeep` audit row (D3); the reasons that make each
-kind due are D4 and D5 of the same context. bee gives the signal and owns no scheduler.
+kind due are upkeep-due-signal D4 (knowledge) and upkeep-due-signal D5 (verify). bee gives the signal and owns no scheduler.
 
 ## Actors & Access
 

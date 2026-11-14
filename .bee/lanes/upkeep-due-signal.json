@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "upkeep-due-signal",
   "mode": null,
-  "phase": "exploring",
+  "phase": "idle",
   "approved_gates": {
     "context": true,
     "shape": true,
@@ -11,9 +11,9 @@
     "uat": true
   },
   "summary": "Feature \"upkeep-due-signal\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at e692b65; reload the product and test \"upkeep-due-signal\", then either approve uat (\"bee gate --name uat --approved true --lane upkeep-due-signal\") or fix it in the worktree and merge again.",
+  "next_action": "bee close finished \"upkeep-due-signal\" — feature is closed.",
   "created_at": "2026-11-14T01:34:19.637Z",
-  "run_state": "done",
+  "run_state": "shaping",
   "waiting_on": null,
   "route": {
     "class": "feature",
