@@ -123,27 +123,27 @@
       },
       ".claude/skills/formal-cell-lifecycle": {
         "CellLifecycle.cfg": "3209f713e8aa4863b20ed49df13cfd2deabbce0ce16b0ba682c99c4db14f299b",
-        "CellLifecycle.tla": "9ca8b37990cae86a4c0bdb0afe6bf43df80ca9056e5004f122f5a9094bbda6a3",
+        "CellLifecycle.tla": "e44b4baa8a8913b3e15b38af5193d2ec86ef1499000d9490e35a69d1161904dd",
         "Fixed.cfg": "f23da116867271a398a24486bbebefeb100b1ec2f752835eeb38ce3fe787bc01",
         "NoOwnershipCheck.cfg": "ab8640bc04a6bad0ca81cc50b8f309273306437681f52602ab1885e7dabef42d",
-        "SKILL.md": "f2a704872fc61f5a883147f41272fc43e118917533661bfc38784d2620a626af",
-        "check": "aeb99f83dd20a187bd0f08d1b6e58403eeb720a2baba9978a5f9e5fd96a46b2a"
+        "SKILL.md": "57d27e8f6ab96c06544ec5d1e0ca11d58c9b20772fdcb890cf3032cd43fc7807",
+        "check": "0c61fa5371ee26b813aea6be3a7cebc5fe63e0d5f6133d2469a74806cc98bcd2"
       },
       ".agents/skills/formal-cell-lifecycle": {
         "CellLifecycle.cfg": "3209f713e8aa4863b20ed49df13cfd2deabbce0ce16b0ba682c99c4db14f299b",
-        "CellLifecycle.tla": "9ca8b37990cae86a4c0bdb0afe6bf43df80ca9056e5004f122f5a9094bbda6a3",
+        "CellLifecycle.tla": "e44b4baa8a8913b3e15b38af5193d2ec86ef1499000d9490e35a69d1161904dd",
         "Fixed.cfg": "f23da116867271a398a24486bbebefeb100b1ec2f752835eeb38ce3fe787bc01",
         "NoOwnershipCheck.cfg": "ab8640bc04a6bad0ca81cc50b8f309273306437681f52602ab1885e7dabef42d",
-        "SKILL.md": "f2a704872fc61f5a883147f41272fc43e118917533661bfc38784d2620a626af",
-        "check": "aeb99f83dd20a187bd0f08d1b6e58403eeb720a2baba9978a5f9e5fd96a46b2a"
+        "SKILL.md": "57d27e8f6ab96c06544ec5d1e0ca11d58c9b20772fdcb890cf3032cd43fc7807",
+        "check": "0c61fa5371ee26b813aea6be3a7cebc5fe63e0d5f6133d2469a74806cc98bcd2"
       },
       ".opencode/skills/formal-cell-lifecycle": {
         "CellLifecycle.cfg": "3209f713e8aa4863b20ed49df13cfd2deabbce0ce16b0ba682c99c4db14f299b",
-        "CellLifecycle.tla": "9ca8b37990cae86a4c0bdb0afe6bf43df80ca9056e5004f122f5a9094bbda6a3",
+        "CellLifecycle.tla": "e44b4baa8a8913b3e15b38af5193d2ec86ef1499000d9490e35a69d1161904dd",
         "Fixed.cfg": "f23da116867271a398a24486bbebefeb100b1ec2f752835eeb38ce3fe787bc01",
         "NoOwnershipCheck.cfg": "ab8640bc04a6bad0ca81cc50b8f309273306437681f52602ab1885e7dabef42d",
-        "SKILL.md": "f2a704872fc61f5a883147f41272fc43e118917533661bfc38784d2620a626af",
-        "check": "aeb99f83dd20a187bd0f08d1b6e58403eeb720a2baba9978a5f9e5fd96a46b2a"
+        "SKILL.md": "57d27e8f6ab96c06544ec5d1e0ca11d58c9b20772fdcb890cf3032cd43fc7807",
+        "check": "0c61fa5371ee26b813aea6be3a7cebc5fe63e0d5f6133d2469a74806cc98bcd2"
       }
     }
   },

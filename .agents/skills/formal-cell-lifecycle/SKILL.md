@@ -20,8 +20,8 @@ every order with TLC.
    session cap, block, unclaim or reopen S's live work, and the sweep never
    frees the cell if S dies, because the sweep only walks claim files.
    (`docs/knowledge/areas/workflow-state/claims-and-ownership.md` B23, R36.)
-2. **No guarded close of a live claim.** `cap`, `block`, `unclaim` and
-   `reopen` never succeed against another session's claim that was never
+2. **No close of a live claim by another session.** `cap`, `block`,
+   `unclaim`, `reopen` and `drop` never succeed against another session's claim that was never
    swept or let go stale. Harm when broken: one session finishes or throws
    away another session's work in progress without `--force-ownership`.
    (Same concept, B23 and R39.)
@@ -70,14 +70,17 @@ its commands here.
   4. Session c runs `bee cells reopen`; the cell is `open` again.
   5. Session a takes the cell lock, sees `open`, and writes `claimed` with
      `trace.claim_session` = a. a's claim file is gone.
-  The same hole opens through `drop`, which has no ownership check, while
-  a's claim is half done. With the hole open, rule 2 also fails: a third
-  session caps a's live cell and no ownership refusal fires.
-- **fixed variant** passes both rules over 4,327,689 states. It changes
-  two things: the clear removes a claim file only if it is the exact
-  claim (by claim number) the closer saw under the lock, and the claim
-  re-checks its own claim file under the cell lock before it writes
-  `claimed`. Either change alone still fails. This variant is a design
+  TLC can also print a sibling path: a closer's late clear lands right
+  after a's claim succeeded. Both are the same bug. With the hole open,
+  rule 2 also fails: a third session caps a's live cell and no ownership
+  refusal fires.
+- **fixed variant** passes both rules over 3,762,606 states. It changes
+  one thing: the clear removes a claim file only if it is the exact claim
+  (by claim number, not by owner name) that the closer saw under the
+  lock. An owner-name check is not enough: the same session can claim
+  again in between. Before `drop` checked ownership, this fix also needed
+  the claim to re-check its own claim file under the cell lock; now it
+  does not, and that re-check alone still fails. This variant is a design
   note for whoever fixes the bug; it is not code.
 - **no-ownership-check variant** fails rule 2 in a short path (claim,
   then a foreign close). It proves rule 2 can catch a missing ownership
@@ -88,17 +91,9 @@ When the bug is fixed in the code, change the model's `code` behavior to
 match the new code, run `--variants`, and update this section: the plain
 run must then exit 0.
 
-## Open question, not a finding
-
-`bee cells drop` takes no `--session-id` and checks no ownership
-(`handlers_close.rs` `run_drop`). B23 says "any operation that would
-change a claimed unit's state", but lists completing, blocking, releasing
-and reopening, not dropping. The model leaves `drop` out of rule 2 and
-records the gap here for the owner to decide.
-
 ## Coverage and sync
 
-Sync commit: `8bdd8aab80b10a708e72284941c3064b996a696f`. At this commit
+Sync commit: `9df0c5ea3fb99d26bdbd5684f6cf269cc2c22606`. At this commit
 the model was confirmed to describe every function below.
 
 | Model action | Code it stands for |
@@ -119,7 +114,7 @@ inside or outside the cell lock.
 Find what changed since the sync commit:
 
 ```bash
-git diff 8bdd8aab80b10a708e72284941c3064b996a696f -- packages/bee-rs/crates/bee/src/verbs/cells/claims.rs packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs packages/bee-rs/crates/bee/src/verbs/cells/handlers_select.rs packages/bee-rs/crates/bee/src/verbs/cells/trace.rs
+git diff 9df0c5ea3fb99d26bdbd5684f6cf269cc2c22606 -- packages/bee-rs/crates/bee/src/verbs/cells/claims.rs packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs packages/bee-rs/crates/bee/src/verbs/cells/handlers_select.rs packages/bee-rs/crates/bee/src/verbs/cells/trace.rs
 ```
 
 Move the sync commit forward only after you have read each change, made

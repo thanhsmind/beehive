@@ -8,7 +8,6 @@ Variants == {"code", "fixed", "no-ownership-check"}
 Statuses == {"open", "claimed", "blocked", "capped", "dropped"}
 Ops == {"claim", "cap", "block", "unclaim", "reopen", "drop", "sweep"}
 CloseOps == {"cap", "block", "unclaim", "reopen", "drop"}
-GuardedOps == {"cap", "block", "unclaim", "reopen"}
 
 VARIABLES status, owner, token, claimNo, stale, revoked, pc, op, seen, swept, foreign
 
@@ -62,7 +61,7 @@ ClaimFile(s) ==
 
 ClaimCellUnderLock(s) ==
     /\ pc[s] = "store" /\ op[s] = "claim"
-    /\ IF status = "open" /\ (Variant # "fixed" \/ token = s)
+    /\ IF status = "open"
          THEN /\ status' = "claimed"
               /\ owner' = s
               /\ revoked' = FALSE
@@ -84,12 +83,12 @@ CloseAllowed(s, o) ==
       [] o = "block"   -> OwnershipOk(s)
       [] o = "unclaim" -> status = "claimed" /\ OwnershipOk(s)
       [] o = "reopen"  -> status \in {"blocked", "capped", "dropped"} /\ OwnershipOk(s)
-      [] o = "drop"    -> TRUE
+      [] o = "drop"    -> OwnershipOk(s)
 
 CloseCellUnderLock(s) ==
     /\ pc[s] = "lock" /\ op[s] \in CloseOps
     /\ IF CloseAllowed(s, op[s])
-         THEN /\ foreign' = (foreign \/ (op[s] \in GuardedOps /\ LiveForeignOwner(s)))
+         THEN /\ foreign' = (foreign \/ LiveForeignOwner(s))
               /\ status' = CloseTo(op[s])
               /\ owner' = None
               /\ seen' = [seen EXCEPT ![s] = IF token = None THEN 0 ELSE claimNo]
