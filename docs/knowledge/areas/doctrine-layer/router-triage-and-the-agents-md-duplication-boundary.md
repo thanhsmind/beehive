@@ -336,6 +336,8 @@ principle outside the namespace passes every source-side check and ships to no
 host repo at all — which is why the parity fence also reads the rendered
 plugin trees, not just `skills/`.
 
+Where the Claude runtime fetches a principle body from is a config choice, not part of this index: see Business Rules in `docs/knowledge/areas/onboarding/skillstation-hub-skills-and-aliases.md` (skillstation-principles D1, D5).
+
 - `bee-principle-red-before-green` (expertise/tests.md § Red before green):
   spoken: reproduce the bug as a failing test and watch it fail for the reported reason before you fix it — a never-red test proves nothing
   classes: feature, bugfix, refactor

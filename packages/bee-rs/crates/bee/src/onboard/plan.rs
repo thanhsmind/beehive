@@ -26,6 +26,7 @@ use super::render::{
 };
 use super::skills::{
     blocked_source_identity_skill_sync, compute_design_sync, compute_skill_sync, SkillSync,
+    PRINCIPLE_PREFIX,
 };
 use super::source::{read_source_release_identity, Engine};
 use super::templates as T;
@@ -35,7 +36,8 @@ use super::util::{
 };
 use crate::jsjson;
 use crate::verbs::skillstation_group::{
-    carries_alias_marker, hub_runner, hub_show, render_alias, HubErr, Run, RELATED_SKILLS,
+    carries_alias_marker, hub_runner, hub_show, principles_on_hub, render_alias, HubErr, Run,
+    RELATED_SKILLS,
 };
 use serde_json::{json, Map, Value};
 use std::path::{Path, PathBuf};
@@ -96,6 +98,43 @@ fn publish_skillstation_items() -> Vec<Value> {
             })
         })
         .collect()
+}
+
+fn principle_ids(engine: &Engine) -> Vec<String> {
+    super::render::list_bee_skill_entries(&engine.skills_root)
+        .into_iter()
+        .filter(|e| e.is_dir && !e.is_symlink && e.name.starts_with(PRINCIPLE_PREFIX))
+        .map(|e| e.name)
+        .collect()
+}
+
+fn publish_principle_items(engine: &Engine) -> Vec<Value> {
+    let root = repo_claude_root();
+    principle_ids(engine)
+        .into_iter()
+        .map(|skill| {
+            json!({
+                "action": "publish_skillstation",
+                "skill": skill,
+                "path": format!("{root}/{skill}"),
+                "target": "skillstation",
+                "source": engine.skills_root.to_string_lossy(),
+            })
+        })
+        .collect()
+}
+
+fn principles_served_by_hub(engine: &Engine, run: Run) -> Result<bool, String> {
+    let ids = principle_ids(engine);
+    for id in &ids {
+        match hub_show(run, id) {
+            Ok(hub) if hub.status == "active" => {}
+            Ok(hub) => return Err(format!("{id} is {} on the hub", hub.status)),
+            Err(HubErr::Missing) => return Err(format!("{id} is not on the hub")),
+            Err(HubErr::Skip(reason)) => return Err(reason),
+        }
+    }
+    Ok(!ids.is_empty())
 }
 
 fn alias_skip(skill: &str, reason: &str) -> Value {
@@ -1477,8 +1516,25 @@ pub fn compute_plan(engine: &Engine, repo_root: &Path, opts: &Options) -> Comput
     }
 
     // 7. skill sync (D1-D5, per target)
+    let mut alias_skips: Vec<Value> = Vec::new();
+    let hub_mode = principles_on_hub(repo_root);
+    let claude_in_scope = matches!(opts.runtime.as_str(), "claude" | "both");
+    let mut principles_from_hub = false;
+    if opts.sync_skills && hub_mode && claude_in_scope {
+        match principles_served_by_hub(engine, &*hub_runner(repo_root)) {
+            Ok(served) => principles_from_hub = served,
+            Err(reason) => alias_skips
+                .push(json!({"target": "skillstation-principles", "reason": reason})),
+        }
+    }
     let skill_sync = if opts.sync_skills {
-        compute_skill_sync(engine, repo_root, opts.global_skills, &design_packs)
+        compute_skill_sync(
+            engine,
+            repo_root,
+            opts.global_skills,
+            &design_packs,
+            principles_from_hub,
+        )
     } else if opts.design_packs.is_some() || recorded_packs.is_some() {
         compute_design_sync(engine, repo_root, &design_packs)
     } else {
@@ -1500,14 +1556,16 @@ pub fn compute_plan(engine: &Engine, repo_root: &Path, opts: &Options) -> Comput
 
     if opts.skillstation && opts.sync_skills && skill_sync.blocked.is_none() {
         plan.extend(publish_skillstation_items());
+        if hub_mode {
+            plan.extend(publish_principle_items(engine));
+        }
     }
 
-    let mut alias_skips: Vec<Value> = Vec::new();
-    if matches!(opts.runtime.as_str(), "claude" | "both") {
+    if claude_in_scope {
         let run = hub_runner(repo_root);
         let (items, skips) = skillstation_items(repo_root, &*run, opts.skillstation);
         plan.extend(items);
-        alias_skips = skips;
+        alias_skips.extend(skips);
     }
 
     // 8. host-generated verification skills (verification-ships-to-hosts D3).

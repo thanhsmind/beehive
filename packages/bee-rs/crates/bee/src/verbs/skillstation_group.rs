@@ -6,6 +6,14 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::time::Instant;
 
+pub(crate) fn principles_on_hub(root: &Path) -> bool {
+    crate::state::read_config_raw(root)
+        .get("skillstation")
+        .and_then(|s| s.get("principles"))
+        .and_then(Value::as_str)
+        == Some("hub")
+}
+
 #[cfg(not(test))]
 pub(crate) fn hub_runner(root: &Path) -> Box<dyn Fn(&[&str]) -> Result<Value, String>> {
     let root = root.to_path_buf();
@@ -345,6 +353,47 @@ mod tests {
 
     fn skill_md(root: &Path, id: &str) -> PathBuf {
         root.join(".claude").join("skills").join(id).join("SKILL.md")
+    }
+
+    fn principles_cfg(root: &Path, tracked: Option<&str>, local: Option<&str>) {
+        std::fs::create_dir_all(root.join(".bee")).unwrap();
+        if let Some(t) = tracked {
+            std::fs::write(root.join(".bee/config.json"), t).unwrap();
+        }
+        if let Some(l) = local {
+            std::fs::write(root.join(".bee/config.local.json"), l).unwrap();
+        }
+    }
+
+    #[test]
+    fn principles_on_hub_is_true_only_for_the_string_hub() {
+        let d = tempfile::tempdir().unwrap();
+        assert!(!principles_on_hub(d.path()));
+        principles_cfg(d.path(), Some("{}"), None);
+        assert!(!principles_on_hub(d.path()));
+        principles_cfg(d.path(), Some(r#"{"skillstation":{"principles":"hub"}}"#), None);
+        assert!(principles_on_hub(d.path()));
+        principles_cfg(d.path(), Some(r#"{"skillstation":{"principles":"local"}}"#), None);
+        assert!(!principles_on_hub(d.path()));
+        principles_cfg(d.path(), Some(r#"{"skillstation":{"principles":true}}"#), None);
+        assert!(!principles_on_hub(d.path()));
+    }
+
+    #[test]
+    fn principles_on_hub_honours_the_local_overlay() {
+        let d = tempfile::tempdir().unwrap();
+        principles_cfg(
+            d.path(),
+            Some(r#"{"skillstation":{"principles":"local"}}"#),
+            Some(r#"{"skillstation":{"principles":"hub"}}"#),
+        );
+        assert!(principles_on_hub(d.path()));
+        principles_cfg(
+            d.path(),
+            Some(r#"{"skillstation":{"principles":"hub"}}"#),
+            Some(r#"{"skillstation":{"principles":"local"}}"#),
+        );
+        assert!(!principles_on_hub(d.path()));
     }
 
     #[test]

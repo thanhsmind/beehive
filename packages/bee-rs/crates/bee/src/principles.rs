@@ -116,12 +116,12 @@ pub(crate) fn principle_lines(root: &Path, class: Option<&str>) -> Vec<String> {
     let Ok(body) = std::fs::read_to_string(root.join(PRINCIPLE_INDEX)) else {
         return Vec::new();
     };
-    render_lines(&body, class)
+    render_lines(&body, class, crate::verbs::skillstation_group::principles_on_hub(root))
 }
 
 /// `principle_lines` with the index text already in hand — the seam the unit
 /// tests drive, so they never need a repo tree on disk.
-fn render_lines(body: &str, class: &str) -> Vec<String> {
+fn render_lines(body: &str, class: &str, hub: bool) -> Vec<String> {
     let matched: Vec<Principle> = parse_principles(body)
         .into_iter()
         .filter(|p| p.classes.iter().any(|c| c.eq_ignore_ascii_case(class)))
@@ -129,9 +129,12 @@ fn render_lines(body: &str, class: &str) -> Vec<String> {
     if matched.is_empty() {
         return Vec::new();
     }
-    let mut lines = vec![format!(
-        "- Principles (class={class}) — name each one you apply and the decision it changed:"
-    )];
+    let mut header =
+        format!("- Principles (class={class}) — name each one you apply and the decision it changed:");
+    if hub {
+        header.push_str(" Load each one with the skillstation MCP tool skill_get, the slug as skill_id.");
+    }
+    let mut lines = vec![header];
     lines.extend(
         matched.iter().map(|p| format!("  - `{}` — {}", p.slug, p.spoken)),
     );
@@ -177,7 +180,7 @@ mod tests {
 
     #[test]
     fn a_class_with_matches_names_each_principle_and_its_spoken_line() {
-        let lines = render_lines(INDEX, "bugfix");
+        let lines = render_lines(INDEX, "bugfix", false);
         assert_eq!(
             lines,
             vec![
@@ -190,28 +193,56 @@ mod tests {
     }
 
     #[test]
+    fn hub_mode_extends_only_the_header_line() {
+        let plain = render_lines(INDEX, "bugfix", false);
+        let hub = render_lines(INDEX, "bugfix", true);
+        assert_eq!(
+            hub[0],
+            format!("{} Load each one with the skillstation MCP tool skill_get, the slug as skill_id.", plain[0])
+        );
+        assert_eq!(hub[1..], plain[1..]);
+    }
+
+    #[test]
+    fn principle_lines_reads_hub_mode_from_the_repo_config() {
+        let dir = tempfile::tempdir().unwrap();
+        let idx = dir.path().join(PRINCIPLE_INDEX);
+        std::fs::create_dir_all(idx.parent().unwrap()).unwrap();
+        std::fs::write(&idx, INDEX).unwrap();
+        let plain = principle_lines(dir.path(), Some("bugfix"));
+        assert!(!plain[0].contains("skill_get"));
+        std::fs::create_dir_all(dir.path().join(".bee")).unwrap();
+        std::fs::write(
+            dir.path().join(".bee/config.json"),
+            r#"{"skillstation":{"principles":"hub"}}"#,
+        )
+        .unwrap();
+        assert!(principle_lines(dir.path(), Some("bugfix"))[0].contains("skill_get"));
+    }
+
+    #[test]
     fn a_row_listing_several_classes_matches_every_one_of_them() {
         for class in ["feature", "bugfix", "refactor"] {
-            let lines = render_lines(INDEX, class);
+            let lines = render_lines(INDEX, class, false);
             assert!(
                 lines.iter().any(|l| l.contains("bee-principle-red-before-green")),
                 "class {class} lost the three-class row: {lines:?}"
             );
         }
         // `refactor` is the only class both rows carry.
-        assert_eq!(render_lines(INDEX, "refactor").len(), 3);
-        assert_eq!(render_lines(INDEX, "feature").len(), 2);
+        assert_eq!(render_lines(INDEX, "refactor", false).len(), 3);
+        assert_eq!(render_lines(INDEX, "feature", false).len(), 2);
     }
 
     #[test]
     fn a_class_matching_zero_rows_emits_no_block_at_all() {
-        assert!(render_lines(INDEX, "docs").is_empty());
+        assert!(render_lines(INDEX, "docs", false).is_empty());
     }
 
     #[test]
     fn a_missing_section_emits_no_block_at_all() {
         assert!(parse_principles("# Concept\n\n## Open Gaps\n\n- nothing here\n").is_empty());
-        assert!(render_lines("# Concept\n\n## Open Gaps\n\n- nothing\n", "feature").is_empty());
+        assert!(render_lines("# Concept\n\n## Open Gaps\n\n- nothing\n", "feature", false).is_empty());
     }
 
     #[test]

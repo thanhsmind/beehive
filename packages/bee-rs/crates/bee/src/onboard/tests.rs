@@ -3620,3 +3620,181 @@ mod skillstation_alias {
         assert!(hub.0.lock().unwrap().is_empty());
     }
 }
+
+mod principles_on_the_hub {
+    use super::*;
+    use crate::verbs::skillstation_group::set_test_hub;
+    use std::rc::Rc;
+
+    const IDS: [&str; 2] = ["bee-principle-alpha", "bee-principle-beta"];
+
+    struct Hub;
+
+    impl Drop for Hub {
+        fn drop(&mut self) {
+            set_test_hub(None);
+        }
+    }
+
+    fn hub(statuses: &[(&'static str, &'static str)]) -> Hub {
+        let statuses: Vec<(&'static str, &'static str)> = statuses.to_vec();
+        set_test_hub(Some(Rc::new(move |args: &[&str]| {
+            let id = args.get(2).copied().unwrap_or("");
+            match statuses.iter().find(|(k, _)| *k == id) {
+                Some((_, status)) => Ok(json!({
+                    "manifest": {"status": status, "description": "A principle."},
+                    "content": "---\nname: x\n---\nbody\n",
+                })),
+                None => Err(format!("skill not found: {id}")),
+            }
+        })));
+        Hub
+    }
+
+    fn all_active() -> Vec<(&'static str, &'static str)> {
+        IDS.iter().map(|id| (*id, "active")).collect()
+    }
+
+    fn fixture_with_local_copies() -> Fixture {
+        let fx = fixture();
+        for id in IDS {
+            write(&fx.root.join("skills").join(id).join("SKILL.md"), "principle\n");
+        }
+        apply(&fx, &["--runtime", "claude"]);
+        for id in IDS {
+            assert!(fx.repo.join(".claude").join("skills").join(id).exists());
+            assert!(fx.repo.join(".agents").join("skills").join(id).exists());
+        }
+        fx
+    }
+
+    fn go_hub(fx: &Fixture) {
+        write(
+            &fx.repo.join(".bee").join("config.json"),
+            r#"{"skillstation":{"principles":"hub"}}"#,
+        );
+    }
+
+    fn principle_removals(p: &Value) -> Vec<(String, String)> {
+        p["plan"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|i| i["action"] == "remove_skill")
+            .filter(|i| i["skill"].as_str().unwrap().starts_with("bee-principle-"))
+            .map(|i| {
+                (i["target"].as_str().unwrap().to_string(), i["skill"].as_str().unwrap().to_string())
+            })
+            .collect()
+    }
+
+    fn principle_skips(p: &Value) -> Vec<Value> {
+        p["skills"]["skipped"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|s| s["target"] == "skillstation-principles")
+            .cloned()
+            .collect()
+    }
+
+    #[test]
+    fn every_principle_active_removes_the_claude_copies_only_and_replans_clean() {
+        let fx = fixture_with_local_copies();
+        go_hub(&fx);
+        let _hub = hub(&all_active());
+        let p = plan(&fx, &["--runtime", "claude"]);
+        let removed: Vec<(String, String)> = IDS
+            .iter()
+            .map(|id| ("repo-claude".to_string(), id.to_string()))
+            .collect();
+        assert_eq!(principle_removals(&p), removed);
+        assert!(principle_skips(&p).is_empty());
+        apply(&fx, &["--runtime", "claude"]);
+        for id in IDS {
+            assert!(!fx.repo.join(".claude").join("skills").join(id).exists(), "{id}");
+            assert!(fx.repo.join(".agents").join("skills").join(id).exists(), "{id}");
+        }
+        assert!(fx.repo.join(".claude").join("skills").join("bee-hive").exists());
+        let again = plan(&fx, &["--runtime", "claude"]);
+        assert!(principle_removals(&again).is_empty());
+        assert!(principle_skips(&again).is_empty());
+        assert_eq!(again["status"], "up_to_date", "{:?}", again["plan"]);
+    }
+
+    #[test]
+    fn one_draft_principle_keeps_every_copy_and_gives_one_skip_row() {
+        let fx = fixture_with_local_copies();
+        go_hub(&fx);
+        let _hub = hub(&[(IDS[0], "active"), (IDS[1], "draft")]);
+        let p = plan(&fx, &["--runtime", "claude"]);
+        assert!(principle_removals(&p).is_empty());
+        let skips = principle_skips(&p);
+        assert_eq!(skips.len(), 1, "{skips:?}");
+        assert_eq!(skips[0]["reason"], "bee-principle-beta is draft on the hub");
+    }
+
+    #[test]
+    fn a_principle_missing_from_the_hub_gives_one_skip_row() {
+        let fx = fixture_with_local_copies();
+        go_hub(&fx);
+        let _hub = hub(&[(IDS[0], "active")]);
+        let p = plan(&fx, &["--runtime", "claude"]);
+        assert!(principle_removals(&p).is_empty());
+        let skips = principle_skips(&p);
+        assert_eq!(skips.len(), 1, "{skips:?}");
+        assert_eq!(skips[0]["reason"], "bee-principle-beta is not on the hub");
+    }
+
+    #[test]
+    fn a_hub_that_cannot_be_read_gives_one_skip_row_and_keeps_every_copy() {
+        let fx = fixture_with_local_copies();
+        go_hub(&fx);
+        let p = plan(&fx, &["--runtime", "claude"]);
+        assert!(principle_removals(&p).is_empty());
+        let skips = principle_skips(&p);
+        assert_eq!(skips.len(), 1, "{skips:?}");
+        assert_eq!(skips[0]["reason"], "skillstation is not on PATH");
+    }
+
+    #[test]
+    fn the_skillstation_flag_plans_one_publish_per_principle_from_the_engine_source() {
+        let fx = fixture_with_local_copies();
+        go_hub(&fx);
+        let _hub = hub(&all_active());
+        let p = plan(&fx, &["--runtime", "claude", "--skillstation"]);
+        let published: Vec<Value> = publish_items(&p, "plan")
+            .into_iter()
+            .filter(|i| i["skill"].as_str().unwrap().starts_with("bee-principle-"))
+            .collect();
+        assert_eq!(published.len(), IDS.len(), "{published:?}");
+        for (item, id) in published.iter().zip(IDS) {
+            assert_eq!(item["skill"], id);
+            assert_eq!(item["target"], "skillstation");
+            assert_eq!(item["source"], json!(fx.root.join("skills").to_string_lossy()));
+        }
+        let without = plan(&fx, &["--runtime", "claude"]);
+        assert!(publish_items(&without, "plan").is_empty());
+    }
+
+    #[test]
+    fn without_the_config_key_the_plan_is_unchanged() {
+        let fx = fixture_with_local_copies();
+        let _hub = hub(&all_active());
+        let p = plan(&fx, &["--runtime", "claude", "--skillstation"]);
+        assert!(principle_removals(&p).is_empty());
+        assert!(principle_skips(&p).is_empty());
+        let published = publish_items(&p, "plan");
+        assert!(published.iter().all(|i| !i["skill"].as_str().unwrap().starts_with("bee-principle-")));
+    }
+
+    #[test]
+    fn a_codex_only_run_never_reads_the_principles_on_the_hub() {
+        let fx = fixture_with_local_copies();
+        go_hub(&fx);
+        let _hub = hub(&all_active());
+        let p = plan(&fx, &["--runtime", "codex"]);
+        assert!(principle_removals(&p).is_empty());
+        assert!(principle_skips(&p).is_empty());
+    }
+}

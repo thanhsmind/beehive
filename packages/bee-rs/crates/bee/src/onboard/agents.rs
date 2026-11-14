@@ -154,17 +154,27 @@ pub fn render_agent_template(engine: &Engine, agent_name: &str, model: &str) -> 
 /// only an agent bee does not know (`AGENT_ROLES_BY_NAME` has no entry) —
 /// that template is never rendered, exactly as before. A `{{TIER_MODEL}}`
 /// line in a stale template copy is dropped rather than shipped verbatim.
-pub fn render_claude_agent_file(engine: &Engine, agent_name: &str) -> Option<String> {
+pub fn render_claude_agent_file(engine: &Engine, agent_name: &str, repo_root: &Path) -> Option<String> {
     roles_for_agent(agent_name)?;
     let source =
         read_text_if_exists(&engine.templates_agents_dir.join(format!("{agent_name}.md.tmpl")));
-    if !source.contains("{{TIER_MODEL}}") {
-        return Some(source);
-    }
+    let hub = crate::verbs::skillstation_group::principles_on_hub(repo_root);
     let mut out = String::with_capacity(source.len());
     for line in source.split_inclusive('\n') {
-        if !line.contains("{{TIER_MODEL}}") {
-            out.push_str(line);
+        if line.contains("{{TIER_MODEL}}") {
+            continue;
+        }
+        match line.strip_prefix("tools:") {
+            Some(_) if hub => {
+                let (body, eol) = match line.strip_suffix('\n') {
+                    Some(b) => (b, "\n"),
+                    None => (line, ""),
+                };
+                out.push_str(body);
+                out.push_str(", mcp__skillstation__skill_get");
+                out.push_str(eol);
+            }
+            _ => out.push_str(line),
         }
     }
     Some(out)
@@ -220,7 +230,7 @@ pub fn compute_agent_file_plan(engine: &Engine, repo_root: &Path) -> Vec<Value> 
         // no model resolve, so a herded/cli/null slot keeps the file (the
         // dispatch payload's model param is the authority). Removal is only
         // for a template bee does not know.
-        match render_claude_agent_file(engine, &agent_name) {
+        match render_claude_agent_file(engine, &agent_name, repo_root) {
             Some(rendered) => {
                 if read_text_if_exists(&target) != rendered {
                     items.push(
@@ -517,7 +527,7 @@ mod tests {
         // `model: {{TIER_MODEL}}` template line is dropped, never shipped.
         for it in &items {
             let agent = it["agent"].as_str().unwrap();
-            let rendered = render_claude_agent_file(&engine, agent).unwrap();
+            let rendered = render_claude_agent_file(&engine, agent, &repo).unwrap();
             assert!(
                 !rendered.contains("model:"),
                 "rendered {agent} still carries a model pin: {rendered}"
@@ -577,6 +587,46 @@ mod tests {
         assert_eq!(items.len(), 1);
         assert_eq!(items[0]["action"], "remove_agent_file");
         assert_eq!(items[0]["agent"], "bee-mystery");
+    }
+
+    #[test]
+    fn hub_mode_appends_the_fetch_tool_to_the_tools_line_and_settles_after_apply() {
+        let dir = tempfile::tempdir().unwrap();
+        let engine = Engine::from_plugin_root(dir.path().to_path_buf());
+        std::fs::create_dir_all(&engine.templates_agents_dir).unwrap();
+        std::fs::write(
+            engine.templates_agents_dir.join("bee-scout.md.tmpl"),
+            "---\nname: bee-scout\ntools: Read, Grep\n---\nbody\n",
+        )
+        .unwrap();
+        std::fs::write(
+            engine.templates_agents_dir.join("bee-guard.md.tmpl"),
+            "---\nname: bee-guard\n---\nbody\n",
+        )
+        .unwrap();
+        let repo = dir.path().join("repo");
+        std::fs::create_dir_all(repo.join(".bee")).unwrap();
+        let plain = render_claude_agent_file(&engine, "bee-scout", &repo).unwrap();
+        assert_eq!(plain, "---\nname: bee-scout\ntools: Read, Grep\n---\nbody\n");
+        std::fs::write(
+            repo.join(".bee/config.json"),
+            r#"{"skillstation":{"principles":"hub"}}"#,
+        )
+        .unwrap();
+        let hub = render_claude_agent_file(&engine, "bee-scout", &repo).unwrap();
+        assert_eq!(
+            hub,
+            "---\nname: bee-scout\ntools: Read, Grep, mcp__skillstation__skill_get\n---\nbody\n"
+        );
+        let bare = render_claude_agent_file(&engine, "bee-guard", &repo).unwrap();
+        assert_eq!(bare, "---\nname: bee-guard\n---\nbody\n");
+        for agent in ["bee-scout", "bee-guard"] {
+            let target = repo.join(".claude/agents").join(format!("{agent}.md"));
+            std::fs::create_dir_all(target.parent().unwrap()).unwrap();
+            std::fs::write(&target, render_claude_agent_file(&engine, agent, &repo).unwrap())
+                .unwrap();
+        }
+        assert!(compute_agent_file_plan(&engine, &repo).is_empty());
     }
 
     #[test]
