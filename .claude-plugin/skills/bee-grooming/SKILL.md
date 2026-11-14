@@ -1,7 +1,7 @@
 ---
 name: bee-grooming
 description: >-
-  Hunt and kill tech debt IN THE CURRENT PROJECT — dead code, stale docs, TODO/stubs, duplication, drifted specs — reported in plain project language. bee's own housekeeping (the entropy score) is a short side-note, and `.bee/`, `.claude/`, `.codex/` are never treated as project debt. Use when the user asks to clean up, find debt, or audit the repo.
+  Hunt and kill tech debt in the current project — dead code, stale docs, TODOs, duplication, drifted specs. Use when the user asks to clean up, dọn dẹp, find debt, or audit the repo. Not for fixing a reported bug.
 metadata:
   version: '0.2'
   ecosystem: bee

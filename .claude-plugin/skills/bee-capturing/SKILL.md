@@ -1,7 +1,7 @@
 ---
 name: bee-capturing
 description: >-
-  Capture what settles into durable records — area specs, decisions, learnings. SELF-TRIGGERING: invoke this yourself, unprompted, the moment a rule, behavior, or value settles in discussion — the user never has to ask for knowledge to be recorded. Also use when execution completes, when documenting a screen/API/job/area, and when capturing learnings and decisions at feature close or on intentional abandon.
+  Capture what settles into durable records — specs, decisions, learnings. SELF-TRIGGERING: invoke it yourself, unprompted, the moment a rule or value settles. Also use at execution close, when documenting an area, and at feature close or abandon. Not for periodic audits (bee-knowledge-upkeep).
 metadata:
   version: '0.1'
   ecosystem: bee

@@ -1,7 +1,7 @@
 ---
 name: bee-hive
 description: >-
-  Route the bee workflow: session start, the next skill, gates, and onboarding. Use when starting or resuming any bee session, choosing the next bee skill, running go mode, checking onboarding state, enforcing workflow gates, or setting/checking the gate-bypass level (off/normal/full/total).
+  Route the bee workflow: session start, the next skill, gates, onboarding. Use when starting or resuming a bee session, asking where work stands or which step comes next, checking onboarding state, running go mode, or setting the gate-bypass level (off/normal/full/total).
 metadata:
   version: '0.2'
   ecosystem: bee

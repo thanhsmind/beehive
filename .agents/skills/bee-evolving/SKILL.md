@@ -1,7 +1,7 @@
 ---
 name: bee-evolving
 description: >-
-  Run bee's gated self-improvement loop over its collected feedback digest. Use when the human asks bee to improve itself from ranked friction/feedback — in the bee repository only, on the human's explicit invocation. Never auto-runs, never runs in a host repo, never pushes on its own.
+  Run bee's gated self-improvement loop over its collected feedback digest. Use when the human asks bee to improve itself from ranked friction or feedback, in the bee repo only. Never auto-runs. Not for recording a settled fact (bee-capturing).
 metadata:
   version: '0.1'
   ecosystem: bee

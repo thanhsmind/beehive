@@ -4,47 +4,47 @@
   "skills": [
     {
       "name": "bee-capturing",
-      "sha256": "1ce6b135e7ee2c03f87556e1b7a7ed222443ef4c2934be0b5582337f454ad04e"
+      "sha256": "31449bf5ecb2f35b9d5154a628483752f2d359c51868d112d7965d22e447f684"
     },
     {
       "name": "bee-deploying",
-      "sha256": "aa150b07f3f6acaf7dc9932b83efdc179600898c2e4e323bfd4dbd00bdb7cd40"
+      "sha256": "b75e79301a01303ad5d72b7c8546e206992989197e946954a3ad7a05ad437cf0"
     },
     {
       "name": "bee-evolving",
-      "sha256": "231162e2eb8d3de61bba8b07594b17bab24420643a259273627d913287fb5448"
+      "sha256": "2c6e0319b63d5db0b918e38a431ef2e89963efd71d67410a4d201cf4eb1680bc"
     },
     {
       "name": "bee-grooming",
-      "sha256": "619f9fb5992e7ac07701eac08cdb9e00b56f648fed37983d3f218bd773d74f7a"
+      "sha256": "5d8782f484ff8fab5912ba20e6d1448001f8d57b1f6ecefd9d875004e002fe3e"
     },
     {
       "name": "bee-herding",
-      "sha256": "87eaeb0f94aca23bf5bcd6b0b44d701b9f23142a328a8cbd3782455a595d4dd7"
+      "sha256": "e41bd70c57ad931cb1ee207377a071365f129f24c8039c46bc034aaeaa8f07ce"
     },
     {
       "name": "bee-herdr",
-      "sha256": "cffea6d5ee5f6cf8af65ee3f821ca85b206616e632887463ad3528d60fa7feac"
+      "sha256": "de1b84eb4acac2de7228bf2b75aa3458e258329adcddebb5fdc6a4c5207b0cf1"
     },
     {
       "name": "bee-hive",
-      "sha256": "493f3c4a6a340aefe394632f0e1151e4786e6f11c31895972dd9081800236ce7"
+      "sha256": "34a236e2715f99a1d245d6f3c2a82e63ff9c835e9535ad319ac659fed051edcc"
     },
     {
       "name": "bee-how",
-      "sha256": "1d281146f27423dbbf58723392a9515791359a4e2dc495f9f46aec8f6f05f783"
+      "sha256": "9d25a40ca38b8f2047c79e05744b4f7570043d4797409d8da733aadd8ded87f7"
     },
     {
       "name": "bee-knowledge-setup",
-      "sha256": "48a9fee988c124f769ae3344d8d389304e0d11dde5a4c6491a2ba668b780dac9"
+      "sha256": "d3d0ab668baa447beb8bb3620c43a50571d6a6b7e8185dd1acca62f7e6ff985d"
     },
     {
       "name": "bee-knowledge-upkeep",
-      "sha256": "ba9f66f30f7f8d7396b84788a26d3ea91a6bd4e2f6f5d1baf0d0b23afea3cd9d"
+      "sha256": "4fcc9e6cd84d869211fc82c44bd06e642940a317a24221aacfef7ff79a40dff0"
     },
     {
       "name": "bee-planning",
-      "sha256": "f1970a619525762e0c4ecfd3bbfd4a78a49d6067cbf60c82a0575292568ce243"
+      "sha256": "d60071e1309081d2b84e080b9f570c5d07d1b627976dbedb9059e22a6cbea183"
     },
     {
       "name": "bee-principle-attack-the-premise",
@@ -144,51 +144,51 @@
     },
     {
       "name": "bee-researching",
-      "sha256": "a6f99f45416b8475c3ab18a691dacd0c67c9f3970a2f3a8cb15a79f155b97948"
+      "sha256": "d8cddcb04dc26ea2e3ff848e682f95aa0d8e818dcd9c1aa3c91895c7f0943194"
     },
     {
       "name": "bee-reviewing",
-      "sha256": "b3dab86b6c9c4eb52cf741d7d8c4bad9d4151e317b8990c1a6fba5cc104fa50b"
+      "sha256": "739c0b47dd06fa40b88e6a10279bcb20c882bb47895886d7458f820654e2eece"
     },
     {
       "name": "bee-shaping",
-      "sha256": "f83a9d7ca628362e42e532574b695cea6d338f81fc4a9f9efdc1eb3e9399858f"
+      "sha256": "bfc09cc7469b6e2f15cfc0a960f96163098bc09e3813fe2e893cd7c888e2a80b"
     },
     {
       "name": "bee-swarming",
-      "sha256": "aac5c6d7d7995787274ae76c409fc6705bce29beb47567bcd2e28e5b8a5d685a"
+      "sha256": "aaf330b5942e081993ee71f4d71fd43770fa3919acbd347ab6bb9a8be95052af"
     },
     {
       "name": "bee-teach",
-      "sha256": "62ddc903a4459053ee5e65c2011db982ebd78e48106246573856b7adaa599d5b"
+      "sha256": "e75b23d4f4a3eba3a211a0afa36f16494cbaab29c31ee2642418f76293d25b01"
     },
     {
       "name": "bee-technical-writing",
-      "sha256": "362cf1786cf923e319e5e2afcc85e7e3441d1e4d9ee7700b4818d483b621b18b"
+      "sha256": "2561831eafecab15c44100afde2789109be4ea0d4a5280fa03835c4b4ec3cdf8"
     },
     {
       "name": "bee-unslop",
-      "sha256": "dddea4e4e43d212d20efdf9f0e3b1cc3bb2110fe23cfbb3da5610718e9b527b7"
+      "sha256": "819acf92f0691c036060619cc048475abcc1c5946158261d02f1b5f3d58dfdcd"
     },
     {
       "name": "bee-verify-upkeep",
-      "sha256": "0ce4f30865d32f7fddd41ff2b9fc645eb38f9488d6d5e07659ed73152eb96ff4"
+      "sha256": "a919de08e56ecbfe669d36065e103b90b27bd0013fb1f2fa322a45596d099b41"
     },
     {
       "name": "bee-verifying",
-      "sha256": "13be05912002fa7a9607924edbeb9fc00f11479dc584baaf04fe23df24315a58"
+      "sha256": "84bb93f5b37703e497050b40812bf7355254c9afc35e3985f4339053778f1413"
     },
     {
       "name": "bee-wayfinding",
-      "sha256": "b743438a713c5a802b2678d21d88f93776afdb568c673130d13ea2fef8772f71"
+      "sha256": "a69ec0e6e8733236c3ad0722b5e2141d7af04219c9305161ef5051b1f33622ed"
     },
     {
       "name": "bee-why",
-      "sha256": "57c6038975e14de59cf4f71c2bd0e4de36bd45bf966be5d9d9d4510951a39edf"
+      "sha256": "a3d854b8f76c526b442822dc0a3d6c409be2aeb32e7188039519f562af5432ff"
     },
     {
       "name": "bee-writing-skills",
-      "sha256": "0e5d16ccf7dc189e575c086da10d663ce1778681c9754b93ae02386556719efd"
+      "sha256": "a8aed8b5d1ea50b8de09183f550e056ee964fcdfa7b8a8c78fb3767f71043916"
     }
   ]
 }

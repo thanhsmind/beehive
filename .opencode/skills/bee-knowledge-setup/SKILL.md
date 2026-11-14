@@ -1,7 +1,7 @@
 ---
 name: bee-knowledge-setup
 description: >-
-  Build a project's `docs/knowledge/` bundle from the tree: one area concept per real subsystem, the orientation file, seeded anchors, and a strict check that proves it. Use ONCE per repo, when the repo has no `docs/knowledge/` bundle and the user asks to set up, create, bootstrap or start the knowledge base, or when onboarding finds none. Not for the periodic audit of a bundle that already exists — that is bee-knowledge-upkeep — and not for the in-flow write of one settled fact, which stays with bee-capturing.
+  Build a project's docs/knowledge/ bundle from the tree, once. Use when the repo has no docs/knowledge/ bundle and the user asks to set up, create or bootstrap the knowledge base (kho tri thức). Not for auditing an existing bundle (bee-knowledge-upkeep) or recording one fact (bee-capturing).
 disable-model-invocation: true
 metadata:
   version: '0.1'

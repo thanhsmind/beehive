@@ -1,7 +1,7 @@
 ---
 name: bee-shaping
 description: >-
-  Shape fuzzy intent into locked, buildable decisions. Use when a feature request has gray areas or unstated product decisions, when a new backlog item needs its first unattended triage (proceed or park), when resolved decisions must be locked into docs/history/<feature>/CONTEXT.md, or when a feature's implement plan must be rendered for gate review. One skill is the whole front door — the interviewer, the triage judge, the decision scribe, and the plan renderer. Not for implementation research, cell creation, or code.
+  Shape fuzzy intent into locked, buildable decisions. Use when a request has gray areas or unstated product decisions to pin down, a new backlog item needs first triage (proceed or park), or decisions must be locked into CONTEXT.md. Not for planning the lane (bee-planning) or code.
 metadata:
   version: '0.1'
   ecosystem: bee
