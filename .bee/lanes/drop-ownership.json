@@ -11,9 +11,9 @@
     "uat": false
   },
   "summary": "Feature \"drop-ownership\" started at phase \"exploring\" (lane).",
-  "next_action": "Continue bee-exploring for \"drop-ownership\" (lane).",
+  "next_action": "Merged into main at 5a30b0b; capture what settled, then bee close --feature drop-ownership.",
   "created_at": "2026-11-14T04:31:18.866Z",
-  "run_state": "awaiting-approval",
+  "run_state": null,
   "waiting_on": null,
   "route": {
     "class": "feature",
@@ -23,12 +23,5 @@
     "rationale": null,
     "updated_at": "2026-11-14T04:31:08.549Z",
     "feature": "drop-ownership"
-  },
-  "merge_ready": {
-    "since": "2026-11-14T04:42:44.831Z",
-    "branch": "wt/drop-ownership",
-    "worktree_id": "beehive--wt--drop-ownership",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
