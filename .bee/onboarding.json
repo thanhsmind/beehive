@@ -59,7 +59,7 @@
     },
     "verify_skills": {
       ".claude/skills/verify-app": {
-        "SKILL.md": "5a1a9e0cf9938fad3feaf806d0770b1c731a77bf157789105f551ac1600c2e90",
+        "SKILL.md": "53390e3ab0d18f2fa998c85e1c7f0abefb60096a20c3f49e1b1f5706a8164985",
         "control-bee": "613ed4462ebdee90d80157cf829dbaa74d91261584019cfa2f610068c0230983",
         "features/README.md": "5a406fcc1f26d35cace271d33fb0f0e69905f1fb64ba10bfbeda25622ebae8a3",
         "features/cells-and-proof.md": "28719684a09d9ac3a2e781216321fbde72ce14cffd6bde79ff1027f4fecbb676",
@@ -80,7 +80,7 @@
         "fixtures/role-plan-v2.md": "05f99d5afeaad84a43de714a90ab388ba7073ff93e83a783764faba4d0c49965"
       },
       ".agents/skills/verify-app": {
-        "SKILL.md": "5a1a9e0cf9938fad3feaf806d0770b1c731a77bf157789105f551ac1600c2e90",
+        "SKILL.md": "53390e3ab0d18f2fa998c85e1c7f0abefb60096a20c3f49e1b1f5706a8164985",
         "control-bee": "613ed4462ebdee90d80157cf829dbaa74d91261584019cfa2f610068c0230983",
         "features/README.md": "5a406fcc1f26d35cace271d33fb0f0e69905f1fb64ba10bfbeda25622ebae8a3",
         "features/cells-and-proof.md": "28719684a09d9ac3a2e781216321fbde72ce14cffd6bde79ff1027f4fecbb676",
@@ -101,7 +101,7 @@
         "fixtures/role-plan-v2.md": "05f99d5afeaad84a43de714a90ab388ba7073ff93e83a783764faba4d0c49965"
       },
       ".opencode/skills/verify-app": {
-        "SKILL.md": "5a1a9e0cf9938fad3feaf806d0770b1c731a77bf157789105f551ac1600c2e90",
+        "SKILL.md": "53390e3ab0d18f2fa998c85e1c7f0abefb60096a20c3f49e1b1f5706a8164985",
         "control-bee": "613ed4462ebdee90d80157cf829dbaa74d91261584019cfa2f610068c0230983",
         "features/README.md": "5a406fcc1f26d35cace271d33fb0f0e69905f1fb64ba10bfbeda25622ebae8a3",
         "features/cells-and-proof.md": "28719684a09d9ac3a2e781216321fbde72ce14cffd6bde79ff1027f4fecbb676",
@@ -188,5 +188,5 @@
   },
   "design_role_offered": true,
   "created_at": "2026-07-24T03:53:44.750Z",
-  "updated_at": "2026-11-14T17:39:30.605Z"
+  "updated_at": "2026-11-14T17:45:59.554Z"
 }

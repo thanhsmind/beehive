@@ -229,8 +229,8 @@ release commit; a red smoke stops the release.
 - **`--files` on `bee route --set` is a count, not a list.** It wants an integer.
 - **A `small`-lane cap needs a registered worker.** `bee cells cap` refuses
   unless `trace.worker` also appears in `state.json` `workers[]` for that cell.
-  Register it with `bee state worker add --nickname <w> --cell <id>`, or use a
-  `tiny` lane, which runs inline.
+  Register it with `bee state worker add --nickname <w> --cell <id>`. A `tiny`
+  code cell is no way round it: it is dispatched too.
 - **The close `mistakes` door checks the cells first, the mailbox second.** A
   bare `bee cells cap --no-mistakes` caps and writes `trace.no_mistakes: true`;
   `bee mailbox reflect --no-mistakes` (bare) clears the mailbox half.
