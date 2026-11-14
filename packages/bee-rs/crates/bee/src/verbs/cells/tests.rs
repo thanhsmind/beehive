@@ -9205,6 +9205,39 @@ use std::time::Instant;
         );
     }
 
+    #[test]
+    fn dispatch_wave_rolling_without_run_refuses_naming_run() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = wfl4_wave_root(&tmp, "{}");
+        lane_with_route(&root, "f");
+
+        let payload = wfl4_dispatch_wave_run(&root, &["--feature", "f", "--rolling"]);
+        let error = payload["error"].as_str().unwrap_or_else(|| panic!("payload: {payload}"));
+        assert!(error.contains("--run"), "payload: {payload}");
+    }
+
+    #[test]
+    fn dispatch_wave_rolling_returns_native_cells_once_and_claims_each_once() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = wfl4_wave_root(&tmp, r#"{"models":{"claude":{"generation":"sonnet"}}}"#);
+        lane_with_route(&root, "f");
+        for id in ["wg-1", "wg-2", "wg-3"] {
+            let mut c = cell(id, "open", "f", json!([]));
+            c["files"] = json!([format!("docs/{id}.md")]);
+            c["tier"] = json!("generation");
+            c["role"] = json!("code");
+            write_cell_fixture(&root, id, &c);
+        }
+
+        let payload =
+            wfl4_dispatch_wave_run(&root, &["--feature", "f", "--run", "--rolling", "--limit", "1"]);
+
+        assert_eq!(payload["ran"], json!([]), "payload: {payload}");
+        assert_eq!(payload["skipped"], json!([]), "payload: {payload}");
+        let native = payload["native"].as_array().unwrap_or_else(|| panic!("payload: {payload}"));
+        assert_eq!(native.len(), 3, "payload: {payload}");
+    }
+
     /// must-have: "one refusal never poisons the batch" — a cell already
     /// claimed by another worker still occupies its wave slot (schedulable
     /// covers open AND claimed), the wave batch attempts it through the SAME
