@@ -11,9 +11,9 @@
     "uat": false
   },
   "summary": "Feature \"formal-cell-lifecycle\" started at phase \"exploring\" (lane).",
-  "next_action": "Continue bee-exploring for \"formal-cell-lifecycle\" (lane).",
+  "next_action": "Merged into main at e588e66; capture what settled, then bee close --feature formal-cell-lifecycle.",
   "created_at": "2026-11-14T04:00:12.598Z",
-  "run_state": "awaiting-approval",
+  "run_state": null,
   "waiting_on": null,
   "route": {
     "class": "feature",
