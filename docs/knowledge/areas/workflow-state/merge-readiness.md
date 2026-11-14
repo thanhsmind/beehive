@@ -11,7 +11,7 @@ bee:
   decisions: ["merge-ready-fact D1 (cfccdde4, 2026-08-22 — the feature's record carries an optional merge_ready {since, branch, worktree_id, uat, blocked_by}, set by the completion that leaves zero open or claimed units when a worktree grant exists; a zero-unit feature never gets it)", "merge-ready-fact D2 (e069ef73, 2026-08-22 — every verb that can falsify the fact also owns correcting it: close rewrites blocked_by, the uat gate flips uat, merge and unregister delete it, any reopen deletes it and the next last completion sets it again with a fresh since)", "merge-ready-fact D3 (f2c16247, 2026-08-22 — additive projection only: bee's own gates and its merge door never read it; status lane rows surface it verbatim)"]
   sources: ["merge-ready-fact cells mrf-1 and mrf-2 (2026-08-22 — the one helper every writer calls, and the four verbs wired through it)", docs/history/merge-ready-fact/CONTEXT.md, docs/history/merge-ready-fact/plan.md, "the user's ask of 2026-08-22 from the waggledance session — a board needs a stored, file-readable 'Ready to merge' fact instead of deriving one"]
   authoritative_for: "workflow-state: the merge_ready fact on a feature record — its meaning, fields, lifecycle, and read rules"
-  anchors: [packages/bee-rs/crates/bee/src/verbs/workflow_store/merge_ready.rs]
+  anchors: [packages/bee-rs/crates/bee/src/verbs/workflow_store/merge_ready.rs, packages/bee-rs/crates/bee/src/verbs/drivers/close.rs, packages/bee-rs/crates/bee/src/verbs/drivers/proof_pointers.rs]
   verified_at: 2026-09-08
   verified_commit: fcc91f2f25e63b07d716b778eb6a7c8ec1144451
 ---
@@ -240,3 +240,11 @@ should not infer it.
   `find_granted_worktree_for_feature` in the same module.
 - Cells: `.bee/cells/archive/merge-ready-fact/mrf-1.json` (helper plus the completion and reopen
   paths), `.bee/cells/archive/merge-ready-fact/mrf-2.json` (close, gate, merge, unregister, status).
+
+## Dead proof pointers — a close warning, never a door
+
+Read when: a `bee close` prints `warning: dead proof pointer: <cell>: <path>` or its JSON carries `dead_proof_pointers`, or you are tempted to make that warning refuse.
+
+Close reads each capped cell's proof line and checks every token that names a repo-relative path (has a slash; not a URL, flag, absolute path, glob, or an expansion/assignment; a trailing `:N` or `:N-M` is stripped first). A path missing under the repo root prints one warning and lands in `dead_proof_pointers [{cell, path}]`, always present and `[]` when clean. It is attached by a wrapper around the close handler, so every outcome carries it and no outcome depends on it (pstack-rust-checks D4, 682e3531). Find the tokenizer rules in `verbs/drivers/proof_pointers.rs`.
+
+Why a warning: a proof line may legitimately name a path that moved or was deleted later, so a missing path is a prompt to re-read the evidence, not proof it was fake. Promoting it to a refusal waits until it has run clean on real plans.

@@ -2641,6 +2641,34 @@ pub(crate) fn close_handler(
     shell: Option<&'static str>,
     pattern_verdicts: &HashMap<String, String>,
 ) -> D<Out> {
+    let mut out = close_handler_core(root, feature, dry_run, declared, shell, pattern_verdicts)?;
+    if let Out::Emit(result, text, _) = &mut out {
+        let dead = crate::verbs::drivers::proof_pointers::dead_proof_pointers(root, feature);
+        for item in &dead {
+            if !text.is_empty() {
+                text.push('\n');
+            }
+            text.push_str(&format!(
+                "warning: dead proof pointer: {}: {}",
+                item["cell"].as_str().unwrap_or(""),
+                item["path"].as_str().unwrap_or("")
+            ));
+        }
+        if let Value::Object(map) = result {
+            map.insert("dead_proof_pointers".into(), Value::Array(dead));
+        }
+    }
+    Ok(out)
+}
+
+fn close_handler_core(
+    root: &Path,
+    feature: &str,
+    dry_run: bool,
+    declared: Option<Vec<String>>,
+    shell: Option<&'static str>,
+    pattern_verdicts: &HashMap<String, String>,
+) -> D<Out> {
     // P2-3: a non-boolean, non-null `close_commit_bookkeeping` refuses the
     // WHOLE close UP FRONT — before the dry-run door listing, before the
     // declared tests run, before anything is written. Precedent:
@@ -4576,6 +4604,38 @@ mod tests {
         let Ok(Out::Emit(red_result, _text, code)) = red_out else { panic!("expected Emit") };
         assert_eq!(code, 1);
         assert!(red_result.get("prune").is_none(), "{red_result}");
+    }
+
+    fn capped_cell_with_proof(root: &Path, proof: &str) {
+        let cell = json!({"id":"demo-1","feature":"demo","status":"capped","trace":{"report":{"outcome":"o","commit":"c","files":[],"tests":proof,"deviations":[]}}});
+        w(root, ".bee/cells/demo-1.json", &cell.to_string());
+    }
+
+    #[test]
+    fn dead_proof_close_warns_naming_cell_and_missing_path_without_changing_outcome() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        init_bee_repo(root);
+        capped_cell_with_proof(root, "cargo test — green:unit — checked docs/missing/file.md");
+
+        let out = close_handler(root, "demo", false, None, None, &HashMap::new()).unwrap();
+        let Out::Emit(result, text, _code) = out else { panic!("expected Emit") };
+        assert_eq!(result["dead_proof_pointers"], json!([{"cell": "demo-1", "path": "docs/missing/file.md"}]));
+        assert!(text.contains("warning: dead proof pointer: demo-1: docs/missing/file.md"), "{text}");
+    }
+
+    #[test]
+    fn dead_proof_close_is_silent_for_urls_flags_and_existing_paths() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        init_bee_repo(root);
+        w(root, "docs/real.md", "x");
+        capped_cell_with_proof(root, "cargo test --release — green:unit — docs/real.md https://example.com/a/b --manifest-path=x/y");
+
+        let out = close_handler(root, "demo", false, None, None, &HashMap::new()).unwrap();
+        let Out::Emit(result, text, _code) = out else { panic!("expected Emit") };
+        assert_eq!(result["dead_proof_pointers"], json!([]));
+        assert!(!text.contains("dead proof pointer"), "{text}");
     }
 
     #[test]
