@@ -17,6 +17,13 @@
    flow's code, when the host has that skill. Each break it reports stays a
    guess until a test on the real code fails the same way. With no
    `statechart` skill on the host, skip this step and say so.
+7. Keep a model that must stay true as the code moves with the
+   `create-formal-verification-skill` skill: it picks the code where a break
+   costs most, proves the property can fail, and leaves a project-local verify
+   skill under `.bee/verify/<name>/` with the files it covers and its sync
+   commit. A change to covered code runs that verify skill; drift that piled
+   up across merges takes `maintain-formal-verification-skill`. With neither
+   skill on the host, skip this step and say so.
 
 A green unit behind a path nobody can walk is not a result.
 

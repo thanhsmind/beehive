@@ -20,7 +20,9 @@ the split that removes the most candidates, with runtime evidence, not a
 reading of the code (`.bee/expertise/tests.md` ("Instrument before
 guessing")). A symptom that turns on event order — a late, doubled or
 reordered message, a retry, a stuck flow — takes the `statechart` model of
-`feature.md` step 6 as one candidate split. Revert every edit that a refuted hypothesis motivated. A
+`feature.md` step 6 as one candidate split. A fix in code that a
+project-local formal verify skill covers reruns that skill (`feature.md`
+step 7). Revert every edit that a refuted hypothesis motivated. A
 one-line fix whose cause is already known keeps the short path. If the
 deciding fact took a deep dig to find, propose the cheap, always-on signal
 that would have shown it at first look.
