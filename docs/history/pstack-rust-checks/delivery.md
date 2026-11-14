@@ -33,10 +33,10 @@ before presenting the gate.
 ## Departures recorded
 
 - psrc-5 touched three files beyond the plan list as mechanical companions: the boolean-flag list in `catalog.rs`, the pinned flag count in `reservations/flags.rs` (247 to 248), and the two wave-door tests in `cells/tests.rs`.
-- psrc-1 to psrc-5 each deferred the skill update to psrc-6, which owns it.
+- psrc-1 to psrc-5 left the skill update to psrc-6, which owns it.
 
 ## Skipped
 
 - Plan step 6 (statechart) and step 7 (formal verification): no such skill on this host. psrc-5's tests cover the refill order instead.
-- Promoting any check to a refusal: out of scope. A later feature may do it once a check has run clean on real plans.
+- Promoting any check to a refusal: out of scope.
 - Pattern candidates from `bee knowledge consolidate`: all five only restated the sync-ack deviation, so none was filed.

@@ -283,7 +283,7 @@ next open cell of the first wave is claimed, prepared and started.
 - Agent-tool items are claimed and returned under `native` once. They take no slot
   and are never refilled, so a native dependency never unblocks its dependents here.
 - Every cell is attempted once per call, so a refused claim lands in `skipped` and is
-  not retried in a later refill.
+  not retried by any refill in the same call.
 - Workers report over a channel and the loop blocks on it, so no polling runs.
 - Rejected: one fixed batch per `--limit` (the existing mode), which leaves slots idle
   while the slowest run in the batch finishes.
