@@ -8,8 +8,8 @@ bee:
   lifecycle: active
   areas: [onboarding]
   required_context: [areas/onboarding/overview.md]
-  decisions: ["skillstation-aliases D1-D9 (a bee skillstation verb group checks the hub skills bee relies on and writes a small alias skill so /<id> works; CONTEXT.md)", "skillstation-onboard-aliases D1-D7 (install and onboard write the aliases by default; the hub changes only behind --skillstation; CONTEXT.md)"]
-  sources: ["skillstation-aliases cell ssa-1 (2026-11-14; the verb group)", "skillstation-aliases cell ssa-2 (2026-11-14; this concept and the README section)", "skillstation-onboard-aliases cells sooa-1 and sooa-2 (2026-11-14; onboard and install write the aliases)"]
+  decisions: ["skillstation-aliases D1-D9 (a bee skillstation verb group checks the hub skills bee relies on and writes a small alias skill so /<id> works; CONTEXT.md)", "skillstation-onboard-aliases D1-D7 (install and onboard write the aliases by default; the hub changes only behind --skillstation; CONTEXT.md)", "skillstation-principles D1-D5 (skillstation.principles hub serves the bee-principle skills to Claude Code; CONTEXT.md)"]
+  sources: ["skillstation-aliases cell ssa-1 (2026-11-14; the verb group)", "skillstation-aliases cell ssa-2 (2026-11-14; this concept and the README section)", "skillstation-onboard-aliases cells sooa-1 and sooa-2 (2026-11-14; onboard and install write the aliases)", "skillstation-principles cells ssp-1 to ssp-3 (2026-11-14; hub-served principles)"]
   authoritative_for: "onboarding: the bee skillstation verb group"
   anchors: [packages/bee-rs/crates/bee/src/verbs/skillstation_group.rs, packages/bee-rs/crates/bee/src/principles.rs, packages/bee-rs/crates/bee/src/onboard/agents.rs, packages/bee-rs/crates/bee/src/onboard/apply.rs, packages/bee-rs/crates/bee/src/onboard/plan.rs, packages/bee-rs/crates/bee/src/onboard/skills.rs, scripts/install.sh]
   verified_at: 2026-11-14
@@ -20,7 +20,8 @@ bee:
 
 Read when: a hub skill cannot be started with `/<id>`, a skill marked
 `disable-model-invocation` is unreachable, or you are changing what
-`bee skillstation install` or `bee skillstation alias` writes or refuses.
+`bee skillstation install` or `bee skillstation alias` writes or refuses, or
+the `skillstation.principles` key (hub-served principles) behaves unexpectedly.
 
 ## Why the verb group exists
 
