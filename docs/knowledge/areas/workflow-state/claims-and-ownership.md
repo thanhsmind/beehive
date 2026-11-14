@@ -11,7 +11,7 @@ bee:
   decisions: [pi-slp-operations D1/D2/D4 (refusal fixes name one runnable command; text only; CLAIMED names who holds it), "multi-session-hardening D1/D4 with Δ2/Δ5 amendments (docs/history/multi-session-hardening/CONTEXT.md; audit 12f54e88, locked 17a624dc)", fresh-session-handoff D1/D3 (atomic exclusive creation; gate-protected adoption and reclaim), "multisession-native D4/D9 invariant 10 (slice 3: claims stamp and bump a fence_epoch on adoption; renew/release may present it and refuse typed CLAIM_FENCE_STALE when stale — docs/history/multisession-native/CONTEXT.md)", "hook-teeth D2/D7 (docs/history/hook-teeth/CONTEXT.md, 2026-08-04 — never claim onto a red base; the sole escape is a declared fix-first reason kept on the claim's own trace)"]
   sources: ["multi-session-hardening cells msh-1..7 (traces in .bee/cells/, reports docs/history/multi-session-hardening/reports/, 2026-07-19)", "fresh-session-handoff S1 cells fsh-1/fsh-2 (race proofs on Linux/WSL2 and Windows, 2026-07-13)", "critical pattern 20260710 — never release another agent's holdings on a stall signal alone", "docs/specs/workflow-state.md#B11", "docs/specs/workflow-state.md#B23", "docs/specs/workflow-state.md#R17", "docs/specs/workflow-state.md#R18", "docs/specs/workflow-state.md#R36", "docs/specs/workflow-state.md#R39", "docs/specs/workflow-state.md#R40", "docs/specs/workflow-state.md#E19", "docs/specs/workflow-state.md#E20", "docs/specs/workflow-state.md#E21", "docs/specs/workflow-state.md#P13", "docs/specs/workflow-state.md#P18", "multisession-native cell multisession-native-12 (fence_epoch on claims; trace .bee/cells/multisession-native-12.json, commit 8c002a1, 2026-07-25; advisor digest docs/history/multisession-native/reports/advisor-digest-slice3.md condition F)", "hook-teeth cell bh-2 (red-base claim refusal with the fix-first escape persisted on the trace; trace .bee/cells/archive/hook-teeth/bh-2.json, commit 7ef3a1f7, 2026-08-04 — cells slice 81 passed)"]
   authoritative_for: "workflow-state: claim exclusivity, typed contention refusals, claim fencing, and claimed-unit ownership"
-  anchors: [packages/bee-rs/crates/bee/src/verbs/cells/claims.rs, packages/bee-rs/crates/bee/src/lock.rs, packages/bee-rs/crates/bee/tests/concurrency.rs, packages/bee-rs/crates/bee/src/hooks/prompt_context.rs, packages/bee-rs/crates/bee/src/hooks/state_sync.rs, skills/bee-swarming/SKILL.md]
+  anchors: [packages/bee-rs/crates/bee/src/verbs/cells/claims.rs, packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs, packages/bee-rs/crates/bee/src/lock.rs, packages/bee-rs/crates/bee/tests/concurrency.rs, packages/bee-rs/crates/bee/src/hooks/prompt_context.rs, packages/bee-rs/crates/bee/src/hooks/state_sync.rs, skills/bee-swarming/SKILL.md]
   verified_at: 2026-11-07
   verified_commit: 9861c1b430dc099ce4e0ba481503579ad3a2d738
 ---
@@ -301,11 +301,13 @@ red.
   (B23, R39) lets any session through, and the expired-claim sweep never sees
   the unit. A TLA+ model of one unit, three sessions and the five closing
   verbs finds the path; a variant that both releases only the exact token it
-  saw under the lock and re-checks the claimant's own token under the lock
-  holds both rules, and either change alone does not
-  (formal-cell-lifecycle D1/D2/D3/D4). The model and its rerun live in the `formal-cell-lifecycle` verify
-  skill; the fix is a filed P2 finding. Dropping a unit takes no ownership
-  check at all, which B23's list of guarded operations leaves open.
+  saw under the lock holds both rules, now that dropping checks ownership
+  too; an owner-name check is not enough, and re-checking the claimant's
+  own token alone does not hold (formal-cell-lifecycle D1/D2/D3/D4). The model and its rerun live in the `formal-cell-lifecycle` verify
+  skill; the fix is a filed P2 finding. Dropping a unit now takes the same
+  ownership check and `--force-ownership` rescue as the other closing verbs
+  (drop-ownership D1/D2); it was the one closing verb without it, and a drop
+  discards another session's work, which B23 protects.
 
 ## Pointers (implementation)
 

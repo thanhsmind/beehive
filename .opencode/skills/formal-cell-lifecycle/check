@@ -76,7 +76,7 @@ explain() {
     ClaimedCellHoldsItsOwnersClaimFile)
       echo "broken: a cell is \"claimed\" by a session, but that session's claim file is gone (claims-and-ownership B23, R36)" ;;
     NoForeignCloseOfALiveClaim)
-      echo "broken: another session capped, blocked, unclaimed or reopened a cell whose owner's claim was never swept or stale (claims-and-ownership B23, R39)" ;;
+      echo "broken: another session capped, blocked, unclaimed, reopened or dropped a cell whose owner's claim was never swept or stale (claims-and-ownership B23, R39)" ;;
     TypeOK)
       echo "broken: the model reached a value outside its types — a modeling error, not a code bug" ;;
     *)

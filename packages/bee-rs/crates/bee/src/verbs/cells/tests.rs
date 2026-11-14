@@ -5007,6 +5007,59 @@ use std::time::Instant;
         assert_eq!(std::fs::read_to_string(&gate).unwrap(), held);
     }
 
+    fn drop_fixture(id: &str) -> (tempfile::TempDir, Value) {
+        let tmp = cn_root();
+        let root = tmp.path();
+        lane_with_route(root, "dr");
+        write_cell_fixture(root, id, &cell(id, "open", "dr", json!([])));
+        claim_cell_from_flags(root, id, "w1", Some("s1"), None).unwrap();
+        let before = read_cell_fixture(root, id);
+        (tmp, before)
+    }
+
+    #[test]
+    fn drop_refuses_a_live_claim_held_by_another_session_and_writes_nothing() {
+        let (tmp, before) = drop_fixture("dr-1");
+        let root = tmp.path();
+        let refusal = thrown(drop_cell(root, "dr-1", "not needed", Some("s2"), false));
+        assert!(refusal.starts_with("dropCell: cell \"dr-1\" is claimed by session \"s1\""));
+        assert!(refusal.ends_with("Pass --force-ownership to override (audited)."));
+        assert_eq!(read_cell_fixture(root, "dr-1"), before);
+        assert!(claims_dir(root).join("dr-1.json").exists());
+    }
+
+    #[test]
+    fn drop_with_force_ownership_drops_and_audits_the_override() {
+        let (tmp, _) = drop_fixture("dr-2");
+        let root = tmp.path();
+        let cell = drop_cell(root, "dr-2", "not needed", Some("s2"), true).unwrap();
+        assert_eq!(cell["status"], json!("dropped"));
+        assert_eq!(cell["trace"]["dropped_reason"], json!("not needed"));
+        let overrides = cell["trace"]["ownership_overrides"].as_array().unwrap();
+        assert_eq!(overrides.len(), 1);
+        assert_eq!(overrides[0]["verb"], json!("dropCell"));
+        assert!(!claims_dir(root).join("dr-2.json").exists());
+    }
+
+    #[test]
+    fn drop_by_the_claiming_session_drops_the_cell() {
+        let (tmp, _) = drop_fixture("dr-3");
+        let root = tmp.path();
+        let cell = drop_cell(root, "dr-3", "not needed", Some("s1"), false).unwrap();
+        assert_eq!(cell["status"], json!("dropped"));
+        assert!(cell["trace"].get("ownership_overrides").is_none());
+    }
+
+    #[test]
+    fn drop_of_a_cell_with_no_claim_drops_the_cell() {
+        let tmp = cn_root();
+        let root = tmp.path();
+        write_cell_fixture(root, "dr-4", &cell("dr-4", "open", "dr", json!([])));
+        let cell = drop_cell(root, "dr-4", "not needed", Some("s2"), false).unwrap();
+        assert_eq!(cell["status"], json!("dropped"));
+        assert_eq!(cell["trace"]["dropped_reason"], json!("not needed"));
+    }
+
     // ── claims D5 (R5): the Codex session bridge ──────────────────────────
     // Oracle: test_claims.mjs "claimCellFile (hardening-1-7-10 D5 — Codex
     // session bridge): a sessionless claim with EXACTLY ONE fresh live session
