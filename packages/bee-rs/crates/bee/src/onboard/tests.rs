@@ -3965,8 +3965,12 @@ mod principles_on_the_hub {
         assert!(published_ids(&p).is_empty(), "{:?}", p["plan"]);
         let deferred = after_publish(&p);
         assert_eq!(deferred[0]["action"], "set_principles_hub");
-        let removals: Vec<&str> = deferred[1..].iter().map(|i| i["skill"].as_str().unwrap()).collect();
-        assert_eq!(removals, IDS);
+        let removals: Vec<&str> = deferred[1..]
+            .iter()
+            .filter(|i| i["action"] == "remove_skill")
+            .map(|i| i["skill"].as_str().unwrap())
+            .collect();
+        assert_eq!(removals, ["bee-deploying", IDS[0], IDS[1]]);
     }
 
     #[test]
@@ -4029,7 +4033,7 @@ mod principles_on_the_hub {
             published_ids(&p),
             vec!["bee-deploying".to_string(), IDS[0].to_string(), IDS[1].to_string()]
         );
-        assert_eq!(after_publish(&p).len(), 1 + IDS.len());
+        assert_eq!(after_publish(&p).len(), 1 + IDS.len() + 2);
     }
 
     fn recording_hub(commits: Rc<std::cell::RefCell<Vec<Vec<String>>>>) -> Hub {
@@ -4048,7 +4052,7 @@ mod principles_on_the_hub {
     }
 
     #[test]
-    fn a_principle_commit_carries_the_routing_flags_and_bee_deploying_carries_none() {
+    fn a_principle_commit_carries_the_routing_flags_and_so_does_bee_deploying() {
         let fx = fixture_with_local_copies();
         with_bee_deploying(&fx);
         write(
@@ -4067,8 +4071,8 @@ mod principles_on_the_hub {
         );
         assert_eq!(flag_value(principle, "--min-scope"), Some("multi_step"));
         let deploying = commits.iter().find(|c| c[2].ends_with("bee-deploying")).unwrap();
-        for flag in ["--trigger", "--not-for", "--min-scope"] {
-            assert!(!deploying.iter().any(|a| a == flag), "{flag}");
+        for flag in ["--not-for", "--min-scope"] {
+            assert!(deploying.iter().any(|a| a == flag), "{flag}");
         }
     }
 
@@ -4236,6 +4240,107 @@ mod principles_on_the_hub {
         assert!(how_items(&p, "remove_skill").iter().all(|i| i["target"] == "repo-claude"));
         apply(&fx, &["--runtime", "claude", "--skillstation"]);
         assert!(fx.repo.join(".agents").join("skills").join("bee-how").join("SKILL.md").exists());
+    }
+
+    const ADDED: [&str; 3] = ["bee-unslop", "bee-verifying", "bee-deploying"];
+
+    fn with_added_skills(fx: &Fixture) {
+        let skills = fx.root.join("skills");
+        write(
+            &skills.join("bee-unslop").join("SKILL.md"),
+            "---\nname: bee-unslop\ndescription: Strip machine-sounding prose.\n---\nbody\n",
+        );
+        write(
+            &skills.join("bee-verifying").join("SKILL.md"),
+            "---\nname: bee-verifying\ndescription: Verify the app.\ndisable-model-invocation: true\n---\nbody\n",
+        );
+        write(
+            &skills.join("bee-deploying").join("SKILL.md"),
+            "---\nname: bee-deploying\ndescription: Deploy the project.\n---\nbody\n",
+        );
+        apply(fx, &["--runtime", "claude"]);
+    }
+
+    fn skill_items(p: &Value, action: &str, id: &str) -> Vec<Value> {
+        p["plan"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|i| i["action"] == action && i["skill"] == id)
+            .cloned()
+            .collect()
+    }
+
+    #[test]
+    fn the_switch_plan_publishes_removes_and_aliases_the_added_engine_skills() {
+        let fx = fixture_with_local_copies();
+        with_added_skills(&fx);
+        let _hub = switching_hub(None);
+        let p = plan(&fx, &["--runtime", "claude", "--skillstation"]);
+        for id in ADDED {
+            assert!(!skill_items(&p, "publish_skillstation", id).is_empty(), "{id}: {:?}", p["plan"]);
+            let removals = skill_items(&p, "remove_skill", id);
+            assert_eq!(removals.len(), 1, "{id}: {:?}", p["plan"]);
+            assert_eq!(removals[0]["target"], "repo-claude");
+            assert_eq!(removals[0]["after_publish"], true);
+            let aliases = skill_items(&p, "skillstation_alias", id);
+            assert_eq!(aliases.len(), 1, "{id}: {:?}", p["plan"]);
+            assert_eq!(aliases[0]["after_publish"], true);
+        }
+    }
+
+    #[test]
+    fn an_alias_keeps_disable_model_invocation_only_for_a_skill_that_sets_it() {
+        let fx = fixture_with_local_copies();
+        with_added_skills(&fx);
+        let _hub = switching_hub(None);
+        let p = plan(&fx, &["--runtime", "claude", "--skillstation"]);
+        let verifying = skill_items(&p, "skillstation_alias", "bee-verifying");
+        assert!(verifying[0]["content"].as_str().unwrap().contains("disable-model-invocation: true"));
+        for id in ["bee-unslop", "bee-deploying"] {
+            let alias = skill_items(&p, "skillstation_alias", id);
+            assert!(!alias[0]["content"].as_str().unwrap().contains("disable-model-invocation"), "{id}");
+        }
+    }
+
+    #[test]
+    fn the_switch_plan_publishes_bee_deploying_exactly_once() {
+        let fx = fixture_with_local_copies();
+        with_added_skills(&fx);
+        let _hub = switching_hub(None);
+        let p = plan(&fx, &["--runtime", "claude", "--skillstation"]);
+        assert_eq!(skill_items(&p, "publish_skillstation", "bee-deploying").len(), 1, "{:?}", p["plan"]);
+    }
+
+    #[test]
+    fn a_run_without_the_claude_runtime_still_publishes_bee_deploying_once_and_plans_no_alias() {
+        let fx = fixture_with_local_copies();
+        with_added_skills(&fx);
+        let _hub = switching_hub(None);
+        let p = plan(&fx, &["--runtime", "codex", "--skillstation"]);
+        assert_eq!(skill_items(&p, "publish_skillstation", "bee-deploying").len(), 1, "{:?}", p["plan"]);
+        assert!(p["plan"].as_array().unwrap().iter().all(|i| i["action"] != "skillstation_alias"));
+    }
+
+    #[test]
+    fn a_full_switch_aliases_the_added_skills_and_the_hub_replan_plans_nothing_for_them() {
+        let fx = fixture_with_local_copies();
+        with_added_skills(&fx);
+        let _hub = switching_hub(None);
+        apply(&fx, &["--runtime", "claude", "--skillstation"]);
+        for id in ADDED {
+            let alias =
+                std::fs::read_to_string(fx.repo.join(".claude").join("skills").join(id).join("SKILL.md")).unwrap();
+            assert!(alias.contains(&format!("skillstation_alias: {id}")), "{id}: {alias}");
+        }
+        let again = plan(&fx, &["--runtime", "claude"]);
+        for id in ADDED {
+            assert!(
+                again["plan"].as_array().unwrap().iter().all(|i| i["skill"] != id),
+                "{id}: {:?}",
+                again["plan"]
+            );
+        }
     }
 
     fn with_worker_template(fx: &Fixture) {

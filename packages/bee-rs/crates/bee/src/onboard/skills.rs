@@ -78,8 +78,22 @@ pub struct SkillSources {
 
 pub const PRINCIPLE_PREFIX: &str = "bee-principle-";
 
-pub const HUB_SERVED_SKILLS: [&str; 5] =
-    ["bee-how", "bee-teach", "bee-technical-writing", "bee-why", "bee-writing-skills"];
+pub const HUB_SERVED_SKILLS: [&str; 14] = [
+    "bee-how",
+    "bee-teach",
+    "bee-technical-writing",
+    "bee-why",
+    "bee-writing-skills",
+    "bee-unslop",
+    "bee-researching",
+    "bee-knowledge-setup",
+    "bee-knowledge-upkeep",
+    "bee-verifying",
+    "bee-verify-upkeep",
+    "bee-wayfinding",
+    "bee-grooming",
+    "bee-deploying",
+];
 
 pub fn is_hub_served(name: &str) -> bool {
     name.starts_with(PRINCIPLE_PREFIX) || HUB_SERVED_SKILLS.contains(&name)
@@ -99,6 +113,14 @@ pub fn frontmatter_description(skill_md: &str) -> Option<String> {
     };
     let text = text.split_whitespace().collect::<Vec<_>>().join(" ");
     (!text.is_empty()).then_some(text)
+}
+
+pub fn frontmatter_disables_model(skill_md: &str) -> bool {
+    let (front, _) = crate::textutil::split_frontmatter(skill_md);
+    front
+        .lines()
+        .find_map(|line| line.strip_prefix("disable-model-invocation:"))
+        .is_some_and(|v| v.trim().trim_matches(|c| c == '"' || c == '\'') == "true")
 }
 
 impl SkillSources {

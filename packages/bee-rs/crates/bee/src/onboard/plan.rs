@@ -25,8 +25,8 @@ use super::render::{
     render_skill_bytes, runtime_for_target_kind, validate_skill_markers, walk_skill_tree, Walk,
 };
 use super::skills::{
-    blocked_source_identity_skill_sync, compute_design_sync, compute_skill_sync, frontmatter_description,
-    is_hub_served, SkillSync, HUB_SERVED_SKILLS,
+    blocked_source_identity_skill_sync, compute_design_sync, compute_skill_sync,
+    frontmatter_description, frontmatter_disables_model, is_hub_served, SkillSync, HUB_SERVED_SKILLS,
 };
 use super::source::{read_source_release_identity, Engine};
 use super::templates as T;
@@ -100,10 +100,13 @@ fn hub_needs_publish(run: Run, source_dir: &Path, id: &str) -> bool {
     staged != served
 }
 
-fn publish_skillstation_items(engine: &Engine, run: Run) -> Vec<Value> {
+fn publish_skillstation_items(engine: &Engine, run: Run, hub_mode: bool) -> Vec<Value> {
     let root = repo_claude_root();
+    let served = if hub_mode { principle_ids(engine) } else { Vec::new() };
     HUB_SKILLS
         .iter()
+        .filter(|skill| !served.iter().any(|id| id == *skill))
+        .filter(|skill| engine.skills_root.join(skill).is_dir())
         .filter(|skill| hub_needs_publish(run, &engine.skills_root.join(skill), skill))
         .map(|skill| {
             json!({
@@ -131,7 +134,9 @@ fn hub_alias_items(engine: &Engine, repo_root: &Path, after_publish: bool) -> Ve
         .filter_map(|id| {
             let source = std::fs::read(engine.skills_root.join(&id).join("SKILL.md")).ok()?;
             let rendered = String::from_utf8_lossy(&render_skill_bytes(&source, "claude")).to_string();
-            let content = render_alias(&id, &frontmatter_description(&rendered).unwrap_or_default(), false);
+            let disable_model = frontmatter_disables_model(&rendered);
+            let content =
+                render_alias(&id, &frontmatter_description(&rendered).unwrap_or_default(), disable_model);
             let rel = format!(".claude/skills/{id}/SKILL.md");
             if !after_publish && read_text_if_exists(&join_rel(repo_root, &rel)) == content {
                 return None;
@@ -1646,7 +1651,7 @@ pub fn compute_plan(engine: &Engine, repo_root: &Path, opts: &Options) -> Comput
 
     if opts.skillstation && opts.sync_skills && skill_sync.blocked.is_none() {
         let run = hub_runner(repo_root);
-        plan.extend(publish_skillstation_items(engine, &*run));
+        plan.extend(publish_skillstation_items(engine, &*run, hub_mode));
         if hub_mode {
             plan.extend(publish_principle_items(engine, &*run));
         }

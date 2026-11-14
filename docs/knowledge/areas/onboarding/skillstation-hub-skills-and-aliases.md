@@ -8,7 +8,7 @@ bee:
   lifecycle: active
   areas: [onboarding]
   required_context: [areas/onboarding/overview.md]
-  decisions: ["skillstation-aliases D1-D9 (a bee skillstation verb group checks the hub skills bee relies on and writes a small alias skill so /<id> works; CONTEXT.md)", "skillstation-onboard-aliases D1-D7 (install and onboard write the aliases by default; the hub changes only behind --skillstation; CONTEXT.md)", "skillstation-principles D1-D5, D8-D10, D12-D14 (skillstation.principles hub serves the bee-principle skills to Claude Code; CONTEXT.md)", "skillstation-human-skills D1-D5 (five human-started bee skills join the hub-served set and get /<id> aliases; CONTEXT.md)"]
+  decisions: ["skillstation-aliases D1-D9 (a bee skillstation verb group checks the hub skills bee relies on and writes a small alias skill so /<id> works; CONTEXT.md)", "skillstation-onboard-aliases D1-D7 (install and onboard write the aliases by default; the hub changes only behind --skillstation; CONTEXT.md)", "skillstation-principles D1-D5, D8-D10, D12-D14 (skillstation.principles hub serves the bee-principle skills to Claude Code; CONTEXT.md)", "skillstation-human-skills D1-D5 (five human-started bee skills join the hub-served set and get /<id> aliases; CONTEXT.md)", "skillstation-more-skills D1-D3 (nine more engine skills join the set; an alias keeps disable-model-invocation; bee-deploying publishes once; CONTEXT.md)"]
   sources: ["skillstation-aliases cell ssa-1 (2026-11-14; the verb group)", "skillstation-aliases cell ssa-2 (2026-11-14; this concept and the README section)", "skillstation-onboard-aliases cells sooa-1 and sooa-2 (2026-11-14; onboard and install write the aliases)", "skillstation-principles cells ssp-1 to ssp-3, ssp-6, ssp-7, ssp-9 (2026-11-14; hub-served principles)"]
   authoritative_for: "onboarding: the bee skillstation verb group"
   anchors: [packages/bee-rs/crates/bee/src/verbs/skillstation_group.rs, packages/bee-rs/crates/bee/src/principles.rs, packages/bee-rs/crates/bee/src/onboard/agents.rs, packages/bee-rs/crates/bee/src/onboard/apply.rs, packages/bee-rs/crates/bee/src/onboard/plan.rs, packages/bee-rs/crates/bee/src/onboard/skills.rs, scripts/install.sh]
@@ -136,6 +136,21 @@ cannot change their result (skillstation-onboard-aliases D6).
   the next wrote it again, and the installer recheck never reached `up_to_date`
   (skillstation-human-skills D4). Codex, opencode, the plugin trees and the
   legacy global targets keep the five (skillstation-human-skills D5).
+- The same set also holds nine added engine skills: `bee-unslop`,
+  `bee-researching`, `bee-knowledge-setup`, `bee-knowledge-upkeep`,
+  `bee-verifying`, `bee-verify-upkeep`, `bee-wayfinding`, `bee-grooming` and
+  `bee-deploying`. They follow every rule above unchanged, and codex, opencode,
+  plugin and legacy global targets keep them (skillstation-more-skills D1, D3).
+- An alias copies the engine skill's `disable-model-invocation` value, read from
+  the frontmatter rendered for claude and true only for the literal `true`.
+  `bee-knowledge-setup`, `bee-knowledge-upkeep`, `bee-verifying` and
+  `bee-verify-upkeep` keep it on, so hub serving never changes who may start a
+  skill; any other alias carries no such line (skillstation-more-skills D2).
+- `bee-deploying` is also the one entry of `HUB_SKILLS`, the older publish list.
+  A run publishes it once: through the hub-served publish when hub mode is on,
+  through `HUB_SKILLS` only when it is not (a `--skillstation` run without the
+  Claude runtime). `HUB_SKILLS` publishes a skill only when its engine folder
+  exists (skillstation-more-skills D3).
 
 ## Edge Cases Settled
 
