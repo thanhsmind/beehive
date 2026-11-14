@@ -315,9 +315,8 @@ pub(crate) fn merge_stage(
             return Err(refuse_merge(
                 "WORKTREE_MERGE_PROOF_DEBT",
                 format!(
-                    "worktree {id}'s feature \"{feature_disp}\" has {} capped cell(s) that carry a report with no valid proof line ({}) — \"bee worktree merge\" refuses until each is re-capped with a real proof line: \"<command> — <result> — <scope reason>\" (bee cells finish --id <id> --report '{{...}}').",
-                    proof.bad_ids.len(),
-                    proof.bad_ids.join(", "),
+                    "worktree {id}'s feature \"{feature_disp}\" is blocked: {} — \"bee worktree merge\" refuses until each is re-capped with a real proof line (\"<command> — <result> — <scope reason>\", bee cells finish --id <id> --report '{{...}}') and each stamped cell has a capped test-role dependent.",
+                    proof.debt_summary(),
                 ),
             ));
         }

@@ -5151,7 +5151,7 @@ exit 0
         };
         assert!(
             text.starts_with(
-                "door tests: BLOCKING — 1 capped cell(s) carry a report with no valid proof line (demo-1) — re-cap with a real proof line: \"<command> — <result> — <scope reason>\". | settle: bee cells finish\n"
+                "door tests: BLOCKING — 1 capped cell(s) carry a report with no valid proof line (demo-1) — re-cap with a real proof line: \"<command> — <result> — <scope reason>\", and cap a separate test-role cell that depends on each stamped cell. | settle: bee cells finish\n"
             ),
             "{text}"
         );

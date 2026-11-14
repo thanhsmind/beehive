@@ -123,7 +123,7 @@ fn flow_end_to_end_with_pack_cap_consolidate_close_and_report() {
         "feature": "demo",
         "title": "demo cell",
         "lane": "small",
-        "role": "code",
+        "role": "docs",
         "status": "claimed",
         "verify": "cargo test"
     });

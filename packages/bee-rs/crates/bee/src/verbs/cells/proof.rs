@@ -46,6 +46,41 @@ pub(crate) struct ProofCheck {
     /// module runs no git.
     pub(crate) commits: Vec<(String, String)>,
     pub(crate) patch_ids: Vec<(String, String)>,
+    pub(crate) unpaired: Vec<String>,
+}
+
+impl ProofCheck {
+    pub(crate) fn debt_summary(&self) -> String {
+        let mut parts: Vec<String> = Vec::new();
+        if !self.bad_ids.is_empty() {
+            parts.push(format!(
+                "{} capped cell(s) carry a report with no valid proof line ({})",
+                self.bad_ids.len(),
+                self.bad_ids.join(", ")
+            ));
+        }
+        if !self.unpaired.is_empty() {
+            parts.push(format!(
+                "{} stamped cell(s) have no capped dependent tester or checker on the test role ({})",
+                self.unpaired.len(),
+                self.unpaired.join(", ")
+            ));
+        }
+        parts.join("; ")
+    }
+}
+
+pub(crate) fn needs_tester(cell: &Value) -> bool {
+    cell.get("tester_rule").and_then(Value::as_bool) == Some(true)
+        && matches!(cell.get("role").and_then(Value::as_str), Some("code" | "docs"))
+}
+
+pub(crate) fn has_dependent_with_role_test(cells: &[Value], id: &str, capped_only: bool) -> bool {
+    cells.iter().any(|c| {
+        c.get("role").and_then(Value::as_str) == Some("test")
+            && (!capped_only || c.get("status").and_then(Value::as_str) == Some("capped"))
+            && c.get("deps").and_then(Value::as_array).is_some_and(|d| d.iter().any(|x| x.as_str() == Some(id)))
+    })
 }
 
 /// The D8 proof-check itself: every `status: "capped"` cell for `feature`
@@ -64,7 +99,15 @@ pub(crate) fn feature_proof_check(
     let mut patch_ids: Vec<(String, String)> = Vec::new();
     let mut proven_count = 0usize;
     let mut legacy_count = 0usize;
-    for cell in crate::verbs::drivers::list_cells_including_archive(root, feature, Some("capped"))? {
+    let mut unpaired: Vec<String> = Vec::new();
+    let all = crate::verbs::drivers::list_cells_including_archive(root, feature, None)?;
+    for cell in all.iter().filter(|c| c.get("status").and_then(Value::as_str) == Some("capped")) {
+        if needs_tester(cell) {
+            let id = cell.get("id").and_then(Value::as_str).unwrap_or("");
+            if !has_dependent_with_role_test(&all, id, true) {
+                unpaired.push(id.to_string());
+            }
+        }
         let report = cell.get("trace").and_then(|t| t.get("report"));
         let Some(report) = report else {
             legacy_count += 1;
@@ -92,7 +135,7 @@ pub(crate) fn feature_proof_check(
             bad_ids.push(id);
         }
     }
-    Ok(ProofCheck { blocking: !bad_ids.is_empty(), bad_ids, proven_count, legacy_count, commits, patch_ids })
+    Ok(ProofCheck { blocking: !bad_ids.is_empty() || !unpaired.is_empty(), bad_ids, unpaired, proven_count, legacy_count, commits, patch_ids })
 }
 
 #[cfg(test)]

@@ -124,6 +124,25 @@ pub(crate) fn emit_manifest_lint_warnings(cells: &[Value]) {
     }
 }
 
+pub(crate) fn emit_tester_pairing_warnings(root: &Path, cells: &[Value]) {
+    for cell in cells {
+        if !needs_tester(cell) {
+            continue;
+        }
+        let id = cell.get("id").and_then(Value::as_str).unwrap_or("(unknown id)");
+        let Some(feature) = cell.get("feature").and_then(Value::as_str) else { continue };
+        let Ok(mut all) = crate::verbs::drivers::list_cells_including_archive(root, feature, None) else { continue };
+        all.extend(cells.iter().filter(|c| c.get("feature").and_then(Value::as_str) == Some(feature)).cloned());
+        if has_dependent_with_role_test(&all, id, false) {
+            continue;
+        }
+        let kind = if cell.get("role").and_then(Value::as_str) == Some("docs") { "checker" } else { "tester" };
+        eprintln!(
+            "WARNING: cell \"{id}\" has no dependent {kind} cell on role test in feature \"{feature}\" — bee close and bee worktree merge refuse the feature until a separate test-role cell that depends on it is capped. FIX: add a role test cell with deps [\"{id}\"]."
+        );
+    }
+}
+
 // ── cells add ──────────────────────────────────────────────────────────────
 
 // ─── D3 (no cells before the gate, docs/history/hook-teeth CONTEXT.md) ────
@@ -365,6 +384,7 @@ pub(crate) fn run_add(flags: rsv::Flags, use_json: bool, t0: Instant) -> Option<
             }
             emit_manifest_lint_warnings(&normalized);
             emit_design_gate_warnings(&root, &normalized);
+            emit_tester_pairing_warnings(&root, &normalized);
             let text = normalized
                 .iter()
                 .map(|c| format!("Added {}", summarize_cell(c)))
@@ -389,6 +409,7 @@ pub(crate) fn run_add(flags: rsv::Flags, use_json: bool, t0: Instant) -> Option<
         write_cell(&root, &normalized)?;
         emit_manifest_lint_warnings(std::slice::from_ref(&normalized));
         emit_design_gate_warnings(&root, std::slice::from_ref(&normalized));
+        emit_tester_pairing_warnings(&root, std::slice::from_ref(&normalized));
         let text = format!("Added {}", summarize_cell(&normalized));
         Ok(Out::Emit(normalized, text, 0))
     })
@@ -3160,7 +3181,7 @@ mod tests {
         let cell_json = tmp.path().join("cell.json");
         std::fs::write(
             &cell_json,
-            "{\"id\":\"demo-1\",\"feature\":\"demo\",\"title\":\"t\",\"lane\":\"standard\",\"role\":\"code\",\"action\":\"act\",\"files\":[\"src/main.rs\"],\"read_first\":[],\"must_haves\":{\"truths\":[\"ok\"]},\"verify\":\"true\",\"affects_skills\":[],\"affects_specs\":[]}\n",
+            "{\"id\":\"demo-1\",\"feature\":\"demo\",\"title\":\"t\",\"lane\":\"standard\",\"role\":\"docs\",\"action\":\"act\",\"files\":[\"src/main.rs\"],\"read_first\":[],\"must_haves\":{\"truths\":[\"ok\"]},\"verify\":\"true\",\"affects_skills\":[],\"affects_specs\":[]}\n",
         )
         .unwrap();
 

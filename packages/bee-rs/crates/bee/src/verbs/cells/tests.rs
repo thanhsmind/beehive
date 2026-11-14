@@ -755,7 +755,7 @@ use std::time::Instant;
         // normalize: literal-order appends + trace defaults
         let normalized = normalize_new_cell(&json!({"id": "n-1", "title": "t"})).unwrap();
         let keys: Vec<&String> = normalized.as_object().unwrap().keys().collect();
-        assert_eq!(keys, vec!["id", "title", "status", "deps", "decisions", "files", "read_first", "affects_skills", "affects_specs", "trace"]);
+        assert_eq!(keys, vec!["id", "title", "status", "tester_rule", "deps", "decisions", "files", "read_first", "affects_skills", "affects_specs", "trace"]);
         assert_eq!(normalized["status"], json!("open"));
         let trace_keys: Vec<&String> = normalized["trace"].as_object().unwrap().keys().collect();
         assert_eq!(
