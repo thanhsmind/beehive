@@ -13,11 +13,13 @@ bee:
   authoritative_for: "bee-herding: the thin peer boot — the env layer, the peer preamble hook, the dispatch.thin_peer_boot switch and its default"
   owns.code: [packages/bee-rs/crates/bee/src/hooks/mod.rs, packages/bee-rs/crates/bee/src/hooks/session_init.rs, packages/bee/prompts/peer-boot.md]
   anchors: [packages/bee/prompts/peer-boot.md, packages/bee-rs/crates/bee/src/hooks/mod.rs, packages/bee-rs/crates/bee/src/herding/run.rs, packages/bee-rs/crates/bee/src/hooks/session_init.rs]
-  verified_at: 2026-11-07
-  verified_commit: 3b9d2e2a363470dd1365e42b07f88d186942ed64
+  verified_at: 2026-11-14
+  verified_commit: cdefa65590c37a8f7f9a716d23cd23df9a082c54
 ---
 
 # Bee Herding — thin peer boot, what a herded Claude worker loads, and the switch that is on by default
+
+Read when: a herded Claude worker boots without the context you expected, or you change the env a herding launch sets.
 
 ## What it is
 

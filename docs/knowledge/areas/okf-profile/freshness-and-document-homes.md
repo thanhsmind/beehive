@@ -12,8 +12,8 @@ bee:
   sources: [docs/history/knowledge-freshness-mechanic/CONTEXT.md, docs/history/knowledge-freshness-mechanic/plan.md, docs/history/knowledge-docs-in-the-flow/CONTEXT.md, docs/history/knowledge-docs-in-the-flow/plan.md, docs/history/knowledge-useful-rules/CONTEXT.md]
   authoritative_for: "okf-profile: the document homes rule, the anchor and verified fields, the cap re-confirm step, the host seed step, the pull-rate measure, the read set, the templates rule and its three writing warnings, and the decision-link error"
   anchors: [packages/bee-rs/crates/bee/src/verbs/knowledge/freshness.rs, packages/bee-rs/crates/bee/src/verbs/cells/sync_door.rs, packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs, packages/bee-rs/crates/bee/src/verbs/drivers/context_table.rs, packages/bee-rs/crates/bee/src/verbs/state_group/plan_packets.rs, packages/bee-rs/crates/bee/src/verbs/knowledge/check.rs, packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs]
-  verified_at: 2026-11-10
-  verified_commit: f49dc03cd38d1e2df53a161680ecc37a570a10c6
+  verified_at: 2026-11-14
+  verified_commit: cdefa65590c37a8f7f9a716d23cd23df9a082c54
 ---
 
 # Bee OKF Profile (freshness, anchors and the document homes)
@@ -81,8 +81,9 @@ from the start; the seed is not re-run to author them.
 ## The pull-rate measure
 
 Every timings row carries the feature bound to the session that ran the command. `bee knowledge report` prints,
-per feature, how many `knowledge search`, `knowledge context` and `knowledge show` calls ran against all calls,
-and the ratio. That ratio is the measure of whether the bundle is read. A flat rate means the lean layer
+per feature, how many `knowledge search`, `knowledge context`, `knowledge show` and `knowledge pack` calls ran
+against all calls, and the ratio. Calls from a session bound to no feature add up in one `(unbound)` row.
+`--root <path>` measures that store instead of the current one. That ratio is the measure of whether the bundle is read. A flat rate means the lean layer
 carries no weight with the agents it was written for, and the lean layer is deleted next, not extended.
 
 ## The read set
