@@ -1,0 +1,123 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+spec="$here/CellLifecycle.tla"
+tlc_tool='http:tla2tools[url=https://github.com/tlaplus/tlaplus/releases/download/v1.7.4/tla2tools.jar,checksum=sha256:936a262061c914694dfd669a543be24573c45d5aa0ff20a8b96b23d01e050e88]@1.7.4'
+java_tool='java@temurin-25'
+
+usage() {
+  echo "usage: check [--variants] [--trace]" >&2
+  echo "  (no flag)   check the model of the current code" >&2
+  echo "  --variants  also check the fixed and the no-ownership-check variants" >&2
+  echo "  --trace     print TLC's full counterexample" >&2
+  exit 2
+}
+
+variants=0
+trace=0
+for arg in "$@"; do
+  case "$arg" in
+    --variants) variants=1 ;;
+    --trace) trace=1 ;;
+    *) usage ;;
+  esac
+done
+
+find_tools() {
+  if [ -n "${TLA2TOOLS:-}" ]; then
+    jar="$TLA2TOOLS"
+    java_bin="${JAVA:-java}"
+    return
+  fi
+  if ! command -v mise >/dev/null; then
+    echo "check: needs mise, or TLA2TOOLS set to tla2tools.jar (and JAVA to a Java 11+ binary)" >&2
+    exit 2
+  fi
+  local where java_path
+  if ! where="$(mise where "$tlc_tool" 2>/dev/null)" || ! java_path="$(mise which java --tool "$java_tool" 2>/dev/null)"; then
+    echo "check: installing TLC 1.7.4 and $java_tool with mise (network, first run only)" >&2
+    mise install "$java_tool" "$tlc_tool" >&2
+    where="$(mise where "$tlc_tool")"
+    java_path="$(mise which java --tool "$java_tool")"
+  fi
+  jar="$where/tla2tools.jar"
+  java_bin="${JAVA:-$java_path}"
+}
+
+run_tlc() {
+  local cfg="$1" out="$2" meta
+  meta="$(mktemp -d)"
+  set +e
+  "$java_bin" -XX:+UseParallelGC -cp "$jar" tlc2.TLC -workers auto -deadlock -metadir "$meta" \
+    -config "$here/$cfg" "$spec" >"$out" 2>&1
+  set -e
+  rm -rf "$meta"
+}
+
+verdict() {
+  local out="$1"
+  if grep -q '^Model checking completed. No error has been found.' "$out"; then
+    echo "pass"
+  elif grep -q '^Error: Invariant .* is violated.' "$out"; then
+    sed -n 's/^Error: Invariant \(.*\) is violated\./\1/p' "$out" | head -n 1
+  else
+    echo "tool-error"
+  fi
+}
+
+steps() {
+  local out="$1"
+  grep -E '^State [0-9]+: <' "$out" | sed -E 's/^State ([0-9]+): <([A-Za-z]+).*/\1 \2/'
+}
+
+explain() {
+  case "$1" in
+    ClaimedCellHoldsItsOwnersClaimFile)
+      echo "broken: a cell is \"claimed\" by a session, but that session's claim file is gone (claims-and-ownership B23, R36)" ;;
+    NoForeignCloseOfALiveClaim)
+      echo "broken: another session capped, blocked, unclaimed or reopened a cell whose owner's claim was never swept or stale (claims-and-ownership B23, R39)" ;;
+    TypeOK)
+      echo "broken: the model reached a value outside its types — a modeling error, not a code bug" ;;
+    *)
+      echo "broken: $1" ;;
+  esac
+}
+
+report() {
+  local name="$1" cfg="$2" expect="$3" out v
+  out="$(mktemp)"
+  run_tlc "$cfg" "$out"
+  v="$(verdict "$out")"
+  local states
+  states="$(sed -n 's/.* \([0-9,]*\) distinct states found.*/\1/p' "$out" | tail -n 1)"
+  if [ "$v" = "pass" ]; then
+    echo "$name: every rule holds (${states:-?} distinct states)"
+  elif [ "$v" = "tool-error" ]; then
+    echo "$name: TLC did not finish — output follows" >&2
+    cat "$out" >&2
+    rm -f "$out"
+    return 2
+  else
+    echo "$name: $(explain "$v")"
+    echo "  shortest path, one TLA+ action per step:"
+    steps "$out" | sed 's/^/    /'
+    if [ "$trace" = 1 ]; then
+      cat "$out"
+    fi
+  fi
+  rm -f "$out"
+  if [ "$v" = "$expect" ]; then
+    return 0
+  fi
+  return 1
+}
+
+find_tools
+status=0
+report "current code" CellLifecycle.cfg pass || status=$?
+if [ "$variants" = 1 ]; then
+  report "fixed variant" Fixed.cfg pass || status=1
+  report "no-ownership-check variant" NoOwnershipCheck.cfg NoForeignCloseOfALiveClaim || status=1
+fi
+exit "$status"
