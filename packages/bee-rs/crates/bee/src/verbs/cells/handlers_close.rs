@@ -431,6 +431,7 @@ pub(crate) fn cap_cell_from_flags(root: &Path, f: &CapFlags, finish: bool) -> MR
 
     // capCell (lib/cells.mjs) under the per-cell lock.
     let mut guard = acquire_named_lock(root, &format!("cells:{id}"))?;
+    let seen_claim = read_claim_acquired_at(root, id);
     let saved = (|| -> MR<Value> {
         assert_not_archived(root, "capCell", id)?;
         let cell = read_cell_norm(root, id)?;
@@ -882,7 +883,7 @@ pub(crate) fn cap_cell_from_flags(root: &Path, f: &CapFlags, finish: bool) -> MR
     })();
     guard.release();
     let mut saved = saved?;
-    release_claim_file_best_effort(root, id); // D1 Δ2: cap clears the claim
+    release_claim_file_best_effort(root, id, seen_claim.as_deref());
     // D4 (human-mailbox): the cap is on disk and the claim is released —
     // this stop has HAPPENED, so its entry is appended now, not gathered
     // at the end of the run. Never refuses (D10), never conditional on
@@ -1848,6 +1849,7 @@ pub(crate) fn mutate_cell(
 ) -> MR<Value> {
     prescan_claim(root, id)?;
     let mut guard = acquire_named_lock(root, &format!("cells:{id}"))?;
+    let seen_claim = read_claim_acquired_at(root, id);
     let saved = (|| -> MR<Value> {
         if let Some(verb) = archived_verb {
             assert_not_archived(root, verb, id)?;
@@ -1865,7 +1867,7 @@ pub(crate) fn mutate_cell(
     guard.release();
     let saved = saved?;
     if clear_claim_after {
-        release_claim_file_best_effort(root, id);
+        release_claim_file_best_effort(root, id, seen_claim.as_deref());
     }
     Ok(saved)
 }

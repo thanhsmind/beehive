@@ -185,6 +185,7 @@ pub(crate) fn record_one(
     delegate_only(load_taxonomy(root))?;
     let mut reopened = false;
     let mut guard = acquire_named_lock(root, &format!("cells:{id}"))?;
+    let seen_claim = read_claim_acquired_at(root, id);
     let saved = (|| -> MR<Value> {
         assert_not_archived(root, "recordJudgeVerdict", id)?;
         let cell = read_cell_norm(root, id)?;
@@ -266,7 +267,7 @@ pub(crate) fn record_one(
     guard.release();
     let cell = saved?;
     if reopened {
-        release_claim_file_best_effort(root, id);
+        release_claim_file_best_effort(root, id, seen_claim.as_deref());
         clear_merge_ready_for(root, &cell);
     }
     Ok(cell)

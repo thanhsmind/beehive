@@ -36,17 +36,16 @@ bash .bee/verify/formal-cell-lifecycle/check --variants
 bash .bee/verify/formal-cell-lifecycle/check --trace
 ```
 
-The plain run checks the model of the current code, in under a second.
-`--variants` also checks two variants, about 10 seconds in total; run it
-after every change to the model, to show that each rule can still pass
-and still fail. `--trace` prints TLC's full counterexample.
+The plain run checks the model of the current code, in about 10
+seconds. `--variants` also checks two broken variants, about 15 seconds
+in total; run it after every change to the model, to show that each rule
+can still fail. `--trace` prints TLC's full counterexample.
 
 The script needs mise, or `TLA2TOOLS` set to a `tla2tools.jar` (and
 `JAVA` to a Java 11+ binary). With mise it pins TLC 1.7.4 and Java
 Temurin 25, and installs them on the first run (this needs the network).
 Exit 0: every expected result came true. Exit 1: a result differs from
-what is expected (today the plain run exits 1 on the known finding
-below). Exit 2: TLC did not finish, or a usage error.
+what is expected. Exit 2: TLC did not finish, or a usage error.
 
 Read a counterexample with the `statechart` skill when the host has it:
 it shows each broken rule as its shortest path in plain words, and draws
@@ -55,8 +54,13 @@ its commands here.
 
 ## What the result means today
 
-- **current code** fails rule 1. This is a known bug, not drift. Shortest
-  path, in the code's words:
+- **current code** holds both rules over 3,762,606 states. A
+  claim-clearing transition reads the claim's `acquired_at` under the
+  cell lock and, after the lock, removes the claim file only if it still
+  carries that `acquired_at` (`claims.rs` `release_claim_file_best_effort`
+  and its callers). The model's claim number stands for `acquired_at`.
+- **owner-blind-clear variant** is the code before claim-clear-identity,
+  and must fail rule 1. Its shortest path, in the code's words:
   1. Session b runs `bee cells cap` on an open cell nobody claimed. The
      ownership check passes, because no claim file exists
      (`trace.rs` `check_claim_ownership`), and b writes `capped` under the
@@ -64,36 +68,25 @@ its commands here.
   2. Session a runs `bee cells claim` and writes its claim file
      (`claims.rs` `claim_cell_file`), before it takes the cell lock
      (`handlers_write.rs` `claim_cell_cross_session_ex`).
-  3. Session b, after it released the lock, clears the claim file. The
-     clear removes whatever claim file is there, a's included
-     (`claims.rs` `release_claim_file_best_effort`).
+  3. Session b, after it released the lock, clears whatever claim file is
+     there, a's included.
   4. Session c runs `bee cells reopen`; the cell is `open` again.
-  5. Session a takes the cell lock, sees `open`, and writes `claimed` with
-     `trace.claim_session` = a. a's claim file is gone.
-  TLC can also print a sibling path: a closer's late clear lands right
-  after a's claim succeeded. Both are the same bug. With the hole open,
-  rule 2 also fails: a third session caps a's live cell and no ownership
-  refusal fires.
-- **fixed variant** passes both rules over 3,762,606 states. It changes
-  one thing: the clear removes a claim file only if it is the exact claim
-  (by claim number, not by owner name) that the closer saw under the
-  lock. An owner-name check is not enough: the same session can claim
-  again in between. Before `drop` checked ownership, this fix also needed
-  the claim to re-check its own claim file under the cell lock; now it
-  does not, and that re-check alone still fails. This variant is a design
-  note for whoever fixes the bug; it is not code.
-- **no-ownership-check variant** fails rule 2 in a short path (claim,
+  5. Session a takes the cell lock, sees `open`, and writes `claimed`.
+     a's claim file is gone: any session now passes the ownership check,
+     and the sweep never frees the cell.
+  An owner-name check in the clear is not enough: the same session can
+  claim again in between. Re-checking the claimant's own file under the
+  cell lock, alone, does not hold either.
+- **no-ownership-check variant** must fail rule 2 in a short path (claim,
   then a foreign close). It proves rule 2 can catch a missing ownership
-  check. Path lengths can differ by a step between runs, because TLC runs
-  with several workers.
+  check.
 
-When the bug is fixed in the code, change the model's `code` behavior to
-match the new code, run `--variants`, and update this section: the plain
-run must then exit 0.
+Path lengths can differ by a step between runs, because TLC runs with
+several workers.
 
 ## Coverage and sync
 
-Sync commit: `9df0c5ea3fb99d26bdbd5684f6cf269cc2c22606`. At this commit
+Sync commit: `721148d9eb1b0b256465f26927027e79da7d3554`. At this commit
 the model was confirmed to describe every function below.
 
 | Model action | Code it stands for |
@@ -101,7 +94,7 @@ the model was confirmed to describe every function below.
 | `ClaimFile` | `packages/bee-rs/crates/bee/src/verbs/cells/claims.rs` `claim_cell_file` (exclusive create of `.bee/claims/<cell>.json`) |
 | `ClaimCellUnderLock` | `packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs` `claim_cell_cross_session_ex`, the `cells:<id>` lock block; the refusal path's `release_claim` |
 | `CloseCellUnderLock` | `packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs` `cap_cell_from_flags` (lock block), `mutate_cell` as used by `block_cell`, `run_drop`, `unclaim_cell`, `reopen_cell`; ownership from `packages/bee-rs/crates/bee/src/verbs/cells/trace.rs` `check_claim_ownership` and `guard_claim_ownership` |
-| `ClearClaimFile` | `claims.rs` `release_claim_file_best_effort`, called after the lock in `mutate_cell` and in `cap_cell_from_flags` |
+| `ClearClaimFile` | `claims.rs` `release_claim_file_best_effort` with the `acquired_at` that `read_claim_acquired_at` read under the lock, called after the lock in `mutate_cell`, `cap_cell_from_flags` and `packages/bee-rs/crates/bee/src/verbs/cells/handlers_meta.rs` `record_one` (a NEEDS_REVISION judge reopen) |
 | `SweepClaimFile` | `packages/bee-rs/crates/bee/src/verbs/cells/handlers_select.rs` `sweep_expired_claims`, the gated removal |
 | `SweepResetCell` | `handlers_select.rs` `sweep_reset_cell` |
 | `ClaimGoesStale` | the TTL in `claims.rs` `claim_expired` together with the 900-second `heartbeat_stale` |
@@ -114,7 +107,7 @@ inside or outside the cell lock.
 Find what changed since the sync commit:
 
 ```bash
-git diff 9df0c5ea3fb99d26bdbd5684f6cf269cc2c22606 -- packages/bee-rs/crates/bee/src/verbs/cells/claims.rs packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs packages/bee-rs/crates/bee/src/verbs/cells/handlers_select.rs packages/bee-rs/crates/bee/src/verbs/cells/trace.rs
+git diff 721148d9eb1b0b256465f26927027e79da7d3554 -- packages/bee-rs/crates/bee/src/verbs/cells/claims.rs packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs packages/bee-rs/crates/bee/src/verbs/cells/handlers_select.rs packages/bee-rs/crates/bee/src/verbs/cells/trace.rs packages/bee-rs/crates/bee/src/verbs/cells/handlers_meta.rs
 ```
 
 Move the sync commit forward only after you have read each change, made
@@ -125,6 +118,9 @@ the model describe the code at the new commit, and run `--variants`.
 - One cell, three sessions, at most four claims in one run, every session
   with a session id. Each command is one process step per lock boundary:
   everything done under the cell lock or under the claim gate is one step.
+- Every claim carries `acquired_at` (only `claim_cell_file` creates claim
+  files). A legacy claim file without it is never cleared by a close; the
+  sweep frees it once it is stale. The model does not cover that case.
 - A claim goes stale only while its owner is between commands. In the code
   the sweep needs the claim TTL to pass and a 900-second stale heartbeat;
   no command runs that long between its claim file and its lock.

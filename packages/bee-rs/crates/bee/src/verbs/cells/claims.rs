@@ -287,26 +287,33 @@ pub(crate) fn acquire_gate_with_retry(control: &Path, cell_id: &str) -> MR<bool>
     Ok(false)
 }
 
-/// claims.mjs clearClaim — unconditional claim-file removal for the
-/// claim-clearing cell transitions (cap/unclaim/block/drop/reopen). The
-/// production call sites wrap it best-effort (releaseClaimFileBestEffort
-/// swallows every failure), so this returns () and never fails the caller.
-pub(crate) fn release_claim_file_best_effort(root: &Path, id: &str) {
+pub(crate) fn read_claim_acquired_at(root: &Path, id: &str) -> Option<String> {
+    let control = control_root(root).ok()?;
+    let claim = read_claim(&control, id).ok()??;
+    match claim.get("acquired_at") {
+        Some(Value::String(s)) => Some(s.clone()),
+        _ => None,
+    }
+}
+
+pub(crate) fn release_claim_file_best_effort(root: &Path, id: &str, seen: Option<&str>) {
+    let Some(seen) = seen else { return };
     let Ok(control) = control_root(root) else { return };
+    let carries_seen = |claim: &Map<String, Value>| {
+        matches!(claim.get("acquired_at"), Some(Value::String(s)) if s == seen)
+    };
     let _ = (|| -> MR<()> {
-        if read_claim(&control, id)?.is_none() {
-            return Ok(());
-        }
         if !acquire_gate_with_retry(&control, id)? {
             return Ok(());
         }
-        let still_there = read_claim(&control, id);
-        if let Ok(Some(_)) = still_there {
-            if let Ok(file) = claim_path(&control, id) {
-                let _ = transient_fs_retry(|| match std::fs::remove_file(&file) {
-                    Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
-                    other => other,
-                });
+        if let Ok(Some(claim)) = read_claim(&control, id) {
+            if carries_seen(&claim) {
+                if let Ok(file) = claim_path(&control, id) {
+                    let _ = transient_fs_retry(|| match std::fs::remove_file(&file) {
+                        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+                        other => other,
+                    });
+                }
             }
         }
         release_gate(&control, id);
