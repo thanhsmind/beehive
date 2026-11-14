@@ -120,7 +120,8 @@ cannot change their result (skillstation-onboard-aliases D6).
   one skip row per skill with the reason and exits 0, the same contract as the
   onboard publish skip. `alias <id>` exits non-zero instead, because an explicit
   request that cannot work must say so (skillstation-aliases D7).
-- Claude Code only. Other runtimes are a later row (skillstation-aliases D8).
+- Claude Code only. Codex, opencode and the plugin trees keep their local
+  copies (skillstation-aliases D8, skillstation-principles D1).
 - The alias body relies on the host having the skillstation MCP server; when the
   tool is missing the alias tells the user to run `skillstation connect -g`.
 - The `--skillstation` switch renders the Claude agent files in hub mode at plan
