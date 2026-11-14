@@ -126,6 +126,12 @@ rule never disappears — only its elaboration moves.
   agent derive the call in a case the text never names, and the reason lives here and in the
   playbooks, never in the always-loaded contract. The bugfix playbook's cause-not-known paragraph ends
   with the cheap always-on-signal sentence (pstack-0-15-port D5, same cell).
+- **The formal-verification steps point outward.** The feature playbook's step 6 names the
+  `statechart` skill and step 7 names `create-formal-verification-skill` and
+  `maintain-formal-verification-skill`; all three live in the skillstation hub, tracked upstream
+  from pstack, and bee vendors none of them (formal-verification-pack D1, D2). Each step is skipped,
+  and the skip said, when the host lacks the skill. The verify skill the generator writes goes under
+  `.bee/verify/<name>/`, so `bee onboard --verify-only --apply` renders it into every runtime.
 
 ## Edge Cases Settled
 
