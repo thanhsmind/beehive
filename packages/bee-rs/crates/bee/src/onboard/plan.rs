@@ -35,7 +35,6 @@ use super::util::{
     read_dir_sorted_checked, read_json_if_exists, read_text_if_exists, realpath, sha256_str,
 };
 use crate::jsjson;
-use crate::principles::PRINCIPLE_INDEX;
 use crate::verbs::skillstation_group::{
     carries_alias_marker, hub_runner, hub_show, principles_on_hub, render_alias, HubErr, Run,
     RELATED_SKILLS,
@@ -1522,18 +1521,10 @@ pub fn compute_plan(engine: &Engine, repo_root: &Path, opts: &Options) -> Comput
     let claude_in_scope = matches!(opts.runtime.as_str(), "claude" | "both");
     let mut principles_from_hub = false;
     if opts.sync_skills && hub_mode && claude_in_scope {
-        if !repo_root.join(PRINCIPLE_INDEX).is_file() {
-            alias_skips.push(json!({
-                "target": "skillstation-principles",
-                "reason": format!(
-                    "{PRINCIPLE_INDEX} is absent, so bee orient cannot name principles in this repo"
-                ),
-            }));
-        } else {
-            match principles_served_by_hub(engine, &*hub_runner(repo_root)) {
-                Ok(served) => principles_from_hub = served,
-                Err(reason) => alias_skips
-                    .push(json!({"target": "skillstation-principles", "reason": reason})),
+        match principles_served_by_hub(engine, &*hub_runner(repo_root)) {
+            Ok(served) => principles_from_hub = served,
+            Err(reason) => {
+                alias_skips.push(json!({"target": "skillstation-principles", "reason": reason}))
             }
         }
     }

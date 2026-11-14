@@ -88,10 +88,11 @@ cannot change their result (skillstation-onboard-aliases D6).
   the codex, opencode, plugin and legacy global targets keep theirs. A principle
   that is missing or not active, or a hub read that skips, keeps every local
   copy and adds one `skipped_skills` row with target `skillstation-principles`.
-  The hub is not read at all, and the same single skip row names the index, when
-  the repo root lacks the file `principles::PRINCIPLE_INDEX`: without it `bee
-  orient` cannot name principles, so dropping the local copies would leave the
-  agent with none (skillstation-principles D7). Today only the bee repo holds it.
+  Every repo has an index: `principles::principle_lines` reads the repo's own
+  `principles::PRINCIPLE_INDEX` file when it exists and otherwise the copy
+  compiled into bee from that same file at build time, so dropping the local
+  copies never leaves the agent without principle lines (skillstation-principles
+  D8, which replaced the D7 skip row for a missing index).
   With `--skillstation`, each principle is published from the engine source
   rendered for claude, never from `.claude/skills`, because that folder is gone
   by the second onboard. The first hub-mode onboard therefore publishes and keeps

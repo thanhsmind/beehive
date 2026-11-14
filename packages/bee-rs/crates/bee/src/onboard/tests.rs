@@ -3736,22 +3736,18 @@ mod principles_on_the_hub {
     }
 
     #[test]
-    fn hub_mode_without_the_principle_index_keeps_every_copy_and_names_the_index() {
+    fn hub_mode_without_the_principle_index_still_drops_the_copies() {
         let fx = fixture_with_local_copies();
         go_hub(&fx);
         std::fs::remove_file(fx.repo.join(crate::principles::PRINCIPLE_INDEX)).unwrap();
         let _hub = hub(&all_active());
         let p = plan(&fx, &["--runtime", "claude"]);
-        assert!(principle_removals(&p).is_empty());
-        let skips = principle_skips(&p);
-        assert_eq!(skips.len(), 1, "{skips:?}");
-        assert_eq!(
-            skips[0]["reason"],
-            format!(
-                "{} is absent, so bee orient cannot name principles in this repo",
-                crate::principles::PRINCIPLE_INDEX
-            )
-        );
+        let removed: Vec<(String, String)> = IDS
+            .iter()
+            .map(|id| ("repo-claude".to_string(), id.to_string()))
+            .collect();
+        assert_eq!(principle_removals(&p), removed);
+        assert!(principle_skips(&p).is_empty());
     }
 
     #[test]
