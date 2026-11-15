@@ -15,8 +15,8 @@ bee:
   owns.skills: [skills/bee-shaping/*, skills/bee-grooming/*]
   owns.tests: []
   anchors: [packages/bee-rs/crates/bee/src/verbs/backlog.rs, packages/bee-rs/crates/bee/src/registry.rs, packages/bee-rs/crates/bee/src/main.rs, packages/bee-rs/crates/bee/src/verbs/cells/tests.rs]
-  verified_at: 2026-11-07
-  verified_commit: 9861c1b430dc099ce4e0ba481503579ad3a2d738
+  verified_at: 2026-11-15
+  verified_commit: a963c71a41249647b5aa15a64118f007f39c4c67
 ---
 
 # Product Backlog — Mechanical Passes and Submission

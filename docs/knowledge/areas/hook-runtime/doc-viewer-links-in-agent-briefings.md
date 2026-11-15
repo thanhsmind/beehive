@@ -12,8 +12,8 @@ bee:
   sources: ["doc-viewer-links cell dvl-1 (one shared reader + both briefing injectors; trace .bee/cells/archive/doc-viewer-links/dvl-1.json, capped 2026-08-05)", "doc-viewer-links cell dvl-2 (the contract rule and the configuration reference; trace .bee/cells/archive/doc-viewer-links/dvl-2.json, capped 2026-08-05)", docs/config-reference.md (the doc_viewer key and its half-set warning)]
   authoritative_for: "hook-runtime: the doc-viewer link prefix carried into agent-facing briefings"
   anchors: [packages/bee-rs/crates/bee/src/state.rs, packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs, packages/bee-rs/crates/bee/src/hooks/compaction.rs, packages/bee/AGENTS.block.md, skills/bee-hive/references/routing-and-contracts.md]
-  verified_at: 2026-11-12
-  verified_commit: 7f54454995fbf20e110c405f0f4016ecb9571cd8
+  verified_at: 2026-11-15
+  verified_commit: a963c71a41249647b5aa15a64118f007f39c4c67
 ---
 
 # Hook Runtime — the opt-in doc-viewer prefix in agent-facing briefings

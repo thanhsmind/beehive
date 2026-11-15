@@ -14,8 +14,8 @@ bee:
   owns.skills: [skills/bee-wayfinding/*]
   owns.tests: [packages/bee-rs/crates/bee/tests/discovery_verbs.rs]
   anchors: [packages/bee-rs/crates/bee/src/verbs/discovery.rs, packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs, packages/bee-rs/crates/bee/src/verbs/status_full/orient.rs, skills/bee-wayfinding/SKILL.md, skills/bee-wayfinding/references/wayfinding-reference.md, skills/bee-shaping/references/gray-area-probes.md, skills/bee-wayfinding/, skills/bee-shaping/SKILL.md]
-  verified_at: 2026-09-06
-  verified_commit: ab2fce1afc72aade536e8910d1034a96315697b9
+  verified_at: 2026-11-15
+  verified_commit: a963c71a41249647b5aa15a64118f007f39c4c67
 ---
 
 # Discovery Wayfinding (charting fog-state ideas before shaping)

@@ -12,8 +12,8 @@ bee:
   sources: ["parallel-scheduler cells parallel-scheduler-1..5 (traces in .bee/cells/, reports docs/history/parallel-scheduler/reports/, 2026-07-15/16; -5: review fix scoping refusal to introduced/participating cycles)", "docs/specs/workflow-state.md#B17", "docs/specs/workflow-state.md#B18", "docs/specs/workflow-state.md#R26", "docs/specs/workflow-state.md#R27", "docs/specs/workflow-state.md#P19"]
   authoritative_for: "workflow-state: the computed dispatch schedule and dependency-cycle refusal"
   anchors: [packages/bee-rs/crates/bee/src/verbs/cells/schedule.rs, skills/bee-swarming/SKILL.md, skills/bee-planning/references/planning-reference.md]
-  verified_at: 2026-11-07
-  verified_commit: 9861c1b430dc099ce4e0ba481503579ad3a2d738
+  verified_at: 2026-11-15
+  verified_commit: a963c71a41249647b5aa15a64118f007f39c4c67
 ---
 
 # Workflow State — the computed dispatch schedule and the cycle refused at the door

@@ -12,8 +12,8 @@ bee:
   sources: ["bee-footprint D1 (managed ignore section, cells footprint-1/footprint-4, 2026-07-12)", "docs/specs/onboarding.md#R9", "docs/specs/onboarding.md#R10", "docs/specs/onboarding.md#R11", "docs/specs/onboarding.md#E10", "docs/specs/onboarding.md#E11", "docs/specs/onboarding.md#E12", "docs/specs/onboarding.md#E13", "docs/specs/onboarding.md#E14", "docs/specs/onboarding.md#P15"]
   authoritative_for: "onboarding: the managed ignore section"
   anchors: [packages/bee-rs/crates/bee/src/main.rs]
-  verified_at: 2026-11-07
-  verified_commit: 9861c1b430dc099ce4e0ba481503579ad3a2d738
+  verified_at: 2026-11-15
+  verified_commit: a963c71a41249647b5aa15a64118f007f39c4c67
 ---
 
 # Onboarding — The Managed Ignore Section

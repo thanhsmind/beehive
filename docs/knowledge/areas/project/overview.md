@@ -16,8 +16,8 @@ bee:
   owns.skills: [skills/bee-knowledge-setup/SKILL.md]
   owns.tests: []
   anchors: [README.md, packages/bee-rs/Cargo.toml, packages/bee-rs/crates/bee/src/main.rs, packages/bee-rs/crates/bee/src/router.rs, packages/bee-rs/crates/bee/src/verbs/mod.rs, packages/bee-rs/crates/fleet/Cargo.toml, .github/workflows/ci.yml, scripts/release.sh]
-  verified_at: 2026-11-14
-  verified_commit: cdefa65590c37a8f7f9a716d23cd23df9a082c54
+  verified_at: 2026-11-15
+  verified_commit: a963c71a41249647b5aa15a64118f007f39c4c67
 ---
 
 # Project map
