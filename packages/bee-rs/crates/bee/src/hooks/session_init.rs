@@ -1143,4 +1143,44 @@ mod tests {
         let bad = json!({ "belt_contract": "pi" }).as_object().unwrap().clone();
         assert_eq!(belt_contract_line(tmp.path(), &bad), None);
     }
+
+    const THIN_PEER_HOOK_CHILD: &str = "hooks::session_init::tests::thin_peer_hook_child_runs_the_session_init_hook";
+    const THIN_PEER_ROOT_ENV: &str = "BEE_TEST_THIN_PEER_ROOT";
+
+    #[test]
+    #[ignore = "child process of the_session_init_hook_tells_a_herded_peer_to_read_agents_md_and_still_forbids_claude_md_and_leader_md"]
+    fn thin_peer_hook_child_runs_the_session_init_hook() {
+        let root = PathBuf::from(std::env::var_os(THIN_PEER_ROOT_ENV).expect("the parent names the repo"));
+        let outcome = run(&[], &payload_for(&root));
+        assert!(matches!(outcome, Outcome::Done(_)));
+    }
+
+    #[test]
+    fn the_session_init_hook_tells_a_herded_peer_to_read_agents_md_and_still_forbids_claude_md_and_leader_md() {
+        let tmp = tempfile::tempdir().unwrap();
+        crate::hooks::tests::thin_repo(tmp.path(), None);
+        let out = std::process::Command::new(std::env::current_exe().expect("test binary path"))
+            .args(["--exact", THIN_PEER_HOOK_CHILD, "--ignored", "--test-threads", "1", "--nocapture"])
+            .env("BEE_HERDING_WORKER", "1")
+            .env(THIN_PEER_ROOT_ENV, tmp.path())
+            .output()
+            .expect("spawn the test binary");
+        let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
+        assert!(out.status.success(), "child failed:\n{stdout}\n{}", String::from_utf8_lossy(&out.stderr));
+        assert!(stdout.contains("1 passed"), "the child test did not run:\n{stdout}");
+        assert!(stdout.contains("You are a bee peer."), "the hook printed no peer preamble:\n{stdout}");
+        let read_line = stdout
+            .lines()
+            .find(|l| l.contains("Read AGENTS.md"))
+            .unwrap_or_else(|| panic!("the preamble does not send the peer to AGENTS.md:\n{stdout}"));
+        assert!(read_line.starts_with("- "), "{read_line}");
+        let forbids: Vec<&str> =
+            stdout.lines().filter(|l| l.contains("Do not read") || l.contains("Never read")).collect();
+        assert!(forbids.iter().all(|l| !l.contains("AGENTS.md")), "{forbids:?}");
+        let forbid = forbids
+            .iter()
+            .find(|l| l.contains("CLAUDE.md"))
+            .unwrap_or_else(|| panic!("no line forbids CLAUDE.md:\n{stdout}"));
+        assert!(forbid.contains(".bee/LEADER.md"), "{forbid}");
+    }
 }

@@ -316,6 +316,54 @@ use std::time::Instant;
         );
     }
 
+    fn worker_prompt_render(is_herding: bool, expertise: Option<&str>) -> String {
+        let cell = json!({"id": "c-1", "feature": "feat", "status": "claimed"});
+        prompt_body_for(
+            std::path::Path::new("/unused"),
+            "cell",
+            Some(&cell),
+            Some("w1"),
+            None,
+            expertise,
+            None,
+            None,
+            None,
+            None,
+            None,
+            is_herding,
+        )
+        .unwrap()
+        .unwrap()
+    }
+
+    #[test]
+    fn worker_prompt_native_and_herding_renders_both_carry_the_depth_on_demand_line() {
+        let native = worker_prompt_render(false, None);
+        let herded = worker_prompt_render(true, None);
+        assert_ne!(native, herded, "the two renders must differ or this test proves one path twice");
+        for (render, text) in [("native", &native), ("herding", &herded)] {
+            let depth = text
+                .lines()
+                .find(|l| l.starts_with("Depth on demand"))
+                .unwrap_or_else(|| panic!("{render} render lost the depth line:\n{text}"));
+            assert!(depth.contains(".bee/expertise/INDEX.md"), "{render}: {depth}");
+            assert!(depth.contains("Depth line"), "{render}: {depth}");
+        }
+    }
+
+    #[test]
+    fn worker_prompt_without_expertise_carries_no_expertise_body_in_either_render() {
+        let body = "EXPERTISE-BODY-SENTINEL tests.md section";
+        let header = "Expertise — dispatcher-picked";
+        for is_herding in [false, true] {
+            let with = worker_prompt_render(is_herding, Some(body));
+            assert!(with.contains(header) && with.contains(body), "herding={is_herding}: {with}");
+            let without = worker_prompt_render(is_herding, None);
+            assert!(!without.contains(header), "herding={is_herding}: {without}");
+            assert!(!without.contains(body), "herding={is_herding}: {without}");
+        }
+    }
+
     #[test]
     fn one_line_collapses_whitespace_and_ellipsises() {
         assert_eq!(one_line(Some(&json!("  a \n b  ")), 140), "a b");
