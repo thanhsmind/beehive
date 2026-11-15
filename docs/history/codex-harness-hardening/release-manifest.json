@@ -142,7 +142,7 @@
     },
     {
       "path": ".claude-plugin/skills/.bee-render.json",
-      "sha256": "21664ac82954170df0f8e59c35dbd8d070cd32836a10362f20b9c95a743938b8",
+      "sha256": "594eedb4171dfe31314aa6d1e8acde6820e3ca6a29b9aeb0b46192eedf04d574",
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/.bee-render.json"
@@ -457,10 +457,17 @@
     },
     {
       "path": ".claude-plugin/skills/bee-planning/playbooks/bugfix.md",
-      "sha256": "eab42259d8d5b5058aadb785a5c0bc9241073f4bd00be2fd586c50f607086e19",
+      "sha256": "1550089a37118a91e35f0acd83a59c72c38a24a4ac0bd03e087d282b37f6382d",
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/bee-planning/playbooks/bugfix.md"
+    },
+    {
+      "path": ".claude-plugin/skills/bee-planning/playbooks/bugfix/bug-fix.md",
+      "sha256": "c16e002f961a16296ca81f4083f039b53b1a8a6fa0f0a80414214638714d9a94",
+      "mode": "644",
+      "role": "plugin_skill_claude_render",
+      "packagePath": ".claude-plugin/skills/bee-planning/playbooks/bugfix/bug-fix.md"
     },
     {
       "path": ".claude-plugin/skills/bee-planning/playbooks/content.md",
@@ -482,6 +489,13 @@
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/bee-planning/playbooks/feature.md"
+    },
+    {
+      "path": ".claude-plugin/skills/bee-planning/playbooks/LICENSE.pstack",
+      "sha256": "bc957ca6bee02792566a1a028d105e02e247c6e77cf057061674273da77b200e",
+      "mode": "644",
+      "role": "plugin_skill_claude_render",
+      "packagePath": ".claude-plugin/skills/bee-planning/playbooks/LICENSE.pstack"
     },
     {
       "path": ".claude-plugin/skills/bee-planning/playbooks/perf.md",
@@ -1066,7 +1080,7 @@
     },
     {
       "path": ".codex-plugin/skills/.bee-render.json",
-      "sha256": "eee20654f22ecb5822eea6f77c89672991c9b5c430e05a1490f46b3ab0a46c50",
+      "sha256": "c0cba834b9dca067f0c50771c62f76a55ca76aa98ec05697a942052b61c328b2",
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/.bee-render.json"
@@ -1381,10 +1395,17 @@
     },
     {
       "path": ".codex-plugin/skills/bee-planning/playbooks/bugfix.md",
-      "sha256": "eab42259d8d5b5058aadb785a5c0bc9241073f4bd00be2fd586c50f607086e19",
+      "sha256": "1550089a37118a91e35f0acd83a59c72c38a24a4ac0bd03e087d282b37f6382d",
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/bee-planning/playbooks/bugfix.md"
+    },
+    {
+      "path": ".codex-plugin/skills/bee-planning/playbooks/bugfix/bug-fix.md",
+      "sha256": "c16e002f961a16296ca81f4083f039b53b1a8a6fa0f0a80414214638714d9a94",
+      "mode": "644",
+      "role": "plugin_skill_codex_render",
+      "packagePath": ".codex-plugin/skills/bee-planning/playbooks/bugfix/bug-fix.md"
     },
     {
       "path": ".codex-plugin/skills/bee-planning/playbooks/content.md",
@@ -1406,6 +1427,13 @@
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/bee-planning/playbooks/feature.md"
+    },
+    {
+      "path": ".codex-plugin/skills/bee-planning/playbooks/LICENSE.pstack",
+      "sha256": "bc957ca6bee02792566a1a028d105e02e247c6e77cf057061674273da77b200e",
+      "mode": "644",
+      "role": "plugin_skill_codex_render",
+      "packagePath": ".codex-plugin/skills/bee-planning/playbooks/LICENSE.pstack"
     },
     {
       "path": ".codex-plugin/skills/bee-planning/playbooks/perf.md",
@@ -3796,10 +3824,17 @@
     },
     {
       "path": "skills/bee-planning/playbooks/bugfix.md",
-      "sha256": "eab42259d8d5b5058aadb785a5c0bc9241073f4bd00be2fd586c50f607086e19",
+      "sha256": "1550089a37118a91e35f0acd83a59c72c38a24a4ac0bd03e087d282b37f6382d",
       "mode": "644",
       "role": "plugin_skill",
       "packagePath": "skills/bee-planning/playbooks/bugfix.md"
+    },
+    {
+      "path": "skills/bee-planning/playbooks/bugfix/bug-fix.md",
+      "sha256": "c16e002f961a16296ca81f4083f039b53b1a8a6fa0f0a80414214638714d9a94",
+      "mode": "644",
+      "role": "plugin_skill",
+      "packagePath": "skills/bee-planning/playbooks/bugfix/bug-fix.md"
     },
     {
       "path": "skills/bee-planning/playbooks/content.md",
@@ -3821,6 +3856,13 @@
       "mode": "644",
       "role": "plugin_skill",
       "packagePath": "skills/bee-planning/playbooks/feature.md"
+    },
+    {
+      "path": "skills/bee-planning/playbooks/LICENSE.pstack",
+      "sha256": "bc957ca6bee02792566a1a028d105e02e247c6e77cf057061674273da77b200e",
+      "mode": "644",
+      "role": "plugin_skill",
+      "packagePath": "skills/bee-planning/playbooks/LICENSE.pstack"
     },
     {
       "path": "skills/bee-planning/playbooks/perf.md",
