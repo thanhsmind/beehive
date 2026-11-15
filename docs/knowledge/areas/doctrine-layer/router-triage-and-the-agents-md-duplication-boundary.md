@@ -557,6 +557,34 @@ Slice 4 (pstack-playbook-port D5, cell ppb-28): classes follow each pstack
   - applied_at:
     - `skills/bee-principle-make-operations-idempotent/SKILL.md`
 
+The four rows from guard-the-context-window to experience-first continue pstack
+Slice 4 (pstack-playbook-port D5, cell ppb-29): classes follow each pstack
+"when it applies" line.
+
+- `bee-principle-guard-the-context-window` (expertise/thinking.md § Guard the Context Window):
+  spoken: keep bulk out of the main thread — route large outputs and multi-file hunts to a read-only gather, read by relevance, cap the files per unit, and read the artifact itself when the exact bytes decide the answer
+  classes: research, refactor, feature
+  - applied_at:
+    - `skills/bee-principle-guard-the-context-window/SKILL.md`
+
+- `bee-principle-never-block-on-the-human` (expertise/decisions.md § Never block on the human):
+  spoken: on reversible work, do it, show it and say why instead of asking — one short yes/no question only for genuine ambiguity, and confirmation stays for irreversible actions, product direction and locked decisions
+  classes: feature, bugfix, refactor, perf, spike, docs
+  - applied_at:
+    - `skills/bee-principle-never-block-on-the-human/SKILL.md`
+
+- `bee-principle-exhaust-the-design-space` (expertise/thinking.md § Exhaust the Design Space):
+  spoken: when a novel interaction or architectural choice has no precedent, compare two or three candidates of different shapes side by side before you commit — a second flavor of the first shape does not count
+  classes: feature, spike
+  - applied_at:
+    - `skills/bee-principle-exhaust-the-design-space/SKILL.md`
+
+- `bee-principle-experience-first` (expertise/thinking.md § Experience First):
+  spoken: where implementation convenience and user delight conflict, choose delight — every feature earns its place, fewer polished beats more rough, and the user includes whoever imports or maintains the code
+  classes: feature, spike
+  - applied_at:
+    - `skills/bee-principle-experience-first/SKILL.md`
+
 ## Open Gaps
 
 - **The realised saving is smaller than first projected.** The router fell 18.7%, about 1,675 tokens

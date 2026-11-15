@@ -16,6 +16,7 @@ how to write one, and how to keep the record honest as the work moves.
 | Writing the record itself | Anatomy of a good record |
 | Recognizing a record that carries no weight | Anti-patterns |
 | Downstream work meets a settled question | Locked versus open |
+| About to ask "should I do X?" on work that can be undone | Never block on the human |
 | A locked decision no longer fits the budget or reality | Reinterpretation is quiet narrowing |
 | Changing a recorded decision | Superseding, not editing |
 | Writing a change that exists to honor a decision | Cite the decision at the work |
@@ -124,6 +125,35 @@ superseded. The distinction is the entire value of keeping records: work
 downstream of a locked decision builds on it *without re-deriving it*,
 which is what lets many hands work in parallel without converging on
 different answers.
+
+## Never block on the human
+
+When you are about to ask "should I do X?" about work that can be undone → do
+X, show the result and say why. The human supervises asynchronously, and every
+permission pause stalls the pipeline and makes the human the bottleneck. Code
+is cheap and attention is scarce: a wrong implementation costs minutes to fix,
+a blocked agent costs the human's attention to unblock.
+
+- **Proceed, then present.** Do the work and show it; do not ask first.
+- **Reserve questions for genuine ambiguity.** Ask only when intent cannot be
+  inferred from the task, the records and the code, and then ask one short
+  yes/no question, not a menu of options.
+- **Name what you assumed.** The human reviews on their own schedule, and a
+  call they cannot see is a call they cannot correct. Put the assumption where
+  the review will read it; if it settles a rule others will build on, record it
+  (Record at the moment of settlement).
+- **Make the system self-healing.** When you notice a problem on the way, log
+  it and fix it in the next round instead of stopping the run.
+- **Design for review after the fact.** Plans, diffs and changes are read when
+  the human chooses to read them.
+
+The boundaries hold. An irreversible action — a force-push, deleting
+production data, a message sent outside the project — still needs
+confirmation. A reversible one — writing code, editing notes, splitting a task
+— proceeds. Product direction comes from the human, while execution does not
+wait on it. A locked decision is never reinterpreted to get unblocked
+(Reinterpretation is quiet narrowing), and the uat acceptance at `bee close`
+stays the owner's at every gate-bypass level.
 
 ## Reinterpretation is quiet narrowing
 

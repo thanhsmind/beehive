@@ -29,6 +29,9 @@ questioning — ask before asserting.
 | Two explanations fit the evidence | Occam's Razor |
 | About to remove something that looks pointless | Chesterton's Fence |
 | Stuck, or an explanation only makes sense to its author | Rubber-Duck Explanation |
+| A novel interaction or architectural choice with no precedent | Exhaust the Design Space |
+| Product, UX or feature-scope tradeoffs | Experience First |
+| Context is filling: bulk output, long files, repeated reads, fan-out | Guard the Context Window |
 
 ## Methods
 
@@ -268,6 +271,91 @@ works because explanation forces serialization — beliefs held vaguely
 in parallel must be stated one at a time, in order, and the broken
 one becomes visible the moment it has to be said plainly. The duck
 never has to answer; the explanation itself does the debugging.
+
+### Exhaust the Design Space
+
+When a UI interaction or an architectural decision has no precedent in the
+codebase → do not implement the first idea. Build two or three competing
+prototypes or sketches, compare them side by side, and only then commit.
+Building the wrong thing costs more than exploring three options.
+
+Design it twice is this rule by another name. The candidates must differ in
+shape. A second flavor of the first shape — the same structure under other
+names, or the same layout with different polish — does not count, and two
+near-twins are one design explored once.
+
+It applies to a novel interaction with no prior art in the codebase, an
+architectural choice with several viable approaches, and a product decision
+whose answer depends on feel and not on logic. It does not apply to mechanical
+implementation where the pattern is established, a bug fix or refactor with a
+clear target state, or a change where the constraints leave one viable
+approach; there the fan-out only confirms what is already fixed.
+
+In bee the candidates go out as blind lanes, each as
+`bee dispatch prepare --runtime claude --kind advisor --role lane-1 --json`,
+then `--role lane-2` and `--role lane-3` for a third. The judge goes out as
+`--kind reviewer`, and `bee blind check` checks the blind brief before the
+lanes run. The lane constraints, the four things each lane returns and the
+comparison on depth, locality and seam placement are in Design it twice in
+`planning.md`; `bee-architect` and `bee-arena` run the procedure. A throwaway
+prototype is the cheapest candidate when the question is feel (Experience
+First). End with a verdict and a reason, never a menu.
+
+### Experience First
+
+When product, UX or feature-scope tradeoffs come up → the product is the
+experience, and every technical decision either helps or hurts it. Where
+implementation convenience conflicts with user delight, choose delight.
+
+- Say no to a thousand things: every feature, control and option must earn
+  its place.
+- Ship less, ship better: a polished experience with three features beats a
+  rough one with ten.
+- Prototype before committing: a design decision is cheaper in throwaway
+  markup than in production code.
+- Sweat the details: transitions, alignment, spacing, feedback, error states.
+- Tighten the core loop: each feature serves the central workflow or gets out
+  of the way.
+
+The user is whoever consumes the work. For a UI that is the end user; for a
+library or an internal API it is the colleague who imports it; the engineer
+who maintains the code next is a user too. Weigh their experience the same
+way, and explain impact from their seat.
+
+Foundations serve the experience, not the other way around. Foundational
+Thinking in `architecture.md` governs the *sequence* of work; this method
+governs the *target*. A locked decision or a stated constraint that already
+settled the tradeoff ends the weighing, and polish nobody asked for is scope
+(The smallest honest shape in `planning.md`).
+
+### Guard the Context Window
+
+When output is large, files are long, reads repeat, or a fan-out is being
+planned → treat the context window as finite and non-renewable inside a
+session, and make every token earn its place. Overflow degrades reasoning,
+leaves compression artifacts and halts progress, and unlike compute or time,
+spent context cannot be reclaimed.
+
+- **Isolate large payloads.** Verbose output, screenshots and long documents go
+  to a delegate; the main thread gets the summary, not the payload. A
+  read-only gather goes out as
+  `bee dispatch prepare --runtime claude --kind gather --json` and returns
+  paths, facts with anchors, and quotes only where asked.
+- **Don't read what you won't use.** Read by relevance; a file the current
+  task does not need stays closed.
+- **Keep frequently used content inline.** A template or reference used on
+  every invocation belongs in the skill body, because in a separate file it
+  costs a read each time.
+- **Size units and cap scope.** Limit the files per unit (What makes a good
+  unit of work in `planning.md`), set a turn budget, and count what the
+  mechanism costs: a fan-out whose reports all return to the main thread has
+  moved the bulk, not removed it. `bee-fanout` drains its workers into one
+  report for that reason.
+
+A summary can lose exactly the byte that matters. When the answer depends on
+the exact content — a diff under review, a value being proven, a quote being
+cited — read the artifact itself (Prove it works in `tests.md`). Delegating a
+lookup of one or two files costs more than reading them.
 
 ## Choosing and combining
 

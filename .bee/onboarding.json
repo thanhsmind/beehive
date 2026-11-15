@@ -14,7 +14,7 @@
       "architecture.md": "acace3dc7a8d839e3058607df4bd4816ea125807e3c0f20d7b30d6da3f212ca6",
       "data.md": "799000e64e6c274447e94571ec8b78dfeba8df015a3d566e7b9afc7ea7ef7785",
       "debugging.md": "8b2d4018fc461c68f7582c53967f2d76bdbb9f17a4d9461579862959e1423572",
-      "decisions.md": "599b07310c5ae8b037a02ee9464c209b9f50e4a7a35744a36c5f5ad38832b9e9",
+      "decisions.md": "47542962c99424bbcf3ff214bba46a6c5d7e2a96ed9517c3f158b7832822fa61",
       "documentation.md": "7b3cf8afcea9dcb969d2a6965671f0282b53897da9275d09da5686b53f8aca19",
       "frontend.md": "1abcec2e73165a5c2c1b4537a377a30d0da9608de64d1cacab97434e77a78439",
       "knowledge.md": "23ab9373261a9fe0e9c93fe28c892f3578a048e0f840ff6230b06b0db4d09e3c",
@@ -34,7 +34,7 @@
       "tests/patterns/environment-limited-tests.md": "b55575b8822948848f355abe62508388c3a3f2d50ba59a6d06bfedf8aafcc72e",
       "tests/patterns/pinning-against-a-live-oracle.md": "c6251f5fd518cdc1ef7d323ddc7e2b5b6ae9a6cda810cb15cc76d2c43e3a2928",
       "tests/patterns/proving-the-code-under-test-ran.md": "6e9e895c3c83a726dd6f5f3c86bc686513db460491cbf51804c4a990d747c9da",
-      "thinking.md": "3b38bad95aa29ffd0c84bd470334bcc9018892c85b70d532fab6b40931312617"
+      "thinking.md": "ac4ffabd9c2222f2fa27ac2953a3ba08914aa641775669550c85201f1746a5ab"
     },
     "prompts": {
       "advisor.md": "6b191a961073dc460c835498d1f07d8fc38bc2e0eb765de3cd25d10871a149dd",
@@ -188,5 +188,5 @@
   },
   "design_role_offered": true,
   "created_at": "2026-07-24T03:53:44.750Z",
-  "updated_at": "2026-11-15T04:49:57.413Z"
+  "updated_at": "2026-11-15T04:53:37.755Z"
 }

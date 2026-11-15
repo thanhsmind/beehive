@@ -38,7 +38,7 @@
     },
     {
       "path": ".bee/expertise/decisions.md",
-      "sha256": "599b07310c5ae8b037a02ee9464c209b9f50e4a7a35744a36c5f5ad38832b9e9",
+      "sha256": "47542962c99424bbcf3ff214bba46a6c5d7e2a96ed9517c3f158b7832822fa61",
       "mode": "644",
       "role": "runtime_expertise"
     },
@@ -122,7 +122,7 @@
     },
     {
       "path": ".bee/expertise/thinking.md",
-      "sha256": "3b38bad95aa29ffd0c84bd470334bcc9018892c85b70d532fab6b40931312617",
+      "sha256": "ac4ffabd9c2222f2fa27ac2953a3ba08914aa641775669550c85201f1746a5ab",
       "mode": "644",
       "role": "runtime_expertise"
     },
@@ -142,7 +142,7 @@
     },
     {
       "path": ".claude-plugin/skills/.bee-render.json",
-      "sha256": "6160af2e05bec7b9d55eaeda6d2210d01244819a7ced37c0d1f1552f77a25309",
+      "sha256": "ed2c5e5a902c833802cda916e382c31b49b0c104526a7096230616dfec662110",
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/.bee-render.json"
@@ -939,6 +939,34 @@
       "packagePath": ".claude-plugin/skills/bee-principle-encode-lessons-in-structure/SKILL.md"
     },
     {
+      "path": ".claude-plugin/skills/bee-principle-exhaust-the-design-space/LICENSE.pstack",
+      "sha256": "bc957ca6bee02792566a1a028d105e02e247c6e77cf057061674273da77b200e",
+      "mode": "644",
+      "role": "plugin_skill_claude_render",
+      "packagePath": ".claude-plugin/skills/bee-principle-exhaust-the-design-space/LICENSE.pstack"
+    },
+    {
+      "path": ".claude-plugin/skills/bee-principle-exhaust-the-design-space/SKILL.md",
+      "sha256": "1ed918bddab28b63346a4cf7aed2f0b9fd0ef7e247526c479c93ca78f87b5030",
+      "mode": "644",
+      "role": "plugin_skill_claude_render",
+      "packagePath": ".claude-plugin/skills/bee-principle-exhaust-the-design-space/SKILL.md"
+    },
+    {
+      "path": ".claude-plugin/skills/bee-principle-experience-first/LICENSE.pstack",
+      "sha256": "bc957ca6bee02792566a1a028d105e02e247c6e77cf057061674273da77b200e",
+      "mode": "644",
+      "role": "plugin_skill_claude_render",
+      "packagePath": ".claude-plugin/skills/bee-principle-experience-first/LICENSE.pstack"
+    },
+    {
+      "path": ".claude-plugin/skills/bee-principle-experience-first/SKILL.md",
+      "sha256": "e5498f739c8d7cf408546b1d130a9002055211cb2404de1f6c19197a471163ab",
+      "mode": "644",
+      "role": "plugin_skill_claude_render",
+      "packagePath": ".claude-plugin/skills/bee-principle-experience-first/SKILL.md"
+    },
+    {
       "path": ".claude-plugin/skills/bee-principle-foundational-thinking/LICENSE.pstack",
       "sha256": "bc957ca6bee02792566a1a028d105e02e247c6e77cf057061674273da77b200e",
       "mode": "644",
@@ -951,6 +979,20 @@
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/bee-principle-foundational-thinking/SKILL.md"
+    },
+    {
+      "path": ".claude-plugin/skills/bee-principle-guard-the-context-window/LICENSE.pstack",
+      "sha256": "bc957ca6bee02792566a1a028d105e02e247c6e77cf057061674273da77b200e",
+      "mode": "644",
+      "role": "plugin_skill_claude_render",
+      "packagePath": ".claude-plugin/skills/bee-principle-guard-the-context-window/LICENSE.pstack"
+    },
+    {
+      "path": ".claude-plugin/skills/bee-principle-guard-the-context-window/SKILL.md",
+      "sha256": "66c4869ac0f0426846ce87f8de7bd2f7e1669fba846e02e356cf142b205b785e",
+      "mode": "644",
+      "role": "plugin_skill_claude_render",
+      "packagePath": ".claude-plugin/skills/bee-principle-guard-the-context-window/SKILL.md"
     },
     {
       "path": ".claude-plugin/skills/bee-principle-laziness-protocol/LICENSE.pstack",
@@ -1028,6 +1070,20 @@
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/bee-principle-model-the-domain/SKILL.md"
+    },
+    {
+      "path": ".claude-plugin/skills/bee-principle-never-block-on-the-human/LICENSE.pstack",
+      "sha256": "bc957ca6bee02792566a1a028d105e02e247c6e77cf057061674273da77b200e",
+      "mode": "644",
+      "role": "plugin_skill_claude_render",
+      "packagePath": ".claude-plugin/skills/bee-principle-never-block-on-the-human/LICENSE.pstack"
+    },
+    {
+      "path": ".claude-plugin/skills/bee-principle-never-block-on-the-human/SKILL.md",
+      "sha256": "a524c23935fb3f8145cb1713c3e437914fbd1d38409b12b8f1b855fccb0416cb",
+      "mode": "644",
+      "role": "plugin_skill_claude_render",
+      "packagePath": ".claude-plugin/skills/bee-principle-never-block-on-the-human/SKILL.md"
     },
     {
       "path": ".claude-plugin/skills/bee-principle-never-invent-behavior-neither-side-has/SKILL.md",
@@ -1640,7 +1696,7 @@
     },
     {
       "path": ".codex-plugin/skills/.bee-render.json",
-      "sha256": "d310ab8abcb96b346e2f2591145774d76d2615022240370f5ec850f32f533f71",
+      "sha256": "3f0bb2a7bbb6c752f7996f59444c1fac69f1f3cc842eeeb567980018de3cb16e",
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/.bee-render.json"
@@ -2437,6 +2493,34 @@
       "packagePath": ".codex-plugin/skills/bee-principle-encode-lessons-in-structure/SKILL.md"
     },
     {
+      "path": ".codex-plugin/skills/bee-principle-exhaust-the-design-space/LICENSE.pstack",
+      "sha256": "bc957ca6bee02792566a1a028d105e02e247c6e77cf057061674273da77b200e",
+      "mode": "644",
+      "role": "plugin_skill_codex_render",
+      "packagePath": ".codex-plugin/skills/bee-principle-exhaust-the-design-space/LICENSE.pstack"
+    },
+    {
+      "path": ".codex-plugin/skills/bee-principle-exhaust-the-design-space/SKILL.md",
+      "sha256": "1ed918bddab28b63346a4cf7aed2f0b9fd0ef7e247526c479c93ca78f87b5030",
+      "mode": "644",
+      "role": "plugin_skill_codex_render",
+      "packagePath": ".codex-plugin/skills/bee-principle-exhaust-the-design-space/SKILL.md"
+    },
+    {
+      "path": ".codex-plugin/skills/bee-principle-experience-first/LICENSE.pstack",
+      "sha256": "bc957ca6bee02792566a1a028d105e02e247c6e77cf057061674273da77b200e",
+      "mode": "644",
+      "role": "plugin_skill_codex_render",
+      "packagePath": ".codex-plugin/skills/bee-principle-experience-first/LICENSE.pstack"
+    },
+    {
+      "path": ".codex-plugin/skills/bee-principle-experience-first/SKILL.md",
+      "sha256": "e5498f739c8d7cf408546b1d130a9002055211cb2404de1f6c19197a471163ab",
+      "mode": "644",
+      "role": "plugin_skill_codex_render",
+      "packagePath": ".codex-plugin/skills/bee-principle-experience-first/SKILL.md"
+    },
+    {
       "path": ".codex-plugin/skills/bee-principle-foundational-thinking/LICENSE.pstack",
       "sha256": "bc957ca6bee02792566a1a028d105e02e247c6e77cf057061674273da77b200e",
       "mode": "644",
@@ -2449,6 +2533,20 @@
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/bee-principle-foundational-thinking/SKILL.md"
+    },
+    {
+      "path": ".codex-plugin/skills/bee-principle-guard-the-context-window/LICENSE.pstack",
+      "sha256": "bc957ca6bee02792566a1a028d105e02e247c6e77cf057061674273da77b200e",
+      "mode": "644",
+      "role": "plugin_skill_codex_render",
+      "packagePath": ".codex-plugin/skills/bee-principle-guard-the-context-window/LICENSE.pstack"
+    },
+    {
+      "path": ".codex-plugin/skills/bee-principle-guard-the-context-window/SKILL.md",
+      "sha256": "66c4869ac0f0426846ce87f8de7bd2f7e1669fba846e02e356cf142b205b785e",
+      "mode": "644",
+      "role": "plugin_skill_codex_render",
+      "packagePath": ".codex-plugin/skills/bee-principle-guard-the-context-window/SKILL.md"
     },
     {
       "path": ".codex-plugin/skills/bee-principle-laziness-protocol/LICENSE.pstack",
@@ -2526,6 +2624,20 @@
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/bee-principle-model-the-domain/SKILL.md"
+    },
+    {
+      "path": ".codex-plugin/skills/bee-principle-never-block-on-the-human/LICENSE.pstack",
+      "sha256": "bc957ca6bee02792566a1a028d105e02e247c6e77cf057061674273da77b200e",
+      "mode": "644",
+      "role": "plugin_skill_codex_render",
+      "packagePath": ".codex-plugin/skills/bee-principle-never-block-on-the-human/LICENSE.pstack"
+    },
+    {
+      "path": ".codex-plugin/skills/bee-principle-never-block-on-the-human/SKILL.md",
+      "sha256": "a524c23935fb3f8145cb1713c3e437914fbd1d38409b12b8f1b855fccb0416cb",
+      "mode": "644",
+      "role": "plugin_skill_codex_render",
+      "packagePath": ".codex-plugin/skills/bee-principle-never-block-on-the-human/SKILL.md"
     },
     {
       "path": ".codex-plugin/skills/bee-principle-never-invent-behavior-neither-side-has/SKILL.md",
@@ -3281,7 +3393,7 @@
     },
     {
       "path": "expertise/decisions.md",
-      "sha256": "599b07310c5ae8b037a02ee9464c209b9f50e4a7a35744a36c5f5ad38832b9e9",
+      "sha256": "47542962c99424bbcf3ff214bba46a6c5d7e2a96ed9517c3f158b7832822fa61",
       "mode": "644",
       "role": "expertise_guide"
     },
@@ -3365,7 +3477,7 @@
     },
     {
       "path": "expertise/thinking.md",
-      "sha256": "3b38bad95aa29ffd0c84bd470334bcc9018892c85b70d532fab6b40931312617",
+      "sha256": "ac4ffabd9c2222f2fa27ac2953a3ba08914aa641775669550c85201f1746a5ab",
       "mode": "644",
       "role": "expertise_guide"
     },
@@ -5426,6 +5538,34 @@
       "packagePath": "skills/bee-principle-encode-lessons-in-structure/SKILL.md"
     },
     {
+      "path": "skills/bee-principle-exhaust-the-design-space/LICENSE.pstack",
+      "sha256": "bc957ca6bee02792566a1a028d105e02e247c6e77cf057061674273da77b200e",
+      "mode": "644",
+      "role": "plugin_skill",
+      "packagePath": "skills/bee-principle-exhaust-the-design-space/LICENSE.pstack"
+    },
+    {
+      "path": "skills/bee-principle-exhaust-the-design-space/SKILL.md",
+      "sha256": "1ed918bddab28b63346a4cf7aed2f0b9fd0ef7e247526c479c93ca78f87b5030",
+      "mode": "644",
+      "role": "plugin_skill",
+      "packagePath": "skills/bee-principle-exhaust-the-design-space/SKILL.md"
+    },
+    {
+      "path": "skills/bee-principle-experience-first/LICENSE.pstack",
+      "sha256": "bc957ca6bee02792566a1a028d105e02e247c6e77cf057061674273da77b200e",
+      "mode": "644",
+      "role": "plugin_skill",
+      "packagePath": "skills/bee-principle-experience-first/LICENSE.pstack"
+    },
+    {
+      "path": "skills/bee-principle-experience-first/SKILL.md",
+      "sha256": "e5498f739c8d7cf408546b1d130a9002055211cb2404de1f6c19197a471163ab",
+      "mode": "644",
+      "role": "plugin_skill",
+      "packagePath": "skills/bee-principle-experience-first/SKILL.md"
+    },
+    {
       "path": "skills/bee-principle-foundational-thinking/LICENSE.pstack",
       "sha256": "bc957ca6bee02792566a1a028d105e02e247c6e77cf057061674273da77b200e",
       "mode": "644",
@@ -5438,6 +5578,20 @@
       "mode": "644",
       "role": "plugin_skill",
       "packagePath": "skills/bee-principle-foundational-thinking/SKILL.md"
+    },
+    {
+      "path": "skills/bee-principle-guard-the-context-window/LICENSE.pstack",
+      "sha256": "bc957ca6bee02792566a1a028d105e02e247c6e77cf057061674273da77b200e",
+      "mode": "644",
+      "role": "plugin_skill",
+      "packagePath": "skills/bee-principle-guard-the-context-window/LICENSE.pstack"
+    },
+    {
+      "path": "skills/bee-principle-guard-the-context-window/SKILL.md",
+      "sha256": "66c4869ac0f0426846ce87f8de7bd2f7e1669fba846e02e356cf142b205b785e",
+      "mode": "644",
+      "role": "plugin_skill",
+      "packagePath": "skills/bee-principle-guard-the-context-window/SKILL.md"
     },
     {
       "path": "skills/bee-principle-laziness-protocol/LICENSE.pstack",
@@ -5515,6 +5669,20 @@
       "mode": "644",
       "role": "plugin_skill",
       "packagePath": "skills/bee-principle-model-the-domain/SKILL.md"
+    },
+    {
+      "path": "skills/bee-principle-never-block-on-the-human/LICENSE.pstack",
+      "sha256": "bc957ca6bee02792566a1a028d105e02e247c6e77cf057061674273da77b200e",
+      "mode": "644",
+      "role": "plugin_skill",
+      "packagePath": "skills/bee-principle-never-block-on-the-human/LICENSE.pstack"
+    },
+    {
+      "path": "skills/bee-principle-never-block-on-the-human/SKILL.md",
+      "sha256": "a524c23935fb3f8145cb1713c3e437914fbd1d38409b12b8f1b855fccb0416cb",
+      "mode": "644",
+      "role": "plugin_skill",
+      "packagePath": "skills/bee-principle-never-block-on-the-human/SKILL.md"
     },
     {
       "path": "skills/bee-principle-never-invent-behavior-neither-side-has/SKILL.md",

@@ -99,8 +99,20 @@
       "sha256": "2b52522f5168bcf933ad7b5feb4a49d68c7e97b9b26c7e58b9accbfcf4cbe171"
     },
     {
+      "name": "bee-principle-exhaust-the-design-space",
+      "sha256": "f8ba1f1861222e7f05a5fd49c817e2b2502fee63b7c48452ed2c535d0c2f0792"
+    },
+    {
+      "name": "bee-principle-experience-first",
+      "sha256": "8e6d372fcfdf23361aa346dbd50b8a1d682479a7deba1295f68e299f5db40cd5"
+    },
+    {
       "name": "bee-principle-foundational-thinking",
       "sha256": "99834f95444389504cc4faae4c5844944fabac77aca05aa80187555cc5d8f5a6"
+    },
+    {
+      "name": "bee-principle-guard-the-context-window",
+      "sha256": "f9cbc7633c7e818b34a44bd9751c0c75d5daa9f1be75182581c8f2b4dfac7dfc"
     },
     {
       "name": "bee-principle-laziness-protocol",
@@ -129,6 +141,10 @@
     {
       "name": "bee-principle-model-the-domain",
       "sha256": "922e10a115e7064b409bd9fe3ae7f50e88fd161eb9af3f202f4df7c52034cb63"
+    },
+    {
+      "name": "bee-principle-never-block-on-the-human",
+      "sha256": "4b56f371798344d0a2712c62309fd7f014f49b6c62f151c0ec16182febbbdf51"
     },
     {
       "name": "bee-principle-never-invent-behavior-neither-side-has",
