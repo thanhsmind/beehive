@@ -11,7 +11,7 @@
       "INDEX.md": "dbb0bb767c29e8640f9047c304fb6ed74017306462c02a85e798f7b23150d887",
       "README.md": "3f9ad922145df53981bce91ae306dd96b7e48283918e7cd2da0074b2ce930e7d",
       "apis.md": "b7350c145f4442d4d0cf0f58a4e21e118ab4bb96654256a6837e10ccd5a070a8",
-      "architecture.md": "4ad48ec461bb9e42b40b4ddf74135b635b57b82a893a4ff3a8d859f98ce88cf5",
+      "architecture.md": "acace3dc7a8d839e3058607df4bd4816ea125807e3c0f20d7b30d6da3f212ca6",
       "data.md": "799000e64e6c274447e94571ec8b78dfeba8df015a3d566e7b9afc7ea7ef7785",
       "debugging.md": "8b2d4018fc461c68f7582c53967f2d76bdbb9f17a4d9461579862959e1423572",
       "decisions.md": "599b07310c5ae8b037a02ee9464c209b9f50e4a7a35744a36c5f5ad38832b9e9",
@@ -24,7 +24,7 @@
       "operations.md": "464a6e355d640422c617e9f9e6c09a63f495d69c95ef0d0163bbf95d1ed88dba",
       "performance.md": "71afb3cb39be78c6538a0eb12baa0f3b460194140d3d70e35bfcdb66052088e8",
       "planning.md": "9e4edfeab889190cc3927c3b0ad9e618fb3eced909e1c23299dfc15bd0d26139",
-      "review.md": "320e48016138df67c3b4082bd8a588d190317e4f2623bfb370023ae914c0c681",
+      "review.md": "8f81efce730d2996c7c8222c5511d46d9791287ed14586b572c24999b37e114e",
       "security.md": "c39709516b888a41ae620fa7b070f8c2b28623c8f1d8f4639267385de4edeed8",
       "static-rules.md": "35cb07f73d6eef338d8625864d4e523713c49d0ecb3d146596613c8ea9b78a74",
       "tests.md": "f98ac132b9562658caa93cb50448cf96ac6d956002d804d556e833cc0c77ab25",
@@ -188,5 +188,5 @@
   },
   "design_role_offered": true,
   "created_at": "2026-07-24T03:53:44.750Z",
-  "updated_at": "2026-11-15T04:44:12.256Z"
+  "updated_at": "2026-11-15T04:47:01.854Z"
 }

@@ -103,6 +103,10 @@
       "sha256": "99834f95444389504cc4faae4c5844944fabac77aca05aa80187555cc5d8f5a6"
     },
     {
+      "name": "bee-principle-laziness-protocol",
+      "sha256": "9ac9feede4acebb0b75a1535f71db1bb1fd8cd7082b8c1b8d517c935540475f1"
+    },
+    {
       "name": "bee-principle-lock-the-contract",
       "sha256": "8292e4aa3ce5542fc4c542a9c6b8af2e675e1500d9bf8263c37f4ef2da2ff0fd"
     },
@@ -113,6 +117,14 @@
     {
       "name": "bee-principle-migrate-callers-then-delete",
       "sha256": "19116b6f8fb7577f0f3473cd4b0950549272d7fa867e08e30cfe89693ff44822"
+    },
+    {
+      "name": "bee-principle-minimize-reader-load",
+      "sha256": "f5795a055e5948482d8e1408dac5cefd85dbf00a14122903fb9559b10964e044"
+    },
+    {
+      "name": "bee-principle-model-the-domain",
+      "sha256": "922e10a115e7064b409bd9fe3ae7f50e88fd161eb9af3f202f4df7c52034cb63"
     },
     {
       "name": "bee-principle-never-invent-behavior-neither-side-has",
