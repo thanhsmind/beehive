@@ -213,9 +213,11 @@ Three field failures (reported against a host repo, fixed generically):
   complete by construction. Reading order per area: spec → decision index
   section → history. Search offers structured filters (`--tag`,
   `--scope`/`--area`, `--since`, `--untagged`, `--all`) and multi-term OR
-  ranking; bare substring grep is fallback, never the recall path. Search
-  results name the concept lines that cite them (decision-concept-links D1,
-  D2).
+  ranking; bare substring grep is fallback, never the recall path.
+  Search results name the concept lines that cite them, by short id or by
+  `<feature> D<n>` (decision-concept-links D1, D2): a `concepts` array of
+  `path:line` in `--json` and one `knowledge:` text line, both only when
+  a link exists, at most three; `decisions active` prints no links.
 - **R6 — The store stays bounded** (D4c, `b9b9fee3`). An explicit archive verb
   moves superseded/redacted and aged-out events (explicit cutoff, never a
   default purge) to an archive file; union reads (`--all`) reach both and
