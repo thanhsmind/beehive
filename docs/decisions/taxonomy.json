@@ -882,6 +882,10 @@
     "contract:tester-pairing",
     "contract:docs-checker",
     "contract:playbook-situations",
-    "session"
+    "session",
+    "thin-boot",
+    "contract:peer-brief",
+    "contract:principles-outcomes",
+    "contract:herding-principles-answer"
   ]
 }

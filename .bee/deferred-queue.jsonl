@@ -1360,3 +1360,32 @@
 {"ts":"2026-11-14T15:42:27.489Z","event":"complete","id":"eea8bcbb-8893-41b0-bfc5-52aaed92fbec"}
 {"ts":"2026-11-14T17:59:45.714Z","event":"add","id":"7c46377a-5fa1-42ac-9361-153ac5770628","kind":"worktree-cleanup","feature":"per-task-router","cells":[],"areas":[],"files":["/mnt/data/Projects/goglbe/beehive--wt--per-task-router"],"reason":"Worktree beehive--wt--per-task-router (branch wt/per-task-router) merged into main at 9459a0a45bae40b4b3ae32537b4fcffe07222898 and kept per default (D1) — remove it with `bee worktree prune`."}
 {"ts":"2026-11-15T05:56:43.848Z","event":"add","id":"40ee747a-d75c-4e03-808b-0994b38a76c2","kind":"worktree-cleanup","feature":"pstack-playbook-port","cells":[],"areas":[],"files":["/mnt/data/Projects/goglbe/beehive--wt--pstack-playbook-port"],"reason":"Worktree beehive--wt--pstack-playbook-port (branch wt/pstack-playbook-port) merged into main at 216ef496c5dbe7ea93e3537d2f6f9dbac25cc78a and kept per default (D1) — remove it with `bee worktree prune`."}
+{"ts":"2026-11-15T07:09:10.401Z","event":"complete","id":"daa5a299-3ae0-47e2-a0a4-4c04aaa0bf39"}
+{"ts":"2026-11-15T07:09:18.644Z","event":"complete","id":"dd30ccea-6246-428b-baaa-c99c5596e096"}
+{"ts":"2026-11-15T07:09:26.998Z","event":"complete","id":"26952fa4-dfdf-44f4-b2c6-071fab34d2cf"}
+{"ts":"2026-11-15T07:09:35.225Z","event":"complete","id":"9465ae5f-6835-415a-9f8a-653ef7e74d83"}
+{"ts":"2026-11-15T07:09:40.657Z","event":"complete","id":"abd22d9b-4a9c-4b9b-a788-3575fdda6b83"}
+{"ts":"2026-11-15T07:09:48.925Z","event":"complete","id":"447ef4b0-bd5e-41f7-baf9-5903ab84f29f"}
+{"ts":"2026-11-15T07:09:50.811Z","event":"complete","id":"35e4ef0f-44a3-4a7c-b5c5-674007c0a8fd"}
+{"ts":"2026-11-15T07:09:59.159Z","event":"complete","id":"50488d27-36ee-4b5a-a72b-d75724ed6f64"}
+{"ts":"2026-11-15T07:10:07.430Z","event":"complete","id":"7c46377a-5fa1-42ac-9361-153ac5770628"}
+{"ts":"2026-11-15T07:10:11.797Z","event":"complete","id":"40ee747a-d75c-4e03-808b-0994b38a76c2"}
+{"ts":"2026-11-15T07:10:20.172Z","event":"complete","id":"9f196216-7579-4280-900e-502ddd85ded7"}
+{"ts":"2026-11-15T07:10:24.851Z","event":"complete","id":"0a2f66af-d65e-401f-81ec-435ae3e3060e"}
+{"ts":"2026-11-15T07:10:24.897Z","event":"complete","id":"25da7454-d0d3-41a7-bbee-5868e228fc42"}
+{"ts":"2026-11-15T07:10:28.947Z","event":"complete","id":"4b5d7c33-da23-43e9-a03a-5e163644b6a9"}
+{"ts":"2026-11-15T07:10:34.426Z","event":"complete","id":"40afea67-6744-4945-88d2-6a7ec53217e5"}
+{"ts":"2026-11-15T07:10:38.845Z","event":"complete","id":"ac8b0eda-a02d-45ec-a38c-a6f4d122c81e"}
+{"ts":"2026-11-15T07:10:46.057Z","event":"complete","id":"c2da4586-6c83-45e8-a05b-92ea792c4c23"}
+{"ts":"2026-11-15T07:10:53.782Z","event":"complete","id":"434b71ba-9315-4c6b-8c0d-96620d974a13"}
+{"ts":"2026-11-15T07:10:58.377Z","event":"complete","id":"8d20de0c-c71a-4dcc-80f9-4ca0861febc5"}
+{"ts":"2026-11-15T07:11:03.835Z","event":"complete","id":"c00b54b8-cb63-4e1a-80e7-caff6635c850"}
+{"ts":"2026-11-15T07:11:08.026Z","event":"complete","id":"45780049-3efa-4489-98d7-154cd6b2b18a"}
+{"ts":"2026-11-15T07:11:08.052Z","event":"complete","id":"0a748a9e-b1d2-4cf7-8f28-f7a596d7738c"}
+{"ts":"2026-11-15T07:11:08.052Z","event":"complete","id":"75da685d-22ee-4479-9337-98426980c321"}
+{"ts":"2026-11-15T07:11:08.052Z","event":"complete","id":"20e8b61d-c79e-4027-a6d6-7adadbd9fb0e"}
+{"ts":"2026-11-15T07:11:08.053Z","event":"complete","id":"a3c3513b-e555-4835-8ef4-0457f0cc75a4"}
+{"ts":"2026-11-15T07:11:16.305Z","event":"complete","id":"8d5d0d87-e3b1-4208-a71f-2da2281f76d2"}
+{"ts":"2026-11-15T07:11:24.657Z","event":"complete","id":"554deb4d-ad41-4d0d-bcc6-24796430dbdd"}
+{"ts":"2026-11-15T07:11:33.011Z","event":"complete","id":"b7e82b75-776d-4ef6-a161-4fa12e7d4760"}
+{"ts":"2026-11-15T07:11:41.228Z","event":"complete","id":"ca752a73-6ff3-43dd-ba00-d4470d6e4a47"}
