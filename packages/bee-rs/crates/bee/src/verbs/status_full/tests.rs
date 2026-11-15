@@ -439,6 +439,7 @@ use crate::version::BEE_VERSION;
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
         write(root, crate::principles::PRINCIPLE_INDEX, crate::principles::TEST_INDEX);
+        write(root, "skills/bee-planning/playbooks/refactor.md", "# Refactor\n");
         let before = walk_count(root);
         let packet = class_packet(root, "refactor");
         assert_eq!(
@@ -515,6 +516,7 @@ use crate::version::BEE_VERSION;
     fn bee_orient_class_research_prints_the_research_playbook_and_principles_and_writes_nothing() {
         let tmp = class_fixture();
         let root = tmp.path();
+        write(root, "skills/bee-planning/playbooks/research.md", "# Research\n");
         let before = file_snapshot(root);
         let out = std::process::Command::new(bee_bin())
             .args(["orient", "--class", "research"])
@@ -634,6 +636,7 @@ use crate::version::BEE_VERSION;
     fn bee_orient_class_perf_json_carries_an_empty_situations_key() {
         let tmp = class_fixture();
         let root = tmp.path();
+        write(root, "skills/bee-planning/playbooks/perf.md", "# Perf\n");
         let out = std::process::Command::new(bee_bin())
             .args(["orient", "--json", "--class", "perf"])
             .current_dir(root)
