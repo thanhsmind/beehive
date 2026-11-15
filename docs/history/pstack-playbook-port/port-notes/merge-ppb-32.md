@@ -123,6 +123,17 @@ Provenance sweep (`trace-and-provenance.md`):
   grouping drift and the vendor's own explainer, Datadog log aggregation calls.
 - No bee skill or principle was missing for this merge.
 
+## Closed by ppb-41 (the rows ppb-32c marked missing)
+
+All written tool-free, in the Provenance sweep of `trace-and-provenance.md`.
+- Follow links inside a row: the worker brief.
+- Reconcile one record cited by several rows: Report rules.
+- Follow duplicate and reopen history: row 7, external tracker.
+- Take the finalized draft: Reading a source.
+- A low count may be sampling: Reading a source.
+- A step in volume may be new logging: Reading a source.
+- Never report from a source never confirmed to exist: Reading a source.
+
 ## Regen note
 
 `bee dev regen` also re-renders unrelated `.claude/skills/` entries in this

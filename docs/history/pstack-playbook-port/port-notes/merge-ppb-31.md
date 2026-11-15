@@ -90,6 +90,17 @@ Trace (`trace-and-provenance.md`):
 - The pstack `references/` files as separate files: bee-how stays a door, and
   their content lives in Trace; no skill or principle was missing.
 
+## Closed by ppb-41 (the rows ppb-31c marked missing)
+
+- M1, spawn every explorer in one turn: Trace step 3.
+- M2, the flow return carries the data passed between steps: Trace step 3
+  return shape.
+- M3, How it works is the core and the longest section: Trace answer shape.
+- M4, walkthrough before a change: the bee-how description (291 characters).
+  "where its parts live" left the description to make room; Scope and the
+  answer shape still carry it.
+- M5, fan out when an inline pass finds more entry points: Trace step 4.
+
 ## Regen note
 
 `bee dev regen` also re-renders unrelated `.claude/skills/` entries in this

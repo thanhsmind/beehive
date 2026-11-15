@@ -22,7 +22,8 @@ anchored `path:line`. A file list is not a trace.
    distinct slices instead — data model and state, the request path,
    configuration and metrics — and treat each slice as an entry point: the
    same floor, ceiling and disjointness hold.
-3. Fan one read-only worker at each entry point. The ONE door is
+3. Fan one read-only worker at each entry point, every one spawned in the
+   same turn. The ONE door is
    `.bee/bin/bee dispatch prepare --runtime <rt> --kind gather --json`. Run
    that door first, then run exactly the tool and payload it returns. Never
    hand-pick a `subagent_type`, a `model`, or a tier marker — the door
@@ -31,7 +32,8 @@ anchored `path:line`. A file list is not a trace.
    rework:
    - the components found: each key type, service or abstraction with its
      `path:line` and one sentence on what it does;
-   - the ordered steps, each with its `path:line` and what it calls next;
+   - the ordered steps, each with its `path:line`, what it calls next and
+     the data it passes there;
    - the boundaries the path crosses (process, network, storage, runtime);
    - the surprises;
    - the UNFOLLOWED steps, each with its reason;
@@ -48,7 +50,8 @@ anchored `path:line`. A file list is not a trace.
    returns is fine, because step 5 reconciles.
 4. One honest entry point means NO fan-out: the trace runs inline, and the
    account says so in one line. Splitting one path into two workers to reach
-   the floor is theater.
+   the floor is theater. When the inline pass turns up a second disjoint
+   entry point, stop and fan out per step 3.
 5. Fold every return into ONE account. The leader writes the path; a worker's
    return is evidence, never pasted output. When two returns disagree on a
    step, open that step's anchor and settle it from the code. When the code
@@ -71,7 +74,8 @@ section that does not apply.
   why it exists. A reader can stop here and decide whether to read on.
 - **Key concepts** — the types, services, or abstractions a reader needs to
   follow the path, with brief definitions. Only those; never exhaustive.
-- **How it works** — the runtime path in prose: what starts it, each step,
+- **How it works** — the core, and the longest section: the runtime path in
+  prose: what starts it, each step,
   where the data goes, and the decision points, each step anchored
   `path:line`. When a step is complex, say why it is complex; when a step
   is simple, give it one line. Prose, never pseudocode, and no code block
@@ -217,7 +221,9 @@ Then sweep all seven categories, in this order.
    --search "<term>"`, and `gh pr view <number> --json
    title,body,comments,reviews,closingIssuesReferences` for each PR number
    the Anchor found. The review threads and the linked issues are where the
-   debated alternatives sit. Often absent here; report it as absent rather
+   debated alternatives sit. A ticket closed as a duplicate leads to the
+   canonical ticket, and a reopen or a change of scope is part of the
+   story, so follow both. Often absent here; report it as absent rather
    than dropping the row.
 
 When the target is defensive — a guard, a retry, a timeout, a sleep, or a
@@ -250,7 +256,9 @@ walk its row this way:
 - Quote verbatim where the exact wording matters, with its location
   (commit sha, PR number, `path:line`), its author and its date.
 - Record the queries as run, so an empty result says what was looked for.
-- A reference that points at another row is recorded as a lead, never
+- A link inside your own row (a PR to another PR, a ticket to its parent or
+  sibling, a doc to the doc it replaces) is followed to its end. A
+  reference that points at another row is recorded as a lead, never
   chased; that row holds it.
 - Return: what it searched; Direct evidence, each with its quote and one
   line on how it bears; indirect evidence, each with what it suggests, the
@@ -263,6 +271,8 @@ Report rules, which are the point of the procedure:
 - A category you did not sweep is reported as UNSWEPT, with the reason.
 - An omitted category is the defect this procedure exists to stop. Seven
   rows go in, seven rows come out.
+- One record that several rows cite is one reference in the account, with
+  every row that found it named beside it.
 
 Close with anchors: `path:line`, a commit sha, a decision id, or the command
 that ran.
@@ -325,6 +335,14 @@ Reading a source:
 - A "why" field filled with boilerplate ("improve user experience") is not
   a reason, and a passing remark in chat is not a decision. Look for
   considered discussion and open the whole thread.
+- Several drafts of one doc: take the finalized or latest one, and say
+  which.
+- A low event count may be heavy sampling, not rarity, so check how the
+  source samples before you read a count as rare.
+- A step in event volume may come from new logging, not new behavior, so
+  check whether the instrumentation changed that day.
+- Never report a result from a source you never confirmed exists. Open it
+  first; a name you only guessed is UNSWEPT.
 - A record that is gone — retention, a deleted thread, a page you cannot
   open, a renamed metric — is a gap, not an empty result. "Found nothing"
   is EMPTY; "could not look" is UNSWEPT.

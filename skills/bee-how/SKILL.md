@@ -1,7 +1,7 @@
 ---
 name: bee-how
 description: >-
-  Answer how a part of this repo actually runs, as a path of steps a reader can open. Use when the user types /bee-how or asks how a command, hook, flow or subsystem runs, where its parts live, or which package or layer owns it. Not for why (bee-why), teaching (bee-teach), or changing code.
+  Answer how a part of this repo actually runs, as a path of steps a reader can open. Use when the user types /bee-how or asks how a command, hook, flow or subsystem runs, which layer owns it, or for a walkthrough before a change. Not for why (bee-why), teaching (bee-teach), or changing code.
 metadata:
   version: '0.1'
   ecosystem: bee
