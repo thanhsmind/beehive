@@ -1,0 +1,257 @@
+{
+  "id": "ckf-1",
+  "feature": "cite-knowledge-first",
+  "title": "Cite the knowledge concept before history",
+  "lane": "small",
+  "role": "docs",
+  "deps": [],
+  "decisions": [
+    "D1",
+    "D2",
+    "eaddc44a-abeb-4ee0-99c4-3f8f77850b49",
+    "0124ee8b-f135-431b-bff8-121ad5cae3ff"
+  ],
+  "affects_skills": [
+    "skills/bee-hive/references/routing-and-contracts.md"
+  ],
+  "affects_specs": [
+    "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md"
+  ],
+  "files": [
+    "packages/bee/LEADER.md",
+    ".bee/LEADER.md",
+    "skills/bee-hive/references/routing-and-contracts.md",
+    ".agents/skills/bee-hive/references/routing-and-contracts.md",
+    ".claude/skills/bee-hive/references/routing-and-contracts.md",
+    ".claude-plugin/skills/bee-hive/references/routing-and-contracts.md",
+    ".codex-plugin/skills/bee-hive/references/routing-and-contracts.md",
+    ".opencode/skills/bee-hive/references/routing-and-contracts.md",
+    "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md",
+    "docs/history/cite-knowledge-first/delivery.md",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/cite-knowledge-first/CONTEXT.md",
+    "packages/bee/LEADER.md",
+    "skills/bee-hive/references/routing-and-contracts.md",
+    "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md"
+  ],
+  "action": "Edit three homes, short sentences, no new rule id. (1) packages/bee/LEADER.md: in the CLI-only state bullet, change the end 'docs/history/<feature>/CONTEXT.md holds the locked ones — cite them, never reinterpret them.' so it says history holds the locked ones, cite it for a locked decision and its reason, never reinterpret it, and current behavior is cited from its docs/knowledge concept (D2). In rule block agents-knowledge-before-code add one sentence: the same search comes first when a turn answers how something works, before docs/history is opened for that answer (D2). In rule block agents-verify-before-agreeing, after the Sources sentence, add the source order (D1): a claim about how something works now cites the docs/knowledge concept that holds it, then code file:line; docs/history is cited only for why a decision was made; a decision hit leads to the concept that cites its D-number first. Keep every rule marker line unchanged. (2) skills/bee-hive/references/routing-and-contracts.md, section 'Claim labels and pushback': add a 'Source order' paragraph after 'Claim labels' with the D1 order, the decision-hit step, and a short example that cites a docs/knowledge path for a behavior claim and a docs/history CONTEXT.md D-number for a reason. (3) docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md: extend the spoken line of agents-verify-before-agreeing with the source order, and the spoken line of agents-knowledge-before-code with the how-it-works answer; cite cite-knowledge-first D1/D2, never raw decision ids. Then run .bee/bin/bee dev regen once; it re-renders .bee/LEADER.md and the five rendered copies of routing-and-contracts.md. If regen touches .claude/skills paths that are hub-served aliases, restore them with git restore before commit. Write docs/history/cite-knowledge-first/delivery.md (what changed, proof, known limit: bee decisions search still names no concept, p-eb824507). One commit.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test rule_index_parity --test pointer_integrity --test instruction_laws && .bee/bin/bee dev release-manifest --check && .bee/bin/bee onboard --repo-root . --json",
+  "must_haves": {
+    "truths": [
+      "the citation rule says a how-it-works claim cites the docs/knowledge concept first and docs/history only for why",
+      "the knowledge-first rule covers a turn that answers how something works before docs/history is opened",
+      "the LEADER.md history line scopes its cite instruction to the locked decision and its reason",
+      ".bee/LEADER.md is byte-equal to packages/bee/LEADER.md after regen"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee/LEADER.md",
+        "substantive": "source order in two rule blocks and the scoped history line"
+      },
+      {
+        "path": "skills/bee-hive/references/routing-and-contracts.md",
+        "substantive": "Source order paragraph in Claim labels"
+      }
+    ],
+    "key_links": [
+      "Claim labels stays the full form of agents-verify-before-agreeing",
+      "the rule index spoken lines match the rule blocks"
+    ],
+    "prohibitions": [
+      "No new rule id",
+      "No hook or guard change",
+      "No hand edit of rendered copies"
+    ],
+    "open_choices": [
+      "Exact wording",
+      "Example paths in the Source order paragraph"
+    ]
+  },
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "ckf-1-docs",
+    "outcome": "Source order added to LEADER.md rules, Claim labels and the rule index; regen rendered the copies; one commit 848d8d1d8aeae4bcf7b90de05e85f79860373a42",
+    "files_changed": [
+      "packages/bee/LEADER.md",
+      ".bee/LEADER.md",
+      "skills/bee-hive/references/routing-and-contracts.md",
+      ".agents/skills/bee-hive/references/routing-and-contracts.md",
+      ".claude/skills/bee-hive/references/routing-and-contracts.md",
+      ".claude-plugin/skills/bee-hive/references/routing-and-contracts.md",
+      ".codex-plugin/skills/bee-hive/references/routing-and-contracts.md",
+      ".opencode/skills/bee-hive/references/routing-and-contracts.md",
+      "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md",
+      "docs/history/cite-knowledge-first/delivery.md",
+      "docs/history/codex-harness-hardening/release-manifest.json",
+      ".bee/onboarding.json"
+    ],
+    "deviations": [
+      "sync-ack: agents-capture-line-at-close text is unchanged; the edit touched agents-verify-before-agreeing, agents-knowledge-before-code and the CLI-only state bullet only. Deviation: no second docs worker ran the parity checks because the plan has no checker stage; the leader re-ran the verify fresh (instruction_laws 9, pointer_integrity 10, rule_index_parity 5 passed)"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-15T14:57:22.559Z",
+    "behavior_change": false,
+    "verification_evidence": "cargo test --release --test rule_index_parity --test pointer_integrity --test instruction_laws && bee dev release-manifest --check && bee onboard --repo-root . --json — green:static — docs-only change, parity and pointer tests plus manifest and onboard checks",
+    "verify_output": "green:static",
+    "verify_passed": true,
+    "claim_session": "1266bdf8-61aa-4b16-a19c-af0931b795e2",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test rule_index_parity --test pointer_integrity --test instruction_laws && .bee/bin/bee dev release-manifest --check && .bee/bin/bee onboard --repo-root . --json",
+    "claimed_at": "2026-11-15T14:54:35.550Z",
+    "knowledge_delta": [
+      "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md"
+    ],
+    "sync_ack": "agents-capture-line-at-close text is unchanged; the edit touched agents-verify-before-agreeing, agents-knowledge-before-code and the CLI-only state bullet only. Deviation: no second docs worker ran the parity checks because the plan has no checker stage; the leader re-ran the verify fresh (instruction_laws 9, pointer_integrity 10, rule_index_parity 5 passed)",
+    "no_mistakes": true,
+    "knowledge_used": [
+      {
+        "path": "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md",
+        "changed": "extended the spoken lines of both rules instead of adding a new entry"
+      }
+    ],
+    "principles_used": [
+      {
+        "slug": "bee-principle-one-fact-one-home",
+        "changed": "extended the existing rule index entries rather than adding a new rule id"
+      },
+      {
+        "slug": "bee-principle-single-source-of-truth",
+        "changed": "edited only the source files and let bee dev regen render the copies"
+      },
+      {
+        "slug": "bee-principle-prove-it-works",
+        "changed": "ran the cell verify command and the byte-equality check before committing"
+      }
+    ],
+    "report": {
+      "outcome": "Source order added to LEADER.md rules, Claim labels and the rule index; regen rendered the copies; one commit 848d8d1d8aeae4bcf7b90de05e85f79860373a42",
+      "commit": "848d8d1d8aeae4bcf7b90de05e85f79860373a42",
+      "files": [
+        "packages/bee/LEADER.md",
+        ".bee/LEADER.md",
+        "skills/bee-hive/references/routing-and-contracts.md",
+        ".agents/skills/bee-hive/references/routing-and-contracts.md",
+        ".claude/skills/bee-hive/references/routing-and-contracts.md",
+        ".claude-plugin/skills/bee-hive/references/routing-and-contracts.md",
+        ".codex-plugin/skills/bee-hive/references/routing-and-contracts.md",
+        ".opencode/skills/bee-hive/references/routing-and-contracts.md",
+        "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md",
+        "docs/history/cite-knowledge-first/delivery.md",
+        "docs/history/codex-harness-hardening/release-manifest.json",
+        ".bee/onboarding.json"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test rule_index_parity --test pointer_integrity --test instruction_laws && .bee/bin/bee dev release-manifest --check && .bee/bin/bee onboard --repo-root . --json — green:static — cargo test --release --test rule_index_parity --test pointer_integrity --test instruction_laws && bee dev release-manifest --check && bee onboard --repo-root . --json — green:static — docs-only change, parity and pointer tests plus manifest and onboard checks",
+      "deviations": [],
+      "knowledge_used": [
+        "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md — extended the spoken lines of both rules instead of adding a new entry"
+      ],
+      "principles_used": [
+        "bee-principle-one-fact-one-home — extended the existing rule index entries rather than adding a new rule id",
+        "bee-principle-single-source-of-truth — edited only the source files and let bee dev regen render the copies",
+        "bee-principle-prove-it-works — ran the cell verify command and the byte-equality check before committing"
+      ],
+      "patch_id": "30d97921bb0d450bcf4c26e49196b0d81998830e"
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "the citation rule says a how-it-works claim cites the docs/knowledge concept first and docs/history only for why",
+            "artifact": "packages/bee/LEADER.md"
+          },
+          {
+            "requirement": "the knowledge-first rule covers a turn that answers how something works before docs/history is opened",
+            "artifact": "packages/bee/LEADER.md"
+          },
+          {
+            "requirement": "the LEADER.md history line scopes its cite instruction to the locked decision and its reason",
+            "artifact": "packages/bee/LEADER.md"
+          },
+          {
+            "requirement": ".bee/LEADER.md is byte-equal to packages/bee/LEADER.md after regen",
+            "artifact": ".bee/LEADER.md"
+          },
+          {
+            "requirement": "Claim labels stays the full form of agents-verify-before-agreeing",
+            "artifact": "skills/bee-hive/references/routing-and-contracts.md"
+          },
+          {
+            "requirement": "the rule index spoken lines match the rule blocks",
+            "artifact": "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md"
+          },
+          {
+            "requirement": "packages/bee/LEADER.md",
+            "artifact": "packages/bee/LEADER.md"
+          },
+          {
+            "requirement": ".bee/LEADER.md",
+            "artifact": ".bee/LEADER.md"
+          },
+          {
+            "requirement": "skills/bee-hive/references/routing-and-contracts.md",
+            "artifact": "skills/bee-hive/references/routing-and-contracts.md"
+          },
+          {
+            "requirement": ".agents/skills/bee-hive/references/routing-and-contracts.md",
+            "artifact": ".agents/skills/bee-hive/references/routing-and-contracts.md"
+          },
+          {
+            "requirement": ".claude/skills/bee-hive/references/routing-and-contracts.md",
+            "artifact": ".claude/skills/bee-hive/references/routing-and-contracts.md"
+          },
+          {
+            "requirement": ".claude-plugin/skills/bee-hive/references/routing-and-contracts.md",
+            "artifact": ".claude-plugin/skills/bee-hive/references/routing-and-contracts.md"
+          },
+          {
+            "requirement": ".codex-plugin/skills/bee-hive/references/routing-and-contracts.md",
+            "artifact": ".codex-plugin/skills/bee-hive/references/routing-and-contracts.md"
+          },
+          {
+            "requirement": ".opencode/skills/bee-hive/references/routing-and-contracts.md",
+            "artifact": ".opencode/skills/bee-hive/references/routing-and-contracts.md"
+          },
+          {
+            "requirement": "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md",
+            "artifact": "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md"
+          },
+          {
+            "requirement": "docs/history/cite-knowledge-first/delivery.md",
+            "artifact": "docs/history/cite-knowledge-first/delivery.md"
+          },
+          {
+            "requirement": "docs/history/codex-harness-hardening/release-manifest.json",
+            "artifact": "docs/history/codex-harness-hardening/release-manifest.json"
+          },
+          {
+            "requirement": ".bee/onboarding.json",
+            "artifact": ".bee/onboarding.json"
+          }
+        ],
+        "recorded_at": "2026-11-15T14:58:30.901Z",
+        "recorded_by": "1266bdf8-61aa-4b16-a19c-af0931b795e2",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": {
+    "new": 54163,
+    "cached": 476912,
+    "total": 531075,
+    "models": {
+      "claude-sonnet-5-5": {
+        "new": 54163,
+        "cached": 476912,
+        "total": 531075
+      }
+    },
+    "jobs": [
+      "job-1794754484133-3565451-1"
+    ]
+  }
+}

@@ -1,0 +1,140 @@
+{
+  "id": "ckf-2",
+  "feature": "cite-knowledge-first",
+  "title": "Check the source-order doctrine edit",
+  "lane": "small",
+  "role": "test",
+  "deps": [
+    "ckf-1"
+  ],
+  "decisions": [
+    "D1",
+    "D2",
+    "eaddc44a-abeb-4ee0-99c4-3f8f77850b49",
+    "0124ee8b-f135-431b-bff8-121ad5cae3ff",
+    "c75ee651-7123-4a5a-9fe2-1d48032df70c"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "files": [
+    "docs/history/cite-knowledge-first/reports/ckf-2.md"
+  ],
+  "read_first": [
+    "docs/history/cite-knowledge-first/CONTEXT.md",
+    "docs/history/cite-knowledge-first/delivery.md"
+  ],
+  "action": "Checker for ckf-1, no product edits. Run the verify command. Check that packages/bee/LEADER.md and .bee/LEADER.md are byte-equal, that the five rendered copies of skills/bee-hive/references/routing-and-contracts.md carry the Source order paragraph, and that each path in the Source order example resolves. Check each ckf-1 must_have truth against the text. Write docs/history/cite-knowledge-first/reports/ckf-2.md with the test counts, the manifest result and one line per truth (met or not, with file:line). One commit.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test rule_index_parity --test pointer_integrity --test instruction_laws && .bee/bin/bee dev release-manifest --check && .bee/bin/bee onboard --repo-root . --json",
+  "must_haves": {
+    "truths": [
+      "the report quotes fresh pass counts for rule_index_parity, pointer_integrity and instruction_laws",
+      "the report states each ckf-1 truth as met or not with a file:line"
+    ],
+    "artifacts": [
+      {
+        "path": "docs/history/cite-knowledge-first/reports/ckf-2.md",
+        "substantive": "checker report"
+      }
+    ],
+    "key_links": [
+      "ckf-2 checks ckf-1"
+    ],
+    "prohibitions": [
+      "No product file edits",
+      "No code comments"
+    ],
+    "open_choices": [
+      "Report layout"
+    ]
+  },
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "ckf-2-check",
+    "outcome": "Checked ckf-1: verify green (instruction_laws 9, pointer_integrity 10, rule_index_parity 5 passed; manifest 950 match), LEADER.md copies byte-equal, five rendered copies equal, example paths resolve, all four ckf-1 truths met; report committed 6058515aa",
+    "files_changed": [
+      "docs/history/cite-knowledge-first/reports/ckf-2.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-11-15T14:59:16.736Z",
+    "behavior_change": false,
+    "verification_evidence": "the cell edits one docs report and checks prose that these three tests and the manifest read",
+    "verify_output": "green:static",
+    "verify_passed": true,
+    "claim_session": "1266bdf8-61aa-4b16-a19c-af0931b795e2",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test rule_index_parity --test pointer_integrity --test instruction_laws && .bee/bin/bee dev release-manifest --check && .bee/bin/bee onboard --repo-root . --json",
+    "claimed_at": "2026-11-15T14:58:16.900Z",
+    "knowledge_delta": [],
+    "no_mistakes": true,
+    "no_knowledge_used": true,
+    "principles_used": [
+      {
+        "slug": "bee-principle-prove-it-works",
+        "changed": "checked each anchor line by reading it, which moved the knowledge-first anchor from :168 to :168-170"
+      },
+      {
+        "slug": "bee-principle-verify-before-reporting",
+        "changed": "recorded the short-form omission of 'locked wording' as within D1 scope rather than as a defect"
+      }
+    ],
+    "report": {
+      "outcome": "Checked ckf-1: verify green (instruction_laws 9, pointer_integrity 10, rule_index_parity 5 passed; manifest 950 match), LEADER.md copies byte-equal, five rendered copies equal, example paths resolve, all four ckf-1 truths met; report committed 6058515aa",
+      "commit": "6058515aafc9539a4e122775b284b698a19c9915",
+      "files": [
+        "docs/history/cite-knowledge-first/reports/ckf-2.md"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test rule_index_parity --test pointer_integrity --test instruction_laws && .bee/bin/bee dev release-manifest --check && .bee/bin/bee onboard --repo-root . --json — green:static — the cell edits one docs report and checks prose that these three tests and the manifest read",
+      "deviations": [],
+      "knowledge_used": [],
+      "principles_used": [
+        "bee-principle-prove-it-works — checked each anchor line by reading it, which moved the knowledge-first anchor from :168 to :168-170",
+        "bee-principle-verify-before-reporting — recorded the short-form omission of 'locked wording' as within D1 scope rather than as a defect"
+      ],
+      "patch_id": "66793cf9a5b3b4834bca7c4c1223695cdd1062d6"
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "the report quotes fresh pass counts for rule_index_parity, pointer_integrity and instruction_laws",
+            "artifact": "docs/history/cite-knowledge-first/reports/ckf-2.md"
+          },
+          {
+            "requirement": "the report states each ckf-1 truth as met or not with a file:line",
+            "artifact": "docs/history/cite-knowledge-first/reports/ckf-2.md"
+          },
+          {
+            "requirement": "ckf-2 checks ckf-1",
+            "artifact": "docs/history/cite-knowledge-first/reports/ckf-2.md"
+          },
+          {
+            "requirement": "docs/history/cite-knowledge-first/reports/ckf-2.md",
+            "artifact": "docs/history/cite-knowledge-first/reports/ckf-2.md"
+          }
+        ],
+        "recorded_at": "2026-11-15T14:59:29.325Z",
+        "recorded_by": "1266bdf8-61aa-4b16-a19c-af0931b795e2",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": {
+    "new": 43653,
+    "cached": 294885,
+    "total": 338538,
+    "models": {
+      "claude-opus-5-5": {
+        "new": 43653,
+        "cached": 294885,
+        "total": 338538
+      }
+    },
+    "jobs": [
+      "job-1794754700792-3596436-1"
+    ]
+  }
+}
