@@ -146,5 +146,12 @@
   {"brief": "Jumping straight to code would lock in the wrong shape here — draw up the interfaces first.", "expect": ["bee-architect"]},
   {"brief": "The design is approved — break it into cells and pick the lane for each.", "expect": ["bee-planning"], "near": "bee-architect"},
   {"brief": "Lock the product decisions for the notification settings before anyone designs anything.", "expect": ["bee-shaping"], "near": "bee-architect"},
-  {"brief": "Giải thích cho tôi cách module thanh toán hiện tại chạy từ đầu đến cuối.", "expect": ["bee-how"], "near": "bee-architect"}
+  {"brief": "Giải thích cho tôi cách module thanh toán hiện tại chạy từ đầu đến cuối.", "expect": ["bee-how"], "near": "bee-architect"},
+
+  {"brief": "Try this refactor four different ways in parallel, keep the best one and borrow the good parts of the rest.", "expect": ["bee-arena"]},
+  {"brief": "Cho nhiều bản làm song song cùng một việc, chọn bản tốt nhất rồi ghép phần hay của các bản còn lại vào.", "expect": ["bee-arena"]},
+  {"brief": "One attempt at this API shape would lock in the wrong design — run competing candidates and compare them.", "expect": ["bee-arena"]},
+  {"brief": "Draft the migration script several independent ways and fold the strongest ideas into the winner.", "expect": ["bee-arena"]},
+  {"brief": "Have independent reviewers go over this diff and report what is wrong with it.", "expect": ["bee-reviewing"], "near": "bee-arena"},
+  {"brief": "Lay out the types and module map for the new queue before writing any of it.", "expect": ["bee-architect"], "near": "bee-arena"}
 ]
