@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "orient-host-playbook",
   "mode": null,
-  "phase": "exploring",
+  "phase": "idle",
   "approved_gates": {
     "context": false,
     "shape": true,
@@ -11,9 +11,9 @@
     "uat": false
   },
   "summary": "Feature \"orient-host-playbook\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at 1018765; capture what settled, then bee close --feature orient-host-playbook.",
+  "next_action": "bee close finished \"orient-host-playbook\" — feature is closed.",
   "created_at": "2026-11-15T11:02:08.985Z",
-  "run_state": null,
+  "run_state": "awaiting-approval",
   "waiting_on": null,
   "route": {
     "class": "bugfix",
