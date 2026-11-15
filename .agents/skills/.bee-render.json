@@ -19,6 +19,10 @@
       "sha256": "31449bf5ecb2f35b9d5154a628483752f2d359c51868d112d7965d22e447f684"
     },
     {
+      "name": "bee-comment-review",
+      "sha256": "34bc2f2b12f2f7af5b5ff5148cf6251bf16fef709fee901941e9534d12ddadf5"
+    },
+    {
       "name": "bee-deploying",
       "sha256": "b75e79301a01303ad5d72b7c8546e206992989197e946954a3ad7a05ad437cf0"
     },

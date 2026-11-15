@@ -198,5 +198,11 @@
   {"brief": "Before I merge this, what could this change break somewhere else that grep won't show me?", "expect": ["bee-blast-radius"]},
   {"brief": "Phạm vi ảnh hưởng của thay đổi này là gì? Tìm xem nó có thể làm hỏng chỗ nào khác trước khi ship.", "expect": ["bee-blast-radius"]},
   {"brief": "Trace how the dispatch door picks a worker, step by step, with the files I can open.", "expect": ["bee-how"], "near": "bee-blast-radius"},
-  {"brief": "Review the diff from main to this branch with independent reviewers and give me one verdict.", "expect": ["bee-reviewing"], "near": "bee-blast-radius"}
+  {"brief": "Review the diff from main to this branch with independent reviewers and give me one verdict.", "expect": ["bee-reviewing"], "near": "bee-blast-radius"},
+
+  {"brief": "Strip the comments out of this diff: delete the narration and the workaround sermons, and fix whatever hack each one was apologizing for.", "expect": ["bee-comment-review"]},
+  {"brief": "Audit the comments in these files with a fresh pair of eyes. I keep defending mine and I don't trust that.", "expect": ["bee-comment-review"]},
+  {"brief": "Xóa hết comment thừa trong phần thay đổi này, còn comment nào ghi 'đừng xoá' thì kiểm tra xem có cần giữ thật không.", "expect": ["bee-comment-review"]},
+  {"brief": "Run the review gate over everything unreviewed on this branch before it merges.", "expect": ["bee-reviewing"], "near": "bee-comment-review"},
+  {"brief": "Why was the no-comments rule built this way? Give me the recorded reason for it.", "expect": ["bee-why"], "near": "bee-comment-review"}
 ]

@@ -142,7 +142,7 @@
     },
     {
       "path": ".claude-plugin/skills/.bee-render.json",
-      "sha256": "0f30fa286c3fd34e2c3030e78bce61aef36fa51bdd39387c099b57381c4f2ce1",
+      "sha256": "5b25c23ee42a96b8579c31689f2c23bcbae8b8ef6cce0508915694a703bb9af2",
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/.bee-render.json"
@@ -251,6 +251,27 @@
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/bee-capturing/SKILL.md"
+    },
+    {
+      "path": ".claude-plugin/skills/bee-comment-review/LICENSE.pstack",
+      "sha256": "bc957ca6bee02792566a1a028d105e02e247c6e77cf057061674273da77b200e",
+      "mode": "644",
+      "role": "plugin_skill_claude_render",
+      "packagePath": ".claude-plugin/skills/bee-comment-review/LICENSE.pstack"
+    },
+    {
+      "path": ".claude-plugin/skills/bee-comment-review/references/comment-reviewer.md",
+      "sha256": "cc1938f48357b3e82eaaa72d80296d1b951b1c67d436c2dacf950c74d2e7d2fa",
+      "mode": "644",
+      "role": "plugin_skill_claude_render",
+      "packagePath": ".claude-plugin/skills/bee-comment-review/references/comment-reviewer.md"
+    },
+    {
+      "path": ".claude-plugin/skills/bee-comment-review/SKILL.md",
+      "sha256": "42333aa234065eec844a252a3267252d9a16e531fe3ac1dc403d2500a5f5d3b9",
+      "mode": "644",
+      "role": "plugin_skill_claude_render",
+      "packagePath": ".claude-plugin/skills/bee-comment-review/SKILL.md"
     },
     {
       "path": ".claude-plugin/skills/bee-deploying/references/deploy.sh.template",
@@ -1479,7 +1500,7 @@
     },
     {
       "path": ".codex-plugin/skills/.bee-render.json",
-      "sha256": "dc4216f7b9c9901d3c63599e8397e8d1062457e6e384120b018c4a8e07defb10",
+      "sha256": "5dc5cc4b793245f5768540d06fe37684d61cbd7818b2f018457ebafb9dd8a934",
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/.bee-render.json"
@@ -1588,6 +1609,27 @@
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/bee-capturing/SKILL.md"
+    },
+    {
+      "path": ".codex-plugin/skills/bee-comment-review/LICENSE.pstack",
+      "sha256": "bc957ca6bee02792566a1a028d105e02e247c6e77cf057061674273da77b200e",
+      "mode": "644",
+      "role": "plugin_skill_codex_render",
+      "packagePath": ".codex-plugin/skills/bee-comment-review/LICENSE.pstack"
+    },
+    {
+      "path": ".codex-plugin/skills/bee-comment-review/references/comment-reviewer.md",
+      "sha256": "cc1938f48357b3e82eaaa72d80296d1b951b1c67d436c2dacf950c74d2e7d2fa",
+      "mode": "644",
+      "role": "plugin_skill_codex_render",
+      "packagePath": ".codex-plugin/skills/bee-comment-review/references/comment-reviewer.md"
+    },
+    {
+      "path": ".codex-plugin/skills/bee-comment-review/SKILL.md",
+      "sha256": "42333aa234065eec844a252a3267252d9a16e531fe3ac1dc403d2500a5f5d3b9",
+      "mode": "644",
+      "role": "plugin_skill_codex_render",
+      "packagePath": ".codex-plugin/skills/bee-comment-review/SKILL.md"
     },
     {
       "path": ".codex-plugin/skills/bee-deploying/references/deploy.sh.template",
@@ -4416,6 +4458,27 @@
       "mode": "644",
       "role": "plugin_skill",
       "packagePath": "skills/bee-capturing/SKILL.md"
+    },
+    {
+      "path": "skills/bee-comment-review/LICENSE.pstack",
+      "sha256": "bc957ca6bee02792566a1a028d105e02e247c6e77cf057061674273da77b200e",
+      "mode": "644",
+      "role": "plugin_skill",
+      "packagePath": "skills/bee-comment-review/LICENSE.pstack"
+    },
+    {
+      "path": "skills/bee-comment-review/references/comment-reviewer.md",
+      "sha256": "cc1938f48357b3e82eaaa72d80296d1b951b1c67d436c2dacf950c74d2e7d2fa",
+      "mode": "644",
+      "role": "plugin_skill",
+      "packagePath": "skills/bee-comment-review/references/comment-reviewer.md"
+    },
+    {
+      "path": "skills/bee-comment-review/SKILL.md",
+      "sha256": "42333aa234065eec844a252a3267252d9a16e531fe3ac1dc403d2500a5f5d3b9",
+      "mode": "644",
+      "role": "plugin_skill",
+      "packagePath": "skills/bee-comment-review/SKILL.md"
     },
     {
       "path": "skills/bee-deploying/references/deploy.sh.template",
