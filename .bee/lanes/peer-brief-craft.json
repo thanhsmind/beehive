@@ -11,9 +11,9 @@
     "uat": false
   },
   "summary": "Feature \"peer-brief-craft\" started at phase \"exploring\" (lane).",
-  "next_action": "Continue bee-exploring for \"peer-brief-craft\" (lane).",
+  "next_action": "Merged into main at aef4a59; capture what settled, then bee close --feature peer-brief-craft.",
   "created_at": "2026-11-15T09:37:40.288Z",
-  "run_state": "awaiting-approval",
+  "run_state": null,
   "waiting_on": null,
   "route": {
     "class": "feature",
@@ -23,12 +23,5 @@
     "rationale": null,
     "updated_at": "2026-11-15T09:37:37.243Z",
     "feature": "peer-brief-craft"
-  },
-  "merge_ready": {
-    "since": "2026-11-15T10:01:38.262Z",
-    "branch": "wt/peer-brief-craft",
-    "worktree_id": "beehive--wt--peer-brief-craft",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
