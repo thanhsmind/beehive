@@ -142,7 +142,7 @@
     },
     {
       "path": ".claude-plugin/skills/.bee-render.json",
-      "sha256": "6b20620e2b13b424ed84b8f5bfb525af73d40cbe82caff93296648aa30696a5d",
+      "sha256": "4b1e8ac34f284f16c50f1ee7dc8fe996de18fd3a0aaa92030710acfc50b842f7",
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/.bee-render.json"
@@ -482,6 +482,48 @@
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/bee-how/SKILL.md"
+    },
+    {
+      "path": ".claude-plugin/skills/bee-interrogate/LICENSE.pstack",
+      "sha256": "bc957ca6bee02792566a1a028d105e02e247c6e77cf057061674273da77b200e",
+      "mode": "644",
+      "role": "plugin_skill_claude_render",
+      "packagePath": ".claude-plugin/skills/bee-interrogate/LICENSE.pstack"
+    },
+    {
+      "path": ".claude-plugin/skills/bee-interrogate/references/code-quality-review.md",
+      "sha256": "b4d0cd5e78c2f6f82634b2910b430ba41e2188c81729503b177379b6c5b8b3cf",
+      "mode": "644",
+      "role": "plugin_skill_claude_render",
+      "packagePath": ".claude-plugin/skills/bee-interrogate/references/code-quality-review.md"
+    },
+    {
+      "path": ".claude-plugin/skills/bee-interrogate/references/lead-judgment.md",
+      "sha256": "8c317bf8096f4020dccb2fa0e834174a512f6fccfeffafcb73b3bd160e72c87d",
+      "mode": "644",
+      "role": "plugin_skill_claude_render",
+      "packagePath": ".claude-plugin/skills/bee-interrogate/references/lead-judgment.md"
+    },
+    {
+      "path": ".claude-plugin/skills/bee-interrogate/references/reviewer-prompt.md",
+      "sha256": "7214b414566f12448c92535b063845530d88c58aaed623add78fb464a5dbc5c3",
+      "mode": "644",
+      "role": "plugin_skill_claude_render",
+      "packagePath": ".claude-plugin/skills/bee-interrogate/references/reviewer-prompt.md"
+    },
+    {
+      "path": ".claude-plugin/skills/bee-interrogate/references/rubric.md",
+      "sha256": "a67bf02426f88714634ff481d667db821d4b2cea7b335bcd165fe3126e427fb5",
+      "mode": "644",
+      "role": "plugin_skill_claude_render",
+      "packagePath": ".claude-plugin/skills/bee-interrogate/references/rubric.md"
+    },
+    {
+      "path": ".claude-plugin/skills/bee-interrogate/SKILL.md",
+      "sha256": "404b04ebbf9f17c797985cab0a1f3594d17236baf9dad4ee2750dda9900e90d6",
+      "mode": "644",
+      "role": "plugin_skill_claude_render",
+      "packagePath": ".claude-plugin/skills/bee-interrogate/SKILL.md"
     },
     {
       "path": ".claude-plugin/skills/bee-knowledge-setup/SKILL.md",
@@ -1311,7 +1353,7 @@
     },
     {
       "path": ".codex-plugin/skills/.bee-render.json",
-      "sha256": "c00d3873a1d5fe8b886ca1f7e4183aa90b5f53bd1df4c3a4009c1b0c1332fd39",
+      "sha256": "bbc0cf988a645bbb18ab7cfa9be2f1c7f727cdea054ec189010973fc41a06f9a",
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/.bee-render.json"
@@ -1651,6 +1693,48 @@
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/bee-how/SKILL.md"
+    },
+    {
+      "path": ".codex-plugin/skills/bee-interrogate/LICENSE.pstack",
+      "sha256": "bc957ca6bee02792566a1a028d105e02e247c6e77cf057061674273da77b200e",
+      "mode": "644",
+      "role": "plugin_skill_codex_render",
+      "packagePath": ".codex-plugin/skills/bee-interrogate/LICENSE.pstack"
+    },
+    {
+      "path": ".codex-plugin/skills/bee-interrogate/references/code-quality-review.md",
+      "sha256": "b4d0cd5e78c2f6f82634b2910b430ba41e2188c81729503b177379b6c5b8b3cf",
+      "mode": "644",
+      "role": "plugin_skill_codex_render",
+      "packagePath": ".codex-plugin/skills/bee-interrogate/references/code-quality-review.md"
+    },
+    {
+      "path": ".codex-plugin/skills/bee-interrogate/references/lead-judgment.md",
+      "sha256": "8c317bf8096f4020dccb2fa0e834174a512f6fccfeffafcb73b3bd160e72c87d",
+      "mode": "644",
+      "role": "plugin_skill_codex_render",
+      "packagePath": ".codex-plugin/skills/bee-interrogate/references/lead-judgment.md"
+    },
+    {
+      "path": ".codex-plugin/skills/bee-interrogate/references/reviewer-prompt.md",
+      "sha256": "7214b414566f12448c92535b063845530d88c58aaed623add78fb464a5dbc5c3",
+      "mode": "644",
+      "role": "plugin_skill_codex_render",
+      "packagePath": ".codex-plugin/skills/bee-interrogate/references/reviewer-prompt.md"
+    },
+    {
+      "path": ".codex-plugin/skills/bee-interrogate/references/rubric.md",
+      "sha256": "a67bf02426f88714634ff481d667db821d4b2cea7b335bcd165fe3126e427fb5",
+      "mode": "644",
+      "role": "plugin_skill_codex_render",
+      "packagePath": ".codex-plugin/skills/bee-interrogate/references/rubric.md"
+    },
+    {
+      "path": ".codex-plugin/skills/bee-interrogate/SKILL.md",
+      "sha256": "404b04ebbf9f17c797985cab0a1f3594d17236baf9dad4ee2750dda9900e90d6",
+      "mode": "644",
+      "role": "plugin_skill_codex_render",
+      "packagePath": ".codex-plugin/skills/bee-interrogate/SKILL.md"
     },
     {
       "path": ".codex-plugin/skills/bee-knowledge-setup/SKILL.md",
@@ -4311,6 +4395,48 @@
       "mode": "644",
       "role": "plugin_skill",
       "packagePath": "skills/bee-how/SKILL.md"
+    },
+    {
+      "path": "skills/bee-interrogate/LICENSE.pstack",
+      "sha256": "bc957ca6bee02792566a1a028d105e02e247c6e77cf057061674273da77b200e",
+      "mode": "644",
+      "role": "plugin_skill",
+      "packagePath": "skills/bee-interrogate/LICENSE.pstack"
+    },
+    {
+      "path": "skills/bee-interrogate/references/code-quality-review.md",
+      "sha256": "b4d0cd5e78c2f6f82634b2910b430ba41e2188c81729503b177379b6c5b8b3cf",
+      "mode": "644",
+      "role": "plugin_skill",
+      "packagePath": "skills/bee-interrogate/references/code-quality-review.md"
+    },
+    {
+      "path": "skills/bee-interrogate/references/lead-judgment.md",
+      "sha256": "8c317bf8096f4020dccb2fa0e834174a512f6fccfeffafcb73b3bd160e72c87d",
+      "mode": "644",
+      "role": "plugin_skill",
+      "packagePath": "skills/bee-interrogate/references/lead-judgment.md"
+    },
+    {
+      "path": "skills/bee-interrogate/references/reviewer-prompt.md",
+      "sha256": "7214b414566f12448c92535b063845530d88c58aaed623add78fb464a5dbc5c3",
+      "mode": "644",
+      "role": "plugin_skill",
+      "packagePath": "skills/bee-interrogate/references/reviewer-prompt.md"
+    },
+    {
+      "path": "skills/bee-interrogate/references/rubric.md",
+      "sha256": "a67bf02426f88714634ff481d667db821d4b2cea7b335bcd165fe3126e427fb5",
+      "mode": "644",
+      "role": "plugin_skill",
+      "packagePath": "skills/bee-interrogate/references/rubric.md"
+    },
+    {
+      "path": "skills/bee-interrogate/SKILL.md",
+      "sha256": "404b04ebbf9f17c797985cab0a1f3594d17236baf9dad4ee2750dda9900e90d6",
+      "mode": "644",
+      "role": "plugin_skill",
+      "packagePath": "skills/bee-interrogate/SKILL.md"
     },
     {
       "path": "skills/bee-knowledge-setup/SKILL.md",

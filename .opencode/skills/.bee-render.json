@@ -43,6 +43,10 @@
       "sha256": "9d25a40ca38b8f2047c79e05744b4f7570043d4797409d8da733aadd8ded87f7"
     },
     {
+      "name": "bee-interrogate",
+      "sha256": "3b3d73436b9a6765125eada27aa2cb94b81246a9cec7981692d248ddfc820c00"
+    },
+    {
       "name": "bee-knowledge-setup",
       "sha256": "d3d0ab668baa447beb8bb3620c43a50571d6a6b7e8185dd1acca62f7e6ff985d"
     },

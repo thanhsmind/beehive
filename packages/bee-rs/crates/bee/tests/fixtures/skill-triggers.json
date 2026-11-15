@@ -153,5 +153,12 @@
   {"brief": "One attempt at this API shape would lock in the wrong design — run competing candidates and compare them.", "expect": ["bee-arena"]},
   {"brief": "Draft the migration script several independent ways and fold the strongest ideas into the winner.", "expect": ["bee-arena"]},
   {"brief": "Have independent reviewers go over this diff and report what is wrong with it.", "expect": ["bee-reviewing"], "near": "bee-arena"},
-  {"brief": "Lay out the types and module map for the new queue before writing any of it.", "expect": ["bee-architect"], "near": "bee-arena"}
+  {"brief": "Lay out the types and module map for the new queue before writing any of it.", "expect": ["bee-architect"], "near": "bee-arena"},
+
+  {"brief": "Stress-test this change with several skeptical reviewers and give me one verdict on what to fix.", "expect": ["bee-interrogate"]},
+  {"brief": "Tear this branch apart: find the blind spots, filter the noise, and tell me what actually matters.", "expect": ["bee-interrogate"]},
+  {"brief": "Cho vài người đánh giá độc lập soi kỹ thay đổi này rồi tổng hợp thành một kết luận, đừng tự sửa gì cả.", "expect": ["bee-interrogate"]},
+  {"brief": "Before I merge, challenge this diff from independent angles and rank what each reviewer found.", "expect": ["bee-interrogate"]},
+  {"brief": "Review everything unreviewed in this feature and tell me whether it can merge.", "expect": ["bee-reviewing"], "near": "bee-interrogate"},
+  {"brief": "Explain how this change flows through the code from the command to the file it writes.", "expect": ["bee-how"], "near": "bee-interrogate"}
 ]
