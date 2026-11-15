@@ -13,7 +13,7 @@ use super::templates::{
     STATIC_CHECK_FIRST_OFFER, STATIC_CHECK_HOW_TO_OFFER, STATIC_CHECK_MISSING_OFFER,
     TESTED_REPO_VERIFICATION_OFFER, VERIFICATION_UPKEEP_POINTER, VERIFY_APP_SKILL_NAME,
 };
-use super::util::{exists, read_dir_sorted, read_json_if_exists, read_text_if_exists, split_lines};
+use super::util::{exists, join_rel, read_dir_sorted, read_json_if_exists, read_text_if_exists, split_lines};
 use crate::verbs::protocol::{gather_facts, protocol_state, render_protocol, ProtocolState, PROTOCOL_FILE};
 use serde_json::{json, Value};
 use std::path::Path;
@@ -75,14 +75,34 @@ fn makefile_targets(text: &str) -> Vec<String> {
     targets
 }
 
-fn first_csproj(root: &Path) -> Option<String> {
-    let mut matches: Vec<String> = read_dir_sorted(root)
-        .into_iter()
-        .filter(|e| e.is_file && e.name.to_lowercase().ends_with(".csproj"))
-        .map(|e| e.name)
-        .collect();
-    matches.sort();
-    matches.into_iter().next()
+const MANIFEST_SKIPPED_DIRS: &[&str] = &["node_modules", "target", "vendor", "dist", "build"];
+const MANIFEST_MAX_DEPTH: usize = 2;
+
+fn find_manifests(root: &Path, matches: &dyn Fn(&str) -> bool) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut level = vec![String::new()];
+    for _ in 0..=MANIFEST_MAX_DEPTH {
+        let mut found = Vec::new();
+        let mut next = Vec::new();
+        for dir in &level {
+            for e in read_dir_sorted(&join_rel(root, dir)) {
+                let rel = if dir.is_empty() { e.name.clone() } else { format!("{dir}/{}", e.name) };
+                if e.is_file && matches(&e.name) {
+                    found.push(rel);
+                } else if e.is_dir && !e.name.starts_with('.') && !MANIFEST_SKIPPED_DIRS.contains(&e.name.as_str()) {
+                    next.push(rel);
+                }
+            }
+        }
+        found.sort();
+        out.extend(found);
+        level = next;
+    }
+    out
+}
+
+fn manifest_dir(rel: &str) -> Option<&str> {
+    rel.rsplit_once('/').map(|(dir, _)| dir)
 }
 
 /// detectCommands(root): at most one candidate per key. Priority when
@@ -124,18 +144,26 @@ pub fn detect_commands(root: &Path) -> Vec<Candidate> {
         }
     }
 
-    // CONVENTION_SOURCES, in order.
-    let conventions: Vec<(&'static str, &'static str, Option<String>)> = vec![
-        ("test", "pytest", exists(&root.join("pyproject.toml")).then(|| "pyproject.toml".into())),
-        ("test", "dotnet test", first_csproj(root)),
-        ("test", "go test ./...", exists(&root.join("go.mod")).then(|| "go.mod".into())),
+    let first = |matches: &dyn Fn(&str) -> bool| find_manifests(root, matches).into_iter().next();
+    let at = |rel: &str, root_cmd: &str, nested_cmd: &str| match manifest_dir(rel) {
+        Some(dir) => nested_cmd.replace("{dir}", dir).replace("{rel}", rel),
+        None => root_cmd.to_string(),
+    };
+    let conventions: Vec<(&'static str, Option<(String, String)>)> = vec![
+        ("test", first(&|n| n == "pyproject.toml").map(|rel| (at(&rel, "pytest", "pytest {dir}"), rel))),
+        (
+            "test",
+            first(&|n| n.to_lowercase().ends_with(".csproj"))
+                .map(|rel| (at(&rel, "dotnet test", "dotnet test {rel}"), rel)),
+        ),
+        ("test", first(&|n| n == "go.mod").map(|rel| (at(&rel, "go test ./...", "go -C {dir} test ./..."), rel))),
     ];
-    for (key, value, marker) in conventions {
+    for (key, hit) in conventions {
         if by_key.iter().any(|(k, _)| *k == key) {
             continue;
         }
-        if let Some(marker) = marker {
-            push(Candidate { key, value: value.into(), source: marker }, &mut by_key);
+        if let Some((value, source)) = hit {
+            push(Candidate { key, value, source }, &mut by_key);
         }
     }
 
@@ -169,7 +197,7 @@ fn package_runner(root: &Path, name: &str) -> String {
     }
 }
 
-fn static_check_for(root: &Path, names: &[&str], conventions: &[(&str, &str, &str)]) -> Option<StaticCheck> {
+fn static_check_for(root: &Path, names: &[&str], conventions: &[(&str, &str, &str, &str)]) -> Option<StaticCheck> {
     let pkg = script_names(read_manifest_json(&root.join("package.json")));
     if let Some(name) = names.iter().find(|n| pkg.iter().any(|p| p == *n)) {
         return Some(StaticCheck {
@@ -198,19 +226,20 @@ fn static_check_for(root: &Path, names: &[&str], conventions: &[(&str, &str, &st
             });
         }
     }
-    for (file, table, command_marker) in conventions {
+    for (file, table, command_marker, nested_command) in conventions {
         let (command, marker) = command_marker.split_once('|').unwrap_or((command_marker, ""));
-        let text = std::fs::read_to_string(root.join(file)).ok();
-        let hit = match text {
-            Some(t) => table.is_empty() || t.contains(table),
-            None => false,
-        };
-        if hit {
-            return Some(StaticCheck {
-                command: command.into(),
-                source: (*file).into(),
-                marker: marker.into(),
-            });
+        for rel in find_manifests(root, &|n| n == *file) {
+            let satisfied = std::fs::read_to_string(join_rel(root, &rel))
+                .map(|t| table.is_empty() || t.contains(table))
+                .unwrap_or(false);
+            if !satisfied {
+                continue;
+            }
+            let command = match manifest_dir(&rel) {
+                Some(dir) => nested_command.replace("{dir}", dir).replace("{rel}", &rel),
+                None => command.to_string(),
+            };
+            return Some(StaticCheck { command, source: rel, marker: marker.into() });
         }
     }
     None
@@ -222,15 +251,20 @@ pub fn detect_static_checks(root: &Path) -> Vec<StaticCheck> {
             root,
             &["lint"],
             &[
-                ("Cargo.toml", "", "cargo clippy -- -D warnings|clippy"),
-                ("pyproject.toml", "[tool.ruff", "ruff check .|ruff"),
-                ("go.mod", "", "go vet ./...|vet"),
+                (
+                    "Cargo.toml",
+                    "",
+                    "cargo clippy -- -D warnings|clippy",
+                    "cargo clippy --manifest-path {rel} -- -D warnings",
+                ),
+                ("pyproject.toml", "[tool.ruff", "ruff check .|ruff", "ruff check {dir}"),
+                ("go.mod", "", "go vet ./...|vet", "go -C {dir} vet ./..."),
             ],
         ),
         static_check_for(
             root,
             &["typecheck", "type-check"],
-            &[("pyproject.toml", "[tool.mypy", "mypy .|mypy")],
+            &[("pyproject.toml", "[tool.mypy", "mypy .|mypy", "mypy {dir}")],
         ),
     ]
     .into_iter()
@@ -654,7 +688,9 @@ mod tests {
     fn static_check_repo(files: &[(&str, &str)], config: Option<Value>) -> tempfile::TempDir {
         let dir = tempfile::tempdir().unwrap();
         for (name, body) in files {
-            std::fs::write(dir.path().join(name), body).unwrap();
+            let path = dir.path().join(name);
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(path, body).unwrap();
         }
         if let Some(config) = config {
             std::fs::create_dir_all(dir.path().join(".bee")).unwrap();
@@ -823,6 +859,98 @@ mod tests {
             commands_notices(dir.path(), false),
             vec!["No standard commands recorded. Detected candidates: test: npm test — package.json. Present them to the user as one pre-filled confirmation question (skippable) and write only confirmed values to .bee/config.json `commands` — never write unconfirmed values (D3). They power the session CI status gate.".to_string()]
         );
+    }
+
+    fn static_check_pairs(dir: &tempfile::TempDir) -> Vec<(String, String)> {
+        detect_static_checks(dir.path()).into_iter().map(|c| (c.command, c.source)).collect()
+    }
+
+    #[test]
+    fn static_check_nested_manifest_names_its_location() {
+        let dir = static_check_repo(&[("packages/app/Cargo.toml", "[package]\n")], None);
+        assert_eq!(
+            static_check_pairs(&dir),
+            vec![(
+                "cargo clippy --manifest-path packages/app/Cargo.toml -- -D warnings".to_string(),
+                "packages/app/Cargo.toml".to_string()
+            )]
+        );
+    }
+
+    #[test]
+    fn static_check_nested_manifest_loses_to_a_root_manifest() {
+        let dir = static_check_repo(
+            &[("Cargo.toml", "[workspace]\n"), ("packages/app/Cargo.toml", "[package]\n"), ("app/Cargo.toml", "[package]\n")],
+            None,
+        );
+        assert_eq!(
+            static_check_pairs(&dir),
+            vec![("cargo clippy -- -D warnings".to_string(), "Cargo.toml".to_string())]
+        );
+        let dir = static_check_repo(
+            &[("packages/app/Cargo.toml", "[package]\n"), ("tools/Cargo.toml", "[package]\n")],
+            None,
+        );
+        assert_eq!(
+            static_check_pairs(&dir),
+            vec![("cargo clippy --manifest-path tools/Cargo.toml -- -D warnings".to_string(), "tools/Cargo.toml".to_string())]
+        );
+    }
+
+    #[test]
+    fn static_check_nested_manifest_too_deep_or_in_a_skipped_dir_is_not_found() {
+        let dir = static_check_repo(
+            &[
+                ("a/b/c/Cargo.toml", "[package]\n"),
+                ("node_modules/x/Cargo.toml", "[package]\n"),
+                ("target/Cargo.toml", "[package]\n"),
+                ("packages/target/Cargo.toml", "[package]\n"),
+                (".hidden/Cargo.toml", "[package]\n"),
+                ("packages/.cache/Cargo.toml", "[package]\n"),
+            ],
+            None,
+        );
+        assert!(detect_static_checks(dir.path()).is_empty());
+        let dir = static_check_repo(&[("a/b/c/go.mod", "module x\n"), ("node_modules/p/go.mod", "module x\n")], None);
+        assert!(detect_commands(dir.path()).is_empty());
+    }
+
+    #[test]
+    fn static_check_nested_manifest_pyproject_needs_the_ruff_table() {
+        let dir = static_check_repo(
+            &[("packages/a/pyproject.toml", "[project]\n"), ("packages/b/pyproject.toml", "[tool.ruff]\n")],
+            None,
+        );
+        assert_eq!(
+            static_check_pairs(&dir),
+            vec![("ruff check packages/b".to_string(), "packages/b/pyproject.toml".to_string())]
+        );
+        let dir = static_check_repo(&[("packages/a/pyproject.toml", "[project]\n")], None);
+        assert!(detect_static_checks(dir.path()).is_empty());
+    }
+
+    #[test]
+    fn nested_manifest_go_mod_gives_a_located_go_test() {
+        let dir = static_check_repo(&[("services/api/go.mod", "module x\n")], None);
+        let got: Vec<(&str, String, String)> =
+            detect_commands(dir.path()).into_iter().map(|c| (c.key, c.value, c.source)).collect();
+        assert_eq!(
+            got,
+            vec![("test", "go -C services/api test ./...".to_string(), "services/api/go.mod".to_string())]
+        );
+    }
+
+    #[test]
+    fn static_check_nested_manifest_is_named_by_commands_notices() {
+        let dir = static_check_repo(
+            &[("packages/app/Cargo.toml", "[package]\n")],
+            Some(json!({"commands": {"test": "cargo test"}})),
+        );
+        let n = commands_notices(dir.path(), false);
+        assert_eq!(n.len(), 1);
+        assert!(n[0].contains(
+            "cargo clippy --manifest-path packages/app/Cargo.toml -- -D warnings — packages/app/Cargo.toml"
+        ));
     }
 
     #[test]
