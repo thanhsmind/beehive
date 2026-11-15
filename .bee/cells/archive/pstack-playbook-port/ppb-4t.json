@@ -1,0 +1,87 @@
+{
+  "id": "ppb-4t",
+  "feature": "pstack-playbook-port",
+  "title": "Check the situation fence goes red for each break",
+  "lane": "standard",
+  "role": "test",
+  "deps": [
+    "ppb-4"
+  ],
+  "decisions": [
+    "c64c5827-e110-4add-988c-5b668e93ccfe",
+    "913115b3-e1f1-4004-902c-bc574fabb2f1"
+  ],
+  "files": [
+    "docs/history/pstack-playbook-port/reports/ppb-4t.md"
+  ],
+  "read_first": [
+    "docs/history/pstack-playbook-port/CONTEXT.md",
+    "docs/history/pstack-playbook-port/plan.md",
+    "packages/bee-rs/crates/bee/tests/class_playbook_parity.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Break the tree three ways with temporary edits you revert before reporting (an unlisted situation file, a listed missing file, a stray subdirectory), record the fence output for each, then confirm the clean tree is green. Write the report to docs/history/pstack-playbook-port/reports/ppb-4t.md; every other file ends byte-identical.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test class_playbook_parity",
+  "must_haves": {
+    "truths": [
+      "each break is shown red with its message"
+    ],
+    "prohibitions": [
+      "Every file but the report ends byte-identical"
+    ]
+  },
+  "status": "capped",
+  "trace": {
+    "worker": "w-ppb-4t",
+    "outcome": "All three temporary breaks of the real playbook tree (unlisted file, listed missing file, stray subdir) turned the situation fence red with one finding each; after the reverts the tree is green and byte-identical. Report committed in 8c7823e627afab17430b60bb68e17824aaf208ae",
+    "files_changed": [
+      "docs/history/pstack-playbook-port/reports/ppb-4t.md"
+    ],
+    "deviations": [
+      "sync-ack: checker writes only its report under docs/history"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-15T03:12:01.710Z",
+    "behavior_change": false,
+    "verification_evidence": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test class_playbook_parity — green:unit — 9 passed 0 failed on the clean tree; the three breaks each FAILED every_situation_file_matches_its_index, outputs in the report",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "1fe39916-f67e-4233-a4da-ffc17046e993",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test class_playbook_parity",
+    "claimed_at": "2026-11-15T03:10:09.981Z",
+    "knowledge_delta": [],
+    "sync_ack": "checker writes only its report under docs/history",
+    "no_mistakes": true,
+    "no_knowledge_used": true,
+    "no_principles_used": true,
+    "report": {
+      "outcome": "All three temporary breaks of the real playbook tree (unlisted file, listed missing file, stray subdir) turned the situation fence red with one finding each; after the reverts the tree is green and byte-identical. Report committed in 8c7823e627afab17430b60bb68e17824aaf208ae",
+      "commit": "8c7823e627afab17430b60bb68e17824aaf208ae",
+      "files": [
+        "docs/history/pstack-playbook-port/reports/ppb-4t.md"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test class_playbook_parity — green:unit — PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test class_playbook_parity — green:unit — 9 passed 0 failed on the clean tree; the three breaks each FAILED every_situation_file_matches_its_index, outputs in the report",
+      "deviations": [],
+      "knowledge_used": [],
+      "patch_id": "001d46d86f2f52fa91b610ecf44310bc5fef2b2f"
+    },
+    "warnings": [],
+    "tests": "boundary"
+  },
+  "usage": {
+    "new": 36562,
+    "cached": 349979,
+    "total": 386541,
+    "models": {
+      "claude-opus-5-5": {
+        "new": 36562,
+        "cached": 349979,
+        "total": 386541
+      }
+    },
+    "jobs": [
+      "job-1794712210476-2513241-1"
+    ]
+  }
+}

@@ -1,0 +1,111 @@
+{
+  "id": "ppb-5",
+  "feature": "pstack-playbook-port",
+  "title": "Port the perf-issue and hillclimb playbooks",
+  "lane": "standard",
+  "role": "docs",
+  "deps": [],
+  "decisions": [
+    "d480d467-1a0d-4feb-bbe6-3f181aa86f4b",
+    "063a21e4-bccc-46a4-8fe8-1f1f99874c72",
+    "5a1fc656-5549-462a-be0c-6bce5d919188",
+    "c64c5827-e110-4add-988c-5b668e93ccfe",
+    "41bbba68-9de8-48b3-a9c7-ba1abfdd6410",
+    "913115b3-e1f1-4004-902c-bc574fabb2f1"
+  ],
+  "files": [
+    "skills/bee-planning/playbooks/perf.md",
+    "skills/bee-planning/playbooks/perf/perf-issue.md",
+    "skills/bee-planning/playbooks/perf/hillclimb.md",
+    "docs/history/pstack-playbook-port/port-notes/perf.md"
+  ],
+  "read_first": [
+    "docs/history/pstack-playbook-port/CONTEXT.md",
+    "docs/history/pstack-playbook-port/plan.md",
+    "skills/bee-planning/playbooks/bugfix.md",
+    "skills/bee-planning/playbooks/bugfix/bug-fix.md",
+    "docs/history/pstack-playbook-port/port-notes.md",
+    "skills/bee-planning/playbooks/perf.md",
+    "/home/thanhsmind/Projects/refs/ai-skills/cursor-plugins/pstack/skills/poteto-mode/playbooks/perf-issue.md",
+    "/home/thanhsmind/Projects/refs/ai-skills/cursor-plugins/pstack/skills/poteto-mode/playbooks/hillclimb.md"
+  ],
+  "affects_skills": [
+    "skills/bee-planning/playbooks/perf.md",
+    "skills/bee-planning/playbooks/perf/perf-issue.md",
+    "skills/bee-planning/playbooks/perf/hillclimb.md"
+  ],
+  "affects_specs": [],
+  "regen_obligation_ack": "wave-barrier",
+  "action": "Port into the perf class. Write one situation file per row: playbooks/perf/perf-issue.md from pstack perf-issue.md; playbooks/perf/hillclimb.md from pstack hillclimb.md. perf-issue merges with the current perf.md steps per D3; the current sustained-target paragraph and plateau-pivot sentence move into hillclimb.md. Rewrite playbooks/perf.md as the class index: title, one intro line, the Situations section listing every situation above, then the class Proof floor line kept byte-identical. Index grammar (contract 913115b3): a '## Situations' heading, then one line per situation of the exact form - `<name>` — <trigger phrases, English and Vietnamese> — delivers: <deliverable>, <name> matching [a-z0-9-]+; the section ends at the next '## ' heading. Port rules: the pstack method text is the body (D1); every pstack tool is swapped for its bee counterpart per D2 (how and why become bee-how and bee-why gathers, subagent delegation becomes bee dispatch prepare, the control skill becomes the project's verify-app or the real interface, Opening a PR becomes the bee close and worktree merge path, show-me-your-work becomes a decision trail under docs/history/<feature>/); a step whose tool bee does not have yet (architect, arena, interrogate, swarm, tdd, figure-it-out, show-me-your-work) is dropped from the playbook text and named in your port notes file, because slice 3 brings those skills and re-adds the steps. Name no skill that does not exist in skills/ today. No line under skills/bee-planning/playbooks/ names Cursor, Graphite, bugbot or poteto-agent. Every step states why it holds, as decision 61b52e96 requires of class playbooks; keep the pstack reason where it gives one. Follow bugfix.md and bugfix/bug-fix.md as the worked example of shape and voice. Do not run bee dev regen: the leader runs it once at wave close (regen_obligation_ack wave-barrier). Sibling cells edit other class directories in this same worktree at the same time: if the parity fence is red only for a directory you did not touch, that is a sibling mid-edit; wait, rerun, and name it in your report.  Write docs/history/pstack-playbook-port/port-notes/perf.md with one section per ported playbook listing each tool swap and each dropped step.",
+  "verify": "rg -n 'Proof floor' skills/bee-planning/playbooks/perf.md && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test class_playbook_parity",
+  "must_haves": {
+    "truths": [
+      "every situation file listed on perf.md exists and carries its pstack source's steps",
+      "every enforced line of the old class playbook survives in a situation file",
+      "no file under skills/bee-planning/playbooks/ names Cursor, Graphite, bugbot or poteto-agent"
+    ],
+    "prohibitions": [
+      "No playbook of another class is edited",
+      "No skill named that does not exist in skills/"
+    ]
+  },
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "w-ppb-5",
+    "outcome": "Ported perf into a class index plus perf-issue and hillclimb situation files with port notes; parity fence green; commit 800d8342e",
+    "files_changed": [
+      "skills/bee-planning/playbooks/perf.md",
+      "skills/bee-planning/playbooks/perf/perf-issue.md",
+      "skills/bee-planning/playbooks/perf/hillclimb.md",
+      "docs/history/pstack-playbook-port/port-notes/perf.md"
+    ],
+    "deviations": [
+      "sync-ack: playbook or report text only; regen runs once at wave close; anchored concepts are re-graded by the final writer cell"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-15T03:30:17.147Z",
+    "behavior_change": false,
+    "verification_evidence": "the parity fence reads exactly the playbook index and files this cell changed (9 passed, 0 failed); leader reran class_playbook_parity at 422729836: test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "1fe39916-f67e-4233-a4da-ffc17046e993",
+    "verify_command": "rg -n 'Proof floor' skills/bee-planning/playbooks/perf.md && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test class_playbook_parity",
+    "claimed_at": "2026-11-15T03:26:43.787Z",
+    "knowledge_delta": [],
+    "sync_ack": "playbook or report text only; regen runs once at wave close; anchored concepts are re-graded by the final writer cell",
+    "no_mistakes": true,
+    "no_knowledge_used": true,
+    "no_principles_used": true,
+    "report": {
+      "outcome": "Ported perf into a class index plus perf-issue and hillclimb situation files with port notes; parity fence green; commit 800d8342e",
+      "commit": "42272983658a05aabfdc99e85e775f73265ec81a",
+      "files": [
+        "skills/bee-planning/playbooks/perf.md",
+        "skills/bee-planning/playbooks/perf/perf-issue.md",
+        "skills/bee-planning/playbooks/perf/hillclimb.md",
+        "docs/history/pstack-playbook-port/port-notes/perf.md"
+      ],
+      "tests": "rg -n 'Proof floor' skills/bee-planning/playbooks/perf.md && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test class_playbook_parity — green:unit — the parity fence reads exactly the playbook index and files this cell changed (9 passed, 0 failed); leader reran class_playbook_parity at 422729836: test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+      "deviations": [],
+      "patch_id": "3773204e9b6a5356c1e3ef6b773c49aad064950b"
+    },
+    "warnings": [],
+    "tests": "boundary"
+  },
+  "usage": {
+    "new": 67495,
+    "cached": 439396,
+    "total": 506891,
+    "models": {
+      "claude-sonnet-5-5": {
+        "new": 67495,
+        "cached": 439396,
+        "total": 506891
+      }
+    },
+    "jobs": [
+      "job-1794713204103-2667055-1"
+    ]
+  }
+}

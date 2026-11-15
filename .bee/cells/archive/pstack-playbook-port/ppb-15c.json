@@ -1,0 +1,95 @@
+{
+  "id": "ppb-15c",
+  "feature": "pstack-playbook-port",
+  "title": "Check bee-interrogate against its pstack source",
+  "lane": "standard",
+  "role": "test",
+  "deps": [
+    "ppb-15"
+  ],
+  "decisions": [
+    "063a21e4-bccc-46a4-8fe8-1f1f99874c72",
+    "3ac421ec-168b-4007-9976-9b6bcbe6e18a",
+    "913115b3-e1f1-4004-902c-bc574fabb2f1"
+  ],
+  "files": [
+    "docs/history/pstack-playbook-port/reports/ppb-15c.md"
+  ],
+  "read_first": [
+    "docs/history/pstack-playbook-port/CONTEXT.md",
+    "docs/history/pstack-playbook-port/plan.md",
+    "skills/bee-interrogate/SKILL.md",
+    "docs/history/pstack-playbook-port/port-notes/skill-bee-interrogate.md",
+    "/home/thanhsmind/Projects/refs/ai-skills/cursor-plugins/pstack/skills/interrogate/SKILL.md",
+    "/home/thanhsmind/Projects/refs/ai-skills/cursor-plugins/pstack/skills/interrogate/references/code-quality-review.md",
+    "/home/thanhsmind/Projects/refs/ai-skills/cursor-plugins/pstack/skills/interrogate/references/lead-judgment.md",
+    "/home/thanhsmind/Projects/refs/ai-skills/cursor-plugins/pstack/skills/interrogate/references/reviewer-prompt.md",
+    "/home/thanhsmind/Projects/refs/ai-skills/cursor-plugins/pstack/skills/interrogate/references/rubric.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Read the pstack source files beside skills/bee-interrogate/. Report each source step or rule as present, dropped with a port-notes entry, or missing; any pstack-only tool name; any hand-picked model or subagent_type; and whether the description fits 300 characters and says when not to use the skill. Write the report to docs/history/pstack-playbook-port/reports/ppb-15c.md; no other edits.",
+  "verify": "rg -n -i 'cursor|graphite|bugbot|poteto-agent' skills/bee-interrogate/ ; test $? -eq 1",
+  "must_haves": {
+    "truths": [
+      "the report lists every source step with present, dropped or missing"
+    ],
+    "prohibitions": [
+      "No edit outside the report file"
+    ]
+  },
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "w-ppb-15c",
+    "outcome": "Checked bee-interrogate against pstack interrogate: every source step present or dropped with a port-notes entry, none missing; fence clean, no hand-picked model, description 276 chars with Not-for; three P3 findings; commit 348a5a28e",
+    "files_changed": [
+      "docs/history/pstack-playbook-port/reports/ppb-15c.md"
+    ],
+    "deviations": [
+      "sync-ack: playbook or report text only; regen runs once at wave close; anchored concepts are re-graded by the final writer cell"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-15T04:07:06.070Z",
+    "behavior_change": false,
+    "verification_evidence": "cell is a read-only check producing one markdown report; leader reran class_playbook_parity at 6886cfdbf: test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "1fe39916-f67e-4233-a4da-ffc17046e993",
+    "verify_command": "rg -n -i 'cursor|graphite|bugbot|poteto-agent' skills/bee-interrogate/ ; test $? -eq 1",
+    "claimed_at": "2026-11-15T04:04:58.697Z",
+    "knowledge_delta": [],
+    "sync_ack": "playbook or report text only; regen runs once at wave close; anchored concepts are re-graded by the final writer cell",
+    "no_mistakes": true,
+    "no_knowledge_used": true,
+    "no_principles_used": true,
+    "report": {
+      "outcome": "Checked bee-interrogate against pstack interrogate: every source step present or dropped with a port-notes entry, none missing; fence clean, no hand-picked model, description 276 chars with Not-for; three P3 findings; commit 348a5a28e",
+      "commit": "6886cfdbfb54d1c1447a9b94c33e252171fdd8b9",
+      "files": [
+        "docs/history/pstack-playbook-port/reports/ppb-15c.md"
+      ],
+      "tests": "rg -n -i 'cursor|graphite|bugbot|poteto-agent' skills/bee-interrogate/ ; test $? -eq 1 — green:unit — cell is a read-only check producing one markdown report; leader reran class_playbook_parity at 6886cfdbf: test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+      "deviations": [],
+      "knowledge_used": [],
+      "patch_id": "1c9156deb5e1eaa20d5774a9be9b18c06d039cc9"
+    },
+    "warnings": [],
+    "tests": "boundary"
+  },
+  "usage": {
+    "new": 50759,
+    "cached": 369085,
+    "total": 419844,
+    "models": {
+      "claude-opus-5-5": {
+        "new": 50759,
+        "cached": 369085,
+        "total": 419844
+      }
+    },
+    "jobs": [
+      "job-1794715500218-3103008-1"
+    ]
+  }
+}

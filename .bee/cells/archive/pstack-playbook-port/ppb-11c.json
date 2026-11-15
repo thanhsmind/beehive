@@ -1,0 +1,93 @@
+{
+  "id": "ppb-11c",
+  "feature": "pstack-playbook-port",
+  "title": "Check the session port against its sources",
+  "lane": "standard",
+  "role": "test",
+  "deps": [
+    "ppb-11"
+  ],
+  "decisions": [
+    "063a21e4-bccc-46a4-8fe8-1f1f99874c72",
+    "5a1fc656-5549-462a-be0c-6bce5d919188",
+    "913115b3-e1f1-4004-902c-bc574fabb2f1"
+  ],
+  "files": [
+    "docs/history/pstack-playbook-port/reports/ppb-11c.md"
+  ],
+  "read_first": [
+    "docs/history/pstack-playbook-port/CONTEXT.md",
+    "docs/history/pstack-playbook-port/plan.md",
+    "skills/bee-planning/playbooks/session/index.md",
+    "docs/history/pstack-playbook-port/port-notes/session-ppb-11.md",
+    "/home/thanhsmind/Projects/refs/ai-skills/cursor-plugins/pstack/skills/poteto-mode/playbooks/session-pickup.md",
+    "/home/thanhsmind/Projects/refs/ai-skills/cursor-plugins/pstack/skills/poteto-mode/playbooks/pause-safely.md",
+    "/home/thanhsmind/Projects/refs/ai-skills/cursor-plugins/pstack/skills/poteto-mode/playbooks/autonomous-run.md",
+    "/home/thanhsmind/Projects/refs/ai-skills/cursor-plugins/pstack/skills/poteto-mode/playbooks/orchestrate.md",
+    "/home/thanhsmind/Projects/refs/ai-skills/cursor-plugins/pstack/skills/poteto-mode/playbooks/worktree-cleanup.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Read each pstack source and the old session playbook text (git show of the commit before ppb-11) beside the new files. Report each source step and each old enforced line as present, or dropped with its port-notes entry, or missing; any pstack-only tool name under skills/bee-planning/playbooks/; any skill named that does not exist in skills/; and whether each index line matches the contract grammar. Write the report to docs/history/pstack-playbook-port/reports/ppb-11c.md; no other edits.",
+  "verify": "rg -n -i 'cursor|graphite|bugbot|poteto-agent' skills/bee-planning/playbooks/ ; test $? -eq 1",
+  "must_haves": {
+    "truths": [
+      "the report lists every source step with present, dropped or missing"
+    ],
+    "prohibitions": [
+      "No edit outside the report file"
+    ]
+  },
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "w-ppb-11c",
+    "outcome": "Checked the session port against its five pstack sources: every source step is present, the tool fence and the index grammar hold, and the gaps are worktree-cleanup's missing port-notes section and orchestrate's unnoted figure-it-out and inbox/ drops (dangling inbox references) — dc265a85e4e74233897644afc9cf05e9e7028fc5",
+    "files_changed": [
+      "docs/history/pstack-playbook-port/reports/ppb-11c.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-11-15T03:25:13.247Z",
+    "behavior_change": false,
+    "verification_evidence": "checker cell, report-only change",
+    "verify_output": "green:static",
+    "verify_passed": true,
+    "claim_session": "1fe39916-f67e-4233-a4da-ffc17046e993",
+    "verify_command": "rg -n -i 'cursor|graphite|bugbot|poteto-agent' skills/bee-planning/playbooks/ ; test $? -eq 1",
+    "claimed_at": "2026-11-15T03:22:52.310Z",
+    "knowledge_delta": [],
+    "no_mistakes": true,
+    "no_knowledge_used": true,
+    "report": {
+      "outcome": "Checked the session port against its five pstack sources: every source step is present, the tool fence and the index grammar hold, and the gaps are worktree-cleanup's missing port-notes section and orchestrate's unnoted figure-it-out and inbox/ drops (dangling inbox references) — dc265a85e4e74233897644afc9cf05e9e7028fc5",
+      "commit": "dc265a85e4e74233897644afc9cf05e9e7028fc5",
+      "files": [
+        "docs/history/pstack-playbook-port/reports/ppb-11c.md"
+      ],
+      "tests": "rg -n -i 'cursor|graphite|bugbot|poteto-agent' skills/bee-planning/playbooks/ ; test $? -eq 1 — green:static — checker cell, report-only change",
+      "deviations": [],
+      "knowledge_used": [],
+      "patch_id": "e843074553e4f5aec42ca81f61a7b7f4251eaee5"
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 204 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
+  },
+  "usage": {
+    "new": 76668,
+    "cached": 696061,
+    "total": 772729,
+    "models": {
+      "claude-opus-5-5": {
+        "new": 76668,
+        "cached": 696061,
+        "total": 772729
+      }
+    },
+    "jobs": [
+      "job-1794712973618-2628341-1"
+    ]
+  }
+}

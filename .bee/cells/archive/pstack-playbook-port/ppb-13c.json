@@ -1,0 +1,94 @@
+{
+  "id": "ppb-13c",
+  "feature": "pstack-playbook-port",
+  "title": "Check bee-architect against its pstack source",
+  "lane": "standard",
+  "role": "test",
+  "deps": [
+    "ppb-13"
+  ],
+  "decisions": [
+    "063a21e4-bccc-46a4-8fe8-1f1f99874c72",
+    "3ac421ec-168b-4007-9976-9b6bcbe6e18a",
+    "913115b3-e1f1-4004-902c-bc574fabb2f1"
+  ],
+  "files": [
+    "docs/history/pstack-playbook-port/reports/ppb-13c.md"
+  ],
+  "read_first": [
+    "docs/history/pstack-playbook-port/CONTEXT.md",
+    "docs/history/pstack-playbook-port/plan.md",
+    "skills/bee-architect/SKILL.md",
+    "docs/history/pstack-playbook-port/port-notes/skill-bee-architect.md",
+    "/home/thanhsmind/Projects/refs/ai-skills/cursor-plugins/pstack/skills/architect/SKILL.md",
+    "/home/thanhsmind/Projects/refs/ai-skills/cursor-plugins/pstack/skills/architect/references/design-red-flags.md",
+    "/home/thanhsmind/Projects/refs/ai-skills/cursor-plugins/pstack/skills/architect/references/rationale-template.md",
+    "/home/thanhsmind/Projects/refs/ai-skills/cursor-plugins/pstack/skills/architect/references/runner-prompt.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Read the pstack source files beside skills/bee-architect/. Report each source step or rule as present, dropped with a port-notes entry, or missing; any pstack-only tool name; any hand-picked model or subagent_type; and whether the description fits 300 characters and says when not to use the skill. Write the report to docs/history/pstack-playbook-port/reports/ppb-13c.md; no other edits.",
+  "verify": "rg -n -i 'cursor|graphite|bugbot|poteto-agent' skills/bee-architect/ ; test $? -eq 1",
+  "must_haves": {
+    "truths": [
+      "the report lists every source step with present, dropped or missing"
+    ],
+    "prohibitions": [
+      "No edit outside the report file"
+    ]
+  },
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "w-ppb-13c",
+    "outcome": "Checked bee-architect against pstack architect: every source step present or dropped with a port-notes entry, none missing; tool fence clean, no hand-picked model, description 296 chars with a not-for clause; 3 minor findings (lane command lacks --brief-file, --runtime claude fixed, 4 additions unnoted) — 269fad41ba5c50893d2a8ad242e192017ad0170c",
+    "files_changed": [
+      "docs/history/pstack-playbook-port/reports/ppb-13c.md"
+    ],
+    "deviations": [
+      "sync-ack: playbook or report text only; regen runs once at wave close; anchored concepts are re-graded by the final writer cell"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-15T04:00:22.208Z",
+    "behavior_change": false,
+    "verification_evidence": "report-only checker cell, the cell's own verify; leader reran class_playbook_parity at 1a72a53c5: test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "1fe39916-f67e-4233-a4da-ffc17046e993",
+    "verify_command": "rg -n -i 'cursor|graphite|bugbot|poteto-agent' skills/bee-architect/ ; test $? -eq 1",
+    "claimed_at": "2026-11-15T03:57:01.689Z",
+    "knowledge_delta": [],
+    "sync_ack": "playbook or report text only; regen runs once at wave close; anchored concepts are re-graded by the final writer cell",
+    "no_mistakes": true,
+    "no_knowledge_used": true,
+    "no_principles_used": true,
+    "report": {
+      "outcome": "Checked bee-architect against pstack architect: every source step present or dropped with a port-notes entry, none missing; tool fence clean, no hand-picked model, description 296 chars with a not-for clause; 3 minor findings (lane command lacks --brief-file, --runtime claude fixed, 4 additions unnoted) — 269fad41ba5c50893d2a8ad242e192017ad0170c",
+      "commit": "1a72a53c52c1ed5f8ffb05ad21704ebe9a7b0ee7",
+      "files": [
+        "docs/history/pstack-playbook-port/reports/ppb-13c.md"
+      ],
+      "tests": "rg -n -i 'cursor|graphite|bugbot|poteto-agent' skills/bee-architect/ ; test $? -eq 1 — green:unit — report-only checker cell, the cell's own verify; leader reran class_playbook_parity at 1a72a53c5: test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+      "deviations": [],
+      "knowledge_used": [],
+      "patch_id": "17801604288aea45b0b0eeca5d1d5ddb36837171"
+    },
+    "warnings": [],
+    "tests": "boundary"
+  },
+  "usage": {
+    "new": 57683,
+    "cached": 583127,
+    "total": 640810,
+    "models": {
+      "claude-opus-5-5": {
+        "new": 57683,
+        "cached": 583127,
+        "total": 640810
+      }
+    },
+    "jobs": [
+      "job-1794715023113-2934026-1"
+    ]
+  }
+}

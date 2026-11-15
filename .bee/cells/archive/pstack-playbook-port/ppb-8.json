@@ -1,0 +1,106 @@
+{
+  "id": "ppb-8",
+  "feature": "pstack-playbook-port",
+  "title": "Port the prototype playbook",
+  "lane": "standard",
+  "role": "docs",
+  "deps": [],
+  "decisions": [
+    "d480d467-1a0d-4feb-bbe6-3f181aa86f4b",
+    "063a21e4-bccc-46a4-8fe8-1f1f99874c72",
+    "5a1fc656-5549-462a-be0c-6bce5d919188",
+    "c64c5827-e110-4add-988c-5b668e93ccfe",
+    "41bbba68-9de8-48b3-a9c7-ba1abfdd6410",
+    "913115b3-e1f1-4004-902c-bc574fabb2f1"
+  ],
+  "files": [
+    "skills/bee-planning/playbooks/spike.md",
+    "skills/bee-planning/playbooks/spike/prototype.md",
+    "docs/history/pstack-playbook-port/port-notes/spike.md"
+  ],
+  "read_first": [
+    "docs/history/pstack-playbook-port/CONTEXT.md",
+    "docs/history/pstack-playbook-port/plan.md",
+    "skills/bee-planning/playbooks/bugfix.md",
+    "skills/bee-planning/playbooks/bugfix/bug-fix.md",
+    "docs/history/pstack-playbook-port/port-notes.md",
+    "skills/bee-planning/playbooks/spike.md",
+    "/home/thanhsmind/Projects/refs/ai-skills/cursor-plugins/pstack/skills/poteto-mode/playbooks/prototype.md"
+  ],
+  "affects_skills": [
+    "skills/bee-planning/playbooks/spike.md",
+    "skills/bee-planning/playbooks/spike/prototype.md"
+  ],
+  "affects_specs": [],
+  "regen_obligation_ack": "wave-barrier",
+  "action": "Port into the spike class. Write one situation file per row: playbooks/spike/prototype.md from pstack prototype.md. prototype merges with the current spike.md steps per D3. Rewrite playbooks/spike.md as the class index: title, one intro line, the Situations section listing every situation above, then the class Proof floor line kept byte-identical. Index grammar (contract 913115b3): a '## Situations' heading, then one line per situation of the exact form - `<name>` — <trigger phrases, English and Vietnamese> — delivers: <deliverable>, <name> matching [a-z0-9-]+; the section ends at the next '## ' heading. Port rules: the pstack method text is the body (D1); every pstack tool is swapped for its bee counterpart per D2 (how and why become bee-how and bee-why gathers, subagent delegation becomes bee dispatch prepare, the control skill becomes the project's verify-app or the real interface, Opening a PR becomes the bee close and worktree merge path, show-me-your-work becomes a decision trail under docs/history/<feature>/); a step whose tool bee does not have yet (architect, arena, interrogate, swarm, tdd, figure-it-out, show-me-your-work) is dropped from the playbook text and named in your port notes file, because slice 3 brings those skills and re-adds the steps. Name no skill that does not exist in skills/ today. No line under skills/bee-planning/playbooks/ names Cursor, Graphite, bugbot or poteto-agent. Every step states why it holds, as decision 61b52e96 requires of class playbooks; keep the pstack reason where it gives one. Follow bugfix.md and bugfix/bug-fix.md as the worked example of shape and voice. Do not run bee dev regen: the leader runs it once at wave close (regen_obligation_ack wave-barrier). Sibling cells edit other class directories in this same worktree at the same time: if the parity fence is red only for a directory you did not touch, that is a sibling mid-edit; wait, rerun, and name it in your report.  Write docs/history/pstack-playbook-port/port-notes/spike.md with one section per ported playbook listing each tool swap and each dropped step.",
+  "verify": "rg -n 'Proof floor' skills/bee-planning/playbooks/spike.md && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test class_playbook_parity",
+  "must_haves": {
+    "truths": [
+      "every situation file listed on spike.md exists and carries its pstack source's steps",
+      "every enforced line of the old class playbook survives in a situation file",
+      "no file under skills/bee-planning/playbooks/ names Cursor, Graphite, bugbot or poteto-agent"
+    ],
+    "prohibitions": [
+      "No playbook of another class is edited",
+      "No skill named that does not exist in skills/"
+    ]
+  },
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "w-ppb-8",
+    "outcome": "Ported the prototype playbook into the spike class: spike.md is the index, spike/prototype.md the situation, port notes written; commit c710cdc42",
+    "files_changed": [
+      "skills/bee-planning/playbooks/spike.md",
+      "skills/bee-planning/playbooks/spike/prototype.md",
+      "docs/history/pstack-playbook-port/port-notes/spike.md"
+    ],
+    "deviations": [
+      "sync-ack: playbook or report text only; regen runs once at wave close; anchored concepts are re-graded by the final writer cell"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-15T03:36:41.066Z",
+    "behavior_change": false,
+    "verification_evidence": "docs port, 9 passed 0 failed; leader reran class_playbook_parity at 6ab285be1: test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "1fe39916-f67e-4233-a4da-ffc17046e993",
+    "verify_command": "rg -n 'Proof floor' skills/bee-planning/playbooks/spike.md && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test class_playbook_parity",
+    "claimed_at": "2026-11-15T03:34:49.604Z",
+    "knowledge_delta": [],
+    "sync_ack": "playbook or report text only; regen runs once at wave close; anchored concepts are re-graded by the final writer cell",
+    "no_mistakes": true,
+    "no_knowledge_used": true,
+    "no_principles_used": true,
+    "report": {
+      "outcome": "Ported the prototype playbook into the spike class: spike.md is the index, spike/prototype.md the situation, port notes written; commit c710cdc42",
+      "commit": "6ab285be14680a88d16dffe20ce106299ff2598e",
+      "files": [
+        "skills/bee-planning/playbooks/spike.md",
+        "skills/bee-planning/playbooks/spike/prototype.md",
+        "docs/history/pstack-playbook-port/port-notes/spike.md"
+      ],
+      "tests": "rg -n 'Proof floor' skills/bee-planning/playbooks/spike.md && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test class_playbook_parity — green:unit — docs port, 9 passed 0 failed; leader reran class_playbook_parity at 6ab285be1: test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+      "deviations": [],
+      "patch_id": "2c6b2e7297506af3901285591c70d67c37060b2f"
+    },
+    "warnings": [],
+    "tests": "boundary"
+  },
+  "usage": {
+    "new": 48597,
+    "cached": 331643,
+    "total": 380240,
+    "models": {
+      "claude-sonnet-5-5": {
+        "new": 48597,
+        "cached": 331643,
+        "total": 380240
+      }
+    },
+    "jobs": [
+      "job-1794713689906-2713685-1"
+    ]
+  }
+}

@@ -1,0 +1,158 @@
+{
+  "id": "ppb-28",
+  "feature": "pstack-playbook-port",
+  "title": "Port the pstack principles prove-it-works, sequence-verifiable-units, make-operations-idempotent",
+  "lane": "standard",
+  "role": "docs",
+  "deps": [],
+  "decisions": [
+    "063a21e4-bccc-46a4-8fe8-1f1f99874c72",
+    "3ac421ec-168b-4007-9976-9b6bcbe6e18a",
+    "6ca3cd62-c65d-499b-9351-7128c63c80b9",
+    "913115b3-e1f1-4004-902c-bc574fabb2f1"
+  ],
+  "files": [
+    "skills/bee-principle-prove-it-works/",
+    "skills/bee-principle-sequence-verifiable-units/",
+    "skills/bee-principle-make-operations-idempotent/",
+    "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md",
+    "expertise/tests.md",
+    "expertise/operations.md",
+    "expertise/planning.md",
+    "docs/history/codex-harness-hardening/release-manifest.json",
+    ".claude-plugin/skills/bee-principle-prove-it-works/",
+    ".claude-plugin/skills/bee-principle-sequence-verifiable-units/",
+    ".claude-plugin/skills/bee-principle-make-operations-idempotent/",
+    ".codex-plugin/skills/bee-principle-prove-it-works/",
+    ".codex-plugin/skills/bee-principle-sequence-verifiable-units/",
+    ".codex-plugin/skills/bee-principle-make-operations-idempotent/",
+    ".claude/skills/bee-principle-prove-it-works/",
+    ".claude/skills/bee-principle-sequence-verifiable-units/",
+    ".claude/skills/bee-principle-make-operations-idempotent/",
+    ".agents/skills/bee-principle-prove-it-works/",
+    ".agents/skills/bee-principle-sequence-verifiable-units/",
+    ".agents/skills/bee-principle-make-operations-idempotent/",
+    ".opencode/skills/bee-principle-prove-it-works/",
+    ".opencode/skills/bee-principle-sequence-verifiable-units/",
+    ".opencode/skills/bee-principle-make-operations-idempotent/",
+    "docs/history/pstack-playbook-port/port-notes/principles-ppb-28.md"
+  ],
+  "read_first": [
+    "docs/history/pstack-playbook-port/CONTEXT.md",
+    "docs/history/pstack-playbook-port/plan.md",
+    "skills/bee-principle-subtract-before-you-add/SKILL.md",
+    "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md",
+    "/home/thanhsmind/Projects/refs/ai-skills/cursor-plugins/pstack/skills/principle-prove-it-works/SKILL.md",
+    "/home/thanhsmind/Projects/refs/ai-skills/cursor-plugins/pstack/skills/principle-sequence-verifiable-units/SKILL.md",
+    "/home/thanhsmind/Projects/refs/ai-skills/cursor-plugins/pstack/skills/principle-make-operations-idempotent/SKILL.md",
+    "expertise/tests.md",
+    "expertise/operations.md",
+    "expertise/planning.md"
+  ],
+  "affects_skills": [
+    "skills/bee-principle-prove-it-works/SKILL.md",
+    "skills/bee-principle-sequence-verifiable-units/SKILL.md",
+    "skills/bee-principle-make-operations-idempotent/SKILL.md"
+  ],
+  "affects_specs": [],
+  "action": "For each slug, create skills/bee-principle-<slug>/SKILL.md from pstack principle-<slug>, in the exact shape of skills/bee-principle-subtract-before-you-add/SKILL.md (description 'Apply when ...', body, Check, Not when, Why, Depth). Put the depth into a new section of the expertise guide named in files whose craft it belongs to, and point Depth at that section. Add one row per slug to the '## Principle homes' section of docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md, in the existing row grammar: the guide anchor, a spoken line, a classes line naming the route classes it fires for (from the nine), then applied_at. Pick the classes from the pstack 'when it applies' line. No line names Cursor, Graphite, bugbot or poteto-agent; no hand-picked model or subagent_type; tools become bee counterparts per D2. Copy the pstack LICENSE verbatim to each new skill directory as LICENSE.pstack. Run bee dev regen and commit the rendered trees and the manifest with the cell. Write docs/history/pstack-playbook-port/port-notes/principles-ppb-28.md. Facts you need, so no lookup is required: an advisor or design runner goes out as `bee dispatch prepare --runtime claude --kind advisor --role <role> --json`; a judge or reviewer as `--kind reviewer`; read-only gathers as `--kind gather`; the blind-lane roles are lane-1, lane-2 and lane-3, and `bee blind check` checks a blind brief; write these spellings into the skill text, never run them. Bee commands you may run in this cell: cargo test, `.bee/bin/bee dev regen`, `.bee/bin/bee dev release-manifest --check`, `.bee/bin/bee knowledge check`, and `bee herding notify`. Never run `bee dispatch` or any of its `--help`; the worker guard refuses it and the cell stops. A principle or skill that does not exist in skills/ yet keeps its method as a plain sentence and is named in the port notes.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test principle_index_parity && .bee/bin/bee dev release-manifest --check",
+  "must_haves": {
+    "truths": [
+      "skills/bee-principle-prove-it-works/SKILL.md exists and has an index row with spoken and classes lines",
+      "skills/bee-principle-sequence-verifiable-units/SKILL.md exists and has an index row with spoken and classes lines",
+      "skills/bee-principle-make-operations-idempotent/SKILL.md exists and has an index row with spoken and classes lines",
+      "principle_index_parity is green"
+    ],
+    "prohibitions": [
+      "No existing principle row is changed"
+    ]
+  },
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "w-ppb-28",
+    "outcome": "Ported prove-it-works, sequence-verifiable-units and make-operations-idempotent as bee principle skills with depth sections, index rows, regenerated trees and manifest; commit f82a8ebbd92046ee7d6f2c9897ce485d5ebc2e94",
+    "files_changed": [
+      "skills/bee-principle-prove-it-works/",
+      "skills/bee-principle-sequence-verifiable-units/",
+      "skills/bee-principle-make-operations-idempotent/",
+      "expertise/tests.md",
+      "expertise/planning.md",
+      "expertise/operations.md",
+      "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md",
+      "docs/history/codex-harness-hardening/release-manifest.json",
+      "docs/history/pstack-playbook-port/port-notes/principles-ppb-28.md",
+      ".claude-plugin/skills/",
+      ".codex-plugin/skills/",
+      ".claude/skills/",
+      ".agents/skills/",
+      ".opencode/skills/",
+      ".bee/expertise/",
+      ".bee/onboarding.json"
+    ],
+    "deviations": [
+      "sync-ack: playbook or report text only; regen runs once at wave close; anchored concepts are re-graded by the final writer cell"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-15T04:51:20.638Z",
+    "behavior_change": false,
+    "verification_evidence": "5 parity tests passed, 878 manifest files match; leader reran class_playbook_parity at f82a8ebbd: test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "1fe39916-f67e-4233-a4da-ffc17046e993",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test principle_index_parity && .bee/bin/bee dev release-manifest --check",
+    "claimed_at": "2026-11-15T04:48:20.447Z",
+    "knowledge_delta": [
+      "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md"
+    ],
+    "sync_ack": "playbook or report text only; regen runs once at wave close; anchored concepts are re-graded by the final writer cell",
+    "no_mistakes": true,
+    "no_knowledge_used": true,
+    "no_principles_used": true,
+    "report": {
+      "outcome": "Ported prove-it-works, sequence-verifiable-units and make-operations-idempotent as bee principle skills with depth sections, index rows, regenerated trees and manifest; commit f82a8ebbd92046ee7d6f2c9897ce485d5ebc2e94",
+      "commit": "f82a8ebbd92046ee7d6f2c9897ce485d5ebc2e94",
+      "files": [
+        "skills/bee-principle-prove-it-works/",
+        "skills/bee-principle-sequence-verifiable-units/",
+        "skills/bee-principle-make-operations-idempotent/",
+        "expertise/tests.md",
+        "expertise/planning.md",
+        "expertise/operations.md",
+        "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md",
+        "docs/history/codex-harness-hardening/release-manifest.json",
+        "docs/history/pstack-playbook-port/port-notes/principles-ppb-28.md",
+        ".claude-plugin/skills/",
+        ".codex-plugin/skills/",
+        ".claude/skills/",
+        ".agents/skills/",
+        ".opencode/skills/",
+        ".bee/expertise/",
+        ".bee/onboarding.json"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test principle_index_parity && .bee/bin/bee dev release-manifest --check — green:unit — 5 parity tests passed, 878 manifest files match; leader reran class_playbook_parity at f82a8ebbd: test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+      "deviations": [],
+      "patch_id": "002cbdd35c0b0530ffdb75820234fe018af9ec56"
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 1553 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
+  },
+  "usage": {
+    "new": 92783,
+    "cached": 1121570,
+    "total": 1214353,
+    "models": {
+      "claude-sonnet-5-5": {
+        "new": 92783,
+        "cached": 1121570,
+        "total": 1214353
+      }
+    },
+    "jobs": [
+      "job-1794718102106-3599924-1"
+    ]
+  }
+}

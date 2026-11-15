@@ -1,0 +1,88 @@
+{
+  "id": "ppb-36c",
+  "feature": "pstack-playbook-port",
+  "title": "Check the bee-verifying merge",
+  "lane": "standard",
+  "role": "test",
+  "deps": [
+    "ppb-36"
+  ],
+  "decisions": [
+    "063a21e4-bccc-46a4-8fe8-1f1f99874c72",
+    "3ac421ec-168b-4007-9976-9b6bcbe6e18a",
+    "913115b3-e1f1-4004-902c-bc574fabb2f1"
+  ],
+  "files": [
+    "docs/history/pstack-playbook-port/reports/ppb-36c.md"
+  ],
+  "read_first": [
+    "docs/history/pstack-playbook-port/CONTEXT.md",
+    "docs/history/pstack-playbook-port/plan.md",
+    "/home/thanhsmind/Projects/refs/ai-skills/cursor-plugins/pstack/skills/create-verification-skill/SKILL.md",
+    "/home/thanhsmind/Projects/refs/ai-skills/cursor-plugins/pstack/skills/maintain-verification-skill/SKILL.md",
+    "skills/bee-verifying/SKILL.md",
+    "skills/bee-verify-upkeep/SKILL.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Read the pstack sources beside what ppb-36 wrote. Report each source rule as present, left out with a named bee home, or missing; any pstack-only tool name; any bee rule removed. Write docs/history/pstack-playbook-port/reports/ppb-36c.md; no other edits.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test skill_triggers",
+  "must_haves": {
+    "truths": [
+      "the report lists every source rule with present, left out or missing"
+    ],
+    "prohibitions": [
+      "No edit outside the report file"
+    ]
+  },
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "w-ppb-36c",
+    "outcome": "Checked the ppb-36 verification-skill merge: 68 pstack rules, 62 present, 6 left out with bee homes, 0 missing; no pstack-only tool, no bee rule removed; report at docs/history/pstack-playbook-port/reports/ppb-36c.md — dac33e0be",
+    "files_changed": [
+      "docs/history/pstack-playbook-port/reports/ppb-36c.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-11-15T05:18:05.857Z",
+    "behavior_change": false,
+    "verification_evidence": "report-only change; plus rg -i 'cursor|graphite|bugbot|poteto|subagent_type|model:' over both skills (no match) — green:static — checker",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "1fe39916-f67e-4233-a4da-ffc17046e993",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test skill_triggers",
+    "claimed_at": "2026-11-15T05:16:19.218Z",
+    "knowledge_delta": [],
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Checked the ppb-36 verification-skill merge: 68 pstack rules, 62 present, 6 left out with bee homes, 0 missing; no pstack-only tool, no bee rule removed; report at docs/history/pstack-playbook-port/reports/ppb-36c.md — dac33e0be",
+      "commit": "dac33e0bed7e404782d407f7fd67e47c73135a7f",
+      "files": [
+        "docs/history/pstack-playbook-port/reports/ppb-36c.md"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test skill_triggers — green:unit — report-only change; plus rg -i 'cursor|graphite|bugbot|poteto|subagent_type|model:' over both skills (no match) — green:static — checker",
+      "deviations": [],
+      "patch_id": "571cbfaf0c2ad99b7a35bf5d646c792f74cf4149"
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 191 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
+  },
+  "usage": {
+    "new": 58417,
+    "cached": 582639,
+    "total": 641056,
+    "models": {
+      "claude-opus-5-5": {
+        "new": 58417,
+        "cached": 582639,
+        "total": 641056
+      }
+    },
+    "jobs": [
+      "job-1794719784154-3923730-1"
+    ]
+  }
+}

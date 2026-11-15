@@ -1,0 +1,94 @@
+{
+  "id": "ppb-9c",
+  "feature": "pstack-playbook-port",
+  "title": "Check the feature port against its sources",
+  "lane": "standard",
+  "role": "test",
+  "deps": [
+    "ppb-9"
+  ],
+  "decisions": [
+    "063a21e4-bccc-46a4-8fe8-1f1f99874c72",
+    "5a1fc656-5549-462a-be0c-6bce5d919188",
+    "913115b3-e1f1-4004-902c-bc574fabb2f1"
+  ],
+  "files": [
+    "docs/history/pstack-playbook-port/reports/ppb-9c.md"
+  ],
+  "read_first": [
+    "docs/history/pstack-playbook-port/CONTEXT.md",
+    "docs/history/pstack-playbook-port/plan.md",
+    "skills/bee-planning/playbooks/feature.md",
+    "docs/history/pstack-playbook-port/port-notes/feature.md",
+    "/home/thanhsmind/Projects/refs/ai-skills/cursor-plugins/pstack/skills/poteto-mode/playbooks/feature.md",
+    "/home/thanhsmind/Projects/refs/ai-skills/cursor-plugins/pstack/skills/poteto-mode/playbooks/multi-phase-plan.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Read each pstack source and the old feature playbook text (git show of the commit before ppb-9) beside the new files. Report each source step and each old enforced line as present, or dropped with its port-notes entry, or missing; any pstack-only tool name under skills/bee-planning/playbooks/; any skill named that does not exist in skills/; and whether each index line matches the contract grammar. Write the report to docs/history/pstack-playbook-port/reports/ppb-9c.md; no other edits.",
+  "verify": "rg -n -i 'cursor|graphite|bugbot|poteto-agent' skills/bee-planning/playbooks/ ; test $? -eq 1",
+  "must_haves": {
+    "truths": [
+      "the report lists every source step with present, dropped or missing"
+    ],
+    "prohibitions": [
+      "No edit outside the report file"
+    ]
+  },
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "w-ppb-9c",
+    "outcome": "Checked the feature and multi-phase-plan ports against both pstack sources and the old bee feature playbook: no missing method step, fences clean, grammar ok; 4 non-blocking findings (feature/feature.md lacks the Proof floor line its D3 siblings carry, 'explore role' should be 'read', two unnoted clause drops, encode-lessons-in-structure pointer could return) — e9a483943",
+    "files_changed": [
+      "docs/history/pstack-playbook-port/reports/ppb-9c.md"
+    ],
+    "deviations": [
+      "sync-ack: playbook or report text only; regen runs once at wave close; anchored concepts are re-graded by the final writer cell"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-15T03:43:10.648Z",
+    "behavior_change": false,
+    "verification_evidence": "docs-only report cell; the fence and the situation parity test are the surfaces it touches; leader reran class_playbook_parity at e9a483943: test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "1fe39916-f67e-4233-a4da-ffc17046e993",
+    "verify_command": "rg -n -i 'cursor|graphite|bugbot|poteto-agent' skills/bee-planning/playbooks/ ; test $? -eq 1",
+    "claimed_at": "2026-11-15T03:40:29.751Z",
+    "knowledge_delta": [],
+    "sync_ack": "playbook or report text only; regen runs once at wave close; anchored concepts are re-graded by the final writer cell",
+    "no_mistakes": true,
+    "no_knowledge_used": true,
+    "no_principles_used": true,
+    "report": {
+      "outcome": "Checked the feature and multi-phase-plan ports against both pstack sources and the old bee feature playbook: no missing method step, fences clean, grammar ok; 4 non-blocking findings (feature/feature.md lacks the Proof floor line its D3 siblings carry, 'explore role' should be 'read', two unnoted clause drops, encode-lessons-in-structure pointer could return) — e9a483943",
+      "commit": "e9a48394328490497fef167cd91639c3f136d576",
+      "files": [
+        "docs/history/pstack-playbook-port/reports/ppb-9c.md"
+      ],
+      "tests": "rg -n -i 'cursor|graphite|bugbot|poteto-agent' skills/bee-planning/playbooks/ ; test $? -eq 1 — green:unit — docs-only report cell; the fence and the situation parity test are the surfaces it touches; leader reran class_playbook_parity at e9a483943: test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+      "deviations": [],
+      "knowledge_used": [],
+      "patch_id": "e309308ba9983b9fdcd410e5f3e45db30cd6221f"
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 203 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
+  },
+  "usage": {
+    "new": 88245,
+    "cached": 838684,
+    "total": 926929,
+    "models": {
+      "claude-opus-5-5": {
+        "new": 88245,
+        "cached": 838684,
+        "total": 926929
+      }
+    },
+    "jobs": [
+      "job-1794714030259-2742140-1"
+    ]
+  }
+}

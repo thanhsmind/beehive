@@ -1,0 +1,96 @@
+{
+  "id": "ppb-39c",
+  "feature": "pstack-playbook-port",
+  "title": "Check the consolidated knowledge",
+  "lane": "standard",
+  "role": "test",
+  "deps": [
+    "ppb-39"
+  ],
+  "decisions": [
+    "41bbba68-9de8-48b3-a9c7-ba1abfdd6410",
+    "913115b3-e1f1-4004-902c-bc574fabb2f1"
+  ],
+  "files": [
+    "docs/history/pstack-playbook-port/reports/ppb-39c.md"
+  ],
+  "read_first": [
+    "docs/history/pstack-playbook-port/CONTEXT.md",
+    "docs/history/pstack-playbook-port/plan.md",
+    "docs/history/pstack-playbook-port/delivery.md",
+    "docs/knowledge/index.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Run bee knowledge check, confirm each concept ppb-39 wrote names real anchors and that delivery.md matches the capped cells. Write docs/history/pstack-playbook-port/reports/ppb-39c.md; no other edits.",
+  "verify": ".bee/bin/bee knowledge check",
+  "must_haves": {
+    "truths": [
+      "bee knowledge check is green"
+    ],
+    "prohibitions": [
+      "No edit outside the report file"
+    ]
+  },
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "w-ppb-39c",
+    "outcome": "Checked the ppb-39 consolidated knowledge: knowledge check green, all 31 anchors of the situation-layer concept are real files, delivery.md covers every capped ppb cell; report written — 0d8a04a9e90c35e042d70407c5b4dfae76f2b687",
+    "files_changed": [
+      "docs/history/pstack-playbook-port/reports/ppb-39c.md"
+    ],
+    "deviations": [
+      "sync-ack: playbook or report text only; regen runs once at wave close; anchored concepts are re-graded by the final writer cell"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-15T05:40:56.577Z",
+    "behavior_change": false,
+    "verification_evidence": "exit 0, 0 OKF/profile errors, no warning on the new concept; this cell changed only a markdown report; leader reran class_playbook_parity at 0d8a04a9e: test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "1fe39916-f67e-4233-a4da-ffc17046e993",
+    "verify_command": ".bee/bin/bee knowledge check",
+    "claimed_at": "2026-11-15T05:39:03.982Z",
+    "knowledge_delta": [],
+    "sync_ack": "playbook or report text only; regen runs once at wave close; anchored concepts are re-graded by the final writer cell",
+    "no_mistakes": true,
+    "knowledge_used": [
+      {
+        "path": "docs/knowledge/areas/doctrine-layer/situation-layer-class-index-session-group-and-parity-fence.md",
+        "changed": "the claims spot-checked against situations.rs, orient.rs, plan_group.rs and LEADER.md"
+      }
+    ],
+    "no_principles_used": true,
+    "report": {
+      "outcome": "Checked the ppb-39 consolidated knowledge: knowledge check green, all 31 anchors of the situation-layer concept are real files, delivery.md covers every capped ppb cell; report written — 0d8a04a9e90c35e042d70407c5b4dfae76f2b687",
+      "commit": "0d8a04a9e90c35e042d70407c5b4dfae76f2b687",
+      "files": [
+        "docs/history/pstack-playbook-port/reports/ppb-39c.md"
+      ],
+      "tests": ".bee/bin/bee knowledge check — green:unit — exit 0, 0 OKF/profile errors, no warning on the new concept; this cell changed only a markdown report; leader reran class_playbook_parity at 0d8a04a9e: test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+      "deviations": [],
+      "knowledge_used": [
+        "docs/knowledge/areas/doctrine-layer/situation-layer-class-index-session-group-and-parity-fence.md — the claims spot-checked against situations.rs, orient.rs, plan_group.rs and LEADER.md"
+      ],
+      "patch_id": "a3ac3c51dd9add65ee42e44bd30e258a48b8defd"
+    },
+    "warnings": [],
+    "tests": "boundary"
+  },
+  "usage": {
+    "new": 60576,
+    "cached": 625593,
+    "total": 686169,
+    "models": {
+      "claude-opus-5-5": {
+        "new": 60576,
+        "cached": 625593,
+        "total": 686169
+      }
+    },
+    "jobs": [
+      "job-1794721144356-4096996-1"
+    ]
+  }
+}

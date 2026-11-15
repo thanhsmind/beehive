@@ -1,0 +1,100 @@
+{
+  "id": "ppb-38c",
+  "feature": "pstack-playbook-port",
+  "title": "Check the situation routing doctrine",
+  "lane": "standard",
+  "role": "test",
+  "deps": [
+    "ppb-38"
+  ],
+  "decisions": [
+    "41bbba68-9de8-48b3-a9c7-ba1abfdd6410",
+    "913115b3-e1f1-4004-902c-bc574fabb2f1"
+  ],
+  "files": [
+    "docs/history/pstack-playbook-port/reports/ppb-38c.md"
+  ],
+  "read_first": [
+    "docs/history/pstack-playbook-port/CONTEXT.md",
+    "docs/history/pstack-playbook-port/plan.md",
+    "packages/bee/LEADER.md",
+    ".bee/LEADER.md",
+    "skills/bee-planning/SKILL.md",
+    "skills/bee-planning/references/planning-reference.md",
+    "skills/bee-hive/references/routing-and-contracts.md",
+    "skills/bee-hive/SKILL.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Check that each surface ppb-38 changed says the same thing about situations, that no surface restates another, that every new skill the trigger index names exists in skills/, and that .bee/LEADER.md equals packages/bee/LEADER.md. Write docs/history/pstack-playbook-port/reports/ppb-38c.md; no other edits.",
+  "verify": "cmp packages/bee/LEADER.md .bee/LEADER.md",
+  "must_haves": {
+    "truths": [
+      "the report names each surface and its agreement"
+    ],
+    "prohibitions": [
+      "No edit outside the report file"
+    ]
+  },
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "w-ppb-38c",
+    "outcome": "Checked ppb-38 situation routing doctrine: all surfaces agree, 11 new trigger skills exist, LEADER copies identical; 3 consider findings — a963c71a41249647b5aa15a64118f007f39c4c67",
+    "files_changed": [
+      "docs/history/pstack-playbook-port/reports/ppb-38c.md"
+    ],
+    "deviations": [
+      "sync-ack: playbook or report text only; regen runs once at wave close; anchored concepts are re-graded by the final writer cell"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-15T05:32:14.528Z",
+    "behavior_change": false,
+    "verification_evidence": "checker cell, report-only diff; LEADER copies byte-identical (exit 0); leader reran class_playbook_parity at a963c71a4: test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "1fe39916-f67e-4233-a4da-ffc17046e993",
+    "verify_command": "cmp packages/bee/LEADER.md .bee/LEADER.md",
+    "claimed_at": "2026-11-15T05:30:45.995Z",
+    "knowledge_delta": [],
+    "sync_ack": "playbook or report text only; regen runs once at wave close; anchored concepts are re-graded by the final writer cell",
+    "no_mistakes": true,
+    "knowledge_used": [
+      {
+        "path": "docs/knowledge/patterns/20260821-a-vendored-binary-is-a-second-place-the-feature-must-land.md",
+        "changed": "prompted checking the worktree binary against the store binary for situation lines"
+      }
+    ],
+    "no_principles_used": true,
+    "report": {
+      "outcome": "Checked ppb-38 situation routing doctrine: all surfaces agree, 11 new trigger skills exist, LEADER copies identical; 3 consider findings — a963c71a41249647b5aa15a64118f007f39c4c67",
+      "commit": "a963c71a41249647b5aa15a64118f007f39c4c67",
+      "files": [
+        "docs/history/pstack-playbook-port/reports/ppb-38c.md"
+      ],
+      "tests": "cmp packages/bee/LEADER.md .bee/LEADER.md — green:unit — checker cell, report-only diff; LEADER copies byte-identical (exit 0); leader reran class_playbook_parity at a963c71a4: test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+      "deviations": [],
+      "knowledge_used": [
+        "docs/knowledge/patterns/20260821-a-vendored-binary-is-a-second-place-the-feature-must-land.md — prompted checking the worktree binary against the store binary for situation lines"
+      ],
+      "patch_id": "48c7d3d57f8d1ceb64dc0ceb9590404d22fe049e"
+    },
+    "warnings": [],
+    "tests": "boundary"
+  },
+  "usage": {
+    "new": 50554,
+    "cached": 483862,
+    "total": 534416,
+    "models": {
+      "claude-opus-5-5": {
+        "new": 50554,
+        "cached": 483862,
+        "total": 534416
+      }
+    },
+    "jobs": [
+      "job-1794720646554-3982590-1"
+    ]
+  }
+}

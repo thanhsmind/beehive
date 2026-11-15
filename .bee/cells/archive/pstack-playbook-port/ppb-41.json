@@ -1,0 +1,133 @@
+{
+  "id": "ppb-41",
+  "feature": "pstack-playbook-port",
+  "title": "Close the missing rules in the bee-how and bee-why merges",
+  "lane": "standard",
+  "role": "docs",
+  "deps": [],
+  "decisions": [
+    "063a21e4-bccc-46a4-8fe8-1f1f99874c72",
+    "3ac421ec-168b-4007-9976-9b6bcbe6e18a",
+    "913115b3-e1f1-4004-902c-bc574fabb2f1"
+  ],
+  "files": [
+    "skills/bee-researching/references/trace-and-provenance.md",
+    "skills/bee-how/SKILL.md",
+    "skills/bee-why/SKILL.md",
+    ".claude-plugin/skills/bee-researching/",
+    ".codex-plugin/skills/bee-researching/",
+    ".agents/skills/bee-researching/",
+    ".opencode/skills/bee-researching/",
+    ".claude-plugin/skills/bee-how/",
+    ".codex-plugin/skills/bee-how/",
+    ".agents/skills/bee-how/",
+    ".opencode/skills/bee-how/",
+    ".claude-plugin/skills/bee-why/",
+    ".codex-plugin/skills/bee-why/",
+    ".agents/skills/bee-why/",
+    ".opencode/skills/bee-why/",
+    "docs/history/codex-harness-hardening/release-manifest.json",
+    "docs/history/pstack-playbook-port/port-notes/merge-ppb-31.md",
+    "docs/history/pstack-playbook-port/port-notes/merge-ppb-32.md"
+  ],
+  "read_first": [
+    "docs/history/pstack-playbook-port/CONTEXT.md",
+    "docs/history/pstack-playbook-port/plan.md",
+    "docs/history/pstack-playbook-port/reports/ppb-31c.md",
+    "docs/history/pstack-playbook-port/reports/ppb-32c.md",
+    "skills/bee-researching/references/trace-and-provenance.md",
+    "skills/bee-how/SKILL.md",
+    "skills/bee-why/SKILL.md",
+    "/home/thanhsmind/Projects/refs/ai-skills/cursor-plugins/pstack/skills/how/SKILL.md",
+    "/home/thanhsmind/Projects/refs/ai-skills/cursor-plugins/pstack/skills/why/SKILL.md"
+  ],
+  "affects_skills": [
+    "skills/bee-researching/references/trace-and-provenance.md",
+    "skills/bee-how/SKILL.md",
+    "skills/bee-why/SKILL.md"
+  ],
+  "affects_specs": [],
+  "action": "Every row the checkers marked missing comes in, in bee's voice, in its single home (Trace and Provenance sweep live in trace-and-provenance.md; bee-how and bee-why stay doors): from ppb-31c M1 (spawn every explorer in one turn), M2 (the Flow return carries the data passed between steps), M3 (How it works is the core and the longest section), M4 (the walkthrough-before-a-change trigger in the bee-how description, under 300 characters), M5 (fan out when an inline pass finds more entry points); from ppb-32c each row marked missing (follow in-row links, reconcile one source cited by several rows, follow duplicate and reopen history, take the finalized draft, a low count may be sampling, a step in volume may be new logging, never report from a source you never confirmed exists) written tool-free. Mark each in the port notes. Run bee dev regen and commit. Bee commands you may run: cargo test, `.bee/bin/bee dev regen`, `.bee/bin/bee dev release-manifest --check`, `bee herding notify`; never `bee dispatch`.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test skill_triggers && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test pointer_integrity && .bee/bin/bee dev release-manifest --check",
+  "must_haves": {
+    "truths": [
+      "every row ppb-31c and ppb-32c marked missing is present in its bee home"
+    ],
+    "prohibitions": [
+      "No rule restated outside its single home"
+    ]
+  },
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "w-ppb-41",
+    "outcome": "Closed every missing row from ppb-31c and ppb-32c in Trace and Provenance, bee-how description and port notes; commit 89b95c3a9",
+    "files_changed": [
+      "skills/bee-researching/references/trace-and-provenance.md",
+      "skills/bee-how/SKILL.md",
+      "docs/history/pstack-playbook-port/port-notes/merge-ppb-31.md",
+      "docs/history/pstack-playbook-port/port-notes/merge-ppb-32.md",
+      "docs/history/codex-harness-hardening/release-manifest.json",
+      ".bee/onboarding.json",
+      ".agents/skills",
+      ".claude-plugin/skills",
+      ".codex-plugin/skills",
+      ".opencode/skills"
+    ],
+    "deviations": [
+      "sync-ack: playbook or report text only; regen runs once at wave close; anchored concepts are re-graded by the final writer cell"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-15T05:51:28.625Z",
+    "behavior_change": false,
+    "verification_evidence": "the change is skill prose, descriptions and render copies, covered by the description budget, pointer and manifest checks; leader reran class_playbook_parity at 89b95c3a9: test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "1fe39916-f67e-4233-a4da-ffc17046e993",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test skill_triggers && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test pointer_integrity && .bee/bin/bee dev release-manifest --check",
+    "claimed_at": "2026-11-15T05:50:28.953Z",
+    "knowledge_delta": [],
+    "sync_ack": "playbook or report text only; regen runs once at wave close; anchored concepts are re-graded by the final writer cell",
+    "no_mistakes": true,
+    "no_knowledge_used": true,
+    "no_principles_used": true,
+    "report": {
+      "outcome": "Closed every missing row from ppb-31c and ppb-32c in Trace and Provenance, bee-how description and port notes; commit 89b95c3a9",
+      "commit": "89b95c3a946e3d6c09938d604b36f21b0c633ac7",
+      "files": [
+        "skills/bee-researching/references/trace-and-provenance.md",
+        "skills/bee-how/SKILL.md",
+        "docs/history/pstack-playbook-port/port-notes/merge-ppb-31.md",
+        "docs/history/pstack-playbook-port/port-notes/merge-ppb-32.md",
+        "docs/history/codex-harness-hardening/release-manifest.json",
+        ".bee/onboarding.json",
+        ".agents/skills",
+        ".claude-plugin/skills",
+        ".codex-plugin/skills",
+        ".opencode/skills"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test skill_triggers && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test pointer_integrity && .bee/bin/bee dev release-manifest --check — green:unit — the change is skill prose, descriptions and render copies, covered by the description budget, pointer and manifest checks; leader reran class_playbook_parity at 89b95c3a9: test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+      "deviations": [],
+      "patch_id": "65e9b7c04147c0b42781a81e91eab6a768ab1176"
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 216 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
+  },
+  "usage": {
+    "new": 61018,
+    "cached": 418232,
+    "total": 479250,
+    "models": {
+      "claude-sonnet-5-5": {
+        "new": 61018,
+        "cached": 418232,
+        "total": 479250
+      }
+    },
+    "jobs": [
+      "job-1794721830002-18790-1"
+    ]
+  }
+}

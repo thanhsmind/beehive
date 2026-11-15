@@ -1,0 +1,94 @@
+{
+  "id": "ppb-2",
+  "feature": "pstack-playbook-port",
+  "title": "Hold a plan to a situation playbook",
+  "lane": "standard",
+  "role": "code",
+  "deps": [
+    "ppb-1t"
+  ],
+  "decisions": [
+    "41bbba68-9de8-48b3-a9c7-ba1abfdd6410",
+    "913115b3-e1f1-4004-902c-bc574fabb2f1"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/plan_group.rs"
+  ],
+  "read_first": [
+    "docs/history/pstack-playbook-port/CONTEXT.md",
+    "docs/history/pstack-playbook-port/plan.md",
+    "packages/bee-rs/crates/bee/src/verbs/plan_group.rs",
+    "packages/bee-rs/crates/bee/src/situations.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "In plan_group.rs playbook_findings, read the routed class's situations through situations.rs. When the class lists one or more situations: a plan citing skills/bee-planning/playbooks/<class>/<name>.md for a listed name passes; a plan citing only the class index is a finding whose detail names each listed situation path. When the class lists none, today's class-index rule holds unchanged. With no class known, a citation of playbooks/<class>/<name>.md counts as a playbook citation as well as playbooks/<name>.md. The inline tests your change flips are yours; new tests belong to ppb-2t.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee plan_group",
+  "must_haves": {
+    "truths": [
+      "a bugfix route whose plan cites only bugfix.md yields one playbook finding naming bugfix/bug-fix.md",
+      "a bugfix route whose plan cites bugfix/bug-fix.md has no playbook finding",
+      "a perf route citing perf.md still passes while perf lists no situation",
+      "a plan with no route class citing only bugfix/bug-fix.md has no playbook finding"
+    ],
+    "prohibitions": [
+      "No other plan-check finding changes"
+    ]
+  },
+  "status": "capped",
+  "trace": {
+    "worker": "w-ppb-2",
+    "outcome": "plan check holds a plan to a situation playbook when the class lists situations; d23bb0fb4e2432349bc9ff58ed3878a0af953205",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/plan_group.rs",
+      "docs/knowledge/areas/doctrine-layer/per-task-route-tester-pairing-and-proof-floors.md"
+    ],
+    "deviations": [
+      "sync-ack: plan_group.rs change plus the per-task-route concept updated in the commit; other concepts anchored by plan_group.rs were suspect before and are re-graded by the final writer cell"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-15T02:55:30.113Z",
+    "behavior_change": false,
+    "verification_evidence": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee plan_group — green:unit — the 8 plan_group tests cover the changed function",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "1fe39916-f67e-4233-a4da-ffc17046e993",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee plan_group",
+    "claimed_at": "2026-11-15T02:53:03.702Z",
+    "knowledge_delta": [
+      "docs/knowledge/areas/doctrine-layer/per-task-route-tester-pairing-and-proof-floors.md"
+    ],
+    "sync_ack": "plan_group.rs change plus the per-task-route concept updated in the commit; other concepts anchored by plan_group.rs were suspect before and are re-graded by the final writer cell",
+    "no_mistakes": true,
+    "no_knowledge_used": true,
+    "no_principles_used": true,
+    "report": {
+      "outcome": "plan check holds a plan to a situation playbook when the class lists situations; d23bb0fb4e2432349bc9ff58ed3878a0af953205",
+      "commit": "d23bb0fb4e2432349bc9ff58ed3878a0af953205",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/plan_group.rs",
+        "docs/knowledge/areas/doctrine-layer/per-task-route-tester-pairing-and-proof-floors.md"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee plan_group — green:unit — cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee plan_group — green:unit — the 8 plan_group tests cover the changed function",
+      "deviations": [],
+      "patch_id": "60127f12e57300053a120c3f76c0577ac78464f8"
+    },
+    "warnings": [],
+    "tests": "boundary"
+  },
+  "usage": {
+    "new": 37781,
+    "cached": 235138,
+    "total": 272919,
+    "models": {
+      "claude-sonnet-5-5": {
+        "new": 37781,
+        "cached": 235138,
+        "total": 272919
+      }
+    },
+    "jobs": [
+      "job-1794711184216-2362975-1"
+    ]
+  }
+}

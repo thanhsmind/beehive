@@ -1,0 +1,156 @@
+{
+  "id": "ppb-26",
+  "feature": "pstack-playbook-port",
+  "title": "Port the pstack principles foundational-thinking, redesign-from-first-principles, outcome-oriented-execution",
+  "lane": "standard",
+  "role": "docs",
+  "deps": [],
+  "decisions": [
+    "063a21e4-bccc-46a4-8fe8-1f1f99874c72",
+    "3ac421ec-168b-4007-9976-9b6bcbe6e18a",
+    "6ca3cd62-c65d-499b-9351-7128c63c80b9",
+    "913115b3-e1f1-4004-902c-bc574fabb2f1"
+  ],
+  "files": [
+    "skills/bee-principle-foundational-thinking/",
+    "skills/bee-principle-redesign-from-first-principles/",
+    "skills/bee-principle-outcome-oriented-execution/",
+    "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md",
+    "expertise/planning.md",
+    "expertise/architecture.md",
+    "docs/history/codex-harness-hardening/release-manifest.json",
+    ".claude-plugin/skills/bee-principle-foundational-thinking/",
+    ".claude-plugin/skills/bee-principle-redesign-from-first-principles/",
+    ".claude-plugin/skills/bee-principle-outcome-oriented-execution/",
+    ".codex-plugin/skills/bee-principle-foundational-thinking/",
+    ".codex-plugin/skills/bee-principle-redesign-from-first-principles/",
+    ".codex-plugin/skills/bee-principle-outcome-oriented-execution/",
+    ".claude/skills/bee-principle-foundational-thinking/",
+    ".claude/skills/bee-principle-redesign-from-first-principles/",
+    ".claude/skills/bee-principle-outcome-oriented-execution/",
+    ".agents/skills/bee-principle-foundational-thinking/",
+    ".agents/skills/bee-principle-redesign-from-first-principles/",
+    ".agents/skills/bee-principle-outcome-oriented-execution/",
+    ".opencode/skills/bee-principle-foundational-thinking/",
+    ".opencode/skills/bee-principle-redesign-from-first-principles/",
+    ".opencode/skills/bee-principle-outcome-oriented-execution/",
+    "docs/history/pstack-playbook-port/port-notes/principles-ppb-26.md"
+  ],
+  "read_first": [
+    "docs/history/pstack-playbook-port/CONTEXT.md",
+    "docs/history/pstack-playbook-port/plan.md",
+    "skills/bee-principle-subtract-before-you-add/SKILL.md",
+    "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md",
+    "/home/thanhsmind/Projects/refs/ai-skills/cursor-plugins/pstack/skills/principle-foundational-thinking/SKILL.md",
+    "/home/thanhsmind/Projects/refs/ai-skills/cursor-plugins/pstack/skills/principle-redesign-from-first-principles/SKILL.md",
+    "/home/thanhsmind/Projects/refs/ai-skills/cursor-plugins/pstack/skills/principle-outcome-oriented-execution/SKILL.md",
+    "expertise/planning.md",
+    "expertise/architecture.md"
+  ],
+  "affects_skills": [
+    "skills/bee-principle-foundational-thinking/SKILL.md",
+    "skills/bee-principle-redesign-from-first-principles/SKILL.md",
+    "skills/bee-principle-outcome-oriented-execution/SKILL.md"
+  ],
+  "affects_specs": [],
+  "action": "For each slug, create skills/bee-principle-<slug>/SKILL.md from pstack principle-<slug>, in the exact shape of skills/bee-principle-subtract-before-you-add/SKILL.md (description 'Apply when ...', body, Check, Not when, Why, Depth). Put the depth into a new section of the expertise guide named in files whose craft it belongs to, and point Depth at that section. Add one row per slug to the '## Principle homes' section of docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md, in the existing row grammar: the guide anchor, a spoken line, a classes line naming the route classes it fires for (from the nine), then applied_at. Pick the classes from the pstack 'when it applies' line. No line names Cursor, Graphite, bugbot or poteto-agent; no hand-picked model or subagent_type; tools become bee counterparts per D2. Copy the pstack LICENSE verbatim to each new skill directory as LICENSE.pstack. Run bee dev regen and commit the rendered trees and the manifest with the cell. Write docs/history/pstack-playbook-port/port-notes/principles-ppb-26.md.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test principle_index_parity && .bee/bin/bee dev release-manifest --check",
+  "must_haves": {
+    "truths": [
+      "skills/bee-principle-foundational-thinking/SKILL.md exists and has an index row with spoken and classes lines",
+      "skills/bee-principle-redesign-from-first-principles/SKILL.md exists and has an index row with spoken and classes lines",
+      "skills/bee-principle-outcome-oriented-execution/SKILL.md exists and has an index row with spoken and classes lines",
+      "principle_index_parity is green"
+    ],
+    "prohibitions": [
+      "No existing principle row is changed"
+    ]
+  },
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "w-ppb-26",
+    "outcome": "Ported foundational-thinking, redesign-from-first-principles and outcome-oriented-execution as bee principle skills with depth sections, index rows, rendered trees and manifest; commit 06e570157",
+    "files_changed": [
+      "skills/bee-principle-foundational-thinking/",
+      "skills/bee-principle-redesign-from-first-principles/",
+      "skills/bee-principle-outcome-oriented-execution/",
+      "expertise/architecture.md",
+      "expertise/planning.md",
+      "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md",
+      "docs/history/codex-harness-hardening/release-manifest.json",
+      ".claude-plugin/skills/",
+      ".codex-plugin/skills/",
+      ".claude/skills/",
+      ".agents/skills/",
+      ".opencode/skills/",
+      ".bee/expertise/architecture.md",
+      ".bee/expertise/planning.md",
+      ".bee/onboarding.json",
+      "docs/history/pstack-playbook-port/port-notes/principles-ppb-26.md"
+    ],
+    "deviations": [
+      "sync-ack: playbook or report text only; regen runs once at wave close; anchored concepts are re-graded by the final writer cell"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-15T04:45:39.524Z",
+    "behavior_change": false,
+    "verification_evidence": "docs port: 5 parity tests passed, 842 manifest files match; leader reran class_playbook_parity at 06e570157: test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "1fe39916-f67e-4233-a4da-ffc17046e993",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test principle_index_parity && .bee/bin/bee dev release-manifest --check",
+    "claimed_at": "2026-11-15T04:42:59.737Z",
+    "knowledge_delta": [
+      "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md"
+    ],
+    "sync_ack": "playbook or report text only; regen runs once at wave close; anchored concepts are re-graded by the final writer cell",
+    "no_mistakes": true,
+    "no_knowledge_used": true,
+    "no_principles_used": true,
+    "report": {
+      "outcome": "Ported foundational-thinking, redesign-from-first-principles and outcome-oriented-execution as bee principle skills with depth sections, index rows, rendered trees and manifest; commit 06e570157",
+      "commit": "06e570157e22de4627a80bc6334d3f3eed199ffe",
+      "files": [
+        "skills/bee-principle-foundational-thinking/",
+        "skills/bee-principle-redesign-from-first-principles/",
+        "skills/bee-principle-outcome-oriented-execution/",
+        "expertise/architecture.md",
+        "expertise/planning.md",
+        "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md",
+        "docs/history/codex-harness-hardening/release-manifest.json",
+        ".claude-plugin/skills/",
+        ".codex-plugin/skills/",
+        ".claude/skills/",
+        ".agents/skills/",
+        ".opencode/skills/",
+        ".bee/expertise/architecture.md",
+        ".bee/expertise/planning.md",
+        ".bee/onboarding.json",
+        "docs/history/pstack-playbook-port/port-notes/principles-ppb-26.md"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test principle_index_parity && .bee/bin/bee dev release-manifest --check — green:unit — docs port: 5 parity tests passed, 842 manifest files match; leader reran class_playbook_parity at 06e570157: test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+      "deviations": [],
+      "patch_id": "c8caf330032ac93abb73928724d9a4d6aa8d0402"
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 1391 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
+  },
+  "usage": {
+    "new": 97868,
+    "cached": 1268182,
+    "total": 1366050,
+    "models": {
+      "claude-sonnet-5-5": {
+        "new": 97868,
+        "cached": 1268182,
+        "total": 1366050
+      }
+    },
+    "jobs": [
+      "job-1794717781327-3577683-1"
+    ]
+  }
+}

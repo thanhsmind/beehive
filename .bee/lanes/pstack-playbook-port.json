@@ -2,24 +2,19 @@
   "schema_version": "1.0",
   "feature": "pstack-playbook-port",
   "mode": "standard",
-  "phase": "swarming",
+  "phase": "compounding",
   "approved_gates": {
     "context": true,
     "shape": true,
     "execution": true,
     "review": false,
-    "uat": false
+    "uat": true
   },
   "summary": "Feature \"pstack-playbook-port\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at 216ef49; reload the product and test \"pstack-playbook-port\", then either approve uat (\"bee gate --name uat --approved true --lane pstack-playbook-port\") or fix it in the worktree and merge again.",
+  "next_action": "close",
   "created_at": "2026-11-15T02:27:08.857Z",
-  "run_state": "awaiting-approval",
-  "waiting_on": {
-    "kind": "gate",
-    "subject": "uat: pstack-playbook-port",
-    "asked_at": "2026-11-15T05:56:43.722Z",
-    "session": "bee-worktree-merge-sessionless"
-  },
+  "run_state": "done",
+  "waiting_on": null,
   "route": {
     "class": "feature",
     "lane": "standard",
@@ -517,5 +512,15 @@
   },
   "gate_revoked_at": {
     "execution": "2026-11-15T05:50:18.499Z"
+  },
+  "last_scribing_run": {
+    "feature": "pstack-playbook-port",
+    "date": "2026-11-15",
+    "at": "2026-11-15T05:56:43.852Z",
+    "areas_synced": [
+      "doctrine-layer",
+      "workflow-state"
+    ],
+    "next_action": "close"
   }
 }

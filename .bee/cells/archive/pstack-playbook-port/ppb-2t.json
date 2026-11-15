@@ -1,0 +1,87 @@
+{
+  "id": "ppb-2t",
+  "feature": "pstack-playbook-port",
+  "title": "Test the situation citation rule",
+  "lane": "standard",
+  "role": "test",
+  "deps": [
+    "ppb-2"
+  ],
+  "decisions": [
+    "41bbba68-9de8-48b3-a9c7-ba1abfdd6410",
+    "913115b3-e1f1-4004-902c-bc574fabb2f1"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/plan_group.rs"
+  ],
+  "read_first": [
+    "docs/history/pstack-playbook-port/CONTEXT.md",
+    "docs/history/pstack-playbook-port/plan.md",
+    "packages/bee-rs/crates/bee/src/verbs/plan_group.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Cite plan_group_missing_playbook_citation_is_a_playbook_finding and its neighbours, then add only the gap in the inline test module: situation cited passes, index-only cited fails naming the situation paths, a class with no situations keeps the index rule, a no-class plan citing only a situation path passes, a name not listed on the index does not count.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee plan_group",
+  "must_haves": {
+    "truths": [
+      "each truth of ppb-2 has a test that fails if the behavior is removed"
+    ],
+    "prohibitions": [
+      "No edit outside the test module"
+    ]
+  },
+  "status": "capped",
+  "trace": {
+    "worker": "w-ppb-2t",
+    "outcome": "Added 5 plan_group tests pinning situation cited, index-only, unlisted name, no-situation class and no-class citation rules; each red under a mutation of ppb-2 code — 45ee41a923c6ede021955130c42ab646e16aa676",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/plan_group.rs"
+    ],
+    "deviations": [
+      "sync-ack: test module of plan_group.rs only; anchored concepts re-graded by the final writer cell"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-15T03:04:18.153Z",
+    "behavior_change": false,
+    "verification_evidence": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee plan_group — green:unit — tester for ppb-2, test module of plan_group.rs only (13 passed; 5 mutations each turned a new test red)",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "1fe39916-f67e-4233-a4da-ffc17046e993",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee plan_group",
+    "claimed_at": "2026-11-15T02:55:30.515Z",
+    "knowledge_delta": [],
+    "sync_ack": "test module of plan_group.rs only; anchored concepts re-graded by the final writer cell",
+    "no_mistakes": true,
+    "no_knowledge_used": true,
+    "no_principles_used": true,
+    "report": {
+      "outcome": "Added 5 plan_group tests pinning situation cited, index-only, unlisted name, no-situation class and no-class citation rules; each red under a mutation of ppb-2 code — 45ee41a923c6ede021955130c42ab646e16aa676",
+      "commit": "45ee41a923c6ede021955130c42ab646e16aa676",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/plan_group.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee plan_group — green:unit — PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee plan_group — green:unit — tester for ppb-2, test module of plan_group.rs only (13 passed; 5 mutations each turned a new test red)",
+      "deviations": [],
+      "knowledge_used": [],
+      "patch_id": "471d7ba81751d7a084ddce789396612b4db09a8c"
+    },
+    "warnings": [],
+    "tests": "boundary"
+  },
+  "usage": {
+    "new": 51194,
+    "cached": 483085,
+    "total": 534279,
+    "models": {
+      "claude-opus-5-5": {
+        "new": 51194,
+        "cached": 483085,
+        "total": 534279
+      }
+    },
+    "jobs": [
+      "job-1794711331007-2384595-1"
+    ]
+  }
+}

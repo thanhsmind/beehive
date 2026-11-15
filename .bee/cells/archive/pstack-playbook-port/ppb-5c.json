@@ -1,0 +1,94 @@
+{
+  "id": "ppb-5c",
+  "feature": "pstack-playbook-port",
+  "title": "Check the perf port against its sources",
+  "lane": "standard",
+  "role": "test",
+  "deps": [
+    "ppb-5"
+  ],
+  "decisions": [
+    "063a21e4-bccc-46a4-8fe8-1f1f99874c72",
+    "5a1fc656-5549-462a-be0c-6bce5d919188",
+    "913115b3-e1f1-4004-902c-bc574fabb2f1"
+  ],
+  "files": [
+    "docs/history/pstack-playbook-port/reports/ppb-5c.md"
+  ],
+  "read_first": [
+    "docs/history/pstack-playbook-port/CONTEXT.md",
+    "docs/history/pstack-playbook-port/plan.md",
+    "skills/bee-planning/playbooks/perf.md",
+    "docs/history/pstack-playbook-port/port-notes/perf.md",
+    "/home/thanhsmind/Projects/refs/ai-skills/cursor-plugins/pstack/skills/poteto-mode/playbooks/perf-issue.md",
+    "/home/thanhsmind/Projects/refs/ai-skills/cursor-plugins/pstack/skills/poteto-mode/playbooks/hillclimb.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Read each pstack source and the old perf playbook text (git show of the commit before ppb-5) beside the new files. Report each source step and each old enforced line as present, or dropped with its port-notes entry, or missing; any pstack-only tool name under skills/bee-planning/playbooks/; any skill named that does not exist in skills/; and whether each index line matches the contract grammar. Write the report to docs/history/pstack-playbook-port/reports/ppb-5c.md; no other edits.",
+  "verify": "rg -n -i 'cursor|graphite|bugbot|poteto-agent' skills/bee-planning/playbooks/ ; test $? -eq 1",
+  "must_haves": {
+    "truths": [
+      "the report lists every source step with present, dropped or missing"
+    ],
+    "prohibitions": [
+      "No edit outside the report file"
+    ]
+  },
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "w-ppb-5c",
+    "outcome": "Checked the perf port: every perf-issue and hillclimb source step present or dropped with a note, old lines kept, fence clean, grammar holds; one likely trail-revert finding; commit 376db036d",
+    "files_changed": [
+      "docs/history/pstack-playbook-port/reports/ppb-5c.md"
+    ],
+    "deviations": [
+      "sync-ack: playbook or report text only; regen runs once at wave close; anchored concepts are re-graded by the final writer cell"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-15T03:32:31.567Z",
+    "behavior_change": false,
+    "verification_evidence": "report-only checker cell; plus cargo test -p bee --test class_playbook_parity 9 passed; leader reran class_playbook_parity at 376db036d: test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "1fe39916-f67e-4233-a4da-ffc17046e993",
+    "verify_command": "rg -n -i 'cursor|graphite|bugbot|poteto-agent' skills/bee-planning/playbooks/ ; test $? -eq 1",
+    "claimed_at": "2026-11-15T03:30:17.344Z",
+    "knowledge_delta": [],
+    "sync_ack": "playbook or report text only; regen runs once at wave close; anchored concepts are re-graded by the final writer cell",
+    "no_mistakes": true,
+    "no_knowledge_used": true,
+    "no_principles_used": true,
+    "report": {
+      "outcome": "Checked the perf port: every perf-issue and hillclimb source step present or dropped with a note, old lines kept, fence clean, grammar holds; one likely trail-revert finding; commit 376db036d",
+      "commit": "376db036d6e1f0240980a391082ba62a0f888536",
+      "files": [
+        "docs/history/pstack-playbook-port/reports/ppb-5c.md"
+      ],
+      "tests": "rg -n -i 'cursor|graphite|bugbot|poteto-agent' skills/bee-planning/playbooks/ ; test $? -eq 1 — green:unit — report-only checker cell; plus cargo test -p bee --test class_playbook_parity 9 passed; leader reran class_playbook_parity at 376db036d: test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+      "deviations": [],
+      "knowledge_used": [],
+      "patch_id": "c1a90592aa3f485c4f1ea7fa568e293c116558b9"
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 175 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
+  },
+  "usage": {
+    "new": 72572,
+    "cached": 556623,
+    "total": 629195,
+    "models": {
+      "claude-opus-5-5": {
+        "new": 72572,
+        "cached": 556623,
+        "total": 629195
+      }
+    },
+    "jobs": [
+      "job-1794713418664-2681717-1"
+    ]
+  }
+}

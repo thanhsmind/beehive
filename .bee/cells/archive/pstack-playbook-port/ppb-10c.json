@@ -1,0 +1,85 @@
+{
+  "id": "ppb-10c",
+  "feature": "pstack-playbook-port",
+  "title": "Check the docs port against its sources",
+  "lane": "standard",
+  "role": "test",
+  "deps": [
+    "ppb-10"
+  ],
+  "decisions": [
+    "063a21e4-bccc-46a4-8fe8-1f1f99874c72",
+    "5a1fc656-5549-462a-be0c-6bce5d919188",
+    "913115b3-e1f1-4004-902c-bc574fabb2f1"
+  ],
+  "files": [
+    "docs/history/pstack-playbook-port/reports/ppb-10c.md"
+  ],
+  "read_first": [
+    "docs/history/pstack-playbook-port/CONTEXT.md",
+    "docs/history/pstack-playbook-port/plan.md",
+    "skills/bee-planning/playbooks/docs.md",
+    "docs/history/pstack-playbook-port/port-notes/docs.md",
+    "/home/thanhsmind/Projects/refs/ai-skills/cursor-plugins/pstack/skills/poteto-mode/playbooks/authoring-a-skill.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Read each pstack source and the old docs playbook text (git show of the commit before ppb-10) beside the new files. Report each source step and each old enforced line as present, or dropped with its port-notes entry, or missing; any pstack-only tool name under skills/bee-planning/playbooks/; any skill named that does not exist in skills/; and whether each index line matches the contract grammar. Write the report to docs/history/pstack-playbook-port/reports/ppb-10c.md; no other edits.",
+  "verify": "rg -n -i 'cursor|graphite|bugbot|poteto-agent' skills/bee-planning/playbooks/ ; test $? -eq 1",
+  "must_haves": {
+    "truths": [
+      "the report lists every source step with present, dropped or missing"
+    ],
+    "prohibitions": [
+      "No edit outside the report file"
+    ]
+  },
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "w-ppb-10c",
+    "outcome": "Checked ppb-10 docs/release/content port: every pstack authoring-a-skill step present (3 swapped, noted), old texts moved byte-identical, 4 index lines match grammar, no pstack tool names, all named skills exist; report committed b7032a750b35daba0faed476624c6f9e7922ce16",
+    "files_changed": [
+      "docs/history/pstack-playbook-port/reports/ppb-10c.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-11-15T03:20:50.845Z",
+    "behavior_change": false,
+    "verification_evidence": "exit 0, cell verify; plus cargo test --release --test class_playbook_parity — green:unit — 9 passed, scoped to the situation fence since only a report file changed",
+    "verify_output": "green:static",
+    "verify_passed": true,
+    "claim_session": "1fe39916-f67e-4233-a4da-ffc17046e993",
+    "verify_command": "rg -n -i 'cursor|graphite|bugbot|poteto-agent' skills/bee-planning/playbooks/ ; test $? -eq 1",
+    "claimed_at": "2026-11-15T03:19:23.654Z",
+    "knowledge_delta": [],
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Checked ppb-10 docs/release/content port: every pstack authoring-a-skill step present (3 swapped, noted), old texts moved byte-identical, 4 index lines match grammar, no pstack tool names, all named skills exist; report committed b7032a750b35daba0faed476624c6f9e7922ce16",
+      "commit": "b7032a750b35daba0faed476624c6f9e7922ce16",
+      "files": [
+        "docs/history/pstack-playbook-port/reports/ppb-10c.md"
+      ],
+      "tests": "rg -n -i 'cursor|graphite|bugbot|poteto-agent' skills/bee-planning/playbooks/ ; test $? -eq 1 — green:static — exit 0, cell verify; plus cargo test --release --test class_playbook_parity — green:unit — 9 passed, scoped to the situation fence since only a report file changed",
+      "deviations": [],
+      "patch_id": "3190735e7eb9bb4fe0d6defb6d9133eb36b2d358"
+    },
+    "warnings": [],
+    "tests": "boundary"
+  },
+  "usage": {
+    "new": 51636,
+    "cached": 500685,
+    "total": 552321,
+    "models": {
+      "claude-opus-5-5": {
+        "new": 51636,
+        "cached": 500685,
+        "total": 552321
+      }
+    },
+    "jobs": [
+      "job-1794712764919-2612630-1"
+    ]
+  }
+}

@@ -1,0 +1,96 @@
+{
+  "id": "ppb-12c",
+  "feature": "pstack-playbook-port",
+  "title": "Check the session port against its sources",
+  "lane": "standard",
+  "role": "test",
+  "deps": [
+    "ppb-12"
+  ],
+  "decisions": [
+    "063a21e4-bccc-46a4-8fe8-1f1f99874c72",
+    "5a1fc656-5549-462a-be0c-6bce5d919188",
+    "913115b3-e1f1-4004-902c-bc574fabb2f1"
+  ],
+  "files": [
+    "docs/history/pstack-playbook-port/reports/ppb-12c.md"
+  ],
+  "read_first": [
+    "docs/history/pstack-playbook-port/CONTEXT.md",
+    "docs/history/pstack-playbook-port/plan.md",
+    "skills/bee-planning/playbooks/session/index.md",
+    "docs/history/pstack-playbook-port/port-notes/session-ppb-12.md",
+    "/home/thanhsmind/Projects/refs/ai-skills/cursor-plugins/pstack/skills/poteto-mode/playbooks/babysit.md",
+    "/home/thanhsmind/Projects/refs/ai-skills/cursor-plugins/pstack/skills/poteto-mode/playbooks/shipping.md",
+    "/home/thanhsmind/Projects/refs/ai-skills/cursor-plugins/pstack/skills/poteto-mode/playbooks/autopilot-full.md",
+    "/home/thanhsmind/Projects/refs/ai-skills/cursor-plugins/pstack/skills/poteto-mode/playbooks/autopilot-stack.md",
+    "/home/thanhsmind/Projects/refs/ai-skills/cursor-plugins/pstack/skills/poteto-mode/playbooks/opening-a-pr.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Read each pstack source and the old session playbook text (git show of the commit before ppb-12) beside the new files. Report each source step and each old enforced line as present, or dropped with its port-notes entry, or missing; any pstack-only tool name under skills/bee-planning/playbooks/; any skill named that does not exist in skills/; and whether each index line matches the contract grammar. Write the report to docs/history/pstack-playbook-port/reports/ppb-12c.md; no other edits.",
+  "verify": "rg -n -i 'cursor|graphite|bugbot|poteto-agent' skills/bee-planning/playbooks/ ; test $? -eq 1",
+  "must_haves": {
+    "truths": [
+      "the report lists every source step with present, dropped or missing"
+    ],
+    "prohibitions": [
+      "No edit outside the report file"
+    ]
+  },
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "w-ppb-12c",
+    "outcome": "Checked the five ppb-12 session playbooks against pstack: every source step present, dropped with a note or changed under D4; fence clean, skills exist, index grammar holds; 2 findings (babysit waits for CLEAN on bee draft PRs; autopilot owners rebase while orchestrate forbids it) — 422729836",
+    "files_changed": [
+      "docs/history/pstack-playbook-port/reports/ppb-12c.md"
+    ],
+    "deviations": [
+      "sync-ack: playbook or report text only; regen runs once at wave close; anchored concepts are re-graded by the final writer cell"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-15T03:30:16.898Z",
+    "behavior_change": false,
+    "verification_evidence": "report-only checker cell, no code changed; leader reran class_playbook_parity at 422729836: test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "1fe39916-f67e-4233-a4da-ffc17046e993",
+    "verify_command": "rg -n -i 'cursor|graphite|bugbot|poteto-agent' skills/bee-planning/playbooks/ ; test $? -eq 1",
+    "claimed_at": "2026-11-15T03:26:43.205Z",
+    "knowledge_delta": [],
+    "sync_ack": "playbook or report text only; regen runs once at wave close; anchored concepts are re-graded by the final writer cell",
+    "no_mistakes": true,
+    "no_knowledge_used": true,
+    "no_principles_used": true,
+    "report": {
+      "outcome": "Checked the five ppb-12 session playbooks against pstack: every source step present, dropped with a note or changed under D4; fence clean, skills exist, index grammar holds; 2 findings (babysit waits for CLEAN on bee draft PRs; autopilot owners rebase while orchestrate forbids it) — 422729836",
+      "commit": "42272983658a05aabfdc99e85e775f73265ec81a",
+      "files": [
+        "docs/history/pstack-playbook-port/reports/ppb-12c.md"
+      ],
+      "tests": "rg -n -i 'cursor|graphite|bugbot|poteto-agent' skills/bee-planning/playbooks/ ; test $? -eq 1 — green:unit — report-only checker cell, no code changed; leader reran class_playbook_parity at 422729836: test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+      "deviations": [],
+      "patch_id": "3773204e9b6a5356c1e3ef6b773c49aad064950b"
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 305 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
+  },
+  "usage": {
+    "new": 112175,
+    "cached": 1576671,
+    "total": 1688846,
+    "models": {
+      "claude-opus-5-5": {
+        "new": 112175,
+        "cached": 1576671,
+        "total": 1688846
+      }
+    },
+    "jobs": [
+      "job-1794713204103-2667054-1"
+    ]
+  }
+}

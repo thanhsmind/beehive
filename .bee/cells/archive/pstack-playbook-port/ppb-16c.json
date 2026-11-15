@@ -1,0 +1,95 @@
+{
+  "id": "ppb-16c",
+  "feature": "pstack-playbook-port",
+  "title": "Check bee-show-me-your-work against its pstack source",
+  "lane": "standard",
+  "role": "test",
+  "deps": [
+    "ppb-16"
+  ],
+  "decisions": [
+    "063a21e4-bccc-46a4-8fe8-1f1f99874c72",
+    "3ac421ec-168b-4007-9976-9b6bcbe6e18a",
+    "913115b3-e1f1-4004-902c-bc574fabb2f1"
+  ],
+  "files": [
+    "docs/history/pstack-playbook-port/reports/ppb-16c.md"
+  ],
+  "read_first": [
+    "docs/history/pstack-playbook-port/CONTEXT.md",
+    "docs/history/pstack-playbook-port/plan.md",
+    "skills/bee-show-me-your-work/SKILL.md",
+    "docs/history/pstack-playbook-port/port-notes/skill-bee-show-me-your-work.md",
+    "/home/thanhsmind/Projects/refs/ai-skills/cursor-plugins/pstack/skills/show-me-your-work/SKILL.md",
+    "/home/thanhsmind/Projects/refs/ai-skills/cursor-plugins/pstack/skills/show-me-your-work/references/decision-log-template.tsv",
+    "/home/thanhsmind/Projects/refs/ai-skills/cursor-plugins/pstack/skills/show-me-your-work/scripts/log.sh"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Read the pstack source files beside skills/bee-show-me-your-work/. Report each source step or rule as present, dropped with a port-notes entry, or missing; any pstack-only tool name; any hand-picked model or subagent_type; and whether the description fits 300 characters and says when not to use the skill. Write the report to docs/history/pstack-playbook-port/reports/ppb-16c.md; no other edits.",
+  "verify": "rg -n -i 'cursor|graphite|bugbot|poteto-agent' skills/bee-show-me-your-work/ ; test $? -eq 1",
+  "must_haves": {
+    "truths": [
+      "the report lists every source step with present, dropped or missing"
+    ],
+    "prohibitions": [
+      "No edit outside the report file"
+    ]
+  },
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "w-ppb-16c",
+    "outcome": "Checked bee-show-me-your-work against pstack show-me-your-work: no missing step, every drop noted, tool fence clean, no hand-picked model, description 267 chars with a Not-for clause, three P3 findings; commit 2e4ecf2a0ffa3fb7ce3b2c878b1a397cd966bda1",
+    "files_changed": [
+      "docs/history/pstack-playbook-port/reports/ppb-16c.md"
+    ],
+    "deviations": [
+      "sync-ack: playbook or report text only; regen runs once at wave close; anchored concepts are re-graded by the final writer cell"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-15T04:08:45.149Z",
+    "behavior_change": false,
+    "verification_evidence": "doc-only report cell; its verify is a static fence over the ported skill; leader reran class_playbook_parity at 2e4ecf2a0: test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "1fe39916-f67e-4233-a4da-ffc17046e993",
+    "verify_command": "rg -n -i 'cursor|graphite|bugbot|poteto-agent' skills/bee-show-me-your-work/ ; test $? -eq 1",
+    "claimed_at": "2026-11-15T04:07:06.522Z",
+    "knowledge_delta": [],
+    "sync_ack": "playbook or report text only; regen runs once at wave close; anchored concepts are re-graded by the final writer cell",
+    "no_mistakes": true,
+    "no_knowledge_used": true,
+    "no_principles_used": true,
+    "report": {
+      "outcome": "Checked bee-show-me-your-work against pstack show-me-your-work: no missing step, every drop noted, tool fence clean, no hand-picked model, description 267 chars with a Not-for clause, three P3 findings; commit 2e4ecf2a0ffa3fb7ce3b2c878b1a397cd966bda1",
+      "commit": "2e4ecf2a0ffa3fb7ce3b2c878b1a397cd966bda1",
+      "files": [
+        "docs/history/pstack-playbook-port/reports/ppb-16c.md"
+      ],
+      "tests": "rg -n -i 'cursor|graphite|bugbot|poteto-agent' skills/bee-show-me-your-work/ ; test $? -eq 1 — green:unit — doc-only report cell; its verify is a static fence over the ported skill; leader reran class_playbook_parity at 2e4ecf2a0: test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+      "deviations": [],
+      "knowledge_used": [],
+      "patch_id": "d365eb251c23286e55cf8cedad042116cb03913e"
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 156 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
+  },
+  "usage": {
+    "new": 51401,
+    "cached": 458768,
+    "total": 510169,
+    "models": {
+      "claude-opus-5-5": {
+        "new": 51401,
+        "cached": 458768,
+        "total": 510169
+      }
+    },
+    "jobs": [
+      "job-1794715628034-3116097-1"
+    ]
+  }
+}

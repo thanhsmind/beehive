@@ -1,0 +1,85 @@
+{
+  "id": "ppb-14c",
+  "feature": "pstack-playbook-port",
+  "title": "Check bee-arena against its pstack source",
+  "lane": "standard",
+  "role": "test",
+  "deps": [
+    "ppb-14"
+  ],
+  "decisions": [
+    "063a21e4-bccc-46a4-8fe8-1f1f99874c72",
+    "3ac421ec-168b-4007-9976-9b6bcbe6e18a",
+    "913115b3-e1f1-4004-902c-bc574fabb2f1"
+  ],
+  "files": [
+    "docs/history/pstack-playbook-port/reports/ppb-14c.md"
+  ],
+  "read_first": [
+    "docs/history/pstack-playbook-port/CONTEXT.md",
+    "docs/history/pstack-playbook-port/plan.md",
+    "skills/bee-arena/SKILL.md",
+    "docs/history/pstack-playbook-port/port-notes/skill-bee-arena.md",
+    "/home/thanhsmind/Projects/refs/ai-skills/cursor-plugins/pstack/skills/arena/SKILL.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Read the pstack source files beside skills/bee-arena/. Report each source step or rule as present, dropped with a port-notes entry, or missing; any pstack-only tool name; any hand-picked model or subagent_type; and whether the description fits 300 characters and says when not to use the skill. Write the report to docs/history/pstack-playbook-port/reports/ppb-14c.md; no other edits.",
+  "verify": "rg -n -i 'cursor|graphite|bugbot|poteto-agent' skills/bee-arena/ ; test $? -eq 1",
+  "must_haves": {
+    "truths": [
+      "the report lists every source step with present, dropped or missing"
+    ],
+    "prohibitions": [
+      "No edit outside the report file"
+    ]
+  },
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "w-ppb-14c",
+    "outcome": "Checked bee-arena against pstack arena: every source step present or dropped with a port-notes entry, fence clean, no hand-picked model, description 289 chars with a Not-for clause; three minor findings. Commit e9913dd9b686039a42962c50b46b20e91e0898f9",
+    "files_changed": [
+      "docs/history/pstack-playbook-port/reports/ppb-14c.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-11-15T04:01:54.787Z",
+    "behavior_change": false,
+    "verification_evidence": "the cell adds one markdown report and checks the shipped skill text",
+    "verify_output": "green:static",
+    "verify_passed": true,
+    "claim_session": "1fe39916-f67e-4233-a4da-ffc17046e993",
+    "verify_command": "rg -n -i 'cursor|graphite|bugbot|poteto-agent' skills/bee-arena/ ; test $? -eq 1",
+    "claimed_at": "2026-11-15T04:00:22.687Z",
+    "knowledge_delta": [],
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Checked bee-arena against pstack arena: every source step present or dropped with a port-notes entry, fence clean, no hand-picked model, description 289 chars with a Not-for clause; three minor findings. Commit e9913dd9b686039a42962c50b46b20e91e0898f9",
+      "commit": "e9913dd9b686039a42962c50b46b20e91e0898f9",
+      "files": [
+        "docs/history/pstack-playbook-port/reports/ppb-14c.md"
+      ],
+      "tests": "rg -n -i 'cursor|graphite|bugbot|poteto-agent' skills/bee-arena/ ; test $? -eq 1 — green:static — the cell adds one markdown report and checks the shipped skill text",
+      "deviations": [],
+      "patch_id": "534be1fc0c041a3106fd7cf5c8e0a2cc35504441"
+    },
+    "warnings": [],
+    "tests": "boundary"
+  },
+  "usage": {
+    "new": 49374,
+    "cached": 264390,
+    "total": 313764,
+    "models": {
+      "claude-opus-5-5": {
+        "new": 49374,
+        "cached": 264390,
+        "total": 313764
+      }
+    },
+    "jobs": [
+      "job-1794715224188-3001400-1"
+    ]
+  }
+}

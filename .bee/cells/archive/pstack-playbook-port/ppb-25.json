@@ -1,0 +1,144 @@
+{
+  "id": "ppb-25",
+  "feature": "pstack-playbook-port",
+  "title": "Fix the slice 2 checker findings in the session and merged playbooks",
+  "lane": "standard",
+  "role": "docs",
+  "deps": [],
+  "decisions": [
+    "063a21e4-bccc-46a4-8fe8-1f1f99874c72",
+    "b25486e3-747d-4827-bb77-f9d11ef2cb42",
+    "913115b3-e1f1-4004-902c-bc574fabb2f1"
+  ],
+  "files": [
+    "skills/bee-planning/playbooks/session/babysit.md",
+    "skills/bee-planning/playbooks/session/shipping.md",
+    "skills/bee-planning/playbooks/session/autopilot-full.md",
+    "skills/bee-planning/playbooks/session/autopilot-stack.md",
+    "skills/bee-planning/playbooks/session/orchestrate.md",
+    "skills/bee-planning/playbooks/session/opening-a-pr.md",
+    "skills/bee-planning/playbooks/session/session-pickup.md",
+    "skills/bee-planning/playbooks/bugfix/bug-fix.md",
+    "skills/bee-planning/playbooks/perf/perf-issue.md",
+    "skills/bee-planning/playbooks/research/investigation.md",
+    "skills/bee-planning/playbooks/refactor/refactoring.md",
+    "skills/bee-planning/playbooks/spike/prototype.md",
+    "skills/bee-planning/playbooks/feature/feature.md",
+    "docs/history/pstack-playbook-port/port-notes/session-ppb-11.md",
+    "docs/history/pstack-playbook-port/port-notes/session-ppb-12.md",
+    ".claude-plugin/skills/bee-planning/",
+    ".codex-plugin/skills/bee-planning/",
+    ".claude/skills/bee-planning/",
+    ".agents/skills/bee-planning/",
+    ".opencode/skills/bee-planning/",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/pstack-playbook-port/CONTEXT.md",
+    "docs/history/pstack-playbook-port/plan.md",
+    "docs/history/pstack-playbook-port/reports/ppb-9c.md",
+    "docs/history/pstack-playbook-port/reports/ppb-11c.md",
+    "docs/history/pstack-playbook-port/reports/ppb-12c.md"
+  ],
+  "affects_skills": [
+    "skills/bee-planning/playbooks/"
+  ],
+  "affects_specs": [],
+  "action": "Apply decision b25486e3 and the findings in reports ppb-9c, ppb-11c and ppb-12c: babysit and shipping land through bee worktree merge on green checks and review, never on GitHub's CLEAN state; autopilot owners never rebase, and a conflict goes to the merger as a cell; a red CI run is retried as a fresh run on a fresh ref with the pstack reason; every merged situation file ends with its class Proof floor line copied byte for byte from its class index; add the missing worktree-cleanup section and the orchestrate figure-it-out and inbox notes to the session port notes, and either keep inbox/ in orchestrate's record list or reword its inbox references; restore or note each clause ppb-12c lists as dropped with no note; fix the cosmetic port-notes slip. Run bee dev regen and commit the rendered trees and the manifest.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test class_playbook_parity && .bee/bin/bee dev release-manifest --check",
+  "must_haves": {
+    "truths": [
+      "no session playbook waits on GitHub's CLEAN merge state",
+      "no session playbook tells a worker or owner to rebase",
+      "every merged situation file ends with its class Proof floor line"
+    ],
+    "prohibitions": [
+      "No situation is added or removed"
+    ]
+  },
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "w-ppb-25",
+    "outcome": "Fixed slice 2 session and merged-playbook findings, regenerated trees and manifest, commit ffc6c41ff",
+    "files_changed": [
+      "skills/bee-planning/playbooks/session/babysit.md",
+      "skills/bee-planning/playbooks/session/autopilot-full.md",
+      "skills/bee-planning/playbooks/session/autopilot-stack.md",
+      "skills/bee-planning/playbooks/session/orchestrate.md",
+      "skills/bee-planning/playbooks/session/opening-a-pr.md",
+      "skills/bee-planning/playbooks/bugfix/bug-fix.md",
+      "skills/bee-planning/playbooks/feature/feature.md",
+      "skills/bee-planning/playbooks/research/investigation.md",
+      "docs/history/pstack-playbook-port/port-notes/session-ppb-11.md",
+      "docs/history/pstack-playbook-port/port-notes/session-ppb-12.md",
+      ".claude-plugin/skills/bee-planning/",
+      ".codex-plugin/skills/bee-planning/",
+      ".claude/skills/bee-planning/",
+      ".agents/skills/bee-planning/",
+      ".opencode/skills/bee-planning/",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [
+      "sync-ack: playbook or report text only; regen runs once at wave close; anchored concepts are re-graded by the final writer cell"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-15T03:48:06.979Z",
+    "behavior_change": false,
+    "verification_evidence": "parity fence 9 passed and manifest 716 files match; full cargo test not run; leader reran class_playbook_parity at ffc6c41ff: test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "1fe39916-f67e-4233-a4da-ffc17046e993",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test class_playbook_parity && .bee/bin/bee dev release-manifest --check",
+    "claimed_at": "2026-11-15T03:45:34.581Z",
+    "knowledge_delta": [],
+    "sync_ack": "playbook or report text only; regen runs once at wave close; anchored concepts are re-graded by the final writer cell",
+    "no_mistakes": true,
+    "no_knowledge_used": true,
+    "no_principles_used": true,
+    "report": {
+      "outcome": "Fixed slice 2 session and merged-playbook findings, regenerated trees and manifest, commit ffc6c41ff",
+      "commit": "ffc6c41ff63d18554c741c221613eee655e48c37",
+      "files": [
+        "skills/bee-planning/playbooks/session/babysit.md",
+        "skills/bee-planning/playbooks/session/autopilot-full.md",
+        "skills/bee-planning/playbooks/session/autopilot-stack.md",
+        "skills/bee-planning/playbooks/session/orchestrate.md",
+        "skills/bee-planning/playbooks/session/opening-a-pr.md",
+        "skills/bee-planning/playbooks/bugfix/bug-fix.md",
+        "skills/bee-planning/playbooks/feature/feature.md",
+        "skills/bee-planning/playbooks/research/investigation.md",
+        "docs/history/pstack-playbook-port/port-notes/session-ppb-11.md",
+        "docs/history/pstack-playbook-port/port-notes/session-ppb-12.md",
+        ".claude-plugin/skills/bee-planning/",
+        ".codex-plugin/skills/bee-planning/",
+        ".claude/skills/bee-planning/",
+        ".agents/skills/bee-planning/",
+        ".opencode/skills/bee-planning/",
+        "docs/history/codex-harness-hardening/release-manifest.json"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test class_playbook_parity && .bee/bin/bee dev release-manifest --check — green:unit — parity fence 9 passed and manifest 716 files match; full cargo test not run; leader reran class_playbook_parity at ffc6c41ff: test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+      "deviations": [],
+      "patch_id": "ac127f52145e32c29d54360d6a7a3ee3aadd5861"
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 654 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
+  },
+  "usage": {
+    "new": 106039,
+    "cached": 2017724,
+    "total": 2123763,
+    "models": {
+      "claude-sonnet-5-5": {
+        "new": 106039,
+        "cached": 2017724,
+        "total": 2123763
+      }
+    },
+    "jobs": [
+      "job-1794714336008-2788710-1"
+    ]
+  }
+}

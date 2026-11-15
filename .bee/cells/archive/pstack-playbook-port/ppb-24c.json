@@ -1,0 +1,86 @@
+{
+  "id": "ppb-24c",
+  "feature": "pstack-playbook-port",
+  "title": "Check the restored playbook steps",
+  "lane": "standard",
+  "role": "test",
+  "deps": [
+    "ppb-24"
+  ],
+  "decisions": [
+    "063a21e4-bccc-46a4-8fe8-1f1f99874c72",
+    "3ac421ec-168b-4007-9976-9b6bcbe6e18a",
+    "913115b3-e1f1-4004-902c-bc574fabb2f1"
+  ],
+  "files": [
+    "docs/history/pstack-playbook-port/reports/ppb-24c.md"
+  ],
+  "read_first": [
+    "docs/history/pstack-playbook-port/CONTEXT.md",
+    "docs/history/pstack-playbook-port/plan.md",
+    "docs/history/pstack-playbook-port/port-notes/restored-steps.md",
+    "skills/bee-planning/playbooks/"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Check every step restored-steps.md lists is in its situation file and names a skill that exists in skills/, and that every index carries the fallback line. Write docs/history/pstack-playbook-port/reports/ppb-24c.md; no other edits.",
+  "verify": "rg -c 'bee-figure-it-out' skills/bee-planning/playbooks/bugfix.md skills/bee-planning/playbooks/session/index.md",
+  "must_haves": {
+    "truths": [
+      "the report lists every source step with present, dropped or missing"
+    ],
+    "prohibitions": [
+      "No edit outside the report file"
+    ]
+  },
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "w-ppb-24c",
+    "outcome": "Checked all 34 restored steps and the 10 index fallback lines: 33 name an existing bee skill, worktree-cleanup step 3 says 'arena' without naming bee-arena; report at docs/history/pstack-playbook-port/reports/ppb-24c.md, commit 31649e0e50eee7497dd5308a467b5150b7850502",
+    "files_changed": [
+      "docs/history/pstack-playbook-port/reports/ppb-24c.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-11-15T04:41:24.673Z",
+    "behavior_change": false,
+    "verification_evidence": "docs-only check cell; output bugfix.md:1, session/index.md:1",
+    "verify_output": "green:static",
+    "verify_passed": true,
+    "claim_session": "1fe39916-f67e-4233-a4da-ffc17046e993",
+    "verify_command": "rg -c 'bee-figure-it-out' skills/bee-planning/playbooks/bugfix.md skills/bee-planning/playbooks/session/index.md",
+    "claimed_at": "2026-11-15T04:40:02.944Z",
+    "knowledge_delta": [],
+    "no_mistakes": true,
+    "no_knowledge_used": true,
+    "report": {
+      "outcome": "Checked all 34 restored steps and the 10 index fallback lines: 33 name an existing bee skill, worktree-cleanup step 3 says 'arena' without naming bee-arena; report at docs/history/pstack-playbook-port/reports/ppb-24c.md, commit 31649e0e50eee7497dd5308a467b5150b7850502",
+      "commit": "31649e0e50eee7497dd5308a467b5150b7850502",
+      "files": [
+        "docs/history/pstack-playbook-port/reports/ppb-24c.md"
+      ],
+      "tests": "rg -c 'bee-figure-it-out' skills/bee-planning/playbooks/bugfix.md skills/bee-planning/playbooks/session/index.md — green:static — docs-only check cell; output bugfix.md:1, session/index.md:1",
+      "deviations": [],
+      "knowledge_used": [],
+      "patch_id": "62ab4b78e08ece8ba10be04d82bc310855065f06"
+    },
+    "warnings": [],
+    "tests": "boundary"
+  },
+  "usage": {
+    "new": 49726,
+    "cached": 382518,
+    "total": 432244,
+    "models": {
+      "claude-opus-5-5": {
+        "new": 49726,
+        "cached": 382518,
+        "total": 432244
+      }
+    },
+    "jobs": [
+      "job-1794717603457-3566130-1"
+    ]
+  }
+}

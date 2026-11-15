@@ -1,0 +1,114 @@
+{
+  "id": "ppb-3c",
+  "feature": "pstack-playbook-port",
+  "title": "Check the bug-fix port against its sources",
+  "lane": "standard",
+  "role": "test",
+  "deps": [
+    "ppb-3"
+  ],
+  "decisions": [
+    "063a21e4-bccc-46a4-8fe8-1f1f99874c72",
+    "5a1fc656-5549-462a-be0c-6bce5d919188",
+    "913115b3-e1f1-4004-902c-bc574fabb2f1"
+  ],
+  "files": [
+    "docs/history/pstack-playbook-port/reports/ppb-3c.md"
+  ],
+  "read_first": [
+    "docs/history/pstack-playbook-port/CONTEXT.md",
+    "docs/history/pstack-playbook-port/plan.md",
+    "skills/bee-planning/playbooks/bugfix/bug-fix.md",
+    "skills/bee-planning/playbooks/bugfix.md",
+    "/home/thanhsmind/Projects/refs/ai-skills/cursor-plugins/pstack/skills/poteto-mode/playbooks/bug-fix.md",
+    "docs/history/pstack-playbook-port/port-notes.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Read pstack bug-fix.md and the old bugfix.md (git show of the commit before ppb-3) beside the new files. Report each pstack step and each old enforced line as present or missing, any pstack-only tool name under skills/, whether port-notes.md names every swap and drop, and whether the index lines match the grammar in the plan. Write the report to docs/history/pstack-playbook-port/reports/ppb-3c.md; no other edits.",
+  "verify": "rg -n -i 'cursor|graphite|bugbot|poteto-agent' skills/bee-planning/ ; test $? -eq 1",
+  "must_haves": {
+    "truths": [
+      "the report lists every source step with present or missing"
+    ],
+    "prohibitions": [
+      "No edit outside the report file"
+    ]
+  },
+  "status": "capped",
+  "trace": {
+    "worker": "w-ppb-3c",
+    "outcome": "Checked the bug-fix port against pstack bug-fix.md and the old bugfix.md: every source step and every enforced line is present or named as dropped in port-notes, the index line matches the plan grammar, but the cell verify rg is red on a pre-existing design-sketch.md:11 provenance line; e9fc40b9a",
+    "files_changed": [
+      "docs/history/pstack-playbook-port/reports/ppb-3c.md"
+    ],
+    "deviations": [
+      "The cell verify rg spans all of skills/bee-planning/ and catches a pre-existing provenance credit that is not a tool step, so it is red no matter how good the port is",
+      "sync-ack: checker writes only its report under docs/history"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-15T02:50:58.856Z",
+    "behavior_change": false,
+    "verification_evidence": "port checked step by step (reports/ppb-3c.md); the cell verify rg over skills/bee-planning/ hits one pre-existing provenance line in references/design-sketch.md:11 (2a4856520, 2026-09-11, not this feature); the same rg over skills/bee-planning/playbooks/ finds nothing; full suite at a8be04ffd 5763 passed incl class_playbook_parity",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "1fe39916-f67e-4233-a4da-ffc17046e993",
+    "verify_command": "rg -n -i 'cursor|graphite|bugbot|poteto-agent' skills/bee-planning/ ; test $? -eq 1",
+    "claimed_at": "2026-11-15T02:48:03.692Z",
+    "dissent": [
+      {
+        "target": "ppb-3c",
+        "claim": "The cell verify rg spans all of skills/bee-planning/ and catches a pre-existing provenance credit that is not a tool step, so it is red no matter how good the port is",
+        "alternative": "Narrow the checker to skills/bee-planning/playbooks/ (green today), or reword the design-sketch.md:11 credit in a separate cell and correct the port-notes sentence",
+        "severity": "consider",
+        "worker": "w-ppb-3c",
+        "recorded_at": "2026-11-15T02:50:11.236Z",
+        "verdict": "accept",
+        "verdict_reason": "the worker is right: the sweep was scoped too wide and caught a pre-existing provenance credit; every later checker and port rule scopes the tool-name sweep to skills/bee-planning/playbooks/ (slice 2 onward), and the port-notes sentence was corrected in ppb-25",
+        "answered_at": "2026-11-15T05:50:39.187Z"
+      }
+    ],
+    "knowledge_delta": [],
+    "sync_ack": "checker writes only its report under docs/history",
+    "mistakes": [
+      {
+        "wrong": "the leader scoped the ppb-3c verify rg to all of skills/bee-planning so a pre-existing provenance line turned it red",
+        "better": "scope the sweep to the ported playbooks directory",
+        "fix_at": "none"
+      }
+    ],
+    "no_knowledge_used": true,
+    "no_principles_used": true,
+    "report": {
+      "outcome": "Checked the bug-fix port against pstack bug-fix.md and the old bugfix.md: every source step and every enforced line is present or named as dropped in port-notes, the index line matches the plan grammar, but the cell verify rg is red on a pre-existing design-sketch.md:11 provenance line; e9fc40b9a",
+      "commit": "e9fc40b9aa15f92cee13cdf62b0902572374a7c2",
+      "files": [
+        "docs/history/pstack-playbook-port/reports/ppb-3c.md"
+      ],
+      "tests": "rg -n -i 'cursor|graphite|bugbot|poteto-agent' skills/bee-planning/ ; test $? -eq 1 — green:unit — port checked step by step (reports/ppb-3c.md); the cell verify rg over skills/bee-planning/ hits one pre-existing provenance line in references/design-sketch.md:11 (2a4856520, 2026-09-11, not this feature); the same rg over skills/bee-planning/playbooks/ finds nothing; full suite at a8be04ffd 5763 passed incl class_playbook_parity",
+      "deviations": [
+        "The cell verify rg spans all of skills/bee-planning/ and catches a pre-existing provenance credit that is not a tool step, so it is red no matter how good the port is"
+      ],
+      "patch_id": "28362d5bec6fe442572b4e1a5566b9ee1052e8e7"
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 160 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
+  },
+  "usage": {
+    "new": 54966,
+    "cached": 541993,
+    "total": 596959,
+    "models": {
+      "claude-opus-5-5": {
+        "new": 54966,
+        "cached": 541993,
+        "total": 596959
+      }
+    },
+    "jobs": [
+      "job-1794710888646-2300713-1"
+    ]
+  }
+}

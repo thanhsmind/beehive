@@ -1,0 +1,91 @@
+{
+  "id": "ppb-20c",
+  "feature": "pstack-playbook-port",
+  "title": "Check bee-recall against its pstack source",
+  "lane": "standard",
+  "role": "test",
+  "deps": [
+    "ppb-20"
+  ],
+  "decisions": [
+    "063a21e4-bccc-46a4-8fe8-1f1f99874c72",
+    "3ac421ec-168b-4007-9976-9b6bcbe6e18a",
+    "913115b3-e1f1-4004-902c-bc574fabb2f1"
+  ],
+  "files": [
+    "docs/history/pstack-playbook-port/reports/ppb-20c.md"
+  ],
+  "read_first": [
+    "docs/history/pstack-playbook-port/CONTEXT.md",
+    "docs/history/pstack-playbook-port/plan.md",
+    "skills/bee-recall/SKILL.md",
+    "docs/history/pstack-playbook-port/port-notes/skill-bee-recall.md",
+    "/home/thanhsmind/Projects/refs/ai-skills/cursor-plugins/pstack/skills/recall/SKILL.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Read the pstack source files beside skills/bee-recall/. Report each source step or rule as present, dropped with a port-notes entry, or missing; any pstack-only tool name; any hand-picked model or subagent_type; and whether the description fits 300 characters and says when not to use the skill. Write the report to docs/history/pstack-playbook-port/reports/ppb-20c.md; no other edits.",
+  "verify": "rg -n -i 'cursor|graphite|bugbot|poteto-agent' skills/bee-recall/ ; test $? -eq 1",
+  "must_haves": {
+    "truths": [
+      "the report lists every source step with present, dropped or missing"
+    ],
+    "prohibitions": [
+      "No edit outside the report file"
+    ]
+  },
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "w-ppb-20c",
+    "outcome": "Checked bee-recall against pstack recall: every source step present, swapped or dropped with a note, none missing; one P3 finding on workspace scope; report committed 3cf7e9719a34dfa825c99410a711aca776210e23",
+    "files_changed": [
+      "docs/history/pstack-playbook-port/reports/ppb-20c.md"
+    ],
+    "deviations": [
+      "sync-ack: playbook or report text only; regen runs once at wave close; anchored concepts are re-graded by the final writer cell"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-15T04:23:23.655Z",
+    "behavior_change": false,
+    "verification_evidence": "docs-only report cell; the cell verify is the narrowest proof; leader reran class_playbook_parity at 3cf7e9719: test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "1fe39916-f67e-4233-a4da-ffc17046e993",
+    "verify_command": "rg -n -i 'cursor|graphite|bugbot|poteto-agent' skills/bee-recall/ ; test $? -eq 1",
+    "claimed_at": "2026-11-15T04:21:38.454Z",
+    "knowledge_delta": [],
+    "sync_ack": "playbook or report text only; regen runs once at wave close; anchored concepts are re-graded by the final writer cell",
+    "no_mistakes": true,
+    "no_knowledge_used": true,
+    "no_principles_used": true,
+    "report": {
+      "outcome": "Checked bee-recall against pstack recall: every source step present, swapped or dropped with a note, none missing; one P3 finding on workspace scope; report committed 3cf7e9719a34dfa825c99410a711aca776210e23",
+      "commit": "3cf7e9719a34dfa825c99410a711aca776210e23",
+      "files": [
+        "docs/history/pstack-playbook-port/reports/ppb-20c.md"
+      ],
+      "tests": "rg -n -i 'cursor|graphite|bugbot|poteto-agent' skills/bee-recall/ ; test $? -eq 1 — green:unit — docs-only report cell; the cell verify is the narrowest proof; leader reran class_playbook_parity at 3cf7e9719: test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+      "deviations": [],
+      "knowledge_used": [],
+      "patch_id": "741a132d956431bd9354d9116f02117aa8f1e013"
+    },
+    "warnings": [],
+    "tests": "boundary"
+  },
+  "usage": {
+    "new": 55474,
+    "cached": 418592,
+    "total": 474066,
+    "models": {
+      "claude-opus-5-5": {
+        "new": 55474,
+        "cached": 418592,
+        "total": 474066
+      }
+    },
+    "jobs": [
+      "job-1794716500049-3232945-1"
+    ]
+  }
+}

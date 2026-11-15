@@ -1,0 +1,125 @@
+{
+  "id": "ppb-32",
+  "feature": "pstack-playbook-port",
+  "title": "Merge pstack why improvements into bee-why",
+  "lane": "standard",
+  "role": "docs",
+  "deps": [],
+  "decisions": [
+    "063a21e4-bccc-46a4-8fe8-1f1f99874c72",
+    "3ac421ec-168b-4007-9976-9b6bcbe6e18a",
+    "6ca3cd62-c65d-499b-9351-7128c63c80b9",
+    "913115b3-e1f1-4004-902c-bc574fabb2f1"
+  ],
+  "files": [
+    "skills/bee-why/SKILL.md",
+    "skills/bee-researching/references/trace-and-provenance.md",
+    ".claude-plugin/skills/bee-why/",
+    ".codex-plugin/skills/bee-why/",
+    ".claude/skills/bee-why/",
+    ".agents/skills/bee-why/",
+    ".opencode/skills/bee-why/",
+    "docs/history/codex-harness-hardening/release-manifest.json",
+    "docs/history/pstack-playbook-port/port-notes/merge-ppb-32.md"
+  ],
+  "read_first": [
+    "docs/history/pstack-playbook-port/CONTEXT.md",
+    "docs/history/pstack-playbook-port/plan.md",
+    "skills/bee-why/SKILL.md",
+    "skills/bee-researching/references/trace-and-provenance.md",
+    "/home/thanhsmind/Projects/refs/ai-skills/cursor-plugins/pstack/skills/why/SKILL.md"
+  ],
+  "affects_skills": [
+    "skills/bee-why/SKILL.md",
+    "skills/bee-researching/references/trace-and-provenance.md"
+  ],
+  "affects_specs": [],
+  "action": "Read the pstack source beside the bee skill that already covers it (D5: the bee skill stays bee's). Merge in each pstack rule, step or check the bee skill lacks, in the bee skill's voice and structure; keep every bee rule, and never add a second copy of a rule bee already homes elsewhere (cite it instead). Provenance sweep stays single-homed in bee-researching/references/trace-and-provenance.md; a pstack why rule bee-why lacks goes there. No line names Cursor, Graphite, bugbot or poteto-agent; no hand-picked model or subagent_type; tools become bee counterparts per D2. Copy the pstack LICENSE verbatim to each new skill directory as LICENSE.pstack. Run bee dev regen and commit the rendered trees and the manifest with the cell. Write docs/history/pstack-playbook-port/port-notes/merge-ppb-32.md listing what came in and what was left out because bee already has it. Facts you need, so no lookup is required: an advisor or design runner goes out as `bee dispatch prepare --runtime claude --kind advisor --role <role> --json`; a judge or reviewer as `--kind reviewer`; read-only gathers as `--kind gather`; the blind-lane roles are lane-1, lane-2 and lane-3, and `bee blind check` checks a blind brief; write these spellings into the skill text, never run them. Bee commands you may run in this cell: cargo test, `.bee/bin/bee dev regen`, `.bee/bin/bee dev release-manifest --check`, `.bee/bin/bee knowledge check`, and `bee herding notify`. Never run `bee dispatch` or any of its `--help`; the worker guard refuses it and the cell stops. A principle or skill that does not exist in skills/ yet keeps its method as a plain sentence and is named in the port notes.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test skill_triggers && .bee/bin/bee dev release-manifest --check",
+  "must_haves": {
+    "truths": [
+      "every pstack rule the bee skill lacked is merged in or named in the port notes with the bee home that already holds it"
+    ],
+    "prohibitions": [
+      "No bee rule is removed",
+      "The skill description stays under 300 characters"
+    ]
+  },
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "w-ppb-32",
+    "outcome": "Merged the pstack why rules bee lacked into the Provenance sweep and the bee-why door, added LICENSE.pstack, regenerated trees and manifest, wrote port notes; commit 8db3596ee",
+    "files_changed": [
+      "skills/bee-why/SKILL.md",
+      "skills/bee-why/LICENSE.pstack",
+      "skills/bee-researching/references/trace-and-provenance.md",
+      ".claude-plugin/skills/bee-why/",
+      "​.codex-plugin/skills/bee-why/",
+      ".claude/skills/bee-why/",
+      ".agents/skills/bee-why/",
+      ".opencode/skills/bee-why/",
+      "docs/history/codex-harness-hardening/release-manifest.json",
+      "docs/history/pstack-playbook-port/port-notes/merge-ppb-32.md",
+      "docs/knowledge/areas/doctrine-layer/lane-and-working-discipline.md"
+    ],
+    "deviations": [
+      "sync-ack: playbook or report text only; regen runs once at wave close; anchored concepts are re-graded by the final writer cell"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-15T05:07:56.305Z",
+    "behavior_change": false,
+    "verification_evidence": "docs port, 2 passed and 935 manifest files match; leader reran class_playbook_parity at 8db3596ee: test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "1fe39916-f67e-4233-a4da-ffc17046e993",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test skill_triggers && .bee/bin/bee dev release-manifest --check",
+    "claimed_at": "2026-11-15T05:05:03.325Z",
+    "knowledge_delta": [
+      "docs/knowledge/areas/doctrine-layer/lane-and-working-discipline.md"
+    ],
+    "sync_ack": "playbook or report text only; regen runs once at wave close; anchored concepts are re-graded by the final writer cell",
+    "no_mistakes": true,
+    "no_knowledge_used": true,
+    "no_principles_used": true,
+    "report": {
+      "outcome": "Merged the pstack why rules bee lacked into the Provenance sweep and the bee-why door, added LICENSE.pstack, regenerated trees and manifest, wrote port notes; commit 8db3596ee",
+      "commit": "8db3596ee7e235fb7285fb76de1db2f1167c1320",
+      "files": [
+        "skills/bee-why/SKILL.md",
+        "skills/bee-why/LICENSE.pstack",
+        "skills/bee-researching/references/trace-and-provenance.md",
+        ".claude-plugin/skills/bee-why/",
+        "​.codex-plugin/skills/bee-why/",
+        ".claude/skills/bee-why/",
+        ".agents/skills/bee-why/",
+        ".opencode/skills/bee-why/",
+        "docs/history/codex-harness-hardening/release-manifest.json",
+        "docs/history/pstack-playbook-port/port-notes/merge-ppb-32.md",
+        "docs/knowledge/areas/doctrine-layer/lane-and-working-discipline.md"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test skill_triggers && .bee/bin/bee dev release-manifest --check — green:unit — docs port, 2 passed and 935 manifest files match; leader reran class_playbook_parity at 8db3596ee: test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+      "deviations": [],
+      "patch_id": "ebb607508ae413bdd3f374c78d02fb9b2cb93bb6"
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 1216 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
+  },
+  "usage": {
+    "new": 107725,
+    "cached": 1275066,
+    "total": 1382791,
+    "models": {
+      "claude-sonnet-5-5": {
+        "new": 107725,
+        "cached": 1275066,
+        "total": 1382791
+      }
+    },
+    "jobs": [
+      "job-1794719104278-3785938-1"
+    ]
+  }
+}

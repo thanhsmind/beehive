@@ -1,0 +1,115 @@
+{
+  "id": "ppb-3",
+  "feature": "pstack-playbook-port",
+  "title": "Port the pstack bug-fix playbook as the first situation",
+  "lane": "standard",
+  "role": "docs",
+  "deps": [],
+  "decisions": [
+    "d480d467-1a0d-4feb-bbe6-3f181aa86f4b",
+    "063a21e4-bccc-46a4-8fe8-1f1f99874c72",
+    "5a1fc656-5549-462a-be0c-6bce5d919188",
+    "c64c5827-e110-4add-988c-5b668e93ccfe",
+    "41bbba68-9de8-48b3-a9c7-ba1abfdd6410"
+  ],
+  "files": [
+    "skills/bee-planning/playbooks/bugfix.md",
+    "skills/bee-planning/playbooks/bugfix/bug-fix.md",
+    "skills/bee-planning/playbooks/LICENSE.pstack",
+    "docs/history/pstack-playbook-port/port-notes.md",
+    "docs/history/codex-harness-hardening/release-manifest.json",
+    ".claude-plugin/skills/bee-planning/",
+    ".codex-plugin/skills/bee-planning/"
+  ],
+  "read_first": [
+    "docs/history/pstack-playbook-port/CONTEXT.md",
+    "docs/history/pstack-playbook-port/plan.md",
+    "skills/bee-planning/playbooks/bugfix.md",
+    "/home/thanhsmind/Projects/refs/ai-skills/cursor-plugins/pstack/skills/poteto-mode/playbooks/bug-fix.md",
+    "/home/thanhsmind/Projects/refs/ai-skills/cursor-plugins/pstack/LICENSE"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Write playbooks/bugfix/bug-fix.md: the pstack bug-fix method is the body (scientific stance, reproduce on the real surface, binary-search hypotheses with runtime evidence, revert what a refuted hypothesis motivated, confirm the mechanism before the fix, verify on the same surface, the failing repro lands before the fix), with every pstack tool swapped for its bee counterpart per D2 (how and why become bee-how and bee-why, subagent delegation becomes bee dispatch prepare, the control skill becomes the project's verify-app or the real interface) and every enforced line of the current bugfix.md kept per D3 (the red-before-green home pointer, the crash-site principle, the event-order statechart split, the formal verify rerun, the always-on signal sentence, Proof line, Proof floor). Rewrite playbooks/bugfix.md as the class index: one intro line, then The class index grammar: a '## Situations' heading, then one line per situation of the exact form - `<name>` — <trigger phrases, English and Vietnamese> — delivers: <deliverable>, where <name> matches [a-z0-9-]+ and names playbooks/<class>/<name>.md; the section ends at the next '## ' heading. List bug-fix as the one situation, then keep the Proof floor line. Name no skill that does not exist yet. Write docs/history/pstack-playbook-port/port-notes.md with one section per ported playbook listing each tool swap and each dropped step; that file is the only place a pstack-only tool is named. Copy the pstack LICENSE text verbatim to playbooks/LICENSE.pstack. Run bee dev regen so the rendered plugin trees match.",
+  "verify": "rg -n 'Proof floor' skills/bee-planning/playbooks/bugfix.md skills/bee-planning/playbooks/bugfix/bug-fix.md && rg -c 'Lauren Tan' skills/bee-planning/playbooks/LICENSE.pstack && diff -r skills/bee-planning/playbooks .claude-plugin/skills/bee-planning/playbooks && .bee/bin/bee dev release-manifest --check",
+  "must_haves": {
+    "truths": [
+      "bugfix/bug-fix.md carries every step of pstack bug-fix and every enforced line of the old bugfix.md",
+      "no file under skills/ names Cursor, Graphite, bugbot or poteto-agent",
+      "the bugfix index Situations section parses under the grammar"
+    ],
+    "prohibitions": [
+      "No other class playbook is edited"
+    ]
+  },
+  "status": "capped",
+  "trace": {
+    "worker": "w-ppb-3",
+    "outcome": "Ported pstack bug-fix as bugfix/bug-fix.md, rewrote bugfix.md as the class index with a Situations section, added LICENSE.pstack and port-notes.md, regenerated trees and manifest; commit 25bccf3b6",
+    "files_changed": [
+      "skills/bee-planning/playbooks/bugfix.md",
+      "skills/bee-planning/playbooks/bugfix/bug-fix.md",
+      "skills/bee-planning/playbooks/LICENSE.pstack",
+      "docs/history/pstack-playbook-port/port-notes.md",
+      "docs/history/codex-harness-hardening/release-manifest.json",
+      ".claude-plugin/skills/bee-planning/",
+      ".codex-plugin/skills/bee-planning/"
+    ],
+    "deviations": [
+      "sync-ack: the plan left affects_skills empty for a playbook cell; the three touched paths are exactly the cell's declared files, and the cell is claimed so update is refused"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-15T02:47:28.951Z",
+    "behavior_change": false,
+    "verification_evidence": "full suite at a8be04ffd (contains ppb-3 25bccf3b6) 5763 passed 0 failed incl class_playbook_parity; rg Proof floor, LICENSE cmp, diff -r rendered tree, release-manifest --check green",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "1fe39916-f67e-4233-a4da-ffc17046e993",
+    "verify_command": "rg -n 'Proof floor' skills/bee-planning/playbooks/bugfix.md skills/bee-planning/playbooks/bugfix/bug-fix.md && rg -c 'Lauren Tan' skills/bee-planning/playbooks/LICENSE.pstack && diff -r skills/bee-planning/playbooks .claude-plugin/skills/bee-planning/playbooks && .bee/bin/bee dev release-manifest --check",
+    "claimed_at": "2026-11-15T02:41:58.283Z",
+    "knowledge_delta": [],
+    "sync_ack": "the plan left affects_skills empty for a playbook cell; the three touched paths are exactly the cell's declared files, and the cell is claimed so update is refused",
+    "mistakes": [
+      {
+        "wrong": "bee dev regen in a shared worktree rewrote .bee/onboarding.json updated_at and the worker could not restore it under the sibling guard",
+        "better": "regen should leave onboarding.json untouched when only the timestamp changes",
+        "fix_at": "architecture"
+      }
+    ],
+    "no_knowledge_used": true,
+    "no_principles_used": true,
+    "report": {
+      "outcome": "Ported pstack bug-fix as bugfix/bug-fix.md, rewrote bugfix.md as the class index with a Situations section, added LICENSE.pstack and port-notes.md, regenerated trees and manifest; commit 25bccf3b6",
+      "commit": "a8be04ffd361832880e92af8ed71a5b9aaf13c35",
+      "files": [
+        "skills/bee-planning/playbooks/bugfix.md",
+        "skills/bee-planning/playbooks/bugfix/bug-fix.md",
+        "skills/bee-planning/playbooks/LICENSE.pstack",
+        "docs/history/pstack-playbook-port/port-notes.md",
+        "docs/history/codex-harness-hardening/release-manifest.json",
+        ".claude-plugin/skills/bee-planning/",
+        ".codex-plugin/skills/bee-planning/"
+      ],
+      "tests": "rg -n 'Proof floor' skills/bee-planning/playbooks/bugfix.md skills/bee-planning/playbooks/bugfix/bug-fix.md && rg -c 'Lauren Tan' skills/bee-planning/playbooks/LICENSE.pstack && diff -r skills/bee-planning/playbooks .claude-plugin/skills/bee-planning/playbooks && .bee/bin/bee dev release-manifest --check — green:unit — full suite at a8be04ffd (contains ppb-3 25bccf3b6) 5763 passed 0 failed incl class_playbook_parity; rg Proof floor, LICENSE cmp, diff -r rendered tree, release-manifest --check green",
+      "deviations": [],
+      "patch_id": "762532f725066c24ba5660b1f752c230f1cef083"
+    },
+    "warnings": [],
+    "tests": "boundary"
+  },
+  "usage": {
+    "new": 76295,
+    "cached": 749017,
+    "total": 825312,
+    "models": {
+      "claude-sonnet-5-5": {
+        "new": 76295,
+        "cached": 749017,
+        "total": 825312
+      }
+    },
+    "jobs": [
+      "job-1794710519042-2231732-1"
+    ]
+  }
+}

@@ -1,0 +1,92 @@
+{
+  "id": "ppb-4",
+  "feature": "pstack-playbook-port",
+  "title": "Fence the situation files against their index",
+  "lane": "standard",
+  "role": "test",
+  "deps": [
+    "ppb-2t",
+    "ppb-3c"
+  ],
+  "decisions": [
+    "c64c5827-e110-4add-988c-5b668e93ccfe",
+    "41bbba68-9de8-48b3-a9c7-ba1abfdd6410",
+    "913115b3-e1f1-4004-902c-bc574fabb2f1"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/tests/class_playbook_parity.rs"
+  ],
+  "read_first": [
+    "docs/history/pstack-playbook-port/CONTEXT.md",
+    "docs/history/pstack-playbook-port/plan.md",
+    "packages/bee-rs/crates/bee/tests/class_playbook_parity.rs",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/workflows.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Extend class_playbook_parity.rs without touching its two existing tests: every subdirectory of playbooks/ is a route class or session; every .md in a class subdirectory is listed on its class index's Situations section, and every listed name has its file; every .md in session/ other than index.md is listed in session/index.md and the reverse, when session/ exists; the class list stays read as text from workflows.rs. The class index grammar: a '## Situations' heading, then one line per situation of the exact form - `<name>` — <trigger phrases, English and Vietnamese> — delivers: <deliverable>, where <name> matches [a-z0-9-]+ and names playbooks/<class>/<name>.md; the section ends at the next '## ' heading.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test class_playbook_parity",
+  "must_haves": {
+    "truths": [
+      "an unlisted situation file fails the fence",
+      "a listed name with no file fails the fence",
+      "a subdirectory that is neither a class nor session fails the fence"
+    ],
+    "prohibitions": [
+      "No private copy of the class list"
+    ]
+  },
+  "status": "capped",
+  "trace": {
+    "worker": "w-ppb-4",
+    "outcome": "Added the situation fence to class_playbook_parity.rs: subdirectories must be classes or session, and class/session situation files and their index lines must agree both ways; 7 new tests, each break shown red under a mutation — 2bddce22e",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/tests/class_playbook_parity.rs"
+    ],
+    "deviations": [
+      "sync-ack: integration test file only; anchored concepts re-graded by the final writer cell"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-15T03:10:08.869Z",
+    "behavior_change": false,
+    "verification_evidence": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test class_playbook_parity — green:unit — the fence is the cell's only change (9 passed, 0 failed)",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "1fe39916-f67e-4233-a4da-ffc17046e993",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test class_playbook_parity",
+    "claimed_at": "2026-11-15T03:04:19.227Z",
+    "knowledge_delta": [],
+    "sync_ack": "integration test file only; anchored concepts re-graded by the final writer cell",
+    "no_mistakes": true,
+    "no_knowledge_used": true,
+    "no_principles_used": true,
+    "report": {
+      "outcome": "Added the situation fence to class_playbook_parity.rs: subdirectories must be classes or session, and class/session situation files and their index lines must agree both ways; 7 new tests, each break shown red under a mutation — 2bddce22e",
+      "commit": "2bddce22ecb16d8d48f71d0b88a48855303746f8",
+      "files": [
+        "packages/bee-rs/crates/bee/tests/class_playbook_parity.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test class_playbook_parity — green:unit — PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test class_playbook_parity — green:unit — the fence is the cell's only change (9 passed, 0 failed)",
+      "deviations": [],
+      "knowledge_used": [],
+      "patch_id": "1bf5383a4df09a49f1048c4dad05b97458b171ea"
+    },
+    "warnings": [],
+    "tests": "boundary"
+  },
+  "usage": {
+    "new": 56617,
+    "cached": 541593,
+    "total": 598210,
+    "models": {
+      "claude-opus-5-5": {
+        "new": 56617,
+        "cached": 541593,
+        "total": 598210
+      }
+    },
+    "jobs": [
+      "job-1794711859764-2417670-1"
+    ]
+  }
+}

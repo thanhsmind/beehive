@@ -2268,5 +2268,10 @@
     "capped": 1,
     "dropped": 0,
     "archived_at": "2026-11-14T22:44:55.609Z"
+  },
+  "pstack-playbook-port": {
+    "capped": 81,
+    "dropped": 0,
+    "archived_at": "2026-11-15T06:12:48.514Z"
   }
 }

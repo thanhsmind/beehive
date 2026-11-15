@@ -1,0 +1,90 @@
+{
+  "id": "ppb-34c",
+  "feature": "pstack-playbook-port",
+  "title": "Check the bee-unslop merge",
+  "lane": "standard",
+  "role": "test",
+  "deps": [
+    "ppb-34"
+  ],
+  "decisions": [
+    "063a21e4-bccc-46a4-8fe8-1f1f99874c72",
+    "3ac421ec-168b-4007-9976-9b6bcbe6e18a",
+    "913115b3-e1f1-4004-902c-bc574fabb2f1"
+  ],
+  "files": [
+    "docs/history/pstack-playbook-port/reports/ppb-34c.md"
+  ],
+  "read_first": [
+    "docs/history/pstack-playbook-port/CONTEXT.md",
+    "docs/history/pstack-playbook-port/plan.md",
+    "/home/thanhsmind/Projects/refs/ai-skills/cursor-plugins/pstack/skills/unslop/SKILL.md",
+    "skills/bee-unslop/SKILL.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Read the pstack sources beside what ppb-34 wrote. Report each source rule as present, left out with a named bee home, or missing; any pstack-only tool name; any bee rule removed. Write docs/history/pstack-playbook-port/reports/ppb-34c.md; no other edits.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test skill_triggers",
+  "must_haves": {
+    "truths": [
+      "the report lists every source rule with present, left out or missing"
+    ],
+    "prohibitions": [
+      "No edit outside the report file"
+    ]
+  },
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "w-ppb-34c",
+    "outcome": "Checked the bee-unslop merge: 45 pstack rules, 40 present, 5 left out with named bee home or difference, 0 missing; no pstack-only tool, no bee rule removed; commit 823e5c6047b9abacc464dbc7386515cdc737f2ff",
+    "files_changed": [
+      "docs/history/pstack-playbook-port/reports/ppb-34c.md"
+    ],
+    "deviations": [
+      "sync-ack: playbook or report text only; regen runs once at wave close; anchored concepts are re-graded by the final writer cell"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-15T05:13:25.127Z",
+    "behavior_change": false,
+    "verification_evidence": "report-only change, cell verify: 2 passed, 0 failed, 1 ignored; leader reran class_playbook_parity at 823e5c604: test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "1fe39916-f67e-4233-a4da-ffc17046e993",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test skill_triggers",
+    "claimed_at": "2026-11-15T05:11:59.861Z",
+    "knowledge_delta": [],
+    "sync_ack": "playbook or report text only; regen runs once at wave close; anchored concepts are re-graded by the final writer cell",
+    "no_mistakes": true,
+    "no_knowledge_used": true,
+    "no_principles_used": true,
+    "report": {
+      "outcome": "Checked the bee-unslop merge: 45 pstack rules, 40 present, 5 left out with named bee home or difference, 0 missing; no pstack-only tool, no bee rule removed; commit 823e5c6047b9abacc464dbc7386515cdc737f2ff",
+      "commit": "823e5c6047b9abacc464dbc7386515cdc737f2ff",
+      "files": [
+        "docs/history/pstack-playbook-port/reports/ppb-34c.md"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test skill_triggers — green:unit — report-only change, cell verify: 2 passed, 0 failed, 1 ignored; leader reran class_playbook_parity at 823e5c604: test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+      "deviations": [],
+      "knowledge_used": [],
+      "patch_id": "5a53b07eb22af801b744456aefa8709fa6f9df2f"
+    },
+    "warnings": [],
+    "tests": "boundary"
+  },
+  "usage": {
+    "new": 52469,
+    "cached": 555962,
+    "total": 608431,
+    "models": {
+      "claude-opus-5-5": {
+        "new": 52469,
+        "cached": 555962,
+        "total": 608431
+      }
+    },
+    "jobs": [
+      "job-1794719521051-3817898-1"
+    ]
+  }
+}

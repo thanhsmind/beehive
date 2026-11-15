@@ -1,0 +1,97 @@
+{
+  "id": "ppb-30c",
+  "feature": "pstack-playbook-port",
+  "title": "Check the merged principles",
+  "lane": "standard",
+  "role": "test",
+  "deps": [
+    "ppb-30"
+  ],
+  "decisions": [
+    "063a21e4-bccc-46a4-8fe8-1f1f99874c72",
+    "3ac421ec-168b-4007-9976-9b6bcbe6e18a",
+    "913115b3-e1f1-4004-902c-bc574fabb2f1"
+  ],
+  "files": [
+    "docs/history/pstack-playbook-port/reports/ppb-30c.md"
+  ],
+  "read_first": [
+    "docs/history/pstack-playbook-port/CONTEXT.md",
+    "docs/history/pstack-playbook-port/plan.md",
+    "skills/bee-principle-crash-site-versus-fault-site/SKILL.md",
+    "skills/bee-principle-reproduce-first/SKILL.md",
+    "skills/bee-principle-make-illegal-states-unrepresentable/SKILL.md",
+    "skills/bee-principle-boundary-discipline/SKILL.md",
+    "skills/bee-principle-build-the-lever/SKILL.md",
+    "skills/bee-principle-encode-lessons-in-structure/SKILL.md",
+    "skills/bee-principle-migrate-callers-then-delete/SKILL.md",
+    "skills/bee-principle-separate-before-serializing-shared-state/SKILL.md",
+    "skills/bee-principle-subtract-before-you-add/SKILL.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Read the pstack sources beside what ppb-30 wrote. Report each source rule as present, left out with a named bee home, or missing; any pstack-only tool name; any bee rule removed. Write docs/history/pstack-playbook-port/reports/ppb-30c.md; no other edits.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test principle_index_parity",
+  "must_haves": {
+    "truths": [
+      "the report lists every source rule with present, left out or missing"
+    ],
+    "prohibitions": [
+      "No edit outside the report file"
+    ]
+  },
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "w-ppb-30c",
+    "outcome": "Wrote the ppb-30c report: each of the eight pstack principles' rules is present, left out with its bee home, or missing (7 minor gaps, incl. 2 migrate-callers applicability conditions, and a wrong port-note claim about a derive-from-owner check); no pstack-only tool names, no bee rule removed, licenses and 5 render trees match; commit 02b15c336ed39b3546b43be5e23669303793261d",
+    "files_changed": [
+      "docs/history/pstack-playbook-port/reports/ppb-30c.md"
+    ],
+    "deviations": [
+      "sync-ack: playbook or report text only; regen runs once at wave close; anchored concepts are re-graded by the final writer cell"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-15T05:05:02.185Z",
+    "behavior_change": false,
+    "verification_evidence": "report-only checker cell, 5 passed 0 failed; full suite exit 101 with 4 failures that do not come from this cell (3 orient situation tests, 1 pointer from sibling ppb-31 commit 7414b8ebe); leader reran class_playbook_parity at 7414b8ebe: test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "1fe39916-f67e-4233-a4da-ffc17046e993",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test principle_index_parity",
+    "claimed_at": "2026-11-15T05:00:59.457Z",
+    "knowledge_delta": [],
+    "sync_ack": "playbook or report text only; regen runs once at wave close; anchored concepts are re-graded by the final writer cell",
+    "no_mistakes": true,
+    "no_knowledge_used": true,
+    "no_principles_used": true,
+    "report": {
+      "outcome": "Wrote the ppb-30c report: each of the eight pstack principles' rules is present, left out with its bee home, or missing (7 minor gaps, incl. 2 migrate-callers applicability conditions, and a wrong port-note claim about a derive-from-owner check); no pstack-only tool names, no bee rule removed, licenses and 5 render trees match; commit 02b15c336ed39b3546b43be5e23669303793261d",
+      "commit": "7414b8ebe6b11fe9d4a0b3eff9346a7a91da3418",
+      "files": [
+        "docs/history/pstack-playbook-port/reports/ppb-30c.md"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test principle_index_parity — green:unit — report-only checker cell, 5 passed 0 failed; full suite exit 101 with 4 failures that do not come from this cell (3 orient situation tests, 1 pointer from sibling ppb-31 commit 7414b8ebe); leader reran class_playbook_parity at 7414b8ebe: test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+      "deviations": [],
+      "knowledge_used": [],
+      "patch_id": "68c1289e97c68fc7564e2c78b3e74cbee8f5196e"
+    },
+    "warnings": [],
+    "tests": "boundary"
+  },
+  "usage": {
+    "new": 94177,
+    "cached": 1239278,
+    "total": 1333455,
+    "models": {
+      "claude-opus-5-5": {
+        "new": 94177,
+        "cached": 1239278,
+        "total": 1333455
+      }
+    },
+    "jobs": [
+      "job-1794718861008-3736474-1"
+    ]
+  }
+}

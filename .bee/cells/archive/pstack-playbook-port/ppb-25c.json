@@ -1,0 +1,88 @@
+{
+  "id": "ppb-25c",
+  "feature": "pstack-playbook-port",
+  "title": "Check the slice 2 fixes",
+  "lane": "standard",
+  "role": "test",
+  "deps": [
+    "ppb-25"
+  ],
+  "decisions": [
+    "063a21e4-bccc-46a4-8fe8-1f1f99874c72",
+    "3ac421ec-168b-4007-9976-9b6bcbe6e18a",
+    "913115b3-e1f1-4004-902c-bc574fabb2f1"
+  ],
+  "files": [
+    "docs/history/pstack-playbook-port/reports/ppb-25c.md"
+  ],
+  "read_first": [
+    "docs/history/pstack-playbook-port/CONTEXT.md",
+    "docs/history/pstack-playbook-port/plan.md",
+    "docs/history/pstack-playbook-port/reports/ppb-9c.md",
+    "docs/history/pstack-playbook-port/reports/ppb-11c.md",
+    "docs/history/pstack-playbook-port/reports/ppb-12c.md",
+    "skills/bee-planning/playbooks/session/"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Check each finding in reports ppb-9c, ppb-11c and ppb-12c against the files ppb-25 changed: fixed, noted, or still open. Write docs/history/pstack-playbook-port/reports/ppb-25c.md; no other edits.",
+  "verify": "rg -c '^Proof floor' skills/bee-planning/playbooks/bugfix/bug-fix.md skills/bee-planning/playbooks/perf/perf-issue.md skills/bee-planning/playbooks/research/investigation.md skills/bee-planning/playbooks/refactor/refactoring.md skills/bee-planning/playbooks/spike/prototype.md skills/bee-planning/playbooks/feature/feature.md",
+  "must_haves": {
+    "truths": [
+      "the report lists every source step with present, dropped or missing"
+    ],
+    "prohibitions": [
+      "No edit outside the report file"
+    ]
+  },
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "w-ppb-25c",
+    "outcome": "Checked every ppb-9c/11c/12c finding against ppb-25: all in-scope (b25486e3) findings fixed or noted, ppb-9c 1b/2/3/4 and ppb-11c 4 still open out of scope, new: multi-phase-plan owners still rebase; commit 91ccec8ad",
+    "files_changed": [
+      "docs/history/pstack-playbook-port/reports/ppb-25c.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-11-15T03:52:14.692Z",
+    "behavior_change": false,
+    "verification_evidence": "each of the six prints 1, doc-only checker report; cargo test --release printed 5779 passed and 4 failed, and the 4 failures predate this commit (stale orient situation expectations, and the CLI-shape guard on multi-phase-plan.md and plan.md)",
+    "verify_output": "green:static",
+    "verify_passed": true,
+    "claim_session": "1fe39916-f67e-4233-a4da-ffc17046e993",
+    "verify_command": "rg -c '^Proof floor' skills/bee-planning/playbooks/bugfix/bug-fix.md skills/bee-planning/playbooks/perf/perf-issue.md skills/bee-planning/playbooks/research/investigation.md skills/bee-planning/playbooks/refactor/refactoring.md skills/bee-planning/playbooks/spike/prototype.md skills/bee-planning/playbooks/feature/feature.md",
+    "claimed_at": "2026-11-15T03:48:08.151Z",
+    "knowledge_delta": [],
+    "no_mistakes": true,
+    "no_knowledge_used": true,
+    "report": {
+      "outcome": "Checked every ppb-9c/11c/12c finding against ppb-25: all in-scope (b25486e3) findings fixed or noted, ppb-9c 1b/2/3/4 and ppb-11c 4 still open out of scope, new: multi-phase-plan owners still rebase; commit 91ccec8ad",
+      "commit": "91ccec8ada214b885272cb9940f61cce4161a631",
+      "files": [
+        "docs/history/pstack-playbook-port/reports/ppb-25c.md"
+      ],
+      "tests": "rg -c '^Proof floor' skills/bee-planning/playbooks/bugfix/bug-fix.md skills/bee-planning/playbooks/perf/perf-issue.md skills/bee-planning/playbooks/research/investigation.md skills/bee-planning/playbooks/refactor/refactoring.md skills/bee-planning/playbooks/spike/prototype.md skills/bee-planning/playbooks/feature/feature.md — green:static — each of the six prints 1, doc-only checker report; cargo test --release printed 5779 passed and 4 failed, and the 4 failures predate this commit (stale orient situation expectations, and the CLI-shape guard on multi-phase-plan.md and plan.md)",
+      "deviations": [],
+      "knowledge_used": [],
+      "patch_id": "b4ce22a5a10eeda0447ccbd399ad362879432680"
+    },
+    "warnings": [],
+    "tests": "boundary"
+  },
+  "usage": {
+    "new": 84259,
+    "cached": 820430,
+    "total": 904689,
+    "models": {
+      "claude-opus-5-5": {
+        "new": 84259,
+        "cached": 820430,
+        "total": 904689
+      }
+    },
+    "jobs": [
+      "job-1794714488605-2810863-1"
+    ]
+  }
+}

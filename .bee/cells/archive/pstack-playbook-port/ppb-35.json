@@ -1,0 +1,108 @@
+{
+  "id": "ppb-35",
+  "feature": "pstack-playbook-port",
+  "title": "Merge pstack technical-writing improvements into bee-technical-writing",
+  "lane": "standard",
+  "role": "docs",
+  "deps": [],
+  "decisions": [
+    "063a21e4-bccc-46a4-8fe8-1f1f99874c72",
+    "3ac421ec-168b-4007-9976-9b6bcbe6e18a",
+    "6ca3cd62-c65d-499b-9351-7128c63c80b9",
+    "913115b3-e1f1-4004-902c-bc574fabb2f1"
+  ],
+  "files": [
+    "skills/bee-technical-writing/SKILL.md",
+    ".claude-plugin/skills/bee-technical-writing/",
+    ".codex-plugin/skills/bee-technical-writing/",
+    ".claude/skills/bee-technical-writing/",
+    ".agents/skills/bee-technical-writing/",
+    ".opencode/skills/bee-technical-writing/",
+    "docs/history/codex-harness-hardening/release-manifest.json",
+    "docs/history/pstack-playbook-port/port-notes/merge-ppb-35.md"
+  ],
+  "read_first": [
+    "docs/history/pstack-playbook-port/CONTEXT.md",
+    "docs/history/pstack-playbook-port/plan.md",
+    "skills/bee-technical-writing/SKILL.md",
+    "/home/thanhsmind/Projects/refs/ai-skills/cursor-plugins/pstack/skills/technical-writing/SKILL.md"
+  ],
+  "affects_skills": [
+    "skills/bee-technical-writing/SKILL.md"
+  ],
+  "affects_specs": [],
+  "action": "Read the pstack source beside the bee skill that already covers it (D5: the bee skill stays bee's). Merge in each pstack rule, step or check the bee skill lacks, in the bee skill's voice and structure; keep every bee rule, and never add a second copy of a rule bee already homes elsewhere (cite it instead).  No line names Cursor, Graphite, bugbot or poteto-agent; no hand-picked model or subagent_type; tools become bee counterparts per D2. Copy the pstack LICENSE verbatim to each new skill directory as LICENSE.pstack. Run bee dev regen and commit the rendered trees and the manifest with the cell. Write docs/history/pstack-playbook-port/port-notes/merge-ppb-35.md listing what came in and what was left out because bee already has it. Facts you need, so no lookup is required: an advisor or design runner goes out as `bee dispatch prepare --runtime claude --kind advisor --role <role> --json`; a judge or reviewer as `--kind reviewer`; read-only gathers as `--kind gather`; the blind-lane roles are lane-1, lane-2 and lane-3, and `bee blind check` checks a blind brief; write these spellings into the skill text, never run them. Bee commands you may run in this cell: cargo test, `.bee/bin/bee dev regen`, `.bee/bin/bee dev release-manifest --check`, `.bee/bin/bee knowledge check`, and `bee herding notify`. Never run `bee dispatch` or any of its `--help`; the worker guard refuses it and the cell stops. A principle or skill that does not exist in skills/ yet keeps its method as a plain sentence and is named in the port notes.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test skill_triggers && .bee/bin/bee dev release-manifest --check",
+  "must_haves": {
+    "truths": [
+      "every pstack rule the bee skill lacked is merged in or named in the port notes with the bee home that already holds it"
+    ],
+    "prohibitions": [
+      "No bee rule is removed",
+      "The skill description stays under 300 characters"
+    ]
+  },
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "w-ppb-35",
+    "outcome": "Merged three pstack technical-writing lines into bee-technical-writing, added LICENSE.pstack and port notes, regen'd trees; commit 6ae9e959e",
+    "files_changed": [
+      "skills/bee-technical-writing/SKILL.md",
+      "skills/bee-technical-writing/CREATION-LOG.md",
+      "skills/bee-technical-writing/LICENSE.pstack",
+      "docs/history/pstack-playbook-port/port-notes/merge-ppb-35.md",
+      "docs/history/codex-harness-hardening/release-manifest.json",
+      ".bee/onboarding.json"
+    ],
+    "deviations": [
+      "sync-ack: playbook or report text only; regen runs once at wave close; anchored concepts are re-graded by the final writer cell"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-15T05:13:25.395Z",
+    "behavior_change": false,
+    "verification_evidence": "description budget test plus manifest match; the cell changes skill prose only. Commit 6ae9e959e; leader reran class_playbook_parity at 823e5c604: test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "1fe39916-f67e-4233-a4da-ffc17046e993",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test skill_triggers && .bee/bin/bee dev release-manifest --check",
+    "claimed_at": "2026-11-15T05:12:00.144Z",
+    "knowledge_delta": [],
+    "sync_ack": "playbook or report text only; regen runs once at wave close; anchored concepts are re-graded by the final writer cell",
+    "no_mistakes": true,
+    "no_knowledge_used": true,
+    "no_principles_used": true,
+    "report": {
+      "outcome": "Merged three pstack technical-writing lines into bee-technical-writing, added LICENSE.pstack and port notes, regen'd trees; commit 6ae9e959e",
+      "commit": "823e5c6047b9abacc464dbc7386515cdc737f2ff",
+      "files": [
+        "skills/bee-technical-writing/SKILL.md",
+        "skills/bee-technical-writing/CREATION-LOG.md",
+        "skills/bee-technical-writing/LICENSE.pstack",
+        "docs/history/pstack-playbook-port/port-notes/merge-ppb-35.md",
+        "docs/history/codex-harness-hardening/release-manifest.json",
+        ".bee/onboarding.json"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test skill_triggers && .bee/bin/bee dev release-manifest --check — green:unit — description budget test plus manifest match; the cell changes skill prose only. Commit 6ae9e959e; leader reran class_playbook_parity at 823e5c604: test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+      "deviations": [],
+      "patch_id": "5a53b07eb22af801b744456aefa8709fa6f9df2f"
+    },
+    "warnings": [],
+    "tests": "boundary"
+  },
+  "usage": {
+    "new": 59315,
+    "cached": 504942,
+    "total": 564257,
+    "models": {
+      "claude-sonnet-5-5": {
+        "new": 59315,
+        "cached": 504942,
+        "total": 564257
+      }
+    },
+    "jobs": [
+      "job-1794719521051-3817897-1"
+    ]
+  }
+}

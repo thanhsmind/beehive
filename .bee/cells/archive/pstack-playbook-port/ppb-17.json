@@ -1,0 +1,120 @@
+{
+  "id": "ppb-17",
+  "feature": "pstack-playbook-port",
+  "title": "Port the pstack swarm skill as bee-fanout",
+  "lane": "standard",
+  "role": "docs",
+  "deps": [
+    "ppb-16"
+  ],
+  "decisions": [
+    "063a21e4-bccc-46a4-8fe8-1f1f99874c72",
+    "3ac421ec-168b-4007-9976-9b6bcbe6e18a",
+    "6ca3cd62-c65d-499b-9351-7128c63c80b9",
+    "913115b3-e1f1-4004-902c-bc574fabb2f1"
+  ],
+  "files": [
+    "skills/bee-fanout/",
+    ".claude-plugin/skills/bee-fanout/",
+    ".codex-plugin/skills/bee-fanout/",
+    ".claude/skills/bee-fanout/",
+    ".agents/skills/bee-fanout/",
+    ".opencode/skills/bee-fanout/",
+    "packages/bee-rs/crates/bee/tests/fixtures/skill-triggers.json",
+    "docs/history/codex-harness-hardening/release-manifest.json",
+    "docs/history/pstack-playbook-port/port-notes/skill-bee-fanout.md"
+  ],
+  "read_first": [
+    "docs/history/pstack-playbook-port/CONTEXT.md",
+    "docs/history/pstack-playbook-port/plan.md",
+    "skills/bee-how/SKILL.md",
+    "skills/bee-writing-skills/SKILL.md",
+    "/home/thanhsmind/Projects/refs/ai-skills/cursor-plugins/pstack/skills/swarm/SKILL.md"
+  ],
+  "affects_skills": [
+    "skills/bee-fanout/SKILL.md"
+  ],
+  "affects_specs": [],
+  "action": "Create skills/bee-fanout/ from pstack swarm: SKILL.md and every reference file listed in read_first under /home/thanhsmind/Projects/refs/ai-skills/cursor-plugins/pstack, in bee terms. Name it bee-fanout (decision 6ca3cd62); its description says it is not bee-swarming, which runs approved cells. Port rules: the pstack text is the base (D1, D5); every pstack tool is swapped for its bee counterpart per D2: subagent spawning becomes bee dispatch prepare (the payload it returns, never a hand-picked model or subagent_type), model-per-role settings become bee team roles, Cursor /loop and Graphite are dropped, bugbot becomes bee-reviewing, how and why become bee-how and bee-why, show-me-your-work becomes bee-show-me-your-work. A step with no bee counterpart is dropped and named in your port notes. Frontmatter follows skills/bee-how/SKILL.md: name, a description under 300 characters that says what it does, when to use it and what it is not for, and metadata with ecosystem bee. No line names Cursor, Graphite, bugbot or poteto-agent. No code comments in any script (a #! line and a license header are the only exceptions). Copy the pstack LICENSE verbatim to the skill's LICENSE.pstack. Add at least three expect briefs and two near briefs for the skill to packages/bee-rs/crates/bee/tests/fixtures/skill-triggers.json, one of them in Vietnamese, in the fixture's existing shape. Run bee dev regen so the rendered trees and the release manifest match, and commit them with the skill. Write docs/history/pstack-playbook-port/port-notes/skill-bee-fanout.md listing each swap and each dropped step. Facts you need, so no lookup is required: an advisor or design runner goes out as `bee dispatch prepare --runtime claude --kind advisor --role <role> --json`; a judge or reviewer as `--kind reviewer`; read-only gathers as `--kind gather`; the blind-lane roles are lane-1, lane-2 and lane-3, and `bee blind check` checks a blind brief; write these spellings into the skill text, never run them. Bee commands you may run in this cell: cargo test, `.bee/bin/bee dev regen`, `.bee/bin/bee dev release-manifest --check`, `.bee/bin/bee knowledge check`, and `bee herding notify`. Never run `bee dispatch` or any of its `--help`; the worker guard refuses it and the cell stops. A principle or skill that does not exist in skills/ yet keeps its method as a plain sentence and is named in the port notes.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test skill_triggers && .bee/bin/bee dev release-manifest --check",
+  "must_haves": {
+    "truths": [
+      "skills/bee-fanout/SKILL.md exists with a description under 300 characters",
+      "the trigger fixture holds at least three expect and two near briefs for bee-fanout",
+      "no file under skills/bee-fanout/ names Cursor, Graphite, bugbot or poteto-agent"
+    ],
+    "prohibitions": [
+      "No other skill is edited",
+      "No hand-picked model or subagent_type in the skill text"
+    ]
+  },
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "w-ppb-17",
+    "outcome": "Ported pstack swarm as bee-fanout with 6 trigger briefs, rendered trees, manifest and port notes; commit 2e4ecf2a0ffa3fb7ce3b2c878b1a397cd966bda1",
+    "files_changed": [
+      "skills/bee-fanout/",
+      ".claude-plugin/skills/bee-fanout/",
+      ".codex-plugin/skills/bee-fanout/",
+      ".claude/skills/bee-fanout/",
+      ".agents/skills/bee-fanout/",
+      ".opencode/skills/bee-fanout/",
+      "packages/bee-rs/crates/bee/tests/fixtures/skill-triggers.json",
+      "docs/history/codex-harness-hardening/release-manifest.json",
+      "docs/history/pstack-playbook-port/port-notes/skill-bee-fanout.md"
+    ],
+    "deviations": [
+      "sync-ack: playbook or report text only; regen runs once at wave close; anchored concepts are re-graded by the final writer cell"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-15T04:08:45.411Z",
+    "behavior_change": false,
+    "verification_evidence": "skill text, fixture and manifest are static files; 2 tests passed, 773 manifest files match; leader reran class_playbook_parity at 2e4ecf2a0: test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "1fe39916-f67e-4233-a4da-ffc17046e993",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test skill_triggers && .bee/bin/bee dev release-manifest --check",
+    "claimed_at": "2026-11-15T04:07:07.132Z",
+    "knowledge_delta": [],
+    "sync_ack": "playbook or report text only; regen runs once at wave close; anchored concepts are re-graded by the final writer cell",
+    "no_mistakes": true,
+    "no_knowledge_used": true,
+    "no_principles_used": true,
+    "report": {
+      "outcome": "Ported pstack swarm as bee-fanout with 6 trigger briefs, rendered trees, manifest and port notes; commit 2e4ecf2a0ffa3fb7ce3b2c878b1a397cd966bda1",
+      "commit": "2e4ecf2a0ffa3fb7ce3b2c878b1a397cd966bda1",
+      "files": [
+        "skills/bee-fanout/",
+        ".claude-plugin/skills/bee-fanout/",
+        ".codex-plugin/skills/bee-fanout/",
+        ".claude/skills/bee-fanout/",
+        ".agents/skills/bee-fanout/",
+        ".opencode/skills/bee-fanout/",
+        "packages/bee-rs/crates/bee/tests/fixtures/skill-triggers.json",
+        "docs/history/codex-harness-hardening/release-manifest.json",
+        "docs/history/pstack-playbook-port/port-notes/skill-bee-fanout.md"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test skill_triggers && .bee/bin/bee dev release-manifest --check — green:unit — skill text, fixture and manifest are static files; 2 tests passed, 773 manifest files match; leader reran class_playbook_parity at 2e4ecf2a0: test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+      "deviations": [],
+      "patch_id": "d365eb251c23286e55cf8cedad042116cb03913e"
+    },
+    "warnings": [],
+    "tests": "boundary"
+  },
+  "usage": {
+    "new": 70221,
+    "cached": 624957,
+    "total": 695178,
+    "models": {
+      "claude-sonnet-5-5": {
+        "new": 70221,
+        "cached": 624957,
+        "total": 695178
+      }
+    },
+    "jobs": [
+      "job-1794715628034-3116098-1"
+    ]
+  }
+}

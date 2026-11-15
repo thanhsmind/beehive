@@ -1,0 +1,90 @@
+{
+  "id": "ppb-41c",
+  "feature": "pstack-playbook-port",
+  "title": "Check the bee-how and bee-why gaps are closed",
+  "lane": "standard",
+  "role": "test",
+  "deps": [
+    "ppb-41"
+  ],
+  "decisions": [
+    "063a21e4-bccc-46a4-8fe8-1f1f99874c72",
+    "913115b3-e1f1-4004-902c-bc574fabb2f1"
+  ],
+  "files": [
+    "docs/history/pstack-playbook-port/reports/ppb-41c.md"
+  ],
+  "read_first": [
+    "docs/history/pstack-playbook-port/CONTEXT.md",
+    "docs/history/pstack-playbook-port/plan.md",
+    "docs/history/pstack-playbook-port/reports/ppb-31c.md",
+    "docs/history/pstack-playbook-port/reports/ppb-32c.md",
+    "skills/bee-researching/references/trace-and-provenance.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Check each row ppb-31c and ppb-32c marked missing against what ppb-41 wrote: present or still missing. Write docs/history/pstack-playbook-port/reports/ppb-41c.md; no other edits.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test pointer_integrity",
+  "must_haves": {
+    "truths": [
+      "the report lists every previously missing row as present or still missing"
+    ],
+    "prohibitions": [
+      "No edit outside the report file"
+    ]
+  },
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "w-ppb-41c",
+    "outcome": "All 12 rows ppb-31c and ppb-32c marked missing are present after ppb-41; none still missing; report committed in 0f5ab59e9",
+    "files_changed": [
+      "docs/history/pstack-playbook-port/reports/ppb-41c.md"
+    ],
+    "deviations": [
+      "sync-ack: playbook or report text only; regen runs once at wave close; anchored concepts are re-graded by the final writer cell"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-15T05:52:12.654Z",
+    "behavior_change": false,
+    "verification_evidence": "the cell's verify; the change is a docs report, so the full suite adds nothing; leader reran class_playbook_parity at 0f5ab59e9: test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "1fe39916-f67e-4233-a4da-ffc17046e993",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test pointer_integrity",
+    "claimed_at": "2026-11-15T05:51:28.844Z",
+    "knowledge_delta": [],
+    "sync_ack": "playbook or report text only; regen runs once at wave close; anchored concepts are re-graded by the final writer cell",
+    "no_mistakes": true,
+    "no_knowledge_used": true,
+    "no_principles_used": true,
+    "report": {
+      "outcome": "All 12 rows ppb-31c and ppb-32c marked missing are present after ppb-41; none still missing; report committed in 0f5ab59e9",
+      "commit": "0f5ab59e92bb064524d954f5dbbbcbde04ea1194",
+      "files": [
+        "docs/history/pstack-playbook-port/reports/ppb-41c.md"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test pointer_integrity — green:unit — the cell's verify; the change is a docs report, so the full suite adds nothing; leader reran class_playbook_parity at 0f5ab59e9: test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+      "deviations": [],
+      "knowledge_used": [],
+      "patch_id": "b0d9ef2b28b7a7e5fb3413a8834b7486a55443a4"
+    },
+    "warnings": [],
+    "tests": "boundary"
+  },
+  "usage": {
+    "new": 45707,
+    "cached": 292988,
+    "total": 338695,
+    "models": {
+      "claude-opus-5-5": {
+        "new": 45707,
+        "cached": 292988,
+        "total": 338695
+      }
+    },
+    "jobs": [
+      "job-1794721889243-23036-1"
+    ]
+  }
+}

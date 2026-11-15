@@ -1,0 +1,91 @@
+{
+  "id": "ppb-8c",
+  "feature": "pstack-playbook-port",
+  "title": "Check the spike port against its sources",
+  "lane": "standard",
+  "role": "test",
+  "deps": [
+    "ppb-8"
+  ],
+  "decisions": [
+    "063a21e4-bccc-46a4-8fe8-1f1f99874c72",
+    "5a1fc656-5549-462a-be0c-6bce5d919188",
+    "913115b3-e1f1-4004-902c-bc574fabb2f1"
+  ],
+  "files": [
+    "docs/history/pstack-playbook-port/reports/ppb-8c.md"
+  ],
+  "read_first": [
+    "docs/history/pstack-playbook-port/CONTEXT.md",
+    "docs/history/pstack-playbook-port/plan.md",
+    "skills/bee-planning/playbooks/spike.md",
+    "docs/history/pstack-playbook-port/port-notes/spike.md",
+    "/home/thanhsmind/Projects/refs/ai-skills/cursor-plugins/pstack/skills/poteto-mode/playbooks/prototype.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Read each pstack source and the old spike playbook text (git show of the commit before ppb-8) beside the new files. Report each source step and each old enforced line as present, or dropped with its port-notes entry, or missing; any pstack-only tool name under skills/bee-planning/playbooks/; any skill named that does not exist in skills/; and whether each index line matches the contract grammar. Write the report to docs/history/pstack-playbook-port/reports/ppb-8c.md; no other edits.",
+  "verify": "rg -n -i 'cursor|graphite|bugbot|poteto-agent' skills/bee-planning/playbooks/ ; test $? -eq 1",
+  "must_haves": {
+    "truths": [
+      "the report lists every source step with present, dropped or missing"
+    ],
+    "prohibitions": [
+      "No edit outside the report file"
+    ]
+  },
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "w-ppb-8c",
+    "outcome": "Checked the spike port against pstack prototype.md and the old spike.md: every source step and old enforced line present or dropped with a port-notes entry, none missing; fence clean; index line matches grammar; one harmless duplicate port-note finding; ef0eb7e40d39fc2d60a917855cb2f43b1499b5c8",
+    "files_changed": [
+      "docs/history/pstack-playbook-port/reports/ppb-8c.md"
+    ],
+    "deviations": [
+      "sync-ack: playbook or report text only; regen runs once at wave close; anchored concepts are re-graded by the final writer cell"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-15T03:40:29.274Z",
+    "behavior_change": false,
+    "verification_evidence": "checker cell, report-only change; plus cargo test --release --test class_playbook_parity 9 passed; leader reran class_playbook_parity at 3ba27a8d1: test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "1fe39916-f67e-4233-a4da-ffc17046e993",
+    "verify_command": "rg -n -i 'cursor|graphite|bugbot|poteto-agent' skills/bee-planning/playbooks/ ; test $? -eq 1",
+    "claimed_at": "2026-11-15T03:36:41.253Z",
+    "knowledge_delta": [],
+    "sync_ack": "playbook or report text only; regen runs once at wave close; anchored concepts are re-graded by the final writer cell",
+    "no_mistakes": true,
+    "no_knowledge_used": true,
+    "no_principles_used": true,
+    "report": {
+      "outcome": "Checked the spike port against pstack prototype.md and the old spike.md: every source step and old enforced line present or dropped with a port-notes entry, none missing; fence clean; index line matches grammar; one harmless duplicate port-note finding; ef0eb7e40d39fc2d60a917855cb2f43b1499b5c8",
+      "commit": "3ba27a8d108c987c5be994fde037410f40aa0e13",
+      "files": [
+        "docs/history/pstack-playbook-port/reports/ppb-8c.md"
+      ],
+      "tests": "rg -n -i 'cursor|graphite|bugbot|poteto-agent' skills/bee-planning/playbooks/ ; test $? -eq 1 — green:unit — checker cell, report-only change; plus cargo test --release --test class_playbook_parity 9 passed; leader reran class_playbook_parity at 3ba27a8d1: test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+      "deviations": [],
+      "knowledge_used": [],
+      "patch_id": "d0deabab47b73ac5a1435716af63af102d39e236"
+    },
+    "warnings": [],
+    "tests": "boundary"
+  },
+  "usage": {
+    "new": 51396,
+    "cached": 411807,
+    "total": 463203,
+    "models": {
+      "claude-opus-5-5": {
+        "new": 51396,
+        "cached": 411807,
+        "total": 463203
+      }
+    },
+    "jobs": [
+      "job-1794713802484-2723943-1"
+    ]
+  }
+}

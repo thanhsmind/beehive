@@ -1,0 +1,89 @@
+{
+  "id": "ppb-40",
+  "feature": "pstack-playbook-port",
+  "title": "Pin the orient class tests to their own fixture indexes",
+  "lane": "standard",
+  "role": "test",
+  "deps": [],
+  "decisions": [
+    "41bbba68-9de8-48b3-a9c7-ba1abfdd6410",
+    "913115b3-e1f1-4004-902c-bc574fabb2f1"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/pstack-playbook-port/CONTEXT.md",
+    "docs/history/pstack-playbook-port/plan.md",
+    "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs",
+    "packages/bee-rs/crates/bee/src/situations.rs",
+    ".bee/logs/test-failure-test-0.log"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Three tests in status_full/tests.rs went red in the full suite once slice 2 filled the class indexes: bee_orient_class_perf_json_carries_an_empty_situations_key, bee_orient_class_research_prints_the_research_playbook_and_principles_and_writes_nothing and orient_class_names_the_playbook_and_the_class_principles_and_writes_nothing. Their temp repo has no skills/ tree, so orient reads the compiled-in indexes, which now list situations. Make each test write its own skills/bee-planning/playbooks/<class>.md into the temp repo (the repo copy wins over the compiled-in one), with no Situations section where the test pins an empty list, so the tests check the contract instead of the shipped playbook text. Keep one test that pins the compiled-in fallback by asserting it lists at least one situation for a class whose shipped index has one. Bee commands you may run: cargo test and `bee herding notify`.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee status_full",
+  "must_haves": {
+    "truths": [
+      "the three tests pass and no longer depend on the shipped playbook text",
+      "a test still pins the compiled-in fallback"
+    ],
+    "prohibitions": [
+      "No edit outside status_full/tests.rs"
+    ]
+  },
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "w-ppb-40",
+    "outcome": "Three orient class tests now write their own playbook with no Situations section, so they no longer depend on shipped text; the bugfix test still pins the compiled-in fallback — 1b5370021",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs"
+    ],
+    "deviations": [
+      "sync-ack: playbook or report text only; regen runs once at wave close; anchored concepts are re-graded by the final writer cell"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-15T05:46:29.245Z",
+    "behavior_change": false,
+    "verification_evidence": "the cell's verify; 130 passed 0 failed, all three previously FAILED tests ok; leader reran class_playbook_parity at 1b5370021: test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "1fe39916-f67e-4233-a4da-ffc17046e993",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee status_full",
+    "claimed_at": "2026-11-15T05:44:51.171Z",
+    "knowledge_delta": [],
+    "sync_ack": "playbook or report text only; regen runs once at wave close; anchored concepts are re-graded by the final writer cell",
+    "no_mistakes": true,
+    "no_knowledge_used": true,
+    "no_principles_used": true,
+    "report": {
+      "outcome": "Three orient class tests now write their own playbook with no Situations section, so they no longer depend on shipped text; the bugfix test still pins the compiled-in fallback — 1b5370021",
+      "commit": "1b537002196aa687f8826cc2ca379f1a84dbcf60",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee status_full — green:unit — the cell's verify; 130 passed 0 failed, all three previously FAILED tests ok; leader reran class_playbook_parity at 1b5370021: test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+      "deviations": [],
+      "knowledge_used": [],
+      "patch_id": "0cc27e8ef2f9f1bd6cc57e7f6afd9030405de6b8"
+    },
+    "warnings": [],
+    "tests": "boundary"
+  },
+  "usage": {
+    "new": 40338,
+    "cached": 205487,
+    "total": 245825,
+    "models": {
+      "claude-opus-5-5": {
+        "new": 40338,
+        "cached": 205487,
+        "total": 245825
+      }
+    },
+    "jobs": [
+      "job-1794721491579-4154840-1"
+    ]
+  }
+}

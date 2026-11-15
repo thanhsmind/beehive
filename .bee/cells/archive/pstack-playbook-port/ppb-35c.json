@@ -1,0 +1,92 @@
+{
+  "id": "ppb-35c",
+  "feature": "pstack-playbook-port",
+  "title": "Check the bee-technical-writing merge",
+  "lane": "standard",
+  "role": "test",
+  "deps": [
+    "ppb-35"
+  ],
+  "decisions": [
+    "063a21e4-bccc-46a4-8fe8-1f1f99874c72",
+    "3ac421ec-168b-4007-9976-9b6bcbe6e18a",
+    "913115b3-e1f1-4004-902c-bc574fabb2f1"
+  ],
+  "files": [
+    "docs/history/pstack-playbook-port/reports/ppb-35c.md"
+  ],
+  "read_first": [
+    "docs/history/pstack-playbook-port/CONTEXT.md",
+    "docs/history/pstack-playbook-port/plan.md",
+    "/home/thanhsmind/Projects/refs/ai-skills/cursor-plugins/pstack/skills/technical-writing/SKILL.md",
+    "skills/bee-technical-writing/SKILL.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Read the pstack sources beside what ppb-35 wrote. Report each source rule as present, left out with a named bee home, or missing; any pstack-only tool name; any bee rule removed. Write docs/history/pstack-playbook-port/reports/ppb-35c.md; no other edits.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test skill_triggers",
+  "must_haves": {
+    "truths": [
+      "the report lists every source rule with present, left out or missing"
+    ],
+    "prohibitions": [
+      "No edit outside the report file"
+    ]
+  },
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "w-ppb-35c",
+    "outcome": "Wrote the ppb-35c check report: 66 pstack technical-writing rules, 63 present, 3 left out with a bee home or difference, 0 missing, no pstack-only tool, no bee rule removed; commit 1788ccfd99ac1c4766ae0789023cfac814326272",
+    "files_changed": [
+      "docs/history/pstack-playbook-port/reports/ppb-35c.md"
+    ],
+    "deviations": [
+      "sync-ack: playbook or report text only; regen runs once at wave close; anchored concepts are re-graded by the final writer cell"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-15T05:16:18.733Z",
+    "behavior_change": false,
+    "verification_evidence": "the cell's verify for a docs-only report; the brief's full-suite command exits 101 on 4 tests outside this cell (3 status_full orient situation tests, 1 pointer_integrity broken pointer); leader reran class_playbook_parity at 1788ccfd9: test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "1fe39916-f67e-4233-a4da-ffc17046e993",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test skill_triggers",
+    "claimed_at": "2026-11-15T05:13:25.600Z",
+    "knowledge_delta": [],
+    "sync_ack": "playbook or report text only; regen runs once at wave close; anchored concepts are re-graded by the final writer cell",
+    "no_mistakes": true,
+    "no_knowledge_used": true,
+    "no_principles_used": true,
+    "report": {
+      "outcome": "Wrote the ppb-35c check report: 66 pstack technical-writing rules, 63 present, 3 left out with a bee home or difference, 0 missing, no pstack-only tool, no bee rule removed; commit 1788ccfd99ac1c4766ae0789023cfac814326272",
+      "commit": "1788ccfd99ac1c4766ae0789023cfac814326272",
+      "files": [
+        "docs/history/pstack-playbook-port/reports/ppb-35c.md"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test skill_triggers — green:unit — the cell's verify for a docs-only report; the brief's full-suite command exits 101 on 4 tests outside this cell (3 status_full orient situation tests, 1 pointer_integrity broken pointer); leader reran class_playbook_parity at 1788ccfd9: test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+      "deviations": [],
+      "knowledge_used": [],
+      "patch_id": "9723c7e56e31c2054b8e01326127f32a60ec5c49"
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 162 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
+  },
+  "usage": {
+    "new": 60315,
+    "cached": 676741,
+    "total": 737056,
+    "models": {
+      "claude-opus-5-5": {
+        "new": 60315,
+        "cached": 676741,
+        "total": 737056
+      }
+    },
+    "jobs": [
+      "job-1794719607136-3824844-1"
+    ]
+  }
+}

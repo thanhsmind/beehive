@@ -1,0 +1,156 @@
+{
+  "id": "ppb-27",
+  "feature": "pstack-playbook-port",
+  "title": "Port the pstack principles laziness-protocol, minimize-reader-load, model-the-domain",
+  "lane": "standard",
+  "role": "docs",
+  "deps": [],
+  "decisions": [
+    "063a21e4-bccc-46a4-8fe8-1f1f99874c72",
+    "3ac421ec-168b-4007-9976-9b6bcbe6e18a",
+    "6ca3cd62-c65d-499b-9351-7128c63c80b9",
+    "913115b3-e1f1-4004-902c-bc574fabb2f1"
+  ],
+  "files": [
+    "skills/bee-principle-laziness-protocol/",
+    "skills/bee-principle-minimize-reader-load/",
+    "skills/bee-principle-model-the-domain/",
+    "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md",
+    "expertise/architecture.md",
+    "expertise/review.md",
+    "docs/history/codex-harness-hardening/release-manifest.json",
+    ".claude-plugin/skills/bee-principle-laziness-protocol/",
+    ".claude-plugin/skills/bee-principle-minimize-reader-load/",
+    ".claude-plugin/skills/bee-principle-model-the-domain/",
+    ".codex-plugin/skills/bee-principle-laziness-protocol/",
+    ".codex-plugin/skills/bee-principle-minimize-reader-load/",
+    ".codex-plugin/skills/bee-principle-model-the-domain/",
+    ".claude/skills/bee-principle-laziness-protocol/",
+    ".claude/skills/bee-principle-minimize-reader-load/",
+    ".claude/skills/bee-principle-model-the-domain/",
+    ".agents/skills/bee-principle-laziness-protocol/",
+    ".agents/skills/bee-principle-minimize-reader-load/",
+    ".agents/skills/bee-principle-model-the-domain/",
+    ".opencode/skills/bee-principle-laziness-protocol/",
+    ".opencode/skills/bee-principle-minimize-reader-load/",
+    ".opencode/skills/bee-principle-model-the-domain/",
+    "docs/history/pstack-playbook-port/port-notes/principles-ppb-27.md"
+  ],
+  "read_first": [
+    "docs/history/pstack-playbook-port/CONTEXT.md",
+    "docs/history/pstack-playbook-port/plan.md",
+    "skills/bee-principle-subtract-before-you-add/SKILL.md",
+    "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md",
+    "/home/thanhsmind/Projects/refs/ai-skills/cursor-plugins/pstack/skills/principle-laziness-protocol/SKILL.md",
+    "/home/thanhsmind/Projects/refs/ai-skills/cursor-plugins/pstack/skills/principle-minimize-reader-load/SKILL.md",
+    "/home/thanhsmind/Projects/refs/ai-skills/cursor-plugins/pstack/skills/principle-model-the-domain/SKILL.md",
+    "expertise/architecture.md",
+    "expertise/review.md"
+  ],
+  "affects_skills": [
+    "skills/bee-principle-laziness-protocol/SKILL.md",
+    "skills/bee-principle-minimize-reader-load/SKILL.md",
+    "skills/bee-principle-model-the-domain/SKILL.md"
+  ],
+  "affects_specs": [],
+  "action": "For each slug, create skills/bee-principle-<slug>/SKILL.md from pstack principle-<slug>, in the exact shape of skills/bee-principle-subtract-before-you-add/SKILL.md (description 'Apply when ...', body, Check, Not when, Why, Depth). Put the depth into a new section of the expertise guide named in files whose craft it belongs to, and point Depth at that section. Add one row per slug to the '## Principle homes' section of docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md, in the existing row grammar: the guide anchor, a spoken line, a classes line naming the route classes it fires for (from the nine), then applied_at. Pick the classes from the pstack 'when it applies' line. No line names Cursor, Graphite, bugbot or poteto-agent; no hand-picked model or subagent_type; tools become bee counterparts per D2. Copy the pstack LICENSE verbatim to each new skill directory as LICENSE.pstack. Run bee dev regen and commit the rendered trees and the manifest with the cell. Write docs/history/pstack-playbook-port/port-notes/principles-ppb-27.md. Facts you need, so no lookup is required: an advisor or design runner goes out as `bee dispatch prepare --runtime claude --kind advisor --role <role> --json`; a judge or reviewer as `--kind reviewer`; read-only gathers as `--kind gather`; the blind-lane roles are lane-1, lane-2 and lane-3, and `bee blind check` checks a blind brief; write these spellings into the skill text, never run them. Bee commands you may run in this cell: cargo test, `.bee/bin/bee dev regen`, `.bee/bin/bee dev release-manifest --check`, `.bee/bin/bee knowledge check`, and `bee herding notify`. Never run `bee dispatch` or any of its `--help`; the worker guard refuses it and the cell stops. A principle or skill that does not exist in skills/ yet keeps its method as a plain sentence and is named in the port notes.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test principle_index_parity && .bee/bin/bee dev release-manifest --check",
+  "must_haves": {
+    "truths": [
+      "skills/bee-principle-laziness-protocol/SKILL.md exists and has an index row with spoken and classes lines",
+      "skills/bee-principle-minimize-reader-load/SKILL.md exists and has an index row with spoken and classes lines",
+      "skills/bee-principle-model-the-domain/SKILL.md exists and has an index row with spoken and classes lines",
+      "principle_index_parity is green"
+    ],
+    "prohibitions": [
+      "No existing principle row is changed"
+    ]
+  },
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "w-ppb-27",
+    "outcome": "Ported principles laziness-protocol, minimize-reader-load and model-the-domain with depth sections, index rows, rendered trees and manifest; commit 58285028b",
+    "files_changed": [
+      "skills/bee-principle-laziness-protocol/",
+      "skills/bee-principle-minimize-reader-load/",
+      "skills/bee-principle-model-the-domain/",
+      "expertise/architecture.md",
+      "expertise/review.md",
+      "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md",
+      "docs/history/codex-harness-hardening/release-manifest.json",
+      "docs/history/pstack-playbook-port/port-notes/principles-ppb-27.md",
+      ".claude-plugin/skills/",
+      ".codex-plugin/skills/",
+      ".claude/skills/",
+      ".agents/skills/",
+      ".opencode/skills/",
+      ".bee/expertise/architecture.md",
+      ".bee/expertise/review.md",
+      ".bee/onboarding.json"
+    ],
+    "deviations": [
+      "sync-ack: playbook or report text only; regen runs once at wave close; anchored concepts are re-graded by the final writer cell"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-15T04:48:19.588Z",
+    "behavior_change": false,
+    "verification_evidence": "5 parity tests passed and 860 manifest files match; docs port, no behavior change; leader reran class_playbook_parity at 58285028b: test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "1fe39916-f67e-4233-a4da-ffc17046e993",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test principle_index_parity && .bee/bin/bee dev release-manifest --check",
+    "claimed_at": "2026-11-15T04:45:40.382Z",
+    "knowledge_delta": [
+      "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md"
+    ],
+    "sync_ack": "playbook or report text only; regen runs once at wave close; anchored concepts are re-graded by the final writer cell",
+    "no_mistakes": true,
+    "no_knowledge_used": true,
+    "no_principles_used": true,
+    "report": {
+      "outcome": "Ported principles laziness-protocol, minimize-reader-load and model-the-domain with depth sections, index rows, rendered trees and manifest; commit 58285028b",
+      "commit": "58285028b0cc4dd048cd10852cc503e10b40049a",
+      "files": [
+        "skills/bee-principle-laziness-protocol/",
+        "skills/bee-principle-minimize-reader-load/",
+        "skills/bee-principle-model-the-domain/",
+        "expertise/architecture.md",
+        "expertise/review.md",
+        "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md",
+        "docs/history/codex-harness-hardening/release-manifest.json",
+        "docs/history/pstack-playbook-port/port-notes/principles-ppb-27.md",
+        ".claude-plugin/skills/",
+        ".codex-plugin/skills/",
+        ".claude/skills/",
+        ".agents/skills/",
+        ".opencode/skills/",
+        ".bee/expertise/architecture.md",
+        ".bee/expertise/review.md",
+        ".bee/onboarding.json"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test principle_index_parity && .bee/bin/bee dev release-manifest --check — green:unit — 5 parity tests passed and 860 manifest files match; docs port, no behavior change; leader reran class_playbook_parity at 58285028b: test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+      "deviations": [],
+      "patch_id": "d2d7c1b4006898ccb0d537fe0539291980e462fa"
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 1510 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
+  },
+  "usage": {
+    "new": 89625,
+    "cached": 1033959,
+    "total": 1123584,
+    "models": {
+      "claude-sonnet-5-5": {
+        "new": 89625,
+        "cached": 1033959,
+        "total": 1123584
+      }
+    },
+    "jobs": [
+      "job-1794717942010-3589383-1"
+    ]
+  }
+}

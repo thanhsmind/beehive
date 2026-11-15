@@ -1,0 +1,96 @@
+{
+  "id": "ppb-29c",
+  "feature": "pstack-playbook-port",
+  "title": "Check the principles guard-the-context-window, never-block-on-the-human, exhaust-the-design-space, experience-first",
+  "lane": "standard",
+  "role": "test",
+  "deps": [
+    "ppb-29"
+  ],
+  "decisions": [
+    "063a21e4-bccc-46a4-8fe8-1f1f99874c72",
+    "3ac421ec-168b-4007-9976-9b6bcbe6e18a",
+    "913115b3-e1f1-4004-902c-bc574fabb2f1"
+  ],
+  "files": [
+    "docs/history/pstack-playbook-port/reports/ppb-29c.md"
+  ],
+  "read_first": [
+    "docs/history/pstack-playbook-port/CONTEXT.md",
+    "docs/history/pstack-playbook-port/plan.md",
+    "/home/thanhsmind/Projects/refs/ai-skills/cursor-plugins/pstack/skills/principle-guard-the-context-window/SKILL.md",
+    "/home/thanhsmind/Projects/refs/ai-skills/cursor-plugins/pstack/skills/principle-never-block-on-the-human/SKILL.md",
+    "/home/thanhsmind/Projects/refs/ai-skills/cursor-plugins/pstack/skills/principle-exhaust-the-design-space/SKILL.md",
+    "/home/thanhsmind/Projects/refs/ai-skills/cursor-plugins/pstack/skills/principle-experience-first/SKILL.md",
+    "skills/bee-principle-guard-the-context-window/SKILL.md",
+    "skills/bee-principle-never-block-on-the-human/SKILL.md",
+    "skills/bee-principle-exhaust-the-design-space/SKILL.md",
+    "skills/bee-principle-experience-first/SKILL.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Read the pstack sources beside what ppb-29 wrote. Report each source rule as present, left out with a named bee home, or missing; any pstack-only tool name; any bee rule removed. Write docs/history/pstack-playbook-port/reports/ppb-29c.md; no other edits.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test principle_index_parity",
+  "must_haves": {
+    "truths": [
+      "the report lists every source rule with present, left out or missing"
+    ],
+    "prohibitions": [
+      "No edit outside the report file"
+    ]
+  },
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "w-ppb-29c",
+    "outcome": "All 45 source rules of the four ppb-29 principles are present in bee, none left out or missing, no pstack-only tool names, no bee rule removed; report docs/history/pstack-playbook-port/reports/ppb-29c.md in commit 45c161bfaa83a4a4bb453fb952b1224d104cdf00",
+    "files_changed": [
+      "docs/history/pstack-playbook-port/reports/ppb-29c.md"
+    ],
+    "deviations": [
+      "sync-ack: playbook or report text only; regen runs once at wave close; anchored concepts are re-graded by the final writer cell"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-15T05:00:58.965Z",
+    "behavior_change": false,
+    "verification_evidence": "the cell's verify; checker edits only its report, plus cmp of 5 rendered trees, LICENSE and vendored expertise, and an rg for pstack-only tools returning nothing (green:static); leader reran class_playbook_parity at 578647b6d: test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "1fe39916-f67e-4233-a4da-ffc17046e993",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test principle_index_parity",
+    "claimed_at": "2026-11-15T04:55:03.236Z",
+    "knowledge_delta": [],
+    "sync_ack": "playbook or report text only; regen runs once at wave close; anchored concepts are re-graded by the final writer cell",
+    "no_mistakes": true,
+    "no_knowledge_used": true,
+    "no_principles_used": true,
+    "report": {
+      "outcome": "All 45 source rules of the four ppb-29 principles are present in bee, none left out or missing, no pstack-only tool names, no bee rule removed; report docs/history/pstack-playbook-port/reports/ppb-29c.md in commit 45c161bfaa83a4a4bb453fb952b1224d104cdf00",
+      "commit": "578647b6d7cd83d5091a57b9f792040828234cf5",
+      "files": [
+        "docs/history/pstack-playbook-port/reports/ppb-29c.md"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test principle_index_parity — green:unit — the cell's verify; checker edits only its report, plus cmp of 5 rendered trees, LICENSE and vendored expertise, and an rg for pstack-only tools returning nothing (green:static); leader reran class_playbook_parity at 578647b6d: test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+      "deviations": [],
+      "knowledge_used": [],
+      "patch_id": "0d8a0adc4289e0f28e50d3f55690f96a4afc642a"
+    },
+    "warnings": [],
+    "tests": "boundary"
+  },
+  "usage": {
+    "new": 63205,
+    "cached": 542734,
+    "total": 605939,
+    "models": {
+      "claude-opus-5-5": {
+        "new": 63205,
+        "cached": 542734,
+        "total": 605939
+      }
+    },
+    "jobs": [
+      "job-1794718507298-3647346-1"
+    ]
+  }
+}

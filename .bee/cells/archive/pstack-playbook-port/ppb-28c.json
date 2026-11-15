@@ -1,0 +1,94 @@
+{
+  "id": "ppb-28c",
+  "feature": "pstack-playbook-port",
+  "title": "Check the principles prove-it-works, sequence-verifiable-units, make-operations-idempotent",
+  "lane": "standard",
+  "role": "test",
+  "deps": [
+    "ppb-28"
+  ],
+  "decisions": [
+    "063a21e4-bccc-46a4-8fe8-1f1f99874c72",
+    "3ac421ec-168b-4007-9976-9b6bcbe6e18a",
+    "913115b3-e1f1-4004-902c-bc574fabb2f1"
+  ],
+  "files": [
+    "docs/history/pstack-playbook-port/reports/ppb-28c.md"
+  ],
+  "read_first": [
+    "docs/history/pstack-playbook-port/CONTEXT.md",
+    "docs/history/pstack-playbook-port/plan.md",
+    "/home/thanhsmind/Projects/refs/ai-skills/cursor-plugins/pstack/skills/principle-prove-it-works/SKILL.md",
+    "/home/thanhsmind/Projects/refs/ai-skills/cursor-plugins/pstack/skills/principle-sequence-verifiable-units/SKILL.md",
+    "/home/thanhsmind/Projects/refs/ai-skills/cursor-plugins/pstack/skills/principle-make-operations-idempotent/SKILL.md",
+    "skills/bee-principle-prove-it-works/SKILL.md",
+    "skills/bee-principle-sequence-verifiable-units/SKILL.md",
+    "skills/bee-principle-make-operations-idempotent/SKILL.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Read the pstack sources beside what ppb-28 wrote. Report each source rule as present, left out with a named bee home, or missing; any pstack-only tool name; any bee rule removed. Write docs/history/pstack-playbook-port/reports/ppb-28c.md; no other edits.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test principle_index_parity",
+  "must_haves": {
+    "truths": [
+      "the report lists every source rule with present, left out or missing"
+    ],
+    "prohibitions": [
+      "No edit outside the report file"
+    ]
+  },
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "w-ppb-28c",
+    "outcome": "Wrote ppb-28c report: all 41 source rules of the three principles present, no pstack-only tool name, no bee rule removed; commit 385bede82b322295c40d07ce933143b5f0c13228",
+    "files_changed": [
+      "docs/history/pstack-playbook-port/reports/ppb-28c.md"
+    ],
+    "deviations": [
+      "sync-ack: playbook or report text only; regen runs once at wave close; anchored concepts are re-graded by the final writer cell"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-15T04:55:02.728Z",
+    "behavior_change": false,
+    "verification_evidence": "report-only cell; the index parity test covers the ported rows and 5/5 passed; leader reran class_playbook_parity at 331557906: test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "1fe39916-f67e-4233-a4da-ffc17046e993",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test principle_index_parity",
+    "claimed_at": "2026-11-15T04:51:20.861Z",
+    "knowledge_delta": [],
+    "sync_ack": "playbook or report text only; regen runs once at wave close; anchored concepts are re-graded by the final writer cell",
+    "no_mistakes": true,
+    "no_knowledge_used": true,
+    "no_principles_used": true,
+    "report": {
+      "outcome": "Wrote ppb-28c report: all 41 source rules of the three principles present, no pstack-only tool name, no bee rule removed; commit 385bede82b322295c40d07ce933143b5f0c13228",
+      "commit": "331557906a8ede63a588cb68b0185dbc6e2d218e",
+      "files": [
+        "docs/history/pstack-playbook-port/reports/ppb-28c.md"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test principle_index_parity — green:unit — report-only cell; the index parity test covers the ported rows and 5/5 passed; leader reran class_playbook_parity at 331557906: test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+      "deviations": [],
+      "knowledge_used": [],
+      "patch_id": "5acf59fa74eb89622efe5da5df889adb0e46586e"
+    },
+    "warnings": [],
+    "tests": "boundary"
+  },
+  "usage": {
+    "new": 58161,
+    "cached": 373161,
+    "total": 431322,
+    "models": {
+      "claude-opus-5-5": {
+        "new": 58161,
+        "cached": 373161,
+        "total": 431322
+      }
+    },
+    "jobs": [
+      "job-1794718283385-3615092-1"
+    ]
+  }
+}

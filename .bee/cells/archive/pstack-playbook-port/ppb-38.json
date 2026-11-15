@@ -1,0 +1,144 @@
+{
+  "id": "ppb-38",
+  "feature": "pstack-playbook-port",
+  "title": "Teach the leader to route to a situation",
+  "lane": "standard",
+  "role": "docs",
+  "deps": [],
+  "decisions": [
+    "d480d467-1a0d-4feb-bbe6-3f181aa86f4b",
+    "b749c98d-65e2-4346-b07f-6dc52dbd78ca",
+    "3ac421ec-168b-4007-9976-9b6bcbe6e18a",
+    "41bbba68-9de8-48b3-a9c7-ba1abfdd6410",
+    "913115b3-e1f1-4004-902c-bc574fabb2f1"
+  ],
+  "files": [
+    "packages/bee/LEADER.md",
+    ".bee/LEADER.md",
+    "skills/bee-planning/SKILL.md",
+    "skills/bee-planning/references/planning-reference.md",
+    "skills/bee-hive/references/routing-and-contracts.md",
+    "skills/bee-hive/SKILL.md",
+    ".claude-plugin/skills/bee-planning/",
+    ".codex-plugin/skills/bee-planning/",
+    ".claude/skills/bee-planning/",
+    ".agents/skills/bee-planning/",
+    ".opencode/skills/bee-planning/",
+    ".claude-plugin/skills/bee-hive/",
+    ".codex-plugin/skills/bee-hive/",
+    ".claude/skills/bee-hive/",
+    ".agents/skills/bee-hive/",
+    ".opencode/skills/bee-hive/",
+    "docs/history/codex-harness-hardening/release-manifest.json",
+    ".bee/onboarding.json",
+    "skills/bee-researching/references/trace-and-provenance.md"
+  ],
+  "read_first": [
+    "docs/history/pstack-playbook-port/CONTEXT.md",
+    "docs/history/pstack-playbook-port/plan.md",
+    "packages/bee/LEADER.md",
+    ".bee/LEADER.md",
+    "skills/bee-planning/SKILL.md",
+    "skills/bee-planning/references/planning-reference.md",
+    "skills/bee-hive/references/routing-and-contracts.md",
+    "skills/bee-hive/SKILL.md",
+    "skills/bee-planning/playbooks/bugfix.md",
+    "skills/bee-planning/playbooks/session/index.md"
+  ],
+  "affects_skills": [
+    "skills/bee-planning/SKILL.md",
+    "skills/bee-planning/references/planning-reference.md",
+    "skills/bee-hive/references/routing-and-contracts.md",
+    "skills/bee-hive/SKILL.md",
+    "skills/bee-researching/references/trace-and-provenance.md"
+  ],
+  "affects_specs": [],
+  "action": "Update the doctrine to the situation router (decision 41bbba68). packages/bee/LEADER.md § Route each task: after `bee orient --class <c>`, pick the situation whose trigger phrases match the task from the situation lines it prints, open that situation file, and seed the todo list from its numbered steps; when no situation fits, or the work is large and cross-cutting, use bee-figure-it-out; a session situation (pick up, pause, run until done, orchestrate, babysit, ship) comes from skills/bee-planning/playbooks/session/index.md and binds no class. Add to § Trigger index one line per new skill a leader reaches by situation (bee-architect, bee-arena, bee-interrogate, bee-fanout, bee-tdd, bee-show-me-your-work, bee-reflect, bee-recall, bee-blast-radius, bee-comment-review, bee-figure-it-out), pointing, never restating. In skills/bee-planning/SKILL.md and planning-reference.md § Playbooks, the plan cites the situation file skills/bee-planning/playbooks/<class>/<situation>.md, and the class index only for a class with no situations. In skills/bee-hive/references/routing-and-contracts.md, the todo list seeds from the situation's steps. Name no principle in any of these surfaces (decision a6e3d0bf). Copy packages/bee/LEADER.md to .bee/LEADER.md byte for byte, run bee dev regen, and commit. Bee commands you may run in this cell: cargo test, `.bee/bin/bee dev regen`, `.bee/bin/bee dev release-manifest --check`, `.bee/bin/bee knowledge check`, `.bee/bin/bee knowledge consolidate`, `.bee/bin/bee onboard --repo-root . --json`, and `bee herding notify`. Never run `bee dispatch` or any of its `--help`. Round 2: commit ecf77d86c already landed the doctrine changes above; keep them. The one red is pointer_integrity: skills/bee-researching/references/trace-and-provenance.md:129 points at references/lead-judgment.md, which lives at skills/bee-interrogate/references/lead-judgment.md. Fix that pointer in the form the pointer test accepts, run bee dev regen, rerun the verify, commit, and cap.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test rule_index_parity && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test pointer_integrity && .bee/bin/bee dev release-manifest --check && .bee/bin/bee onboard --repo-root . --json",
+  "must_haves": {
+    "truths": [
+      "LEADER.md § Route each task tells the leader to pick a situation from the orient output and names bee-figure-it-out as the fallback",
+      "the plan template cites a situation file",
+      "the trigger index points at every new skill"
+    ],
+    "prohibitions": [
+      "No surface enumerates the principle set",
+      "No rule is restated in two places"
+    ]
+  },
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "w-ppb-38",
+    "outcome": "Qualified the lead-judgment pointer in trace-and-provenance.md, regenerated trees and manifest, pointer_integrity green; commit 8bd04dcdf",
+    "files_changed": [
+      "skills/bee-researching/references/trace-and-provenance.md",
+      ".agents/skills/bee-researching/references/trace-and-provenance.md",
+      ".claude-plugin/skills/bee-researching/references/trace-and-provenance.md",
+      ".claude/skills/bee-researching/references/trace-and-provenance.md",
+      ".codex-plugin/skills/bee-researching/references/trace-and-provenance.md",
+      ".opencode/skills/bee-researching/references/trace-and-provenance.md",
+      "docs/history/codex-harness-hardening/release-manifest.json",
+      ".bee/onboarding.json"
+    ],
+    "deviations": [
+      "sync-ack: playbook or report text only; regen runs once at wave close; anchored concepts are re-graded by the final writer cell"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-15T05:30:45.780Z",
+    "behavior_change": false,
+    "verification_evidence": "the change is one doc pointer plus regenerated copies; the full cargo suite was not run; leader reran class_playbook_parity at 8bd04dcdf: test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "1fe39916-f67e-4233-a4da-ffc17046e993",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test rule_index_parity && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test pointer_integrity && .bee/bin/bee dev release-manifest --check && .bee/bin/bee onboard --repo-root . --json",
+    "claimed_at": "2026-11-15T05:29:59.268Z",
+    "verified_at": null,
+    "baseline": null,
+    "reaction": null,
+    "skipped": null,
+    "unknowns": null,
+    "found": null,
+    "stopped": null,
+    "knowledge_delta": [],
+    "sync_ack": "playbook or report text only; regen runs once at wave close; anchored concepts are re-graded by the final writer cell",
+    "no_mistakes": true,
+    "no_knowledge_used": true,
+    "no_principles_used": true,
+    "report": {
+      "outcome": "Qualified the lead-judgment pointer in trace-and-provenance.md, regenerated trees and manifest, pointer_integrity green; commit 8bd04dcdf",
+      "commit": "8bd04dcdfdc089603ff4d413e26120914c0c2bd8",
+      "files": [
+        "skills/bee-researching/references/trace-and-provenance.md",
+        ".agents/skills/bee-researching/references/trace-and-provenance.md",
+        ".claude-plugin/skills/bee-researching/references/trace-and-provenance.md",
+        ".claude/skills/bee-researching/references/trace-and-provenance.md",
+        ".codex-plugin/skills/bee-researching/references/trace-and-provenance.md",
+        ".opencode/skills/bee-researching/references/trace-and-provenance.md",
+        "docs/history/codex-harness-hardening/release-manifest.json",
+        ".bee/onboarding.json"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test rule_index_parity && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test pointer_integrity && .bee/bin/bee dev release-manifest --check && .bee/bin/bee onboard --repo-root . --json — green:unit — the change is one doc pointer plus regenerated copies; the full cargo suite was not run; leader reran class_playbook_parity at 8bd04dcdf: test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+      "deviations": [],
+      "patch_id": "fc6e57fe938a46df282bc1dddc1b80765b8af8d1"
+    },
+    "warnings": [],
+    "tests": "boundary"
+  },
+  "usage": {
+    "new": 105588,
+    "cached": 1158614,
+    "total": 1264202,
+    "models": {
+      "claude-sonnet-5-5": {
+        "new": 105588,
+        "cached": 1158614,
+        "total": 1264202
+      }
+    },
+    "jobs": [
+      "job-1794720498653-3970038-1",
+      "job-1794720600820-3977955-1"
+    ]
+  }
+}

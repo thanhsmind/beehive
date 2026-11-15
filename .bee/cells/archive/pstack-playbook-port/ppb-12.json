@@ -1,0 +1,128 @@
+{
+  "id": "ppb-12",
+  "feature": "pstack-playbook-port",
+  "title": "Port the babysit, shipping, autopilot and PR playbooks",
+  "lane": "standard",
+  "role": "docs",
+  "deps": [
+    "ppb-11"
+  ],
+  "decisions": [
+    "d480d467-1a0d-4feb-bbe6-3f181aa86f4b",
+    "063a21e4-bccc-46a4-8fe8-1f1f99874c72",
+    "b749c98d-65e2-4346-b07f-6dc52dbd78ca",
+    "c64c5827-e110-4add-988c-5b668e93ccfe",
+    "913115b3-e1f1-4004-902c-bc574fabb2f1"
+  ],
+  "files": [
+    "skills/bee-planning/playbooks/session/index.md",
+    "skills/bee-planning/playbooks/session/babysit.md",
+    "skills/bee-planning/playbooks/session/shipping.md",
+    "skills/bee-planning/playbooks/session/autopilot-full.md",
+    "skills/bee-planning/playbooks/session/autopilot-stack.md",
+    "skills/bee-planning/playbooks/session/opening-a-pr.md",
+    "docs/history/pstack-playbook-port/port-notes/session-ppb-12.md"
+  ],
+  "read_first": [
+    "docs/history/pstack-playbook-port/CONTEXT.md",
+    "docs/history/pstack-playbook-port/plan.md",
+    "skills/bee-planning/playbooks/bugfix.md",
+    "skills/bee-planning/playbooks/bugfix/bug-fix.md",
+    "docs/history/pstack-playbook-port/port-notes.md",
+    "/home/thanhsmind/Projects/refs/ai-skills/cursor-plugins/pstack/skills/poteto-mode/playbooks/babysit.md",
+    "/home/thanhsmind/Projects/refs/ai-skills/cursor-plugins/pstack/skills/poteto-mode/playbooks/shipping.md",
+    "/home/thanhsmind/Projects/refs/ai-skills/cursor-plugins/pstack/skills/poteto-mode/playbooks/autopilot-full.md",
+    "/home/thanhsmind/Projects/refs/ai-skills/cursor-plugins/pstack/skills/poteto-mode/playbooks/autopilot-stack.md",
+    "/home/thanhsmind/Projects/refs/ai-skills/cursor-plugins/pstack/skills/poteto-mode/playbooks/opening-a-pr.md"
+  ],
+  "affects_skills": [
+    "skills/bee-planning/playbooks/session/index.md",
+    "skills/bee-planning/playbooks/session/babysit.md",
+    "skills/bee-planning/playbooks/session/shipping.md",
+    "skills/bee-planning/playbooks/session/autopilot-full.md",
+    "skills/bee-planning/playbooks/session/autopilot-stack.md",
+    "skills/bee-planning/playbooks/session/opening-a-pr.md"
+  ],
+  "affects_specs": [],
+  "regen_obligation_ack": "wave-barrier",
+  "action": "Port into playbooks/session/: session/babysit.md from pstack babysit.md; session/shipping.md from pstack shipping.md; session/autopilot-full.md from pstack autopilot-full.md; session/autopilot-stack.md from pstack autopilot-stack.md; session/opening-a-pr.md from pstack opening-a-pr.md. Append the five situations of this cell to the Situations section of playbooks/session/index.md, keeping the existing lines. Index grammar (contract 913115b3): a '## Situations' heading, then one line per situation of the exact form - `<name>` — <trigger phrases, English and Vietnamese> — delivers: <deliverable>, <name> matching [a-z0-9-]+; the section ends at the next '## ' heading. Port rules: the pstack method text is the body (D1); every pstack tool is swapped for its bee counterpart per D2 (how and why become bee-how and bee-why gathers, subagent delegation becomes bee dispatch prepare, the control skill becomes the project's verify-app or the real interface, Opening a PR becomes the bee close and worktree merge path, show-me-your-work becomes a decision trail under docs/history/<feature>/); a step whose tool bee does not have yet (architect, arena, interrogate, swarm, tdd, figure-it-out, show-me-your-work) is dropped from the playbook text and named in your port notes file, because slice 3 brings those skills and re-adds the steps. Name no skill that does not exist in skills/ today. No line under skills/bee-planning/playbooks/ names Cursor, Graphite, bugbot or poteto-agent. Every step states why it holds, as decision 61b52e96 requires of class playbooks; keep the pstack reason where it gives one. Follow bugfix.md and bugfix/bug-fix.md as the worked example of shape and voice. Do not run bee dev regen: the leader runs it once at wave close (regen_obligation_ack wave-barrier). Sibling cells edit other class directories in this same worktree at the same time: if the parity fence is red only for a directory you did not touch, that is a sibling mid-edit; wait, rerun, and name it in your report. bee counterparts: session pickup and pause safely use .bee/HANDOFF.json, bee state handoff write and bee state handoff adopt; autonomous run and orchestrate use bee-herding and its control loop; worktree cleanup uses bee worktree prune; babysit, shipping, autopilot-full and autopilot-stack land work with bee worktree merge on green without asking (D4, uat_stop close) and stop at the uat door of bee close, which stays the owner's; opening a PR follows the ship_visibility draft-PR rule. Write docs/history/pstack-playbook-port/port-notes/session-ppb-12.md with one section per ported playbook listing each tool swap and each dropped step.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test class_playbook_parity",
+  "must_haves": {
+    "truths": [
+      "every session situation file is listed on session/index.md and the reverse",
+      "a playbook that lands work merges on green and stops at the uat door",
+      "no file under skills/bee-planning/playbooks/ names Cursor, Graphite, bugbot or poteto-agent"
+    ],
+    "prohibitions": [
+      "No class playbook is edited",
+      "No skill named that does not exist in skills/"
+    ]
+  },
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "w-ppb-12",
+    "outcome": "Ported babysit, shipping, autopilot-full, autopilot-stack and opening-a-pr into playbooks/session with index lines and port notes; parity fence green; commit 051eda386c018524004815475da061fc895bc900",
+    "files_changed": [
+      "skills/bee-planning/playbooks/session/index.md",
+      "skills/bee-planning/playbooks/session/babysit.md",
+      "skills/bee-planning/playbooks/session/shipping.md",
+      "skills/bee-planning/playbooks/session/autopilot-full.md",
+      "skills/bee-planning/playbooks/session/autopilot-stack.md",
+      "skills/bee-planning/playbooks/session/opening-a-pr.md",
+      "docs/history/pstack-playbook-port/port-notes/session-ppb-12.md"
+    ],
+    "deviations": [
+      "sync-ack: playbook or report text only; regen runs once at wave close; anchored concepts are re-graded by the final writer cell"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-15T03:26:43.005Z",
+    "behavior_change": false,
+    "verification_evidence": "docs-only change, the fence reads the session files and index; 9 passed 0 failed; leader reran class_playbook_parity at 051eda386: test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "1fe39916-f67e-4233-a4da-ffc17046e993",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test class_playbook_parity",
+    "claimed_at": "2026-11-15T03:22:52.858Z",
+    "knowledge_delta": [],
+    "sync_ack": "playbook or report text only; regen runs once at wave close; anchored concepts are re-graded by the final writer cell",
+    "no_mistakes": true,
+    "no_knowledge_used": true,
+    "no_principles_used": true,
+    "report": {
+      "outcome": "Ported babysit, shipping, autopilot-full, autopilot-stack and opening-a-pr into playbooks/session with index lines and port notes; parity fence green; commit 051eda386c018524004815475da061fc895bc900",
+      "commit": "051eda386c018524004815475da061fc895bc900",
+      "files": [
+        "skills/bee-planning/playbooks/session/index.md",
+        "skills/bee-planning/playbooks/session/babysit.md",
+        "skills/bee-planning/playbooks/session/shipping.md",
+        "skills/bee-planning/playbooks/session/autopilot-full.md",
+        "skills/bee-planning/playbooks/session/autopilot-stack.md",
+        "skills/bee-planning/playbooks/session/opening-a-pr.md",
+        "docs/history/pstack-playbook-port/port-notes/session-ppb-12.md"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test class_playbook_parity — green:unit — docs-only change, the fence reads the session files and index; 9 passed 0 failed; leader reran class_playbook_parity at 051eda386: test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+      "deviations": [],
+      "patch_id": "4308f0d457efb4098ee59f3d094c505e2a2190ee"
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 699 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
+  },
+  "usage": {
+    "new": 116307,
+    "cached": 1220822,
+    "total": 1337129,
+    "models": {
+      "claude-sonnet-5-5": {
+        "new": 116307,
+        "cached": 1220822,
+        "total": 1337129
+      }
+    },
+    "jobs": [
+      "job-1794712973618-2628342-1"
+    ]
+  }
+}
