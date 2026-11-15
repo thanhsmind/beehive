@@ -142,7 +142,7 @@
     },
     {
       "path": ".claude-plugin/skills/.bee-render.json",
-      "sha256": "e5f667cfbe0f372865cbd0e64b7f9baca4e42df26fb8658ea7e0734bd241682f",
+      "sha256": "00718775f6a90e6705912add62ed75dc80bc08224b443f15a5da33db0196df47",
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/.bee-render.json"
@@ -1584,14 +1584,21 @@
     },
     {
       "path": ".claude-plugin/skills/bee-technical-writing/CREATION-LOG.md",
-      "sha256": "410237712b9d268bce3d5c8ad0748db317d5f4a589dead7aac7a224be05964ac",
+      "sha256": "365fc6ac9e7432620f3f23ed01891e096007a31f35a42f83e0e57203b869ae7a",
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/bee-technical-writing/CREATION-LOG.md"
     },
     {
+      "path": ".claude-plugin/skills/bee-technical-writing/LICENSE.pstack",
+      "sha256": "bc957ca6bee02792566a1a028d105e02e247c6e77cf057061674273da77b200e",
+      "mode": "644",
+      "role": "plugin_skill_claude_render",
+      "packagePath": ".claude-plugin/skills/bee-technical-writing/LICENSE.pstack"
+    },
+    {
       "path": ".claude-plugin/skills/bee-technical-writing/SKILL.md",
-      "sha256": "8cb4e6c48e73547bce276f2ae41fae375b93c9329e3552c1a7e76c9e8f648ab1",
+      "sha256": "c6e7369e4ab9aad0c2bd0a9e2afe6d059893b8b47b53f321479fcd00ca412bc6",
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/bee-technical-writing/SKILL.md"
@@ -1787,7 +1794,7 @@
     },
     {
       "path": ".codex-plugin/skills/.bee-render.json",
-      "sha256": "72cb31654234bee422bdb563f94f5b1b34992157402028b997a4b3f5db2a4d33",
+      "sha256": "020f2d5a6ba88f902352c4aaddf8d963857589c42d91964a6b75f1a411fa8868",
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/.bee-render.json"
@@ -3229,14 +3236,21 @@
     },
     {
       "path": ".codex-plugin/skills/bee-technical-writing/CREATION-LOG.md",
-      "sha256": "410237712b9d268bce3d5c8ad0748db317d5f4a589dead7aac7a224be05964ac",
+      "sha256": "365fc6ac9e7432620f3f23ed01891e096007a31f35a42f83e0e57203b869ae7a",
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/bee-technical-writing/CREATION-LOG.md"
     },
     {
+      "path": ".codex-plugin/skills/bee-technical-writing/LICENSE.pstack",
+      "sha256": "bc957ca6bee02792566a1a028d105e02e247c6e77cf057061674273da77b200e",
+      "mode": "644",
+      "role": "plugin_skill_codex_render",
+      "packagePath": ".codex-plugin/skills/bee-technical-writing/LICENSE.pstack"
+    },
+    {
       "path": ".codex-plugin/skills/bee-technical-writing/SKILL.md",
-      "sha256": "8cb4e6c48e73547bce276f2ae41fae375b93c9329e3552c1a7e76c9e8f648ab1",
+      "sha256": "c6e7369e4ab9aad0c2bd0a9e2afe6d059893b8b47b53f321479fcd00ca412bc6",
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/bee-technical-writing/SKILL.md"
@@ -6365,14 +6379,21 @@
     },
     {
       "path": "skills/bee-technical-writing/CREATION-LOG.md",
-      "sha256": "410237712b9d268bce3d5c8ad0748db317d5f4a589dead7aac7a224be05964ac",
+      "sha256": "365fc6ac9e7432620f3f23ed01891e096007a31f35a42f83e0e57203b869ae7a",
       "mode": "644",
       "role": "plugin_skill",
       "packagePath": "skills/bee-technical-writing/CREATION-LOG.md"
     },
     {
+      "path": "skills/bee-technical-writing/LICENSE.pstack",
+      "sha256": "bc957ca6bee02792566a1a028d105e02e247c6e77cf057061674273da77b200e",
+      "mode": "644",
+      "role": "plugin_skill",
+      "packagePath": "skills/bee-technical-writing/LICENSE.pstack"
+    },
+    {
       "path": "skills/bee-technical-writing/SKILL.md",
-      "sha256": "8cb4e6c48e73547bce276f2ae41fae375b93c9329e3552c1a7e76c9e8f648ab1",
+      "sha256": "c6e7369e4ab9aad0c2bd0a9e2afe6d059893b8b47b53f321479fcd00ca412bc6",
       "mode": "644",
       "role": "plugin_skill",
       "packagePath": "skills/bee-technical-writing/SKILL.md"
