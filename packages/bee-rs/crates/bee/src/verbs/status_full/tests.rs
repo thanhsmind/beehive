@@ -679,6 +679,90 @@ use crate::version::BEE_VERSION;
         }
     }
 
+    fn install_host_playbooks(root: &Path, dir: &str) {
+        let situations = crate::situations::class_situations(Path::new("/nonexistent-bee-root"), "bugfix");
+        assert!(situations.iter().any(|s| s.name == "bug-fix"), "{situations:?}");
+        let index: String = situations
+            .iter()
+            .map(|s| format!("- `{}` — {} — delivers: {}\n", s.name, s.triggers, s.deliverable))
+            .collect();
+        write(root, &format!("{dir}/playbooks/bugfix.md"), &format!("# Bugfix\n\n## Situations\n\n{index}"));
+        for s in &situations {
+            write(root, &format!("{dir}/playbooks/bugfix/{}.md", s.name), "# Situation\n\n1. step\n");
+        }
+    }
+
+    fn assert_orient_class_paths_open_under(root: &Path, dir: &str) {
+        let packet = class_packet(root, "bugfix");
+        let prefix = format!("{dir}/playbooks/");
+        let playbook = packet["playbook"].as_str().unwrap().to_string();
+        let rows = packet["situations"].as_array().unwrap().clone();
+        assert!(rows.iter().any(|r| r["path"] == json!(format!("{prefix}bugfix/bug-fix.md"))), "{rows:?}");
+        let text = render_class_text(&packet);
+        let lines: Vec<&str> = text.lines().collect();
+        assert_eq!(lines[0], format!("playbook: {playbook}"));
+        assert!(playbook.starts_with(&prefix), "{text}");
+        assert!(root.join(&playbook).is_file(), "printed playbook {playbook} does not exist\n{text}");
+        for (row, line) in rows.iter().zip(&lines[1..]) {
+            let path = row["path"].as_str().unwrap();
+            assert_eq!(*line, format!("situation: {path} — {}", row["triggers"].as_str().unwrap()));
+            assert!(path.starts_with(&prefix), "{text}");
+            assert!(root.join(path).is_file(), "printed situation {path} does not exist\n{text}");
+        }
+        assert_eq!(lines.iter().filter(|l| l.starts_with("situation: ")).count(), rows.len(), "{text}");
+        assert_eq!(lines.iter().filter(|l| l.starts_with("next: ")).count(), 1, "{text}");
+        assert!(lines.last().unwrap().starts_with("next: pick the situation whose trigger phrases match"), "{text}");
+        let reparsed: Value = serde_json::from_str(&jsjson::stringify_pretty(&Value::Object(packet))).unwrap();
+        assert_eq!(reparsed["playbook"], json!(playbook));
+        assert_eq!(reparsed["situations"], Value::Array(rows));
+    }
+
+    #[test]
+    fn orient_class_prints_openable_paths_in_a_claude_skills_host() {
+        let tmp = class_fixture();
+        install_host_playbooks(tmp.path(), ".claude/skills/bee-planning");
+        assert_orient_class_paths_open_under(tmp.path(), ".claude/skills/bee-planning");
+    }
+
+    #[test]
+    fn orient_class_prints_openable_paths_in_an_agents_skills_host() {
+        let tmp = class_fixture();
+        install_host_playbooks(tmp.path(), ".agents/skills/bee-planning");
+        assert_orient_class_paths_open_under(tmp.path(), ".agents/skills/bee-planning");
+    }
+
+    #[test]
+    fn orient_class_prefers_the_repo_skills_tree_over_claude_skills() {
+        let tmp = class_fixture();
+        install_host_playbooks(tmp.path(), ".claude/skills/bee-planning");
+        install_host_playbooks(tmp.path(), "skills/bee-planning");
+        assert_orient_class_paths_open_under(tmp.path(), "skills/bee-planning");
+    }
+
+    #[test]
+    fn orient_class_never_prints_a_missing_file_when_the_host_has_only_one_situation() {
+        let tmp = class_fixture();
+        let root = tmp.path();
+        write(root, ".claude/skills/bee-planning/playbooks/bugfix/bug-fix.md", "# Bug fix\n\n1. step\n");
+        let packet = class_packet(root, "bugfix");
+        let text = render_class_text(&packet);
+        let skill_get = "load bee-planning with skill_get and open this file under its local.path";
+        let mut paths = vec![packet["playbook"].as_str().unwrap().to_string()];
+        paths.extend(packet["situations"].as_array().unwrap().iter().map(|r| r["path"].as_str().unwrap().to_string()));
+        assert!(
+            paths.contains(&".claude/skills/bee-planning/playbooks/bugfix/bug-fix.md".to_string()),
+            "{text}"
+        );
+        for path in &paths {
+            assert!(
+                path.ends_with(skill_get) || root.join(path).is_file(),
+                "printed path {path} neither exists nor names skill_get\n{text}"
+            );
+        }
+        assert_eq!(text.lines().filter(|l| l.starts_with("next: ")).count(), 1, "{text}");
+        assert!(text.lines().last().unwrap().starts_with("next: "), "{text}");
+    }
+
     #[test]
     fn bee_orient_class_perf_json_carries_an_empty_situations_key() {
         let tmp = class_fixture();
