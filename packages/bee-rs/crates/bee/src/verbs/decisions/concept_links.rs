@@ -58,30 +58,40 @@ fn d_tokens(tail: &str) -> Vec<(u64, u64)> {
     let chars: Vec<char> = tail.chars().collect();
     let mut tokens = Vec::new();
     let mut i = 0;
-    while i < chars.len() {
-        let boundary = i == 0 || !chars[i - 1].is_alphanumeric();
-        if chars[i] == 'D' && boundary && chars.get(i + 1).is_some_and(|c| c.is_ascii_digit()) {
-            let (a, next) = read_number(&chars, i + 1);
-            let mut hi = a;
-            let mut end = next;
-            if chars.get(next) == Some(&'-') {
-                let mut j = next + 1;
-                if chars.get(j) == Some(&'D') {
-                    j += 1;
-                }
-                if chars.get(j).is_some_and(|c| c.is_ascii_digit()) {
-                    let (b, after) = read_number(&chars, j);
-                    hi = b;
-                    end = after;
-                }
+    while chars.get(i).is_some_and(|c| c.is_whitespace()) {
+        i += 1;
+    }
+    loop {
+        if chars.get(i) != Some(&'D') || !chars.get(i + 1).is_some_and(|c| c.is_ascii_digit()) {
+            break;
+        }
+        let (a, next) = read_number(&chars, i + 1);
+        let mut hi = a;
+        let mut end = next;
+        if chars.get(next) == Some(&'-') {
+            let mut j = next + 1;
+            if chars.get(j) == Some(&'D') {
+                j += 1;
             }
-            tokens.push((a, hi.max(a)));
-            i = end;
-        } else {
-            i += 1;
+            if chars.get(j).is_some_and(|c| c.is_ascii_digit()) {
+                let (b, after) = read_number(&chars, j);
+                hi = b;
+                end = after;
+            }
+        }
+        tokens.push((a, hi.max(a)));
+        i = end;
+        match separator_len(&chars[i..]) {
+            Some(n) => i += n,
+            None => break,
         }
     }
     tokens
+}
+
+fn separator_len(rest: &[char]) -> Option<usize> {
+    let starts = |s: &str| s.chars().enumerate().all(|(k, c)| rest.get(k) == Some(&c));
+    [" and ", ", ", ",", "/"].into_iter().find(|s| starts(s)).map(|s| s.chars().count())
 }
 
 fn read_number(chars: &[char], from: usize) -> (u64, usize) {
