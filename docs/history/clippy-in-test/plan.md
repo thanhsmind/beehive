@@ -1,0 +1,113 @@
+---
+artifact_contract: bee-plan/v2
+mode: small
+---
+
+# Plan: Clippy runs before the tests
+
+## Summary
+
+beehive's declared test path gains a clippy run before the cargo tests, as
+the owner chose: fix the one deny-level clippy error, then run clippy without
+`-D warnings`, so the list is green on day one. The release script and the
+config-to-CI parity test learn to read a list, and CI runs the clippy step.
+
+Mode: `small` — one lint fix, one config value, two readers, one workflow.
+
+## Requirements (from CONTEXT.md)
+
+- D1: `commands.test` = [clippy without `-D warnings`, the unchanged cargo test command]; the `never_loop` error is fixed first.
+- D2: release.sh runs each entry in order; proof_gate accepts a string or a list; ci.yml runs the clippy entry; windows.yml gains no clippy.
+- C1: tests per contract clippy-in-test.
+
+## Load-bearing claims
+
+| # | Claim | Label | Anchor | Verbatim evidence |
+|---|-------|-------|--------|-------------------|
+| 1 | The dossier loop returns on its first pass, which clippy denies as never_loop | read | packages/bee-rs/crates/bee/src/verbs/blind/mod.rs:337 | `for h in heads.iter().skip(1).filter(` |
+| 2 | The parity test reads commands.test as a string only | read | packages/bee-rs/crates/bee/tests/proof_gate.rs:37 | `.expect(".bee/config.json declares commands.test as a string");` |
+| 3 | The release gate reads commands.test as one string | read | scripts/release.sh:283 | `TEST_CMD="$(jq -r '.commands.test // empty' "$BEE_CONFIG")"` |
+| 4 | Without -D warnings clippy fails only on the one error | ran | cargo clippy --manifest-path packages/bee-rs/Cargo.toml --message-format short | `could not compile `bee` (bin "bee") due to 1 previous error; 1036 warnings emitted` |
+
+## Approach
+
+Situation: `skills/bee-planning/playbooks/feature/feature.md`.
+
+architect skipped: no new data shape; `commands.test` already accepts a list
+in `bee test` and in onboarding.
+
+Two cells in series: cit-1 (code) makes every change; cit-2 (test), a
+separate worker, verifies cit-1 against the contract and adds the tests it
+lacks.
+
+Rejected: one `&&`-joined string (hides which entry went red); clippy on the
+Windows job (untested cfg(windows) lints); `-D warnings` now (red on day one).
+
+## Role assignments
+
+```json
+{
+  "schema_version": "1.0",
+  "runtime": "claude",
+  "roster_sha256": "d4e696dbde7989d6388dacce3fd7057cb3a6935b46024b79698596a46f6f41d3",
+  "stages": [
+    {"stage": "implementation", "classification": "required", "role": "code", "reason": "cit-1 writes the lint fix, config, release script, parity test and workflow change."},
+    {"stage": "test-and-live-proof", "classification": "required", "role": "test", "reason": "cit-2 verifies cit-1 and adds the contract tests."},
+    {"stage": "docs", "classification": "not-applicable", "role": "docs", "reason": "The concept line rides cit-1."},
+    {"stage": "slice-judge", "classification": "not-applicable", "role": "review", "reason": "Small lane; the tester cell is the independent check. Review stays user-invoked."},
+    {"stage": "hat-facts-gaps", "classification": "not-applicable", "role": "hat-facts-gaps", "reason": "Small lane; every claim row was read or run this session."},
+    {"stage": "hat-alternatives", "classification": "not-applicable", "role": "hat-alternatives", "reason": "Small lane; rejected paths named."},
+    {"stage": "hat-user-impact", "classification": "not-applicable", "role": "hat-user-impact", "reason": "beehive-only config; the owner chose the option."},
+    {"stage": "hat-risks", "classification": "not-applicable", "role": "hat-risks", "reason": "The release gate keeps refusing on red; covered by the contract."},
+    {"stage": "hat-value", "classification": "not-applicable", "role": "hat-value", "reason": "The owner asked for this directly."},
+    {"stage": "deployment", "classification": "not-applicable", "role": "deploy", "reason": "No release in this feature."},
+    {"stage": "planning", "classification": "not-applicable", "role": "plan", "reason": "The leader wrote the plan."},
+    {"stage": "read-only-gather", "classification": "not-applicable", "role": "read", "reason": "The leader read the anchors directly."},
+    {"stage": "fact-extraction", "classification": "not-applicable", "role": "extraction", "reason": "No extraction stage."},
+    {"stage": "generation-fallback", "classification": "not-applicable", "role": "generation", "reason": "Both cells have a configured role."},
+    {"stage": "writing", "classification": "not-applicable", "role": "writer", "reason": "No prose deliverable."},
+    {"stage": "generic-advisor", "classification": "not-applicable", "role": "advisor", "reason": "Small lane."},
+    {"stage": "supervision", "classification": "not-applicable", "role": "supervisor", "reason": "Attended session."},
+    {"stage": "blind-lane-1", "classification": "not-applicable", "role": "lane-1", "reason": "No blind lanes."},
+    {"stage": "blind-lane-2", "classification": "not-applicable", "role": "lane-2", "reason": "No blind lanes."},
+    {"stage": "blind-lane-3", "classification": "not-applicable", "role": "lane-3", "reason": "No blind lanes."},
+    {"stage": "design-ui", "classification": "not-applicable", "role": "design", "reason": "No rendered UI."}
+  ]
+}
+```
+
+## Risk map
+
+| Risk | Guard |
+|---|---|
+| A release runs a list as one bash string and breaks | D2: release.sh runs each entry; the contract tests it |
+| CI lacks the clippy component | cit-1 adds `components: clippy` to the toolchain step |
+| A future clippy release adds a deny-level lint and reds CI | Accepted: that is a real finding, fixed as a fix-first cell |
+
+## Cells — current slice (preview)
+
+| id | title | files | deps | you see | proof |
+|---|---|---|---|---|---|
+| cit-1 | Run clippy before the tests in the declared test path | blind/mod.rs, config, release.sh, proof_gate.rs, ci.yml, concept | — | clippy exits 0; parity test green | clippy, proof_gate, blind tests |
+| cit-2 | Test the clippy entry and the list-valued test path | proof_gate.rs, blind/mod.rs | cit-1 | contract tests green | clippy, proof_gate, blind tests |
+
+```json
+[
+{"id":"cit-1","feature":"clippy-in-test","title":"Run clippy before the tests in the declared test path","lane":"small","role":"code","deps":[],
+"verify":"PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo clippy --manifest-path packages/bee-rs/Cargo.toml && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test proof_gate && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- blind",
+"must_haves":{"truths":["cargo clippy --manifest-path packages/bee-rs/Cargo.toml exits 0","commands.test in .bee/config.json is a list: the clippy command first, then the unchanged cargo test command","scripts/release.sh runs every commands.test entry in order and stops at the first red one","ci.yml runs the clippy entry and the toolchain step installs clippy","the proof_gate tests pass"]},
+"decisions":["d6c90a97-78e4-46d0-80e5-32ca5cf654e1","c44134a1-eef7-4de0-a798-f9fc71f7da50"],
+"files":["packages/bee-rs/crates/bee/src/verbs/blind/mod.rs",".bee/config.json","scripts/release.sh","packages/bee-rs/crates/bee/tests/proof_gate.rs",".github/workflows/ci.yml","docs/knowledge/areas/verify-pipeline/suite-topology-and-discovery.md"],
+"read_first":["docs/history/clippy-in-test/CONTEXT.md","packages/bee-rs/crates/bee/tests/proof_gate.rs","scripts/release.sh"],
+"affects_skills":[],"affects_specs":["docs/knowledge/areas/verify-pipeline/suite-topology-and-discovery.md"],
+"action":"Implement CONTEXT.md D1 and D2. (1) packages/bee-rs/crates/bee/src/verbs/blind/mod.rs near line 337: the for loop over heads.iter().skip(1).filter(level == 1) returns on its first pass; rewrite it as an if let on find so clippy::never_loop is gone and the refusal is byte-identical. (2) .bee/config.json commands.test becomes a JSON array: first \"PATH=\\\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\\\" cargo clippy --manifest-path packages/bee-rs/Cargo.toml\", then the current cargo test string unchanged. Keep the file's formatting style. (3) scripts/release.sh test gate (around line 283): read commands.test as a string or a list (jq: if type==\"array\" then .[] else . end; the python3 fallback the same), log and run each entry with bash -c in order, fail with the existing RED message naming the entry on the first non-zero exit; a string value behaves as today; empty still fails. (4) packages/bee-rs/crates/bee/tests/proof_gate.rs: read commands.test as a string or a list of strings; the entry starting with cargo test (after env prefix strip) keeps today's check against every cargo test line in both WORKFLOWS; each other entry, env-stripped, must equal a run line in .github/workflows/ci.yml (same plumbing strip as cargo_test_lines). Keep existing test names. (5) .github/workflows/ci.yml: the dtolnay/rust-toolchain@stable step gains with: components: clippy; add a step named Run clippy before the verify chain that runs cargo clippy --manifest-path packages/bee-rs/Cargo.toml. windows.yml unchanged. (6) docs/knowledge/areas/verify-pipeline/suite-topology-and-discovery.md: one sentence that beehive's commands.test is a list, clippy without -D warnings then the cargo suite, and CI runs both; cite clippy-in-test D1/D2 (never raw ids). Run bee knowledge check. No code comments; keep any existing shell comment lines in release.sh and ci.yml but add none. Do not add new tests; cit-2 owns them. Proof: the verify command; quote the counts."},
+{"id":"cit-2","feature":"clippy-in-test","title":"Test the clippy entry and the list-valued test path","lane":"small","role":"test","deps":["cit-1"],
+"verify":"PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo clippy --manifest-path packages/bee-rs/Cargo.toml && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test proof_gate && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- blind",
+"must_haves":{"truths":["a test fails when ci.yml has no run line for a non-cargo-test commands.test entry","a test checks that release.sh runs each entry of a list-valued commands.test in order and stops at the first red one, and still runs a string value","a test checks the dossier check still refuses a second level-1 heading with dossier_section_unexpected","cargo clippy --manifest-path packages/bee-rs/Cargo.toml exits 0"]},
+"decisions":["9a9521ab-7f49-4ece-a526-35a81d7ed38a","d6c90a97-78e4-46d0-80e5-32ca5cf654e1","c44134a1-eef7-4de0-a798-f9fc71f7da50"],
+"files":["packages/bee-rs/crates/bee/tests/proof_gate.rs","packages/bee-rs/crates/bee/src/verbs/blind/mod.rs"],
+"read_first":["docs/history/clippy-in-test/CONTEXT.md","packages/bee-rs/crates/bee/tests/proof_gate.rs","scripts/release.sh"],
+"affects_skills":[],"affects_specs":[],
+"action":"Verify the cit-1 commit against CONTEXT.md D1 and D2, then add tests that check every clause of contract clippy-in-test (decision 9a9521ab) that no test covers yet. Parity: drive the parity logic on in-memory workflow text so a missing clippy run line fails (refactor the helper in proof_gate.rs only as far as the test needs). Release: exercise the release.sh test-gate reading on a temp config, a list with a passing then failing entry and a string, without running a real release (extract nothing from release.sh into Rust; drive bash on a temp copy of only what you need, or assert on the jq expression output if a full run is not possible, and say which). Blind: a dossier with a second level-1 heading still refuses with dossier_section_unexpected (add it to the existing blind tests module). Assert observable output only. If cit-1 breaks the contract, return BLOCKED with the failing output instead of changing production code. No code comments. Proof: the verify command; quote the counts and name the new tests."}
+]
+```
