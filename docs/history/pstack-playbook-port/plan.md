@@ -105,10 +105,10 @@ the principle `classes:` filter and two parity fences for 23 values);
 situations as sections inside the class file (the router could not name a
 file and the plan check could not hold it); verbatim copy (D2).
 
-Waves: slice 1 runs two chains side by side. The Rust chain pp-1, pp-1t,
-pp-2, pp-2t is serial because every cell compiles the same crate in one
-worktree. pp-3 and pp-3c touch Markdown and the rendered trees only and run
-beside it. pp-4 waits on both chains because the fence reads the bugfix files
+Waves: slice 1 runs two chains side by side. The Rust chain ppb-1, ppb-1t,
+ppb-2, ppb-2t is serial because every cell compiles the same crate in one
+worktree. ppb-3 and ppb-3c touch Markdown and the rendered trees only and run
+beside it. ppb-4 waits on both chains because the fence reads the bugfix files
 and the crate.
 
 ## Role assignments
@@ -119,9 +119,9 @@ and the crate.
   "runtime": "claude",
   "roster_sha256": "d4e696dbde7989d6388dacce3fd7057cb3a6935b46024b79698596a46f6f41d3",
   "stages": [
-    {"stage":"implementation","classification":"required","role":"code","reason":"pp-1 and pp-2 write Rust."},
+    {"stage":"implementation","classification":"required","role":"code","reason":"ppb-1 and ppb-2 write Rust."},
     {"stage":"testing","classification":"required","role":"test","reason":"Every tester and checker cell runs on the test role, apart from its implementer."},
-    {"stage":"documentation","classification":"required","role":"docs","reason":"pp-3 and the later port slices write playbooks, skills and principles."},
+    {"stage":"documentation","classification":"required","role":"docs","reason":"ppb-3 and the later port slices write playbooks, skills and principles."},
     {"stage":"consolidation","classification":"required","role":"writer","reason":"The final slice consolidates knowledge."},
     {"stage":"read-only-gather","classification":"conditional","role":"read","condition":"a leader lookup needs more than three files","reason":"Cheap reads."},
     {"stage":"hat-facts-gaps","classification":"required","role":"hat-facts-gaps","reason":"Standard lane plan-step hat wave."},
@@ -148,12 +148,12 @@ and the crate.
 
 | Component | Risk | Lands in | Proof needed |
 |---|---|---|---|
-| orient output changes for scripts | MEDIUM | pp-1 | the playbook line stays byte-identical; `situations` is always present (pp-1t) |
-| Host repo has no `skills/` tree | MEDIUM | pp-1 | pp-1t runs orient in a repo with no `skills/` and gets the compiled-in situations (claims 14, 15) |
-| Plans in flight that cite only a class index | MEDIUM | pp-2 | the finding fires only for a class that lists situations; slice 1 lists one (bugfix); the plan check is advisory, it never refuses a gate |
-| The merged bug-fix file drops an enforced bee line | MEDIUM | pp-3 | pp-3c lists every old line as present (claim 12) |
-| A vendored file names a tool hosts lack | MEDIUM | pp-3 and the port slices | the checker's `rg` over `skills/bee-planning/` finds none; port notes live under `docs/history/` |
-| A class index names a skill not yet shipped | LOW | pp-3, slice 3 | slice 1 indexes name no skill; slice 3 adds the bee-figure-it-out fallback line with the skill |
+| orient output changes for scripts | MEDIUM | ppb-1 | the playbook line stays byte-identical; `situations` is always present (ppb-1t) |
+| Host repo has no `skills/` tree | MEDIUM | ppb-1 | ppb-1t runs orient in a repo with no `skills/` and gets the compiled-in situations (claims 14, 15) |
+| Plans in flight that cite only a class index | MEDIUM | ppb-2 | the finding fires only for a class that lists situations; slice 1 lists one (bugfix); the plan check is advisory, it never refuses a gate |
+| The merged bug-fix file drops an enforced bee line | MEDIUM | ppb-3 | ppb-3c lists every old line as present (claim 12) |
+| A vendored file names a tool hosts lack | MEDIUM | ppb-3 and the port slices | the checker's `rg` over `skills/bee-planning/` finds none; port notes live under `docs/history/` |
+| A class index names a skill not yet shipped | LOW | ppb-3, slice 3 | slice 1 indexes name no skill; slice 3 adds the bee-figure-it-out fallback line with the skill |
 | New skills fail the trigger fixture | LOW | slice 3 | `skill_triggers` green (claims 10, 11) |
 
 ## Shape
@@ -185,21 +185,21 @@ All `cargo test` proofs run with `--manifest-path packages/bee-rs/Cargo.toml -p 
 
 | id | title | files | deps | you see | proof |
 |---|---|---|---|---|---|
-| pp-1 | List a class's situations in orient | `situations.rs` (new), `main.rs`, `orient.rs`, `status_full/tests.rs` | — | `bee orient --class bugfix` adds one line per bugfix situation; the playbook line is unchanged | `cargo test status_full — green:unit — touched orient.rs` |
-| pp-1t | Test the situation reader and orient listing | `status_full/tests.rs`, `situations.rs` | pp-1 | tests pin the parser, the fallback and the JSON key | `cargo test situations status_full — green:unit — tester for pp-1` |
-| pp-2 | Hold a plan to a situation playbook | `plan_group.rs` | pp-1t | `bee plan check` names the situation files a bugfix plan forgot to cite | `cargo test plan_group — green:unit — touched plan_group.rs` |
-| pp-2t | Test the situation citation rule | `plan_group.rs` | pp-2 | tests pin cited, index-only, no-situation class and no-class cases | `cargo test plan_group — green:unit — tester for pp-2` |
-| pp-3 | Port the pstack bug-fix playbook as the first situation | `skills/bee-planning/playbooks/bugfix.md`, `bugfix/bug-fix.md` (new), `LICENSE.pstack` (new), `port-notes.md` (new), the rendered trees | — | the bugfix class lists its situation with trigger phrases; the situation holds the pstack method and bee's enforced lines | `diff -r of the rendered tree — green:static — docs port` |
-| pp-3c | Check the bug-fix port against its sources | its report only | pp-3 | a report of every source step present or missing | `rg pstack-only tools — green:static — checker for pp-3` |
-| pp-4 | Fence the situation files against their index | `class_playbook_parity.rs` | pp-2t, pp-3c | the suite goes red when a situation file and its index disagree | `cargo test --test class_playbook_parity — green:unit — fence` |
-| pp-4t | Check the situation fence goes red for each break | its report only | pp-4 | each break shown red, the clean tree green | `cargo test --test class_playbook_parity — green:unit — checker for pp-4` |
+| ppb-1 | List a class's situations in orient | `situations.rs` (new), `main.rs`, `orient.rs`, `status_full/tests.rs` | — | `bee orient --class bugfix` adds one line per bugfix situation; the playbook line is unchanged | `cargo test status_full — green:unit — touched orient.rs` |
+| ppb-1t | Test the situation reader and orient listing | `status_full/tests.rs`, `situations.rs` | ppb-1 | tests pin the parser, the fallback and the JSON key | `cargo test situations status_full — green:unit — tester for ppb-1` |
+| ppb-2 | Hold a plan to a situation playbook | `plan_group.rs` | ppb-1t | `bee plan check` names the situation files a bugfix plan forgot to cite | `cargo test plan_group — green:unit — touched plan_group.rs` |
+| ppb-2t | Test the situation citation rule | `plan_group.rs` | ppb-2 | tests pin cited, index-only, no-situation class and no-class cases | `cargo test plan_group — green:unit — tester for ppb-2` |
+| ppb-3 | Port the pstack bug-fix playbook as the first situation | `skills/bee-planning/playbooks/bugfix.md`, `bugfix/bug-fix.md` (new), `LICENSE.pstack` (new), `port-notes.md` (new), the rendered trees, the release manifest | — | the bugfix class lists its situation with trigger phrases; the situation holds the pstack method and bee's enforced lines | `diff -r of the rendered tree and release-manifest --check — green:static — docs port` |
+| ppb-3c | Check the bug-fix port against its sources | its report only | ppb-3 | a report of every source step present or missing | `rg pstack-only tools — green:static — checker for ppb-3` |
+| ppb-4 | Fence the situation files against their index | `class_playbook_parity.rs` | ppb-2t, ppb-3c | the suite goes red when a situation file and its index disagree | `cargo test --test class_playbook_parity — green:unit — fence` |
+| ppb-4t | Check the situation fence goes red for each break | its report only | ppb-4 | each break shown red, the clean tree green | `cargo test --test class_playbook_parity — green:unit — checker for ppb-4` |
 
 Packet (authoritative for the preview):
 
 ```json
 [
  {
-  "id": "pp-1",
+  "id": "ppb-1",
   "feature": "pstack-playbook-port",
   "title": "List a class's situations in orient",
   "lane": "standard",
@@ -223,7 +223,7 @@ Packet (authoritative for the preview):
   ],
   "affects_skills": [],
   "affects_specs": [],
-  "action": "Add situations.rs, the one reader of a class index's situations, shaped like principles.rs: read skills/bee-planning/playbooks/<class>.md from the repo root when it exists, otherwise a copy compiled in with include_str! for each of the nine class indexes; parse the '## Situations' section into (name, triggers, deliverable) rows; an absent section or a malformed line yields no row for that line, never an error. The class index grammar: a '## Situations' heading, then one line per situation of the exact form - `<name>` — <trigger phrases, English and Vietnamese> — delivers: <deliverable>, where <name> matches [a-z0-9-]+ and names playbooks/<class>/<name>.md; the section ends at the next '## ' heading. Register the module in main.rs. In orient.rs class_packet add a situations array (always present, empty for a class with none) and render_class_text one line per situation after the playbook line: `situation: skills/bee-planning/playbooks/<class>/<name>.md — <triggers>`. The existing playbook line stays byte-identical. Existing tests your change flips are yours; new tests belong to pp-1t.",
+  "action": "Add situations.rs, the one reader of a class index's situations, shaped like principles.rs: read skills/bee-planning/playbooks/<class>.md from the repo root when it exists, otherwise a copy compiled in with include_str! for each of the nine class indexes; parse the '## Situations' section into (name, triggers, deliverable) rows; an absent section or a malformed line yields no row for that line, never an error. The class index grammar: a '## Situations' heading, then one line per situation of the exact form - `<name>` — <trigger phrases, English and Vietnamese> — delivers: <deliverable>, where <name> matches [a-z0-9-]+ and names playbooks/<class>/<name>.md; the section ends at the next '## ' heading. Register the module in main.rs. In orient.rs class_packet add a situations array (always present, empty for a class with none) and render_class_text one line per situation after the playbook line: `situation: skills/bee-planning/playbooks/<class>/<name>.md — <triggers>`. The existing playbook line stays byte-identical. Existing tests your change flips are yours; new tests belong to ppb-1t.",
   "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee status_full",
   "must_haves": {
    "truths": [
@@ -239,13 +239,13 @@ Packet (authoritative for the preview):
   }
  },
  {
-  "id": "pp-1t",
+  "id": "ppb-1t",
   "feature": "pstack-playbook-port",
   "title": "Test the situation reader and orient listing",
   "lane": "standard",
   "role": "test",
   "deps": [
-   "pp-1"
+   "ppb-1"
   ],
   "decisions": [
    "41bbba68-9de8-48b3-a9c7-ba1abfdd6410"
@@ -267,7 +267,7 @@ Packet (authoritative for the preview):
   "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee situations && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee status_full",
   "must_haves": {
    "truths": [
-    "each truth of pp-1 has a test that fails if the behavior is removed"
+    "each truth of ppb-1 has a test that fails if the behavior is removed"
    ],
    "prohibitions": [
     "No edit to non-test code"
@@ -275,13 +275,13 @@ Packet (authoritative for the preview):
   }
  },
  {
-  "id": "pp-2",
+  "id": "ppb-2",
   "feature": "pstack-playbook-port",
   "title": "Hold a plan to a situation playbook",
   "lane": "standard",
   "role": "code",
   "deps": [
-   "pp-1t"
+   "ppb-1t"
   ],
   "decisions": [
    "41bbba68-9de8-48b3-a9c7-ba1abfdd6410"
@@ -297,7 +297,7 @@ Packet (authoritative for the preview):
   ],
   "affects_skills": [],
   "affects_specs": [],
-  "action": "In plan_group.rs playbook_findings, read the routed class's situations through situations.rs. When the class lists one or more situations: a plan citing skills/bee-planning/playbooks/<class>/<name>.md for a listed name passes; a plan citing only the class index is a finding whose detail names each listed situation path. When the class lists none, today's class-index rule holds unchanged. With no class known, a citation of playbooks/<class>/<name>.md counts as a playbook citation as well as playbooks/<name>.md. The inline tests your change flips are yours; new tests belong to pp-2t.",
+  "action": "In plan_group.rs playbook_findings, read the routed class's situations through situations.rs. When the class lists one or more situations: a plan citing skills/bee-planning/playbooks/<class>/<name>.md for a listed name passes; a plan citing only the class index is a finding whose detail names each listed situation path. When the class lists none, today's class-index rule holds unchanged. With no class known, a citation of playbooks/<class>/<name>.md counts as a playbook citation as well as playbooks/<name>.md. The inline tests your change flips are yours; new tests belong to ppb-2t.",
   "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee plan_group",
   "must_haves": {
    "truths": [
@@ -312,13 +312,13 @@ Packet (authoritative for the preview):
   }
  },
  {
-  "id": "pp-2t",
+  "id": "ppb-2t",
   "feature": "pstack-playbook-port",
   "title": "Test the situation citation rule",
   "lane": "standard",
   "role": "test",
   "deps": [
-   "pp-2"
+   "ppb-2"
   ],
   "decisions": [
    "41bbba68-9de8-48b3-a9c7-ba1abfdd6410"
@@ -337,7 +337,7 @@ Packet (authoritative for the preview):
   "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee plan_group",
   "must_haves": {
    "truths": [
-    "each truth of pp-2 has a test that fails if the behavior is removed"
+    "each truth of ppb-2 has a test that fails if the behavior is removed"
    ],
    "prohibitions": [
     "No edit outside the test module"
@@ -345,7 +345,7 @@ Packet (authoritative for the preview):
   }
  },
  {
-  "id": "pp-3",
+  "id": "ppb-3",
   "feature": "pstack-playbook-port",
   "title": "Port the pstack bug-fix playbook as the first situation",
   "lane": "standard",
@@ -363,6 +363,7 @@ Packet (authoritative for the preview):
    "skills/bee-planning/playbooks/bugfix/bug-fix.md",
    "skills/bee-planning/playbooks/LICENSE.pstack",
    "docs/history/pstack-playbook-port/port-notes.md",
+   "docs/history/codex-harness-hardening/release-manifest.json",
    ".claude-plugin/skills/bee-planning/",
    ".codex-plugin/skills/bee-planning/"
   ],
@@ -376,7 +377,7 @@ Packet (authoritative for the preview):
   "affects_skills": [],
   "affects_specs": [],
   "action": "Write playbooks/bugfix/bug-fix.md: the pstack bug-fix method is the body (scientific stance, reproduce on the real surface, binary-search hypotheses with runtime evidence, revert what a refuted hypothesis motivated, confirm the mechanism before the fix, verify on the same surface, the failing repro lands before the fix), with every pstack tool swapped for its bee counterpart per D2 (how and why become bee-how and bee-why, subagent delegation becomes bee dispatch prepare, the control skill becomes the project's verify-app or the real interface) and every enforced line of the current bugfix.md kept per D3 (the red-before-green home pointer, the crash-site principle, the event-order statechart split, the formal verify rerun, the always-on signal sentence, Proof line, Proof floor). Rewrite playbooks/bugfix.md as the class index: one intro line, then The class index grammar: a '## Situations' heading, then one line per situation of the exact form - `<name>` — <trigger phrases, English and Vietnamese> — delivers: <deliverable>, where <name> matches [a-z0-9-]+ and names playbooks/<class>/<name>.md; the section ends at the next '## ' heading. List bug-fix as the one situation, then keep the Proof floor line. Name no skill that does not exist yet. Write docs/history/pstack-playbook-port/port-notes.md with one section per ported playbook listing each tool swap and each dropped step; that file is the only place a pstack-only tool is named. Copy the pstack LICENSE text verbatim to playbooks/LICENSE.pstack. Run bee dev regen so the rendered plugin trees match.",
-  "verify": "rg -n 'Proof floor' skills/bee-planning/playbooks/bugfix.md skills/bee-planning/playbooks/bugfix/bug-fix.md && rg -c 'Lauren Tan' skills/bee-planning/playbooks/LICENSE.pstack && diff -r skills/bee-planning/playbooks .claude-plugin/skills/bee-planning/playbooks",
+  "verify": "rg -n 'Proof floor' skills/bee-planning/playbooks/bugfix.md skills/bee-planning/playbooks/bugfix/bug-fix.md && rg -c 'Lauren Tan' skills/bee-planning/playbooks/LICENSE.pstack && diff -r skills/bee-planning/playbooks .claude-plugin/skills/bee-planning/playbooks && .bee/bin/bee dev release-manifest --check",
   "must_haves": {
    "truths": [
     "bugfix/bug-fix.md carries every step of pstack bug-fix and every enforced line of the old bugfix.md",
@@ -389,20 +390,20 @@ Packet (authoritative for the preview):
   }
  },
  {
-  "id": "pp-3c",
+  "id": "ppb-3c",
   "feature": "pstack-playbook-port",
   "title": "Check the bug-fix port against its sources",
   "lane": "standard",
   "role": "test",
   "deps": [
-   "pp-3"
+   "ppb-3"
   ],
   "decisions": [
    "063a21e4-bccc-46a4-8fe8-1f1f99874c72",
    "5a1fc656-5549-462a-be0c-6bce5d919188"
   ],
   "files": [
-   "docs/history/pstack-playbook-port/reports/pp-3c.md"
+   "docs/history/pstack-playbook-port/reports/ppb-3c.md"
   ],
   "read_first": [
    "docs/history/pstack-playbook-port/CONTEXT.md",
@@ -414,7 +415,7 @@ Packet (authoritative for the preview):
   ],
   "affects_skills": [],
   "affects_specs": [],
-  "action": "Read pstack bug-fix.md and the old bugfix.md (git show of the commit before pp-3) beside the new files. Report each pstack step and each old enforced line as present or missing, any pstack-only tool name under skills/, whether port-notes.md names every swap and drop, and whether the index lines match the grammar in the plan. Write the report to docs/history/pstack-playbook-port/reports/pp-3c.md; no other edits.",
+  "action": "Read pstack bug-fix.md and the old bugfix.md (git show of the commit before ppb-3) beside the new files. Report each pstack step and each old enforced line as present or missing, any pstack-only tool name under skills/, whether port-notes.md names every swap and drop, and whether the index lines match the grammar in the plan. Write the report to docs/history/pstack-playbook-port/reports/ppb-3c.md; no other edits.",
   "verify": "rg -n -i 'cursor|graphite|bugbot|poteto-agent' skills/bee-planning/ ; test $? -eq 1",
   "must_haves": {
    "truths": [
@@ -426,14 +427,14 @@ Packet (authoritative for the preview):
   }
  },
  {
-  "id": "pp-4",
+  "id": "ppb-4",
   "feature": "pstack-playbook-port",
   "title": "Fence the situation files against their index",
   "lane": "standard",
   "role": "test",
   "deps": [
-   "pp-2t",
-   "pp-3c"
+   "ppb-2t",
+   "ppb-3c"
   ],
   "decisions": [
    "c64c5827-e110-4add-988c-5b668e93ccfe",
@@ -464,19 +465,19 @@ Packet (authoritative for the preview):
   }
  },
  {
-  "id": "pp-4t",
+  "id": "ppb-4t",
   "feature": "pstack-playbook-port",
   "title": "Check the situation fence goes red for each break",
   "lane": "standard",
   "role": "test",
   "deps": [
-   "pp-4"
+   "ppb-4"
   ],
   "decisions": [
    "c64c5827-e110-4add-988c-5b668e93ccfe"
   ],
   "files": [
-   "docs/history/pstack-playbook-port/reports/pp-4t.md"
+   "docs/history/pstack-playbook-port/reports/ppb-4t.md"
   ],
   "read_first": [
    "docs/history/pstack-playbook-port/CONTEXT.md",
@@ -485,7 +486,7 @@ Packet (authoritative for the preview):
   ],
   "affects_skills": [],
   "affects_specs": [],
-  "action": "Break the tree three ways with temporary edits you revert before reporting (an unlisted situation file, a listed missing file, a stray subdirectory), record the fence output for each, then confirm the clean tree is green. Write the report to docs/history/pstack-playbook-port/reports/pp-4t.md; every other file ends byte-identical.",
+  "action": "Break the tree three ways with temporary edits you revert before reporting (an unlisted situation file, a listed missing file, a stray subdirectory), record the fence output for each, then confirm the clean tree is green. Write the report to docs/history/pstack-playbook-port/reports/ppb-4t.md; every other file ends byte-identical.",
   "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test class_playbook_parity",
   "must_haves": {
    "truths": [
@@ -503,11 +504,11 @@ Packet (authoritative for the preview):
 
 | Cell | Happy path | Edge case | Error path |
 |---|---|---|---|
-| pp-1 | `orient --class bugfix`. Pass when the output has one `situation:` line naming `bugfix/bug-fix.md` | `orient --class perf --json`. Pass when `situations` is `[]` | repo with no `skills/` tree. Pass when the compiled-in situations print |
-| pp-1 | parser on a well-formed section. Pass when one row per line | malformed line. Pass when that line yields no row and the rest parse | absent section. Pass when the list is empty, no error |
-| pp-2 | bugfix plan citing `bugfix/bug-fix.md`. Pass when no playbook finding | no-class plan citing only a situation path. Pass when no playbook finding | bugfix plan citing only `bugfix.md`. Pass when one finding names `bugfix/bug-fix.md` |
-| pp-3 | bug-fix.md beside its sources. Pass when pp-3c lists every step present | English and Vietnamese triggers on the index line. Pass when both appear | a pstack-only tool under `skills/bee-planning/`. Pass when `rg` finds none |
-| pp-4 | clean tree. Pass when the fence is green | `session/` absent. Pass when accepted | unlisted file, listed missing file, stray directory. Pass when each is red with its message |
+| ppb-1 | `orient --class bugfix`. Pass when the output has one `situation:` line naming `bugfix/bug-fix.md` | `orient --class perf --json`. Pass when `situations` is `[]` | repo with no `skills/` tree. Pass when the compiled-in situations print |
+| ppb-1 | parser on a well-formed section. Pass when one row per line | malformed line. Pass when that line yields no row and the rest parse | absent section. Pass when the list is empty, no error |
+| ppb-2 | bugfix plan citing `bugfix/bug-fix.md`. Pass when no playbook finding | no-class plan citing only a situation path. Pass when no playbook finding | bugfix plan citing only `bugfix.md`. Pass when one finding names `bugfix/bug-fix.md` |
+| ppb-3 | bug-fix.md beside its sources. Pass when ppb-3c lists every step present | English and Vietnamese triggers on the index line. Pass when both appear | a pstack-only tool under `skills/bee-planning/`. Pass when `rg` finds none |
+| ppb-4 | clean tree. Pass when the fence is green | `session/` absent. Pass when accepted | unlisted file, listed missing file, stray directory. Pass when each is red with its message |
 
 The run on main and on head for changed behavior: `bee orient --class bugfix`
 on main prints the playbook line and principles; on head the same lines plus
