@@ -11,9 +11,9 @@
     "uat": false
   },
   "summary": "Feature \"decision-concept-links\" started at phase \"exploring\" (lane).",
-  "next_action": "Continue bee-exploring for \"decision-concept-links\" (lane).",
+  "next_action": "Merged into main at 9871d54; capture what settled, then bee close --feature decision-concept-links.",
   "created_at": "2026-11-15T15:07:39.635Z",
-  "run_state": "awaiting-approval",
+  "run_state": null,
   "waiting_on": null,
   "route": {
     "class": "feature",
@@ -539,12 +539,5 @@
         }
       ]
     }
-  },
-  "merge_ready": {
-    "since": "2026-11-15T15:28:04.162Z",
-    "branch": "wt/decision-concept-links",
-    "worktree_id": "beehive--wt--decision-concept-links",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
