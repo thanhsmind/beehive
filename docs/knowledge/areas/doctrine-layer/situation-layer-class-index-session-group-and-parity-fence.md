@@ -53,7 +53,7 @@ Nine route classes were too coarse: a leader who knew the task was a bugfix stil
 
 ## Rejected options
 
-- A situation field on the route record with a write-time file check (`41bbba68`): it refuses in every host where the playbook tree is absent and grows orient's argv patterns; the plan took no new flag and no record change.
+- A situation field on the route record with a write-time file check (rejected in `docs/history/pstack-playbook-port/plan.md` § Approach after the hat wave): it refuses in every host where the playbook tree is absent and grows orient's argv patterns; the plan took no new flag and no record change.
 - Docs-only selection: the plan check could then hold only the class menu, so the steps stop being enforced.
 - One route class per pstack playbook: breaks the proof-floor table, the principle `classes:` filter and two parity fences for 23 values.
 - Situations as sections inside the class file: the router could not name a file and the plan check could not hold one.
