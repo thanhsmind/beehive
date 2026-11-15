@@ -2319,6 +2319,35 @@ so the next session can resume cleanly, or record a capture stub for what settle
     }
 
     #[test]
+    fn agreement_with_a_numbered_source_stays_quiet() {
+        let reply = "Good idea. The loader reads the file twice [1].\n\nSources:\n[1] src/loader.rs:42 reads the file in open and in parse";
+        let events = claude_turn("use a cache?", &[reply]);
+        assert_eq!(unverified_agreement_warning(&events), None);
+    }
+
+    #[test]
+    fn agreement_with_a_citation_but_no_sources_block_warns() {
+        let events = claude_turn("use a cache?", &["Good idea. The loader reads the file twice [1]."]);
+        let warning = unverified_agreement_warning(&events).expect("warns");
+        assert!(warning.contains("agents-verify-before-agreeing"), "{warning}");
+        assert!(warning.contains("Sources"), "{warning}");
+    }
+
+    #[test]
+    fn agreement_with_a_vietnamese_sources_block_stays_quiet() {
+        let reply = "Ý này hợp lý, loader đọc file hai lần [1].\n\n**Nguồn:**\n[1] src/loader.rs:42";
+        let events = claude_turn("dùng cache nhé?", &[reply]);
+        assert_eq!(unverified_agreement_warning(&events), None);
+    }
+
+    #[test]
+    fn agreement_with_a_sources_entry_that_matches_no_inline_number_warns() {
+        let reply = "Good idea [1].\n\n## Sources\n[2] src/loader.rs:42";
+        let events = claude_turn("use a cache?", &[reply]);
+        assert!(unverified_agreement_warning(&events).is_some());
+    }
+
+    #[test]
     fn a_conditional_first_reaction_stays_quiet() {
         let events = claude_turn("use a cache?", &["Sounds right; checking the loader first."]);
         assert_eq!(unverified_agreement_warning(&events), None);
