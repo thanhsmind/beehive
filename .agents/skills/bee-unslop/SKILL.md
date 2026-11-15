@@ -18,7 +18,8 @@ Edit text to remove AI patterns.
 
 1. Scan for the patterns below.
 2. Rewrite. Preserve meaning, match intended tone.
-3. Self-audit: "What makes this obviously AI generated?" Fix remaining tells.
+3. Add voice (see next section).
+4. Self-audit: "What makes this obviously AI generated?" Fix remaining tells.
 
 ## Scope
 
@@ -27,14 +28,28 @@ Edit text to remove AI patterns.
 - When the project's own instructions set tone, length, style or language, they win where the two disagree.
 - Reply in the user's language. Apply the English word lists only to English text.
 
+## Adding voice
+
+Removing patterns is half the job. Sterile, voiceless writing is just as obvious. Rhythm, a view where the mode allows one, and specifics over sterile phrasing live in `bee-technical-writing` under "Vary the rhythm". Apply them there, not from a second copy here. Three more checks:
+
+- **Acknowledge complexity.** "Impressive but also kind of unsettling" beats "impressive". Name the cost next to the benefit instead of listing only one side.
+- **Use "I" when it fits.** A reply that reports what you did or found is first person. Avoiding "I" does not make it more professional.
+- **Let some mess in.** Perfect symmetry looks machine-made: every item the same length, every paragraph the same shape. Do not polish an uneven list into a matched set, and never loosen a verbatim line to get there.
+
+Voice stays inside the Scope section. It never touches a tick, a red or refusal line, evidence, an id or code.
+
 ## Patterns to detect and fix
 
 Rule numbers are stable ids that other skills cite. A removed rule leaves a gap.
 
 ### Content
 
+1. **Puffery.** "pivotal moment", "testament to", "evolving landscape", "setting the stage for", "indelible mark", "deeply rooted". Cut puffery, state what happened.
+2. **Name-dropping.** Listing media outlets without context. Pick one, say what was said.
 3. **Superficial -ing phrases.** "highlighting...", "ensuring...", "reflecting...", "showcasing...", "fostering...". Delete or expand with real sources.
+4. **Promotional language.** "nestled", "vibrant", "breathtaking", "groundbreaking", "renowned", "stunning", "must-visit". Use neutral descriptions.
 5. **Vague attributions.** "Experts believe", "Industry reports suggest", "Some critics argue". Name the source or delete.
+6. **Formulaic challenges.** "Despite challenges... continues to thrive." Replace with specific facts.
 
 ### Language
 
@@ -47,7 +62,7 @@ Rule numbers are stable ids that other skills cite. A removed rule leaves a gap.
 
 ### Style
 
-13. **Em dash overuse.** Avoid em dashes entirely. Use periods or commas only (no parentheses, no en dashes, no hyphen-as-dash substitutes). If a thought needs separation, end the sentence or use a comma.
+13. **Em dash overuse.** Avoid em dashes entirely. Use periods or commas only (no parentheses, no en dashes, no hyphen-as-dash substitutes). Em dashes are an AI tell, and reaching for parentheses instead just trades one tell for another. If a thought needs separation, end the sentence or use a comma.
 14. **Colon overuse.** Colons are fine before a list or example. Not as mid-sentence connectors. "If you're coming from traditional automation: instead of registering event handlers, you describe conditions" adds nothing with the colon. Rewrite to let the point stand on its own without comparison framing. "Describing when the scheduler should fire works best as plain English." Same meaning, no crutch punctuation.
 15. **Boldface overuse.** Don't bold every proper noun or acronym.
 16. **Inline-header lists.** The tell is a bold label and colon that restates the line: "**Performance:** Performance improved...". Convert those to prose. A bold lead-in that ends in a period, names the item, and is followed by genuinely new detail ("**Schema in TypeScript.** Tables live in one file.") is fine, not a tell.
@@ -58,6 +73,7 @@ Rule numbers are stable ids that other skills cite. A removed rule leaves a gap.
 ### Communication artifacts
 
 20. **Chatbot phrases.** "I hope this helps!", "Let me know if...", "Of course!", "Certainly!", "Found the smoking gun!" Remove.
+21. **Cutoff disclaimers.** "While specific details are limited..." Find sources or remove.
 22. **Sycophantic tone.** "Great question! You're absolutely right!" Respond directly.
 
 ### Filler
