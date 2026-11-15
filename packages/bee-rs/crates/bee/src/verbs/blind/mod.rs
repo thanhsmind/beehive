@@ -1445,6 +1445,18 @@ mod tests {
     }
 
     #[test]
+    fn of_two_extra_level_one_headings_the_first_is_refused_by_name() {
+        let doc = well_formed()
+            .replace("## Chosen", "# Second run\n\n## Chosen")
+            .replace("## Citations", "# Third run\n\n## Citations");
+        let v = refusal_of(&doc);
+        assert_refusal_shape(&v);
+        assert_eq!(reason(&v), "dossier_section_unexpected");
+        assert_eq!(field(&v, "section"), "Second run");
+        assert!(field(&v, "fix").contains("second level-1 heading"), "{v}");
+    }
+
+    #[test]
     fn a_misordered_section_is_refused_by_the_name_that_stands_out_of_place() {
         // Swap Chosen and Rejected — both present, both known, wrong order.
         let doc = well_formed()
