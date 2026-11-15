@@ -13166,6 +13166,35 @@ Finish with: .bee/bin/bee cells finish --id c-golden --outcome "<one line>" --fi
         cell_principles(root, root, &cell).0
     }
 
+    const PRINCIPLES_USED_ASK: &str = "When a Principles block appears above, the result file also carries a `principles_used` array";
+
+    fn principled_worker_prompt(is_herding: bool) -> String {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = principles_root(&tmp, Some("0"));
+        let cell = json!({"id": "c-1", "feature": "demo", "status": "claimed"});
+        let rendered = prompt_body_for(
+            &root, "cell", Some(&cell), Some("w1"), None, None, None, None, None, None, None, is_herding,
+        )
+        .unwrap()
+        .unwrap();
+        assert!(rendered.contains(PRINCIPLES_HEADER), "herding={is_herding}: {rendered}");
+        assert!(rendered.contains("- Principles (class=bugfix)"), "herding={is_herding}: {rendered}");
+        rendered
+    }
+
+    #[test]
+    fn worker_prompt_herding_render_with_principles_asks_for_principles_used() {
+        let herded = principled_worker_prompt(true);
+        assert!(herded.contains(PRINCIPLES_USED_ASK), "{herded}");
+        assert!(herded.contains("`[]` when none changed a decision"), "{herded}");
+    }
+
+    #[test]
+    fn worker_prompt_native_render_with_principles_omits_the_principles_used_sentence() {
+        let native = principled_worker_prompt(false);
+        assert!(!native.contains("principles_used"), "{native}");
+    }
+
     #[test]
     fn an_absent_principles_holdout_percent_holds_out_the_ten_percent_bucket() {
         let tmp = tempfile::tempdir().unwrap();
