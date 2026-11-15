@@ -2,7 +2,7 @@
 
 Source: pstack poteto-mode at commit `b9ddc83`, MIT, copyright 2026 Lauren Tan
 (notice in `skills/bee-planning/playbooks/LICENSE.pstack`). This file is the
-only place a pstack-only tool is named; no file under `skills/` names one.
+only place a pstack-only tool is named; no ported file names one.
 The session group has no route class: `skills/bee-planning/playbooks/session/index.md`
 is its index, and ppb-12 appends its five situations to it.
 

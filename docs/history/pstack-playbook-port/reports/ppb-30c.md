@@ -61,6 +61,7 @@ skill nor its depth section.
 
 ## type-system-discipline → make-illegal-states-unrepresentable
 
+<!-- bee:not-a-deferral: a record or description of work already done, never a promise to act -->
 | # | Source rule | Status | Where in bee |
 |---|-------------|--------|--------------|
 | 1 | The type checker is a proof assistant; a case the types let you ignore becomes a runtime failure | present (in substance) | Why line and opening ("let the compiler refuse"); the phrase "proof assistant" is not carried |
@@ -84,6 +85,7 @@ skill nor its depth section.
 | T4 | Test: will the compiler name each place when a variant is added? | present | Check line (new) |
 | T5 | Test: is this type duplicating a shape another file owns? Derive instead | missing as a test; the rule is present | the rule is in the body (row 14), but the Check line has only T1 to T4. `port-notes/merge-ppb-30.md` says four checks came in, including "derive from owner". That is wrong: the fourth new check is the variant question, and derive-from-owner is not in the Check line |
 | T6 | Test: strengthening to keep an operation total, or only for precision? If nothing would panic, keep the plain type | present | Not-when line (new) |
+<!-- /bee:not-a-deferral -->
 
 ## boundary-discipline
 

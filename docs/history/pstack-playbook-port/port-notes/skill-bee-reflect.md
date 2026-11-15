@@ -4,8 +4,7 @@ Source: pstack skill `reflect` (`SKILL.md` and four reference files:
 `judgment-reviewer.md`, `tooling-reviewer.md`, `divergent-reviewer.md`,
 `synthesizer.md`) at commit `b9ddc83`, MIT, copyright 2026 Lauren Tan. The notice
 is `skills/bee-reflect/LICENSE.pstack`, a verbatim copy of the pstack `LICENSE`.
-This file is the only place a pstack-only tool is named; no file under
-`skills/bee-reflect/` names one.
+This file is the only place a pstack-only tool is named; no ported file names one.
 
 Name: `bee-reflect` (the pstack name with the `bee-` prefix every ported skill
 carries).

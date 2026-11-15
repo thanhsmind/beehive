@@ -3,8 +3,7 @@
 Source: pstack skill `figure-it-out` (`SKILL.md`, no reference files) at commit
 `b9ddc83`, MIT, copyright 2026 Lauren Tan. The notice is
 `skills/bee-figure-it-out/LICENSE.pstack`, a verbatim copy of the pstack `LICENSE`.
-This file is the only place a pstack-only tool is named; no file under
-`skills/bee-figure-it-out/` names one.
+This file is the only place a pstack-only tool is named; no ported file names one.
 
 Name: `bee-figure-it-out` (the pstack skill is `figure-it-out`).
 

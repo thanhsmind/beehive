@@ -23,6 +23,7 @@ D2 counts as missing. **missing** means a method step is gone with no reason.
 
 ## Old enforced lines (old `refactor.md`)
 
+<!-- bee:not-a-deferral: a record or description of work already done, never a promise to act -->
 | Old line | New home | Status |
 |---|---|---|
 | 1 Record existing behavior FIRST: characterization test, snapshot or equivalence script | `refactoring.md` step 1 | present |
@@ -38,6 +39,7 @@ D2 counts as missing. **missing** means a method step is gone with no reason.
 | 9 Keep the diff only if it lowers what a reader must hold in mind | `refactoring.md` step 9, verbatim | present |
 | Proof line: the record, green before the change and green after it | `refactoring.md` | present, verbatim |
 | Proof floor line | `refactor.md` line 10, `refactoring.md`, `visual-parity.md` | present; byte-identical (checked with `diff` of the `^Proof floor` line, old against each new file) |
+<!-- /bee:not-a-deferral -->
 
 The refactor class has no routed-principle, statechart or formal-verify lines
 in the old text, so D3 had nothing more to carry.
@@ -156,8 +158,10 @@ situation has its file under `refactor/`, and no file there lacks a line.
    do not mention the wording change. This is a wording note, not a dropped
    step.
 
+<!-- bee:not-a-deferral: a record or description of work already done, never a promise to act -->
 Checked and not filed: refactoring step 10 describes landing through
 `bee worktree merge`, which could read as the D4 merge-on-green rule. It only
 names the path and leaves `uat` with the owner, so it does not claim D4 for a
 class D4 does not list. The old line "a red found later has many suspects"
 looked dropped from the steps, but the opening paragraph carries it.
+<!-- /bee:not-a-deferral -->

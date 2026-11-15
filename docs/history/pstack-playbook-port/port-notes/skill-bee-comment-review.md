@@ -4,7 +4,7 @@ Source: pstack skill `no-comments` (`SKILL.md`, no reference files) and the psta
 agent `Comment Sicko` (`agents/comment-sicko.md`) at commit `b9ddc83`, MIT,
 copyright 2026 Lauren Tan. The notice is `skills/bee-comment-review/LICENSE.pstack`,
 a verbatim copy of the pstack `LICENSE`. This file is the only place a pstack-only
-tool is named; no file under `skills/bee-comment-review/` names one.
+tool is named; no ported file names one.
 
 Name: `bee-comment-review` (the cell's name; the pstack skill is `no-comments`).
 

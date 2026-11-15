@@ -3,8 +3,7 @@
 Source: pstack skill `arena` (`SKILL.md`, no reference files) at commit
 `b9ddc83`, MIT, copyright 2026 Lauren Tan. The notice is
 `skills/bee-arena/LICENSE.pstack`, a verbatim copy of the pstack `LICENSE`. This
-file is the only place a pstack-only tool is named; no file under
-`skills/bee-arena/` names one.
+file is the only place a pstack-only tool is named; no ported file names one.
 
 Kept as the base, with the swaps below: `SKILL.md` (six phases A to F, the
 mandatory rationale, the graft and rejection record, the convergence and

@@ -3,8 +3,7 @@
 Source: pstack skill `tdd` (`SKILL.md`, no reference files) at commit
 `b9ddc83`, MIT, copyright 2026 Lauren Tan. The notice is
 `skills/bee-tdd/LICENSE.pstack`, a verbatim copy of the pstack `LICENSE`. This
-file is the only place a pstack-only tool is named; no file under
-`skills/bee-tdd/` names one.
+file is the only place a pstack-only tool is named; no ported file names one.
 
 Name: `bee-tdd` (the pstack name with the `bee-` prefix every ported skill
 carries).

@@ -185,11 +185,13 @@ exist in skills/", so the plan or the rule should say which wins.
 
 ## Index grammar (contract `913115b3`)
 
+<!-- bee:not-a-deferral: a record or description of work already done, never a promise to act -->
 `session/index.md` has a `## Situations` heading and five lines. All five
 match `^- \`[a-z0-9-]+\` — .+ — delivers: .+$` (5 of 5). Each name matches a
 file in `session/`, each trigger list has English and Vietnamese phrases, and
 no later `## ` heading follows, so the section runs to the end of the file. The
 grammar holds.
+<!-- /bee:not-a-deferral -->
 
 ## Findings to act on
 

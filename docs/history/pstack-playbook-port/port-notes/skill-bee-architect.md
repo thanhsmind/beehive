@@ -4,7 +4,7 @@ Source: pstack skill `architect` (`SKILL.md` and `references/design-red-flags.md
 `rationale-template.md`, `runner-prompt.md`) at commit `b9ddc83`, MIT, copyright
 2026 Lauren Tan. The notice is `skills/bee-architect/LICENSE.pstack`, a verbatim
 copy of the pstack `LICENSE`. This file is the only place a pstack-only tool is
-named; no file under `skills/bee-architect/` names one.
+named; no ported file names one.
 
 Kept verbatim: `design-red-flags.md`. Kept as the base, with the swaps below:
 `SKILL.md` (five phases, Phase E tells, Outputs), `rationale-template.md`,

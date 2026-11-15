@@ -94,6 +94,7 @@ subtract-before-you-add:
 
 ## Left out because bee already has it
 
+<!-- bee:not-a-deferral: a record or description of work already done, never a promise to act -->
 - fix-root-causes: reproduce first (already `bee-principle-reproduce-first`);
   "instrument, do not guess" as a method (homed in `expertise/debugging.md`
   § Instrument before guessing, cited from the skill by behavior, not copied);
@@ -117,6 +118,7 @@ subtract-before-you-add:
   simpler: already in the bee skill.
 - encode-lessons-in-structure: the ladder, delete the prose once the fix
   exists, the instruction is the symptom: already in the bee skill.
+<!-- /bee:not-a-deferral -->
 
 ## Tool swaps
 

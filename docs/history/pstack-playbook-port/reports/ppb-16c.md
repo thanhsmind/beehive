@@ -125,6 +125,7 @@ model or subagent type; it is the same call `bee-interrogate` line 45 uses.
 
 ## Description
 
+<!-- bee:not-a-deferral: a record or description of work already done, never a promise to act -->
 267 characters (counted from the folded `description:` value), matching the
 port notes. It says what the skill does, when to use it (`/bee-show-me-your-work`,
 a human reviewing the run later) and when not to: "Not for recording a settled
@@ -132,6 +133,7 @@ rule (bee decisions log)". It fits the 300-character limit. The source's
 "autonomous or multi-phase runs" trigger and its "local by default" sentence are
 not in the description; the first is covered by "long-running or unattended
 work", the second lives in the body (line 55).
+<!-- /bee:not-a-deferral -->
 
 ## Findings
 

@@ -27,6 +27,7 @@ and the port notes name it. **missing** means a method step is gone with no reas
 
 ## Skill: `no-comments/SKILL.md` → `bee-comment-review/SKILL.md`
 
+<!-- bee:not-a-deferral: a record or description of work already done, never a promise to act -->
 | Source step or rule (source line) | New home (bee-comment-review line) | Status |
 |---|---|---|
 | Frontmatter `name: no-comments` (2) | `name: bee-comment-review` (2) | swapped (noted: "Name") |
@@ -61,6 +62,7 @@ and the port notes name it. **missing** means a method step is gone with no reas
 | Step 5: unattended and eval require caller pre-approval (23) | 34, unattended only | changed (noted: "Departures", fourth bullet; "Dropped steps", eval) |
 | Step 5: approved → encode then delete; else delete, report open, sketch out-of-scope work (23) | 34 | present |
 | Step 6: report deletions, restored comments, reruns, sketch, fixes, offers, encodings, unenforced constraints, open work (24) | 35, "comments not applied", "re-dispatches" | changed (noted: "Departures") |
+<!-- /bee:not-a-deferral -->
 
 ## Agent: `agents/comment-sicko.md` → `references/comment-reviewer.md`
 

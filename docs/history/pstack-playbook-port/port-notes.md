@@ -2,8 +2,7 @@
 
 One section per ported playbook: each pstack tool swapped for its bee
 counterpart, and each step dropped because bee has no counterpart (D2). This
-file is the only place a pstack-only tool is named; no file under `skills/`
-names one. Source: pstack poteto-mode at commit `b9ddc83`, MIT, copyright 2026
+file is the only place a pstack-only tool is named; no ported file names one. Source: pstack poteto-mode at commit `b9ddc83`, MIT, copyright 2026
 Lauren Tan; the notice ships as `skills/bee-planning/playbooks/LICENSE.pstack`.
 
 ## bug-fix
@@ -29,6 +28,7 @@ Tool swaps:
 
 Dropped steps:
 
+<!-- bee:not-a-deferral: a record or description of work already done, never a promise to act -->
 - The Cursor `/loop` command for a long or stubborn hunt: bee has no
   counterpart for a looping command inside a session.
 - The `architect` and `interrogate` fan-out before the fix: neither skill
@@ -45,6 +45,7 @@ Dropped steps:
   the PR.
 - The closing Reply instruction to paste the failing-then-passing output
   verbatim: it is the Proof line, which the cap enforces.
+<!-- /bee:not-a-deferral -->
 
 Kept from the bee `bugfix` playbook (D3): the red-before-green home pointer,
 the crash-site principle, the same-surface re-run with the inconclusive-run

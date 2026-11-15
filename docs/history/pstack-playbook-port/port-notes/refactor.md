@@ -2,8 +2,7 @@
 
 Source: pstack poteto-mode at commit `b9ddc83`, MIT, copyright 2026 Lauren Tan
 (notice in `skills/bee-planning/playbooks/LICENSE.pstack`). Cell ppb-7. This
-file is the only place a pstack-only tool is named; no file under `skills/`
-names one. `skills/bee-planning/playbooks/refactor.md` is now the class index
+file is the only place a pstack-only tool is named; no ported file names one. `skills/bee-planning/playbooks/refactor.md` is now the class index
 with two situations.
 
 ## refactoring

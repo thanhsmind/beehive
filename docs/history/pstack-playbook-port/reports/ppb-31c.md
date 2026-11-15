@@ -45,6 +45,7 @@ named as left out.
 
 ### SKILL.md
 
+<!-- bee:not-a-deferral: a record or description of work already done, never a promise to act -->
 | # | Source rule | Status | Where / home |
 |---|---|---|---|
 | 1 | Triggers: "how does X work", architecture, runtime flow, onboarding mental models | present | bee-how description and Scope |
@@ -74,6 +75,7 @@ named as left out.
 | 25 | A critic gets the explanation, the file paths and the rubric | present | Critique step 2 |
 | 26 | Lead judgment like interrogate: Act on, Consider, Noted, Dismissed; pragmatic lead, not aggregator | present (cited) | Critique step 4 cites `bee-interrogate` Step 5 and `lead-judgment.md` |
 | 27 | Explanation first, critique verdict below; the explanation stands alone | present | Critique opening; bee-how Scope bullet 3 |
+<!-- /bee:not-a-deferral -->
 
 ### references/explorer-prompt.md
 

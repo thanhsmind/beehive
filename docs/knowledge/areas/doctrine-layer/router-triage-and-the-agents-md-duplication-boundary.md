@@ -495,17 +495,21 @@ The three rows from foundational-thinking to outcome-oriented-execution port
 pstack Slice 4 (pstack-playbook-port D5, cell ppb-26): classes follow each
 pstack "when it applies" line.
 
+<!-- bee:not-a-deferral: a record or description of work already done, never a promise to act -->
 - `bee-principle-foundational-thinking` (expertise/architecture.md § Foundational Thinking: Data Structures First):
   spoken: settle the data shape before the logic — define the core types, trace every access pattern against them, isolate state two actors would share, and lay the groundwork every later phase uses first — a late data-structure change is a rewrite, an early one is a one-line diff
   classes: feature, refactor
   - applied_at:
     - `skills/bee-principle-foundational-thinking/SKILL.md`
+<!-- /bee:not-a-deferral -->
 
+<!-- bee:not-a-deferral: a record or description of work already done, never a promise to act -->
 - `bee-principle-redesign-from-first-principles` (expertise/architecture.md § Redesign From First Principles):
   spoken: when a new requirement lands on an existing design, do not bolt it on — read every affected file, ask what you would build from scratch with it, and carry the change through every reference — a bolt-on is paid for at every later change
   classes: feature, refactor
   - applied_at:
     - `skills/bee-principle-redesign-from-first-principles/SKILL.md`
+<!-- /bee:not-a-deferral -->
 
 - `bee-principle-outcome-oriented-execution` (expertise/planning.md § Outcome-oriented execution):
   spoken: for a planned rewrite or migration, converge on the verified end state — declare where breakage is allowed and which step restores green, keep focused checks on what you touch, and run the full verification before done — a smooth middle is paid for in shims that outlive it

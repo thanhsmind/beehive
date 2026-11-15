@@ -4,8 +4,7 @@ Source: pstack skill `interrogate` (`SKILL.md` and four reference files:
 `rubric.md`, `code-quality-review.md`, `reviewer-prompt.md`, `lead-judgment.md`)
 at commit `b9ddc83`, MIT, copyright 2026 Lauren Tan. The notice is
 `skills/bee-interrogate/LICENSE.pstack`, a verbatim copy of the pstack `LICENSE`.
-This file is the only place a pstack-only tool is named; no file under
-`skills/bee-interrogate/` names one.
+This file is the only place a pstack-only tool is named; no ported file names one.
 
 Kept as the base, with the swaps below: the five steps (scope, intent, reviewers,
 synthesize, lead judgment), the verdict shape (Intent, Reviewers, Act On,

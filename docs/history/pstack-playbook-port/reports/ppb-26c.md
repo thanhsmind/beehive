@@ -23,6 +23,7 @@ these sections byte for byte.
 
 ## foundational-thinking
 
+<!-- bee:not-a-deferral: a record or description of work already done, never a promise to act -->
 | # | Source rule | Status | Where in bee |
 |---|-------------|--------|--------------|
 | 1 | Structural decisions protect option value | present | depth, "Two kinds of decision" paragraph |
@@ -41,6 +42,7 @@ these sections byte for byte.
 | 14 | Small single-purpose commits | present | skill body; depth bullet |
 | 15 | Each increment lands a coherent abstraction or deepens one; no capability spread across callers as special-case coordination | present | depth bullet "One abstraction per increment" |
 | 16 | Subtraction comes before scaffolding | present | skill body ("after removing dead weight"); depth bullet pointing at Subtract before you add (`expertise/planning.md:271`) |
+<!-- /bee:not-a-deferral -->
 
 ## redesign-from-first-principles
 

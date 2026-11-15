@@ -7,6 +7,7 @@ The full reports are in the main store's mailbox under those job ids.
 
 ## Accepted, and how the plan changed
 
+<!-- bee:not-a-deferral: a record or description of work already done, never a promise to act -->
 | Finding | Seat | Change |
 |---|---|---|
 | A write-time check for `skills/bee-planning/playbooks/<class>/<name>.md` refuses in every host, which has no `skills/` tree at its root | facts-gaps F2, alternatives fact 3 | Dropped the route field and every new flag. orient reads situations from the repo copy, else a copy compiled into the binary (claims 14, 15). Decision `41bbba68` supersedes `0f6dae94`. |
@@ -20,6 +21,7 @@ The full reports are in the main store's mailbox under those job ids.
 | The no-class plan-check branch ignored situation paths | facts-gaps F8, alternatives fact 5 | pp-2 counts a situation path there. |
 | No explicit SMALLER PATH line | alternatives | Added to Approach, with the rejected shapes. |
 | JSON key presence unstated | user-impact F5 | `situations` is always present. |
+<!-- /bee:not-a-deferral -->
 
 ## Rejected, with reason
 

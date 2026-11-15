@@ -82,6 +82,7 @@ bee difference. M = missing.
 
 ### Write sentences to the reader (Google developer style)
 
+<!-- bee:not-a-deferral: a record or description of work already done, never a promise to act -->
 | Source rule | Status | Note |
 |---|---|---|
 | "You", present tense; "will" only for later | P | |
@@ -97,6 +98,7 @@ bee difference. M = missing.
 | Numbered lists for sequences; parallel items | P | |
 | Code font, bold UI, serial commas, no "etc." | P | |
 | Source line (developers.google.com/style) | P | |
+<!-- /bee:not-a-deferral -->
 
 ### Make statements load one at a time (STE rules)
 

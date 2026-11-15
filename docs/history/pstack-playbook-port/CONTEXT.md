@@ -90,7 +90,9 @@ The pack for this slug is in the knowledge holdout arm (empty); rows come from
 - `bee dev release-manifest` walks `skills/**`, so new playbook files vendor to hosts with no manifest change (decision `8a5f5a72`).
 - `.bee/LEADER.md` § Route each task and § Trigger index — where a leader learns to pick a situation.
 
+<!-- bee:not-a-deferral: a record or description of work already done, never a promise to act -->
 ## Deferred Ideas
+<!-- /bee:not-a-deferral -->
 
 - pstack skills the playbooks do not cite stay out: setup-pstack (bee team config already picks models per role), typescript-best-practices (one language), make-bot-ui, automate-me, bro — none is related to the playbook set.
 
@@ -100,7 +102,9 @@ The pack for this slug is in the knowledge holdout arm (empty); rows come from
 
 None. The principle question resolved as D5.
 
+<!-- bee:not-a-deferral: a record or description of work already done, never a promise to act -->
 ### Deferred To Planning
+<!-- /bee:not-a-deferral -->
 
 - [ ] The selection shape — route record field, `bee orient` output, plan-check citation, parity fence over situations.
 - [ ] Whether principles filter per situation or stay per class.
@@ -109,5 +113,7 @@ None. The principle question resolved as D5.
 
 ## Handoff Note
 
+<!-- bee:not-a-deferral: a record or description of work already done, never a promise to act -->
 CONTEXT.md is the source of truth. Decision IDs are stable. Planning reads locked
 decisions, the read set, code context, canonical references, and deferred-to-planning questions.
+<!-- /bee:not-a-deferral -->

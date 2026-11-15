@@ -56,6 +56,7 @@ and the three `SKILL.md` files are identical in all five rendered trees
 
 ## model-the-domain
 
+<!-- bee:not-a-deferral: a record or description of work already done, never a promise to act -->
 | # | Source rule | Status | Where in bee |
 |---|-------------|--------|--------------|
 | 1 | Encode the domain in a data structure, not scattered conditionals | present | skill body; depth opening |
@@ -75,6 +76,7 @@ and the three `SKILL.md` files are identical in all five rendered trees
 | 15 | Tell: a new feature grows an if/else chain by one branch | present | skill Check line; depth tells paragraph |
 | 16 | Tell: a second boolean that must stay in sync with the first | present | skill Check line; depth tells paragraph |
 | 17 | Tell: temporal decomposition, phase-named modules repeat domain rules | present | depth tells paragraph only |
+<!-- /bee:not-a-deferral -->
 
 ## pstack-only tool names
 

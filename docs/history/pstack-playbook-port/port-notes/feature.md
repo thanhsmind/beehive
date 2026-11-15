@@ -2,8 +2,7 @@
 
 Source: pstack poteto-mode at commit `b9ddc83`, MIT, copyright 2026 Lauren Tan
 (notice in `skills/bee-planning/playbooks/LICENSE.pstack`). Cell ppb-9. This
-file is the only place a pstack-only tool is named; no file under `skills/`
-names one. `skills/bee-planning/playbooks/feature.md` is now the class index
+file is the only place a pstack-only tool is named; no ported file names one. `skills/bee-planning/playbooks/feature.md` is now the class index
 with two situations.
 
 ## feature
@@ -150,6 +149,7 @@ Tool swaps:
 
 Dropped steps and clauses:
 
+<!-- bee:not-a-deferral: a record or description of work already done, never a promise to act -->
 - The plan-shape check script (step 6): bee has no script for the skeleton's shape. Its `encode-lessons-in-structure` pointer is restored (ppb-37): step 7 names `bee-principle-encode-lessons-in-structure` for the reason a rule left to memory is skipped under load. `bee plan check`
   checks the `bee-plan/v2` sections of a feature's own `plan.md`, and a
   program plan carries other headings, so it cannot stand in. Step 7 checks the
@@ -165,6 +165,7 @@ Dropped steps and clauses:
 - The `swarm` skill's own lane protocol: the skill does not exist in bee yet
   (D5, slice 3, where it returns under a bee name that does not collide with
   `bee-swarming`). Restored (ppb-24) as `bee-fanout`.
+<!-- /bee:not-a-deferral -->
 
 Kept from bee (D3 pointer rule): the phase-plan-versus-epic-map rule stays
 in `skills/bee-planning/references/planning-reference.md` under "Phase plan vs

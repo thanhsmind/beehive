@@ -5,7 +5,7 @@ Source: pstack principles `principle-guard-the-context-window`,
 `principle-experience-first` (one `SKILL.md` each, no reference files), MIT,
 copyright 2026 Lauren Tan. The notice is `LICENSE.pstack` in each new skill
 directory, a verbatim copy of the pstack `LICENSE`. This file is the only place
-a pstack-only tool is named; no file under `skills/` or `expertise/` names one.
+a pstack-only tool is named; no ported file names one.
 
 Names: `bee-principle-<slug>`, the pstack slug with the prefix that both
 distribution pipes discover principle skills by.

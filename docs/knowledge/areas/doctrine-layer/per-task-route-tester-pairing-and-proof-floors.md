@@ -46,11 +46,13 @@ Three failures shared one root: the code writer chose its own proof, and the ses
 - `bee orient --class` lists a class's situations from the class index's `## Situations` section through `situations.rs`, the one reader; the repo file wins, a compiled-in copy answers when the tree is absent, and a malformed line is skipped, never an error.
 ## Rejected options
 
+<!-- bee:not-a-deferral: a record or description of work already done, never a promise to act -->
 - A keyword classifier in Rust for the task class: it guesses wrong silently, and the leader's own classification is the signal.
 - Floors written only in the playbooks: host repos do not carry skill files at a fixed path the cap could read.
 - Refusing the pairing at `cells add`: breaks every fixture and every later single fix cell; close and merge already share one door.
 - A same-worker identity check between implementer and tester: each cell is its own dispatch and under herding the leader caps both, so it fires falsely.
 - Gating Route on a lane source alone: hides the route for a session bound through `session_binding` and for every lane-less repo.
+<!-- /bee:not-a-deferral -->
 
 ## Pointers
 

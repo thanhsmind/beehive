@@ -20,6 +20,7 @@ asks. **still open** means neither.
 
 ## ppb-9c (feature port)
 
+<!-- bee:not-a-deferral: a record or description of work already done, never a promise to act -->
 | # | Finding | Status | Evidence |
 |---|---|---|---|
 | 1 | `feature/feature.md` has no Proof floor line | fixed | `feature/feature.md:98`. All 21 `^Proof floor` lines under `skills/bee-planning/playbooks/` are byte-identical (`rg -I '^Proof floor' … \| sort \| uniq -c` gives one line, count 21) |
@@ -30,6 +31,7 @@ asks. **still open** means neither.
 | 4 | the `encode-lessons-in-structure` pointer could cite `bee-principle-encode-lessons-in-structure` | still open, deferred | `port-notes/feature.md:141` still lists it as dropped. The checker filed it for the slice 3 re-add list, not as a defect |
 | — | stale pointer `bugfix/bug-fix.md` cites `feature.md` steps 6 and 7 | fixed | `bugfix/bug-fix.md:57-59` now cites `feature/feature.md` steps 3 and 8 |
 | — | rendered trees hold the old class playbooks | fixed | `diff -r` of `skills/bee-planning/playbooks` against each of `.claude-plugin`, `.codex-plugin`, `.claude`, `.agents` and `.opencode` under `skills/bee-planning/playbooks` reports no difference |
+<!-- /bee:not-a-deferral -->
 
 ## ppb-11c (session port, first half)
 

@@ -3,8 +3,7 @@
 Source: pstack skill `swarm` (`SKILL.md`, no reference files) at commit
 `b9ddc83`, MIT, copyright 2026 Lauren Tan. The notice is
 `skills/bee-fanout/LICENSE.pstack`, a verbatim copy of the pstack `LICENSE`. This
-file is the only place a pstack-only tool is named; no file under
-`skills/bee-fanout/` names one.
+file is the only place a pstack-only tool is named; no ported file names one.
 
 Name: `bee-fanout` (decision `6ca3cd62`), because `bee-swarming` already runs
 approved cells to done. The description and the opening paragraph say the two

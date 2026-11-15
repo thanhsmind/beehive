@@ -2,7 +2,7 @@
 
 Source: pstack poteto-mode at commit `b9ddc83`, MIT, copyright 2026 Lauren Tan
 (notice in `skills/bee-planning/playbooks/LICENSE.pstack`). This file is the
-only place a pstack-only tool is named; no file under `skills/` names one.
+only place a pstack-only tool is named; no ported file names one.
 `skills/bee-planning/playbooks/session/index.md` gains five situation lines:
 `babysit`, `shipping`, `autopilot-full`, `autopilot-stack`, `opening-a-pr`.
 

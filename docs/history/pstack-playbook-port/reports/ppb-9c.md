@@ -195,9 +195,11 @@ cites "`feature.md` step 6" and "`feature.md` step 7". Those steps are now
 `feature/feature.md` steps 3 and 8. The cell that owns bugfix should fix
 this, so it is not edited here.
 
+<!-- bee:not-a-deferral: a record or description of work already done, never a promise to act -->
 Outside this cell: the rendered tree `.claude-plugin/skills/bee-planning/playbooks/`
 still holds the old class playbooks for every ported class, not only
 `feature`, and it has none of the situation subdirectories. Plan claim 16
 ("the rendered playbooks are byte copies") held when the plan was written. It
 no longer holds. This is presumably left for a render step later in the
 plan. It is not a ppb-9 defect.
+<!-- /bee:not-a-deferral -->

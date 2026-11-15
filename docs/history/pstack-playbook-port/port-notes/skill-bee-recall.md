@@ -3,8 +3,7 @@
 Source: pstack skill `recall` (`SKILL.md` only, no reference files) at commit
 `b9ddc83`, MIT, copyright 2026 Lauren Tan. The notice is
 `skills/bee-recall/LICENSE.pstack`, a verbatim copy of the pstack `LICENSE`. This
-file is the only place a pstack-only tool is named; no file under
-`skills/bee-recall/` names one.
+file is the only place a pstack-only tool is named; no ported file names one.
 
 Name: `bee-recall` (the pstack name with the `bee-` prefix every ported skill
 carries).
@@ -70,6 +69,7 @@ None. Every skill and principle the skill names exists in `skills/`.
 
 ## Dropped steps
 
+<!-- bee:not-a-deferral: a record or description of work already done, never a promise to act -->
 - The `automate-me` route ("turning habits into a durable skill"): pstack's
   `automate-me` is outside the port set (CONTEXT.md, Deferred Ideas), so the
   route has no bee counterpart and is dropped. The nearest bee door is
@@ -85,6 +85,7 @@ None. Every skill and principle the skill names exists in `skills/`.
 - Cursor `/loop`, Graphite, bugbot, poteto-agent, arena, architect and
   show-me-your-work: the source cites none of them, so nothing was dropped for
   them. `bee-show-me-your-work` has no place in a read-only recall.
+<!-- /bee:not-a-deferral -->
 
 ## Trigger fixture
 

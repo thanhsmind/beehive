@@ -4,8 +4,7 @@ Source: pstack skill `show-me-your-work` (`SKILL.md`,
 `references/decision-log-template.tsv`, `scripts/log.sh`) at commit `b9ddc83`,
 MIT, copyright 2026 Lauren Tan. The notice is
 `skills/bee-show-me-your-work/LICENSE.pstack`, a verbatim copy of the pstack
-`LICENSE`. This file is the only place a pstack-only tool is named; no file under
-`skills/bee-show-me-your-work/` names one.
+`LICENSE`. This file is the only place a pstack-only tool is named; no ported file names one.
 
 Kept as the base, with the swaps below: the format section and its six columns,
 the plain-spoken example rows, "Logging a row", "Where it lives" (local by

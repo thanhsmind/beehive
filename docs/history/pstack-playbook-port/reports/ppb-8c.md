@@ -63,6 +63,7 @@ D2 counts as missing. **missing** means a method step is gone with no reason.
 
 ## Fences
 
+<!-- bee:not-a-deferral: a record or description of work already done, never a promise to act -->
 - pstack-only tool names under `skills/bee-planning/playbooks/`: none.
   `rg -n -i 'cursor|graphite|bugbot|poteto-agent' skills/bee-planning/playbooks/`
   exits 1 with no output.
@@ -82,6 +83,7 @@ D2 counts as missing. **missing** means a method step is gone with no reason.
   the parser skips any line that does not start with `` - ` ``, and `bugfix.md`
   has the same shape. `cargo test --release --test class_playbook_parity`: 9
   passed, 0 failed.
+<!-- /bee:not-a-deferral -->
 
 ## Findings
 
