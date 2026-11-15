@@ -142,7 +142,7 @@
     },
     {
       "path": ".claude-plugin/skills/.bee-render.json",
-      "sha256": "5174ea6a92f795507c7fab38be2f1a086372deeedd202d4876e003c13a39b84c",
+      "sha256": "0f30fa286c3fd34e2c3030e78bce61aef36fa51bdd39387c099b57381c4f2ce1",
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/.bee-render.json"
@@ -195,6 +195,20 @@
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/bee-arena/SKILL.md"
+    },
+    {
+      "path": ".claude-plugin/skills/bee-blast-radius/LICENSE.pstack",
+      "sha256": "bc957ca6bee02792566a1a028d105e02e247c6e77cf057061674273da77b200e",
+      "mode": "644",
+      "role": "plugin_skill_claude_render",
+      "packagePath": ".claude-plugin/skills/bee-blast-radius/LICENSE.pstack"
+    },
+    {
+      "path": ".claude-plugin/skills/bee-blast-radius/SKILL.md",
+      "sha256": "5d828e81cb169d2405a14a2a2f3fb2194142935cb25d39a88f5bf3ecd95ab7e3",
+      "mode": "644",
+      "role": "plugin_skill_claude_render",
+      "packagePath": ".claude-plugin/skills/bee-blast-radius/SKILL.md"
     },
     {
       "path": ".claude-plugin/skills/bee-capturing/agents/openai.yaml",
@@ -1465,7 +1479,7 @@
     },
     {
       "path": ".codex-plugin/skills/.bee-render.json",
-      "sha256": "379270214a4eafc0bcb8f94aa15c652cf4765fe40ac99d3389065046945d83b1",
+      "sha256": "dc4216f7b9c9901d3c63599e8397e8d1062457e6e384120b018c4a8e07defb10",
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/.bee-render.json"
@@ -1518,6 +1532,20 @@
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/bee-arena/SKILL.md"
+    },
+    {
+      "path": ".codex-plugin/skills/bee-blast-radius/LICENSE.pstack",
+      "sha256": "bc957ca6bee02792566a1a028d105e02e247c6e77cf057061674273da77b200e",
+      "mode": "644",
+      "role": "plugin_skill_codex_render",
+      "packagePath": ".codex-plugin/skills/bee-blast-radius/LICENSE.pstack"
+    },
+    {
+      "path": ".codex-plugin/skills/bee-blast-radius/SKILL.md",
+      "sha256": "5d828e81cb169d2405a14a2a2f3fb2194142935cb25d39a88f5bf3ecd95ab7e3",
+      "mode": "644",
+      "role": "plugin_skill_codex_render",
+      "packagePath": ".codex-plugin/skills/bee-blast-radius/SKILL.md"
     },
     {
       "path": ".codex-plugin/skills/bee-capturing/agents/openai.yaml",
@@ -4332,6 +4360,20 @@
       "mode": "644",
       "role": "plugin_skill",
       "packagePath": "skills/bee-arena/SKILL.md"
+    },
+    {
+      "path": "skills/bee-blast-radius/LICENSE.pstack",
+      "sha256": "bc957ca6bee02792566a1a028d105e02e247c6e77cf057061674273da77b200e",
+      "mode": "644",
+      "role": "plugin_skill",
+      "packagePath": "skills/bee-blast-radius/LICENSE.pstack"
+    },
+    {
+      "path": "skills/bee-blast-radius/SKILL.md",
+      "sha256": "5d828e81cb169d2405a14a2a2f3fb2194142935cb25d39a88f5bf3ecd95ab7e3",
+      "mode": "644",
+      "role": "plugin_skill",
+      "packagePath": "skills/bee-blast-radius/SKILL.md"
     },
     {
       "path": "skills/bee-capturing/agents/openai.yaml",

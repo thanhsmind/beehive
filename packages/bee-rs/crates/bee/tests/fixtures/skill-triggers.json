@@ -192,5 +192,11 @@
   {"brief": "Where did I leave off on the billing migration? Give me a tight current-state brief before I resume.", "expect": ["bee-recall"]},
   {"brief": "Nhắc lại giúp tôi tuần qua tôi đã làm gì với phần thanh toán và giờ nên làm tiếp việc gì.", "expect": ["bee-recall"]},
   {"brief": "Why does the claim sweep skip expired claims? Give me the recorded reason for it.", "expect": ["bee-why"], "near": "bee-recall"},
-  {"brief": "I don't get how the dispatch door picks a worker, explain it to me step by step.", "expect": ["bee-teach"], "near": "bee-recall"}
+  {"brief": "I don't get how the dispatch door picks a worker, explain it to me step by step.", "expect": ["bee-teach"], "near": "bee-recall"},
+
+  {"brief": "What's the blast radius of changing the claim file format? I don't trust this small diff.", "expect": ["bee-blast-radius"]},
+  {"brief": "Before I merge this, what could this change break somewhere else that grep won't show me?", "expect": ["bee-blast-radius"]},
+  {"brief": "Phạm vi ảnh hưởng của thay đổi này là gì? Tìm xem nó có thể làm hỏng chỗ nào khác trước khi ship.", "expect": ["bee-blast-radius"]},
+  {"brief": "Trace how the dispatch door picks a worker, step by step, with the files I can open.", "expect": ["bee-how"], "near": "bee-blast-radius"},
+  {"brief": "Review the diff from main to this branch with independent reviewers and give me one verdict.", "expect": ["bee-reviewing"], "near": "bee-blast-radius"}
 ]

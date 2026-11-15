@@ -11,6 +11,10 @@
       "sha256": "4713c60fc5d84728ab790544cd9a0015054a65ed3dbb4488dd39c5169cc96d90"
     },
     {
+      "name": "bee-blast-radius",
+      "sha256": "67fba6ee379719675e65d270d1393b076db94f74ac84f674bb816b68e342e559"
+    },
+    {
       "name": "bee-capturing",
       "sha256": "31449bf5ecb2f35b9d5154a628483752f2d359c51868d112d7965d22e447f684"
     },
