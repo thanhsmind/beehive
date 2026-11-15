@@ -892,6 +892,7 @@
     "contract:close-principles-line",
     "contract:release-2-105-0-check",
     "contract:cited-claims-doctrine",
-    "contract:cited-claims-stop-check"
+    "contract:cited-claims-stop-check",
+    "contract:release-2-106-0-check"
   ]
 }
