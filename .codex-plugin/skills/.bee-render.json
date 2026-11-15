@@ -56,7 +56,7 @@
     },
     {
       "name": "bee-how",
-      "sha256": "9d25a40ca38b8f2047c79e05744b4f7570043d4797409d8da733aadd8ded87f7"
+      "sha256": "4452b6ca8b17f2615a88a0c9f03c73c81f4a6824106a8933c796680be5b6f508"
     },
     {
       "name": "bee-interrogate",
@@ -232,7 +232,7 @@
     },
     {
       "name": "bee-researching",
-      "sha256": "d8cddcb04dc26ea2e3ff848e682f95aa0d8e818dcd9c1aa3c91895c7f0943194"
+      "sha256": "2bcfa565ddd05eaa3717bc7797efabb1bad17077e5efe17412e67fbc904f7e6f"
     },
     {
       "name": "bee-reviewing",

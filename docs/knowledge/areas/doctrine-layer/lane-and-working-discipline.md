@@ -134,7 +134,12 @@ govern the working residue of a cell rather than its content.
   into these two procedures, never copies: each scopes the question, runs Trace
   or the Provenance sweep from that one home, and answers in the reply with no
   brief file. The procedure owns every step, the vague-target reading line
-  included, so a door restates none of them.
+  included, so a door restates none of them. A how question that asks for
+  architectural problems or a placement call ("which package owns this") ends
+  in Trace's `Critique` (pstack-playbook-port ppb-31): reviewers go out through
+  the reviewer door, the lead buckets findings by `bee-interrogate`'s judgment,
+  and the lenses cite their principles. It lives in the same home, so `/bee-how`
+  gained a scope line, not a step.
 - **R22** — A saved document with no bee template (a README, a guide, a
   handbook page) is written through `bee-technical-writing`: the document type
   comes first, one type per file, split and linked where types meet. Two places

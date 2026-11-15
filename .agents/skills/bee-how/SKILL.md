@@ -1,7 +1,7 @@
 ---
 name: bee-how
 description: >-
-  Answer how a part of this repo actually runs, as a path of steps a reader can open. Use when the user types /bee-how or asks how a command, hook, flow or subsystem runs or where its parts live. Not for why (bee-why), teaching (bee-teach), or changing code.
+  Answer how a part of this repo actually runs, as a path of steps a reader can open. Use when the user types /bee-how or asks how a command, hook, flow or subsystem runs, where its parts live, or which package or layer owns it. Not for why (bee-why), teaching (bee-teach), or changing code.
 metadata:
   version: '0.1'
   ecosystem: bee
@@ -10,7 +10,7 @@ metadata:
       kind: command
       command: .bee/bin/bee
       missing_effect: degraded
-      reason: The trace fans its read-only workers out through the vendored bee binary's dispatch door. Absent, the trace runs inline and the account says so.
+      reason: The trace fans its read-only workers, and a critique its reviewers, out through the vendored bee binary's dispatch door. Absent, the trace runs inline and the account says so.
 ---
 
 # How
@@ -25,6 +25,7 @@ Read-only. Write no brief file. The account is the reply.
 
 - When the question is part how and part why, answer the how part. The why part becomes the one next action, as a ready `/bee-why <question>`.
 - A question about an outside library goes to bee-researching.
+- A request for architectural problems or improvements, or a placement, ownership or layering question ("where should this live", "which package owns this", "is this the right layer"), is a how question too: trace it, then run Trace's "Critique". The account comes first and the verdict below it.
 
 ## Reply
 
