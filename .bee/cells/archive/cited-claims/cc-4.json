@@ -1,0 +1,115 @@
+{
+  "id": "cc-4",
+  "feature": "cited-claims",
+  "title": "Check the citation doctrine text and its skill pointers",
+  "lane": "small",
+  "role": "test",
+  "deps": [
+    "cc-1"
+  ],
+  "decisions": [
+    "D1",
+    "06a46ab6-577b-42c5-8692-6430b02b23fe"
+  ],
+  "files": [
+    "docs/history/cited-claims/cc-4-check.md"
+  ],
+  "read_first": [
+    "docs/history/cited-claims/CONTEXT.md",
+    "packages/bee/LEADER.md",
+    "skills/bee-hive/references/routing-and-contracts.md"
+  ],
+  "action": "Docs checker, no edits to skills, doctrine or code. Read the cc-1 commit. Confirm LEADER.md rule agents-verify-before-agreeing and the Claim labels section teach numbered citations with a Sources block under the reply, keep [unverified] for unchecked claims, and no longer ask for a bare [verified] tag; that .bee/LEADER.md is byte-identical to packages/bee/LEADER.md; that the Pushback text is unchanged; and that the rendered bee-hive copies match the source. Write docs/history/cited-claims/cc-4-check.md with what you checked, the command output summary and a pass or fail verdict. A fail is returned as blocked with the evidence. Bee commands you may run: bee dev release-manifest --check. Run no dispatch verb, not even its help.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test rule_index_parity && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test pointer_integrity && .bee/bin/bee dev release-manifest --check",
+  "judge_obligation_ack": "docs checker over one rule paragraph, no guard logic",
+  "must_haves": {
+    "truths": [
+      "the checker report states pass only when both doctrine homes teach the citation form and .bee/LEADER.md matches its source",
+      "rule index parity and pointer integrity tests pass"
+    ],
+    "artifacts": [
+      {
+        "path": "docs/history/cited-claims/cc-4-check.md",
+        "substantive": "check record with verdict"
+      }
+    ],
+    "key_links": [],
+    "prohibitions": [
+      "No edits outside the check record"
+    ]
+  },
+  "affects_skills": [],
+  "affects_specs": [],
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "cc-4-w",
+    "outcome": "Citation doctrine check passes: both homes teach numbered citations with a Sources block, [unverified] kept, no bare [verified], .bee/LEADER.md identical, Pushback unchanged, renders match; record committed c248b43ee5af5fb8c0ec464b66cc6185d0615a07",
+    "files_changed": [
+      "docs/history/cited-claims/cc-4-check.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-11-15T12:13:55.782Z",
+    "behavior_change": false,
+    "verification_evidence": "cell changes one markdown check record; doctrine parity and pointer tests plus manifest cover it",
+    "verify_output": "green:static",
+    "verify_passed": true,
+    "claim_session": "b6a324b5-f697-4265-85fa-412a7bc98cea",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test rule_index_parity && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test pointer_integrity && .bee/bin/bee dev release-manifest --check",
+    "claimed_at": "2026-11-15T12:12:54.622Z",
+    "knowledge_delta": [],
+    "no_mistakes": true,
+    "no_knowledge_used": true,
+    "report": {
+      "outcome": "Citation doctrine check passes: both homes teach numbered citations with a Sources block, [unverified] kept, no bare [verified], .bee/LEADER.md identical, Pushback unchanged, renders match; record committed c248b43ee5af5fb8c0ec464b66cc6185d0615a07",
+      "commit": "c248b43ee5af5fb8c0ec464b66cc6185d0615a07",
+      "files": [
+        "docs/history/cited-claims/cc-4-check.md"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test rule_index_parity && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test pointer_integrity && .bee/bin/bee dev release-manifest --check — green:static — cell changes one markdown check record; doctrine parity and pointer tests plus manifest cover it",
+      "deviations": [],
+      "knowledge_used": [],
+      "patch_id": "74a2109dca17cc3fc0e67dc29452b52e93812acc"
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "the checker report states pass only when both doctrine homes teach the citation form and .bee/LEADER.md matches its source",
+            "artifact": "docs/history/cited-claims/cc-4-check.md"
+          },
+          {
+            "requirement": "rule index parity and pointer integrity tests pass",
+            "artifact": "docs/history/cited-claims/cc-4-check.md"
+          },
+          {
+            "requirement": "docs/history/cited-claims/cc-4-check.md",
+            "artifact": "docs/history/cited-claims/cc-4-check.md"
+          }
+        ],
+        "recorded_at": "2026-11-15T12:29:01.452Z",
+        "recorded_by": "b6a324b5-f697-4265-85fa-412a7bc98cea",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": {
+    "new": 34637,
+    "cached": 334588,
+    "total": 369225,
+    "models": {
+      "claude-opus-5-5": {
+        "new": 34637,
+        "cached": 334588,
+        "total": 369225
+      }
+    },
+    "jobs": [
+      "job-1794744778987-2557309-1"
+    ]
+  }
+}

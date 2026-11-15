@@ -2293,5 +2293,10 @@
     "capped": 2,
     "dropped": 0,
     "archived_at": "2026-11-15T12:00:42.973Z"
+  },
+  "cited-claims": {
+    "capped": 4,
+    "dropped": 0,
+    "archived_at": "2026-11-15T12:33:12.259Z"
   }
 }

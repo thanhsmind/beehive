@@ -1,0 +1,191 @@
+{
+  "id": "cc-2",
+  "feature": "cited-claims",
+  "title": "Count a reply with numbered sources as checked in the Stop hook",
+  "lane": "standard",
+  "role": "code",
+  "deps": [],
+  "decisions": [
+    "D2",
+    "4c6f834c-58fd-46d0-b26a-b3158a759ff1"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/hooks/session_close/claims.rs",
+    "packages/bee-rs/crates/bee/src/hooks/session_close/tests.rs",
+    "docs/knowledge/areas/hook-runtime/overview.md"
+  ],
+  "read_first": [
+    "docs/history/cited-claims/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/hooks/session_close/claims.rs",
+    "docs/knowledge/areas/hook-runtime/overview.md"
+  ],
+  "action": "D2. In claims.rs unverified_agreement_warning, the reply counts as checked when the lowercased last-turn text contains the legacy '[verified' marker, or when it is cited: some inline [n] (n one or more digits) appears AND, after a line whose trimmed text is 'sources:' or 'nguồn:' (also accept a markdown heading or bold form of those words, e.g. '## sources' or '**nguồn:**'), some line starts (after trim) with that same [n]. Keep it a small pure function over the text; no regex crate if not already a dependency of bee. Rewrite WARNING to name the citation form: the reply agrees with a proposal but cites no source — cite the key assumption as [1] with a Sources line, then agree with what the check showed; keep the rule id agents-verify-before-agreeing. The conditional markers still silence it. Advisory, Stop only, never a block. Add unit tests in session_close/tests.rs for a cited agreement (quiet), a citation with no Sources block (warns), a Vietnamese Nguồn: block (quiet), and keep the existing legacy [verified] test. Sync the Stop agreement paragraph of docs/knowledge/areas/hook-runtime/overview.md (around line 89) citing cited-claims D2. One commit. Bee commands you may run: bee knowledge check. Run no dispatch verb, not even its help.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- session_close",
+  "must_haves": {
+    "truths": [
+      "an agreeing reply with an inline [1] and a Sources block line starting with [1] prints no agreement warning",
+      "an agreeing reply with an inline [1] and no Sources block prints the agreement warning",
+      "an agreeing reply with the legacy [verified marker prints no agreement warning",
+      "the agreement warning never blocks the Stop"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/hooks/session_close/claims.rs",
+        "substantive": "cited-reply check in unverified_agreement_warning"
+      }
+    ],
+    "key_links": [
+      "mod.rs adds claims warnings to the Stop parts only on the Done path"
+    ],
+    "prohibitions": [
+      "No code comments",
+      "No block or exit-code change in the Stop hook",
+      "No new config key"
+    ]
+  },
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/hook-runtime/overview.md"
+  ],
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "cc-2-w",
+    "outcome": "Stop agreement check now accepts numbered [n] citations with a Sources/Nguồn block; warning names the citation form; commit cf82c4dce",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/hooks/session_close/claims.rs",
+      "packages/bee-rs/crates/bee/src/hooks/session_close/tests.rs",
+      "docs/knowledge/areas/hook-runtime/overview.md"
+    ],
+    "deviations": [
+      "sync-ack: herded worker reported done; leader reviewed commit cf82c4dce"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-15T12:12:42.842Z",
+    "behavior_change": false,
+    "verification_evidence": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- session_close — green:unit — 88 passed covering cited, uncited, Vietnamese and legacy [verified cases",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "b6a324b5-f697-4265-85fa-412a7bc98cea",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- session_close",
+    "claimed_at": "2026-11-15T12:09:38.988Z",
+    "knowledge_delta": [
+      "docs/knowledge/areas/hook-runtime/overview.md"
+    ],
+    "sync_ack": "herded worker reported done; leader reviewed commit cf82c4dce",
+    "no_mistakes": true,
+    "principles_used": [
+      {
+        "slug": "bee-principle-laziness-protocol",
+        "changed": "the cited check is three small pure helpers beside the existing marker test, no regex crate (leader read of commit cf82c4dce; worker report named none)"
+      }
+    ],
+    "report": {
+      "outcome": "Stop agreement check now accepts numbered [n] citations with a Sources/Nguồn block; warning names the citation form; commit cf82c4dce",
+      "commit": "004a769f839cfe13473dbaeb90d460110d9f6900",
+      "files": [
+        "packages/bee-rs/crates/bee/src/hooks/session_close/claims.rs",
+        "packages/bee-rs/crates/bee/src/hooks/session_close/tests.rs",
+        "docs/knowledge/areas/hook-runtime/overview.md"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- session_close — green:unit — cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- session_close — green:unit — 88 passed covering cited, uncited, Vietnamese and legacy [verified cases",
+      "deviations": [],
+      "patch_id": "543ee5d5da0e5d5ab4af354d9876a31dfa687ab3"
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "an agreeing reply with an inline [1] and a Sources block line starting with [1] prints no agreement warning",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/session_close/claims.rs"
+          },
+          {
+            "requirement": "an agreeing reply with an inline [1] and no Sources block prints the agreement warning",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/session_close/claims.rs"
+          },
+          {
+            "requirement": "an agreeing reply with the legacy [verified marker prints no agreement warning",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/session_close/claims.rs"
+          },
+          {
+            "requirement": "the agreement warning never blocks the Stop",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/session_close/claims.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/hooks/session_close/claims.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/session_close/claims.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/hooks/session_close/tests.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/session_close/tests.rs"
+          },
+          {
+            "requirement": "docs/knowledge/areas/hook-runtime/overview.md",
+            "artifact": "docs/knowledge/areas/hook-runtime/overview.md"
+          }
+        ],
+        "recorded_at": "2026-11-15T12:29:01.433Z",
+        "recorded_by": "b6a324b5-f697-4265-85fa-412a7bc98cea",
+        "commit_diff": "checked"
+      }
+    ],
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "c1",
+            "status": "PASS",
+            "evidence": "claims.rs is_cited lists [1] after a Sources heading and matches the inline [1]; the fixture 'inline [1], Sources: [1]' has warns=false and passes in both shapes (83 passed)"
+          },
+          {
+            "id": "c2",
+            "status": "PASS",
+            "evidence": "is_cited needs a listed number under a sources/nguồn heading; the fixtures 'inline [1], no Sources heading' and 'Sources lists only [3]' have warns=true and pass"
+          },
+          {
+            "id": "c3",
+            "status": "PASS",
+            "evidence": "claims.rs:37 checked = text.contains(\"[verified\") || is_cited; the legacy [verified: …] fixture has warns=false and passes"
+          },
+          {
+            "id": "c4",
+            "status": "PASS",
+            "evidence": "mod.rs:177-181 computes claims_warning on Stop only; it is pushed into parts only on the Done/Crash arms (mod.rs:203,210), and the Block arm uses advisory's reason alone (mod.rs:191-194)"
+          },
+          {
+            "id": "c5",
+            "status": "PASS",
+            "evidence": "rg for added // or /* lines in both commits found nothing (rc=1); the diff touches no config or schema file and adds no config read"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "sonnet",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-11-15T12:32:20.349Z"
+      }
+    ]
+  },
+  "usage": {
+    "new": 41629,
+    "cached": 261349,
+    "total": 302978,
+    "models": {
+      "claude-sonnet-5-5": {
+        "new": 41629,
+        "cached": 261349,
+        "total": 302978
+      }
+    },
+    "jobs": [
+      "job-1794744588032-2543032-1"
+    ]
+  }
+}

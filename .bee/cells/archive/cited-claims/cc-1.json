@@ -1,0 +1,195 @@
+{
+  "id": "cc-1",
+  "feature": "cited-claims",
+  "title": "Teach numbered source citations in the claim doctrine",
+  "lane": "small",
+  "role": "docs",
+  "deps": [],
+  "decisions": [
+    "D1",
+    "06a46ab6-577b-42c5-8692-6430b02b23fe"
+  ],
+  "files": [
+    "packages/bee/LEADER.md",
+    ".bee/LEADER.md",
+    "skills/bee-hive/references/routing-and-contracts.md",
+    "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md",
+    ".claude-plugin/skills/bee-hive/",
+    ".codex-plugin/skills/bee-hive/",
+    ".claude/skills/bee-hive/",
+    ".agents/skills/bee-hive/",
+    ".opencode/skills/bee-hive/",
+    "docs/history/codex-harness-hardening/release-manifest.json",
+    ".bee/onboarding.json"
+  ],
+  "read_first": [
+    "docs/history/cited-claims/CONTEXT.md",
+    "packages/bee/LEADER.md",
+    "skills/bee-hive/references/routing-and-contracts.md"
+  ],
+  "action": "D1. In packages/bee/LEADER.md rule agents-verify-before-agreeing (around line 199), replace the [verified]/[unverified] tag bullet: a technical claim the session checked carries a numbered citation [1], [2] in the text, and the reply ends with a Sources block (heading Sources: or Nguồn:), one line per number, [n] path:line or [n] the command run with its result; one source keeps one number on reuse; a claim from general knowledge or inference keeps the inline [unverified] marker and gets no number, and is never stated as fact. Change 'until its key assumption is [verified]' to 'until its key assumption has a citation', and the Stop hook sentence to say it warns when a reply agrees with no citation. Copy the same bytes to .bee/LEADER.md (it is the onboarded copy and must stay byte-identical). In skills/bee-hive/references/routing-and-contracts.md section Claim labels and pushback, rewrite the Claim labels paragraph and its text example to the citation form (one example reply with two citations and its Sources block, one [unverified] line), and the First reaction paragraph to 'Until the key assumption has a citation'. Keep the section heading and the Pushback text unchanged. Update the spoken line of agents-verify-before-agreeing in docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md to say cite each checked code claim with a numbered source listed under the reply. Run bee dev regen to re-render the skill trees, then restore .claude/skills hub-served skills other than bee-hive if regen touched them. One commit. Bee commands you may run: bee dev regen, bee dev release-manifest --check, bee onboard --repo-root . --json, bee knowledge check. Run no dispatch verb, not even its help.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test rule_index_parity && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test pointer_integrity && .bee/bin/bee dev release-manifest --check && .bee/bin/bee onboard --repo-root . --json",
+  "must_haves": {
+    "truths": [
+      "LEADER.md rule agents-verify-before-agreeing asks for numbered citations with a Sources block under the reply",
+      "the Claim labels section shows one example reply with numbered citations and its Sources block",
+      "an unchecked claim keeps the [unverified] marker and is never stated as fact"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee/LEADER.md",
+        "substantive": "citation form in agents-verify-before-agreeing"
+      },
+      {
+        "path": "skills/bee-hive/references/routing-and-contracts.md",
+        "substantive": "Claim labels citation form and example"
+      }
+    ],
+    "key_links": [
+      ".bee/LEADER.md stays byte-identical to packages/bee/LEADER.md"
+    ],
+    "prohibitions": [
+      "No new numbered rule",
+      "No code edits",
+      "No change to the Pushback text"
+    ]
+  },
+  "affects_skills": [
+    "skills/bee-hive/references/routing-and-contracts.md"
+  ],
+  "affects_specs": [
+    "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md"
+  ],
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "cc-1-w",
+    "outcome": "Claim doctrine teaches numbered citations with a Sources block in LEADER.md (both copies), routing-and-contracts.md and the rule index spoken line; skill trees regenerated, commit 004a769f8",
+    "files_changed": [
+      "packages/bee/LEADER.md",
+      ".bee/LEADER.md",
+      "skills/bee-hive/references/routing-and-contracts.md",
+      "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md",
+      ".claude-plugin/skills/bee-hive/",
+      ".codex-plugin/skills/bee-hive/",
+      ".claude/skills/bee-hive/",
+      ".agents/skills/bee-hive/",
+      ".opencode/skills/bee-hive/",
+      "docs/history/codex-harness-hardening/release-manifest.json",
+      ".bee/onboarding.json"
+    ],
+    "deviations": [
+      "sync-ack: herded worker reported done, its verify ran the rule_index_parity and pointer_integrity cargo tests; leader reviewed commit 004a769f8"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-15T12:12:53.307Z",
+    "behavior_change": false,
+    "verification_evidence": "cargo test --release -p bee --test rule_index_parity && --test pointer_integrity && bee dev release-manifest --check && bee onboard --repo-root . --json — green:static — doctrine and rendered-copy edits only, no code changed",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "b6a324b5-f697-4265-85fa-412a7bc98cea",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test rule_index_parity && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test pointer_integrity && .bee/bin/bee dev release-manifest --check && .bee/bin/bee onboard --repo-root . --json",
+    "claimed_at": "2026-11-15T12:09:53.940Z",
+    "verified_at": null,
+    "baseline": null,
+    "reaction": null,
+    "skipped": null,
+    "unknowns": null,
+    "found": null,
+    "stopped": null,
+    "knowledge_delta": [
+      "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md"
+    ],
+    "sync_ack": "herded worker reported done, its verify ran the rule_index_parity and pointer_integrity cargo tests; leader reviewed commit 004a769f8",
+    "no_mistakes": true,
+    "principles_used": [
+      {
+        "slug": "bee-principle-single-source-of-truth",
+        "changed": ".bee/LEADER.md copied byte for byte from packages/bee/LEADER.md, the rule text lives in one doctrine home plus its full form (leader read of commit 004a769f8; worker report named none)"
+      }
+    ],
+    "report": {
+      "outcome": "Claim doctrine teaches numbered citations with a Sources block in LEADER.md (both copies), routing-and-contracts.md and the rule index spoken line; skill trees regenerated, commit 004a769f8",
+      "commit": "004a769f839cfe13473dbaeb90d460110d9f6900",
+      "files": [
+        "packages/bee/LEADER.md",
+        ".bee/LEADER.md",
+        "skills/bee-hive/references/routing-and-contracts.md",
+        "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md",
+        ".claude-plugin/skills/bee-hive/",
+        ".codex-plugin/skills/bee-hive/",
+        ".claude/skills/bee-hive/",
+        ".agents/skills/bee-hive/",
+        ".opencode/skills/bee-hive/",
+        "docs/history/codex-harness-hardening/release-manifest.json",
+        ".bee/onboarding.json"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test rule_index_parity && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test pointer_integrity && .bee/bin/bee dev release-manifest --check && .bee/bin/bee onboard --repo-root . --json — green:unit — cargo test --release -p bee --test rule_index_parity && --test pointer_integrity && bee dev release-manifest --check && bee onboard --repo-root . --json — green:static — doctrine and rendered-copy edits only, no code changed",
+      "deviations": [],
+      "patch_id": "543ee5d5da0e5d5ab4af354d9876a31dfa687ab3"
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "LEADER.md rule agents-verify-before-agreeing asks for numbered citations with a Sources block under the reply",
+            "artifact": "packages/bee/LEADER.md"
+          },
+          {
+            "requirement": "the Claim labels section shows one example reply with numbered citations and its Sources block",
+            "artifact": "packages/bee/LEADER.md"
+          },
+          {
+            "requirement": "an unchecked claim keeps the [unverified] marker and is never stated as fact",
+            "artifact": "packages/bee/LEADER.md"
+          },
+          {
+            "requirement": "packages/bee/LEADER.md",
+            "artifact": "packages/bee/LEADER.md"
+          },
+          {
+            "requirement": ".bee/LEADER.md",
+            "artifact": ".bee/LEADER.md"
+          },
+          {
+            "requirement": "skills/bee-hive/references/routing-and-contracts.md",
+            "artifact": "skills/bee-hive/references/routing-and-contracts.md"
+          },
+          {
+            "requirement": "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md",
+            "artifact": "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md"
+          },
+          {
+            "requirement": "docs/history/codex-harness-hardening/release-manifest.json",
+            "artifact": "docs/history/codex-harness-hardening/release-manifest.json"
+          },
+          {
+            "requirement": ".bee/onboarding.json",
+            "artifact": ".bee/onboarding.json"
+          }
+        ],
+        "recorded_at": "2026-11-15T12:29:01.424Z",
+        "recorded_by": "b6a324b5-f697-4265-85fa-412a7bc98cea",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": {
+    "new": 41652,
+    "cached": 364350,
+    "total": 406002,
+    "models": {
+      "claude-sonnet-5-5": {
+        "new": 41652,
+        "cached": 364350,
+        "total": 406002
+      }
+    },
+    "jobs": [
+      "job-1794744597704-2544179-1"
+    ]
+  }
+}

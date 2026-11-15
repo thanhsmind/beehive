@@ -1,0 +1,177 @@
+{
+  "id": "cc-3",
+  "feature": "cited-claims",
+  "title": "Prove the cited-reply check on transcript fixtures",
+  "lane": "standard",
+  "role": "test",
+  "deps": [
+    "cc-2"
+  ],
+  "decisions": [
+    "D2",
+    "4c6f834c-58fd-46d0-b26a-b3158a759ff1"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/hooks/session_close/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/cited-claims/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/hooks/session_close/claims.rs"
+  ],
+  "action": "Test only, no product code. Build agreeing-reply fixtures in both the Claude shape and the Codex shape. Cover: inline [1] with a Sources: line [1] (quiet); inline [2] with a Nguồn: heading and a [2] line (quiet); inline [1] but the Sources block lists only [3] (warns); inline [1] with no Sources heading (warns); an array index like v[1] in prose with no Sources block (warns); legacy [verified] (quiet); a conditional 'checking first' reply (quiet). Drive the Stop hook entry end to end where existing session_close tests do and assert it never blocks. Show each new test red against a mutation of the cc-2 check. A red against the product is a finding returned as blocked. Bee commands you may run: none beyond the verify. Run no dispatch verb, not even its help.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- session_close",
+  "must_haves": {
+    "truths": [
+      "a test fails if a cited reply with a matching Sources line still warns",
+      "a test fails if a citation without a matching Sources line goes quiet",
+      "a test fails if the agreement warning blocks the Stop"
+    ],
+    "artifacts": [],
+    "key_links": [],
+    "prohibitions": [
+      "No code comments",
+      "No product code edits"
+    ]
+  },
+  "affects_skills": [],
+  "affects_specs": [],
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "cc-3-w",
+    "outcome": "Added a 7-case agreeing-reply fixture table in Claude and Codex shapes, checked at unit level and end to end through the Stop hook (never blocks); 4 mutations of the check and the Stop path turn it red; subsumed single-shape tests removed — 9914c5ac0",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/hooks/session_close/tests.rs"
+    ],
+    "deviations": [
+      "sync-ack: herded tester reported done; leader reviewed commit 9914c5ac0"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-15T12:26:22.702Z",
+    "behavior_change": false,
+    "verification_evidence": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- session_close — green:unit — 83 passed 0 failed; full workspace suite 5802 passed 0 failed on final run (one earlier run had 1 unidentified failure that did not reproduce)",
+    "verify_output": "green:red-first",
+    "verify_passed": true,
+    "claim_session": "b6a324b5-f697-4265-85fa-412a7bc98cea",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- session_close",
+    "claimed_at": "2026-11-15T12:12:53.839Z",
+    "knowledge_delta": [],
+    "sync_ack": "herded tester reported done; leader reviewed commit 9914c5ac0",
+    "no_mistakes": true,
+    "knowledge_used": [
+      {
+        "path": "docs/knowledge/patterns/20260818-a-green-count-is-not-evidence-that-your-new-test-ran.md",
+        "changed": "checked the new e2e test by name in the output; caught it being compiled as dead code"
+      }
+    ],
+    "principles_used": [
+      {
+        "slug": "bee-principle-red-before-green",
+        "changed": "each new fixture case was shown red against 4 mutations of the cc-2 check and the Stop path before green (worker summary, commit 9914c5ac0)"
+      },
+      {
+        "slug": "bee-principle-red-before-green",
+        "changed": "ran four mutations (three on is_cited, one making Stop block) and saw each new test go red before trusting green"
+      },
+      {
+        "slug": "bee-principle-laziness-protocol",
+        "changed": "removed seven single-shape tests the table covers instead of adding beside them"
+      },
+      {
+        "slug": "bee-principle-a-green-count-is-not-evidence",
+        "changed": "noticed the e2e fn was 'never used' (brace slip) and fixed it until it showed up in the run list"
+      }
+    ],
+    "report": {
+      "outcome": "Added a 7-case agreeing-reply fixture table in Claude and Codex shapes, checked at unit level and end to end through the Stop hook (never blocks); 4 mutations of the check and the Stop path turn it red; subsumed single-shape tests removed — 9914c5ac0",
+      "commit": "9914c5ac001a4948fed6fb04f8ed66ea86041255",
+      "files": [
+        "packages/bee-rs/crates/bee/src/hooks/session_close/tests.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- session_close — green:red-first — PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- session_close — green:unit — 83 passed 0 failed; full workspace suite 5802 passed 0 failed on final run (one earlier run had 1 unidentified failure that did not reproduce)",
+      "deviations": [],
+      "knowledge_used": [
+        "docs/knowledge/patterns/20260818-a-green-count-is-not-evidence-that-your-new-test-ran.md — checked the new e2e test by name in the output; caught it being compiled as dead code"
+      ],
+      "principles_used": [
+        "bee-principle-red-before-green — ran four mutations (three on is_cited, one making Stop block) and saw each new test go red before trusting green",
+        "bee-principle-laziness-protocol — removed seven single-shape tests the table covers instead of adding beside them",
+        "bee-principle-a-green-count-is-not-evidence — noticed the e2e fn was 'never used' (brace slip) and fixed it until it showed up in the run list"
+      ],
+      "patch_id": "7e04f530668a6db02c05517f65055138ecd7d894"
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "a test fails if a cited reply with a matching Sources line still warns",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/session_close/tests.rs"
+          },
+          {
+            "requirement": "a test fails if a citation without a matching Sources line goes quiet",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/session_close/tests.rs"
+          },
+          {
+            "requirement": "a test fails if the agreement warning blocks the Stop",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/session_close/tests.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/hooks/session_close/tests.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/session_close/tests.rs"
+          }
+        ],
+        "recorded_at": "2026-11-15T12:29:01.442Z",
+        "recorded_by": "b6a324b5-f697-4265-85fa-412a7bc98cea",
+        "commit_diff": "checked"
+      }
+    ],
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "c1",
+            "status": "PASS",
+            "evidence": "agreement_warning_matches_each_claude_and_codex_fixture asserts warning.is_some()==warns for the Sources [1] and Nguồn [2] cases (warns=false), and the e2e test asserts out.contains(rule)==warns, so a cited reply that still warns fails both"
+          },
+          {
+            "id": "c2",
+            "status": "PASS",
+            "evidence": "the cases 'Sources lists only [3]', 'no Sources heading' and 'v[1] array index' have warns=true in both shapes, so a citation that goes quiet fails the assert_eq"
+          },
+          {
+            "id": "c3",
+            "status": "PASS",
+            "evidence": "stop_hook_carries_the_agreement_warning_per_fixture_and_never_blocks runs 14 cases through run_inner and asserts result==Ok(()) and !out.contains(\"\\\"decision\\\":\\\"block\\\"\"), which matches encode_block (adapter.rs:383); the test passed"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "opus",
+        "judge_model": "opus",
+        "model_independence": "same-model",
+        "recorded_at": "2026-11-15T12:32:20.355Z"
+      }
+    ]
+  },
+  "usage": {
+    "new": 60699,
+    "cached": 705284,
+    "total": 765983,
+    "models": {
+      "claude-opus-5-5": {
+        "new": 60699,
+        "cached": 705284,
+        "total": 765983
+      }
+    },
+    "jobs": [
+      "job-1794744777696-2557241-1"
+    ]
+  }
+}
