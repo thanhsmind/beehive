@@ -11,9 +11,9 @@
     "uat": false
   },
   "summary": "Feature \"monorepo-manifest-detect\" started at phase \"exploring\" (lane).",
-  "next_action": "Continue bee-exploring for \"monorepo-manifest-detect\" (lane).",
+  "next_action": "Merged into main at 1ab765d; capture what settled, then bee close --feature monorepo-manifest-detect.",
   "created_at": "2026-11-15T15:13:38.400Z",
-  "run_state": "awaiting-approval",
+  "run_state": null,
   "waiting_on": null,
   "route": {
     "class": "feature",
@@ -439,12 +439,5 @@
         }
       ]
     }
-  },
-  "merge_ready": {
-    "since": "2026-11-15T15:28:38.251Z",
-    "branch": "wt/monorepo-manifest-detect",
-    "worktree_id": "beehive--wt--monorepo-manifest-detect",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
