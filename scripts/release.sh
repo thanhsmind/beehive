@@ -291,7 +291,7 @@ elif [ -n "$ARG_VERSION" ]; then
     while IFS= read -r TEST_CMD; do
       [ -n "$TEST_CMD" ] || continue
       log "test     $TEST_CMD"
-      bash -c "$TEST_CMD" >&2 \
+      bash -c "$TEST_CMD" >&2 </dev/null \
         || fail "the declared test suite went RED at \`$TEST_CMD\` — nothing tagged, nothing pushed; a published tag is the one thing a release can never take back"
     done <<< "$TEST_CMDS"
     log "smoke    bash .bee/verify/verify-app/control-bee smoke"
