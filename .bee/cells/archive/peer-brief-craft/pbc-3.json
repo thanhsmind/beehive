@@ -1,0 +1,135 @@
+{
+  "id": "pbc-3",
+  "feature": "peer-brief-craft",
+  "title": "Prove the peer preamble and both worker brief renders",
+  "lane": "small",
+  "role": "test",
+  "deps": [
+    "pbc-1"
+  ],
+  "judge_obligation_ack": "test-only cell on a text preamble, no guard logic; it is itself the independent read of pbc-1",
+  "decisions": [
+    "D1",
+    "D2",
+    "88540c44-4475-45eb-b35b-dd745dac3540"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/hooks/session_init.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/peer-brief-craft/CONTEXT.md",
+    "packages/bee/prompts/peer-boot.md",
+    "packages/bee/prompts/worker-cell.md"
+  ],
+  "action": "Test only, no product code. Add tests that assert observable output: (a) the session-init hook output for a herded worker with the thin boot on tells the peer to read AGENTS.md and still forbids CLAUDE.md and .bee/LEADER.md; (b) a worker-cell brief rendered for a native dispatch and one rendered for a herding dispatch both carry the depth-on-demand line naming .bee/expertise/INDEX.md; (c) neither render carries an expertise file body when no --expertise is passed. Run them; a red is a finding returned as [BLOCKED] with the output.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- session_init worker_prompt peer depth",
+  "must_haves": {
+    "truths": [
+      "a test fails if the peer preamble forbids AGENTS.md again",
+      "a test fails if either brief render loses the depth line"
+    ],
+    "artifacts": [],
+    "key_links": [],
+    "prohibitions": [
+      "No code comments",
+      "No product code edits"
+    ]
+  },
+  "affects_skills": [],
+  "affects_specs": [],
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "pbc-3-w",
+    "outcome": "Added a session-init hook-output test (child process) for the AGENTS.md read line and the CLAUDE.md/.bee/LEADER.md forbid, plus native+herding worker-cell depth-line and no-expertise-body tests; filtered verify 66 passed — ca5aa1bfcb9f386ca1ef1dd0bb1132ff5a7bb252",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/hooks/session_init.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+    ],
+    "deviations": [
+      "sync-ack: herded tester reported done; leader reviewed commit ca5aa1bfc; herding brief did not ask for principles, leader answers from the diff"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-15T09:51:40.474Z",
+    "behavior_change": false,
+    "verification_evidence": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- session_init worker_prompt peer depth — green:unit — the cell's verify filter covers all three new tests (66 passed, 0 failed, 1 ignored child)",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "08e1c9b9-c58f-481b-a4b7-0cd8b72258c7",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- session_init worker_prompt peer depth",
+    "claimed_at": "2026-11-15T09:45:28.879Z",
+    "knowledge_delta": [],
+    "sync_ack": "herded tester reported done; leader reviewed commit ca5aa1bfc; herding brief did not ask for principles, leader answers from the diff",
+    "no_mistakes": true,
+    "knowledge_used": [
+      {
+        "path": "docs/knowledge/areas/bee-herding/thin-peer-boot.md",
+        "changed": "pointed to PEER_BOOT and the thin_peer_boot switch, so the test drives the real hook with BEE_HERDING_WORKER=1 on a thin repo"
+      }
+    ],
+    "principles_used": [
+      {
+        "slug": "bee-principle-test-behavior-not-structure",
+        "changed": "tests drive the real hook in a child process and the rendered brief, not the template text"
+      }
+    ],
+    "report": {
+      "outcome": "Added a session-init hook-output test (child process) for the AGENTS.md read line and the CLAUDE.md/.bee/LEADER.md forbid, plus native+herding worker-cell depth-line and no-expertise-body tests; filtered verify 66 passed — ca5aa1bfcb9f386ca1ef1dd0bb1132ff5a7bb252",
+      "commit": "ca5aa1bfcb9f386ca1ef1dd0bb1132ff5a7bb252",
+      "files": [
+        "packages/bee-rs/crates/bee/src/hooks/session_init.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- session_init worker_prompt peer depth — green:unit — PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- session_init worker_prompt peer depth — green:unit — the cell's verify filter covers all three new tests (66 passed, 0 failed, 1 ignored child)",
+      "deviations": [],
+      "knowledge_used": [
+        "docs/knowledge/areas/bee-herding/thin-peer-boot.md — pointed to PEER_BOOT and the thin_peer_boot switch, so the test drives the real hook with BEE_HERDING_WORKER=1 on a thin repo"
+      ],
+      "patch_id": "4051ea4d0d8d945b39ee2053f30584e0c2ff8f7e"
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "a test fails if the peer preamble forbids AGENTS.md again",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/session_init.rs"
+          },
+          {
+            "requirement": "a test fails if either brief render loses the depth line",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/session_init.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/hooks/session_init.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/session_init.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+          }
+        ],
+        "recorded_at": "2026-11-15T10:01:56.862Z",
+        "recorded_by": "08e1c9b9-c58f-481b-a4b7-0cd8b72258c7",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": {
+    "new": 71473,
+    "cached": 1350394,
+    "total": 1421867,
+    "models": {
+      "claude-opus-5-5": {
+        "new": 71473,
+        "cached": 1350394,
+        "total": 1421867
+      }
+    },
+    "jobs": [
+      "job-1794735933450-1444838-1"
+    ]
+  }
+}

@@ -1,0 +1,131 @@
+{
+  "id": "pbc-7",
+  "feature": "peer-brief-craft",
+  "title": "Repin the three tests the depth line and the principle block broke",
+  "lane": "small",
+  "role": "test",
+  "deps": [
+    "pbc-6",
+    "pbc-4"
+  ],
+  "decisions": [
+    "D2",
+    "D3",
+    "88540c44-4475-45eb-b35b-dd745dac3540",
+    "e4c59f3a-9d35-4268-b68d-3a662a27fb21"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+    "packages/bee-rs/crates/bee/tests/knowledge_outcomes.rs"
+  ],
+  "read_first": [
+    "docs/history/peer-brief-craft/CONTEXT.md",
+    "packages/bee/prompts/worker-cell.md",
+    ".bee/logs/test-failure-test-0.log"
+  ],
+  "action": "Test only, no product code. The full suite has three reds caused by this feature. (1) drivers/tests.rs a_knowledge_arm_cell_brief_keeps_the_learned_context_block_byte_for_byte asserts the brief contains '- docs/history/demo/plan.md (when present)\\n\\nLearned context (machine-assembled'; (2) worker_cell_without_machine_blocks_matches_the_plain_template asserts '- docs/history/f/plan.md (when present)\\n\\nContract:\\n'. The worker-cell.md template now puts the 'Depth on demand' line between the Inputs list and the next block (peer-brief-craft D2): update both expected strings to the new adjacency, keeping what each test protects (the learned-context block bytes; the plain template with no machine blocks). (3) tests/knowledge_outcomes.rs text_output_has_no_too_few_line_when_comparable asserts the text has no 'not comparable' anywhere; the new principle block (D3) legitimately prints 'principle outcomes not comparable' for a store with no principles_arm rows. Narrow that assertion to the knowledge block: no line starting with 'outcomes not comparable'. Before editing, rg packages/bee-rs for any other test pinning the old worker-cell adjacency or the whole report text and fix those too. Bee commands you may run: none beyond the verify. Run no dispatch verb, not even its help.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- verbs::drivers::tests && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test knowledge_outcomes",
+  "judge_obligation_ack": "test expectation repin after a template text change, no guard logic",
+  "must_haves": {
+    "truths": [
+      "verbs::drivers::tests passes with the depth line in the template",
+      "the knowledge_outcomes integration tests pass with the principle block in the report",
+      "each repinned test still fails if the behavior it protects breaks"
+    ],
+    "artifacts": [],
+    "key_links": [],
+    "prohibitions": [
+      "No code comments",
+      "No product code edits",
+      "No deleted test"
+    ]
+  },
+  "affects_skills": [],
+  "affects_specs": [],
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "pbc-7-w",
+    "outcome": "Repinned two drivers brief tests to the Depth-on-demand adjacency and narrowed the knowledge_outcomes comparable test to the 'outcomes not comparable' line; mutations go red — d9f4c6b56614ee06f6afac3082ec01cd780b79b8",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+      "packages/bee-rs/crates/bee/tests/knowledge_outcomes.rs"
+    ],
+    "deviations": [
+      "sync-ack: herded test-fix worker reported done; leader reviewed commit d9f4c6b56; the worker left principles_used out though its brief asked"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-15T10:12:20.559Z",
+    "behavior_change": false,
+    "verification_evidence": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml — green:unit — full suite 5793 passed 0 failed; cell verify 369+9 passed; template and fixture mutations turn all three repinned tests red",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "08e1c9b9-c58f-481b-a4b7-0cd8b72258c7",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- verbs::drivers::tests && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test knowledge_outcomes",
+    "claimed_at": "2026-11-15T10:04:40.577Z",
+    "knowledge_delta": [],
+    "sync_ack": "herded test-fix worker reported done; leader reviewed commit d9f4c6b56; the worker left principles_used out though its brief asked",
+    "no_mistakes": true,
+    "no_knowledge_used": true,
+    "no_principles_used": true,
+    "report": {
+      "outcome": "Repinned two drivers brief tests to the Depth-on-demand adjacency and narrowed the knowledge_outcomes comparable test to the 'outcomes not comparable' line; mutations go red — d9f4c6b56614ee06f6afac3082ec01cd780b79b8",
+      "commit": "d9f4c6b56614ee06f6afac3082ec01cd780b79b8",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+        "packages/bee-rs/crates/bee/tests/knowledge_outcomes.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- verbs::drivers::tests && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test knowledge_outcomes — green:unit — PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml — green:unit — full suite 5793 passed 0 failed; cell verify 369+9 passed; template and fixture mutations turn all three repinned tests red",
+      "deviations": [],
+      "knowledge_used": [],
+      "patch_id": "ce06521d349d462c3fb12c3635bee2d10c53bec3"
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "verbs::drivers::tests passes with the depth line in the template",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+          },
+          {
+            "requirement": "the knowledge_outcomes integration tests pass with the principle block in the report",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+          },
+          {
+            "requirement": "each repinned test still fails if the behavior it protects breaks",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/tests/knowledge_outcomes.rs",
+            "artifact": "packages/bee-rs/crates/bee/tests/knowledge_outcomes.rs"
+          }
+        ],
+        "recorded_at": "2026-11-15T10:14:29.331Z",
+        "recorded_by": "08e1c9b9-c58f-481b-a4b7-0cd8b72258c7",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": {
+    "new": 40538,
+    "cached": 366953,
+    "total": 407491,
+    "models": {
+      "claude-opus-5-5": {
+        "new": 40538,
+        "cached": 366953,
+        "total": 407491
+      }
+    },
+    "jobs": [
+      "job-1794737083974-1676940-1"
+    ]
+  }
+}

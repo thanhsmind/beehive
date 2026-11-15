@@ -1,0 +1,144 @@
+{
+  "id": "pbc-2",
+  "feature": "peer-brief-craft",
+  "title": "Compare principle and holdout cells in the knowledge report",
+  "lane": "small",
+  "role": "code",
+  "deps": [],
+  "decisions": [
+    "D3"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs",
+    "docs/knowledge/areas/okf-profile/critical-bar.md"
+  ],
+  "read_first": [
+    "docs/history/peer-brief-craft/CONTEXT.md",
+    "docs/knowledge/areas/okf-profile/critical-bar.md",
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+  ],
+  "action": "D3: report.rs build_outcomes reads knowledge_arm from prepare cell rows of .bee/logs/dispatch.jsonl and counts four signals per arm over closed cells. Generalize it over the record key and the arm names so the same code yields the existing knowledge-arm block unchanged and a new principles-arm block from the principles_arm key with arms principles and holdout (the values prepare.rs cell_principles records). Add the new block to the report result as principles_outcomes (JSON) and as text lines prefixed 'principle outcomes' after the existing outcome lines, with the same MIN_PER_ARM comparable rule and an unrecorded count. The existing outcomes JSON and text must stay byte-identical. Add unit tests in report.rs beside the existing outcome tests. Sync docs/knowledge/areas/okf-profile/critical-bar.md where it describes the outcome block, citing peer-brief-craft D3. One commit.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- knowledge::report",
+  "must_haves": {
+    "truths": [
+      "bee knowledge report --json carries principles_outcomes with arms principles and holdout, per-arm cells, the four signals, rates, unrecorded, min_per_arm and comparable",
+      "the text report prints principle outcome lines for each arm",
+      "the existing outcomes block and its text lines are unchanged",
+      "a cell whose prepare row has no principles_arm counts as unrecorded"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs",
+        "substantive": "one arm-outcome builder used for both keys"
+      }
+    ],
+    "key_links": [
+      "prepare.rs writes principles_arm beside knowledge_arm on each kind cell prepare row"
+    ],
+    "prohibitions": [
+      "No code comments",
+      "No change to how prepare assigns or records arms",
+      "No second copy of the outcome counting logic"
+    ]
+  },
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/okf-profile/critical-bar.md"
+  ],
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "pbc-2-w",
+    "outcome": "Generalized build_outcomes into one arm-outcome builder and added principles_outcomes (JSON and text) with tests and a critical-bar.md sync; commit 9fc427babc077f745fecc8577ce75c35da26bc62",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs",
+      "docs/knowledge/areas/okf-profile/critical-bar.md"
+    ],
+    "deviations": [
+      "sync-ack: herded worker reported done; leader reviewed commit 9fc427bab; herding brief never asked the worker for principles, leader answers from the diff"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-15T09:45:22.312Z",
+    "behavior_change": false,
+    "verification_evidence": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- knowledge::report — green:unit — 30 passed incl. 2 new outcome tests; the full-suite proof command was not run",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "08e1c9b9-c58f-481b-a4b7-0cd8b72258c7",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- knowledge::report",
+    "claimed_at": "2026-11-15T09:41:15.249Z",
+    "knowledge_delta": [
+      "docs/knowledge/areas/okf-profile/critical-bar.md"
+    ],
+    "sync_ack": "herded worker reported done; leader reviewed commit 9fc427bab; herding brief never asked the worker for principles, leader answers from the diff",
+    "no_mistakes": true,
+    "principles_used": [
+      {
+        "slug": "bee-principle-single-source-of-truth",
+        "changed": "one arm-outcome builder serves both keys instead of a second counting copy"
+      }
+    ],
+    "report": {
+      "outcome": "Generalized build_outcomes into one arm-outcome builder and added principles_outcomes (JSON and text) with tests and a critical-bar.md sync; commit 9fc427babc077f745fecc8577ce75c35da26bc62",
+      "commit": "9fc427babc077f745fecc8577ce75c35da26bc62",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs",
+        "docs/knowledge/areas/okf-profile/critical-bar.md"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- knowledge::report — green:unit — PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- knowledge::report — green:unit — 30 passed incl. 2 new outcome tests; the full-suite proof command was not run",
+      "deviations": [],
+      "patch_id": "da87f57809f27f19be573ea74c9345b4384e1092"
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "bee knowledge report --json carries principles_outcomes with arms principles and holdout, per-arm cells, the four signals, rates, unrecorded, min_per_arm and comparable",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs"
+          },
+          {
+            "requirement": "the text report prints principle outcome lines for each arm",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs"
+          },
+          {
+            "requirement": "the existing outcomes block and its text lines are unchanged",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs"
+          },
+          {
+            "requirement": "a cell whose prepare row has no principles_arm counts as unrecorded",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs"
+          },
+          {
+            "requirement": "docs/knowledge/areas/okf-profile/critical-bar.md",
+            "artifact": "docs/knowledge/areas/okf-profile/critical-bar.md"
+          }
+        ],
+        "recorded_at": "2026-11-15T10:01:56.848Z",
+        "recorded_by": "08e1c9b9-c58f-481b-a4b7-0cd8b72258c7",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": {
+    "new": 55425,
+    "cached": 417772,
+    "total": 473197,
+    "models": {
+      "claude-sonnet-5-5": {
+        "new": 55425,
+        "cached": 417772,
+        "total": 473197
+      }
+    },
+    "jobs": [
+      "job-1794735706589-1413160-1"
+    ]
+  }
+}

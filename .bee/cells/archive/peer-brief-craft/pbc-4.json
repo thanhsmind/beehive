@@ -1,0 +1,118 @@
+{
+  "id": "pbc-4",
+  "feature": "peer-brief-craft",
+  "title": "Prove the principles-arm outcome block on a fixture store",
+  "lane": "small",
+  "role": "test",
+  "deps": [
+    "pbc-2"
+  ],
+  "decisions": [
+    "D3",
+    "e4c59f3a-9d35-4268-b68d-3a662a27fb21"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs"
+  ],
+  "read_first": [
+    "docs/history/peer-brief-craft/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs"
+  ],
+  "action": "Test only, no product code. In a temp store, write .bee/logs/dispatch.jsonl prepare cell rows with principles_arm principles, holdout and missing, and closed cells with a mix of blocked_reason, reopened_at, attempts and mistakes. Drive the report entry the verb uses and assert principles_outcomes counts, rates, unrecorded and comparable, and that the knowledge outcomes block for the same store equals what it was before pbc-2 (same keys, same numbers). Run them; a red is a finding returned as [BLOCKED] with the output.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- knowledge::report",
+  "must_haves": {
+    "truths": [
+      "a test fails if principle counts read the knowledge_arm key",
+      "a test fails if a row without principles_arm is counted in an arm"
+    ],
+    "artifacts": [],
+    "key_links": [],
+    "prohibitions": [
+      "No code comments",
+      "No product code edits"
+    ]
+  },
+  "affects_skills": [],
+  "affects_specs": [],
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "pbc-4-w",
+    "outcome": "Added three fixture-store tests pinning principles_outcomes and the unchanged knowledge outcomes block to literal JSON and text; mutations for both truths go red; commit 1e6289850e9f39c827335fbd19eec528bb4d608d",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs"
+    ],
+    "deviations": [
+      "sync-ack: herded tester reported done; leader reviewed commit 1e6289850; herding brief did not ask for principles, leader answers from the report"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-15T09:53:56.087Z",
+    "behavior_change": false,
+    "verification_evidence": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- knowledge::report — green:unit — 33 passed 0 failed; test-only change confined to the report module, mutations M1-M3 each turned the new tests red",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "08e1c9b9-c58f-481b-a4b7-0cd8b72258c7",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- knowledge::report",
+    "claimed_at": "2026-11-15T09:45:29.836Z",
+    "knowledge_delta": [],
+    "sync_ack": "herded tester reported done; leader reviewed commit 1e6289850; herding brief did not ask for principles, leader answers from the report",
+    "no_mistakes": true,
+    "no_knowledge_used": true,
+    "principles_used": [
+      {
+        "slug": "bee-principle-test-behavior-not-structure",
+        "changed": "tests assert the report JSON and text a user reads, with mutations proving each test can go red"
+      }
+    ],
+    "report": {
+      "outcome": "Added three fixture-store tests pinning principles_outcomes and the unchanged knowledge outcomes block to literal JSON and text; mutations for both truths go red; commit 1e6289850e9f39c827335fbd19eec528bb4d608d",
+      "commit": "1e6289850e9f39c827335fbd19eec528bb4d608d",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- knowledge::report — green:unit — PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- knowledge::report — green:unit — 33 passed 0 failed; test-only change confined to the report module, mutations M1-M3 each turned the new tests red",
+      "deviations": [],
+      "knowledge_used": [],
+      "patch_id": "62be76a78f3b74e2a59cdf35f3087def72d2c56e"
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "a test fails if principle counts read the knowledge_arm key",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs"
+          },
+          {
+            "requirement": "a test fails if a row without principles_arm is counted in an arm",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs"
+          }
+        ],
+        "recorded_at": "2026-11-15T10:01:56.875Z",
+        "recorded_by": "08e1c9b9-c58f-481b-a4b7-0cd8b72258c7",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": {
+    "new": 68540,
+    "cached": 747861,
+    "total": 816401,
+    "models": {
+      "claude-opus-5-5": {
+        "new": 68540,
+        "cached": 747861,
+        "total": 816401
+      }
+    },
+    "jobs": [
+      "job-1794735935629-1445374-1"
+    ]
+  }
+}

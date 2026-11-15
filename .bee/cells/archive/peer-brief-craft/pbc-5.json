@@ -1,0 +1,175 @@
+{
+  "id": "pbc-5",
+  "feature": "peer-brief-craft",
+  "title": "Ask a herded peer which principles it applied",
+  "lane": "small",
+  "role": "code",
+  "deps": [
+    "pbc-1"
+  ],
+  "decisions": [
+    "D4",
+    "de367f58-bdd6-4267-b9d2-7b063a671a68"
+  ],
+  "files": [
+    "packages/bee/prompts/worker-cell.md",
+    ".bee/bin/prompts/worker-cell.md",
+    ".bee/onboarding.json",
+    "docs/history/codex-harness-hardening/release-manifest.json",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+    "docs/knowledge/areas/workflow-state/dispatch.md",
+    "docs/history/peer-brief-craft/CONTEXT.md"
+  ],
+  "read_first": [
+    "docs/history/peer-brief-craft/CONTEXT.md",
+    "packages/bee/prompts/worker-cell.md",
+    "packages/bee-rs/crates/bee/src/herding/mailbox.rs"
+  ],
+  "action": "D4: in packages/bee/prompts/worker-cell.md, inside the {{#if herding}} block, extend the result-file instruction: when a Principles block appears above, the result file carries a principles_used array, one '<slug> — <the decision it changed>' entry per principle applied, [] when none changed a decision; keep the existing knowledge_used sentence. mailbox.rs already parses principles_used and cells finish --from-job already carries it; change no Rust product code. Run bee dev regen (it mirrors .bee/bin/prompts, onboarding.json and the release manifest) and commit what it writes, restoring any .claude/skills churn it makes. Add to docs/history/peer-brief-craft/CONTEXT.md a D4 bullet (the herding brief asks for principles_used, citing decision de367f58) and add one sentence to the worker-brief part of docs/knowledge/areas/workflow-state/dispatch.md citing peer-brief-craft D4. Update any test in drivers/tests.rs that pins the herding render. One commit. Bee commands you may run: bee dev regen, bee dev release-manifest --check, bee onboard --repo-root . --json, bee knowledge check. Run no dispatch verb, not even its help.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- embedded_prompts every_template_carries_the_original_request_block_and_matches_disk worker_prompt && .bee/bin/bee dev release-manifest --check && .bee/bin/bee onboard --repo-root . --json",
+  "judge_obligation_ack": "prompt text only, no guard logic; the separate tester cell pbc-6 is the independent read",
+  "must_haves": {
+    "truths": [
+      "a herding render of a worker-cell brief asks for a principles_used array in the result file",
+      "a native render is unchanged by this cell",
+      "the embedded prompts match the checked-out files byte for byte"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee/prompts/worker-cell.md",
+        "substantive": "principles_used sentence inside the herding block"
+      }
+    ],
+    "key_links": [
+      "herding/mailbox.rs parses principles_used from the result file",
+      "cells finish --from-job carries principles_used to the cap"
+    ],
+    "prohibitions": [
+      "No code comments",
+      "No Rust product code change",
+      "No change to the native render"
+    ]
+  },
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/workflow-state/dispatch.md"
+  ],
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "pbc-5-w",
+    "outcome": "Herding worker brief now asks for a principles_used array; native render unchanged; commit 673ec29ec",
+    "files_changed": [
+      "packages/bee/prompts/worker-cell.md",
+      ".bee/bin/prompts/worker-cell.md",
+      ".bee/onboarding.json",
+      "docs/history/codex-harness-hardening/release-manifest.json",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+      "docs/knowledge/areas/workflow-state/dispatch.md",
+      "docs/history/peer-brief-craft/CONTEXT.md"
+    ],
+    "deviations": [
+      "sync-ack: herded worker reported done; leader reviewed commit 673ec29ec; its own brief predates this fix so no principles answer was asked"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-15T09:54:09.277Z",
+    "behavior_change": false,
+    "verification_evidence": "cargo test --release --bin bee -- embedded_prompts every_template_carries_the_original_request_block_and_matches_disk worker_prompt && bee dev release-manifest --check && bee onboard --repo-root . --json — green:unit — prompt text only, 8 tests passed, manifest matches",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "08e1c9b9-c58f-481b-a4b7-0cd8b72258c7",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- embedded_prompts every_template_carries_the_original_request_block_and_matches_disk worker_prompt && .bee/bin/bee dev release-manifest --check && .bee/bin/bee onboard --repo-root . --json",
+    "claimed_at": "2026-11-15T09:51:41.166Z",
+    "knowledge_delta": [
+      "docs/knowledge/areas/workflow-state/dispatch.md"
+    ],
+    "sync_ack": "herded worker reported done; leader reviewed commit 673ec29ec; its own brief predates this fix so no principles answer was asked",
+    "no_mistakes": true,
+    "no_knowledge_used": true,
+    "no_principles_used": true,
+    "report": {
+      "outcome": "Herding worker brief now asks for a principles_used array; native render unchanged; commit 673ec29ec",
+      "commit": "673ec29ec5b5394fa44465efc033c5f1563add97",
+      "files": [
+        "packages/bee/prompts/worker-cell.md",
+        ".bee/bin/prompts/worker-cell.md",
+        ".bee/onboarding.json",
+        "docs/history/codex-harness-hardening/release-manifest.json",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+        "docs/knowledge/areas/workflow-state/dispatch.md",
+        "docs/history/peer-brief-craft/CONTEXT.md"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- embedded_prompts every_template_carries_the_original_request_block_and_matches_disk worker_prompt && .bee/bin/bee dev release-manifest --check && .bee/bin/bee onboard --repo-root . --json — green:unit — cargo test --release --bin bee -- embedded_prompts every_template_carries_the_original_request_block_and_matches_disk worker_prompt && bee dev release-manifest --check && bee onboard --repo-root . --json — green:unit — prompt text only, 8 tests passed, manifest matches",
+      "deviations": [],
+      "knowledge_used": [],
+      "patch_id": "00389884373b3543e6fe06b4f1fa64fab29f541f"
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "a herding render of a worker-cell brief asks for a principles_used array in the result file",
+            "artifact": "packages/bee/prompts/worker-cell.md"
+          },
+          {
+            "requirement": "a native render is unchanged by this cell",
+            "artifact": "packages/bee/prompts/worker-cell.md"
+          },
+          {
+            "requirement": "the embedded prompts match the checked-out files byte for byte",
+            "artifact": "packages/bee/prompts/worker-cell.md"
+          },
+          {
+            "requirement": "packages/bee/prompts/worker-cell.md",
+            "artifact": "packages/bee/prompts/worker-cell.md"
+          },
+          {
+            "requirement": ".bee/bin/prompts/worker-cell.md",
+            "artifact": ".bee/bin/prompts/worker-cell.md"
+          },
+          {
+            "requirement": ".bee/onboarding.json",
+            "artifact": ".bee/onboarding.json"
+          },
+          {
+            "requirement": "docs/history/codex-harness-hardening/release-manifest.json",
+            "artifact": "docs/history/codex-harness-hardening/release-manifest.json"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+          },
+          {
+            "requirement": "docs/knowledge/areas/workflow-state/dispatch.md",
+            "artifact": "docs/knowledge/areas/workflow-state/dispatch.md"
+          },
+          {
+            "requirement": "docs/history/peer-brief-craft/CONTEXT.md",
+            "artifact": "docs/history/peer-brief-craft/CONTEXT.md"
+          }
+        ],
+        "recorded_at": "2026-11-15T10:01:56.889Z",
+        "recorded_by": "08e1c9b9-c58f-481b-a4b7-0cd8b72258c7",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": {
+    "new": 34124,
+    "cached": 197957,
+    "total": 232081,
+    "models": {
+      "claude-sonnet-5-5": {
+        "new": 34124,
+        "cached": 197957,
+        "total": 232081
+      }
+    },
+    "jobs": [
+      "job-1794736305121-1510700-1"
+    ]
+  }
+}

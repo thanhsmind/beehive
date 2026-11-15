@@ -1,0 +1,132 @@
+{
+  "id": "pbc-6",
+  "feature": "peer-brief-craft",
+  "title": "Prove the herding brief asks for the principles answer and the job carries it",
+  "lane": "small",
+  "role": "test",
+  "deps": [
+    "pbc-5"
+  ],
+  "decisions": [
+    "D4",
+    "de367f58-bdd6-4267-b9d2-7b063a671a68"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/peer-brief-craft/CONTEXT.md",
+    "packages/bee/prompts/worker-cell.md",
+    "packages/bee-rs/crates/bee/src/herding/mailbox.rs"
+  ],
+  "action": "Test only, no product code. Add tests asserting observable output: (a) a worker-cell brief rendered for a herding dispatch with a non-empty principles value asks for principles_used in the result file; (b) the native render does not carry that herding sentence. Run them; a red is a finding returned as blocked with the output. Bee commands you may run: none beyond the verify. Run no dispatch verb, not even its help.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- worker_prompt principles_used herding_render",
+  "must_haves": {
+    "truths": [
+      "a test fails if the herding brief stops asking for principles_used",
+      "a test fails if the native render gains the herding sentence"
+    ],
+    "artifacts": [],
+    "key_links": [],
+    "prohibitions": [
+      "No code comments",
+      "No product code edits"
+    ]
+  },
+  "affects_skills": [],
+  "affects_specs": [],
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "pbc-6-w",
+    "outcome": "Added two worker_prompt tests with a non-empty Principles block: the herding render must ask for principles_used, the native render must not mention it; each goes red under its template mutation — 86ab8a28b398e2585256a0a1a1b42c73dca01f7f",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+    ],
+    "deviations": [
+      "sync-ack: herded tester reported done; leader reviewed commit 86ab8a28b"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-15T10:01:38.222Z",
+    "behavior_change": false,
+    "verification_evidence": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- worker_prompt principles_used herding_render — green:unit — 8 passed incl. both new tests; template mutations A/B turned each new test red",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "08e1c9b9-c58f-481b-a4b7-0cd8b72258c7",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- worker_prompt principles_used herding_render",
+    "claimed_at": "2026-11-15T09:54:09.850Z",
+    "knowledge_delta": [],
+    "sync_ack": "herded tester reported done; leader reviewed commit 86ab8a28b",
+    "no_mistakes": true,
+    "no_knowledge_used": true,
+    "principles_used": [
+      {
+        "slug": "bee-principle-test-behavior-not-structure",
+        "changed": "asserted rendered brief text, not template structure"
+      },
+      {
+        "slug": "bee-principle-prove-it-works",
+        "changed": "mutated the template to prove each new test can go red"
+      },
+      {
+        "slug": "bee-principle-smallest-honest-shape",
+        "changed": "reused principles_root and PRINCIPLES_HEADER fixtures instead of a new store"
+      }
+    ],
+    "report": {
+      "outcome": "Added two worker_prompt tests with a non-empty Principles block: the herding render must ask for principles_used, the native render must not mention it; each goes red under its template mutation — 86ab8a28b398e2585256a0a1a1b42c73dca01f7f",
+      "commit": "86ab8a28b398e2585256a0a1a1b42c73dca01f7f",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- worker_prompt principles_used herding_render — green:unit — PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- worker_prompt principles_used herding_render — green:unit — 8 passed incl. both new tests; template mutations A/B turned each new test red",
+      "deviations": [],
+      "knowledge_used": [],
+      "principles_used": [
+        "bee-principle-test-behavior-not-structure — asserted rendered brief text, not template structure",
+        "bee-principle-prove-it-works — mutated the template to prove each new test can go red",
+        "bee-principle-smallest-honest-shape — reused principles_root and PRINCIPLES_HEADER fixtures instead of a new store"
+      ],
+      "patch_id": "e9bf2924f3b41e41dd2c55a28c98b06bba64ba79"
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "a test fails if the herding brief stops asking for principles_used",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+          },
+          {
+            "requirement": "a test fails if the native render gains the herding sentence",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+          }
+        ],
+        "recorded_at": "2026-11-15T10:01:56.902Z",
+        "recorded_by": "08e1c9b9-c58f-481b-a4b7-0cd8b72258c7",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": {
+    "new": 53471,
+    "cached": 780953,
+    "total": 834424,
+    "models": {
+      "claude-opus-5-5": {
+        "new": 53471,
+        "cached": 780953,
+        "total": 834424
+      }
+    },
+    "jobs": [
+      "job-1794736455315-1555280-1"
+    ]
+  }
+}

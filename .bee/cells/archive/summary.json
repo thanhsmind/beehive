@@ -2278,5 +2278,10 @@
     "capped": 2,
     "dropped": 0,
     "archived_at": "2026-11-15T06:38:14.032Z"
+  },
+  "peer-brief-craft": {
+    "capped": 7,
+    "dropped": 0,
+    "archived_at": "2026-11-15T10:14:41.525Z"
   }
 }
