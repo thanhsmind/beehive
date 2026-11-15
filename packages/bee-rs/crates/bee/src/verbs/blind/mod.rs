@@ -334,7 +334,7 @@ pub(crate) fn parse_dossier(text: &str) -> Result<Dossier, Value> {
     // ── the fixed sections ───────────────────────────────────────────────
     // A second level-1 heading is an extra SECTION, not a second title: the
     // dossier is one run's record.
-    for h in heads.iter().skip(1).filter(|h| h.level == 1) {
+    if let Some(h) = heads.iter().skip(1).find(|h| h.level == 1) {
         return Err(refuse(
             "dossier_section_unexpected",
             &[("section".into(), s(&h.text))],
@@ -1442,6 +1442,18 @@ mod tests {
         let v = refusal_of(&second_title);
         assert_eq!(reason(&v), "dossier_section_unexpected");
         assert_eq!(field(&v, "section"), "Blind lane run other");
+    }
+
+    #[test]
+    fn of_two_extra_level_one_headings_the_first_is_refused_by_name() {
+        let doc = well_formed()
+            .replace("## Chosen", "# Second run\n\n## Chosen")
+            .replace("## Citations", "# Third run\n\n## Citations");
+        let v = refusal_of(&doc);
+        assert_refusal_shape(&v);
+        assert_eq!(reason(&v), "dossier_section_unexpected");
+        assert_eq!(field(&v, "section"), "Second run");
+        assert!(field(&v, "fix").contains("second level-1 heading"), "{v}");
     }
 
     #[test]

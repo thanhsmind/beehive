@@ -9,7 +9,10 @@
     "write-guard": true
   },
   "commands": {
-    "test": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml"
+    "test": [
+      "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo clippy --manifest-path packages/bee-rs/Cargo.toml",
+      "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml"
+    ]
   },
   "host_shell": "posix",
   "gate_bypass": "full",
