@@ -337,14 +337,14 @@ fn closed_cells(root: &Path) -> Vec<Value> {
     cells
 }
 
-fn recorded_arms(root: &Path) -> std::collections::HashMap<String, String> {
+fn recorded_arms(root: &Path, key: &str) -> std::collections::HashMap<String, String> {
     let mut arms = std::collections::HashMap::new();
     for row in read_jsonl(&root.join(".bee").join("logs").join("dispatch.jsonl")).rows {
         if row.get("source").and_then(Value::as_str) != Some("prepare") || row.get("kind").and_then(Value::as_str) != Some("cell") {
             continue;
         }
         let Some(cell) = row.get("cell").and_then(Value::as_str) else { continue };
-        let arm = row.get("knowledge_arm").and_then(Value::as_str).unwrap_or_default();
+        let arm = row.get(key).and_then(Value::as_str).unwrap_or_default();
         arms.entry(cell.to_string()).or_insert_with(|| arm.to_string());
     }
     arms
@@ -371,14 +371,16 @@ fn rate(count: usize, cells: usize) -> Value {
     json!((count as f64 / cells as f64 * 1000.0).round() / 1000.0)
 }
 
-pub(crate) fn build_outcomes(root: &Path) -> (Value, Vec<String>) {
-    let recorded = recorded_arms(root);
+const PRINCIPLE_ARMS: [&str; 2] = ["principles", "holdout"];
+
+pub(crate) fn build_arm_outcomes(root: &Path, key: &str, arm_names: [&str; 2], label: &str) -> (Value, Vec<String>) {
+    let recorded = recorded_arms(root, key);
     let mut cells = [0usize; 2];
     let mut counts = [[0usize; 4]; 2];
     let mut unrecorded = 0usize;
     for cell in closed_cells(root) {
         let id = cell.get("id").and_then(Value::as_str).unwrap_or_default();
-        let Some(arm) = ARMS.iter().position(|a| recorded.get(id).map(String::as_str) == Some(*a)) else {
+        let Some(arm) = arm_names.iter().position(|a| recorded.get(id).map(String::as_str) == Some(*a)) else {
             unrecorded += 1;
             continue;
         };
@@ -391,7 +393,7 @@ pub(crate) fn build_outcomes(root: &Path) -> (Value, Vec<String>) {
 
     let mut arms = Map::new();
     let mut lines = Vec::new();
-    for (arm, name) in ARMS.iter().enumerate() {
+    for (arm, name) in arm_names.iter().enumerate() {
         let mut row = Map::new();
         let mut rates = Map::new();
         row.insert("cells".into(), Value::from(cells[arm]));
@@ -402,18 +404,20 @@ pub(crate) fn build_outcomes(root: &Path) -> (Value, Vec<String>) {
         row.insert("rates".into(), Value::Object(rates));
         arms.insert((*name).into(), Value::Object(row));
         lines.push(format!(
-            "outcomes {name}: {} cell(s), {} blocked, {} reopened, {} red round(s), {} with mistakes",
+            "{label} {name}: {} cell(s), {} blocked, {} reopened, {} red round(s), {} with mistakes",
             cells[arm], counts[arm][0], counts[arm][1], counts[arm][2], counts[arm][3]
         ));
     }
-    lines.push(format!("outcomes unrecorded: {unrecorded} closed cell(s) with no recorded arm"));
+    lines.push(format!("{label} unrecorded: {unrecorded} closed cell(s) with no recorded arm"));
 
     let comparable = cells.iter().all(|c| *c >= MIN_PER_ARM);
     if !comparable {
         lines.push(format!(
-            "outcomes not comparable: each arm needs {MIN_PER_ARM} cells — {} more knowledge, {} more holdout",
+            "{label} not comparable: each arm needs {MIN_PER_ARM} cells — {} more {}, {} more {}",
             MIN_PER_ARM.saturating_sub(cells[0]),
-            MIN_PER_ARM.saturating_sub(cells[1])
+            arm_names[0],
+            MIN_PER_ARM.saturating_sub(cells[1]),
+            arm_names[1]
         ));
     }
 
@@ -759,8 +763,11 @@ pub(crate) fn run_report(flags: Flags, json: bool, pre_json: bool, t0: Instant) 
     let concepts = collect_concepts(&dir)?;
 
     let (measured, unmeasured, evidence_ladder, mut lines) = build_report(&ctx.root, &concepts);
-    let (outcomes, outcome_lines) = build_outcomes(&ctx.root);
+    let (outcomes, outcome_lines) = build_arm_outcomes(&ctx.root, "knowledge_arm", ARMS, "outcomes");
     lines.extend(outcome_lines);
+    let (principles_outcomes, principle_lines) =
+        build_arm_outcomes(&ctx.root, "principles_arm", PRINCIPLE_ARMS, "principle outcomes");
+    lines.extend(principle_lines);
     let (feature_outcomes, feature_lines) = build_feature_outcomes(&ctx.root);
     lines.extend(feature_lines);
     let (knowledge_used, knowledge_used_lines) = build_knowledge_used(&ctx.root);
@@ -779,6 +786,7 @@ pub(crate) fn run_report(flags: Flags, json: bool, pre_json: bool, t0: Instant) 
     result.insert("unmeasured_count".into(), Value::from(unmeasured_count));
     result.insert("evidence_ladder".into(), evidence_ladder);
     result.insert("outcomes".into(), outcomes);
+    result.insert("principles_outcomes".into(), principles_outcomes);
     result.insert("feature_outcomes".into(), feature_outcomes);
     result.insert("knowledge_used".into(), knowledge_used);
     result.insert("knowledge_wrong".into(), knowledge_wrong);
@@ -1108,6 +1116,61 @@ mod tests {
             "learned_context": learned,
         });
         format!("{row}\n")
+    }
+
+    fn arm_row(cell: &str, knowledge: &str, principles: Option<&str>) -> String {
+        let mut row = json!({"source": "prepare", "kind": "cell", "cell": cell, "knowledge_arm": knowledge});
+        if let Some(arm) = principles {
+            row["principles_arm"] = json!(arm);
+        }
+        format!("{row}\n")
+    }
+
+    fn arm_fixture(root: &Path) {
+        std::fs::create_dir_all(root.join(".bee").join("logs")).unwrap();
+        let log = arm_row("a", "knowledge", Some("principles"))
+            + &arm_row("b", "holdout", Some("principles"))
+            + &arm_row("c", "knowledge", Some("holdout"))
+            + &arm_row("d", "holdout", None);
+        std::fs::write(root.join(".bee").join("logs").join("dispatch.jsonl"), log).unwrap();
+        closed_cell(root, "a", json!({"blocked_reason": "x"}));
+        closed_cell(root, "b", json!({"mistakes": ["m"]}));
+        closed_cell(root, "c", json!({"attempts": [{}]}));
+        closed_cell(root, "d", json!({}));
+    }
+
+    #[test]
+    fn principle_outcomes_split_closed_cells_by_the_principles_arm() {
+        let tmp = tempfile::tempdir().unwrap();
+        arm_fixture(tmp.path());
+        let (section, lines) = build_arm_outcomes(tmp.path(), "principles_arm", PRINCIPLE_ARMS, "principle outcomes");
+        let p = &section["arms"]["principles"];
+        assert_eq!(p["cells"], 2, "{section}");
+        assert_eq!(p["blocked"], 1);
+        assert_eq!(p["with_mistakes"], 1);
+        assert_eq!(p["rates"]["blocked"], 0.5);
+        let h = &section["arms"]["holdout"];
+        assert_eq!(h["cells"], 1);
+        assert_eq!(h["red_rounds"], 1);
+        assert_eq!(section["unrecorded"], 1);
+        assert_eq!(section["min_per_arm"], MIN_PER_ARM);
+        assert_eq!(section["comparable"], false);
+        assert!(lines.iter().any(|l| l == "principle outcomes principles: 2 cell(s), 1 blocked, 0 reopened, 0 red round(s), 1 with mistakes"), "{lines:?}");
+        assert!(lines.iter().any(|l| l == "principle outcomes holdout: 1 cell(s), 0 blocked, 0 reopened, 1 red round(s), 0 with mistakes"), "{lines:?}");
+        assert!(lines.iter().any(|l| l == "principle outcomes unrecorded: 1 closed cell(s) with no recorded arm"), "{lines:?}");
+        assert!(lines.iter().any(|l| l.contains("principle outcomes not comparable") && l.ends_with("28 more principles, 29 more holdout")), "{lines:?}");
+    }
+
+    #[test]
+    fn knowledge_outcomes_keep_their_arms_and_text_beside_the_principles_block() {
+        let tmp = tempfile::tempdir().unwrap();
+        arm_fixture(tmp.path());
+        let (section, lines) = build_arm_outcomes(tmp.path(), "knowledge_arm", ARMS, "outcomes");
+        assert_eq!(section["arms"]["knowledge"]["cells"], 2, "{section}");
+        assert_eq!(section["arms"]["holdout"]["cells"], 2);
+        assert_eq!(section["unrecorded"], 0);
+        assert!(lines.iter().any(|l| l == "outcomes unrecorded: 0 closed cell(s) with no recorded arm"), "{lines:?}");
+        assert!(lines.iter().any(|l| l.starts_with("outcomes not comparable") && l.ends_with("28 more knowledge, 28 more holdout")), "{lines:?}");
     }
 
     #[test]
