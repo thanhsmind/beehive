@@ -63,7 +63,8 @@ because source shows what the code does, never what it costs.
    decided in the diff alone is decided without a second design to compare.
    Dispatch the implementation as a cell
    (`bee dispatch prepare --kind cell`) with a specific scope, and review the
-   diff. Verify each attempt before trying the next, so a regression points at
+   diff. Verify each attempt before trying the next
+   (`bee-principle-sequence-verifiable-units`), so a regression points at
    one change.
 5. Re-measure the same way, with the same command on the same surface, so that
    the delta measures the change and not the method. Capture a post-fix trace.

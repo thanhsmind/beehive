@@ -4,11 +4,11 @@
   "skills": [
     {
       "name": "bee-architect",
-      "sha256": "aad1294955c0e9d7140fdd6ea00bb732cefc5a22df9c1906af5330585f49b7a7"
+      "sha256": "4d1dad67c4f28d0213c838959198dfd37d15dc0b770ba151fc7c8f6e4c9bdc03"
     },
     {
       "name": "bee-arena",
-      "sha256": "4713c60fc5d84728ab790544cd9a0015054a65ed3dbb4488dd39c5169cc96d90"
+      "sha256": "e69471da76c86bd69e6d5b9a06aaf57ebffb5707901cbb387ba55dfbf21a6fcd"
     },
     {
       "name": "bee-blast-radius",
@@ -20,7 +20,7 @@
     },
     {
       "name": "bee-comment-review",
-      "sha256": "34bc2f2b12f2f7af5b5ff5148cf6251bf16fef709fee901941e9534d12ddadf5"
+      "sha256": "76f87ef52393722cf7cc0b22595c10b8becd8c52de4768a01f103a7010a83269"
     },
     {
       "name": "bee-deploying",
@@ -36,7 +36,7 @@
     },
     {
       "name": "bee-figure-it-out",
-      "sha256": "e158444f7d5c44c1b503f81942426c5f1620cfa3a6109f7f996fa025c2eedb9c"
+      "sha256": "d2f25f2746ec5b56f87171753f12ed932ec022f871431431720d8aff987b1f9d"
     },
     {
       "name": "bee-grooming",
@@ -72,7 +72,7 @@
     },
     {
       "name": "bee-planning",
-      "sha256": "4ae8f440266e1b752d1e0b885aac718adce61d229ed6045a9a8039d03444afe3"
+      "sha256": "2f51cddc8cd58f4cbe287d584b225cfc9e271484d09b282c61fef7e15ad6d165"
     },
     {
       "name": "bee-principle-attack-the-premise",

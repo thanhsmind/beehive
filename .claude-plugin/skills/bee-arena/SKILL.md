@@ -59,7 +59,7 @@ Read every candidate end to end before picking. Skimming N candidates surfaces o
 
 Score each candidate against the rubric criterion by criterion, not on holistic feel. Compare against the cross-judge. Agreement on the base confirms the pick. Disagreement means one of you is biased or the rubric was ambiguous. Read both rationales before deciding.
 
-Pick the base on which candidate a future maintainer can extend most easily without breaking invariants. Prefer the cleaner boundary or smaller surface area when two feel tied: do the least that works.
+Pick the base on which candidate a future maintainer can extend most easily without breaking invariants. Prefer the cleaner boundary or smaller surface area when two feel tied: do the least that works (`bee-principle-laziness-protocol`).
 
 Record the pick and the reason in a short synthesis note alongside the base artifact, including the cross-judge's verdict.
 
@@ -67,7 +67,7 @@ Record the pick and the reason in a short synthesis note alongside the base arti
 
 Walk each losing candidate once more and identify what is worth porting into the base. The signal is usually one or two things per candidate, not most of it.
 
-Fold each graft in by hand, redesigning the base from first principles around it as if the graft had been a day-one assumption. Don't paste mechanically. The result has to remain coherent under one mental model.
+Fold each graft in by hand, redesigning the base from first principles (`bee-principle-redesign-from-first-principles`) around it as if the graft had been a day-one assumption. Don't paste mechanically. The result has to remain coherent under one mental model.
 
 Record what was grafted, from which candidate, and what was rejected and why. The rejection notes are the highest-signal part of the record. Future readers learn from what you considered and dropped, not just what you kept.
 
@@ -75,7 +75,7 @@ When N candidates converge on the same shape, that is a strong agreement signal.
 
 ## Phase F: Verify
 
-The synthesized artifact has to hold up under the same scrutiny as any other output: run it, test it or read it against the rubric, and report what that showed, never what should happen. The arena does not earn you a pass.
+The synthesized artifact has to hold up under the same scrutiny as any other output: run it, test it or read it against the rubric, and report what that showed, never what should happen (`bee-principle-prove-it-works`). The arena does not earn you a pass.
 
 If verification surfaces a problem the arena did not catch, either Phase A was wrong (re-frame and re-run) or one candidate caught it and you missed the graft (go back to Phase E). Don't paper over.
 

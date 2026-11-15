@@ -82,6 +82,8 @@ trigger and its limits.
 ## Pointers kept as plain sentences
 
 - `principle-redesign-from-first-principles`: no skill in `skills/` yet; named above.
+  Restored (ppb-37): step 4 names `bee-principle-redesign-from-first-principles`
+  beside its method sentence.
 
 ## Dropped steps
 

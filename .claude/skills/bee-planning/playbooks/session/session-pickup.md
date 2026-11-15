@@ -17,8 +17,8 @@ check and burns context. Resist the urge to re-derive; read.
    private chat. Read the overview and the last messages first, then scan back
    for the decision points. Parse a long transcript in a gather
    (`bee dispatch prepare --kind gather`) and keep the reduced timeline in the
-   main thread, because a transcript is bulk and the lead's context is the
-   scarce thing.
+   main thread, because a transcript is bulk and the lead's context is the scarce thing
+   (`bee-principle-guard-the-context-window`).
 2. Reconstruct operational state: the branch and worktree, what already landed
    (`git log`, `git diff` against the base), the open cells and the decisions
    made. The prior trail is authoritative input, and re-deriving it is the bias
@@ -34,7 +34,8 @@ check and burns context. Resist the urge to re-derive; read.
    restate each other.
 5. Verify the inherited claims against the original goal on the real artifact,
    driven through the project's `verify-app` skill when it has one, otherwise
-   through the real interface. A passing prior self-report is not the proof:
+   through the real interface (`bee-principle-prove-it-works`). A passing prior
+   self-report is not the proof:
    the prior agent graded its own work.
 
 Reply: where the prior agent stopped, what you inherited versus redid (ideally

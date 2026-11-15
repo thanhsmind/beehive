@@ -53,7 +53,9 @@ discipline holds for a perf defect, where the evidence is the trace
    surface, is not a pass; flag it. Unit tests show branch behavior, not bug
    absence.
 6. Stage the commits so the failing repro lands before the fix in git
-   history; the diff tells the story. See `bee-tdd` for the failing-test-first
+   history; the diff tells the story. This is the canonical
+   `bee-principle-sequence-verifiable-units` order: the failing test first, the
+   fix on top. See `bee-tdd` for the failing-test-first
    cadence when the bug has a cheap local test path, because the test written
    first is the repro that shows the fix is the cause; skip it when the test
    would be expensive, integration-heavy or unclear.

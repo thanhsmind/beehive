@@ -33,6 +33,7 @@ Recurring across the five files, handled the same way each time:
 - The `prove-it-works` principle skill is dropped as a pointer in
   autopilot-full step 2 (D5, slice 3). Its method stayed: self-proof on the
   real artifact. Still waiting (ppb-24): no such skill exists in `skills/`.
+  Restored (ppb-37): step 2 names `bee-principle-prove-it-works`.
 - The control skills for the live lane (`control-cli`, `control-ui`) became the
   project's `verify-app` skill, or the real interface when the project has
   none.
@@ -93,16 +94,16 @@ Dropped steps and clauses:
   stack and "merges last" has no meaning.
 - The sentence "Replaces Cursor's built-in babysit skill, do not route there":
   a Cursor routing hint with no bee meaning.
+- The four-column stack-status table in the Reply.
+- The warning about a stacked PR merging into a parent with no required checks
+  when merge-when-ready is armed: Graphite and merge-when-ready have no bee
+  counterpart.
 
 Restored (`b25486e3`): "never a job retry, because a retry reuses the original
 ref snapshot" in step 7. The first port dropped it as vendor-specific, but a
 GitHub Actions re-run of failed jobs also reuses the original commit and merge
 ref, so the reason holds. Step 7 now says one fresh run on a fresh ref, never a
 retry of the failed jobs, with the pstack reason.
-- The four-column stack-status table in the Reply.
-- The warning about a stacked PR merging into a parent with no required checks
-  when merge-when-ready is armed: Graphite and merge-when-ready have no bee
-  counterpart.
 
 Changed (D4): pstack's babysit never lands. Decision `b749c98d` lists babysit
 among the playbooks that merge on their own, so `drive` ends with
@@ -165,7 +166,8 @@ Tool swaps:
 - "One cloud agent per PR" became one worker per unit through
   `bee dispatch prepare --kind cell` in its own worktree.
 - The self-proof step kept its method and lost the `prove-it-works` pointer
-  (see the recurring list).
+  (see the recurring list). Restored (ppb-37): autopilot-full step 2 names
+  `bee-principle-prove-it-works`.
 - "Restack onto current trunk" was dropped by `b25486e3`. The first port made it
   a rebase of the owner's own branch, which contradicts `orchestrate` § Merge
   safety: workers never rebase, and a conflict or drift against main goes to the

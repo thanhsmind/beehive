@@ -36,8 +36,8 @@ Dropped steps:
   contract the fix keeps before dispatching. Restored (ppb-24): step 4 runs
   `bee-architect` first.
 - The `sequence-verifiable-units` principle skill citation: no bee principle
-  of that name exists yet. The sentence stays without the name: verify each
-  attempt before trying the next.
+  of that name exists yet. The sentence stays without the name: verify each attempt before trying the next.
+  Restored (ppb-37): perf-issue step 4 names `bee-principle-sequence-verifiable-units`.
 
 Kept from the bee `perf` playbook (D3): the decision-and-noise-floor step
 written before the first run, the baseline step, the mechanism hypothesis with
@@ -76,14 +76,14 @@ Tool swaps:
 Dropped steps:
 
 - The `prove-it-works` principle citation (Core discipline): no bee principle
-  of that name exists yet (D5, slice 3). The sentence keeps its reason: the
-  data decides.
-- The `guard-the-context-window` principle citation (step 5): the same. The
-  step keeps the reason: the lead's context stays on the metric.
-- The `sequence-verifiable-units` principle citation (step 5): the same. The
-  step keeps "each iteration ends in a check before the next begins".
-- The `laziness-protocol` principle citation (step 6): the same. The step
-  keeps the correctness-and-simplicity rule.
+  of that name exists yet (D5, slice 3). The sentence keeps its reason: the data decides.
+  Restored (ppb-37): hillclimb names `bee-principle-prove-it-works`.
+- The `guard-the-context-window` principle citation (step 5): the same. The step keeps the reason: the lead's context stays on the metric.
+  Restored (ppb-37): hillclimb step 5 names `bee-principle-guard-the-context-window`.
+- The `sequence-verifiable-units` principle citation (step 5): the same. The step keeps "each iteration ends in a check before the next begins".
+  Restored (ppb-37): hillclimb step 5 names `bee-principle-sequence-verifiable-units`.
+- The `laziness-protocol` principle citation (step 6): the same. The step keeps the correctness-and-simplicity rule.
+  Restored (ppb-37): hillclimb step 6 names `bee-principle-laziness-protocol`.
 
 Moved in from the bee `perf` playbook (D3): the sustained-target paragraph's
 rules (harness separates the target case then freezes, median of several runs,

@@ -12,17 +12,17 @@ guards against deleting something in use or holding uncommitted work.
    misses a worktree that lives somewhere else
    (`bee-principle-encode-lessons-in-structure`). It reports one line per
    worktree: the size it would reclaim, or the condition that keeps it.
-2. The verdict is advice, not permission. The open sessions are the real
-   artifact. Get that set from the owner and cross-check every candidate,
+2. The verdict is advice, not permission. The open sessions are the real artifact
+   (`bee-principle-prove-it-works`). Get that set from the owner and cross-check every candidate,
    because a tool has marked safe a worktree its owner still used, so the
    owner's set wins.
 3. Verify usage before deleting. For every worktree the report would remove
    that you doubt, run a gather (`bee dispatch prepare --kind gather`) that
    reads the session records and reports whether a session is open on it and
-   which worktrees that session touches. A herded worker spawns arena and
+   which worktrees that session touches. A herded worker spawns `bee-arena` and
    repro trees into sibling worktrees, and those are in use even when their
-   names never reach the owner's list. Keep the gather's output to a digest, because
-   session logs are bulk.
+   names never reach the owner's list. Keep the gather's output to a digest
+   (`bee-principle-guard-the-context-window`), because session logs are bulk.
 4. Pause on irreversible loss. A tracked uncommitted edit is lost the moment
    the directory goes, so show the diff and get a decision first; removing a
    clean worktree is recoverable from its branch, uncommitted work is not.

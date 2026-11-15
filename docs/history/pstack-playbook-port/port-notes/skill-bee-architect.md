@@ -82,8 +82,17 @@ sentence and the name is dropped from the shipped text:
 - `make-operations-idempotent` principle: the runner prompt's idempotence bullet
   states its method (run twice, crash halfway, the answer is "nothing new").
 
-When ppb-14, ppb-15 and the slice 4 principles land, a later cell may swap the
-sentence for the pointer.
+Restored (ppb-37): each sentence now carries its pointer.
+`bee-interrogate` (ppb-15) is named in Phase C, where the sketch is pressed on
+with the hardest objection. `bee-principle-exhaust-the-design-space` is named on
+the design-it-twice bullet, `bee-principle-foundational-thinking` and
+`bee-principle-outcome-oriented-execution` in Phase C,
+`bee-principle-redesign-from-first-principles` and
+`bee-principle-crash-site-versus-fault-site` (the bee home of fix-root-causes) in
+Phase E, and `bee-principle-make-operations-idempotent`,
+`bee-principle-laziness-protocol` and `bee-principle-minimize-reader-load` in
+`references/runner-prompt.md`. The `arena` skill (ppb-14) stays replaced by the
+blind lanes, because `bee-arena` and `bee-architect` share one procedure.
 
 ## Dropped steps
 

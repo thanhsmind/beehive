@@ -19,8 +19,8 @@ verification, countersigns and audits. A unit is one cell in its own worktree.
    does, so the run continues across turns until the queue is done.
 2. **Start one owner per unit with the full lifecycle.** One worker per unit,
    started through `bee dispatch prepare --kind cell` in its own worktree, owns
-   build, self-proof on the real artifact (the project's `verify-app` skill, or
-   the real interface), skeptical triage of every review comment per
+   build, self-proof on the real artifact (`bee-principle-prove-it-works`, driven through
+   the project's `verify-app` skill, or the real interface), skeptical triage of every review comment per
    `babysit`, a `bee-comment-review` pass over the comments the diff added,
    because bee writes no comment in code, then `babysit` to green. An owner never rebases:
    a conflict or drift against main goes to the merger as a cell, per

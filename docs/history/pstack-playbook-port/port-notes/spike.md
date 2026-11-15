@@ -34,13 +34,13 @@ Dropped steps:
   to `bee-architect` as well.
 - The `exhaust-the-design-space` principle skill citation: no bee principle of
   that name exists yet (D5, slice 3). The step keeps its rule in plain words.
-  Still waiting (ppb-24): no `bee-principle-exhaust-the-design-space` exists,
-  so the method stays a plain sentence.
+  Still waiting (ppb-24): no `bee-principle-exhaust-the-design-space` exists, so the method stays a plain sentence.
+  Restored (ppb-37): step 5 names `bee-principle-exhaust-the-design-space`.
 - The `Laziness Protocol` citation in the intro ("smallest change and the
   verification bar invert"): no bee principle of that name exists yet (D5,
   slice 3). The sentence keeps the inversion without the name.
-  Still waiting (ppb-24): no `bee-principle-laziness-protocol` exists, so the
-  inversion stays a plain sentence.
+  Still waiting (ppb-24): no `bee-principle-laziness-protocol` exists, so the inversion stays a plain sentence.
+  Restored (ppb-37): the intro names `bee-principle-laziness-protocol`.
 
 Kept from the bee `spike` playbook (D3): the YES/NO question before you start,
 the timebox said out loud, the throwaway under `.bee/spikes/<feature>/` with

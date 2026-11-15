@@ -17,8 +17,8 @@ a spindump, your heap tooling for a heapsnapshot.
 1. Identify the format and load it with the right tool, because a wrong parser
    reads a different structure and reports it with confidence. Load a large
    artifact through a gather dispatch (`bee dispatch prepare --kind gather`)
-   and keep the reduced finding in the lead's thread, because the raw artifact
-   fills the context the lead needs for judging.
+   and keep the reduced finding in the lead's thread, because the raw artifact fills the context the lead needs for judging
+   (`bee-principle-guard-the-context-window`).
 2. Transform the raw artifact into a form you can query. Dump the trace or heap
    snapshot into sqlite, one row per sample, frame or node, and reach the
    queryable shape before you read, because scrolling a raw dump finds what

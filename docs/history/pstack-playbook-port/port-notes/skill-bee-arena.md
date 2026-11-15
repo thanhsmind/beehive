@@ -64,8 +64,10 @@ and the name is dropped from the shipped text:
   rubric, and report what that showed, never what should happen".
 - `laziness-protocol` principle (Phase D tie-break): "do the least that works".
 
-When the slice 4 principles land, a later cell may swap each sentence for the
-pointer.
+Restored (ppb-37): the slice 4 principles exist, so each sentence now carries its
+pointer: `bee-principle-redesign-from-first-principles` (Phase E),
+`bee-principle-prove-it-works` (Phase F) and `bee-principle-laziness-protocol`
+(Phase D tie-break).
 
 ## Dropped steps
 

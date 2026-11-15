@@ -18,8 +18,11 @@ the same way in every file, and the sections below list the occurrences.
 - The `principle-guard-the-context-window`, `principle-prove-it-works` and
   `principle-sequence-verifiable-units` skills have no bee skill yet (D5 brings
   them in slice 3). Each pointer is dropped and its method sentence stays inline.
-  Still waiting (ppb-24): no such skill exists in `skills/`, so the sentences
-  stay and the three names stay here.
+  Still waiting (ppb-24): no such skill exists in `skills/`, so the sentences stay and the three names stay here.
+  Restored (ppb-37): the three principles exist now as
+  `bee-principle-guard-the-context-window`, `bee-principle-prove-it-works` and
+  `bee-principle-sequence-verifiable-units`, and each pointer is back in the
+  file named in its own entry below.
 - The show-me-your-work skill has no bee skill yet (D5, slice 3). Its trail
   became a decision trail under `docs/history/<feature>/`; the skill pointer is
   dropped. Restored (ppb-24): `pause-safely`, `autonomous-run` and
@@ -55,6 +58,8 @@ Dropped steps and clauses:
 - The `principle-guard-the-context-window` pointer in step 1 and the
   `principle-prove-it-works` pointer in step 5: dropped, method text kept inline
   (slice 3 re-adds the pointers).
+  Restored (ppb-37): step 1 names `bee-principle-guard-the-context-window` and
+  step 5 names `bee-principle-prove-it-works`.
 
 ## pause-safely
 
@@ -101,8 +106,8 @@ Tool swaps:
 - "Put out-of-band fixes in their own PR" became "in their own cell".
 - The `AskQuestion` tool became "do not stop to ask".
 - The `principle-sequence-verifiable-units` skill: pointer dropped, the sentence
-  "verify each unit before the next instead of batching checks at the end" kept
-  inline.
+  "verify each unit before the next instead of batching checks at the end" kept inline.
+  Restored (ppb-37): the sentence names `bee-principle-sequence-verifiable-units`.
 - The show-me-your-work checkpoint became a row in the feature's decision trail
   under `docs/history/<feature>/`.
 
@@ -178,9 +183,18 @@ Dropped steps and clauses:
   in the intro: the `figure-it-out` skill has no bee skill yet (D5, slice 3
   re-adds it with the fallback line in every index). Restored (ppb-24): the
   intro names `bee-figure-it-out`.
-- Nesting to depth 3 and the full Task schema on a nested spawn: Task-tool
-  details. `bee dispatch prepare` replaces the Task tool, and depth stays at
-  coordinator, track, worker.
+- Nesting to depth 3 and the full Task schema on a nested spawn: Task-tool details. `bee dispatch prepare` replaces the Task tool, and depth stays at coordinator, track, worker.
+- The `gh` probes in Liveness: bee reads liveness from `units.tsv`, the cell
+  records, `git log` and the worktree list, which are local and need no host
+  CLI.
+- "Pushes its branch" in the Verification paragraph became "commits in its
+  worktree": a unit lands through `bee worktree merge`, so no push stands
+  between the worker and the merger.
+- The PR column of `units.tsv`: a unit is a cell in a worktree and not always a
+  PR, so the row keeps the branch and head SHA only.
+- "Stack shape and count" in `preferences.md` became "merge order", because bee
+  has no stack to shape or count and the order of merges is the standing
+  constraint left.
 
 Decision `b25486e3` on the `inbox/` store entry: `inbox/` stays in the program
 record list as one completion-pointer file per finished unit, written by the
@@ -223,8 +237,9 @@ Dropped steps and clauses:
 - The `.cursor/worktrees/` hand-typed-path example in step 1: an editor path.
   The generic reason it illustrated stays.
 - The `principle-prove-it-works` pointer in step 2 and the
-  `principle-guard-the-context-window` pointer in step 3: dropped, method kept
-  inline (D5, slice 3 re-adds them).
+  `principle-guard-the-context-window` pointer in step 3: dropped, method kept inline (D5, slice 3 re-adds them). Restored (ppb-37): step 2 names
+  `bee-principle-prove-it-works` and step 3 names
+  `bee-principle-guard-the-context-window`.
 - The `verify-recent-chat` bucket name in step 3, and the `wip:N` and `scratch:N`
   labels and the "Per Autonomy" pointer in step 4: bucket names of the pstack
   audit script. The pause-on-irreversible-loss method stays.

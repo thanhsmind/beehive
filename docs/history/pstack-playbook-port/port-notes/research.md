@@ -74,8 +74,9 @@ Dropped steps:
 - The one-line throughput checkpoint (`throughput checkpoint: n/a, read-only
   forensics`): no bee counterpart.
 - The `guard-the-context-window` principle citation: no bee principle of that
-  name exists yet (D5, slice 3). The step keeps its reason: the raw artifact
-  fills the lead's context.
+  name exists yet (D5, slice 3). The step keeps its reason: the raw artifact fills the lead's context.
+  Restored (ppb-37): runtime-forensics step 2 names
+  `bee-principle-guard-the-context-window`.
 
 Moved in from the bee `research` playbook (D3): "Capture a real profile or
 trace", "Reduce it through a gather dispatch", "Confirm the reduction with one
@@ -106,6 +107,8 @@ Dropped steps:
 - The one-line throughput checkpoint: no bee counterpart.
 - The `principle-guard-the-context-window` citation: no bee principle of that
   name exists yet (D5, slice 3). The step keeps its reason.
+  Restored (ppb-37): trace-forensics step 1 names
+  `bee-principle-guard-the-context-window`.
 
 Added to the pstack text: a reason on every step where pstack gave none
 (decision `61b52e96`), and a Proof line.

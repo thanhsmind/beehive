@@ -49,10 +49,9 @@ the work is large and cross-cutting: use bee-figure-it-out."
 `bee-reflect`, `bee-recall` and `bee-blast-radius` were never cited by a pstack
 playbook, so no earlier port dropped a step for them and none came back here.
 
-## Still waiting, named here
+## Principle pointers restored in ppb-37
 
-No skill or principle of these names exists in `skills/` yet, so each keeps its
-method as a plain sentence in the playbook, and its port note says so:
+Restored (ppb-37): the principles named here now exist in `skills/`, and each pointer is back as `bee-principle-<slug>` in the playbook or skill it came from, listed in `principle-pointers.md`. Until then each kept its method as a plain sentence in the playbook, and its port note said so:
 `prove-it-works`, `guard-the-context-window`, `sequence-verifiable-units`,
 `laziness-protocol`, `model-the-domain`, `foundational-thinking`,
 `redesign-from-first-principles`, `minimize-reader-load`,

@@ -14,7 +14,7 @@ Apply the following discipline. The leader grades candidates on the rubric these
 - Encode invariants in types: hard-to-misuse types > runtime checks > prose, per `bee-principle-encode-lessons-in-structure`.
 - Validate at boundaries, trust types inside, per `bee-principle-boundary-discipline`. Business logic as pure functions; the shell stays thin.
 - Single source of truth per invariant. Derive instead of sync.
-- Idempotent state transitions where applicable: ask what happens if the operation runs twice or crashes halfway, and make the answer "nothing new."
-- Short call chains. If tracing the flow needs more than three files, flatten the hierarchy: do the least that works, and keep the reader's load small.
+- Idempotent state transitions where applicable: ask what happens if the operation runs twice or crashes halfway, and make the answer "nothing new" (`bee-principle-make-operations-idempotent`).
+- Short call chains. If tracing the flow needs more than three files, flatten the hierarchy: do the least that works (`bee-principle-laziness-protocol`), and keep the reader's load small (`bee-principle-minimize-reader-load`).
 
 You are one of several lanes, each possibly on a different model. Produce the best design your model can make; do not hedge against the others. Differences between candidates are the signal used to pick a base and graft. Converging on a safe-looking middle defeats the exploration.

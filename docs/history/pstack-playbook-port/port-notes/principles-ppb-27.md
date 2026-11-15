@@ -83,8 +83,10 @@ row changed. Classes come from the pstack "when it applies" line:
 minimize-reader-load links `principle-guard-the-context-window`, which has no
 bee skill yet. The link is dropped and the method kept as a plain sentence in
 the skill and in the review section: working memory is finite for a human
-reader and for an agent's context window alike. When that principle is
-ported, the sentence can point at it. Every other skill or principle the new
+reader and for an agent's context window alike. When that principle is ported, the sentence can point at it. Still open after
+ppb-37: `skills/bee-principle-minimize-reader-load/` is outside that cell's
+files, so the link back to `bee-principle-guard-the-context-window` is listed in
+`principle-pointers.md` for a cell that owns that skill. Every other skill or principle the new
 text names exists in `skills/`.
 
 ## Regen note

@@ -8,8 +8,8 @@ fork (which behavior, which timing, which approach) by observing it run, when
 you would otherwise ask the human a question a quick sketch could answer for
 you.
 
-This is the one playbook where the smallest-change rule and the verification
-bar invert. Speed over polish, code quality does not matter, no planning. The
+This is the one playbook where the smallest-change rule (`bee-principle-laziness-protocol`) and the
+verification bar invert. Speed over polish, code quality does not matter, no planning. The
 rigor is in picking the right design cheaply. Be bold: propose variations the
 user didn't ask for, throw an approach away and try another. The question and
 its box come first and the answer outlives the code, because a spike with no
@@ -37,9 +37,8 @@ a spike.
    script that exercises the question. No production framework, no tests, no
    abstractions, because each one is cost the answer never uses.
 5. When comparing alternatives, build them all, side by side, behind one
-   switcher (buttons or a keypress) under `.bee/spikes/<feature>/`, each
-   variant labelled so the user can name it, because the answer is seen, not
-   argued. When the design space is open, add one variant the ask did not name;
+   switcher (buttons or a keypress) under `.bee/spikes/<feature>/`, each variant labelled so the user can name it, because the answer is seen, not
+   argued. This is `bee-principle-exhaust-the-design-space`, made cheap. When the design space is open, add one variant the ask did not name;
    the option nobody asked for is the one a narrow ask would never have
    surfaced.
 6. Verify on the matching surface. For a visual decision, screenshot each

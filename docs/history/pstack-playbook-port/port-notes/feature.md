@@ -27,8 +27,8 @@ Tool swaps:
 - The **Comments** section of the router became the bee rule: no comment in
   code, the why goes to a `docs/knowledge/` concept or `bee decisions log`.
 - The `sequence-verifiable-units` principle skill (step 6) became the
-  build-verify-commit-each-unit sentence in step 9, with the `cell: <id>`
-  trailer rule from `session/opening-a-pr.md`.
+  build-verify-commit-each-unit sentence in step 9, with the `cell: <id>` trailer rule from `session/opening-a-pr.md`.
+  Restored (ppb-37): step 9 names `bee-principle-sequence-verifiable-units`.
 - The control skill (step 5, "Verify on the matching surface") became the
   project's `verify-app` skill, or the real interface when the project has
   none.
@@ -52,11 +52,11 @@ Dropped steps and clauses:
   (ppb-24): a new step 10 runs `bee-interrogate` before shipping a contested
   design, so landing is now step 11 and `opening-a-pr` is pointed at from it.
 - The `principle-model-the-domain` pointer in the delegation step: no bee
-  principle of that name yet (D5, slice 3). Its rule stays in plain words in
-  step 2, where it joins the bee "name the data shape first" step.
+  principle of that name yet (D5, slice 3). Its rule stays in plain words in step 2, where it joins the bee "name the data shape first" step.
+  Restored (ppb-37): step 2 names `bee-principle-model-the-domain`.
 - The `Laziness Protocol` clause ("does not override it"): no bee principle of
-  that name yet (D5, slice 3). The sentence keeps the override rule without the
-  name.
+  that name yet (D5, slice 3). The sentence keeps the override rule without the name.
+  Restored (ppb-37): step 5 names `bee-principle-laziness-protocol`.
 
 Kept from the bee `feature` playbook (D3), each as a step with its reason: the
 data shape first (step 2), the walking skeleton with no stub (step 5), the
@@ -91,19 +91,23 @@ Tool swaps:
   Subagents section became gathers (`bee dispatch prepare --kind gather`) on
   the read role's configured model.
 - The `guard-the-context-window` principle pointer became its method sentence
-  inline ("the plan's lead keeps its context for the plan"); the skill does not
-  exist in bee yet (D5, slice 3).
+  inline ("the plan's lead keeps its context for the plan"); the skill did not
+  exist in bee yet (D5, slice 3). Restored (ppb-37): step 3 names
+  `bee-principle-guard-the-context-window`.
 - The `never-block-on-the-human` principle pointer became its method sentence
-  inline ("give options"); same reason.
+  inline ("give options"); same reason. Restored (ppb-37): step 2 names
+  `bee-principle-never-block-on-the-human`.
 - The `sequence-verifiable-units` principle pointer became the sentence "built,
   verified and committed before the next, so a failure points at one PR".
+  Restored (ppb-37): step 5 names `bee-principle-sequence-verifiable-units`.
 - The agent store's `docs/` as the plan location became
   `docs/history/<feature>/`, for example `program-plan.md`, beside the
   feature's own `plan.md`.
 - `/technical-writing` and `/unslop` became `bee-technical-writing` and
   `bee-unslop`.
 - The `prove-it-works` principle pointer became the verification rule sentence
-  itself, which was already the principle's content in the source.
+  itself, which was already the principle's content in the source. Restored
+  (ppb-37): the Verification paragraph names `bee-principle-prove-it-works`.
 - The live lanes' named model and the ten-lane fan-out "per the swarm skill"
   became lanes started through `bee dispatch prepare --kind reviewer` on the
   review role's configured model. The lane count, one box per lane, the saved
@@ -146,8 +150,7 @@ Tool swaps:
 
 Dropped steps and clauses:
 
-- The plan-shape check script and its `encode-lessons-in-structure` pointer
-  (step 6): bee has no script for the skeleton's shape. `bee plan check`
+- The plan-shape check script (step 6): bee has no script for the skeleton's shape. Its `encode-lessons-in-structure` pointer is restored (ppb-37): step 7 names `bee-principle-encode-lessons-in-structure` for the reason a rule left to memory is skipped under load. `bee plan check`
   checks the `bee-plan/v2` sections of a feature's own `plan.md`, and a
   program plan carries other headings, so it cannot stand in. Step 7 checks the
   skeleton by hand instead and says why. A bee shape check is a candidate for
@@ -181,8 +184,29 @@ step 5, now `bee-arena`), `interrogate` (feature step 10, now
 (now `bee-comment-review`) and the Appendix D reading list (`bee-interrogate`,
 `bee-show-me-your-work`).
 
-Still waiting, because no skill of that name exists in `skills/`:
+Restored (ppb-37), all five now exist in `skills/`:
 `principle-model-the-domain` (feature step 2), `laziness-protocol` (feature step
 5), `guard-the-context-window`, `never-block-on-the-human` and `prove-it-works`
-pointers (multi-phase-plan). Each keeps its method as a plain sentence. The
-deslop pass has no bee counterpart and stays dropped.
+pointers (multi-phase-plan). Each is a `bee-principle-` pointer beside its method sentence. The deslop pass has no bee counterpart and stays dropped.
+
+## Fixes in ppb-37
+
+- The feature step "Rebase into small, ordered commits" became "Leave small,
+  ordered commits" in step 9 of `feature/feature.md`, with no note until now.
+  The swap is deliberate: under decision `b25486e3` and `orchestrate` § Merge
+  safety, a worker or owner never rebases, and a conflict or drift against main
+  goes to the merger as a cell. The order of commits still tells the story,
+  because each unit is built, verified and committed on its own.
+- The pstack rebuttal "the app is small" (step 4, beside "a subagent cannot
+  spawn one") was dropped with no note. Restored in the delegation bullet of
+  step 5: "The app is small" is no exemption, because a small change still needs
+  an author who did not review it. "A subagent cannot spawn one" stays swapped
+  for "a lead that cannot dispatch owns the diff directly".
+- `multi-phase-plan` still had owners rebase in the skeleton: the checklist line
+  "Rebase onto current trunk before babysit and again before the merge-ready
+  report" and the merge line "Rebased onto current trunk after the verdict,
+  patch-id unchanged". Both now send drift against trunk to the merger as a
+  cell, and the second keeps the patch-id check without the rebase (decision
+  `b25486e3`, ppb-25c finding A).
+- `multi-phase-plan` step 3 said "explore role". Bee's gather runs on the read
+  role, so the step reads "the read role's configured model" (ppb-9c finding 2).

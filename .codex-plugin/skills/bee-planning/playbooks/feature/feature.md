@@ -13,7 +13,8 @@ This is for new or changed behavior, built from a named data shape.
 2. Name the DATA shape first: the record the feature turns on, before any
    verb, flag or screen reads it. Pick its organizing structure before the
    delegate writes logic: a state machine over scattered booleans, a table or
-   registry over branching, a typed model over repeated shape assumptions. Core
+   registry over branching, a typed model over repeated shape assumptions
+   (`bee-principle-model-the-domain`). Core
    types and the state concurrent actors share are the part that is expensive
    to change later, so they are decided first and decided on purpose. Run
    `bee-architect` for parallel design exploration of that shape, because one
@@ -52,11 +53,12 @@ This is for new or changed behavior, built from a named data shape.
      because wiring breaks then show up first, while they are still cheap.
    - Build the CURRENT slice only. A cell for a later slice is planned on
      guesses, so headline the rest and leave it out of the cells.
-   - Delegation is mandatory, with no skip-with-reason escape, and a wish to
-     save lines does not override it: the gain is review separation, not lines
-     saved. A lead that cannot dispatch owns the diff directly with the same
-     review separation, and never replies that it is standing by for a nested
-     agent.
+   - Delegation is mandatory, with no skip-with-reason escape, and a wish to save lines
+     (`bee-principle-laziness-protocol`) does not override it: the gain is review
+     separation, not lines saved. "The app is small" is no exemption either,
+     because a small change still needs an author who did not review it. A lead
+     that cannot dispatch owns the diff directly with the same review
+     separation, and never replies that it is standing by for a nested agent.
    - Write no comment in the code, in any language. The why goes to a
      `docs/knowledge/` concept or to `bee decisions log`, because a comment
      goes stale beside the code it describes.
@@ -79,8 +81,8 @@ This is for new or changed behavior, built from a named data shape.
    commit. A change to covered code runs that verify skill; drift that piled up
    across merges takes `maintain-formal-verification-skill`. With neither skill
    on the host, skip this step and say so.
-9. Leave small, ordered commits and stack follow-ups: build, verify and commit
-   each small unit before the next, so a failure points at one unit and a
+9. Leave small, ordered commits and stack follow-ups: build, verify and commit each small unit before the next
+   (`bee-principle-sequence-verifiable-units`), so a failure points at one unit and a
    reviewer reads the story bottom-up. Each cap commit ends with the
    `cell: <id>` trailer.
 10. When the design is contested, run `bee-interrogate` over the change before

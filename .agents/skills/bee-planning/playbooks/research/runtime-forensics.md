@@ -17,8 +17,8 @@ stays read-only.
    retainer chain from the leaked object to a GC root, the loop firing without
    input. Reduce a large artifact through a gather dispatch
    (`bee dispatch prepare --kind gather`) and keep only the reduced finding in
-   the lead's thread, because the raw artifact fills the context the lead needs
-   for judging.
+   the lead's thread, because the raw artifact fills the context the lead needs for judging
+   (`bee-principle-guard-the-context-window`).
 3. Prove the mechanism before believing it. Inject instrumentation into the
    running process, or hotfix the live code without reloading, to confirm the
    hypothesis cheaply. A plausible but unconfirmed cause can be wrong while the

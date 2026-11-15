@@ -17,19 +17,22 @@ coordinated reshape of many subsystems, is not this playbook: it belongs to
 1. Pin the behavior contract first. Run `bee-how` over the affected subsystem
    as a gather (`bee dispatch prepare --kind gather`) to learn the contract,
    then record existing behavior — a characterization test, a snapshot or an
-   equivalence harness — before any structure moves. The record makes
-   "refactor" a checkable claim, because without one nothing can say the
+   equivalence harness — before any structure moves. The record makes "refactor" a checkable claim
+   (`bee-principle-prove-it-works`), because without one nothing can say the
    behavior held. If the area has no coverage, write the pin before touching
    structure. A type check or a lint is not a record.
 2. Prove that record green on the UNCHANGED tree, because a red base hides new
    reds.
 3. Name the structure the code is missing: a state machine over scattered
    booleans, a table or registry over spread-out branching, a typed model over
-   repeated shape assumptions, a reducer over ad hoc mutations. Boring code
+   repeated shape assumptions, a reducer over ad hoc mutations
+   (`bee-principle-model-the-domain`). Boring code
    stays when the shape is already clear and local, because the reshape must
    delete branches or invalid states, not add indirection.
 4. Name the target shape: what the module layout, types and call graph should
-   be if built today, because a move with no target is churn. If the target
+   be if built today (`bee-principle-foundational-thinking`,
+   `bee-principle-redesign-from-first-principles`), because a move with no
+   target is churn. If the target
    crosses a function boundary, run `bee-architect` for parallel design
    exploration of the shape before the move, and write down the contract it
    keeps before dispatching, so the workers share one definition of
@@ -37,8 +40,8 @@ coordinated reshape of many subsystems, is not this playbook: it belongs to
 5. Subtract first (`bee-principle-subtract-before-you-add`) — every later step
    then moves less: an early cell deletes dead weight, collapses one-caller
    wrappers, drops redundant validators and removes orphan references before
-   the new shape is introduced. The smallest change that reaches the target
-   shape ships, and a speculative cleanup that "might help" gets reverted, not
+   the new shape is introduced. The smallest change that reaches the target shape ships
+   (`bee-principle-laziness-protocol`), and a speculative cleanup that "might help" gets reverted, not
    left to ride, because every line kept is a line the next reader holds.
 6. Move in small behavior-preserving steps, each keeping the record green, so
    that a red points at one step. For an API move, migrate every caller and
@@ -54,7 +57,8 @@ coordinated reshape of many subsystems, is not this playbook: it belongs to
 7. Never edit the record, the harness or the baseline to make a step green — a
    record bent to pass no longer records anything. If the pin looks wrong,
    stop and fix it as its own change, on its own evidence.
-8. Prove behavior is unchanged on the real artifact, not "it compiles". For
+8. Prove behavior is unchanged on the real artifact, not "it compiles"
+   (`bee-principle-prove-it-works`). For
    larger reshapes, run an equivalence check: a script that diffs old and new
    outputs, a recorded baseline replayed against the new code, or a smoke run
    on the matching surface, driven through the project's `verify-app` skill
@@ -62,13 +66,15 @@ coordinated reshape of many subsystems, is not this playbook: it belongs to
    verification yourself: a delegate's "looks good" summary is a claim, not
    evidence.
 9. Keep the diff only if it lowers what a reader must hold in mind — that is
-   the whole payoff of a refactor. The measure is reduced reader load: fewer
+   the whole payoff of a refactor. The measure is reduced reader load
+   (`bee-principle-minimize-reader-load`): fewer
    layers between question and answer, less hidden state, fewer indirections
    without a second consumer. If the diff does not lower reader load
    somewhere, revert it.
 10. Order the commits so they tell the story: a subtraction commit, then the
     reshape, then any follow-on cleanup, so a single revert undoes one slice
-    and each behavior-preserving slice stays green before the next. Then land
+    and each behavior-preserving slice stays green before the next
+    (`bee-principle-sequence-verifiable-units`). Then land
     it through the bee close and worktree merge path: the work is capped,
     merged by `bee worktree merge`, and the `uat` acceptance at `bee close`
     stays the owner's.

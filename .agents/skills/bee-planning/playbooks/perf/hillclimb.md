@@ -8,8 +8,8 @@ trying until <metric> improves by N%"). A one-off fix is `bug-fix` or
 `perf-issue`; this is the loop.
 
 Core discipline: one change, one measurement, keep or revert. Never stack
-untested changes, and never claim a win from code inspection, because the data
-decides and a stacked change has no single cause.
+untested changes, and never claim a win from code inspection, because the data decides (`bee-principle-prove-it-works`) and a stacked
+change has no single cause.
 
 1. Ground the workload and architecture before choosing the ruler. Run
    `bee-how` over the target as a gather (`bee dispatch prepare --kind
@@ -44,7 +44,8 @@ decides and a stacked change has no single cause.
 5. Loop, one hypothesis per iteration:
    - Dispatch the change as a cell (`bee dispatch prepare --kind cell`) on the
      code role's configured model with a tight scope; supervise and review the
-     diff rather than typing it, so the lead's context stays on the metric.
+     diff rather than typing it, so the lead's context stays on the metric
+     (`bee-principle-guard-the-context-window`).
      When several independent hypotheses are live, fan them to parallel cells,
      each in its own worktree so they cannot collide
      (`bee-principle-separate-before-serializing-shared-state`).
@@ -56,7 +57,8 @@ decides and a stacked change has no single cause.
    - One commit per accepted fix, staging only the files you changed (`git add
      <files>`, never `-A`), so each commit is one measured step. Log the row
      either way, kept or reverted.
-   Each iteration ends in a check before the next begins, so a failure points
+   Each iteration ends in a check before the next begins
+   (`bee-principle-sequence-verifiable-units`), so a failure points
    at one attempt. If the run is unattended, borrow only the wake mechanism
    from the autonomous-run playbook (`playbooks/session/autonomous-run.md`),
    not its stop rule. This playbook's stop criteria below govern, so a plateau
@@ -64,8 +66,8 @@ decides and a stacked change has no single cause.
 6. Push past the first plateau. A plateau is not a stop — it means pivot the
    hypothesis, not give up. On a stall, several rejects in a row, pivot
    category, combine near-misses, re-read the source, or try something more
-   radical before concluding the hill is climbed. Correctness and simplicity
-   outrank the number: revert a win that breaks behavior, and keep a
+   radical before concluding the hill is climbed. Correctness and simplicity outrank the number
+   (`bee-principle-laziness-protocol`): revert a win that breaks behavior, and keep a
    simplification that holds the number.
 7. When the ask is a sustained metric target, set the stop rule before the
    first attempt: the target reached, plus a minimum number of attempts. Stop

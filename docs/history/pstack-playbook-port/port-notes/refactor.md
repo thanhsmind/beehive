@@ -38,20 +38,21 @@ Dropped steps:
   down the contract the target keeps before dispatching. Restored (ppb-24):
   step 4 runs `bee-architect` for the shape before the move.
 - The `prove-it-works` principle citation (steps 1 and 6): no bee principle of
-  that name exists yet. Step 1 keeps its reason (without a record nothing can
-  say the behavior held) and step 8 keeps the real-artifact rule.
-- The `model-the-domain` principle citation (step 2, now 3): the same. The
-  step keeps the named structures and the "delete branches or invalid states,
-  not add indirection" test.
+  that name exists yet. Step 1 keeps its reason (without a record nothing can say the behavior held) and step 8 keeps the real-artifact rule.
+  Restored (ppb-37): steps 1 and 8 name `bee-principle-prove-it-works`.
+- The `model-the-domain` principle citation (step 2, now 3): the same. The step keeps the named structures and the "delete branches or invalid states, not add indirection" test.
+  Restored (ppb-37): step 3 names `bee-principle-model-the-domain`.
 - The `foundational-thinking` and `redesign-from-first-principles` principle
   citations (step 3, now 4): the same. The step keeps "built today".
-- The `laziness-protocol` principle citation (step 4, now 5): the same. The
-  step keeps "the smallest change that reaches the target shape ships".
-- The `minimize-reader-load` principle citation (step 7, now 9): the same. The
-  step keeps the reader-load measure.
+  Restored (ppb-37): step 4 names `bee-principle-foundational-thinking` and
+  `bee-principle-redesign-from-first-principles`.
+- The `laziness-protocol` principle citation (step 4, now 5): the same. The step keeps "the smallest change that reaches the target shape ships".
+  Restored (ppb-37): step 5 names `bee-principle-laziness-protocol`.
+- The `minimize-reader-load` principle citation (step 7, now 9): the same. The step keeps the reader-load measure.
+  Restored (ppb-37): step 9 names `bee-principle-minimize-reader-load`.
 - The `sequence-verifiable-units` principle skill citation (step 8, now 10): no
-  bee principle of that name exists yet. The step keeps "each
-  behavior-preserving slice stays green before the next".
+  bee principle of that name exists yet. The step keeps "each behavior-preserving slice stays green before the next".
+  Restored (ppb-37): step 10 names `bee-principle-sequence-verifiable-units`.
 
 Kept from the bee `refactor` playbook (D3): record existing behavior first
 with "a type check or a lint is not a record" (step 1), the record proven
@@ -101,8 +102,7 @@ Restored: `architect` (refactoring step 4, now `bee-architect`) and
 figure-it-out (the pointer for large or cross-cutting structural work, now
 `bee-figure-it-out`).
 
-Still waiting, because no skill of that name exists in `skills/`:
+Restored (ppb-37), all seven now exist in `skills/` and each is a pointer beside its method sentence:
 `prove-it-works`, `model-the-domain`, `foundational-thinking`,
 `redesign-from-first-principles`, `laziness-protocol`, `minimize-reader-load`
-and `sequence-verifiable-units` (refactoring). Each keeps its method as a plain
-sentence.
+and `sequence-verifiable-units` (refactoring).

@@ -23,7 +23,8 @@ Tool swaps:
   replacing the named default bug-fix model.
 - The `sequence-verifiable-units` principle skill became the red-before-green
   home pointer (`bee-swarming/references/worker-details.md:33-35`) in step 2,
-  plus the commit-order rule in step 6.
+  plus the commit-order rule in step 6. Restored (ppb-37): step 6 names
+  `bee-principle-sequence-verifiable-units`.
 - The pointer to the same discipline for Perf became `playbooks/perf.md`.
 
 Dropped steps:

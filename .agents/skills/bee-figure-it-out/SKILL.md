@@ -33,15 +33,15 @@ Open a todolist whose first item is to read the principles `bee orient --class <
 
 Ground first, then commit. Don't start the run until you can state:
 
-- The definition of done as a falsifiable predicate: prove it works, on the real artifact, and "done well" has to be checkable.
+- The definition of done as a falsifiable predicate: prove it works (`bee-principle-prove-it-works`), on the real artifact, and "done well" has to be checkable.
 - Scope, quantified: rough units and effort, plus the blockers grounding surfaced. Raise them before spending hours, not after fifty doomed commits.
 - The rigor level, biased high. One-way doors and high blast radius get more (`bee-blast-radius` sizes the radius); reversible low-stakes steps get less. Rigor is gates and artifacts, not "try harder".
 
-Present the framing and tradeoffs before committing to a long run. Reversible work proceeds without waiting on the human, but a multi-hour run earns one checkpoint.
+Present the framing and tradeoffs before committing to a long run. Reversible work proceeds without waiting on the human (`bee-principle-never-block-on-the-human`), but a multi-hour run earns one checkpoint.
 
 ## Phase B: Design the workflow
 
-Decompose into atomic, independently-landable units. Sequence riskiest-unknown-first so option value stays high. Scaffold and verification come before features: build the foundation the rest stands on first.
+Decompose into atomic, independently-landable units. Sequence riskiest-unknown-first so option value stays high. Scaffold and verification come before features: build the foundation the rest stands on first (`bee-principle-foundational-thinking`).
 
 - Build the verification harness before the work, with the baseline captured from the pre-change state, so the check reads as "old value vs new value".
 - For one-way-door design decisions, run `bee-architect` (it runs `bee-arena`) with diverse, isolated, opinionated candidates. Each runner goes out as `bee dispatch prepare --runtime claude --kind advisor --role lane-1 --json`, then `--role lane-2` and `--role lane-3`, and `bee blind check` checks each blind brief. The read-only judge goes out as `bee dispatch prepare --runtime claude --kind reviewer --json`. Use each payload exactly as it returns; which model runs a role is a setting of the bee team table, never a choice made here. Skip it for mechanical work whose shape is already concrete. A second arena over a settled design is over-engineering: do the least that settles it.
@@ -52,8 +52,8 @@ Then put the design into motion. Add its steps to the todolist as concrete items
 
 ## Phase C: Run the loop
 
-Each unit is an experiment: state the hypothesis, make the smallest change, measure against the predicate on the real artifact, keep it if it advanced, revert it if it didn't.
-Verify each unit before starting the next instead of batching checks at the end.
+Each unit is an experiment: state the hypothesis, make the smallest change (`bee-principle-laziness-protocol`), measure against the predicate on the real artifact, keep it if it advanced, revert it if it didn't.
+Verify each unit before starting the next instead of batching checks at the end (`bee-principle-sequence-verifiable-units`).
 
 - Verify by inspecting the artifact, never a self-report. When something passes too easily, suspect the observation method before the system. A blank screenshot passes a lazy gate.
 - Pair delegated work with a judge, dispatched as `bee dispatch prepare --runtime claude --kind reviewer --json`, and audit the delegates' artifacts yourself before trusting them. If a worker games the gate, reset and harden the contract. If the gate itself is wrong, fix the gate in its own change rather than routing around it.

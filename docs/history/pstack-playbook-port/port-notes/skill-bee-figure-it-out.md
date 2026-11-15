@@ -57,6 +57,14 @@ trigger and its limit.
 These pstack principles have no bee skill in `skills/` yet, so each method is a
 plain sentence and becomes a citation when its principle lands.
 
+Restored (ppb-37): all five principles exist now, and each sentence carries its
+pointer in `skills/bee-figure-it-out/SKILL.md`: `bee-principle-prove-it-works`
+and `bee-principle-never-block-on-the-human` (Phase A),
+`bee-principle-foundational-thinking` (Phase B), `bee-principle-laziness-protocol`
+and `bee-principle-sequence-verifiable-units` (Phase C). The laziness pointer sits
+on Phase C's "make the smallest change" clause, the only place the shipped text
+holds that rule, and not on a Phase B sentence.
+
 - `principle-prove-it-works`: "prove it works, on the real artifact, and 'done
   well' has to be checkable" (Phase A).
 - `principle-never-block-on-the-human`: "Reversible work proceeds without waiting

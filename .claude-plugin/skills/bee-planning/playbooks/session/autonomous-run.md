@@ -15,8 +15,8 @@ You own the exit condition. Define done, then drive to it without stopping.
 3. Each iteration makes the smallest change the evidence justifies, verifies it
    against the predicate, commits if it advanced, and discards changes that did
    not help. Belt-and-suspenders that "might help" gets reverted, not left to
-   ride, because a line no evidence asked for is a hypothesis. Sequence the
-   work in verifiable units and verify each one before the next, instead of
+   ride, because a line no evidence asked for is a hypothesis. Sequence the work in verifiable units
+   (`bee-principle-sequence-verifiable-units`) and verify each one before the next, instead of
    batching checks at the end, so a failure points at one unit.
 4. Mid-run discoveries are yours. Address broken skills, related bugs, flaky
    verifiers, review noise, tooling failures, orphaned follow-ups and fixable

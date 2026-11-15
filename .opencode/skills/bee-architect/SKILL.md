@@ -43,7 +43,7 @@ Fan the design out to blind lanes, with the task and the Phase A grounding artif
 - Frame first. Write the rubric into the dossier before any lane runs: one gradeable criterion per screen in `references/design-red-flags.md`, plus interface depth and caller usage. A rubric written after the proposals arrive is fitted to them.
 - One brief, the same bytes for every lane: the task, the grounding artifacts by path, and `references/runner-prompt.md` as the discipline each lane applies. A lane answers with one design package shaped per `references/rationale-template.md`: the caller's usage written first, then the type sketch, function signatures, module map and prose rationale derived from it.
 - Lane runners go out as `bee dispatch prepare --runtime claude --kind advisor --role lane-1 --json`, then `--role lane-2`, and `--role lane-3` for a third. Use the payload it returns exactly as it returns it. Never pick a model or a subagent type by hand: each lane's model comes from the `lane-1` to `lane-3` roles of the bee team table, so a different model per lane is a team setting.
-- Design it twice. Require at least two structurally distinct candidates before synthesis, even when the first looks sufficient: whole-shape alternatives, never point fixes inside one shape. This is exhausting the design space, made concrete.
+- Design it twice. Require at least two structurally distinct candidates before synthesis, even when the first looks sufficient: whole-shape alternatives, never point fixes inside one shape. This is `bee-principle-exhaust-the-design-space`, made concrete.
 - Screen every candidate against `references/design-red-flags.md` before synthesis. Reject or revise shallow modules, information leakage, temporal decomposition and pass-through methods.
 - Compare viable candidates on interface depth. Prefer the design that hides more complexity behind a smaller, simpler public surface. A rich interface keeps call chains short by concentrating capability instead of scattering it across layers.
 - Converge the way the procedure says: base, grafts, a dossier at `docs/history/<feature>/blind/<run-id>.md`, and `bee blind check --dossier <path>` green before `bee decisions log`. Lanes that converge ship the consensus; lanes that diverge wildly mean the frame was loose, so reframe the rubric and re-run, never average.
@@ -57,7 +57,7 @@ Default: proceed directly to implementation with the synthesized design. No huma
 
 Opt in to a checkpoint when the invoker explicitly asks: "/bee-architect with checkpoint", "stop and show me before implementing", or similar. Then surface the synthesized design and pause for sign-off. An unattended run never opts in.
 
-The synthesis can ship as its own commit either way. That is the scaffold-first mode of foundational thinking: get the data shapes and the contract right first, so later commits read as filling in bodies against a stable contract. Planned and scoped breakage during fill-in is fine, because the outcome is what is held fixed, not every intermediate state. For adversarial pressure on the design before implementing, press on the synthesized sketch with the hardest objection you can build, and answer it in the rationale.
+The synthesis can ship as its own commit either way. That is the scaffold-first mode of `bee-principle-foundational-thinking`: get the data shapes and the contract right first, so later commits read as filling in bodies against a stable contract. Planned and scoped breakage during fill-in is fine, because the outcome is what is held fixed, not every intermediate state (`bee-principle-outcome-oriented-execution`). For adversarial pressure on the design before implementing, run `bee-interrogate` over the synthesized sketch: press on it with the hardest objection you can build, and answer it in the rationale.
 
 If the human pushes back on the shape, in a checkpoint or after the fact, treat that as Phase A evidence. Re-ground and re-run Phase B before writing more code.
 
@@ -69,7 +69,7 @@ Deviations from the sketch are signal worth surfacing, not friction to absorb si
 
 ## Phase E: Scrap when the architecture is wrong
 
-If implementation keeps producing friction the sketch cannot absorb, throw the sketch out. Do not bolt fixes onto a wrong design: redesign from first principles, and fix the root cause instead of the symptom it shows.
+If implementation keeps producing friction the sketch cannot absorb, throw the sketch out. Do not bolt fixes onto a wrong design: redesign from first principles (`bee-principle-redesign-from-first-principles`), and fix the root cause instead of the symptom it shows (`bee-principle-crash-site-versus-fault-site`).
 
 The signal is a pattern, not single instances. Tells:
 

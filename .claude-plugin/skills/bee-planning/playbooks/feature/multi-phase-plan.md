@@ -10,13 +10,12 @@ phases or stacked PRs. The plan is the deliverable. Do not implement.
 2. Settle open questions by prototype before you write. For a question about
    layout, timing, behavior, or whether an API works, run
    `playbooks/spike/prototype.md`. Keep the branch, the SHA and the screenshots
-   for Appendix A. Ask the operator only about a product or preference call
-   that no run can settle, and give options, because a question with options
+   for Appendix A. Ask the operator only about a product or preference call that no run can settle
+   (`bee-principle-never-block-on-the-human`), and give options, because a question with options
    costs the operator a pick and a bare question costs a round trip.
-3. Explore in gathers started with `bee dispatch prepare --kind gather`, on the
-   explore role's configured model. Each returns file pointers, conventions,
-   test commands and entry points. No inlined dumps, because the plan's lead
-   keeps its context for the plan.
+3. Explore in gathers started with `bee dispatch prepare --kind gather`, on the read role's configured model. Each returns file pointers, conventions,
+   test commands and entry points. No inlined dumps, because the plan's lead keeps its context for the plan
+   (`bee-principle-guard-the-context-window`).
 4. Choose the program's grouping by the rule in
    `bee-planning/references/planning-reference.md` under "Phase plan vs epic
    map". Use phases only when the work has observable milestones a user could
@@ -28,8 +27,8 @@ phases or stacked PRs. The plan is the deliverable. Do not implement.
    the operator names a path, write the file under `docs/history/<feature>/`,
    for example `program-plan.md`, beside the feature's own `plan.md`. Keep every
    heading and every sub-block in the order shown. One section per PR. One PR is
-   one change with its own evidence, built, verified and committed before the
-   next, so a failure points at one PR. Name the execution playbook in **How to
+   one change with its own evidence, built, verified and committed before the next
+   (`bee-principle-sequence-verifiable-units`), so a failure points at one PR. Name the execution playbook in **How to
    read this**. Pick between `playbooks/session/autopilot-full.md` and
    `playbooks/session/autopilot-stack.md` per the rule at the end of
    `playbooks/session/autopilot-stack.md`. A standing program takes
@@ -42,13 +41,15 @@ phases or stacked PRs. The plan is the deliverable. Do not implement.
 7. Check the file against the skeleton by hand, heading by heading, in the order
    shown, and fix every drift: the verification rule opens every verification
    block, and the punctuation rules hold. A plan whose shape drifts cannot be
-   audited box by box, and a rule left to memory is skipped under load.
+   audited box by box, and a rule left to memory is skipped under load
+   (`bee-principle-encode-lessons-in-structure`).
 8. Hand back. Post the plan path and the result of the shape check, then stop.
    Execution starts on the operator's explicit go, under the execution playbook
    the plan names, because a plan handed over is not a go.
 
 **Verification.** Tests alone are not sufficient verification. A PR is verified
-only when its unit, live and perf boxes are all checked. That sentence is the
+only when its unit, live and perf boxes are all checked
+(`bee-principle-prove-it-works`). That sentence is the
 verification rule. Every verification block opens with it. The live block is
 mandatory. Ten lanes at the PR head drive the real surface, fanned out per
 `bee-fanout`, each started through `bee dispatch prepare --kind reviewer` on
@@ -108,7 +109,7 @@ Tests alone are not sufficient verification. A PR is verified only when its unit
 - [ ] Run the repo's lint and typecheck once before the PR-facing push. Push with hooks on.
 - [ ] Run `bee-comment-review` over the diff before review, because bee writes no comment in code and a comment the diff added is the first thing a reviewer reads.
 - [ ] Triage every review comment per `playbooks/session/babysit.md`.
-- [ ] Rebase onto current trunk before babysit and again before the merge-ready report.
+- [ ] Send drift against current trunk to the merger as a cell before babysit and again before the merge-ready report. The owner never rebases, per `playbooks/session/orchestrate.md` § Merge safety.
 
 ### Verdict and merge, for every PR
 
@@ -177,7 +178,7 @@ Each live lane runs in its own worktree at the PR head. Drive through the `verif
 
 - [ ] The clean verdict at the exact head SHA.
 - [ ] Review comments triaged.
-- [ ] Rebased onto current trunk after the verdict, patch-id unchanged.
+- [ ] The head's patch-id is unchanged since the verdict. Drift against trunk went to the merger as a cell, never an owner's rebase.
 - [ ] <The root runs `bee worktree merge` per the execution playbook, or the PR stops at merge-ready for the operator. The `uat` door of `bee close` stays the operator's.>
 
 ## Close the program
