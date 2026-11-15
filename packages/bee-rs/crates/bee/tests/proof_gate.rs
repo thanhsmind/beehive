@@ -27,15 +27,32 @@ fn read(root: &Path, rel: &str) -> String {
     std::fs::read_to_string(root.join(rel)).unwrap_or_else(|e| panic!("{rel}: {e}"))
 }
 
-/// The declared command, minus any leading `VAR=...` environment prefix (CI
-/// already has cargo on PATH; a local session may not).
-fn declared_test_invocation(root: &Path) -> String {
+/// The declared commands, minus any leading `VAR=...` environment prefix (CI
+/// already has cargo on PATH; a local session may not). `commands.test` is a
+/// string or a list of strings.
+fn declared_test_invocations(root: &Path) -> Vec<String> {
     let config: serde_json::Value =
         serde_json::from_str(&read(root, ".bee/config.json")).expect(".bee/config.json parses");
-    let raw = config["commands"]["test"]
-        .as_str()
-        .expect(".bee/config.json declares commands.test as a string");
-    strip_env_prefix(raw)
+    let test = &config["commands"]["test"];
+    let raws: Vec<&str> = match test {
+        serde_json::Value::String(s) => vec![s.as_str()],
+        serde_json::Value::Array(items) => items
+            .iter()
+            .map(|v| {
+                v.as_str()
+                    .expect(".bee/config.json commands.test entries are strings")
+            })
+            .collect(),
+        _ => panic!(".bee/config.json declares commands.test as a string or a list of strings"),
+    };
+    raws.into_iter().map(strip_env_prefix).collect()
+}
+
+fn declared_test_invocation(root: &Path) -> String {
+    declared_test_invocations(root)
+        .into_iter()
+        .find(|c| c.starts_with("cargo test"))
+        .expect(".bee/config.json commands.test has no cargo test entry")
 }
 
 fn strip_env_prefix(command: &str) -> String {
@@ -64,11 +81,15 @@ fn strip_env_prefix(command: &str) -> String {
 }
 
 fn cargo_test_lines(workflow: &str) -> Vec<String> {
+    run_lines(workflow, "cargo test")
+}
+
+fn run_lines(workflow: &str, needle: &str) -> Vec<String> {
     workflow
         .lines()
         .map(str::trim)
         .filter(|l| !l.starts_with('#'))
-        .filter(|l| l.contains("cargo test"))
+        .filter(|l| l.contains(needle))
         .map(|l| {
             // `run: <cmd>`, redirections and pipeline tails are plumbing
             // around the invocation, not flags passed to it.
@@ -86,6 +107,17 @@ const WORKFLOWS: [&str; 2] = [".github/workflows/ci.yml", ".github/workflows/win
 fn ci_runs_the_declared_test_command_and_adds_no_flags_to_it() {
     let root = repo_root();
     let declared = declared_test_invocation(&root);
+    let ci = read(&root, WORKFLOWS[0]);
+    for other in declared_test_invocations(&root)
+        .into_iter()
+        .filter(|c| !c.starts_with("cargo test"))
+    {
+        assert!(
+            run_lines(&ci, &other).contains(&other),
+            "{} has no run line equal to the declared test entry {other:?}",
+            WORKFLOWS[0]
+        );
+    }
     assert!(
         declared.starts_with("cargo test"),
         "commands.test is expected to be a cargo invocation; got {declared:?}"

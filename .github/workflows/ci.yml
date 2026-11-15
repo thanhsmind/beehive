@@ -56,6 +56,8 @@ jobs:
           fetch-depth: 0
 
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
 
       - uses: Swatinem/rust-cache@v2
         with:
@@ -95,6 +97,9 @@ jobs:
       # job passed — the reds had been invisible to CI for as long as the pipe
       # had been there. Windows CI, which does not pipe, was the only honest
       # report.
+      - name: Run clippy before the verify chain
+        run: cargo clippy --manifest-path packages/bee-rs/Cargo.toml
+
       - name: Run verify chain
         shell: bash
         run: |

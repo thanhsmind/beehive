@@ -280,17 +280,20 @@ elif [ -n "$ARG_VERSION" ]; then
     # Read from .bee/config.json, never hardcoded: CI reads the same field, so
     # this gate can never drift from what the project declares.
     if command -v jq >/dev/null 2>&1; then
-      TEST_CMD="$(jq -r '.commands.test // empty' "$BEE_CONFIG")"
+      TEST_CMDS="$(jq -r '.commands.test // empty | if type == "array" then .[] else . end' "$BEE_CONFIG")"
     elif command -v python3 >/dev/null 2>&1; then
-      TEST_CMD="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("commands",{}).get("test",""))' "$BEE_CONFIG")"
+      TEST_CMDS="$(python3 -c 'import json,sys; v=json.load(open(sys.argv[1])).get("commands",{}).get("test",""); print("\n".join(v) if isinstance(v,list) else v)' "$BEE_CONFIG")"
     else
       fail "need jq or python3 to read \`commands.test\` from $BEE_CONFIG — install one, or re-run with --no-test --confirm"
     fi
-    [ -n "$TEST_CMD" ] \
+    [ -n "$TEST_CMDS" ] \
       || fail "no \`commands.test\` in $BEE_CONFIG — record it there, or re-run with --no-test --confirm"
-    log "test     $TEST_CMD"
-    bash -c "$TEST_CMD" >&2 \
-      || fail "the declared test suite went RED — nothing tagged, nothing pushed; a published tag is the one thing a release can never take back"
+    while IFS= read -r TEST_CMD; do
+      [ -n "$TEST_CMD" ] || continue
+      log "test     $TEST_CMD"
+      bash -c "$TEST_CMD" >&2 \
+        || fail "the declared test suite went RED at \`$TEST_CMD\` — nothing tagged, nothing pushed; a published tag is the one thing a release can never take back"
+    done <<< "$TEST_CMDS"
     log "smoke    bash .bee/verify/verify-app/control-bee smoke"
     bash .bee/verify/verify-app/control-bee smoke >&2 \
       || fail "the live smoke went RED — nothing tagged, nothing pushed; the evidence folder is named above"

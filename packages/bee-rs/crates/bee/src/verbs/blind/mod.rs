@@ -334,7 +334,7 @@ pub(crate) fn parse_dossier(text: &str) -> Result<Dossier, Value> {
     // ── the fixed sections ───────────────────────────────────────────────
     // A second level-1 heading is an extra SECTION, not a second title: the
     // dossier is one run's record.
-    for h in heads.iter().skip(1).filter(|h| h.level == 1) {
+    if let Some(h) = heads.iter().skip(1).find(|h| h.level == 1) {
         return Err(refuse(
             "dossier_section_unexpected",
             &[("section".into(), s(&h.text))],
