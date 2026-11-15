@@ -1,27 +1,12 @@
 # research
 
-1. Read-only: the outcome is an account, never a diff — an edit changes the
-   thing you report on.
-2. Trace the runtime path, not just the file list — the list shows what
-   exists, not what runs.
-3. Name every source searched that came up EMPTY, so that nobody searches it
-   again or reads its silence as unchecked.
-4. End with anchors a reader can open — `path:line`, or the command that ran.
-5. A question that chooses between alternatives ends in a recommendation — the
-   reader came for a pick — and a tradeoffs table. An answer that leads to a
-   change re-routes to `bugfix` or `feature`.
+A question to answer or a cause to find, with no change to ship: pick the situation below and open its file.
 
-Both flows have ONE home: `bee-researching/references/trace-and-provenance.md`
-— § "Trace" for step 2, § "Provenance sweep" for step 3.
+## Situations
 
-**When the symptom is live at runtime.** Capture a real profile or trace.
-Reduce it through a gather dispatch (`bee dispatch prepare --kind gather`).
-Confirm the reduction with one instrumented run, and map it to `path:line`.
-Without a before-and-after pair, label the cause a hypothesis.
+- `investigation` — how does X work, why was Y built this way, are we sure about Z, should we do X or Y, explain this code, trace this path, X hoạt động thế nào, tại sao làm thế này, có chắc về điều này không, nên chọn X hay Y — delivers: a cited account with anchors a reader can open, the sources that came up empty, and a recommendation with a tradeoffs table when the question chooses between alternatives
+- `runtime-forensics` — why is X leaking, spinning, slow at runtime, idle but busy, intermittent glitch, heap grows, CPU stuck high, tại sao rò bộ nhớ, tiến trình chạy không nghỉ, chậm lúc chạy, lỗi chập chờn — delivers: a cited diagnosis from a live capture, the proof of the mechanism, and the source location, with no fix
+- `trace-forensics` — here is a cpuprofile, Trace json.gz, spindump, heapsnapshot, why is this slow or unresponsive from this artifact, đây là file profile, phân tích trace này, vì sao chậm từ artifact này, đọc heap snapshot — delivers: a cited diagnosis from the artifact, the reduced finding mapped to source, and whether a paired capture confirmed it, with no fix
+- `eval` — evaluate this skill variant, compare two prompts, does this change affect agent behavior, run a blind experiment, test a structural change before promoting it, đánh giá biến thể skill, so sánh hai prompt, thí nghiệm mù, thử trước khi áp dụng — delivers: the variant under test, the rubric, per-candidate notes, the blind judge's verdict, and a recommendation on promoting the variant
 
-This is the investigation route (per D3, decision `f1ffa7bd`): the existing
-`research` class, no new route and no new lane. Nothing yet ENFORCES step 1 —
-read-only is craft here, not a guard (backlog `p-69bee217`).
-
-Proof line: the account's anchors, each one opened or run.
 Proof floor: the cap refuses a result weaker than this class's floor and names it; the table is the cap's own (`bee cells finish --help`).
