@@ -65,3 +65,87 @@ pub(crate) fn class_situations(root: &Path, class: &str) -> Vec<Situation> {
             .unwrap_or_default(),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn row(name: &str, triggers: &str, deliverable: &str) -> Situation {
+        Situation {
+            name: name.to_string(),
+            triggers: triggers.to_string(),
+            deliverable: deliverable.to_string(),
+        }
+    }
+
+    fn write_index(root: &Path, class: &str, body: &str) {
+        let path = root.join(format!("skills/bee-planning/playbooks/{class}.md"));
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(path, body).unwrap();
+    }
+
+    #[test]
+    fn a_well_formed_section_yields_one_row_per_line_and_stops_at_the_next_heading() {
+        let body = "\
+# Class
+
+## Situations
+
+- `bug-fix` — bug, lỗi — delivers: the root cause and the fix
+- `slow-2` — slow, chậm — delivers: a measured speedup
+
+## Steps
+
+- `not-a-row` — after the section — delivers: nothing
+";
+        assert_eq!(
+            parse_situations(body),
+            vec![
+                row("bug-fix", "bug, lỗi", "the root cause and the fix"),
+                row("slow-2", "slow, chậm", "a measured speedup"),
+            ]
+        );
+    }
+
+    #[test]
+    fn a_malformed_line_is_skipped_and_its_neighbours_still_parse() {
+        let body = "\
+## Situations
+
+Prose the parser walks past.
+- `Bad-Name` — upper case — delivers: x
+- `` — empty name — delivers: x
+- `no-delivers` — triggers only
+- `empty-triggers` —  — delivers: x
+- `empty-deliverable` — t — delivers: 
+- no-backticks — t — delivers: x
+- `good` — t — delivers: d
+";
+        assert_eq!(parse_situations(body), vec![row("good", "t", "d")]);
+    }
+
+    #[test]
+    fn an_absent_section_yields_no_rows() {
+        assert!(parse_situations("# Class\n\n## Steps\n\n- `x` — t — delivers: d\n").is_empty());
+        assert!(parse_situations("").is_empty());
+    }
+
+    #[test]
+    fn the_repo_copy_wins_over_the_compiled_in_copy() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_index(tmp.path(), "bugfix", "## Situations\n\n- `local-only` — here — delivers: there\n");
+        assert_eq!(class_situations(tmp.path(), "bugfix"), vec![row("local-only", "here", "there")]);
+        write_index(tmp.path(), "bugfix", "# No section\n");
+        assert!(class_situations(tmp.path(), "bugfix").is_empty());
+    }
+
+    #[test]
+    fn a_repo_with_no_skills_tree_reads_the_compiled_in_copy() {
+        let tmp = tempfile::tempdir().unwrap();
+        let built_in = BUILT_IN.iter().find(|(c, _)| *c == "bugfix").unwrap().1;
+        let expected = parse_situations(built_in);
+        assert!(expected.iter().any(|s| s.name == "bug-fix"), "{expected:?}");
+        assert_eq!(class_situations(tmp.path(), "bugfix"), expected);
+        assert!(class_situations(tmp.path(), "no-such-class").is_empty());
+    }
+}
