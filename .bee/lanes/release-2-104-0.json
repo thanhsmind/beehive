@@ -5,8 +5,8 @@
   "phase": "exploring",
   "approved_gates": {
     "context": true,
-    "shape": true,
-    "execution": true,
+    "shape": false,
+    "execution": false,
     "review": false,
     "uat": false
   },
@@ -17,14 +17,14 @@
   "waiting_on": null,
   "gate_preview": {
     "feature": "release-2-104-0",
-    "plan_sha256": "4975168d59bf39526f03af1c96d7d1da3401de138d9c84f977170871c6711eef",
-    "previewed_at": "2026-11-15T06:13:53.243Z",
+    "plan_sha256": "af9470d0664725a682678cecdc4a0fa55eed73ae19cf2c0dd30ad5d0b06ec9c0",
+    "previewed_at": "2026-11-15T06:36:53.060Z",
     "cells": [
       {
         "id": "rel2104-1",
         "feature": "release-2-104-0",
         "title": "Publish release 2.104.0 through the sanctioned script",
-        "lane": "tiny",
+        "lane": "small",
         "role": "deploy",
         "deps": [],
         "decisions": [
@@ -69,6 +69,40 @@
           ]
         },
         "behavior_change": false
+      },
+      {
+        "id": "rel2104-1c",
+        "feature": "release-2-104-0",
+        "title": "Check the published 2.104.0 release",
+        "lane": "small",
+        "role": "test",
+        "deps": [
+          "rel2104-1"
+        ],
+        "decisions": [
+          "8097faaf-6d24-44c6-957e-e1b4ddae3351",
+          "913115b3-e1f1-4004-902c-bc574fabb2f1"
+        ],
+        "files": [
+          "docs/history/release-2-104-0/reports/rel2104-1c.md"
+        ],
+        "read_first": [
+          "docs/history/release-2-104-0/CONTEXT.md",
+          "docs/history/release-2-104-0/plan.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Check the release independently, read-only: both plugin manifests on main report 2.104.0; tag v2.104.0 exists locally and on origin (git ls-remote --tags origin v2.104.0); the GitHub release v2.104.0 lists the five binaries and SHA256SUMS (gh release view v2.104.0 --json assets); the release-binaries run for v2.104.0 concluded success. Write each check with its command and output to docs/history/release-2-104-0/reports/rel2104-1c.md and commit it with the trailer cell: rel2104-1c. Bee commands you may run: bee herding notify; never bee dispatch.",
+        "verify": "gh release view v2.104.0 --json assets --jq '.assets | length'",
+        "must_haves": {
+          "truths": [
+            "the report shows each of the four checks with its command and output"
+          ],
+          "prohibitions": [
+            "No edit outside the report file"
+          ]
+        },
+        "behavior_change": false
       }
     ],
     "role_plan": {
@@ -96,9 +130,9 @@
         },
         {
           "stage": "test-and-live-proof",
-          "classification": "not-applicable",
+          "classification": "required",
           "role": "test",
-          "reason": "The script's own test gate runs the declared suite before tagging."
+          "reason": "rel2104-1c reads the published release independently of the deploy cell."
         },
         {
           "stage": "documentation-and-capture",
@@ -394,5 +428,17 @@
         }
       ]
     }
+  },
+  "route": {
+    "class": "release",
+    "lane": "small",
+    "flags": [],
+    "product_files": 3,
+    "rationale": "the release bump writes two plugin manifests; tiny allows one hand-authored file",
+    "updated_at": "2026-11-15T06:36:06.517Z",
+    "feature": "release-2-104-0"
+  },
+  "gate_revoked_at": {
+    "execution": "2026-11-15T06:36:52.624Z"
   }
 }

@@ -1,6 +1,6 @@
 ---
 artifact_contract: bee-plan/v2
-mode: tiny
+mode: small
 ---
 
 # Plan: Release 2.104.0
@@ -10,7 +10,7 @@ mode: tiny
 Publish 2.104.0 from `main`. One command does the whole release; this plan exists
 so the deployment stage has an approved role plan to authorize against.
 
-Mode: `tiny` — 0 risk flags: none
+Mode: `small` — 0 risk flags: none (two plugin manifests move, and a separate checker reads the published release)
 Why this is the least workflow that protects the work: no source changes, one
 sanctioned script, and a permit that is validated before a single byte moves.
 
@@ -39,12 +39,21 @@ Playbook: `skills/bee-planning/playbooks/release/release.md` (the release class'
     "id": "rel2104-1",
     "feature": "release-2-104-0",
     "title": "Publish release 2.104.0 through the sanctioned script",
-    "lane": "tiny",
+    "lane": "small",
     "role": "deploy",
     "deps": [],
-    "decisions": ["8097faaf-6d24-44c6-957e-e1b4ddae3351"],
-    "files": [".claude-plugin/plugin.json", ".codex-plugin/plugin.json", "docs/history/codex-harness-hardening/release-manifest.json"],
-    "read_first": ["docs/history/release-2-104-0/CONTEXT.md", "scripts/release.sh"],
+    "decisions": [
+      "8097faaf-6d24-44c6-957e-e1b4ddae3351"
+    ],
+    "files": [
+      ".claude-plugin/plugin.json",
+      ".codex-plugin/plugin.json",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "read_first": [
+      "docs/history/release-2-104-0/CONTEXT.md",
+      "scripts/release.sh"
+    ],
     "affects_skills": [],
     "affects_specs": [],
     "action": "Run `scripts/release.sh 2.104.0` with BEE_DISPATCH_ID set to an authorized deployment dispatch and the CI-pinned opencode 1.18.16 (/mnt/data/Projects/goglbe/beehive/.bee/tmp/oc11816/bin) first on PATH and CARGO_TARGET_DIR=/home/thanhsmind/.cache/cargo-target-rel21040, so the opencode contract tests run green. The script bumps both plugin manifests, runs the regen chain (render-skill-trees, onboard --apply, release-manifest --write), runs the declared test suite before tagging, makes the release commit, tags v2.104.0, pushes main and the tag, waits for the release-binaries workflow and verifies the published assets. Never walk those steps by hand. Re-running at a version already committed is idempotent — it resumes the tail. The regen obligation on .claude-plugin/plugin.json is discharged INSIDE the script's own regen chain, which is why the release manifest rides this cell's files.",
@@ -57,11 +66,56 @@ Playbook: `skills/bee-planning/playbooks/release/release.md` (the release class'
         "the script printed its final OK line"
       ],
       "artifacts": [
-        {"path": ".claude-plugin/plugin.json", "substantive": "version 2.104.0"},
-        {"path": ".codex-plugin/plugin.json", "substantive": "version 2.104.0"}
+        {
+          "path": ".claude-plugin/plugin.json",
+          "substantive": "version 2.104.0"
+        },
+        {
+          "path": ".codex-plugin/plugin.json",
+          "substantive": "version 2.104.0"
+        }
       ],
-      "key_links": ["the pushed tag is what triggers release-binaries.yml"],
-      "prohibitions": ["Do not hand-walk bump, tag or push", "Do not skip the test gate"]
+      "key_links": [
+        "the pushed tag is what triggers release-binaries.yml"
+      ],
+      "prohibitions": [
+        "Do not hand-walk bump, tag or push",
+        "Do not skip the test gate"
+      ]
+    },
+    "behavior_change": false
+  },
+  {
+    "id": "rel2104-1c",
+    "feature": "release-2-104-0",
+    "title": "Check the published 2.104.0 release",
+    "lane": "small",
+    "role": "test",
+    "deps": [
+      "rel2104-1"
+    ],
+    "decisions": [
+      "8097faaf-6d24-44c6-957e-e1b4ddae3351",
+      "913115b3-e1f1-4004-902c-bc574fabb2f1"
+    ],
+    "files": [
+      "docs/history/release-2-104-0/reports/rel2104-1c.md"
+    ],
+    "read_first": [
+      "docs/history/release-2-104-0/CONTEXT.md",
+      "docs/history/release-2-104-0/plan.md"
+    ],
+    "affects_skills": [],
+    "affects_specs": [],
+    "action": "Check the release independently, read-only: both plugin manifests on main report 2.104.0; tag v2.104.0 exists locally and on origin (git ls-remote --tags origin v2.104.0); the GitHub release v2.104.0 lists the five binaries and SHA256SUMS (gh release view v2.104.0 --json assets); the release-binaries run for v2.104.0 concluded success. Write each check with its command and output to docs/history/release-2-104-0/reports/rel2104-1c.md and commit it with the trailer cell: rel2104-1c. Bee commands you may run: bee herding notify; never bee dispatch.",
+    "verify": "gh release view v2.104.0 --json assets --jq '.assets | length'",
+    "must_haves": {
+      "truths": [
+        "the report shows each of the four checks with its command and output"
+      ],
+      "prohibitions": [
+        "No edit outside the report file"
+      ]
     },
     "behavior_change": false
   }
@@ -79,7 +133,7 @@ Playbook: `skills/bee-planning/playbooks/release/release.md` (the release class'
     {"stage":"deployment","classification":"required","role":"deploy","reason":"This lane exists to publish 2.104.0; the deploy role owns the release permit."},
     {"stage":"planning","classification":"not-applicable","role":"plan","reason":"The plan is this one page and needs no planning dispatch."},
     {"stage":"implementation","classification":"not-applicable","role":"code","reason":"No source changes: the release publishes what main already holds."},
-    {"stage":"test-and-live-proof","classification":"not-applicable","role":"test","reason":"The script's own test gate runs the declared suite before tagging."},
+    {"stage":"test-and-live-proof","classification":"required","role":"test","reason":"rel2104-1c reads the published release independently of the deploy cell."},
     {"stage":"documentation-and-capture","classification":"not-applicable","role":"docs","reason":"No documentation changes ride this release."},
     {"stage":"read-only-gather","classification":"not-applicable","role":"read","reason":"Nothing to survey; the preconditions are the script's own."},
     {"stage":"fact-extraction","classification":"not-applicable","role":"extraction","reason":"No narrow fact lookup is needed."},
