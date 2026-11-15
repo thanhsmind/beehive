@@ -43,3 +43,8 @@ beside the skills.
   key of prepare cell rows in `.bee/logs/dispatch.jsonl`, arms
   `principles` and `holdout`, same signals and same minimum per arm.
   Touches 4cfda42e (feature_outcomes).
+- **D4** The herding worker brief asks a peer which principles it applied: when
+  a Principles block appears, the result file carries a `principles_used` array,
+  one `<slug> — <the decision it changed>` entry per principle, `[]` when none
+  changed a decision (decision `de367f58`). `herding/mailbox.rs` already parses
+  it and `cells finish --from-job` already carries it; no Rust product change.

@@ -294,6 +294,7 @@ use std::time::Instant;
             rendered.contains("An empty `knowledge_used` array means no concept changed a decision."),
             "{rendered}"
         );
+        assert!(!rendered.contains("principles_used"), "{rendered}");
         let herded = prompt_body_for(
             std::path::Path::new("/unused"),
             "cell",
@@ -312,6 +313,10 @@ use std::time::Instant;
         .unwrap();
         assert!(
             herded.contains("The result file may carry the same `knowledge_used` array"),
+            "{herded}"
+        );
+        assert!(
+            herded.contains("the result file also carries a `principles_used` array"),
             "{herded}"
         );
     }

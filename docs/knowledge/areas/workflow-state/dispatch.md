@@ -152,7 +152,7 @@ is owned by
 render both carry it: follow a principle's Depth line, or route `.bee/expertise/INDEX.md` and read
 only the one guide section it names. Rejected: injecting `tests.md` and `debugging.md` into every
 code cell (about 950 lines per brief, repeats the principle lines); `--expertise` stays the
-leader's explicit choice.
+leader's explicit choice. The herding render also asks for a `principles_used` array in the result file whenever a Principles block is present (peer-brief-craft D4).
 
 **A cell may not run against an unsettled or retired contract decision
 (slp-contract-original-request, cell scor-4, 2026-08-29).** The cell's
