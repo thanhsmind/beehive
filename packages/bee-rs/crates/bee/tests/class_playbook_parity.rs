@@ -28,7 +28,7 @@
 // forever and catches nothing.
 
 use std::collections::BTreeSet;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 /// The single home of the class vocabulary.
 const WORKFLOWS_RS: &str = "packages/bee-rs/crates/bee/src/verbs/state_group/workflows.rs";
@@ -163,4 +163,251 @@ fn every_playbook_names_a_real_route_class() {
          class to the constant, or delete the file.",
         orphans.join(" ")
     );
+}
+
+const SITUATIONS_HEADING: &str = "## Situations";
+const SESSION_DIR: &str = "session";
+
+fn situations_section(body: &str) -> Option<&str> {
+    let start = body.find(SITUATIONS_HEADING)?;
+    let rest = &body[start + SITUATIONS_HEADING.len()..];
+    Some(match rest.find("\n## ") {
+        Some(end) => &rest[..end],
+        None => rest,
+    })
+}
+
+fn situation_line_name(line: &str) -> Option<&str> {
+    let item = line.strip_prefix("- `")?;
+    let (name, rest) = item.split_once('`')?;
+    let named = !name.is_empty()
+        && name.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-');
+    let (triggers, deliverable) = rest.strip_prefix(" — ")?.split_once(" — delivers: ")?;
+    (named && !triggers.trim().is_empty() && !deliverable.trim().is_empty()).then_some(name)
+}
+
+fn listed_situations(index: &Path, findings: &mut Vec<String>) -> BTreeSet<String> {
+    let label = index.display();
+    let Ok(body) = std::fs::read_to_string(index) else {
+        findings.push(format!("{label}: cannot be read, so its situations have no index"));
+        return BTreeSet::new();
+    };
+    let Some(section) = situations_section(&body) else {
+        findings.push(format!("{label}: has no `{SITUATIONS_HEADING}` section"));
+        return BTreeSet::new();
+    };
+    let mut names = BTreeSet::new();
+    for line in section.lines().filter(|l| l.starts_with("- ")) {
+        match situation_line_name(line) {
+            Some(name) => {
+                names.insert(name.to_string());
+            }
+            None => findings.push(format!(
+                "{label}: situation line {line:?} is not of the form - `<name>` — <triggers> — \
+                 delivers: <deliverable>, with <name> in [a-z0-9-]+"
+            )),
+        }
+    }
+    names
+}
+
+fn md_stems(dir: &Path, skip: &str) -> BTreeSet<String> {
+    std::fs::read_dir(dir)
+        .unwrap_or_else(|e| panic!("cannot read {}: {e}", dir.display()))
+        .filter_map(|entry| {
+            let entry = entry.ok()?;
+            entry.file_type().ok()?.is_file().then_some(())?;
+            let name = entry.file_name().to_str()?.to_string();
+            let stem = name.strip_suffix(".md")?;
+            (name != skip).then(|| stem.to_string())
+        })
+        .collect()
+}
+
+fn compare(
+    label: &str,
+    index: &Path,
+    dir: &Path,
+    listed: &BTreeSet<String>,
+    files: &BTreeSet<String>,
+    findings: &mut Vec<String>,
+) {
+    for name in files.difference(listed) {
+        findings.push(format!(
+            "{label}: {}/{name}.md is not listed in {}, so no router can reach it",
+            dir.display(),
+            index.display()
+        ));
+    }
+    for name in listed.difference(files) {
+        findings.push(format!(
+            "{label}: {} lists `{name}` but {}/{name}.md does not exist",
+            index.display(),
+            dir.display()
+        ));
+    }
+}
+
+fn situation_findings(playbooks: &Path, classes: &[String]) -> Vec<String> {
+    let mut findings = Vec::new();
+    let mut subdirs: Vec<String> = std::fs::read_dir(playbooks)
+        .unwrap_or_else(|e| panic!("cannot read {}: {e}", playbooks.display()))
+        .filter_map(|entry| {
+            let entry = entry.ok()?;
+            entry.file_type().ok()?.is_dir().then_some(())?;
+            entry.file_name().to_str().map(str::to_string)
+        })
+        .collect();
+    subdirs.sort();
+
+    for sub in &subdirs {
+        if sub != SESSION_DIR && !classes.contains(sub) {
+            findings.push(format!(
+                "{sub}/: {}/{sub} is neither a route class in `ROUTE_CLASS_VALUES` \
+                 ({WORKFLOWS_RS}) nor `{SESSION_DIR}`",
+                playbooks.display()
+            ));
+        }
+    }
+
+    for class in classes {
+        let index = playbooks.join(format!("{class}.md"));
+        let dir = playbooks.join(class);
+        let has_dir = subdirs.contains(class);
+        let sectioned = std::fs::read_to_string(&index)
+            .is_ok_and(|body| situations_section(&body).is_some());
+        let listed = if has_dir || sectioned {
+            listed_situations(&index, &mut findings)
+        } else {
+            BTreeSet::new()
+        };
+        let files = if has_dir { md_stems(&dir, "") } else { BTreeSet::new() };
+        compare(class, &index, &dir, &listed, &files, &mut findings);
+    }
+
+    if subdirs.iter().any(|s| s == SESSION_DIR) {
+        let dir = playbooks.join(SESSION_DIR);
+        let index = dir.join("index.md");
+        let listed = listed_situations(&index, &mut findings);
+        let files = md_stems(&dir, "index.md");
+        compare(SESSION_DIR, &index, &dir, &listed, &files, &mut findings);
+    }
+    findings
+}
+
+fn real_classes() -> Vec<String> {
+    const_str_array(&read(WORKFLOWS_RS), "ROUTE_CLASS_VALUES")
+}
+
+struct Sandbox(PathBuf);
+
+impl Sandbox {
+    fn new(tag: &str) -> Self {
+        let dir = std::env::temp_dir()
+            .join(format!("class-playbook-parity-{}-{tag}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        Sandbox(dir)
+    }
+
+    fn write(&self, rel: &str, body: &str) {
+        let path = self.0.join(rel);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(path, body).unwrap();
+    }
+
+    fn with_clean_bugfix(tag: &str) -> Self {
+        let sandbox = Sandbox::new(tag);
+        sandbox.write(
+            "bugfix.md",
+            "# bugfix\n\n## Situations\n\n- `bug-fix` — bug, lỗi — delivers: the fix\n\nProof floor: x\n\n## Next\n\n- `not-a-situation` — x — delivers: y\n",
+        );
+        sandbox.write("bugfix/bug-fix.md", "# bug-fix\n");
+        sandbox.write("feature.md", "# feature\n");
+        sandbox
+    }
+}
+
+impl Drop for Sandbox {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.0);
+    }
+}
+
+fn assert_one_finding(findings: &[String], needle: &str) {
+    assert!(
+        findings.len() == 1 && findings[0].contains(needle),
+        "expected exactly one finding containing {needle:?}, got {findings:#?}"
+    );
+}
+
+#[test]
+fn every_situation_file_matches_its_index() {
+    let findings = situation_findings(&repo_root().join(PLAYBOOKS_DIR), &real_classes());
+    assert!(
+        findings.is_empty(),
+        "the situation playbooks disagree with their indexes:\n  {}\n\nA situation file no \
+         index lists is never routed to, and a listed name with no file sends the router to \
+         nothing. FIX: add the line - `<name>` — <triggers, English and Vietnamese> — delivers: \
+         <deliverable> under `{SITUATIONS_HEADING}` in the class index (or session/index.md), \
+         write the missing file, or delete the stray one.",
+        findings.join("\n  ")
+    );
+}
+
+#[test]
+fn a_clean_sandbox_without_session_passes() {
+    let sandbox = Sandbox::with_clean_bugfix("clean");
+    let findings = situation_findings(&sandbox.0, &real_classes());
+    assert!(findings.is_empty(), "{findings:#?}");
+}
+
+#[test]
+fn an_unlisted_situation_file_fails_the_fence() {
+    let sandbox = Sandbox::with_clean_bugfix("unlisted");
+    sandbox.write("bugfix/flaky-test.md", "# flaky\n");
+    let findings = situation_findings(&sandbox.0, &real_classes());
+    assert_one_finding(&findings, "flaky-test.md is not listed");
+}
+
+#[test]
+fn a_listed_name_with_no_file_fails_the_fence() {
+    let sandbox = Sandbox::with_clean_bugfix("missing");
+    std::fs::remove_file(sandbox.0.join("bugfix/bug-fix.md")).unwrap();
+    let findings = situation_findings(&sandbox.0, &real_classes());
+    assert_one_finding(&findings, "lists `bug-fix` but");
+}
+
+#[test]
+fn a_subdirectory_that_is_neither_a_class_nor_session_fails_the_fence() {
+    let sandbox = Sandbox::with_clean_bugfix("stray");
+    std::fs::create_dir_all(sandbox.0.join("hotfix")).unwrap();
+    let findings = situation_findings(&sandbox.0, &real_classes());
+    assert_one_finding(&findings, "hotfix is neither a route class");
+}
+
+#[test]
+fn a_malformed_situation_line_fails_the_fence() {
+    let sandbox = Sandbox::with_clean_bugfix("malformed");
+    sandbox.write("bugfix.md", "## Situations\n\n- `bug-fix` — bug — the fix\n");
+    let findings = situation_findings(&sandbox.0, &real_classes());
+    assert!(
+        findings.iter().any(|f| f.contains("is not of the form")),
+        "{findings:#?}"
+    );
+}
+
+#[test]
+fn session_files_and_session_index_agree_both_ways() {
+    let sandbox = Sandbox::with_clean_bugfix("session");
+    sandbox.write(
+        "session/index.md",
+        "## Situations\n\n- `pickup` — resume, tiếp tục — delivers: the next step\n- `pause` — pause, tạm dừng — delivers: a safe stop\n",
+    );
+    sandbox.write("session/pickup.md", "# pickup\n");
+    sandbox.write("session/orphan.md", "# orphan\n");
+    let findings = situation_findings(&sandbox.0, &real_classes());
+    assert_eq!(findings.len(), 2, "{findings:#?}");
+    assert!(findings.iter().any(|f| f.contains("orphan.md is not listed")), "{findings:#?}");
+    assert!(findings.iter().any(|f| f.contains("lists `pause` but")), "{findings:#?}");
 }
