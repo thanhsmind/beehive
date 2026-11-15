@@ -142,10 +142,45 @@
     },
     {
       "path": ".claude-plugin/skills/.bee-render.json",
-      "sha256": "167158da670fa693d1c058cc4270df79e8bea5d70ed3fbfb71665e1957ea87df",
+      "sha256": "bb76e663957f0f15b9f3427c856798800c7c55d334e26ca2832f5dae0d933284",
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/.bee-render.json"
+    },
+    {
+      "path": ".claude-plugin/skills/bee-architect/LICENSE.pstack",
+      "sha256": "bc957ca6bee02792566a1a028d105e02e247c6e77cf057061674273da77b200e",
+      "mode": "644",
+      "role": "plugin_skill_claude_render",
+      "packagePath": ".claude-plugin/skills/bee-architect/LICENSE.pstack"
+    },
+    {
+      "path": ".claude-plugin/skills/bee-architect/references/design-red-flags.md",
+      "sha256": "905066f9bbac81c573c2b325be47751d2c0f9325e0a0772bd4384e82dafe9336",
+      "mode": "644",
+      "role": "plugin_skill_claude_render",
+      "packagePath": ".claude-plugin/skills/bee-architect/references/design-red-flags.md"
+    },
+    {
+      "path": ".claude-plugin/skills/bee-architect/references/rationale-template.md",
+      "sha256": "0bb4f962d6abafd0661c49dfb152c4c1a588692a3a198556f9f897c6b3d83e5e",
+      "mode": "644",
+      "role": "plugin_skill_claude_render",
+      "packagePath": ".claude-plugin/skills/bee-architect/references/rationale-template.md"
+    },
+    {
+      "path": ".claude-plugin/skills/bee-architect/references/runner-prompt.md",
+      "sha256": "f1242d7a807908d5e8c2cfd9b816054287458311f38a02d3be7d1d350334b533",
+      "mode": "644",
+      "role": "plugin_skill_claude_render",
+      "packagePath": ".claude-plugin/skills/bee-architect/references/runner-prompt.md"
+    },
+    {
+      "path": ".claude-plugin/skills/bee-architect/SKILL.md",
+      "sha256": "29d4db47084ac506fe4c1cabb6ce091f74d40b77ae6a936740cc663e26e574ad",
+      "mode": "644",
+      "role": "plugin_skill_claude_render",
+      "packagePath": ".claude-plugin/skills/bee-architect/SKILL.md"
     },
     {
       "path": ".claude-plugin/skills/bee-capturing/agents/openai.yaml",
@@ -1262,10 +1297,45 @@
     },
     {
       "path": ".codex-plugin/skills/.bee-render.json",
-      "sha256": "bef3c337da20d6d39883500a9eae52326663be8cc7efa8fe198d33d468a85714",
+      "sha256": "8ce1c912df19eda1da95139387efa40357bbdbc335c7ea36cd0df1e796367f1b",
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/.bee-render.json"
+    },
+    {
+      "path": ".codex-plugin/skills/bee-architect/LICENSE.pstack",
+      "sha256": "bc957ca6bee02792566a1a028d105e02e247c6e77cf057061674273da77b200e",
+      "mode": "644",
+      "role": "plugin_skill_codex_render",
+      "packagePath": ".codex-plugin/skills/bee-architect/LICENSE.pstack"
+    },
+    {
+      "path": ".codex-plugin/skills/bee-architect/references/design-red-flags.md",
+      "sha256": "905066f9bbac81c573c2b325be47751d2c0f9325e0a0772bd4384e82dafe9336",
+      "mode": "644",
+      "role": "plugin_skill_codex_render",
+      "packagePath": ".codex-plugin/skills/bee-architect/references/design-red-flags.md"
+    },
+    {
+      "path": ".codex-plugin/skills/bee-architect/references/rationale-template.md",
+      "sha256": "0bb4f962d6abafd0661c49dfb152c4c1a588692a3a198556f9f897c6b3d83e5e",
+      "mode": "644",
+      "role": "plugin_skill_codex_render",
+      "packagePath": ".codex-plugin/skills/bee-architect/references/rationale-template.md"
+    },
+    {
+      "path": ".codex-plugin/skills/bee-architect/references/runner-prompt.md",
+      "sha256": "f1242d7a807908d5e8c2cfd9b816054287458311f38a02d3be7d1d350334b533",
+      "mode": "644",
+      "role": "plugin_skill_codex_render",
+      "packagePath": ".codex-plugin/skills/bee-architect/references/runner-prompt.md"
+    },
+    {
+      "path": ".codex-plugin/skills/bee-architect/SKILL.md",
+      "sha256": "29d4db47084ac506fe4c1cabb6ce091f74d40b77ae6a936740cc663e26e574ad",
+      "mode": "644",
+      "role": "plugin_skill_codex_render",
+      "packagePath": ".codex-plugin/skills/bee-architect/SKILL.md"
     },
     {
       "path": ".codex-plugin/skills/bee-capturing/agents/openai.yaml",
@@ -3877,6 +3947,41 @@
       "sha256": "e79528f5491b125e966c75d7a16853d2c738b837603b55f5028a31453a7724a9",
       "mode": "644",
       "role": "distribution_tool"
+    },
+    {
+      "path": "skills/bee-architect/LICENSE.pstack",
+      "sha256": "bc957ca6bee02792566a1a028d105e02e247c6e77cf057061674273da77b200e",
+      "mode": "644",
+      "role": "plugin_skill",
+      "packagePath": "skills/bee-architect/LICENSE.pstack"
+    },
+    {
+      "path": "skills/bee-architect/references/design-red-flags.md",
+      "sha256": "905066f9bbac81c573c2b325be47751d2c0f9325e0a0772bd4384e82dafe9336",
+      "mode": "644",
+      "role": "plugin_skill",
+      "packagePath": "skills/bee-architect/references/design-red-flags.md"
+    },
+    {
+      "path": "skills/bee-architect/references/rationale-template.md",
+      "sha256": "0bb4f962d6abafd0661c49dfb152c4c1a588692a3a198556f9f897c6b3d83e5e",
+      "mode": "644",
+      "role": "plugin_skill",
+      "packagePath": "skills/bee-architect/references/rationale-template.md"
+    },
+    {
+      "path": "skills/bee-architect/references/runner-prompt.md",
+      "sha256": "f1242d7a807908d5e8c2cfd9b816054287458311f38a02d3be7d1d350334b533",
+      "mode": "644",
+      "role": "plugin_skill",
+      "packagePath": "skills/bee-architect/references/runner-prompt.md"
+    },
+    {
+      "path": "skills/bee-architect/SKILL.md",
+      "sha256": "29d4db47084ac506fe4c1cabb6ce091f74d40b77ae6a936740cc663e26e574ad",
+      "mode": "644",
+      "role": "plugin_skill",
+      "packagePath": "skills/bee-architect/SKILL.md"
     },
     {
       "path": "skills/bee-capturing/agents/openai.yaml",

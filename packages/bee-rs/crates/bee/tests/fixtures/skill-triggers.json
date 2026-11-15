@@ -138,5 +138,13 @@
   {"brief": "There is no knowledge bundle here at all — set one up from scratch.", "expect": ["bee-knowledge-setup"], "near": "bee-knowledge-upkeep"},
   {"brief": "Run the periodic pass over the existing knowledge base after this release.", "expect": ["bee-knowledge-upkeep"]},
   {"brief": "We just agreed the retry cap lives in the loop — record that decision now.", "expect": ["bee-capturing"], "near": "bee-knowledge-upkeep"},
-  {"brief": "Find the dead code and stale docs in this repo and clean them up.", "expect": ["bee-grooming"], "near": "bee-knowledge-upkeep"}
+  {"brief": "Find the dead code and stale docs in this repo and clean them up.", "expect": ["bee-grooming"], "near": "bee-knowledge-upkeep"},
+
+  {"brief": "Before any code, sketch the types, signatures and module layout for the new billing engine.", "expect": ["bee-architect"]},
+  {"brief": "Thiết kế trước cấu trúc module và chữ ký hàm cho tính năng đồng bộ dữ liệu, rồi mới viết mã.", "expect": ["bee-architect"]},
+  {"brief": "Design this twice: give me two structurally different shapes for the plugin API and pick one.", "expect": ["bee-architect"]},
+  {"brief": "Jumping straight to code would lock in the wrong shape here — draw up the interfaces first.", "expect": ["bee-architect"]},
+  {"brief": "The design is approved — break it into cells and pick the lane for each.", "expect": ["bee-planning"], "near": "bee-architect"},
+  {"brief": "Lock the product decisions for the notification settings before anyone designs anything.", "expect": ["bee-shaping"], "near": "bee-architect"},
+  {"brief": "Giải thích cho tôi cách module thanh toán hiện tại chạy từ đầu đến cuối.", "expect": ["bee-how"], "near": "bee-architect"}
 ]

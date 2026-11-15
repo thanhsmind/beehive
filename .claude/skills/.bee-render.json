@@ -3,6 +3,10 @@
   "target_runtime": "claude",
   "skills": [
     {
+      "name": "bee-architect",
+      "sha256": "aad1294955c0e9d7140fdd6ea00bb732cefc5a22df9c1906af5330585f49b7a7"
+    },
+    {
       "name": "bee-capturing",
       "sha256": "31449bf5ecb2f35b9d5154a628483752f2d359c51868d112d7965d22e447f684"
     },
