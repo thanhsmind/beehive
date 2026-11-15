@@ -895,6 +895,7 @@
     "contract:cited-claims-stop-check",
     "contract:release-2-106-0-check",
     "citations",
-    "contract:decision-concept-links"
+    "contract:decision-concept-links",
+    "contract:clippy-in-test"
   ]
 }
