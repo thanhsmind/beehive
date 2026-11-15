@@ -70,6 +70,9 @@ exactly one writer; owners publish facts, readers aggregate at read time.
 - `units.tsv` has one row per unit: id, track, state, branch, head SHA, brief
   path. Update rows in place. A unit is a bee cell, and the cell record stays
   the source of truth for its claim and cap.
+- `inbox/` holds one completion pointer file per finished unit, written by that
+  unit's owner and read and cleared only by the coordinator at a drain, so a
+  burst of completions never contends for one file.
 - `gates.md` parks owner gates (question, options, default on no answer), so a
   completion flood cannot wipe a pending question.
 - `decisions.tsv` is the decision trail.
@@ -166,7 +169,7 @@ fresh with consolidated scope.
 
 #### Queue and drain
 
-- On a completion, record the pointer in the program folder (agent, unit,
+- On a completion, record the pointer in `inbox/` (agent, unit,
   status, report path) and return to what you were doing. Never deep-review
   inline; a completion that needs review becomes a verifier unit. Never review
   a diff inside a drain.

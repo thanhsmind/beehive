@@ -47,3 +47,4 @@ judgment with reasons, and push back when the premise is wrong, because
 agreement that hides a false premise is the costliest answer.
 
 Proof line: the account's anchors, each one opened or run.
+Proof floor: the cap refuses a result weaker than this class's floor and names it; the table is the cap's own (`bee cells finish --help`).

@@ -22,16 +22,16 @@ verification, countersigns and audits. A unit is one cell in its own worktree.
    build, self-proof on the real artifact (the project's `verify-app` skill, or
    the real interface), skeptical triage of every review comment per
    `babysit`, a pass that strips the comments the diff added, because bee
-   writes no comment in code, and a rebase onto current main, then `babysit` to
-   green. The rebase always precedes babysit and never waits for drift or
-   conflicts. Every owner keeps a decision trail under
+   writes no comment in code, then `babysit` to green. An owner never rebases:
+   a conflict or drift against main goes to the merger as a cell, per
+   `orchestrate` § Merge safety. Every owner keeps a decision trail under
    `docs/history/<feature>/` and returns it with its report. Owners push their
    own branch and never merge, because exactly one merger runs `bee worktree
    merge` and step 5 gates it.
 3. **Run owners in true parallel and never chain them.** Many owners at once
    when units are self-contained: one writer per branch, disjoint files
    (`bee-principle-separate-before-serializing-shared-state`), cross-unit drift
-   absorbed by rebase. Only genuinely overlapping work serializes. Self-contained
+   absorbed by the merger. Only genuinely overlapping work serializes. Self-contained
    units branch straight off main, and sequenced work is merge-then-branch. One
    exception: an owner that must split a genuinely dependent change may hold a
    short private chain of its own branches.
@@ -50,7 +50,8 @@ verification, countersigns and audits. A unit is one cell in its own worktree.
    run by the root, without asking, as `uat_stop = "close"` already does. Merge
    only from a head that contains current main
    (`git merge-base --is-ancestor main <head>`), because the verdict pins that
-   SHA. If main moves again before the merge, `shipping` step 3 governs
+   SHA. A head that does not is a cell for the merger, never an owner's rebase.
+   If main moves again before the merge, `shipping` step 3 governs
    re-verification: a new head voids the verdict unless its `git patch-id` is
    unchanged. The owner's full-autonomy grant plus the root's clean verdict is
    the merge authorization that `babysit` alone never has. The owner picks up
@@ -68,7 +69,8 @@ verification, countersigns and audits. A unit is one cell in its own worktree.
    `git show main:skills/bee-planning/playbooks/session/autopilot-full.md`,
    then re-read the exit condition from step 1. Audit the operation against
    both. Fix drift during that tick and treat it as urgent. Probe each owner
-   read-only: the cell records, `git log` and the worktree list. Never resume
+   read-only: the cell records, `git log` and the worktree list, and collect
+   each owner's decision trail. Never resume
    an agent to ask how it is, because a resume restarts an idle agent. Count
    only side effects as progress: commits, pushes, PR or check deltas and
    reports. Treat a lane that passes its expected runtime without a side effect

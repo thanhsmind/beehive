@@ -53,9 +53,9 @@ chain lands as a whole.
    records it in the decision trail. Nobody else reorders it, because two
    writers on the order produce a chain neither of them can explain.
 7. **Absorb drift at the root, then re-verify what moved.** The root absorbs
-   movement of main by having each owner rebase its own branch; when a rebase
-   surfaces conflicts in an owner's files, that owner fixes its own slice. A
-   rebase rewrites every SHA above it and voids the verdicts at the old SHAs.
+   movement of main through the merger: owners never rebase, and a conflict
+   goes to the merger as a cell, per `orchestrate` § Merge safety. A rebase
+   rewrites every SHA above it and voids the verdicts at the old SHAs.
    Compare `git patch-id` at each verdict SHA against the new head. Anything that
    actually drifted goes back through step 4 before delivery. The countersign
    rule is unchanged from `autopilot-full`: a genuinely new pin raises a stop

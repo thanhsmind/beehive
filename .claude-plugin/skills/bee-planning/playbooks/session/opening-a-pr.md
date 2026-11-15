@@ -25,7 +25,8 @@ close` are the way it lands. This playbook is what you do inside that path.
 3. **Write the PR title, PR description and commit body with
    `bee-technical-writing`, then `bee-unslop`.** That skill holds the title
    shape, the section order and the layers; this playbook does not restate them,
-   so the two cannot drift apart. Use one word for each action, keep articles,
+   so the two cannot drift apart. Attach a video or a screenshot when it proves a
+   claim, and leave out `## Summary` and `## Test plan` boilerplate. Use one word for each action, keep articles,
    and avoid `-ing` when a plain verb works, because a reviewer reads a
    description once and an ambiguous word costs a round trip. A commit body does
    not restate its subject. Write no comment in the code you are about to put up

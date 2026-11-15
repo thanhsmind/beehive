@@ -51,10 +51,13 @@ Source `playbooks/babysit.md`, written to
 Tool swaps:
 
 - The `watch-pr` script and its JSON verdicts became
-  `gh pr view <n> --json mergeStateStatus,reviewDecision,statusCheckRollup` and
-  `gh pr checks <n> --watch`, with the same rule: trust GitHub's merge state,
-  not a hand-assembled check list. The review-comment text stays untrusted
-  data.
+  `gh pr view <n> --json statusCheckRollup,reviewDecision` and
+  `gh pr checks <n> --watch`. Decision `b25486e3` replaced the first port's
+  rule to wait on GitHub's `CLEAN` merge state: bee keeps PRs drafts, and a
+  draft never reads `CLEAN`, so a `drive` babysit would wait forever. Ready now
+  means every required check in the rollup is green and the review decision is
+  not pending, and the landing is `bee worktree merge`. The review-comment text
+  stays untrusted data.
 - "Run `drive` and `background` under `/loop` in dynamic mode" became "work that
   must outlive the session hands the wait to `bee-herding`"; the "never add a
   second sleep loop" rule stays.
@@ -70,7 +73,9 @@ Tool swaps:
   "Never mutate stack topology" became "never rewrite history from inside a
   babysit": no rebase, no force-push, no merge of one unit's branch into
   another. The sanctioned follow-up when the owning unit has merged became a
-  new unit branched from current main.
+  new unit branched from current main. A conflict or a stale base is no longer
+  reported to the owner for a rebase: it is filed as a cell for the merger
+  (`b25486e3`, `orchestrate` § Merge safety).
 - "One babysitter per stack" became "per frontier", with the check named: an
   open owner session, a herding worker on that worktree.
 - `git merge-base --is-ancestor main HEAD` kept as the stale-base test.
@@ -80,9 +85,17 @@ Dropped steps and clauses:
 - The queued-mode terminals (`WAITING` with reason `merge-queue`, `ADVANCE`,
   `COMPLETE`): they are the watcher script's output states and bee has no
   merge queue. The frozen queue list and its one sanctioned revision stayed.
-- "Never a job retry, because a retry reuses the original ref snapshot" in
-  step 7: it describes the pstack CI vendor's retry. The one-retry limit and the
-  reclassify-on-second-failure rule stayed.
+- "Rearm with the corrected snapshot; the follow-up merges last": the follow-up
+  now branches off main as its own unit, so it no longer sits at the top of a
+  stack and "merges last" has no meaning.
+- The sentence "Replaces Cursor's built-in babysit skill, do not route there":
+  a Cursor routing hint with no bee meaning.
+
+Restored (`b25486e3`): "never a job retry, because a retry reuses the original
+ref snapshot" in step 7. The first port dropped it as vendor-specific, but a
+GitHub Actions re-run of failed jobs also reuses the original commit and merge
+ref, so the reason holds. Step 7 now says one fresh run on a fresh ref, never a
+retry of the failed jobs, with the pstack reason.
 - The four-column stack-status table in the Reply.
 - The warning about a stacked PR merging into a parent with no required checks
   when merge-when-ready is armed: Graphite and merge-when-ready have no bee
@@ -129,6 +142,11 @@ Dropped steps and clauses:
 - The `gt submit --stack` and `gt sync` prohibitions: replaced by the
   touch-nothing rule, since bee's merge is a synchronous verb and has no queue
   to drain.
+- The trigger "enable merge when ready": it names Graphite's merge-when-ready,
+  which bee does not have, and the index keeps "land the stack" and "ship it".
+- "Independent work gets re-parented onto trunk and shipped on its own": bee
+  units branch off main and are not re-parented, so independent work now waits
+  for its own pass through step 1.
 
 Kept: the contiguous-run-from-the-bottom rule, the ceiling report, the
 patch-id re-check and its twenty-one-stale-verdicts reason. Added (D4): the
@@ -145,16 +163,19 @@ Tool swaps:
   `bee dispatch prepare --kind cell` in its own worktree.
 - The self-proof step kept its method and lost the `prove-it-works` pointer
   (see the recurring list).
-- "Restack onto current trunk" became a rebase of the owner's own branch onto
-  main; the rule that it precedes babysit and never waits stayed.
+- "Restack onto current trunk" was dropped by `b25486e3`. The first port made it
+  a rebase of the owner's own branch, which contradicts `orchestrate` § Merge
+  safety: workers never rebase, and a conflict or drift against main goes to the
+  merger as a cell. The owner builds, proves and babysits, and never rebases.
+  Cross-unit drift in step 3 is absorbed by the merger, not by an owner.
 - "Squash-merges its own PR" became the root running
   `bee worktree merge --id <unit> --cleanup`. Departure recorded: bee allows
   exactly one merger and says workers never merge (see the orchestrate
   playbook, Merge safety), so the owner reports merge-ready and the root merges
   on the clean verdict. The verdict stays the merge authorization, as in pstack.
 - "Merge only from a freshly restacked head" became
-  `git merge-base --is-ancestor main <head>`; the patch-id rule in `shipping`
-  step 3 is cited unchanged.
+  `git merge-base --is-ancestor main <head>`; a head that fails it is a cell for
+  the merger, and the patch-id rule in `shipping` step 3 is cited unchanged.
 - "Arm a `/goal`" became a checkable exit condition driven as `autonomous-run`.
 - The 30-minute audit tick on a terminal `/loop`, and the cloud sleeper wake
   chain, became a fixed-interval tick armed under `bee-herding`. The interval
@@ -170,8 +191,11 @@ Dropped steps and clauses:
 
 - "Every PR is still gt-registered; the Graphite-metadata rule is about the UI":
   Graphite has no bee counterpart.
-- "Self-contained PRs branch straight off main" kept; "never stack" became
-  "never chain", with the private chain exception kept.
+- "never stack" became "never chain", with the private chain exception kept.
+  "Self-contained PRs branch straight off main" is kept, not dropped.
+
+Restored (`b25486e3`): "and collect the decision trails" in the step 6 audit
+tick, which the first port lost.
 
 Added (D4): the merge runs on a clean verdict without asking, and the `uat`
 door of `bee close` stays the owner's.
@@ -191,9 +215,13 @@ Tool swaps:
   writer on order": the root owns the chain's order, an owner pushes only its own
   branch with `--force-with-lease` after an `ls-remote` check, and reports its
   tip and the unit it follows.
-- Step 7, `gt restack` and `gt sync` by the root, became each owner rebasing its
-  own branch; conflicts in an owner's files stay with that owner. The patch-id
+- Step 7, `gt restack` and `gt sync` by the root, became absorbing drift through
+  the merger: owners never rebase, and a conflict goes to the merger as a cell
+  (`b25486e3`; the first port had each owner rebase its own branch). The patch-id
   comparison and the countersign rule stayed.
+- The owner loop's self-proof reads "on the real artifact" where pstack's stack
+  playbook says "gates, CI, receipts": the port keeps the one wording of
+  autopilot-full, whose live lane is the floor.
 - "The operator reviews and lands it with her own clicks, or with
   merge-when-ready she arms herself" became step 8: the root lands the verified
   chain bottom first with `bee worktree merge`, in one pass, and stops at the
@@ -230,9 +258,10 @@ Tool swaps:
   `bee feature finish` and `bee close`.
 - Writing the title, description and commit body with `/technical-writing` and
   `/unslop` became `bee-technical-writing` then `bee-unslop`. The Conventional
-  Commits title rule, the five description sections and the no-boilerplate rule
-  are not copied: `bee-technical-writing` already holds the title shape and
-  section order, so one fact keeps one home. The "one word for each action, keep
+  Commits title rule and the five description sections are not copied:
+  `bee-technical-writing` already holds the title shape and section order, so
+  one fact keeps one home. The screenshot and no-boilerplate clauses are not in
+  that skill, so step 3 restores them (`b25486e3`). The "one word for each action, keep
   articles, avoid `-ing`" line stayed.
 - "Commit liberally, rebase into small commits" kept, with the cap's
   `cell: <id>` trailer and the rule that after the cap a fix is a new commit.
@@ -247,6 +276,9 @@ Dropped steps and clauses:
 - `/deslop` from the team-kit plugin, the `interrogate` skill (D5, slice 3
   re-adds it) and the `no-comments` skill pointer (D5, slice 3 re-adds it).
 - The "Cloud-agent PR tools default to draft, so set `draft: false`" paragraph.
+- The `git fetch && git reset --hard origin/<branch>` alternative to a worktree
+  per parallel worker: bee gives each worker its own worktree, so the reset
+  between workers is never needed.
 
 Changed to keep a locked bee rule: pstack says open every PR ready, never as a
 draft. The `ship_visibility` rule says the draft stays a draft, "a window, not a

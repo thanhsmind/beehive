@@ -169,3 +169,57 @@ Dropped steps and clauses:
 - The loop skill that arms a frontier watcher: the herding loop replaces it with
   an interval only.
 - The PR links in the closing Reply: a program lands units, not necessarily PRs.
+- The sentence "One ambitious run needing a bespoke workflow is figure-it-out"
+  in the intro: the `figure-it-out` skill has no bee skill yet (D5, slice 3
+  re-adds it with the fallback line in every index).
+- Nesting to depth 3 and the full Task schema on a nested spawn: Task-tool
+  details. `bee dispatch prepare` replaces the Task tool, and depth stays at
+  coordinator, track, worker.
+
+Decision `b25486e3` on the `inbox/` store entry: `inbox/` stays in the program
+record list as one completion-pointer file per finished unit, written by the
+unit's owner and read and cleared only by the coordinator at a drain. The first
+port dropped the entry but kept three references to "the inbox" (Roles, Close,
+Liveness), and the Queue step recorded the pointer in "the program folder"
+without naming a file; all four now name `inbox/`. The `orch inbox push` and
+`drain` commands stay dropped, since the files are written by hand.
+
+## worktree-cleanup
+
+Source `playbooks/worktree-cleanup.md` ("Worktree and simulator cleanup"),
+written to `skills/bee-planning/playbooks/session/worktree-cleanup.md`. The
+steps and the closing "no code review" sentence are kept.
+
+Tool swaps:
+
+- Step 1, `df -h /` then `scripts/worktree-audit.sh`, became `df -h /` then
+  `bee worktree prune --dry-run` from the main checkout. The script's
+  classification by size, age, merge state, uncommitted work, PR state and the
+  newest chat is narrower here: prune reports a size or the condition that keeps
+  a worktree, and the PR-state and newest-chat columns have no bee counterpart.
+- Step 3, verifying usage through subagents that read transcripts, became a
+  gather through `bee dispatch prepare --kind gather` over session records.
+- Step 3, "a pinned chat spawns arena and repro trees", became "a herded worker
+  spawns repro trees", with `arena` dropped (D5, slice 3).
+- Step 5, `git worktree remove --force`, `rm -rf` and `git worktree prune`,
+  became `bee worktree prune`, with `--older-than-days` for the age cut and a
+  `git worktree lock` as the opt-out the verb's help names.
+- "Chat" became "session" throughout, including the Reply.
+- The `principle-build-the-lever` and `principle-encode-lessons-in-structure`
+  pointers became the `bee-principle-` skills that already exist.
+
+Dropped steps and clauses:
+
+- The transcript scan note ("slow, background it") in step 1: bee has no
+  transcript scan.
+- The `.cursor/worktrees/` hand-typed-path example in step 1: an editor path.
+  The generic reason it illustrated stays.
+- The `principle-prove-it-works` pointer in step 2 and the
+  `principle-guard-the-context-window` pointer in step 3: dropped, method kept
+  inline (D5, slice 3 re-adds them).
+- The `verify-recent-chat` bucket name in step 3, and the `wip:N` and `scratch:N`
+  labels and the "Per Autonomy" pointer in step 4: bucket names of the pstack
+  audit script. The pause-on-irreversible-loss method stays.
+- The `~/Library/Application Support/Cursor` reclaimer (`state.vscdb.backup`,
+  `snapshots/roots`) in step 6: an editor cache. The three `xcrun` simulator
+  commands, DerivedData, DeviceSupport and the package caches stay.
