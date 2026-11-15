@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "cite-knowledge-first",
   "mode": "docs",
-  "phase": "exploring",
+  "phase": "idle",
   "approved_gates": {
     "context": false,
     "shape": true,
@@ -11,15 +11,10 @@
     "uat": false
   },
   "summary": "Feature \"cite-knowledge-first\" started at phase \"exploring\" (lane).",
-  "next_action": "Continue bee-exploring for \"cite-knowledge-first\" (lane).",
+  "next_action": "bee close finished \"cite-knowledge-first\" — feature is closed.",
   "created_at": "2026-11-15T14:51:59.664Z",
   "run_state": "awaiting-approval",
-  "waiting_on": {
-    "kind": "turn-end",
-    "subject": "▸ Worker đang sửa doctrine (cell ckf-1). Mình chờ kết quả.",
-    "asked_at": "2026-11-15T14:54:56.913Z",
-    "session": "1266bdf8-61aa-4b16-a19c-af0931b795e2"
-  },
+  "waiting_on": null,
   "route": {
     "class": "docs",
     "lane": "docs",
