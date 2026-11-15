@@ -2391,29 +2391,8 @@ so the next session can resume cleanly, or record a capture stub for what settle
     }
 
     #[test]
-    fn a_routed_reply_naming_no_principle_warns() {
-        let warnings = routed_reply_warnings(&orient_turn("Fixed it.", &[read_of("/p/playbooks/bugfix/a.md")], false));
-        assert_eq!(warnings.len(), 1, "{warnings:?}");
-        assert!(warnings[0].contains("agents-name-applied-principles"), "{warnings:?}");
-    }
-
-    #[test]
-    fn a_reply_naming_a_principle_slug_stays_quiet() {
-        let events = orient_turn("Applied bee-principle-red-before-green: wrote the test first.", &[], false);
-        assert!(routed_reply_warnings(&events).is_empty());
-    }
-
-    #[test]
     fn a_plain_no_principle_statement_stays_quiet() {
-        assert!(routed_reply_warnings(&orient_turn("No principle changed anything here.", &[], false)).is_empty());
         assert!(routed_reply_warnings(&orient_turn("Không có principle nào đổi quyết định.", &[], false)).is_empty());
-    }
-
-    #[test]
-    fn an_unopened_situation_warns_about_the_playbook() {
-        let warnings = routed_reply_warnings(&orient_turn("No principle applied.", &[], true));
-        assert_eq!(warnings.len(), 1, "{warnings:?}");
-        assert!(warnings[0].contains("playbooks/"), "{warnings:?}");
     }
 
     #[test]
@@ -2425,38 +2404,128 @@ so the next session can resume cleanly, or record a capture stub for what settle
     }
 
     #[test]
-    fn both_warnings_fire_together() {
-        assert_eq!(routed_reply_warnings(&orient_turn("Fixed it.", &[], true)).len(), 2);
-    }
-
-    #[test]
     fn a_turn_without_orient_class_warns_nothing() {
-        let events = claude_turn("fix the bug", &["Fixed it."]);
-        assert!(routed_reply_warnings(&events).is_empty());
         let mut other = orient_turn("Fixed it.", &[], true);
         other[1] = json!({"type":"assistant","message":{"content":[{"type":"tool_use","id":"t1","name":"Bash","input":{"command":"bee orient"}}]}});
         assert!(routed_reply_warnings(&other).is_empty());
     }
 
-    #[test]
-    fn an_orient_in_an_earlier_turn_warns_nothing() {
-        let mut events = orient_turn("Fixed it.", &[], true);
-        events.extend(claude_turn("now rename it", &["Renamed."]));
-        assert!(routed_reply_warnings(&events).is_empty());
+    #[derive(Clone, Copy, Debug)]
+    enum Shape {
+        Claude,
+        Codex,
     }
 
-    #[test]
-    fn codex_shaped_orient_turn_warns() {
-        let out = "Principles (class=bugfix) — x\nsituation: .agents/skills/bee-planning/playbooks/bugfix/a.md — x\n";
-        let events = vec![
-            json!({"type":"event_msg","payload":{"type":"task_started"}}),
-            json!({"type":"response_item","payload":{"type":"function_call","name":"shell","call_id":"c1","arguments":"{\"command\":[\"bash\",\"-lc\",\"bee orient --class bugfix\"]}"}}),
-            json!({"type":"response_item","payload":{"type":"function_call_output","call_id":"c1","output":out}}),
-            json!({"type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"Fixed it."}]}}),
+    const SHAPES: [Shape; 2] = [Shape::Claude, Shape::Codex];
+    const BUG_FIX_PLAYBOOK: &str = ".claude/skills/bee-planning/playbooks/bugfix/bug-fix.md";
+    const PRINCIPLE_RULE: &str = "agents-name-applied-principles";
+    const PLAYBOOK_TEXT: &str = "never opened a playbooks/ file";
+
+    fn user_message(shape: Shape, text: &str) -> Value {
+        match shape {
+            Shape::Claude => json!({"type":"user","message":{"content":text}}),
+            Shape::Codex => json!({"type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":text}]}}),
+        }
+    }
+
+    fn shell_call(shape: Shape, id: &str, command: &str) -> Value {
+        match shape {
+            Shape::Claude => json!({"type":"assistant","message":{"content":[{"type":"tool_use","id":id,"name":"Bash","input":{"command":command}}]}}),
+            Shape::Codex => {
+                let arguments = json!({"command":["bash","-lc",command]}).to_string();
+                json!({"type":"response_item","payload":{"type":"function_call","name":"shell","call_id":id,"arguments":arguments}})
+            }
+        }
+    }
+
+    fn call_output(shape: Shape, id: &str, text: &str) -> Value {
+        match shape {
+            Shape::Claude => json!({"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":id,"content":text}]}}),
+            Shape::Codex => json!({"type":"response_item","payload":{"type":"function_call_output","call_id":id,"output":text}}),
+        }
+    }
+
+    fn playbook_read(shape: Shape) -> Vec<Value> {
+        let call = match shape {
+            Shape::Claude => json!({"type":"assistant","message":{"content":[{"type":"tool_use","id":"r1","name":"Read","input":{"file_path":format!("/repo/{BUG_FIX_PLAYBOOK}")}}]}}),
+            Shape::Codex => shell_call(shape, "r1", &format!("sed -n '1,200p' {BUG_FIX_PLAYBOOK}")),
+        };
+        vec![call, call_output(shape, "r1", "# Bug fix\n1. Reproduce the bug.")]
+    }
+
+    fn assistant_reply(shape: Shape, text: &str) -> Value {
+        match shape {
+            Shape::Claude => json!({"type":"assistant","message":{"content":[{"type":"text","text":text}]}}),
+            Shape::Codex => json!({"type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":text}]}}),
+        }
+    }
+
+    fn orient_output(situation: bool) -> String {
+        let mut out = String::from(
+            "Route: bugfix\nPrinciples (class=bugfix) — name each one you apply and the decision it changed:\n  - `bee-principle-red-before-green` — x\n",
+        );
+        if situation {
+            out.push_str(&format!("situation: {BUG_FIX_PLAYBOOK} — triggers: a reported bug\n"));
+        }
+        out
+    }
+
+    fn routed_turn(shape: Shape, command: &str, situation: bool, read_playbook: bool, reply: &str) -> Vec<Value> {
+        let mut events = vec![
+            user_message(shape, "fix the bug"),
+            shell_call(shape, "t1", command),
+            call_output(shape, "t1", &orient_output(situation)),
         ];
-        assert_eq!(routed_reply_warnings(&events).len(), 2);
+        if read_playbook {
+            events.extend(playbook_read(shape));
+        }
+        events.push(assistant_reply(shape, reply));
+        events
     }
 
+    struct RoutedCase {
+        name: &'static str,
+        events: Vec<Value>,
+        principle_warning: bool,
+        playbook_warning: bool,
+    }
+
+    fn routed_cases(shape: Shape) -> Vec<RoutedCase> {
+        let orient = "bee orient --class bugfix";
+        let slug = "Fixed it. bee-principle-red-before-green: wrote the failing test before the fix.";
+        let case = |name, events, principle_warning, playbook_warning| RoutedCase { name, events, principle_warning, playbook_warning };
+        let mut earlier = routed_turn(shape, orient, true, false, "Fixed it.");
+        earlier.push(user_message(shape, "now rename it"));
+        earlier.push(assistant_reply(shape, "Renamed."));
+        vec![
+            case("principles, no slug", routed_turn(shape, orient, false, false, "Fixed the off-by-one."), true, false),
+            case("principles, slug", routed_turn(shape, orient, false, false, slug), false, false),
+            case("principles, none changed", routed_turn(shape, orient, false, false, "Fixed it. No principle changed anything."), false, false),
+            case("situation, playbook read", routed_turn(shape, orient, true, true, slug), false, false),
+            case("situation, no playbook", routed_turn(shape, orient, true, false, slug), false, true),
+            case("situation, no playbook, no slug", routed_turn(shape, orient, true, false, "Fixed it."), true, true),
+            case("orient in an earlier turn", earlier, false, false),
+            case("no orient", routed_turn(shape, "cargo test", true, false, "Fixed it."), false, false),
+        ]
+    }
+
+    fn check_warnings(shape: Shape, case: &RoutedCase, out: &str) {
+        let label = format!("{shape:?} / {}", case.name);
+        assert_eq!(out.contains(PRINCIPLE_RULE), case.principle_warning, "{label}: {out}");
+        assert_eq!(out.contains(PLAYBOOK_TEXT), case.playbook_warning, "{label}: {out}");
+    }
+
+    #[test]
+    fn routed_reply_warnings_match_each_claude_and_codex_fixture() {
+        for shape in SHAPES {
+            for case in routed_cases(shape) {
+                let warnings = routed_reply_warnings(&case.events);
+                let expected = usize::from(case.principle_warning) + usize::from(case.playbook_warning);
+                assert_eq!(warnings.len(), expected, "{shape:?} / {}: {warnings:?}", case.name);
+                check_warnings(shape, &case, &warnings.join("\n"));
+            }
+        }
+    }
     #[cfg(unix)]
     fn stdout_of(f: impl FnOnce()) -> String {
         use std::os::fd::AsRawFd;
@@ -2515,11 +2584,11 @@ so the next session can resume cleanly, or record a capture stub for what settle
         assert_eq!(result, Ok(()));
         assert!(out.contains("agents-verify-before-agreeing"), "{out}");
         assert!(!out.contains("\"decision\":\"block\""), "{out}");
-    
+    }
 
     #[cfg(unix)]
     #[test]
-    fn stop_hook_output_carries_the_routed_reply_warnings() {
+    fn stop_hook_carries_routed_reply_warnings_and_never_blocks() {
         let _perf_guard = lock_perf_env();
         let _transcript_guard = lock_transcript_env();
         let perf = tempfile::tempdir().unwrap();
@@ -2532,33 +2601,33 @@ so the next session can resume cleanly, or record a capture stub for what settle
         let root = root_canon.as_path();
         write_json_file(&root.join(".bee").join("config.json"), &json!({}));
         write_json_file(&root.join(".bee").join("state.json"), &json!({"phase": "idle"}));
-        write_transcript(
-            config.path(),
-            root,
-            "s-1",
-            &[
-                r#"{"type":"user","message":{"content":"fix the bug"}}"#,
-                r#"{"type":"assistant","message":{"content":[{"type":"tool_use","id":"t1","name":"Bash","input":{"command":"bee orient --class bugfix"}}]}}"#,
-                r#"{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"t1","content":"Principles (class=bugfix) — x\nsituation: skills/bee-planning/playbooks/bugfix/a.md — x"}]}}"#,
-                r#"{"type":"assistant","message":{"content":[{"type":"text","text":"Fixed it."}]}}"#,
-            ],
-        );
-        let stdin = serde_json::to_string(&json!({
-            "hook_event_name": "Stop",
-            "cwd": root.to_string_lossy(),
-            "session_id": "s-1",
-        }))
-        .unwrap();
 
-        let mut result = Err(());
-        let out = stdout_of(|| result = run_inner(&[], &stdin));
+        let mut runs = Vec::new();
+        for shape in SHAPES {
+            for (i, case) in routed_cases(shape).into_iter().enumerate() {
+                let session = format!("s-{shape:?}-{i}");
+                let lines: Vec<String> = case.events.iter().map(Value::to_string).collect();
+                let lines: Vec<&str> = lines.iter().map(String::as_str).collect();
+                write_transcript(config.path(), root, &session, &lines);
+                let stdin = serde_json::to_string(&json!({
+                    "hook_event_name": "Stop",
+                    "cwd": root.to_string_lossy(),
+                    "session_id": session,
+                }))
+                .unwrap();
+                let mut result = Err(());
+                let out = stdout_of(|| result = run_inner(&[], &stdin));
+                runs.push((shape, case, result, out));
+            }
+        }
 
         unsafe { std::env::remove_var("BEEHIVE_PERF_DIR") };
         unsafe { std::env::remove_var("CLAUDE_CONFIG_DIR") };
 
-        assert_eq!(result, Ok(()));
-        assert!(out.contains("agents-name-applied-principles"), "{out}");
-        assert!(out.contains("never opened a playbooks/ file"), "{out}");
-        assert!(!out.contains("\"decision\":\"block\""), "{out}");
+        assert_eq!(runs.len(), 16);
+        for (shape, case, result, out) in &runs {
+            assert_eq!(*result, Ok(()), "{shape:?} / {}", case.name);
+            assert!(!out.contains("\"decision\":\"block\""), "{shape:?} / {}: {out}", case.name);
+            check_warnings(*shape, case, out);
+        }
     }
-}
