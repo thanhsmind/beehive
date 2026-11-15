@@ -1,0 +1,141 @@
+{
+  "id": "mmd-2",
+  "feature": "monorepo-manifest-detect",
+  "title": "Test nested manifest detection",
+  "lane": "small",
+  "role": "test",
+  "deps": [
+    "mmd-1"
+  ],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- onboard::notices",
+  "must_haves": {
+    "truths": [
+      "a nested packages/app/Cargo.toml gives cargo clippy --manifest-path packages/app/Cargo.toml -- -D warnings",
+      "a root manifest beats a nested one",
+      "a manifest three directories down or under node_modules, target or a hidden directory is not found",
+      "nested go.mod gives go -C <dir> test ./... from detect_commands",
+      "commands_notices names the nested clippy command when commands.test lacks clippy"
+    ]
+  },
+  "decisions": [
+    "641b2eb3-79a0-4aa8-bcb0-956dbbfdadc5",
+    "ac0a62df-abf0-47e6-bb1d-c7055a1c9cb2",
+    "2b3c81e2-7531-4728-9efb-0a2eba4cff58"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/onboard/notices.rs"
+  ],
+  "read_first": [
+    "docs/history/monorepo-manifest-detect/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/onboard/notices.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Verify the mmd-1 commit against CONTEXT.md D1 and D2, then add tests to the tests module of packages/bee-rs/crates/bee/src/onboard/notices.rs that check every clause of contract nested-manifest-detect (decision 641b2eb3). Test names carry static_check (trust-layers C1) or nested_manifest. Use temp-dir repos and the existing static_check_repo helper where it fits. Assert observable output (command, source) only. If mmd-1 breaks the contract, return BLOCKED with the failing output instead of changing the production code. No code comments. Proof: the verify command; quote the counts and name the new tests.",
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "mmd-2-worker",
+    "outcome": "mmd-1 matches D1/D2; added 6 nested-manifest contract tests in onboard::notices, 44/44 green, mutation-checked red; commit a23054745a35fa80629d67b12989c69907ed1f3d",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/onboard/notices.rs"
+    ],
+    "deviations": [
+      "sync-ack: Test-only change; mmd-1 already synced host-project-artifacts.md for the detector behavior, and no concept describes these tests"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-15T15:28:38.209Z",
+    "behavior_change": false,
+    "verification_evidence": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- onboard::notices — green:unit — test-only change in the notices tests module; 44 passed 0 failed",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "542c65ba-d0f1-433f-bdc0-b1f702334e00",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- onboard::notices",
+    "claimed_at": "2026-11-15T15:22:13.638Z",
+    "knowledge_delta": [],
+    "sync_ack": "Test-only change; mmd-1 already synced host-project-artifacts.md for the detector behavior, and no concept describes these tests",
+    "no_mistakes": true,
+    "no_knowledge_used": true,
+    "principles_used": [
+      {
+        "slug": "bee-principle-red-before-green",
+        "changed": "mutated MANIFEST_MAX_DEPTH to 3 and 0 to show every new test can fail"
+      },
+      {
+        "slug": "bee-principle-test-behavior-not-structure",
+        "changed": "tests assert command/source output only, never find_manifests directly"
+      },
+      {
+        "slug": "bee-principle-verify-before-reporting",
+        "changed": "read the mmd-1 diff against D1/D2 before writing tests; found no break"
+      }
+    ],
+    "report": {
+      "outcome": "mmd-1 matches D1/D2; added 6 nested-manifest contract tests in onboard::notices, 44/44 green, mutation-checked red; commit a23054745a35fa80629d67b12989c69907ed1f3d",
+      "commit": "a23054745a35fa80629d67b12989c69907ed1f3d",
+      "files": [
+        "packages/bee-rs/crates/bee/src/onboard/notices.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- onboard::notices — green:unit — PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- onboard::notices — green:unit — test-only change in the notices tests module; 44 passed 0 failed",
+      "deviations": [],
+      "knowledge_used": [],
+      "principles_used": [
+        "bee-principle-red-before-green — mutated MANIFEST_MAX_DEPTH to 3 and 0 to show every new test can fail",
+        "bee-principle-test-behavior-not-structure — tests assert command/source output only, never find_manifests directly",
+        "bee-principle-verify-before-reporting — read the mmd-1 diff against D1/D2 before writing tests; found no break"
+      ],
+      "patch_id": "34d7b9dd073274bfd6361688bb31016fc7676e2f"
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "a nested packages/app/Cargo.toml gives cargo clippy --manifest-path packages/app/Cargo.toml -- -D warnings",
+            "artifact": "packages/bee-rs/crates/bee/src/onboard/notices.rs"
+          },
+          {
+            "requirement": "a root manifest beats a nested one",
+            "artifact": "packages/bee-rs/crates/bee/src/onboard/notices.rs"
+          },
+          {
+            "requirement": "a manifest three directories down or under node_modules, target or a hidden directory is not found",
+            "artifact": "packages/bee-rs/crates/bee/src/onboard/notices.rs"
+          },
+          {
+            "requirement": "nested go.mod gives go -C <dir> test ./... from detect_commands",
+            "artifact": "packages/bee-rs/crates/bee/src/onboard/notices.rs"
+          },
+          {
+            "requirement": "commands_notices names the nested clippy command when commands.test lacks clippy",
+            "artifact": "packages/bee-rs/crates/bee/src/onboard/notices.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/onboard/notices.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/onboard/notices.rs"
+          }
+        ],
+        "recorded_at": "2026-11-15T15:32:14.438Z",
+        "recorded_by": "542c65ba-d0f1-433f-bdc0-b1f702334e00",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": {
+    "new": 63112,
+    "cached": 943173,
+    "total": 1006285,
+    "models": {
+      "claude-opus-5-5": {
+        "new": 63112,
+        "cached": 943173,
+        "total": 1006285
+      }
+    },
+    "jobs": [
+      "job-1794756139282-3973292-1"
+    ]
+  }
+}

@@ -2318,5 +2318,10 @@
     "capped": 2,
     "dropped": 0,
     "archived_at": "2026-11-15T15:32:11.356Z"
+  },
+  "monorepo-manifest-detect": {
+    "capped": 2,
+    "dropped": 0,
+    "archived_at": "2026-11-15T15:32:51.910Z"
   }
 }

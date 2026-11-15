@@ -1,0 +1,132 @@
+{
+  "id": "mmd-1",
+  "feature": "monorepo-manifest-detect",
+  "title": "Find convention manifests up to two directories down",
+  "lane": "small",
+  "role": "code",
+  "deps": [],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- onboard::notices",
+  "must_haves": {
+    "truths": [
+      "detect_static_checks on the beehive repo root returns cargo clippy --manifest-path packages/bee-rs/Cargo.toml -- -D warnings with source packages/bee-rs/Cargo.toml",
+      "a repo with a root Cargo.toml still gets cargo clippy -- -D warnings with source Cargo.toml",
+      "every existing onboard::notices test stays green"
+    ]
+  },
+  "decisions": [
+    "ac0a62df-abf0-47e6-bb1d-c7055a1c9cb2",
+    "2b3c81e2-7531-4728-9efb-0a2eba4cff58"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/onboard/notices.rs",
+    "docs/knowledge/areas/onboarding/host-project-artifacts.md"
+  ],
+  "read_first": [
+    "docs/history/monorepo-manifest-detect/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/onboard/notices.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/onboarding/host-project-artifacts.md"
+  ],
+  "action": "Implement CONTEXT.md D1 and D2 in packages/bee-rs/crates/bee/src/onboard/notices.rs. Add one private finder that returns the candidate manifest paths relative to root for a file name (or a suffix such as .csproj): root first, then depth 1, then depth 2, each depth sorted by relative path, skipping directories whose name starts with '.' and node_modules, target, vendor, dist, build. In static_check_for, take the first candidate whose text satisfies the table (empty table = any) and build the command from its location: root keeps the exact current text; nested gives cargo clippy --manifest-path <rel> -- -D warnings, ruff check <dir>, go -C <dir> vet ./..., mypy <dir>; source = rel path; marker unchanged. In detect_commands conventions: pyproject -> pytest or pytest <dir>, csproj -> dotnet test (root, source = file name as today) or dotnet test <rel csproj>, go.mod -> go test ./... or go -C <dir> test ./...; source = rel path. Use forward slashes in rel paths. package.json, Makefile, composer.json stay root-only. Sync docs/knowledge/areas/onboarding/host-project-artifacts.md: the sentence that says detect_static_checks reads the project's own root files now says root then up to two directories down, cite docs/history/monorepo-manifest-detect/CONTEXT.md D1/D2 (never raw ids). Run bee knowledge check. No code comments. Do not add new tests; mmd-2 owns them. Proof: the verify command; quote the counts.",
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "mmd-1-worker",
+    "outcome": "Convention manifests now found at root then up to two directories down; nested commands name their location. Commit 4c8c4abd9",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/onboard/notices.rs",
+      "docs/knowledge/areas/onboarding/host-project-artifacts.md"
+    ],
+    "deviations": [
+      "sync-ack: The owning concept host-project-artifacts.md is updated in the cell commit; the other anchoring concepts describe other parts of notices.rs (design packs, protocol, vendoring) and the detector change does not touch them"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-15T15:21:58.875Z",
+    "behavior_change": false,
+    "verification_evidence": "cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml — green:unit — 5208 passed 0 failed in bee bin; onboard::notices 38 passed",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "542c65ba-d0f1-433f-bdc0-b1f702334e00",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- onboard::notices",
+    "claimed_at": "2026-11-15T15:16:17.557Z",
+    "knowledge_delta": [
+      "docs/knowledge/areas/onboarding/host-project-artifacts.md"
+    ],
+    "sync_ack": "The owning concept host-project-artifacts.md is updated in the cell commit; the other anchoring concepts describe other parts of notices.rs (design packs, protocol, vendoring) and the detector change does not touch them",
+    "no_mistakes": true,
+    "principles_used": [
+      {
+        "slug": "bee-principle-single-source-of-truth",
+        "changed": "nested command text is derived from one template per convention, not a second table"
+      },
+      {
+        "slug": "bee-principle-laziness-protocol",
+        "changed": "replaced first_csproj with one shared finder instead of adding a parallel walker"
+      }
+    ],
+    "report": {
+      "outcome": "Convention manifests now found at root then up to two directories down; nested commands name their location. Commit 4c8c4abd9",
+      "commit": "4c8c4abd932dc3feed9c7a274b184cb5c30b3eb2",
+      "files": [
+        "packages/bee-rs/crates/bee/src/onboard/notices.rs",
+        "docs/knowledge/areas/onboarding/host-project-artifacts.md"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- onboard::notices — green:unit — cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml — green:unit — 5208 passed 0 failed in bee bin; onboard::notices 38 passed",
+      "deviations": [],
+      "principles_used": [
+        "bee-principle-single-source-of-truth — nested command text is derived from one template per convention, not a second table",
+        "bee-principle-laziness-protocol — replaced first_csproj with one shared finder instead of adding a parallel walker"
+      ],
+      "patch_id": "eb5f7c2d77d32a0db595bd85ff39ebc6ba44231d"
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "detect_static_checks on the beehive repo root returns cargo clippy --manifest-path packages/bee-rs/Cargo.toml -- -D warnings with source packages/bee-rs/Cargo.toml",
+            "artifact": "packages/bee-rs/crates/bee/src/onboard/notices.rs"
+          },
+          {
+            "requirement": "a repo with a root Cargo.toml still gets cargo clippy -- -D warnings with source Cargo.toml",
+            "artifact": "packages/bee-rs/crates/bee/src/onboard/notices.rs"
+          },
+          {
+            "requirement": "every existing onboard::notices test stays green",
+            "artifact": "packages/bee-rs/crates/bee/src/onboard/notices.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/onboard/notices.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/onboard/notices.rs"
+          },
+          {
+            "requirement": "docs/knowledge/areas/onboarding/host-project-artifacts.md",
+            "artifact": "docs/knowledge/areas/onboarding/host-project-artifacts.md"
+          }
+        ],
+        "recorded_at": "2026-11-15T15:32:14.428Z",
+        "recorded_by": "542c65ba-d0f1-433f-bdc0-b1f702334e00",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": {
+    "new": 48682,
+    "cached": 444423,
+    "total": 493105,
+    "models": {
+      "claude-sonnet-5-5": {
+        "new": 48682,
+        "cached": 444423,
+        "total": 493105
+      }
+    },
+    "jobs": [
+      "job-1794755786245-3826011-1"
+    ]
+  }
+}
