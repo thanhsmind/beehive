@@ -894,6 +894,7 @@
     "contract:cited-claims-doctrine",
     "contract:cited-claims-stop-check",
     "contract:release-2-106-0-check",
-    "citations"
+    "citations",
+    "contract:decision-concept-links"
   ]
 }

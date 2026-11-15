@@ -539,5 +539,12 @@
         }
       ]
     }
+  },
+  "merge_ready": {
+    "since": "2026-11-15T15:28:04.162Z",
+    "branch": "wt/decision-concept-links",
+    "worktree_id": "beehive--wt--decision-concept-links",
+    "uat": "pending",
+    "blocked_by": []
   }
 }
