@@ -99,6 +99,10 @@
       "sha256": "2b52522f5168bcf933ad7b5feb4a49d68c7e97b9b26c7e58b9accbfcf4cbe171"
     },
     {
+      "name": "bee-principle-foundational-thinking",
+      "sha256": "99834f95444389504cc4faae4c5844944fabac77aca05aa80187555cc5d8f5a6"
+    },
+    {
       "name": "bee-principle-lock-the-contract",
       "sha256": "8292e4aa3ce5542fc4c542a9c6b8af2e675e1500d9bf8263c37f4ef2da2ff0fd"
     },
@@ -119,12 +123,20 @@
       "sha256": "972b58f76a6ee07ec828bc9aae75135ae64770a4b94a1c4a8eba0027768f164e"
     },
     {
+      "name": "bee-principle-outcome-oriented-execution",
+      "sha256": "f9c9e04e9b8af128c63f7a245fc2bdfda69c63025be182e6973da5d87c8121d0"
+    },
+    {
       "name": "bee-principle-record-at-the-moment-of-settlement",
       "sha256": "744ddd34ba71e8985287a31e88a22591fbfee675b2aad060213ea839a84d9f9b"
     },
     {
       "name": "bee-principle-red-before-green",
       "sha256": "15d19dde8601127fa50c3118f3364e88643777b33ccded4f332ddae714593a42"
+    },
+    {
+      "name": "bee-principle-redesign-from-first-principles",
+      "sha256": "412aa5a3af86d718f697a9b5b91c5ff0853c7ebbe2cc1f0da02fa2d16cbaa968"
     },
     {
       "name": "bee-principle-reproduce-first",

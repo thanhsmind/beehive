@@ -22,6 +22,8 @@ is about a known trade-off rather than taste.
 | A class hierarchy is bending to share behavior | Composition over Inheritance |
 | The same fact lives in two places | Single Source of Truth |
 | Code is littered with "this can't happen" checks | Make Illegal States Unrepresentable |
+| About to write logic before the core types are settled | Foundational Thinking: Data Structures First |
+| A new requirement is landing on an existing design | Redesign From First Principles |
 | Two actors write the same mutable state | One Writer for Shared State |
 | Two ids or flags of the same primitive type get swapped | Make Illegal States Unrepresentable |
 | A new internal API ships while old callers remain | Migrate Callers, Then Delete |
@@ -322,6 +324,60 @@ not a rewrite. A module split into `helper()` and `validate()` with
 their own unit tests, then merged behind one deep function: once tests
 against the merged function's interface cover the same ground, delete
 the two old unit tests the same day the replacement lands.
+
+### Foundational Thinking: Data Structures First
+
+When you are about to write logic, or choose the first types of a new area
+→ settle the data shape first. The right shape makes the code that reads and
+writes it obvious; the wrong one is rewritten around for as long as it
+lives. Define the core types early, trace every access pattern against them,
+and choose the structure that matches the dominant paths. A data-structure
+change made late is a rewrite; made early it is often a one-line diff.
+
+Two kinds of decision, two kinds of protection. A *structural* decision (the
+core types, what is shared, what runs first) protects option value: the
+right foundation keeps doors open, and over-engineering is often a
+premature structural decision that closes one. A *code-level* decision
+protects simplicity: make the structure converge on one definition rather
+than every line, since three similar statements still beat a premature
+abstraction, and explicit beats clever. Test behavior and edge cases, not
+line counts.
+
+- **Concurrency corollary.** Before two actors share state, ask what
+  happens if the other modifies it at the same moment. If the answer is not
+  "nothing", isolate them (see One Writer for Shared State).
+- **Scaffold first.** Ask of each piece of groundwork: does every later
+  phase benefit from this existing? CI, linting, test infrastructure and
+  shared types do. Sequence for option value, setup before features and
+  tests before fixes, in small single-purpose commits.
+- **One abstraction per increment.** Each increment lands a coherent
+  abstraction or deepens one that exists; a new capability is not spread
+  across its callers as special-case coordination.
+- **Subtraction comes first.** Remove dead weight before laying
+  foundations (see planning.md, Subtract before you add).
+
+### Redesign From First Principles
+
+When a new requirement lands on an existing design → do not bolt it on.
+Redesign as if the requirement had been a foundational assumption from day
+one, so the result reads like what you would have built had you known. A
+bolt-on keeps the old design intact beside a special case, and the special
+cases pile up until nobody can say what the design is.
+
+1. **Read every affected file** and hold the current design whole before
+   touching any of it.
+2. **Ask the from-scratch question.** If we were writing this now, with this
+   requirement, what would we build? The answer is the target, even where it
+   moves what already works.
+3. **Carry the change through every reference**: types, docs, examples and
+   the rationale sections, so nothing still describes the design without the
+   requirement.
+4. **Think holistically, deliver incrementally.** The redesign is one
+   picture; it lands as small steps, each a coherent state (see Split only on
+   a real dependency in planning.md for when a step needs its own phase).
+
+This is the method for keeping option value when a design changes: the cost
+of the redesign is paid once, where bolting on is paid at every later change.
 
 ## Anti-patterns to Name on Sight
 

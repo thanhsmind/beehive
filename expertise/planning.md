@@ -17,6 +17,7 @@ amount of careful coding can recover. This guide is about choosing well.
 | Ordering units; deciding what to verify first | Build order versus discovery order |
 | Sequencing an addition, refactor or rewrite | Subtract before you add |
 | A plan proposes phases, slices or expand-migrate-contract | Split only on a real dependency |
+| A planned rewrite or migration with declared phase boundaries | Outcome-oriented execution |
 | An interface is genuinely open on a standard or high-risk shape | Design it twice |
 | A discovery-order unit needs a written answer before others proceed | Spike craft |
 | Deciding how much detail later phases get | Plan the current slice; headline the rest |
@@ -191,6 +192,30 @@ step at a time. Contract: delete the old form once no caller remains. Full
 green is promised only at contract, never mid-migration. The prefactor
 mantra names the step before expand: make the change easy, then make the
 easy change.
+
+## Outcome-oriented execution
+
+For a planned rewrite or migration with explicit phase boundaries, aim at the
+intended, verifiable end state, not at keeping every intermediate state
+smooth. Holding each step fully stable usually means writing temporary
+compatibility code, and that code outlives the migration as debt. Converge
+on the target architecture and prove it at the boundaries the plan names.
+
+- **End-state integrity over transitional stability.** Breakage between
+  steps is acceptable when it is planned, scoped and reversible.
+- **Declare where breakage is acceptable.** The plan names the phases that
+  may be red and the step that must be green again; a break nobody declared
+  is a defect.
+- **Keep high-signal checks on what you are touching.** The areas the
+  migration is actively changing keep their focused tests running; the rest
+  waits for the boundary.
+- **Verify in full at the end.** The plan closes only on the full static and
+  runtime verification, never on the last step looking right.
+
+This applies only to a plan with phases that a real dependency forces (see
+Split only on a real dependency); with none, the change lands whole and the
+compiler and tests carry it. It never covers a user-facing surface another
+worktree or client depends on mid-migration.
 
 ## Spike craft
 
