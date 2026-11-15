@@ -181,50 +181,112 @@ the full regen (deps 2, 3, 4).
 
 ## Cells — current slice (preview)
 
-Slices 1 to 5 are capped. The full suite (`bee test` at `fec8793da`) went red in three orient class tests: 5186 passed, 3 failed. Their temp repo has no `skills/` tree, so orient reads the compiled-in indexes, which list situations since slice 2. The fallback behaves as designed; the tests pinned shipped text. This fix-first slice (rule agents-never-build-on-red) is one test cell, ppb-40, which gives those tests their own fixture indexes. `bee test` runs again after it caps.
+Slices 1 to 5 and the fix-first cell are capped, and `bee test` is green at `1b5370021`. The close dry run and a reread of the checker reports found rows still marked missing in two slice 4 merges: five in bee-how (ppb-31c M1 to M5) and seven in bee-why (ppb-32c). D5 asks for every pstack rule the bee skill lacks, so ppb-41 brings them in and ppb-41c checks it. `bee test` runs again before the merge.
 
-Waves: one cell.
+Waves: ppb-41, then ppb-41c.
 
 | id | title | files | deps | you see | proof |
 |---|---|---|---|---|---|
-| ppb-40 | Pin the orient class tests to their own fixture indexes | its report only | — | a report of every source step present, dropped or missing | `rg pstack-only tools — green:static — checker` |
+| ppb-41 | Close the missing rules in the bee-how and bee-why merges | `skills/bee-researching/references/trace-and-provenance.md`, `skills/bee-how/SKILL.md`, `skills/bee-why/SKILL.md`, the rendered trees, the release manifest | — | the new or fixed skill or playbook text is in bee terms and renders to every plugin tree | `cargo test — green:unit — docs port` |
+| ppb-41c | Check the bee-how and bee-why gaps are closed | its report only | ppb-41 | a report of every source step present, dropped or missing | `rg pstack-only tools — green:static — checker` |
 
 Packet (authoritative for the preview):
 
 ```json
 [
  {
-  "id": "ppb-40",
+  "id": "ppb-41",
   "feature": "pstack-playbook-port",
-  "title": "Pin the orient class tests to their own fixture indexes",
+  "title": "Close the missing rules in the bee-how and bee-why merges",
   "lane": "standard",
-  "role": "test",
+  "role": "docs",
   "deps": [],
   "decisions": [
-   "41bbba68-9de8-48b3-a9c7-ba1abfdd6410",
+   "063a21e4-bccc-46a4-8fe8-1f1f99874c72",
+   "3ac421ec-168b-4007-9976-9b6bcbe6e18a",
    "913115b3-e1f1-4004-902c-bc574fabb2f1"
   ],
   "files": [
-   "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs"
+   "skills/bee-researching/references/trace-and-provenance.md",
+   "skills/bee-how/SKILL.md",
+   "skills/bee-why/SKILL.md",
+   ".claude-plugin/skills/bee-researching/",
+   ".codex-plugin/skills/bee-researching/",
+   ".agents/skills/bee-researching/",
+   ".opencode/skills/bee-researching/",
+   ".claude-plugin/skills/bee-how/",
+   ".codex-plugin/skills/bee-how/",
+   ".agents/skills/bee-how/",
+   ".opencode/skills/bee-how/",
+   ".claude-plugin/skills/bee-why/",
+   ".codex-plugin/skills/bee-why/",
+   ".agents/skills/bee-why/",
+   ".opencode/skills/bee-why/",
+   "docs/history/codex-harness-hardening/release-manifest.json",
+   "docs/history/pstack-playbook-port/port-notes/merge-ppb-31.md",
+   "docs/history/pstack-playbook-port/port-notes/merge-ppb-32.md"
   ],
   "read_first": [
    "docs/history/pstack-playbook-port/CONTEXT.md",
    "docs/history/pstack-playbook-port/plan.md",
-   "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs",
-   "packages/bee-rs/crates/bee/src/situations.rs",
-   ".bee/logs/test-failure-test-0.log"
+   "docs/history/pstack-playbook-port/reports/ppb-31c.md",
+   "docs/history/pstack-playbook-port/reports/ppb-32c.md",
+   "skills/bee-researching/references/trace-and-provenance.md",
+   "skills/bee-how/SKILL.md",
+   "skills/bee-why/SKILL.md",
+   "/home/thanhsmind/Projects/refs/ai-skills/cursor-plugins/pstack/skills/how/SKILL.md",
+   "/home/thanhsmind/Projects/refs/ai-skills/cursor-plugins/pstack/skills/why/SKILL.md"
+  ],
+  "affects_skills": [
+   "skills/bee-researching/references/trace-and-provenance.md",
+   "skills/bee-how/SKILL.md",
+   "skills/bee-why/SKILL.md"
+  ],
+  "affects_specs": [],
+  "action": "Every row the checkers marked missing comes in, in bee's voice, in its single home (Trace and Provenance sweep live in trace-and-provenance.md; bee-how and bee-why stay doors): from ppb-31c M1 (spawn every explorer in one turn), M2 (the Flow return carries the data passed between steps), M3 (How it works is the core and the longest section), M4 (the walkthrough-before-a-change trigger in the bee-how description, under 300 characters), M5 (fan out when an inline pass finds more entry points); from ppb-32c each row marked missing (follow in-row links, reconcile one source cited by several rows, follow duplicate and reopen history, take the finalized draft, a low count may be sampling, a step in volume may be new logging, never report from a source you never confirmed exists) written tool-free. Mark each in the port notes. Run bee dev regen and commit. Bee commands you may run: cargo test, `.bee/bin/bee dev regen`, `.bee/bin/bee dev release-manifest --check`, `bee herding notify`; never `bee dispatch`.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test skill_triggers && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test pointer_integrity && .bee/bin/bee dev release-manifest --check",
+  "must_haves": {
+   "truths": [
+    "every row ppb-31c and ppb-32c marked missing is present in its bee home"
+   ],
+   "prohibitions": [
+    "No rule restated outside its single home"
+   ]
+  }
+ },
+ {
+  "id": "ppb-41c",
+  "feature": "pstack-playbook-port",
+  "title": "Check the bee-how and bee-why gaps are closed",
+  "lane": "standard",
+  "role": "test",
+  "deps": [
+   "ppb-41"
+  ],
+  "decisions": [
+   "063a21e4-bccc-46a4-8fe8-1f1f99874c72",
+   "913115b3-e1f1-4004-902c-bc574fabb2f1"
+  ],
+  "files": [
+   "docs/history/pstack-playbook-port/reports/ppb-41c.md"
+  ],
+  "read_first": [
+   "docs/history/pstack-playbook-port/CONTEXT.md",
+   "docs/history/pstack-playbook-port/plan.md",
+   "docs/history/pstack-playbook-port/reports/ppb-31c.md",
+   "docs/history/pstack-playbook-port/reports/ppb-32c.md",
+   "skills/bee-researching/references/trace-and-provenance.md"
   ],
   "affects_skills": [],
   "affects_specs": [],
-  "action": "Three tests in status_full/tests.rs went red in the full suite once slice 2 filled the class indexes: bee_orient_class_perf_json_carries_an_empty_situations_key, bee_orient_class_research_prints_the_research_playbook_and_principles_and_writes_nothing and orient_class_names_the_playbook_and_the_class_principles_and_writes_nothing. Their temp repo has no skills/ tree, so orient reads the compiled-in indexes, which now list situations. Make each test write its own skills/bee-planning/playbooks/<class>.md into the temp repo (the repo copy wins over the compiled-in one), with no Situations section where the test pins an empty list, so the tests check the contract instead of the shipped playbook text. Keep one test that pins the compiled-in fallback by asserting it lists at least one situation for a class whose shipped index has one. Bee commands you may run: cargo test and `bee herding notify`.",
-  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee status_full",
+  "action": "Check each row ppb-31c and ppb-32c marked missing against what ppb-41 wrote: present or still missing. Write docs/history/pstack-playbook-port/reports/ppb-41c.md; no other edits.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test pointer_integrity",
   "must_haves": {
    "truths": [
-    "the three tests pass and no longer depend on the shipped playbook text",
-    "a test still pins the compiled-in fallback"
+    "the report lists every previously missing row as present or still missing"
    ],
    "prohibitions": [
-    "No edit outside status_full/tests.rs"
+    "No edit outside the report file"
    ]
   }
  }
@@ -235,9 +297,9 @@ Packet (authoritative for the preview):
 
 | Cell | Happy path | Edge case | Error path |
 |---|---|---|---|
-| ppb-40 | the three tests with fixture indexes. Pass when `cargo test status_full` is green | a fixture index with no Situations section. Pass when orient prints no situation line | the compiled-in fallback. Pass when a test still sees at least one situation with no `skills/` tree |
+| ppb-41 | each previously missing row. Pass when present in Trace, Provenance sweep or the door | the bee-how description with the walkthrough trigger. Pass when it stays under 300 characters | a rule written twice. Pass when the checker finds none |
 
-The run on main and on head for changed behavior: none; this cell changes tests only.
+The run on main and on head for changed behavior: none beyond skill text.
 
 ## Open Questions
 
