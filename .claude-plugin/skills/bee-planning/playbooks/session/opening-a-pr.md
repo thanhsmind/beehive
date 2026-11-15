@@ -31,7 +31,8 @@ close` are the way it lands. This playbook is what you do inside that path.
    description once and an ambiguous word costs a round trip. A commit body does
    not restate its subject. Write no comment in the code you are about to put up
    for review, because bee's rule is that the why goes to a knowledge concept or
-   the decisions log.
+   the decisions log, and run `bee-comment-review` over the diff before review
+   to catch the ones that slipped in.
 4. **Keep the PR narrow.** Prefer five narrow features to one large one, and
    keep each ordered so a reviewer can read it bottom-up. Follow-ups branch
    from current main after the first merges; branch from main only for
@@ -57,10 +58,10 @@ close` are the way it lands. This playbook is what you do inside that path.
    when the owner asks for one after the whole program exists, because a babysit
    for each new PR stalls the build and spends checks on commits that later
    waves restart. Push back when review feedback drifts from the intent.
-8. **A worker that pushes returns the URL and nothing more.** It strips the
-   comments its diff added, returns the PR URL and does not babysit. Return to
-   the parent, because the lead owns the frontier and two agents on one PR is
-   the failure `babysit` step 3 names.
+8. **A worker that pushes returns the URL and nothing more.** It runs
+   `bee-interrogate` and `bee-comment-review` over its diff, returns the PR URL
+   and does not babysit. Return to the parent, because the lead owns the
+   frontier and two agents on one PR is the failure `babysit` step 3 names.
 
 Reply: the PR URL and its state from `gh pr view`, the commits in order, and
 what remains before the merge path runs.

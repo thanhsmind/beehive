@@ -33,9 +33,12 @@ Dropped steps:
 - The `architect` and `interrogate` fan-out before the fix: neither skill
   exists in bee yet (D5 brings them in a later slice). Step 4 keeps the
   contract rule: write down what the fix keeps when it crosses a function
-  boundary.
+  boundary. Restored (ppb-24): step 4 runs `bee-architect` first and
+  `bee-interrogate` over a contested plan, and step 3 confirms the mechanism
+  before that fan-out.
 - The `tdd` skill reference in the commit-order step: no bee counterpart yet
   (D5, a later slice). The cadence stays as the cheap-test-path rule.
+  Restored (ppb-24): step 6 points at `bee-tdd`.
 - Step 6, run Opening a PR: bee opens a draft PR on the first cap and the
   `uat` acceptance at `bee close` stays the owner's, so no playbook step opens
   the PR.

@@ -11,8 +11,8 @@ separate cell. If the cleanup reveals a missing feature or a real bug, split
 it out and ship the structural change first against the pinned contract. A
 redesign is allowed, but name it and route it to the feature class. Large or
 cross-cutting structural work, such as a migration across many call sites or a
-coordinated reshape of many subsystems, is not this playbook: it is the
-focused-to-medium change, and anything larger gets a plan of its own.
+coordinated reshape of many subsystems, is not this playbook: it belongs to
+`bee-figure-it-out`, and this playbook is the focused-to-medium change.
 
 1. Pin the behavior contract first. Run `bee-how` over the affected subsystem
    as a gather (`bee dispatch prepare --kind gather`) to learn the contract,
@@ -30,8 +30,10 @@ focused-to-medium change, and anything larger gets a plan of its own.
    delete branches or invalid states, not add indirection.
 4. Name the target shape: what the module layout, types and call graph should
    be if built today, because a move with no target is churn. If the target
-   crosses a function boundary, write down the contract it keeps before
-   dispatching, so the workers share one definition of "unchanged".
+   crosses a function boundary, run `bee-architect` for parallel design
+   exploration of the shape before the move, and write down the contract it
+   keeps before dispatching, so the workers share one definition of
+   "unchanged".
 5. Subtract first (`bee-principle-subtract-before-you-add`) — every later step
    then moves less: an early cell deletes dead weight, collapses one-caller
    wrappers, drops redundant validators and removes orphan references before

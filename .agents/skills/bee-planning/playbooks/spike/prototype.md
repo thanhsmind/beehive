@@ -53,7 +53,9 @@ a spike.
    decision, not shippable code. Record the answer with `bee decisions log`,
    naming the chosen variant and the evidence, then DELETE the spike: the
    answer outlives the code, and a kept spike gets shipped. Hand the chosen
-   direction to `playbooks/feature.md` for the real build.
+   direction to `playbooks/feature.md` for the real build, and to
+   `bee-architect` for the shape, because the sketch settled which direction,
+   not how the real code is cut.
 
 Reply: the variants explored, the evidence (screenshots for a visual decision,
 the observed output or timing for a behavioral one), tradeoffs, your

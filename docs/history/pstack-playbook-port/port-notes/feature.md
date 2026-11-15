@@ -41,12 +41,16 @@ Dropped steps and clauses:
 
 - Step 2, `architect` for parallel design exploration, and its
   `architect skipped: <reason>` line: the skill does not exist in bee yet (D5,
-  slice 3).
+  slice 3). Restored (ppb-24): step 2 runs `bee-architect` and keeps the
+  `architect skipped: <reason>` line.
 - The `arena` delegation when the implementation admits several valid shapes:
   the skill does not exist in bee yet (D5, slice 3). The single-cell delegation
-  stays.
+  stays. Restored (ppb-24): step 5 runs `bee-arena` when the implementation
+  admits several valid shapes.
 - Step 7, `interrogate` before shipping a contested design: the skill does not
-  exist in bee yet (D5, slice 3). No replacement step was written.
+  exist in bee yet (D5, slice 3). No replacement step was written. Restored
+  (ppb-24): a new step 10 runs `bee-interrogate` before shipping a contested
+  design, so landing is now step 11 and `opening-a-pr` is pointed at from it.
 - The `principle-model-the-domain` pointer in the delegation step: no bee
   principle of that name yet (D5, slice 3). Its rule stays in plain words in
   step 2, where it joins the bee "name the data shape first" step.
@@ -103,7 +107,9 @@ Tool swaps:
 - The live lanes' named model and the ten-lane fan-out "per the swarm skill"
   became lanes started through `bee dispatch prepare --kind reviewer` on the
   review role's configured model. The lane count, one box per lane, the saved
-  screenshot and the pass predicate stay.
+  screenshot and the pass predicate stay. Restored (ppb-24): the lanes are
+  fanned out per `bee-fanout`, in the plan's Verification paragraph and in the
+  merge-ready verdict box.
 - The control skill by surface (browser, CLI and TUI skills of the editor team
   kit, a native mobile skill) became the project's `verify-app` skill, or the
   real interface when the project has none.
@@ -123,7 +129,8 @@ Tool swaps:
   reference became triage of every review comment per
   `playbooks/session/babysit.md`.
 - The pre-review no-comments pass became "strip every comment the diff added
-  before review, because bee writes no comment in code".
+  before review, because bee writes no comment in code" (restored in ppb-24:
+  the box runs `bee-comment-review` over the diff).
 - Each lane's own cloud VM became its own worktree at the PR head.
 - The lane screenshot path `/tmp/swarm-<pr-id>/` became
   `/tmp/lanes-<pr-id>/`.
@@ -133,7 +140,8 @@ Tool swaps:
   the operator's. The patch-id rule now points at `playbooks/session/shipping.md`.
 - The skill reading list in Appendix D (`how`, `interrogate`,
   `show-me-your-work`) became a `bee-how` gather and the decision trail under
-  `docs/history/<feature>/`.
+  `docs/history/<feature>/` (restored in ppb-24: Appendix D names
+  `bee-interrogate` and the trail per `bee-show-me-your-work`).
 - The pronoun for the operator became "the operator" throughout.
 
 Dropped steps and clauses:
@@ -153,7 +161,7 @@ Dropped steps and clauses:
   configured model applies.
 - The `swarm` skill's own lane protocol: the skill does not exist in bee yet
   (D5, slice 3, where it returns under a bee name that does not collide with
-  `bee-swarming`).
+  `bee-swarming`). Restored (ppb-24) as `bee-fanout`.
 
 Kept from bee (D3 pointer rule): the phase-plan-versus-epic-map rule stays
 in `skills/bee-planning/references/planning-reference.md` under "Phase plan vs
@@ -164,11 +172,17 @@ Added to the pstack text: a reason on every step where pstack gave none
 (decision `61b52e96`), step 4 (the grouping rule), and a Proof line (the plan
 headings in order, from `rg -n '^#{2,3} ' <plan path>`).
 
-## Steps to re-add in slice 3
+## Steps re-added in ppb-24
 
-`architect` (feature step 2), `arena` (feature step 5), `interrogate` (feature,
-the contested-design step), `principle-model-the-domain` (feature step 2),
-`laziness-protocol` (feature step 5), `guard-the-context-window`,
-`never-block-on-the-human` and `prove-it-works` pointers, and the `swarm`
-fan-out (multi-phase-plan verification lanes) return as named steps once those
-skills and principles exist.
+Restored: `architect` (feature step 2, now `bee-architect`), `arena` (feature
+step 5, now `bee-arena`), `interrogate` (feature step 10, now
+`bee-interrogate`, which moved landing to step 11), the `swarm` fan-out
+(multi-phase-plan lanes, now `bee-fanout`), the pre-review no-comments pass
+(now `bee-comment-review`) and the Appendix D reading list (`bee-interrogate`,
+`bee-show-me-your-work`).
+
+Still waiting, because no skill of that name exists in `skills/`:
+`principle-model-the-domain` (feature step 2), `laziness-protocol` (feature step
+5), `guard-the-context-window`, `never-block-on-the-human` and `prove-it-works`
+pointers (multi-phase-plan). Each keeps its method as a plain sentence. The
+deslop pass has no bee counterpart and stays dropped.

@@ -35,22 +35,28 @@ discipline holds for a perf defect, where the evidence is the trace
    runtime evidence, not a reading of the code (`.bee/expertise/tests.md`
    ("Instrument before guessing")). When program state is unclear, add
    instrumentation or logging and read it as the code runs. Do not guess.
-   Confirm the surviving mechanism with runtime evidence before you plan the
-   fix; a design grounded on a plausible but unconfirmed cause can be
-   unanimously wrong while the real cause sits one subsystem over.
+   Confirm the surviving mechanism with runtime evidence before the
+   `bee-architect` and `bee-interrogate` fan-out of step 4; a design grounded
+   on a plausible but unconfirmed cause can be unanimously wrong while the real
+   cause sits one subsystem over.
 4. Plan the fix, then fix the mechanism — a guard at the symptom leaves the
-   cause free to strike again. When the fix crosses a function boundary, write
-   down the contract it keeps before dispatching. Dispatch the implementation
-   as a cell (`bee dispatch prepare --kind cell`) with a specific scope, and
-   review the diff.
+   cause free to strike again. When the fix crosses a function boundary, run
+   `bee-architect` first and write down the contract the fix keeps, because a
+   boundary change decided in the diff alone is decided without a second
+   design to compare. Run `bee-interrogate` over the plan when it is
+   contested, because independent reviewers catch the cause the planner
+   anchored on. Dispatch the implementation as a cell
+   (`bee dispatch prepare --kind cell`) with a specific scope, and review the
+   diff.
 5. Re-run the same reproduction, on the same surface, because only that run
    proves this bug is gone. An inconclusive run, or a run on a different
    surface, is not a pass; flag it. Unit tests show branch behavior, not bug
    absence.
 6. Stage the commits so the failing repro lands before the fix in git
-   history; the diff tells the story. Do it when the bug has a cheap local
-   test path; skip it when the test would be expensive, integration-heavy or
-   unclear.
+   history; the diff tells the story. See `bee-tdd` for the failing-test-first
+   cadence when the bug has a cheap local test path, because the test written
+   first is the repro that shows the fix is the cause; skip it when the test
+   would be expensive, integration-heavy or unclear.
 
 **When the cause is not known.** A symptom that turns on event order — a late,
 doubled or reordered message, a retry, a stuck flow — takes the `statechart`

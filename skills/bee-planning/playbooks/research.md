@@ -9,4 +9,6 @@ A question to answer or a cause to find, with no change to ship: pick the situat
 - `trace-forensics` — here is a cpuprofile, Trace json.gz, spindump, heapsnapshot, why is this slow or unresponsive from this artifact, đây là file profile, phân tích trace này, vì sao chậm từ artifact này, đọc heap snapshot — delivers: a cited diagnosis from the artifact, the reduced finding mapped to source, and whether a paired capture confirmed it, with no fix
 - `eval` — evaluate this skill variant, compare two prompts, does this change affect agent behavior, run a blind experiment, test a structural change before promoting it, đánh giá biến thể skill, so sánh hai prompt, thí nghiệm mù, thử trước khi áp dụng — delivers: the variant under test, the rubric, per-candidate notes, the blind judge's verdict, and a recommendation on promoting the variant
 
+No situation fits, or the work is large and cross-cutting: use bee-figure-it-out.
+
 Proof floor: the cap refuses a result weaker than this class's floor and names it; the table is the cap's own (`bee cells finish --help`).

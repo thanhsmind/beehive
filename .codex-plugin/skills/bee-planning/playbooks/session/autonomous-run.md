@@ -26,8 +26,8 @@ You own the exit condition. Define done, then drive to it without stopping.
    irreversible actions, genuine product or preference calls no experiment can
    settle, or a real dead end. Keep the predicate as the main drive and return
    to it after each side fix, because side fixes are how a run loses its way.
-5. Checkpoint every iteration with a row in the feature's decision trail under
-   `docs/history/<feature>/`: what changed and whether the predicate moved. A
+5. Checkpoint every iteration with a row in the feature's decision trail
+   (`bee-show-me-your-work`) under `docs/history/<feature>/`: what changed and whether the predicate moved. A
    run with no trail cannot be audited or resumed.
 6. Stop when the predicate is met. A plateau is not a stop, so keep going and
    pivot the approach to push past it. Surface a genuine dead end rather than

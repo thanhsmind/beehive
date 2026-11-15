@@ -33,7 +33,8 @@ Dropped steps:
 
 - `architect` before a fix that crosses a function boundary: the skill does
   not exist in bee yet (D5, slice 3). The step keeps the rule: write down the
-  contract the fix keeps before dispatching.
+  contract the fix keeps before dispatching. Restored (ppb-24): step 4 runs
+  `bee-architect` first.
 - The `sequence-verifiable-units` principle skill citation: no bee principle
   of that name exists yet. The sentence stays without the name: verify each
   attempt before trying the next.
@@ -60,7 +61,8 @@ Tool swaps:
 - The `separate-before-serializing-shared-state` principle skill became
   `bee-principle-separate-before-serializing-shared-state`.
 - The `show-me-your-work` decision log (`decision.tsv`, gitignored) became the
-  decision trail under `docs/history/<feature>/`, with the same columns; the
+  decision trail under `docs/history/<feature>/`, with the same columns
+  (restored in ppb-24: step 3 opens it with `bee-show-me-your-work`); the
   gitignore rule became "keep the trail file outside the files an attempt
   touches", so a revert still never removes it.
 - Handing the change to a subagent on the named default hillclimb model became
@@ -94,8 +96,12 @@ line and the Proof floor line carry over.
 Added to the pstack text: a reason on every step where pstack gave none
 (decision `61b52e96`).
 
-## Steps to re-add in slice 3
+## Steps re-added in ppb-24
 
-`architect` (perf-issue step 4), `prove-it-works`, `guard-the-context-window`,
-`sequence-verifiable-units` and `laziness-protocol` (hillclimb and perf-issue)
-return as named steps once those skills and principles exist.
+Restored: `architect` (perf-issue step 4, now `bee-architect`) and
+`show-me-your-work` (hillclimb step 3, now `bee-show-me-your-work`).
+
+Still waiting, because no skill of that name exists in `skills/`:
+`prove-it-works`, `guard-the-context-window`, `sequence-verifiable-units` and
+`laziness-protocol` (hillclimb and perf-issue). Each keeps its method as a
+plain sentence.

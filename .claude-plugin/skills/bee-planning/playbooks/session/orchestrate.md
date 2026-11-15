@@ -6,7 +6,8 @@ frontier green, decide.
 This is for a whole project handed to one standing coordinator: multi-day,
 many cells, dozens to hundreds of workers, the owner checking in twice a day
 instead of every five minutes. One task driven to a predicate is
-`autonomous-run`. Route here when the work outlives any single agent. Work one
+`autonomous-run`. One ambitious run that needs a bespoke workflow is
+`bee-figure-it-out`. Route here when the work outlives any single agent. Work one
 agent could finish inside the session's budget is not a program; measured
 head-to-head, this playbook's ceremony turned a half-hour 12-unit job into 1
 landed unit while a plain agent landed all 12. Below that line, route to
@@ -75,7 +76,8 @@ exactly one writer; owners publish facts, readers aggregate at read time.
   burst of completions never contends for one file.
 - `gates.md` parks owner gates (question, options, default on no answer), so a
   completion flood cannot wipe a pending question.
-- `decisions.tsv` is the decision trail.
+- `decisions.tsv` is the decision trail, opened and kept per
+  `bee-show-me-your-work`.
 - `status.md` is derived from `units.tsv` at each drain, never hand-maintained;
   regenerate it from the table instead of narrating events into it, because
   hand-churned boards get rewritten on every event and go unreadable.
@@ -129,7 +131,9 @@ fresh with consolidated scope.
    verification inline, landing as you go, and none of the register or pilot
    machinery below. Schedule landing against the budget: by roughly 70% of it,
    stop spawning and land what is verified, because finished-but-unlanded work
-   counts as zero. Name the tracks per project. Present the framing once;
+   counts as zero. Name the tracks per project. A contested decomposition or
+   one-way door goes through `bee-arena` before the pilot, because the split
+   cannot be redrawn cheaply once units have landed. Present the framing once;
    reversible prep proceeds without waiting.
 2. **Install the program record.** Create the folder above, write the standing
    orders before any spawn, and seed `units.tsv` from the cells and worktrees
@@ -163,7 +167,8 @@ fresh with consolidated scope.
 7. **Close.** Drain the final inbox, reconcile every spawned agent to a
    terminal row (done, abandoned, zombie-reconciled), confirm the predicate on
    the real artifact, confirm every landed unit has a verdict for its current
-   head SHA, audit the decision trail, and encode recurring corrections into
+   head SHA, audit the decision trail per `bee-show-me-your-work`, including
+   its cross-model review, and encode recurring corrections into
    `preferences.md` or the brief template. Leave the folder intact; it is the
    postmortem.
 

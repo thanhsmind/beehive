@@ -36,7 +36,9 @@ outcome is words with anchors.
 
 An investigation that precedes a code change stops at the account and hands
 back to the user; the change itself re-routes to `bugfix` or `feature`, because
-this class is read-only and the edit belongs to a class that proves it.
+this class is read-only and the edit belongs to a class that proves it. Run
+`bee-architect` only for that change, never inside the investigation, because
+a design is written for a diff and this class writes no diff.
 
 This is the investigation route (per D3, decision `f1ffa7bd`): the existing
 `research` class, no new route and no new lane. Nothing yet ENFORCES step 1 —

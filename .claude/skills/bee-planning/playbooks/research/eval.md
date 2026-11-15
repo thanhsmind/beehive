@@ -43,14 +43,19 @@ Steps:
 3. Author one organic prompt, what a user would type, with no leakage of what
    is measured, because one prompt held constant makes the candidates differ
    only by the variant.
-4. Run N parallel candidates, each in its own sanitized directory with the
-   same prompt, dispatched through `bee dispatch prepare`. The door returns
-   each worker's model; never hand-pick one. Parallel runs share nothing, so
-   one candidate's output cannot leak into another's.
-5. Run one blinded judge through `bee dispatch prepare --kind reviewer`, which
-   returns the review tier's model. The judge sees outputs by sanitized label
+4. Run N parallel candidates per `bee-arena` Phase B, each in its own
+   sanitized directory with the same prompt. Each goes out as
+   `bee dispatch prepare --runtime claude --kind advisor --role lane-1 --json`,
+   then `--role lane-2` and `--role lane-3`, all in one turn; a fourth
+   candidate reuses a lane role. The lane roles sit in the bee team table, so
+   a different model per candidate is a team setting, never a hand-picked
+   one, and the spread shows whether the variant holds across models. Parallel
+   runs share nothing, so one candidate's output cannot leak into another's.
+5. Run one blinded judge per `bee-arena` Phase C, through
+   `bee dispatch prepare --runtime claude --kind reviewer --json`, which
+   returns the review role's model. The judge sees outputs by sanitized label
    and the rubric, never a model name. A judge on the same model as the
-   candidates shares their blind spots, so when the door returns the same
+   candidates shares their blind spots, so when the payload returns the same
    model, say so in the reply.
 6. Verify the chain from transcripts, not self-report. Read each candidate's
    own transcript under the active workspace and no other: never read

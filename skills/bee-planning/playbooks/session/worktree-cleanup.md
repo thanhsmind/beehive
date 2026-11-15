@@ -19,9 +19,9 @@ guards against deleting something in use or holding uncommitted work.
 3. Verify usage before deleting. For every worktree the report would remove
    that you doubt, run a gather (`bee dispatch prepare --kind gather`) that
    reads the session records and reports whether a session is open on it and
-   which worktrees that session touches. A herded worker spawns repro trees
-   into sibling worktrees, and those are in use even when their names never
-   reach the owner's list. Keep the gather's output to a digest, because
+   which worktrees that session touches. A herded worker spawns arena and
+   repro trees into sibling worktrees, and those are in use even when their
+   names never reach the owner's list. Keep the gather's output to a digest, because
    session logs are bulk.
 4. Pause on irreversible loss. A tracked uncommitted edit is lost the moment
    the directory goes, so show the diff and get a decision first; removing a

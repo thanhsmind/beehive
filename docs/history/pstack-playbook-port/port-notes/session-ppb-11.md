@@ -18,9 +18,12 @@ the same way in every file, and the sections below list the occurrences.
 - The `principle-guard-the-context-window`, `principle-prove-it-works` and
   `principle-sequence-verifiable-units` skills have no bee skill yet (D5 brings
   them in slice 3). Each pointer is dropped and its method sentence stays inline.
+  Still waiting (ppb-24): no such skill exists in `skills/`, so the sentences
+  stay and the three names stay here.
 - The show-me-your-work skill has no bee skill yet (D5, slice 3). Its trail
   became a decision trail under `docs/history/<feature>/`; the skill pointer is
-  dropped.
+  dropped. Restored (ppb-24): `pause-safely`, `autonomous-run` and
+  `orchestrate` name `bee-show-me-your-work` for the trail.
 - The Cursor-only wake, transcript and dashboard machinery has no bee
   counterpart and is dropped where listed.
 
@@ -162,16 +165,19 @@ Dropped steps and clauses:
 - The cloud agents' dashboard as a liveness probe, and the editor-restart
   paragraph about cloud agents.
 - The `arena` skill for a contested decomposition or one-way door (Frame step):
-  no bee skill yet (D5, slice 3).
+  no bee skill yet (D5, slice 3). Restored (ppb-24): the Frame step runs
+  `bee-arena` before the pilot.
 - The cross-model review audit of the trail in the Close step: the show-me-your-work
   skill that defines it has no bee skill yet; the per-unit verifier on another
-  model family stays.
+  model family stays. Restored (ppb-24): the Close step audits the trail per
+  `bee-show-me-your-work`, including its cross-model review.
 - The loop skill that arms a frontier watcher: the herding loop replaces it with
   an interval only.
 - The PR links in the closing Reply: a program lands units, not necessarily PRs.
 - The sentence "One ambitious run needing a bespoke workflow is figure-it-out"
   in the intro: the `figure-it-out` skill has no bee skill yet (D5, slice 3
-  re-adds it with the fallback line in every index).
+  re-adds it with the fallback line in every index). Restored (ppb-24): the
+  intro names `bee-figure-it-out`.
 - Nesting to depth 3 and the full Task schema on a nested spawn: Task-tool
   details. `bee dispatch prepare` replaces the Task tool, and depth stays at
   coordinator, track, worker.
@@ -200,7 +206,9 @@ Tool swaps:
 - Step 3, verifying usage through subagents that read transcripts, became a
   gather through `bee dispatch prepare --kind gather` over session records.
 - Step 3, "a pinned chat spawns arena and repro trees", became "a herded worker
-  spawns repro trees", with `arena` dropped (D5, slice 3).
+  spawns repro trees", with `arena` dropped (D5, slice 3). Restored (ppb-24):
+  the step reads "a herded worker spawns arena and repro trees", because a
+  `bee-arena` run spawns candidate trees.
 - Step 5, `git worktree remove --force`, `rm -rf` and `git worktree prune`,
   became `bee worktree prune`, with `--older-than-days` for the age cut and a
   `git worktree lock` as the opt-out the verb's help names.

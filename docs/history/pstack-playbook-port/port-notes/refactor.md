@@ -27,7 +27,7 @@ Tool swaps:
   none.
 - The pointer to Feature became "the feature class"; the pointer to the
   figure-it-out skill became "a plan of its own", because the skill does not
-  exist in bee yet.
+  exist in bee yet (restored in ppb-24: the pointer names `bee-figure-it-out`).
 - Run Opening a PR became the bee close and worktree merge path, with the
   `uat` acceptance at `bee close` the owner's.
 
@@ -35,7 +35,8 @@ Dropped steps:
 
 - `architect` before a move whose target crosses a function boundary: the
   skill does not exist in bee yet (D5, slice 3). Step 4 keeps the rule: write
-  down the contract the target keeps before dispatching.
+  down the contract the target keeps before dispatching. Restored (ppb-24):
+  step 4 runs `bee-architect` for the shape before the move.
 - The `prove-it-works` principle citation (steps 1 and 6): no bee principle of
   that name exists yet. Step 1 keeps its reason (without a record nothing can
   say the behavior held) and step 8 keeps the real-artifact rule.
@@ -94,10 +95,14 @@ Added: a Proof line (the image-diff result for each component against its
 baseline), because the pstack text had only a Reply; and a reason on every
 step where pstack gave none (decision `61b52e96`).
 
-## Steps to re-add in slice 3
+## Steps re-added in ppb-24
 
-`architect` (refactoring step 4), `prove-it-works`, `model-the-domain`,
-`foundational-thinking`, `redesign-from-first-principles`, `laziness-protocol`,
-`minimize-reader-load` and `sequence-verifiable-units` (refactoring), and
-figure-it-out (the pointer for large or cross-cutting structural work) return
-as named steps once those skills and principles exist.
+Restored: `architect` (refactoring step 4, now `bee-architect`) and
+figure-it-out (the pointer for large or cross-cutting structural work, now
+`bee-figure-it-out`).
+
+Still waiting, because no skill of that name exists in `skills/`:
+`prove-it-works`, `model-the-domain`, `foundational-thinking`,
+`redesign-from-first-principles`, `laziness-protocol`, `minimize-reader-load`
+and `sequence-verifiable-units` (refactoring). Each keeps its method as a plain
+sentence.

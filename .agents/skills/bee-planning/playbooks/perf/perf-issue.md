@@ -58,8 +58,10 @@ because source shows what the code does, never what it costs.
      runs the work earlier than the hot moment, or in its shadow. The win is
      perceived latency, so measure the interactive path, not total work done.
 4. Plan the fix from the trace, and change ONE thing, so that the delta has
-   one cause. When the fix crosses a function boundary, write down the
-   contract it keeps before dispatching. Dispatch the implementation as a cell
+   one cause. When the fix crosses a function boundary, run `bee-architect`
+   first and write down the contract the fix keeps, because a boundary change
+   decided in the diff alone is decided without a second design to compare.
+   Dispatch the implementation as a cell
    (`bee dispatch prepare --kind cell`) with a specific scope, and review the
    diff. Verify each attempt before trying the next, so a regression points at
    one change.

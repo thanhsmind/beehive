@@ -14,10 +14,11 @@ chain lands as a whole.
    dispatch prepare --kind cell` in its own worktree, owns its change end to
    end: build, self-proof on the real artifact (the project's `verify-app`
    skill, or the real interface), skeptical triage of every review comment per
-   `babysit`, a pass that strips the comments the diff added, because bee
-   writes no comment in code, and babysit to green. Owners parallelize when the
-   work is self-contained. Every owner keeps a decision trail under
-   `docs/history/<feature>/` and returns it in its report.
+   `babysit`, a `bee-comment-review` pass over the comments the diff added,
+   because bee writes no comment in code, and babysit to green. Owners parallelize when the
+   work is self-contained. Every owner keeps a decision trail per
+   `bee-show-me-your-work` under `docs/history/<feature>/` and returns it in its
+   report.
 2. **Audit on a fixed cadence.** The root runs an audit tick at a fixed
    interval, armed under `bee-herding` (`bee herding control-loop`), never left
    to memory or to lossy completion notices, because a cadence nobody armed
@@ -37,8 +38,8 @@ chain lands as a whole.
    continues across turns until the chain is done. On the owner's stop, every
    owner takes an immediate zero-writes hold.
 4. **Verify at STACK-READY.** The owner reports STACK-READY with the exact head
-   SHA. The root verifies that SHA with independent reviewers, each started
-   through `bee dispatch prepare --kind reviewer`: gates re-run at that SHA, a
+   SHA. The root verifies that SHA with independent reviewers per `bee-fanout`,
+   each started through `bee dispatch prepare --kind reviewer`: gates re-run at that SHA, a
    live runtime floor over the load-bearing behavior, and a receipts-and-diff
    audit that distrusts the PR body. The results aggregate to one verdict.
    Findings go back to the owner, and nothing enters the chain unverified,

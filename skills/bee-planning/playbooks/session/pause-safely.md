@@ -27,7 +27,7 @@ is the only trigger, write the note in step 4 to a file and keep working.
    `/tmp/<slug>-resume.md` instead and write no handoff, because the in-context
    plan will not survive summarization and a handoff happens only on the
    owner's word or at feature close. If the feature keeps a decision trail
-   under `docs/history/<feature>/`, point at it instead of duplicating it, so
+   (`bee-show-me-your-work`) under `docs/history/<feature>/`, point at it instead of duplicating it, so
    one fact keeps one home.
 
 Reply: where you are in the loop, what is on disk versus still in your head

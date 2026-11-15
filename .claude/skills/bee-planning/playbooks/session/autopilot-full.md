@@ -21,11 +21,12 @@ verification, countersigns and audits. A unit is one cell in its own worktree.
    started through `bee dispatch prepare --kind cell` in its own worktree, owns
    build, self-proof on the real artifact (the project's `verify-app` skill, or
    the real interface), skeptical triage of every review comment per
-   `babysit`, a pass that strips the comments the diff added, because bee
-   writes no comment in code, then `babysit` to green. An owner never rebases:
+   `babysit`, a `bee-comment-review` pass over the comments the diff added,
+   because bee writes no comment in code, then `babysit` to green. An owner never rebases:
    a conflict or drift against main goes to the merger as a cell, per
-   `orchestrate` § Merge safety. Every owner keeps a decision trail under
-   `docs/history/<feature>/` and returns it with its report. Owners push their
+   `orchestrate` § Merge safety. Every owner keeps a decision trail per
+   `bee-show-me-your-work` under `docs/history/<feature>/` and returns it with
+   its report. Owners push their
    own branch and never merge, because exactly one merger runs `bee worktree
    merge` and step 5 gates it.
 3. **Run owners in true parallel and never chain them.** Many owners at once
@@ -36,7 +37,7 @@ verification, countersigns and audits. A unit is one cell in its own worktree.
    exception: an owner that must split a genuinely dependent change may hold a
    short private chain of its own branches.
 4. **Verify every merge-ready head before its merge.** At the owner's
-   merge-ready head SHA, fan out independent reviewers, each started through
+   merge-ready head SHA, fan out independent reviewers per `bee-fanout`, each started through
    `bee dispatch prepare --kind reviewer`, and aggregate their results to one
    verdict. The lanes: re-run the gates at that SHA; prove the load-bearing
    behavior live on the real surface the change touches; audit the receipts and

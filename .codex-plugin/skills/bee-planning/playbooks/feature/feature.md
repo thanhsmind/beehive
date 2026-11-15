@@ -15,7 +15,12 @@ This is for new or changed behavior, built from a named data shape.
    delegate writes logic: a state machine over scattered booleans, a table or
    registry over branching, a typed model over repeated shape assumptions. Core
    types and the state concurrent actors share are the part that is expensive
-   to change later, so they are decided first and decided on purpose.
+   to change later, so they are decided first and decided on purpose. Run
+   `bee-architect` for parallel design exploration of that shape, because one
+   design drawn alone is the only one anybody compared. Skipping stays as
+   `architect skipped: <reason>`; do not fold the design decision silently into
+   implementation, because a choice nobody recorded is a choice nobody can
+   review.
 3. Model an event-order flow with the `statechart` skill, so that TLC walks
    every step order and finds the stuck state a unit test never reaches:
    payment hold, capture and refund with retry, a message queue, a re-run or
@@ -39,6 +44,10 @@ This is for new or changed behavior, built from a named data shape.
    (`bee dispatch prepare --kind cell`) on the code role's configured model,
    with a specific scope: the file paths, the named data shape from step 2 and
    its organizing structure, and success criteria. Review its diff yourself.
+   When the implementation admits several valid shapes (error handling,
+   abstraction layer, test structure), run `bee-arena` instead, so the runners
+   surface the alternatives and the cross-judge guards the pick, because the
+   first shape a single worker reaches is rarely the one weighed against others.
    - Build a walking skeleton end to end first, with no stub left on that path,
      because wiring breaks then show up first, while they are still cheap.
    - Build the CURRENT slice only. A cell for a later slice is planned on
@@ -74,7 +83,11 @@ This is for new or changed behavior, built from a named data shape.
    each small unit before the next, so a failure points at one unit and a
    reviewer reads the story bottom-up. Each cap commit ends with the
    `cell: <id>` trailer.
-10. Land through the bee path in `playbooks/session/opening-a-pr.md`: the draft
+10. When the design is contested, run `bee-interrogate` over the change before
+    shipping, because the reviewers that did not write it find what its author
+    anchored past, and a contested design that ships unreviewed is found at the
+    owner's acceptance.
+11. Land through the bee path in `playbooks/session/opening-a-pr.md`: the draft
     PR the `ship_visibility` rule opens on the first cap, `bee worktree merge`
     on green, and the `uat` door of `bee close`, which stays the owner's.
     Nothing here marks the PR ready or merges it by hand, because a PR that

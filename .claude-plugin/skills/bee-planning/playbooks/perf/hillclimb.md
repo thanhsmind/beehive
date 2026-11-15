@@ -31,8 +31,9 @@ decides and a stacked change has no single cause.
    changing it invalidates every earlier number. Record the baseline metric
    and a green run of the regression gate (the tests that must keep passing)
    before any change, so a later red is known to be the change's.
-3. Open the decision trail under `docs/history/<feature>/`: one row per
-   attempt with id, hypothesis, change, before, after, delta, tests, verdict
+3. Open the decision trail with `bee-show-me-your-work`, committed under
+   `docs/history/<feature>/` because a reviewer after the run needs it to
+   trust the result: one row per attempt with id, hypothesis, change, before, after, delta, tests, verdict
    (kept or reverted) and note. This is the run's memory. Read it before each
    attempt so the search accumulates instead of circling. Keep the trail file
    outside the files an attempt touches, so a revert never removes it.

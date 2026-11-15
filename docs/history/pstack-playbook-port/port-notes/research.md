@@ -27,7 +27,9 @@ Dropped steps:
   investigation`): bee has no throughput checkpoint concept, so the step has no
   counterpart.
 - The "no `architect`" clause: the skill does not exist in bee yet (D5, slice
-  3), and the situation has no step that would call it.
+  3), and the situation has no step that would call it. Restored (ppb-24): the
+  closing paragraph of `investigation` runs `bee-architect` only for the code
+  change that follows, never inside the read-only account.
 - The "no PR, no babysit" clause: it restated that a read-only class lands no
   work; the read-only step already says it.
 - The reference to the Autonomy section of the router for pushing back on a
@@ -134,10 +136,13 @@ Dropped steps:
 
 - The `arena` skill reference in steps 4 and 5: the skill does not exist in
   bee yet (D5, slice 3 re-adds it). The steps keep the spawn and the judge
-  through the dispatch door.
+  through the dispatch door. Restored (ppb-24): both steps name `bee-arena`
+  Phase B and Phase C.
 - The model-per-candidate spread ("on different models"): the dispatch door
   fixes the model per role and bee has no per-candidate model flag, so the
-  spread is dropped, not faked.
+  spread is dropped, not faked. Restored (ppb-24): `bee-arena` Phase B sends
+  each candidate through a `lane-1` to `lane-3` role, whose model is a team
+  setting, so step 4 names the roles and the spread comes back.
 
 Kept as written: the word `arena` inside the blinding list. It names a cue word
 a candidate must never see, not a skill the playbook calls, and removing it
@@ -146,8 +151,12 @@ would weaken the blinding rule.
 Added to the pstack text: a reason on every step where pstack gave none
 (decision `61b52e96`), and a Proof line.
 
-## Steps to re-add in slice 3
+## Steps re-added in ppb-24
 
-`arena` (eval steps 4 and 5, with per-candidate model spread) and
-`guard-the-context-window` (runtime-forensics step 2, trace-forensics step 1)
-return as named steps once those skills and principles exist.
+Restored: `arena` (eval steps 4 and 5, now `bee-arena`, with the per-candidate
+model spread through the `lane-1` to `lane-3` roles) and the `architect`
+clause of `investigation` (now `bee-architect`, read-only text).
+
+Still waiting, because no skill of that name exists in `skills/`:
+`guard-the-context-window` (runtime-forensics step 2, trace-forensics step 1).
+It keeps its method as a plain sentence.

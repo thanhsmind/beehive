@@ -30,12 +30,17 @@ Dropped steps:
 
 - The `architect` handoff for the shape in the last step: the skill does not
   exist in bee yet (D5, slice 3). The step hands the chosen direction to
-  `playbooks/feature.md` alone.
+  `playbooks/feature.md` alone. Restored (ppb-24): step 7 hands the direction
+  to `bee-architect` as well.
 - The `exhaust-the-design-space` principle skill citation: no bee principle of
   that name exists yet (D5, slice 3). The step keeps its rule in plain words.
+  Still waiting (ppb-24): no `bee-principle-exhaust-the-design-space` exists,
+  so the method stays a plain sentence.
 - The `Laziness Protocol` citation in the intro ("smallest change and the
   verification bar invert"): no bee principle of that name exists yet (D5,
   slice 3). The sentence keeps the inversion without the name.
+  Still waiting (ppb-24): no `bee-principle-laziness-protocol` exists, so the
+  inversion stays a plain sentence.
 
 Kept from the bee `spike` playbook (D3): the YES/NO question before you start,
 the timebox said out loud, the throwaway under `.bee/spikes/<feature>/` with
@@ -51,8 +56,10 @@ Added to the pstack text: a reason on every step where pstack gave none
 (decision `61b52e96`), and the timebox step from the bee playbook as its own
 numbered step.
 
-## Steps to re-add in slice 3
+## Steps re-added in ppb-24
 
-`architect` (the shape handoff), `exhaust-the-design-space` and
-`laziness-protocol` return as named steps once those skills and principles
-exist.
+Restored: `architect` (the shape handoff, now `bee-architect`).
+
+Still waiting, because no skill of that name exists in `skills/`:
+`exhaust-the-design-space` and `laziness-protocol`. Each keeps its method as a
+plain sentence.

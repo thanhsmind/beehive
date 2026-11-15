@@ -18,7 +18,7 @@ bottom.
    head: the project's `verify-app` skill when it has one, otherwise the real
    interface itself. Each returns `PASS`, `PASS+NOTES` or `FAIL`, posts that
    verdict as a comment on its own PR, and adds a row to the decision trail
-   under `docs/history/<feature>/`, so the record outlives the chat. Safe means
+   (`bee-show-me-your-work`) under `docs/history/<feature>/`, so the record outlives the chat. Safe means
    a verdict from an agent that did not write the code. CI green is not a
    verdict, and an approving automated review is not a verdict.
 2. **Land only the contiguous verified run rooted at the bottom.** Walk up from

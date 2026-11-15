@@ -50,9 +50,9 @@ phases or stacked PRs. The plan is the deliverable. Do not implement.
 **Verification.** Tests alone are not sufficient verification. A PR is verified
 only when its unit, live and perf boxes are all checked. That sentence is the
 verification rule. Every verification block opens with it. The live block is
-mandatory. Ten lanes at the PR head drive the real surface, each started
-through `bee dispatch prepare --kind reviewer` on the review role's configured
-model. Each lane is one box with a concrete scenario, the screenshot it saves,
+mandatory. Ten lanes at the PR head drive the real surface, fanned out per
+`bee-fanout`, each started through `bee dispatch prepare --kind reviewer` on
+the review role's configured model. Each lane is one box with a concrete scenario, the screenshot it saves,
 and its pass predicate. The perf block names the metric, the probe, the trunk
 baseline measured first, and the rule with the number that fails. A PR that
 changes an interaction is review-gated. The operator reviews it in chat with
@@ -95,7 +95,7 @@ Tests alone are not sufficient verification. A PR is verified only when its unit
 
 ### Spawn owners
 
-- [ ] Spawn one owner per PR with the full lifecycle the execution playbook names, through `bee dispatch prepare --kind cell`.
+- [ ] Spawn one owner per PR with the full lifecycle the execution playbook names, through `bee dispatch prepare --runtime claude --kind cell --json`.
 - [ ] Follow this dependency graph. Start dependent work only after its parent merges, or base it on the parent branch when the execution playbook stacks.
   - [ ] <PR id> and <PR id> are independent and first. Both branch from `main`.
   - [ ] <PR id> after <PR id>.
@@ -106,13 +106,13 @@ Tests alone are not sufficient verification. A PR is verified only when its unit
 
 - [ ] Land each PR through `playbooks/session/opening-a-pr.md`. The `ship_visibility` rule opens it as a draft and the draft stays a draft until the operator says otherwise.
 - [ ] Run the repo's lint and typecheck once before the PR-facing push. Push with hooks on.
-- [ ] Strip every comment the diff added before review, because bee writes no comment in code.
+- [ ] Run `bee-comment-review` over the diff before review, because bee writes no comment in code and a comment the diff added is the first thing a reviewer reads.
 - [ ] Triage every review comment per `playbooks/session/babysit.md`.
 - [ ] Rebase onto current trunk before babysit and again before the merge-ready report.
 
 ### Verdict and merge, for every PR
 
-- [ ] At the merge-ready head SHA, fan out the lanes, each through `bee dispatch prepare --kind reviewer`. One gates lane. The ten live lanes from the PR's **Verify, live** block. The perf lane from its **Verify, perf** block. One audit lane that reads the diff and the receipts and distrusts the PR body.
+- [ ] At the merge-ready head SHA, fan out the lanes per `bee-fanout`, each through `bee dispatch prepare --runtime claude --kind reviewer --json`. One gates lane. The ten live lanes from the PR's **Verify, live** block. The perf lane from its **Verify, perf** block. One audit lane that reads the diff and the receipts and distrusts the PR body.
 - [ ] Clean only when every lane is `PASS`. Findings go back to the owner. A new head gets fresh lanes and a fresh verdict.
 - [ ] <The merge or append rule from the execution playbook, with the patch-id rule from `playbooks/session/shipping.md`.>
 
@@ -199,7 +199,7 @@ Each live lane runs in its own worktree at the PR head. Drive through the `verif
 
 ## Appendix D. Links and reading list
 
-<Docs to read before editing. Which PRs get a `bee-how` gather first. The decision trail under `docs/history/<feature>/`.>
+<Docs to read before editing. Which PRs get a `bee-how` gather first and a `bee-interrogate` pass. The decision trail per `bee-show-me-your-work`, under `docs/history/<feature>/`.>
 ````
 
 Reply: the plan path, the PR ids with their dependencies and the review-gated

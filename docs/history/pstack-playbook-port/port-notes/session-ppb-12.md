@@ -15,21 +15,24 @@ Recurring across the five files, handled the same way each time:
 
 - The `show-me-your-work` skill (the `decisions.tsv` trail, never committed)
   became the decision trail under `docs/history/<feature>/`. The skill pointer
-  is dropped (D5, slice 3 re-adds it). The "never committed" clause is dropped:
+  is dropped (D5, slice 3 re-adds it; restored in ppb-24 in `autopilot-full`,
+  `autopilot-stack` and `shipping`). The "never committed" clause is dropped:
   bee's program folder is kept intact as the postmortem.
 - The `swarm` skill is the fan-out of verifiers in autopilot-full step 4 and
   autopilot-stack step 4. The pointer is dropped (D5, slice 3 re-adds it). The
   fan-out itself stayed, as independent reviewers started with
-  `bee dispatch prepare --kind reviewer`, aggregated to one verdict.
+  `bee dispatch prepare --kind reviewer`, aggregated to one verdict. Restored
+  (ppb-24): both steps fan out per `bee-fanout`.
 - The `no-comments` skill pointer is dropped (D5, slice 3 re-adds it). Its
   effect stays as a sentence: strip the comments the diff added, because bee
-  writes no comment in code.
+  writes no comment in code. Restored (ppb-24): `autopilot-full`,
+  `autopilot-stack` and `opening-a-pr` run `bee-comment-review`.
 - The `deslop` skill from the team-kit plugin is dropped everywhere. It is a
   separate plugin's command with no bee counterpart and no D5 entry; the
   comment strip and `bee-unslop` over the prose cover what bee has.
 - The `prove-it-works` principle skill is dropped as a pointer in
   autopilot-full step 2 (D5, slice 3). Its method stayed: self-proof on the
-  real artifact.
+  real artifact. Still waiting (ppb-24): no such skill exists in `skills/`.
 - The control skills for the live lane (`control-cli`, `control-ui`) became the
   project's `verify-app` skill, or the real interface when the project has
   none.
@@ -275,6 +278,9 @@ Dropped steps and clauses:
 
 - `/deslop` from the team-kit plugin, the `interrogate` skill (D5, slice 3
   re-adds it) and the `no-comments` skill pointer (D5, slice 3 re-adds it).
+  Restored (ppb-24): step 3 runs `bee-comment-review` and step 8 has the
+  pushing worker run `bee-interrogate` and `bee-comment-review`; `/deslop`
+  stays dropped.
 - The "Cloud-agent PR tools default to draft, so set `draft: false`" paragraph.
 - The `git fetch && git reset --hard origin/<branch>` alternative to a worktree
   per parallel worker: bee gives each worker its own worktree, so the reset
