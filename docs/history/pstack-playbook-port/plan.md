@@ -181,199 +181,50 @@ the full regen (deps 2, 3, 4).
 
 ## Cells — current slice (preview)
 
-Slices 1 to 4 are capped: the situation router, all 23 playbooks, the eleven skills, the thirteen new principles, and the merges into the bee skills and principles that already covered a pstack one. This is slice 5, the last: ppb-38 teaches the leader doctrine to route to a situation and names the fallback and the new skills; ppb-39 is the writer consolidation cell that writes the knowledge and `delivery.md`. After it caps, `bee test` runs the full suite once in the worktree before the merge.
+Slices 1 to 5 are capped. The full suite (`bee test` at `fec8793da`) went red in three orient class tests: 5186 passed, 3 failed. Their temp repo has no `skills/` tree, so orient reads the compiled-in indexes, which list situations since slice 2. The fallback behaves as designed; the tests pinned shipped text. This fix-first slice (rule agents-never-build-on-red) is one test cell, ppb-40, which gives those tests their own fixture indexes. `bee test` runs again after it caps.
 
-Waves: ppb-38, then its checker, then ppb-39 and its checker; each depends on the one before.
+Waves: one cell.
 
 | id | title | files | deps | you see | proof |
 |---|---|---|---|---|---|
-| ppb-38 | Teach the leader to route to a situation | `packages/bee/LEADER.md`, `.bee/LEADER.md`, `skills/bee-planning/SKILL.md`, the rendered trees, the release manifest | — | the new or fixed skill or playbook text is in bee terms and renders to every plugin tree | `cargo test — green:unit — docs port` |
-| ppb-38c | Check the situation routing doctrine | its report only | ppb-38 | a report of every source step present, dropped or missing | `rg pstack-only tools — green:static — checker` |
-| ppb-39 | Consolidate pstack-playbook-port knowledge | its report only | ppb-38c | a report of every source step present, dropped or missing | `rg pstack-only tools — green:static — checker` |
-| ppb-39c | Check the consolidated knowledge | its report only | ppb-39 | a report of every source step present, dropped or missing | `rg pstack-only tools — green:static — checker` |
+| ppb-40 | Pin the orient class tests to their own fixture indexes | its report only | — | a report of every source step present, dropped or missing | `rg pstack-only tools — green:static — checker` |
 
 Packet (authoritative for the preview):
 
 ```json
 [
  {
-  "id": "ppb-38",
+  "id": "ppb-40",
   "feature": "pstack-playbook-port",
-  "title": "Teach the leader to route to a situation",
+  "title": "Pin the orient class tests to their own fixture indexes",
   "lane": "standard",
-  "role": "docs",
+  "role": "test",
   "deps": [],
   "decisions": [
-   "d480d467-1a0d-4feb-bbe6-3f181aa86f4b",
-   "b749c98d-65e2-4346-b07f-6dc52dbd78ca",
-   "3ac421ec-168b-4007-9976-9b6bcbe6e18a",
    "41bbba68-9de8-48b3-a9c7-ba1abfdd6410",
    "913115b3-e1f1-4004-902c-bc574fabb2f1"
   ],
   "files": [
-   "packages/bee/LEADER.md",
-   ".bee/LEADER.md",
-   "skills/bee-planning/SKILL.md",
-   "skills/bee-planning/references/planning-reference.md",
-   "skills/bee-hive/references/routing-and-contracts.md",
-   "skills/bee-hive/SKILL.md",
-   ".claude-plugin/skills/bee-planning/",
-   ".codex-plugin/skills/bee-planning/",
-   ".claude/skills/bee-planning/",
-   ".agents/skills/bee-planning/",
-   ".opencode/skills/bee-planning/",
-   ".claude-plugin/skills/bee-hive/",
-   ".codex-plugin/skills/bee-hive/",
-   ".claude/skills/bee-hive/",
-   ".agents/skills/bee-hive/",
-   ".opencode/skills/bee-hive/",
-   "docs/history/codex-harness-hardening/release-manifest.json",
-   ".bee/onboarding.json"
+   "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs"
   ],
   "read_first": [
    "docs/history/pstack-playbook-port/CONTEXT.md",
    "docs/history/pstack-playbook-port/plan.md",
-   "packages/bee/LEADER.md",
-   ".bee/LEADER.md",
-   "skills/bee-planning/SKILL.md",
-   "skills/bee-planning/references/planning-reference.md",
-   "skills/bee-hive/references/routing-and-contracts.md",
-   "skills/bee-hive/SKILL.md",
-   "skills/bee-planning/playbooks/bugfix.md",
-   "skills/bee-planning/playbooks/session/index.md"
-  ],
-  "affects_skills": [
-   "skills/bee-planning/SKILL.md",
-   "skills/bee-planning/references/planning-reference.md",
-   "skills/bee-hive/references/routing-and-contracts.md",
-   "skills/bee-hive/SKILL.md"
-  ],
-  "affects_specs": [],
-  "action": "Update the doctrine to the situation router (decision 41bbba68). packages/bee/LEADER.md § Route each task: after `bee orient --class <c>`, pick the situation whose trigger phrases match the task from the situation lines it prints, open that situation file, and seed the todo list from its numbered steps; when no situation fits, or the work is large and cross-cutting, use bee-figure-it-out; a session situation (pick up, pause, run until done, orchestrate, babysit, ship) comes from skills/bee-planning/playbooks/session/index.md and binds no class. Add to § Trigger index one line per new skill a leader reaches by situation (bee-architect, bee-arena, bee-interrogate, bee-fanout, bee-tdd, bee-show-me-your-work, bee-reflect, bee-recall, bee-blast-radius, bee-comment-review, bee-figure-it-out), pointing, never restating. In skills/bee-planning/SKILL.md and planning-reference.md § Playbooks, the plan cites the situation file skills/bee-planning/playbooks/<class>/<situation>.md, and the class index only for a class with no situations. In skills/bee-hive/references/routing-and-contracts.md, the todo list seeds from the situation's steps. Name no principle in any of these surfaces (decision a6e3d0bf). Copy packages/bee/LEADER.md to .bee/LEADER.md byte for byte, run bee dev regen, and commit. Bee commands you may run in this cell: cargo test, `.bee/bin/bee dev regen`, `.bee/bin/bee dev release-manifest --check`, `.bee/bin/bee knowledge check`, `.bee/bin/bee knowledge consolidate`, `.bee/bin/bee onboard --repo-root . --json`, and `bee herding notify`. Never run `bee dispatch` or any of its `--help`.",
-  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test rule_index_parity && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test pointer_integrity && .bee/bin/bee dev release-manifest --check && .bee/bin/bee onboard --repo-root . --json",
-  "must_haves": {
-   "truths": [
-    "LEADER.md § Route each task tells the leader to pick a situation from the orient output and names bee-figure-it-out as the fallback",
-    "the plan template cites a situation file",
-    "the trigger index points at every new skill"
-   ],
-   "prohibitions": [
-    "No surface enumerates the principle set",
-    "No rule is restated in two places"
-   ]
-  }
- },
- {
-  "id": "ppb-38c",
-  "feature": "pstack-playbook-port",
-  "title": "Check the situation routing doctrine",
-  "lane": "standard",
-  "role": "test",
-  "deps": [
-   "ppb-38"
-  ],
-  "decisions": [
-   "41bbba68-9de8-48b3-a9c7-ba1abfdd6410",
-   "913115b3-e1f1-4004-902c-bc574fabb2f1"
-  ],
-  "files": [
-   "docs/history/pstack-playbook-port/reports/ppb-38c.md"
-  ],
-  "read_first": [
-   "docs/history/pstack-playbook-port/CONTEXT.md",
-   "docs/history/pstack-playbook-port/plan.md",
-   "packages/bee/LEADER.md",
-   ".bee/LEADER.md",
-   "skills/bee-planning/SKILL.md",
-   "skills/bee-planning/references/planning-reference.md",
-   "skills/bee-hive/references/routing-and-contracts.md",
-   "skills/bee-hive/SKILL.md"
+   "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs",
+   "packages/bee-rs/crates/bee/src/situations.rs",
+   ".bee/logs/test-failure-test-0.log"
   ],
   "affects_skills": [],
   "affects_specs": [],
-  "action": "Check that each surface ppb-38 changed says the same thing about situations, that no surface restates another, that every new skill the trigger index names exists in skills/, and that .bee/LEADER.md equals packages/bee/LEADER.md. Write docs/history/pstack-playbook-port/reports/ppb-38c.md; no other edits.",
-  "verify": "cmp packages/bee/LEADER.md .bee/LEADER.md",
+  "action": "Three tests in status_full/tests.rs went red in the full suite once slice 2 filled the class indexes: bee_orient_class_perf_json_carries_an_empty_situations_key, bee_orient_class_research_prints_the_research_playbook_and_principles_and_writes_nothing and orient_class_names_the_playbook_and_the_class_principles_and_writes_nothing. Their temp repo has no skills/ tree, so orient reads the compiled-in indexes, which now list situations. Make each test write its own skills/bee-planning/playbooks/<class>.md into the temp repo (the repo copy wins over the compiled-in one), with no Situations section where the test pins an empty list, so the tests check the contract instead of the shipped playbook text. Keep one test that pins the compiled-in fallback by asserting it lists at least one situation for a class whose shipped index has one. Bee commands you may run: cargo test and `bee herding notify`.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee status_full",
   "must_haves": {
    "truths": [
-    "the report names each surface and its agreement"
+    "the three tests pass and no longer depend on the shipped playbook text",
+    "a test still pins the compiled-in fallback"
    ],
    "prohibitions": [
-    "No edit outside the report file"
-   ]
-  }
- },
- {
-  "id": "ppb-39",
-  "feature": "pstack-playbook-port",
-  "title": "Consolidate pstack-playbook-port knowledge",
-  "lane": "standard",
-  "role": "writer",
-  "deps": [
-   "ppb-38c"
-  ],
-  "decisions": [
-   "d480d467-1a0d-4feb-bbe6-3f181aa86f4b",
-   "41bbba68-9de8-48b3-a9c7-ba1abfdd6410",
-   "913115b3-e1f1-4004-902c-bc574fabb2f1"
-  ],
-  "files": [
-   "docs/knowledge/",
-   "docs/history/pstack-playbook-port/delivery.md"
-  ],
-  "read_first": [
-   "docs/history/pstack-playbook-port/CONTEXT.md",
-   "docs/history/pstack-playbook-port/plan.md",
-   "docs/history/pstack-playbook-port/port-notes/",
-   "docs/history/pstack-playbook-port/reports/",
-   "docs/knowledge/areas/doctrine-layer/per-task-route-tester-pairing-and-proof-floors.md",
-   "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md"
-  ],
-  "affects_skills": [],
-  "affects_specs": [],
-  "action": "Run `.bee/bin/bee knowledge consolidate --feature pstack-playbook-port` and write what it asks into docs/knowledge/: the situation layer (class index grammar, situations.rs and its compiled-in fallback, the orient situation lines, the plan check citation rule, the parity fence), the session group, the fallback skill, the eleven new skills and the thirteen new principles, each anchored to its files; re-grade every concept the slice caps acknowledged as suspect and anchored by files this feature changed (bee knowledge confirm or a fix). Write docs/history/pstack-playbook-port/delivery.md: what shipped, per slice, with the commits. Bee commands you may run in this cell: cargo test, `.bee/bin/bee dev regen`, `.bee/bin/bee dev release-manifest --check`, `.bee/bin/bee knowledge check`, `.bee/bin/bee knowledge consolidate`, `.bee/bin/bee onboard --repo-root . --json`, and `bee herding notify`. Never run `bee dispatch` or any of its `--help`.",
-  "verify": ".bee/bin/bee knowledge check",
-  "must_haves": {
-   "truths": [
-    "docs/knowledge names the situation layer with anchors to situations.rs, orient.rs, plan_group.rs and class_playbook_parity.rs",
-    "docs/history/pstack-playbook-port/delivery.md exists"
-   ],
-   "prohibitions": [
-    "No skill or playbook text is edited"
-   ]
-  }
- },
- {
-  "id": "ppb-39c",
-  "feature": "pstack-playbook-port",
-  "title": "Check the consolidated knowledge",
-  "lane": "standard",
-  "role": "test",
-  "deps": [
-   "ppb-39"
-  ],
-  "decisions": [
-   "41bbba68-9de8-48b3-a9c7-ba1abfdd6410",
-   "913115b3-e1f1-4004-902c-bc574fabb2f1"
-  ],
-  "files": [
-   "docs/history/pstack-playbook-port/reports/ppb-39c.md"
-  ],
-  "read_first": [
-   "docs/history/pstack-playbook-port/CONTEXT.md",
-   "docs/history/pstack-playbook-port/plan.md",
-   "docs/history/pstack-playbook-port/delivery.md",
-   "docs/knowledge/index.md"
-  ],
-  "affects_skills": [],
-  "affects_specs": [],
-  "action": "Run bee knowledge check, confirm each concept ppb-39 wrote names real anchors and that delivery.md matches the capped cells. Write docs/history/pstack-playbook-port/reports/ppb-39c.md; no other edits.",
-  "verify": ".bee/bin/bee knowledge check",
-  "must_haves": {
-   "truths": [
-    "bee knowledge check is green"
-   ],
-   "prohibitions": [
-    "No edit outside the report file"
+    "No edit outside status_full/tests.rs"
    ]
   }
  }
@@ -384,10 +235,9 @@ Packet (authoritative for the preview):
 
 | Cell | Happy path | Edge case | Error path |
 |---|---|---|---|
-| ppb-38 | LEADER.md § Route each task. Pass when it names the situation step and the bee-figure-it-out fallback, and `rule_index_parity` is green | a session situation. Pass when the doctrine says it binds no class | a surface that enumerates the principle set. Pass when the checker finds none |
-| ppb-39 | the situation layer concept. Pass when `bee knowledge check` is green and its anchors name the changed files | a concept acknowledged as suspect in an earlier cap. Pass when it is confirmed or fixed | a concept anchor to a missing file. Pass when `bee knowledge check` names none |
+| ppb-40 | the three tests with fixture indexes. Pass when `cargo test status_full` is green | a fixture index with no Situations section. Pass when orient prints no situation line | the compiled-in fallback. Pass when a test still sees at least one situation with no `skills/` tree |
 
-The run on main and on head for changed behavior: on main `.bee/LEADER.md` § Route each task stops at the class playbook; on head it continues to a situation and names the fallback.
+The run on main and on head for changed behavior: none; this cell changes tests only.
 
 ## Open Questions
 
