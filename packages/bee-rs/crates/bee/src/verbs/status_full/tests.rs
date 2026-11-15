@@ -449,6 +449,7 @@ use crate::version::BEE_VERSION;
                 "- Principles (class=refactor) — name each one you apply and the decision it changed:",
                 "  - `bee-principle-red-before-green` — watch it fail for the reported reason before you fix it",
                 "  - `bee-principle-one-home` — a rule lives in one place and every other surface points at it",
+                "next: open the playbook file and make the todo list from its numbered steps",
             ]
             .join("\n")
         );
@@ -530,6 +531,7 @@ use crate::version::BEE_VERSION;
                 "playbook: skills/bee-planning/playbooks/research.md",
                 "- Principles (class=research) — name each one you apply and the decision it changed:",
                 "  - `bee-principle-one-home` — a rule lives in one place and every other surface points at it",
+                "next: open the playbook file and make the todo list from its numbered steps",
                 "",
             ]
             .join("\n")
@@ -587,13 +589,16 @@ use crate::version::BEE_VERSION;
         assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
         let stdout = String::from_utf8(out.stdout).unwrap();
         let lines: Vec<&str> = stdout.lines().collect();
-        assert_eq!(lines[0], "playbook: skills/bee-planning/playbooks/bugfix.md");
+        let tail = "load bee-planning with skill_get and open this file under its local.path";
+        assert_eq!(lines[0], format!("playbook: skill bee-planning: playbooks/bugfix.md — {tail}"));
         let situation_lines: Vec<String> = expected
             .iter()
-            .map(|s| format!("situation: skills/bee-planning/playbooks/bugfix/{}.md — {}", s.name, s.triggers))
+            .map(|s| format!("situation: skill bee-planning: playbooks/bugfix/{}.md — {tail} — {}", s.name, s.triggers))
             .collect();
         assert_eq!(lines[1..=situation_lines.len()], situation_lines[..], "{stdout}");
         assert_eq!(lines.iter().filter(|l| l.starts_with("situation: ")).count(), expected.len());
+        assert_eq!(lines.iter().filter(|l| l.starts_with("next: ")).count(), 1, "{stdout}");
+        assert!(lines.last().unwrap().starts_with("next: pick the situation whose trigger phrases match"), "{stdout}");
         let out = std::process::Command::new(bee_bin())
             .args(["orient", "--class", "bugfix", "--json"])
             .current_dir(root)
@@ -602,9 +607,13 @@ use crate::version::BEE_VERSION;
         let packet: Value = serde_json::from_slice(&out.stdout).unwrap();
         let rows: Vec<Value> = expected
             .iter()
-            .map(|s| json!({"name": s.name, "triggers": s.triggers, "deliverable": s.deliverable}))
+            .map(|s| {
+                let path = format!("skill bee-planning: playbooks/bugfix/{}.md — {tail}", s.name);
+                json!({"name": s.name, "path": path, "triggers": s.triggers, "deliverable": s.deliverable})
+            })
             .collect();
         assert_eq!(packet["situations"], Value::Array(rows));
+        assert_eq!(packet["playbook"], json!(format!("skill bee-planning: playbooks/bugfix.md — {tail}")));
     }
 
     #[test]
@@ -619,7 +628,12 @@ use crate::version::BEE_VERSION;
         let packet = class_packet(root, "bugfix");
         assert_eq!(
             packet["situations"],
-            json!([{"name": "local-only", "triggers": "here, ở đây", "deliverable": "there"}])
+            json!([{
+                "name": "local-only",
+                "path": "skills/bee-planning/playbooks/bugfix/local-only.md",
+                "triggers": "here, ở đây",
+                "deliverable": "there"
+            }])
         );
         let text = render_class_text(&packet);
         assert_eq!(
@@ -630,6 +644,35 @@ use crate::version::BEE_VERSION;
             ]
         );
         assert_eq!(text.lines().filter(|l| l.starts_with("situation: ")).count(), 1, "{text}");
+    }
+
+    #[test]
+    fn orient_class_resolves_every_path_under_the_first_existing_bee_planning_dir() {
+        for (dir, others) in [
+            (".claude/skills/bee-planning", vec![".agents/skills/bee-planning"]),
+            (".agents/skills/bee-planning", vec![".opencode/skills/bee-planning"]),
+            (".opencode/skills/bee-planning", vec![]),
+        ] {
+            let tmp = tempfile::tempdir().unwrap();
+            let root = tmp.path();
+            write(root, &format!("{dir}/playbooks/bugfix.md"), "# Bugfix\n");
+            for other in others {
+                write(root, &format!("{other}/playbooks/bugfix.md"), "# Bugfix\n");
+            }
+            let packet = class_packet(root, "bugfix");
+            let prefix = format!("{dir}/playbooks/");
+            assert!(packet["playbook"].as_str().unwrap().starts_with(&prefix), "{packet:?}");
+            let rows = packet["situations"].as_array().unwrap();
+            assert!(!rows.is_empty());
+            for row in rows {
+                assert!(row["path"].as_str().unwrap().starts_with(&prefix), "{row:?}");
+            }
+            let text = render_class_text(&packet);
+            for line in text.lines().filter(|l| l.starts_with("playbook: ") || l.starts_with("situation: ")) {
+                assert!(line.contains(&prefix), "{line}");
+            }
+            assert!(text.lines().last().unwrap().starts_with("next: pick the situation"), "{text}");
+        }
     }
 
     #[test]
