@@ -2371,6 +2371,92 @@ so the next session can resume cleanly, or record a capture stub for what settle
         assert_eq!(unverified_agreement_warning(&events), None);
     }
 
+    fn orient_turn(reply: &str, reads: &[Value], situation: bool) -> Vec<Value> {
+        let mut out = String::from("Route: bugfix\nPrinciples (class=bugfix) — name each one you apply:\n  - `bee-principle-red-before-green` — x\n");
+        if situation {
+            out.push_str("situation: .claude/skills/bee-planning/playbooks/bugfix/a.md — x\n");
+        }
+        let mut events = vec![
+            json!({"type":"user","message":{"content":"fix the bug"}}),
+            json!({"type":"assistant","message":{"content":[{"type":"tool_use","id":"t1","name":"Bash","input":{"command":"bee orient --class bugfix"}}]}}),
+            json!({"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"t1","content":out}]}}),
+        ];
+        events.extend(reads.iter().cloned());
+        events.push(json!({"type":"assistant","message":{"content":[{"type":"text","text":reply}]}}));
+        events
+    }
+
+    fn read_of(path: &str) -> Value {
+        json!({"type":"assistant","message":{"content":[{"type":"tool_use","id":"r1","name":"Read","input":{"file_path":path}}]}})
+    }
+
+    #[test]
+    fn a_routed_reply_naming_no_principle_warns() {
+        let warnings = routed_reply_warnings(&orient_turn("Fixed it.", &[read_of("/p/playbooks/bugfix/a.md")], false));
+        assert_eq!(warnings.len(), 1, "{warnings:?}");
+        assert!(warnings[0].contains("agents-name-applied-principles"), "{warnings:?}");
+    }
+
+    #[test]
+    fn a_reply_naming_a_principle_slug_stays_quiet() {
+        let events = orient_turn("Applied bee-principle-red-before-green: wrote the test first.", &[], false);
+        assert!(routed_reply_warnings(&events).is_empty());
+    }
+
+    #[test]
+    fn a_plain_no_principle_statement_stays_quiet() {
+        assert!(routed_reply_warnings(&orient_turn("No principle changed anything here.", &[], false)).is_empty());
+        assert!(routed_reply_warnings(&orient_turn("Không có principle nào đổi quyết định.", &[], false)).is_empty());
+    }
+
+    #[test]
+    fn an_unopened_situation_warns_about_the_playbook() {
+        let warnings = routed_reply_warnings(&orient_turn("No principle applied.", &[], true));
+        assert_eq!(warnings.len(), 1, "{warnings:?}");
+        assert!(warnings[0].contains("playbooks/"), "{warnings:?}");
+    }
+
+    #[test]
+    fn a_read_or_cat_of_a_playbook_file_stays_quiet() {
+        let reads = [read_of("/p/.claude/skills/bee-planning/playbooks/bugfix/a.md")];
+        assert!(routed_reply_warnings(&orient_turn("No principle applied.", &reads, true)).is_empty());
+        let cat = json!({"type":"assistant","message":{"content":[{"type":"tool_use","id":"c1","name":"Bash","input":{"command":"cat .claude/skills/bee-planning/playbooks/bugfix/a.md"}}]}});
+        assert!(routed_reply_warnings(&orient_turn("No principle applied.", &[cat], true)).is_empty());
+    }
+
+    #[test]
+    fn both_warnings_fire_together() {
+        assert_eq!(routed_reply_warnings(&orient_turn("Fixed it.", &[], true)).len(), 2);
+    }
+
+    #[test]
+    fn a_turn_without_orient_class_warns_nothing() {
+        let events = claude_turn("fix the bug", &["Fixed it."]);
+        assert!(routed_reply_warnings(&events).is_empty());
+        let mut other = orient_turn("Fixed it.", &[], true);
+        other[1] = json!({"type":"assistant","message":{"content":[{"type":"tool_use","id":"t1","name":"Bash","input":{"command":"bee orient"}}]}});
+        assert!(routed_reply_warnings(&other).is_empty());
+    }
+
+    #[test]
+    fn an_orient_in_an_earlier_turn_warns_nothing() {
+        let mut events = orient_turn("Fixed it.", &[], true);
+        events.extend(claude_turn("now rename it", &["Renamed."]));
+        assert!(routed_reply_warnings(&events).is_empty());
+    }
+
+    #[test]
+    fn codex_shaped_orient_turn_warns() {
+        let out = "Principles (class=bugfix) — x\nsituation: .agents/skills/bee-planning/playbooks/bugfix/a.md — x\n";
+        let events = vec![
+            json!({"type":"event_msg","payload":{"type":"task_started"}}),
+            json!({"type":"response_item","payload":{"type":"function_call","name":"shell","call_id":"c1","arguments":"{\"command\":[\"bash\",\"-lc\",\"bee orient --class bugfix\"]}"}}),
+            json!({"type":"response_item","payload":{"type":"function_call_output","call_id":"c1","output":out}}),
+            json!({"type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"Fixed it."}]}}),
+        ];
+        assert_eq!(routed_reply_warnings(&events).len(), 2);
+    }
+
     #[cfg(unix)]
     fn stdout_of(f: impl FnOnce()) -> String {
         use std::os::fd::AsRawFd;
@@ -2429,4 +2515,50 @@ so the next session can resume cleanly, or record a capture stub for what settle
         assert_eq!(result, Ok(()));
         assert!(out.contains("agents-verify-before-agreeing"), "{out}");
         assert!(!out.contains("\"decision\":\"block\""), "{out}");
+    
+
+    #[cfg(unix)]
+    #[test]
+    fn stop_hook_output_carries_the_routed_reply_warnings() {
+        let _perf_guard = lock_perf_env();
+        let _transcript_guard = lock_transcript_env();
+        let perf = tempfile::tempdir().unwrap();
+        let config = tempfile::tempdir().unwrap();
+        unsafe { std::env::set_var("BEEHIVE_PERF_DIR", perf.path()) };
+        unsafe { std::env::set_var("CLAUDE_CONFIG_DIR", config.path()) };
+
+        let fx = fixture();
+        let root_canon = dunce::canonicalize(fx.path()).unwrap();
+        let root = root_canon.as_path();
+        write_json_file(&root.join(".bee").join("config.json"), &json!({}));
+        write_json_file(&root.join(".bee").join("state.json"), &json!({"phase": "idle"}));
+        write_transcript(
+            config.path(),
+            root,
+            "s-1",
+            &[
+                r#"{"type":"user","message":{"content":"fix the bug"}}"#,
+                r#"{"type":"assistant","message":{"content":[{"type":"tool_use","id":"t1","name":"Bash","input":{"command":"bee orient --class bugfix"}}]}}"#,
+                r#"{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"t1","content":"Principles (class=bugfix) — x\nsituation: skills/bee-planning/playbooks/bugfix/a.md — x"}]}}"#,
+                r#"{"type":"assistant","message":{"content":[{"type":"text","text":"Fixed it."}]}}"#,
+            ],
+        );
+        let stdin = serde_json::to_string(&json!({
+            "hook_event_name": "Stop",
+            "cwd": root.to_string_lossy(),
+            "session_id": "s-1",
+        }))
+        .unwrap();
+
+        let mut result = Err(());
+        let out = stdout_of(|| result = run_inner(&[], &stdin));
+
+        unsafe { std::env::remove_var("BEEHIVE_PERF_DIR") };
+        unsafe { std::env::remove_var("CLAUDE_CONFIG_DIR") };
+
+        assert_eq!(result, Ok(()));
+        assert!(out.contains("agents-name-applied-principles"), "{out}");
+        assert!(out.contains("never opened a playbooks/ file"), "{out}");
+        assert!(!out.contains("\"decision\":\"block\""), "{out}");
     }
+}
