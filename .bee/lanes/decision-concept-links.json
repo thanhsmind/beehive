@@ -1,0 +1,543 @@
+{
+  "schema_version": "1.0",
+  "feature": "decision-concept-links",
+  "mode": null,
+  "phase": "exploring",
+  "approved_gates": {
+    "context": false,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"decision-concept-links\" started at phase \"exploring\" (lane).",
+  "next_action": "Continue bee-exploring for \"decision-concept-links\" (lane).",
+  "created_at": "2026-11-15T15:07:39.635Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null,
+  "route": {
+    "class": "feature",
+    "lane": "small",
+    "flags": [],
+    "product_files": 2,
+    "rationale": null,
+    "updated_at": "2026-11-15T15:07:36.469Z",
+    "feature": "decision-concept-links"
+  },
+  "gate_preview": {
+    "feature": "decision-concept-links",
+    "plan_sha256": "9322a41df60f4c73be5b2bbe1c333911ddf4afcfb2c76482231a03d392b807b6",
+    "previewed_at": "2026-11-15T15:09:29.656Z",
+    "cells": [
+      {
+        "id": "dcl-1",
+        "feature": "decision-concept-links",
+        "title": "Link decision search results to the concepts that cite them",
+        "lane": "small",
+        "role": "code",
+        "deps": [],
+        "decisions": [
+          "D1",
+          "D2",
+          "d9374293-0ef8-4b54-8770-66cf13d555bc",
+          "c1124936-188a-48fd-9d48-8421d93681e9"
+        ],
+        "affects_skills": [],
+        "affects_specs": [
+          "docs/knowledge/areas/decision-memory/overview.md"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/verbs/decisions/verbs_read.rs",
+          "packages/bee-rs/crates/bee/src/verbs/decisions/scanners.rs",
+          "packages/bee-rs/crates/bee/src/verbs/decisions/concept_links.rs",
+          "packages/bee-rs/crates/bee/src/verbs/decisions/mod.rs",
+          "packages/bee-rs/crates/bee/src/verbs/decisions/tests.rs",
+          "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+          "docs/knowledge/areas/decision-memory/overview.md",
+          "docs/history/decision-concept-links/delivery.md"
+        ],
+        "read_first": [
+          "docs/history/decision-concept-links/CONTEXT.md",
+          "docs/knowledge/areas/decision-memory/overview.md",
+          "packages/bee-rs/crates/bee/src/verbs/decisions/verbs_read.rs",
+          "packages/bee-rs/crates/bee/src/verbs/decisions/scanners.rs",
+          "packages/bee-rs/crates/bee/src/verbs/decisions/tests.rs"
+        ],
+        "action": "RED FIRST in packages/bee-rs/crates/bee/src/verbs/decisions/tests.rs, beside the existing search tests. Build a temp repo with a decisions store and docs/knowledge/areas/x/a.md and b.md. Tests named with concept_link: (a) a decision whose short id appears in a.md gets concepts [\"docs/knowledge/areas/x/a.md:<line>\"] in --json and a text line '  knowledge: docs/knowledge/areas/x/a.md:<line>' after why/alternatives; (b) a decision with feature field 'feat-x' and text 'feat-x D2: ...' links to a line 'feat-x D1-D3' and not to a line 'feat-x D4'; (c) a decision with no link has no concepts key and its text has no knowledge line; (d) decisions active output never carries concepts. Run them and record the red output. FIX: add concept_links.rs in the decisions module: one function reads every *.md under <root>/docs/knowledge/ once (missing dir gives empty), and one function returns up to three 'path:line' strings for an event per D1 (short id = first 8 chars of id; feature from the feature field else the '<slug> D<n>' text prefix; D tokens on a line parsed after the slug: single Dn, lists separated by '/' or ', ', ranges 'Da-Db' or 'Da-b'; with a known n, require a token equal to n or a range covering it; without n, any D token; first matching line per concept; id hits first, then path order). In run_active_or_search, only when is_search, insert the concepts array into each linked result before emit, and append the knowledge line to that result's text. Keep decisions active untouched. Update the decisions search description in generated/registry_payload.json with one sentence naming the concepts key and the knowledge line (keep the file's JSON form; if a registry test pins the text, update it in the same commit). Add to docs/knowledge/areas/decision-memory/overview.md R5 one sentence: search results name the concept lines that cite them (decision-concept-links D1, D2). Write docs/history/decision-concept-links/delivery.md. No code comments. One commit.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- concept_link",
+        "must_haves": {
+          "truths": [
+            "a search result whose short id or feature D-number is cited in a concept carries concepts and a knowledge line",
+            "a search result with no link keeps today's JSON and text bytes",
+            "decisions active output is unchanged",
+            "a repo without docs/knowledge searches without error"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/verbs/decisions/concept_links.rs",
+              "substantive": "the concept scan and the link rule"
+            },
+            {
+              "path": "packages/bee-rs/crates/bee/src/verbs/decisions/verbs_read.rs",
+              "substantive": "concepts key and knowledge line on the search path only"
+            }
+          ],
+          "key_links": [
+            "the link rule follows decision-concept-links D1",
+            "the output shape follows contract decision-concept-links"
+          ],
+          "prohibitions": [
+            "No code comments",
+            "No stored concept index",
+            "No change to decisions active"
+          ],
+          "open_choices": [
+            "Helper names",
+            "How the D-token parser is written"
+          ]
+        }
+      },
+      {
+        "id": "dcl-2",
+        "feature": "decision-concept-links",
+        "title": "Test the decision-concept-links contract edges",
+        "lane": "small",
+        "role": "test",
+        "deps": [
+          "dcl-1"
+        ],
+        "decisions": [
+          "D1",
+          "D2",
+          "c1124936-188a-48fd-9d48-8421d93681e9"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "files": [
+          "packages/bee-rs/crates/bee/src/verbs/decisions/tests.rs",
+          "docs/history/decision-concept-links/reports/dcl-2.md"
+        ],
+        "read_first": [
+          "docs/history/decision-concept-links/CONTEXT.md",
+          "docs/history/decision-concept-links/delivery.md",
+          "packages/bee-rs/crates/bee/src/verbs/decisions/concept_links.rs"
+        ],
+        "action": "Separate tester for dcl-1: do not change product code. Add tests named with concept_link in packages/bee-rs/crates/bee/src/verbs/decisions/tests.rs for: the list forms 'feat-x D1/D5' and 'feat-x D1, D2' (D5 and D2 link, D3 does not); a range 'feat-x D1-D3' covers D3 and not D4; a slug that is only a prefix of another word does not link ('feat-x' vs 'feat-xy D2'); a decision with no D-number links to any 'feat-x D<n>' line; four citing concepts give exactly three, id hits first; a root with no docs/knowledge returns results with no concepts key and exit 0. If a test exposes a defect, return BLOCKED with the failing output; never fix product code. Run the verify, then a live run: .bee/bin/bee is not rebuilt, so run the built binary from the cargo target dir with 'decisions search --text \"trust-layers D1\" --json' at the repo root and record whether a concepts entry names docs/knowledge/areas/onboarding/host-project-artifacts.md. Write docs/history/decision-concept-links/reports/dcl-2.md with each test name, the verify output count and the live run output. One commit.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- concept_link",
+        "must_haves": {
+          "truths": [
+            "list, range, prefix, no-D-number, cap and missing-dir cases each have a passing concept_link test",
+            "the report quotes the verify pass count and the live run output"
+          ],
+          "artifacts": [
+            {
+              "path": "docs/history/decision-concept-links/reports/dcl-2.md",
+              "substantive": "tester report"
+            }
+          ],
+          "key_links": [
+            "dcl-2 tests dcl-1"
+          ],
+          "prohibitions": [
+            "No product code edits",
+            "No code comments"
+          ],
+          "open_choices": [
+            "Fixture layout"
+          ]
+        }
+      }
+    ],
+    "role_plan": {
+      "schema_version": "1.0",
+      "runtime": "claude",
+      "roster_sha256": "d4e696dbde7989d6388dacce3fd7057cb3a6935b46024b79698596a46f6f41d3",
+      "stages": [
+        {
+          "stage": "implementation",
+          "classification": "required",
+          "role": "code",
+          "reason": "dcl-1 writes the concept scan, the output change and its first tests."
+        },
+        {
+          "stage": "test-and-live-proof",
+          "classification": "required",
+          "role": "test",
+          "reason": "dcl-2 is the separate tester: edge-case tests of the contract and a live run."
+        },
+        {
+          "stage": "documentation",
+          "classification": "not-applicable",
+          "role": "docs",
+          "reason": "dcl-1 updates the concept and the help text with the code."
+        },
+        {
+          "stage": "knowledge-consolidation",
+          "classification": "not-applicable",
+          "role": "writer",
+          "reason": "dcl-1 owns the concept edit and delivery.md."
+        },
+        {
+          "stage": "planning",
+          "classification": "not-applicable",
+          "role": "plan",
+          "reason": "The leader wrote this plan."
+        },
+        {
+          "stage": "deployment",
+          "classification": "not-applicable",
+          "role": "deploy",
+          "reason": "No release unless the owner asks."
+        },
+        {
+          "stage": "read-only-gather",
+          "classification": "not-applicable",
+          "role": "read",
+          "reason": "Discovery is done."
+        },
+        {
+          "stage": "fact-extraction",
+          "classification": "not-applicable",
+          "role": "extraction",
+          "reason": "Discovery is done."
+        },
+        {
+          "stage": "generation-fallback",
+          "classification": "not-applicable",
+          "role": "generation",
+          "reason": "Every job has a specific role."
+        },
+        {
+          "stage": "independent-review",
+          "classification": "not-applicable",
+          "role": "review",
+          "reason": "Review is user-invoked."
+        },
+        {
+          "stage": "generic-advisor",
+          "classification": "not-applicable",
+          "role": "advisor",
+          "reason": "Plan check runs inline at this size."
+        },
+        {
+          "stage": "supervision",
+          "classification": "not-applicable",
+          "role": "supervisor",
+          "reason": "No unattended loop runs here."
+        },
+        {
+          "stage": "blind-lane-1",
+          "classification": "not-applicable",
+          "role": "lane-1",
+          "reason": "One shape."
+        },
+        {
+          "stage": "blind-lane-2",
+          "classification": "not-applicable",
+          "role": "lane-2",
+          "reason": "One shape."
+        },
+        {
+          "stage": "blind-lane-3",
+          "classification": "not-applicable",
+          "role": "lane-3",
+          "reason": "One shape."
+        },
+        {
+          "stage": "hat-facts-gaps",
+          "classification": "not-applicable",
+          "role": "hat-facts-gaps",
+          "reason": "Inline check at this size."
+        },
+        {
+          "stage": "hat-risks",
+          "classification": "not-applicable",
+          "role": "hat-risks",
+          "reason": "Inline check."
+        },
+        {
+          "stage": "hat-value",
+          "classification": "not-applicable",
+          "role": "hat-value",
+          "reason": "Inline check."
+        },
+        {
+          "stage": "hat-alternatives",
+          "classification": "not-applicable",
+          "role": "hat-alternatives",
+          "reason": "Inline check."
+        },
+        {
+          "stage": "hat-user-impact",
+          "classification": "not-applicable",
+          "role": "hat-user-impact",
+          "reason": "Inline check."
+        },
+        {
+          "stage": "design",
+          "classification": "not-applicable",
+          "role": "design",
+          "reason": "No rendered UI changes."
+        }
+      ]
+    }
+  },
+  "approved_cell_packet": {
+    "feature": "decision-concept-links",
+    "plan_sha256": "9322a41df60f4c73be5b2bbe1c333911ddf4afcfb2c76482231a03d392b807b6",
+    "previewed_at": "2026-11-15T15:09:29.656Z",
+    "cells": [
+      {
+        "id": "dcl-1",
+        "feature": "decision-concept-links",
+        "title": "Link decision search results to the concepts that cite them",
+        "lane": "small",
+        "role": "code",
+        "deps": [],
+        "decisions": [
+          "D1",
+          "D2",
+          "d9374293-0ef8-4b54-8770-66cf13d555bc",
+          "c1124936-188a-48fd-9d48-8421d93681e9"
+        ],
+        "affects_skills": [],
+        "affects_specs": [
+          "docs/knowledge/areas/decision-memory/overview.md"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/verbs/decisions/verbs_read.rs",
+          "packages/bee-rs/crates/bee/src/verbs/decisions/scanners.rs",
+          "packages/bee-rs/crates/bee/src/verbs/decisions/concept_links.rs",
+          "packages/bee-rs/crates/bee/src/verbs/decisions/mod.rs",
+          "packages/bee-rs/crates/bee/src/verbs/decisions/tests.rs",
+          "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+          "docs/knowledge/areas/decision-memory/overview.md",
+          "docs/history/decision-concept-links/delivery.md"
+        ],
+        "read_first": [
+          "docs/history/decision-concept-links/CONTEXT.md",
+          "docs/knowledge/areas/decision-memory/overview.md",
+          "packages/bee-rs/crates/bee/src/verbs/decisions/verbs_read.rs",
+          "packages/bee-rs/crates/bee/src/verbs/decisions/scanners.rs",
+          "packages/bee-rs/crates/bee/src/verbs/decisions/tests.rs"
+        ],
+        "action": "RED FIRST in packages/bee-rs/crates/bee/src/verbs/decisions/tests.rs, beside the existing search tests. Build a temp repo with a decisions store and docs/knowledge/areas/x/a.md and b.md. Tests named with concept_link: (a) a decision whose short id appears in a.md gets concepts [\"docs/knowledge/areas/x/a.md:<line>\"] in --json and a text line '  knowledge: docs/knowledge/areas/x/a.md:<line>' after why/alternatives; (b) a decision with feature field 'feat-x' and text 'feat-x D2: ...' links to a line 'feat-x D1-D3' and not to a line 'feat-x D4'; (c) a decision with no link has no concepts key and its text has no knowledge line; (d) decisions active output never carries concepts. Run them and record the red output. FIX: add concept_links.rs in the decisions module: one function reads every *.md under <root>/docs/knowledge/ once (missing dir gives empty), and one function returns up to three 'path:line' strings for an event per D1 (short id = first 8 chars of id; feature from the feature field else the '<slug> D<n>' text prefix; D tokens on a line parsed after the slug: single Dn, lists separated by '/' or ', ', ranges 'Da-Db' or 'Da-b'; with a known n, require a token equal to n or a range covering it; without n, any D token; first matching line per concept; id hits first, then path order). In run_active_or_search, only when is_search, insert the concepts array into each linked result before emit, and append the knowledge line to that result's text. Keep decisions active untouched. Update the decisions search description in generated/registry_payload.json with one sentence naming the concepts key and the knowledge line (keep the file's JSON form; if a registry test pins the text, update it in the same commit). Add to docs/knowledge/areas/decision-memory/overview.md R5 one sentence: search results name the concept lines that cite them (decision-concept-links D1, D2). Write docs/history/decision-concept-links/delivery.md. No code comments. One commit.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- concept_link",
+        "must_haves": {
+          "truths": [
+            "a search result whose short id or feature D-number is cited in a concept carries concepts and a knowledge line",
+            "a search result with no link keeps today's JSON and text bytes",
+            "decisions active output is unchanged",
+            "a repo without docs/knowledge searches without error"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/verbs/decisions/concept_links.rs",
+              "substantive": "the concept scan and the link rule"
+            },
+            {
+              "path": "packages/bee-rs/crates/bee/src/verbs/decisions/verbs_read.rs",
+              "substantive": "concepts key and knowledge line on the search path only"
+            }
+          ],
+          "key_links": [
+            "the link rule follows decision-concept-links D1",
+            "the output shape follows contract decision-concept-links"
+          ],
+          "prohibitions": [
+            "No code comments",
+            "No stored concept index",
+            "No change to decisions active"
+          ],
+          "open_choices": [
+            "Helper names",
+            "How the D-token parser is written"
+          ]
+        }
+      },
+      {
+        "id": "dcl-2",
+        "feature": "decision-concept-links",
+        "title": "Test the decision-concept-links contract edges",
+        "lane": "small",
+        "role": "test",
+        "deps": [
+          "dcl-1"
+        ],
+        "decisions": [
+          "D1",
+          "D2",
+          "c1124936-188a-48fd-9d48-8421d93681e9"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "files": [
+          "packages/bee-rs/crates/bee/src/verbs/decisions/tests.rs",
+          "docs/history/decision-concept-links/reports/dcl-2.md"
+        ],
+        "read_first": [
+          "docs/history/decision-concept-links/CONTEXT.md",
+          "docs/history/decision-concept-links/delivery.md",
+          "packages/bee-rs/crates/bee/src/verbs/decisions/concept_links.rs"
+        ],
+        "action": "Separate tester for dcl-1: do not change product code. Add tests named with concept_link in packages/bee-rs/crates/bee/src/verbs/decisions/tests.rs for: the list forms 'feat-x D1/D5' and 'feat-x D1, D2' (D5 and D2 link, D3 does not); a range 'feat-x D1-D3' covers D3 and not D4; a slug that is only a prefix of another word does not link ('feat-x' vs 'feat-xy D2'); a decision with no D-number links to any 'feat-x D<n>' line; four citing concepts give exactly three, id hits first; a root with no docs/knowledge returns results with no concepts key and exit 0. If a test exposes a defect, return BLOCKED with the failing output; never fix product code. Run the verify, then a live run: .bee/bin/bee is not rebuilt, so run the built binary from the cargo target dir with 'decisions search --text \"trust-layers D1\" --json' at the repo root and record whether a concepts entry names docs/knowledge/areas/onboarding/host-project-artifacts.md. Write docs/history/decision-concept-links/reports/dcl-2.md with each test name, the verify output count and the live run output. One commit.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- concept_link",
+        "must_haves": {
+          "truths": [
+            "list, range, prefix, no-D-number, cap and missing-dir cases each have a passing concept_link test",
+            "the report quotes the verify pass count and the live run output"
+          ],
+          "artifacts": [
+            {
+              "path": "docs/history/decision-concept-links/reports/dcl-2.md",
+              "substantive": "tester report"
+            }
+          ],
+          "key_links": [
+            "dcl-2 tests dcl-1"
+          ],
+          "prohibitions": [
+            "No product code edits",
+            "No code comments"
+          ],
+          "open_choices": [
+            "Fixture layout"
+          ]
+        }
+      }
+    ],
+    "role_plan": {
+      "schema_version": "1.0",
+      "runtime": "claude",
+      "roster_sha256": "d4e696dbde7989d6388dacce3fd7057cb3a6935b46024b79698596a46f6f41d3",
+      "stages": [
+        {
+          "stage": "implementation",
+          "classification": "required",
+          "role": "code",
+          "reason": "dcl-1 writes the concept scan, the output change and its first tests."
+        },
+        {
+          "stage": "test-and-live-proof",
+          "classification": "required",
+          "role": "test",
+          "reason": "dcl-2 is the separate tester: edge-case tests of the contract and a live run."
+        },
+        {
+          "stage": "documentation",
+          "classification": "not-applicable",
+          "role": "docs",
+          "reason": "dcl-1 updates the concept and the help text with the code."
+        },
+        {
+          "stage": "knowledge-consolidation",
+          "classification": "not-applicable",
+          "role": "writer",
+          "reason": "dcl-1 owns the concept edit and delivery.md."
+        },
+        {
+          "stage": "planning",
+          "classification": "not-applicable",
+          "role": "plan",
+          "reason": "The leader wrote this plan."
+        },
+        {
+          "stage": "deployment",
+          "classification": "not-applicable",
+          "role": "deploy",
+          "reason": "No release unless the owner asks."
+        },
+        {
+          "stage": "read-only-gather",
+          "classification": "not-applicable",
+          "role": "read",
+          "reason": "Discovery is done."
+        },
+        {
+          "stage": "fact-extraction",
+          "classification": "not-applicable",
+          "role": "extraction",
+          "reason": "Discovery is done."
+        },
+        {
+          "stage": "generation-fallback",
+          "classification": "not-applicable",
+          "role": "generation",
+          "reason": "Every job has a specific role."
+        },
+        {
+          "stage": "independent-review",
+          "classification": "not-applicable",
+          "role": "review",
+          "reason": "Review is user-invoked."
+        },
+        {
+          "stage": "generic-advisor",
+          "classification": "not-applicable",
+          "role": "advisor",
+          "reason": "Plan check runs inline at this size."
+        },
+        {
+          "stage": "supervision",
+          "classification": "not-applicable",
+          "role": "supervisor",
+          "reason": "No unattended loop runs here."
+        },
+        {
+          "stage": "blind-lane-1",
+          "classification": "not-applicable",
+          "role": "lane-1",
+          "reason": "One shape."
+        },
+        {
+          "stage": "blind-lane-2",
+          "classification": "not-applicable",
+          "role": "lane-2",
+          "reason": "One shape."
+        },
+        {
+          "stage": "blind-lane-3",
+          "classification": "not-applicable",
+          "role": "lane-3",
+          "reason": "One shape."
+        },
+        {
+          "stage": "hat-facts-gaps",
+          "classification": "not-applicable",
+          "role": "hat-facts-gaps",
+          "reason": "Inline check at this size."
+        },
+        {
+          "stage": "hat-risks",
+          "classification": "not-applicable",
+          "role": "hat-risks",
+          "reason": "Inline check."
+        },
+        {
+          "stage": "hat-value",
+          "classification": "not-applicable",
+          "role": "hat-value",
+          "reason": "Inline check."
+        },
+        {
+          "stage": "hat-alternatives",
+          "classification": "not-applicable",
+          "role": "hat-alternatives",
+          "reason": "Inline check."
+        },
+        {
+          "stage": "hat-user-impact",
+          "classification": "not-applicable",
+          "role": "hat-user-impact",
+          "reason": "Inline check."
+        },
+        {
+          "stage": "design",
+          "classification": "not-applicable",
+          "role": "design",
+          "reason": "No rendered UI changes."
+        }
+      ]
+    }
+  }
+}
