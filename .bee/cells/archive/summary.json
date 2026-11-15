@@ -2323,5 +2323,10 @@
     "capped": 2,
     "dropped": 0,
     "archived_at": "2026-11-15T15:32:51.910Z"
+  },
+  "clippy-in-test": {
+    "capped": 2,
+    "dropped": 0,
+    "archived_at": "2026-11-15T23:41:58.964Z"
   }
 }

@@ -1,0 +1,144 @@
+{
+  "id": "cit-2",
+  "feature": "clippy-in-test",
+  "title": "Test the clippy entry and the list-valued test path",
+  "lane": "small",
+  "role": "test",
+  "deps": [
+    "cit-1"
+  ],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo clippy --manifest-path packages/bee-rs/Cargo.toml && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test proof_gate && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- blind",
+  "must_haves": {
+    "truths": [
+      "a test fails when ci.yml has no run line for a non-cargo-test commands.test entry",
+      "a test checks that release.sh runs each entry of a list-valued commands.test in order and stops at the first red one, and still runs a string value",
+      "a test checks the dossier check still refuses a second level-1 heading with dossier_section_unexpected",
+      "cargo clippy --manifest-path packages/bee-rs/Cargo.toml exits 0"
+    ]
+  },
+  "decisions": [
+    "9a9521ab-7f49-4ece-a526-35a81d7ed38a",
+    "d6c90a97-78e4-46d0-80e5-32ca5cf654e1",
+    "c44134a1-eef7-4de0-a798-f9fc71f7da50"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/tests/proof_gate.rs",
+    "packages/bee-rs/crates/bee/src/verbs/blind/mod.rs"
+  ],
+  "read_first": [
+    "docs/history/clippy-in-test/CONTEXT.md",
+    "packages/bee-rs/crates/bee/tests/proof_gate.rs",
+    "scripts/release.sh"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Verify the cit-1 commit against CONTEXT.md D1 and D2, then add tests that check every clause of contract clippy-in-test (decision 9a9521ab) that no test covers yet. Parity: drive the parity logic on in-memory workflow text so a missing clippy run line fails (refactor the helper in proof_gate.rs only as far as the test needs). Release: exercise the release.sh test-gate reading on a temp config, a list with a passing then failing entry and a string, without running a real release (extract nothing from release.sh into Rust; drive bash on a temp copy of only what you need, or assert on the jq expression output if a full run is not possible, and say which). Blind: a dossier with a second level-1 heading still refuses with dossier_section_unexpected (add it to the existing blind tests module). Assert observable output only. If cit-1 breaks the contract, return BLOCKED with the failing output instead of changing production code. No code comments. Proof: the verify command; quote the counts and name the new tests.",
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "cit-2-worker",
+    "outcome": "cit-1 holds against D1/D2; added 4 proof_gate tests (parity on in-memory ci text, release gate list/string via bash through jq and python3) and 1 blind test (first extra level-1 heading refused); commit 766fdec95b4c7231289f19298fae67b6ab7070df",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/tests/proof_gate.rs",
+      "packages/bee-rs/crates/bee/src/verbs/blind/mod.rs"
+    ],
+    "deviations": [
+      "sync-ack: Test-only change; cit-1 synced the owning concept"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-15T23:38:58.861Z",
+    "behavior_change": false,
+    "verification_evidence": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo clippy --manifest-path packages/bee-rs/Cargo.toml && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml — green:unit — full declared path, EXIT 0, 49 targets ok 0 failed, bin 5229 passed; 3 mutations turned the new tests red",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "542c65ba-d0f1-433f-bdc0-b1f702334e00",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo clippy --manifest-path packages/bee-rs/Cargo.toml && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test proof_gate && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- blind",
+    "claimed_at": "2026-11-15T23:32:23.299Z",
+    "knowledge_delta": [],
+    "sync_ack": "Test-only change; cit-1 synced the owning concept",
+    "no_mistakes": true,
+    "no_knowledge_used": true,
+    "principles_used": [
+      {
+        "slug": "bee-principle-red-before-green",
+        "changed": "ran three mutations so each new test was seen to fail"
+      },
+      {
+        "slug": "bee-principle-test-behavior-not-structure",
+        "changed": "the release test runs bash and asserts on the trace file, exit status and stderr, not on the jq text"
+      },
+      {
+        "slug": "bee-principle-single-source-of-truth",
+        "changed": "the release harness is sliced from release.sh, not copied into Rust"
+      }
+    ],
+    "report": {
+      "outcome": "cit-1 holds against D1/D2; added 4 proof_gate tests (parity on in-memory ci text, release gate list/string via bash through jq and python3) and 1 blind test (first extra level-1 heading refused); commit 766fdec95b4c7231289f19298fae67b6ab7070df",
+      "commit": "766fdec95b4c7231289f19298fae67b6ab7070df",
+      "files": [
+        "packages/bee-rs/crates/bee/tests/proof_gate.rs",
+        "packages/bee-rs/crates/bee/src/verbs/blind/mod.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo clippy --manifest-path packages/bee-rs/Cargo.toml && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test proof_gate && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- blind — green:unit — PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo clippy --manifest-path packages/bee-rs/Cargo.toml && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml — green:unit — full declared path, EXIT 0, 49 targets ok 0 failed, bin 5229 passed; 3 mutations turned the new tests red",
+      "deviations": [],
+      "knowledge_used": [],
+      "principles_used": [
+        "bee-principle-red-before-green — ran three mutations so each new test was seen to fail",
+        "bee-principle-test-behavior-not-structure — the release test runs bash and asserts on the trace file, exit status and stderr, not on the jq text",
+        "bee-principle-single-source-of-truth — the release harness is sliced from release.sh, not copied into Rust"
+      ],
+      "patch_id": "e54a17e079d8188e8fef6b4184ce58fb7a41efe7"
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "a test fails when ci.yml has no run line for a non-cargo-test commands.test entry",
+            "artifact": "packages/bee-rs/crates/bee/tests/proof_gate.rs"
+          },
+          {
+            "requirement": "a test checks that release.sh runs each entry of a list-valued commands.test in order and stops at the first red one, and still runs a string value",
+            "artifact": "packages/bee-rs/crates/bee/tests/proof_gate.rs"
+          },
+          {
+            "requirement": "a test checks the dossier check still refuses a second level-1 heading with dossier_section_unexpected",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/blind/mod.rs"
+          },
+          {
+            "requirement": "cargo clippy --manifest-path packages/bee-rs/Cargo.toml exits 0",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/blind/mod.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/tests/proof_gate.rs",
+            "artifact": "packages/bee-rs/crates/bee/tests/proof_gate.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/blind/mod.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/blind/mod.rs"
+          }
+        ],
+        "recorded_at": "2026-11-15T23:39:03.658Z",
+        "recorded_by": "542c65ba-d0f1-433f-bdc0-b1f702334e00",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": {
+    "new": 78164,
+    "cached": 1083694,
+    "total": 1161858,
+    "models": {
+      "claude-opus-5-5": {
+        "new": 78164,
+        "cached": 1083694,
+        "total": 1161858
+      }
+    },
+    "jobs": [
+      "job-1794785548900-1754702-1"
+    ]
+  }
+}
