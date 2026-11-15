@@ -233,7 +233,7 @@ chatter. They trust fresh output, not assurance.
   Progress ticks are not prose and do not count against that budget — they are one
   fixed-format line per step ("Progress ticks"). The complete record (reports,
   findings, matrices) lives in a linked file, never pasted into chat.
-- **Close** with exactly one next action (rule: agents-one-next-action).
+- **Close** with exactly one next action (rule: agents-one-next-action). A multi-step routed task's closing turn also carries one Principles line: each applied principle slug and the decision it changed, or a plain statement that none changed anything (rule: agents-name-applied-principles).
 
 **Five rules.** These are the ones a message can actually violate:
 

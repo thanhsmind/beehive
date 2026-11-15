@@ -738,31 +738,55 @@ pub(crate) fn build_orient(ctx: &mut Ctx) -> R<JMap> {
 pub(crate) fn class_packet(root: &Path, class: &str) -> JMap {
     let mut packet = JMap::new();
     packet.insert("class".into(), json!(class));
-    packet.insert("playbook".into(), json!(format!("skills/bee-planning/playbooks/{class}.md")));
+    packet.insert("playbook".into(), json!(playbook_ref(root, &format!("{class}.md"))));
     let situations: Vec<Value> = crate::situations::class_situations(root, class)
         .into_iter()
-        .map(|s| json!({"name": s.name, "triggers": s.triggers, "deliverable": s.deliverable}))
+        .map(|s| {
+            let path = playbook_ref(root, &format!("{class}/{}.md", s.name));
+            json!({"name": s.name, "path": path, "triggers": s.triggers, "deliverable": s.deliverable})
+        })
         .collect();
     packet.insert("situations".into(), Value::Array(situations));
     packet.insert("principles".into(), json!(crate::principles::principle_lines(root, Some(class))));
     packet
 }
 
+const PLANNING_SKILL_DIRS: [&str; 4] = [
+    "skills/bee-planning",
+    ".claude/skills/bee-planning",
+    ".agents/skills/bee-planning",
+    ".opencode/skills/bee-planning",
+];
+
+fn playbook_ref(root: &Path, rel: &str) -> String {
+    match PLANNING_SKILL_DIRS.iter().find(|d| root.join(d).join("playbooks").join(rel).is_file()) {
+        Some(dir) => format!("{dir}/playbooks/{rel}"),
+        None => format!(
+            "skill bee-planning: playbooks/{rel} — load bee-planning with skill_get and open this file under its local.path"
+        ),
+    }
+}
+
 pub(crate) fn render_class_text(packet: &JMap) -> String {
     let mut lines = vec![format!("playbook: {}", tpl(packet.get("playbook")))];
+    let mut has_situations = false;
     if let Some(Value::Array(situations)) = packet.get("situations") {
-        let class = tpl(packet.get("class"));
+        has_situations = !situations.is_empty();
         for s in situations {
-            lines.push(format!(
-                "situation: skills/bee-planning/playbooks/{class}/{}.md — {}",
-                tpl(vget(s, "name")),
-                tpl(vget(s, "triggers"))
-            ));
+            lines.push(format!("situation: {} — {}", tpl(vget(s, "path")), tpl(vget(s, "triggers"))));
         }
     }
     if let Some(Value::Array(principles)) = packet.get("principles") {
         lines.extend(principles.iter().filter_map(Value::as_str).map(str::to_string));
     }
+    lines.push(
+        if has_situations {
+            "next: pick the situation whose trigger phrases match the task, open that file, and make the todo list from its numbered steps"
+        } else {
+            "next: open the playbook file and make the todo list from its numbered steps"
+        }
+        .to_string(),
+    );
     lines.join("\n")
 }
 

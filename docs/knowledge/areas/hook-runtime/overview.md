@@ -8,7 +8,7 @@ bee:
   lifecycle: active
   areas: [hook-runtime]
   required_context: []
-  decisions: ["codex-runtime-parity D1, D2", "c2c46488 (a closed feature's approvals never license the next write; the guard's silence is never permission)"]
+  decisions: ["codex-runtime-parity D1, D2", "orient-host-playbook D2", "c2c46488 (a closed feature's approvals never license the next write; the guard's silence is never permission)"]
   sources: ["codex-runtime-parity Safety foundation — cells codex-parity-2, 2b, 3, 4 (traces in .bee/cells/), reports in docs/history/codex-runtime-parity/reports/", "docs/specs/hook-runtime.md#B1", "docs/specs/hook-runtime.md#R2", "docs/specs/hook-runtime.md#R13", "knowledge-loop cell kl-4 (session-start critical-pattern digest ranked by relevance; trace .bee/cells/archive/knowledge-loop/kl-4.json, commit d74ca11c, 2026-08-05) — cross-referenced, owned by okf-profile/context-and-promote.md"]
   authoritative_for: "hook-runtime: purpose, actors, and the cross-cutting checkpoint frame"
   owns.code: [packages/bee-rs/crates/bee/src/hooks/*]
@@ -92,6 +92,20 @@ line naming the rule `agents-verify-before-agreeing`. The line is advisory
 only: the turn is never blocked and the exit code never changes, and a Stop
 that blocks or whose hook is disabled adds nothing. Pointer:
 `packages/bee-rs/crates/bee/src/hooks/session_close/claims.rs`.
+
+**B2b — Routed-reply warnings (Stop).** Beside B2, the same Stop reads the last
+turn's tool calls and results (Claude `tool_use`/`tool_result` and Codex
+`function_call`/`function_call_output`, linked by call id). When the turn ran
+`bee orient --class` and its output listed principles, yet the final reply
+carries no `bee-principle-` slug and no plain no-principle statement ("no
+principle", "không principle", "không có principle"), it adds a line naming
+rule `agents-name-applied-principles`. When that output listed a `situation:`
+line and the turn neither `Read` nor `cat`/`sed`/`head`-ed a path under
+`/playbooks/`, it adds a line saying the playbook was never opened. Both are
+advisory in the same way as B2 and a turn without `bee orient --class` adds
+neither (orient-host-playbook D2, `dae9d3c7`). The match is on fixed text, so a
+reworded orient header silently disables the principle line. Pointer:
+`routed_reply_warnings` in the same `claims.rs`.
 
 ## Business Rules
 

@@ -142,7 +142,7 @@
     },
     {
       "path": ".claude-plugin/skills/.bee-render.json",
-      "sha256": "30078c4a3b450888783d3366436338bf002b5fdd29d6d2bed661567b07124acc",
+      "sha256": "c729a1709d0024b51a016df488ae52f94eccf2c45a970d1821af8acc8bbead38",
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/.bee-render.json"
@@ -513,7 +513,7 @@
     },
     {
       "path": ".claude-plugin/skills/bee-hive/references/routing-and-contracts.md",
-      "sha256": "12cb0d47507a72275fc42896e18d08d4fa322ca76012dee4c48dc536d0ce01d5",
+      "sha256": "8b52a4cd0266ba740ac93fa350495f0e95ada826e6dea0b4b6277359813abed3",
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/bee-hive/references/routing-and-contracts.md"
@@ -1808,7 +1808,7 @@
     },
     {
       "path": ".codex-plugin/skills/.bee-render.json",
-      "sha256": "607f4259e2e5778b54d28e8f3fad3efab7e595807ab62e70f2f64e9228c75b7d",
+      "sha256": "d44e4f9a60d7fb666cc99c9f2addda487782134f803f0651350f44ce1cd40403",
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/.bee-render.json"
@@ -2179,7 +2179,7 @@
     },
     {
       "path": ".codex-plugin/skills/bee-hive/references/routing-and-contracts.md",
-      "sha256": "12cb0d47507a72275fc42896e18d08d4fa322ca76012dee4c48dc536d0ce01d5",
+      "sha256": "8b52a4cd0266ba740ac93fa350495f0e95ada826e6dea0b4b6277359813abed3",
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/bee-hive/references/routing-and-contracts.md"
@@ -5336,7 +5336,7 @@
     },
     {
       "path": "skills/bee-hive/references/routing-and-contracts.md",
-      "sha256": "12cb0d47507a72275fc42896e18d08d4fa322ca76012dee4c48dc536d0ce01d5",
+      "sha256": "8b52a4cd0266ba740ac93fa350495f0e95ada826e6dea0b4b6277359813abed3",
       "mode": "644",
       "role": "plugin_skill",
       "packagePath": "skills/bee-hive/references/routing-and-contracts.md"

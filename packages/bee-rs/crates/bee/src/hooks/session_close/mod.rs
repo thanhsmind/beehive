@@ -174,9 +174,12 @@ fn run_inner(argv: &[String], stdin: &str) -> Result<(), ()> {
     let mut stdout = String::new();
     let mut stderr = String::new();
     let mut parts: Vec<String> = Vec::new();
-    let claims_warning = (ctx.event == "Stop")
-        .then(|| perf_events.as_deref().and_then(unverified_agreement_warning))
-        .flatten();
+    let claims_warning: Vec<String> = (ctx.event == "Stop")
+        .then(|| {
+            let events = perf_events.as_deref().unwrap_or(&[]);
+            unverified_agreement_warning(events).into_iter().chain(routed_reply_warnings(events)).collect()
+        })
+        .unwrap_or_default();
 
     // The .mjs's advisory try/catch: a Crash logs and falls through to the
     // emit of whatever parts were already collected.
