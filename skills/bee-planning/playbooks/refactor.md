@@ -1,20 +1,10 @@
 # refactor
 
-1. Record existing behavior FIRST — a characterization test, a snapshot, or an
-   equivalence script. A type check or a lint is not a record.
-2. Prove that record green on the UNCHANGED tree — a red base hides new reds.
-3. Change structure in small steps, so that a red points at one step.
-4. The record stays green at every step, because a red found later has many
-   suspects.
-5. A behavior change is not a refactor — it is a separate cell.
-6. Subtract first — every later step then moves less: an early cell deletes
-   dead code and one-caller wrappers.
-7. An API move migrates every caller and deletes the old API in one slice —
-   two live APIs drift apart. Then search strings and docs for the old name.
-8. Never edit the record, the harness, or the baseline to make a step green —
-   a record bent to pass no longer records anything.
-9. Keep the diff only if it lowers what a reader must hold in mind — that is
-   the whole payoff of a refactor.
+A structure to change while behavior holds: pick the situation below and open its file.
 
-Proof line: the record, green before the change and green after it.
+## Situations
+
+- `refactoring` — refactor, rename, extract, inline, dedupe, restructure, move this module, tidy up this area, clean up the structure, tái cấu trúc, đổi tên, tách hàm, gộp code trùng, dọn lại cấu trúc, di chuyển module — delivers: the structure that changed, the pin it was held against, the equivalence proof, the reader-load delta, and what shipped and what was reverted
+- `visual-parity` — make X match Y exactly, pixel-perfect, pixel parity, styling-system migration, port this UI to another framework, match the design exactly, giống hệt bản gốc, khớp từng pixel, chuyển hệ thống style, chuyển giao diện sang framework khác — delivers: the components migrated, the image-diff result for each, the baseline harness location, and what is left
+
 Proof floor: the cap refuses a result weaker than this class's floor and names it; the table is the cap's own (`bee cells finish --help`).
