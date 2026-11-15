@@ -196,13 +196,17 @@ never read the file, and `bee protocol check` reports its state.
 - A task opens with one line before its first tool call: `Triage:
   <lane> — <reason in 10 words or fewer>`. A route flag never takes a
   fast lane; the user may override; a plain question needs none.
-- Tag each technical claim about code or behavior `[verified]` (read or
-  ran this session) or `[unverified]` (general knowledge or inference);
-  never present `[unverified]` as fact.
-- Never agree with a proposal until its key assumption is `[verified]`;
+- A technical claim about code or behavior that this session checked
+  carries a numbered citation `[1]`, `[2]` in the text. End the reply
+  with a `Sources:` (or `Nguồn:`) block, one line per number: `[n]
+  path:line`, or `[n]` the command run with its result. One source
+  keeps one number on reuse. A claim from general knowledge or
+  inference keeps the inline `[unverified]` marker, gets no number,
+  and is never stated as fact.
+- Never agree with a proposal until its key assumption has a citation;
   the first reaction to an unchecked idea is conditional ("sounds
   right; checking X first").
-  The Stop hook warns when a reply agrees without a `[verified]` label.
+  The Stop hook warns when a reply agrees with no citation.
 - When the user's direction conflicts with the code, never say "you are
   wrong": state the goal, what the code does and why with file:line,
   then the options.

@@ -29,14 +29,52 @@ const CONDITIONAL_MARKERS: &[&str] = &[
     "để tôi kiểm tra",
 ];
 
-const WARNING: &str = "bee: this reply agrees with a proposal but carries no [verified] label — rule agents-verify-before-agreeing: check the key assumption first, then agree with what the check showed.";
+const WARNING: &str = "bee: this reply agrees with a proposal but cites no source — rule agents-verify-before-agreeing: cite the key assumption as [1] with a Sources line, then agree with what the check showed.";
 
 pub(crate) fn unverified_agreement_warning(events: &[Value]) -> Option<String> {
     let text = last_turn_assistant_text(events).to_lowercase();
     let agrees = AGREEMENT_PHRASES.iter().any(|p| text.contains(p));
-    let labelled = text.contains("[verified");
+    let checked = text.contains("[verified") || is_cited(&text);
     let conditional = CONDITIONAL_MARKERS.iter().any(|m| text.contains(m));
-    (agrees && !labelled && !conditional).then(|| WARNING.to_string())
+    (agrees && !checked && !conditional).then(|| WARNING.to_string())
+}
+
+fn is_sources_heading(line: &str) -> bool {
+    let word = line.trim().trim_start_matches(['#', '*', ' ']).trim_end_matches(['*', ':', ' ']);
+    matches!(word, "sources" | "nguồn")
+}
+
+fn leading_number(line: &str) -> Option<&str> {
+    let rest = line.trim().strip_prefix('[')?;
+    let (digits, _) = rest.split_once(']')?;
+    (!digits.is_empty() && digits.bytes().all(|b| b.is_ascii_digit())).then_some(digits)
+}
+
+fn inline_numbers(line: &str) -> Vec<&str> {
+    line.split('[')
+        .skip(1)
+        .filter_map(|part| part.split_once(']').map(|(inner, _)| inner))
+        .filter(|inner| !inner.is_empty() && inner.bytes().all(|b| b.is_ascii_digit()))
+        .collect()
+}
+
+fn is_cited(text: &str) -> bool {
+    let mut in_sources = false;
+    let mut inline: Vec<&str> = Vec::new();
+    let mut listed: Vec<&str> = Vec::new();
+    for line in text.lines() {
+        if in_sources {
+            if let Some(n) = leading_number(line) {
+                listed.push(n);
+                continue;
+            }
+        } else if is_sources_heading(line) {
+            in_sources = true;
+            continue;
+        }
+        inline.extend(inline_numbers(line));
+    }
+    listed.iter().any(|n| inline.contains(n))
 }
 
 const PRINCIPLE_WARNING: &str = "bee: this routed reply names no bee-principle- slug and states no principle changed anything — rule agents-name-applied-principles: name each applied principle and the decision it changed, or say plainly that none did.";

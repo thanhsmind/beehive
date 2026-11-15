@@ -86,12 +86,16 @@ ending the turn.
 **B2 — Unverified-agreement warning (Stop).** When a session stops, the close
 checkpoint reads the assistant text of the last turn from the transcript events
 it already loaded. If that text agrees with a proposal ("you're right", "makes
-sense", "hợp lý" and similar fixed phrases) yet carries no `[verified]` label
-and no conditional marker ("checking", "kiểm tra trước"), it adds one advisory
-line naming the rule `agents-verify-before-agreeing`. The line is advisory
-only: the turn is never blocked and the exit code never changes, and a Stop
-that blocks or whose hook is disabled adds nothing. Pointer:
-`packages/bee-rs/crates/bee/src/hooks/session_close/claims.rs`.
+sense", "hợp lý" and similar fixed phrases) yet counts as neither checked nor
+conditional, it adds one advisory line naming the rule
+`agents-verify-before-agreeing`. A reply counts as checked with the legacy
+`[verified` marker, or when it is cited: an inline `[n]` plus, after a
+`Sources:` or `Nguồn:` line (plain, heading or bold), a line that starts with
+that same `[n]` (cited-claims D2). A conditional marker ("checking", "kiểm tra
+trước") also silences it. The line names the citation form so the fix is
+obvious. The line is advisory only: the turn is never blocked and the exit code
+never changes, and a Stop that blocks or whose hook is disabled adds nothing.
+Pointer: `packages/bee-rs/crates/bee/src/hooks/session_close/claims.rs`.
 
 **B2b — Routed-reply warnings (Stop).** Beside B2, the same Stop reads the last
 turn's tool calls and results (Claude `tool_use`/`tool_result` and Codex
