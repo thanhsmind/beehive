@@ -179,6 +179,10 @@
       "sha256": "68d6c033f7518fa5dcf27050916cabd76d404488f57319b42c7181dbae209af8"
     },
     {
+      "name": "bee-tdd",
+      "sha256": "5db627096fe7303722ae224fd7e003f3c5c0ebfc9cf7a79c355b00549c184a4a"
+    },
+    {
       "name": "bee-teach",
       "sha256": "e75b23d4f4a3eba3a211a0afa36f16494cbaab29c31ee2642418f76293d25b01"
     },

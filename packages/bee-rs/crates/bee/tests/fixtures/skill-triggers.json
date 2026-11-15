@@ -174,5 +174,11 @@
   {"brief": "Chạy song song nhiều worker, mỗi worker phụ trách một phần của codebase, rồi gộp thành một báo cáo duy nhất.", "expect": ["bee-fanout"]},
   {"brief": "I want parallel coverage of every route handler, one worker per handler, drained into a single report.", "expect": ["bee-fanout"]},
   {"brief": "The cells are approved and open — run them to done with workers.", "expect": ["bee-swarming"], "near": "bee-fanout"},
-  {"brief": "Try the same refactor several independent ways, keep the strongest and graft in the good parts of the rest.", "expect": ["bee-arena"], "near": "bee-fanout"}
+  {"brief": "Try the same refactor several independent ways, keep the strongest and graft in the good parts of the rest.", "expect": ["bee-arena"], "near": "bee-fanout"},
+
+  {"brief": "The date parser drops the last day of a month. Write a failing test for it first, watch it fail, then fix the bug.", "expect": ["bee-tdd"]},
+  {"brief": "Add a regression test for this off-by-one crash that fails before the fix and passes after it.", "expect": ["bee-tdd"]},
+  {"brief": "Sửa lỗi này theo kiểu TDD: viết test thất bại trước, xác nhận nó đỏ đúng lý do rồi mới sửa code.", "expect": ["bee-tdd"]},
+  {"brief": "The cells are approved and open, testers included — run them all to done with workers.", "expect": ["bee-swarming"], "near": "bee-tdd"},
+  {"brief": "We agreed regression tests never mock the database, lock that in as a recorded decision.", "expect": ["bee-capturing"], "near": "bee-tdd"}
 ]
