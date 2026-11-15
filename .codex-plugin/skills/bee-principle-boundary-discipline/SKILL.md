@@ -11,9 +11,12 @@ edge, into the types the rest of the code uses. Past the edge, trust those
 types; a check deep in a call chain means the edge did not finish its job.
 
 Keep decisions in pure functions that take typed data and return a result,
-and keep the shell that calls them thin. Never let the boundary's private
+and keep the shell that calls them thin. Parsing is one: raw bytes in, typed
+state out. So is building a prompt (structured state in, string out) and
+scoring a result (state in, assessment out). Never let the boundary's private
 types, such as a wire format or a storage row, leak through the public
-surface.
+surface: expose domain concepts, keep the general-purpose mechanism inside and
+the special-purpose policy at the edge.
 
 **Check:** is this data crossing a boundary right now, and can this logic be
 a pure function the shell calls?

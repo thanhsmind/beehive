@@ -5,15 +5,18 @@ description: "Apply when concurrent actors might write the same file, branch, ke
 
 # Separate Before Serializing Shared State
 
-List the mutable things more than one actor touches. For each, ask whether
-they need the same object at all. Usually they are publishing independent
-facts: give each actor its own file, key or record and merge them where they
-are read.
+List the mutable things more than one actor touches: files both read and
+write, branches both push to, records both define and consume. For each, ask
+whether they need the same object at all. Usually they are publishing
+independent facts: give each actor its own file, key, branch or record and
+merge them where they are read.
 
 Separation has to reach the file. Two writers of different fields in one JSON
-file still share it. Only when one shared target is a real invariant do you
-enforce a single writer through structure — an owning task, a lock, one write
-path — never a convention callers must remember.
+file still share it, while two files, one per writer, do not. Only when one
+shared target is a real invariant do you enforce a single writer through
+structure — an owning task, a lock, sequential phases, one write path, an
+atomic compare-and-swap — never a convention callers must remember. Telling
+workers to take turns is not concurrency control.
 
 **Check:** can each actor own its own record, with the merge done at read
 time?

@@ -80,11 +80,11 @@
     },
     {
       "name": "bee-principle-boundary-discipline",
-      "sha256": "0e2e4287cb94bd3ec7fe64bcd071d9a8eae5f1521d1a8d8dd326abfd6bbecfd1"
+      "sha256": "692772683bba6db025f21eb37e38cd786ed0bd4f89bd0ac72bbcc7c0d36acb9b"
     },
     {
       "name": "bee-principle-build-the-lever",
-      "sha256": "04debd13c174163abd05b9f304c95a627398594551a8b9cccb6b4a3981a95fd4"
+      "sha256": "ccfca35467b43caff630b2e632db92bd333f0eb011152272a64652fe981f4884"
     },
     {
       "name": "bee-principle-chestertons-fence",
@@ -92,11 +92,11 @@
     },
     {
       "name": "bee-principle-crash-site-versus-fault-site",
-      "sha256": "ff446600bed647741133fbba1b715d9a36a74cdc2375553bfe6eb7d6efa22fa5"
+      "sha256": "97d6b76717607021b7877900795547a2a415ed1a42281ae02707bf138487a899"
     },
     {
       "name": "bee-principle-encode-lessons-in-structure",
-      "sha256": "2b52522f5168bcf933ad7b5feb4a49d68c7e97b9b26c7e58b9accbfcf4cbe171"
+      "sha256": "65ecff7558bab4c283e9e0ebc273acc8c16be8eb102652e230be6860f54559e6"
     },
     {
       "name": "bee-principle-exhaust-the-design-space",
@@ -124,7 +124,7 @@
     },
     {
       "name": "bee-principle-make-illegal-states-unrepresentable",
-      "sha256": "2e06df6002f1a752b3df91de5f92bee4c4d2334e11b54af84c2d82d8ffc77046"
+      "sha256": "85037229de471035ce3d11d4bd965725d6f552c05c93af92043c50efbe0883d3"
     },
     {
       "name": "bee-principle-make-operations-idempotent",
@@ -132,7 +132,7 @@
     },
     {
       "name": "bee-principle-migrate-callers-then-delete",
-      "sha256": "19116b6f8fb7577f0f3473cd4b0950549272d7fa867e08e30cfe89693ff44822"
+      "sha256": "8eb2a9fd927752598edc8819cc58d4b93bcc92664d18cf559cf72fa0b6e1d9ff"
     },
     {
       "name": "bee-principle-minimize-reader-load",
@@ -176,11 +176,11 @@
     },
     {
       "name": "bee-principle-reproduce-first",
-      "sha256": "8d6b1e464137a2f91f0abb4e5cc3a26952b13f7f96d514b952c6dc794f386b0d"
+      "sha256": "6d6bf0867f5f06b4205c2f0456148424845c42e1fb88981ccc8087dff46c453d"
     },
     {
       "name": "bee-principle-separate-before-serializing-shared-state",
-      "sha256": "78065b6d0553fa74322243f208090141628561c30ae29f91f4514a4699a814e7"
+      "sha256": "bef8ef568dee2059f389856a93246a5e6881bfcd7a7d687f6b01d1fd2321ac21"
     },
     {
       "name": "bee-principle-sequence-verifiable-units",
@@ -204,7 +204,7 @@
     },
     {
       "name": "bee-principle-subtract-before-you-add",
-      "sha256": "24edbdaf3a47e627c2620d9e725d757e494bcaf7af162b6dec147a4e3091c9f9"
+      "sha256": "f91d8ba0e40161dde76facb35d757efdb075cdef596cc2682b1e39adbe729899"
     },
     {
       "name": "bee-principle-test-behavior-not-structure",
