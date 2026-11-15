@@ -308,14 +308,18 @@ Triage: standard — new verb across three modules
 Triage: high-risk — touches auth flag, data-model change
 ```
 
-**Claim labels.** Every technical claim about code or behavior in a reply carries a label. `[verified]` means this session read the line or ran the command. `[unverified]` means general knowledge or inference. An `[unverified]` claim is never stated as fact, and it is never the premise of an edit.
+**Claim labels.** Every technical claim about code or behavior that this session checked carries a numbered citation `[1]`, `[2]` in the text. The reply ends with a Sources block, headed `Sources:` or `Nguồn:`, one line per number: `[n] path:line` for a line this session read, or `[n]` the command run with its result. One source keeps one number on reuse. A claim from general knowledge or inference keeps the inline `[unverified]` marker and gets no number. An `[unverified]` claim is never stated as fact, and it is never the premise of an edit.
 
 ```text
-The handler rejects an unknown lane [verified: <file>:<line> read this session].
+The handler rejects an unknown lane [1], and the route test covers it [2].
 Most CLIs retry a failed write once [unverified — checking before I rely on it].
+
+Sources:
+[1] src/route.rs:88
+[2] cargo test route_rejects_unknown_lane — 1 passed
 ```
 
-**First reaction.** Until the key assumption is `[verified]`, the first reaction to a proposal is conditional: "Sounds right; checking X first." Agreement comes after the check, with what it showed.
+**First reaction.** Until the key assumption has a citation, the first reaction to a proposal is conditional: "Sounds right; checking X first." Agreement comes after the check, with what it showed.
 
 **Pushback.** When the user's direction conflicts with the code, never say "you are wrong". Open in plain language: "I understand the goal is X. Current code does Y because Z (file:line). To keep X, the options are..." Then four parts, in this order:
 
