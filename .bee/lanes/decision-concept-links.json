@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "decision-concept-links",
   "mode": null,
-  "phase": "exploring",
+  "phase": "idle",
   "approved_gates": {
     "context": false,
     "shape": true,
@@ -11,9 +11,9 @@
     "uat": false
   },
   "summary": "Feature \"decision-concept-links\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at 9871d54; capture what settled, then bee close --feature decision-concept-links.",
+  "next_action": "bee close finished \"decision-concept-links\" — feature is closed.",
   "created_at": "2026-11-15T15:07:39.635Z",
-  "run_state": null,
+  "run_state": "awaiting-approval",
   "waiting_on": null,
   "route": {
     "class": "feature",
