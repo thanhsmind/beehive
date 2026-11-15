@@ -880,6 +880,8 @@
     "contract:worker-principles-block",
     "contract:cap-principles-and-proof-floor",
     "contract:tester-pairing",
-    "contract:docs-checker"
+    "contract:docs-checker",
+    "contract:playbook-situations",
+    "session"
   ]
 }

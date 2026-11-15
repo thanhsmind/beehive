@@ -457,5 +457,10 @@
   },
   "skillstation": {
     "principles": "hub"
+  },
+  "guards": {
+    "cross_project_allow": [
+      "/home/thanhsmind/Projects/refs/ai-skills/cursor-plugins/pstack"
+    ]
   }
 }
