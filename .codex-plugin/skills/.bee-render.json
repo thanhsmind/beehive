@@ -268,11 +268,11 @@
     },
     {
       "name": "bee-verify-upkeep",
-      "sha256": "a919de08e56ecbfe669d36065e103b90b27bd0013fb1f2fa322a45596d099b41"
+      "sha256": "4f9fc09a9ed686adc4d689ef11176a02369b277e25d3a94c0c8b8068c07daa74"
     },
     {
       "name": "bee-verifying",
-      "sha256": "84bb93f5b37703e497050b40812bf7355254c9afc35e3985f4339053778f1413"
+      "sha256": "b786a3898bb1f5ca74b44cd28f8f5246838d9ae8116c0ac9c6cc0eae8f07da0e"
     },
     {
       "name": "bee-wayfinding",

@@ -142,7 +142,7 @@
     },
     {
       "path": ".claude-plugin/skills/.bee-render.json",
-      "sha256": "00718775f6a90e6705912add62ed75dc80bc08224b443f15a5da33db0196df47",
+      "sha256": "b0b465e75b0ad9c5886da87e9abb92cb9b23e9dd5b466142c01f43c9f363f28f",
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/.bee-render.json"
@@ -1625,11 +1625,25 @@
       "packagePath": ".claude-plugin/skills/bee-unslop/SKILL.md"
     },
     {
+      "path": ".claude-plugin/skills/bee-verify-upkeep/LICENSE.pstack",
+      "sha256": "bc957ca6bee02792566a1a028d105e02e247c6e77cf057061674273da77b200e",
+      "mode": "644",
+      "role": "plugin_skill_claude_render",
+      "packagePath": ".claude-plugin/skills/bee-verify-upkeep/LICENSE.pstack"
+    },
+    {
       "path": ".claude-plugin/skills/bee-verify-upkeep/SKILL.md",
       "sha256": "ddaad3f5d99ad51b9fc8cba76958d11b05c8cbeabc5144a242114e7a829fa214",
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/bee-verify-upkeep/SKILL.md"
+    },
+    {
+      "path": ".claude-plugin/skills/bee-verifying/LICENSE.pstack",
+      "sha256": "bc957ca6bee02792566a1a028d105e02e247c6e77cf057061674273da77b200e",
+      "mode": "644",
+      "role": "plugin_skill_claude_render",
+      "packagePath": ".claude-plugin/skills/bee-verifying/LICENSE.pstack"
     },
     {
       "path": ".claude-plugin/skills/bee-verifying/references/feature-map-example/create-note.md",
@@ -1794,7 +1808,7 @@
     },
     {
       "path": ".codex-plugin/skills/.bee-render.json",
-      "sha256": "020f2d5a6ba88f902352c4aaddf8d963857589c42d91964a6b75f1a411fa8868",
+      "sha256": "9bf4ada82f0259d81d2ee4b5e11b28b772968b954594d9f9288192f6413895bb",
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/.bee-render.json"
@@ -3277,11 +3291,25 @@
       "packagePath": ".codex-plugin/skills/bee-unslop/SKILL.md"
     },
     {
+      "path": ".codex-plugin/skills/bee-verify-upkeep/LICENSE.pstack",
+      "sha256": "bc957ca6bee02792566a1a028d105e02e247c6e77cf057061674273da77b200e",
+      "mode": "644",
+      "role": "plugin_skill_codex_render",
+      "packagePath": ".codex-plugin/skills/bee-verify-upkeep/LICENSE.pstack"
+    },
+    {
       "path": ".codex-plugin/skills/bee-verify-upkeep/SKILL.md",
       "sha256": "ddaad3f5d99ad51b9fc8cba76958d11b05c8cbeabc5144a242114e7a829fa214",
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/bee-verify-upkeep/SKILL.md"
+    },
+    {
+      "path": ".codex-plugin/skills/bee-verifying/LICENSE.pstack",
+      "sha256": "bc957ca6bee02792566a1a028d105e02e247c6e77cf057061674273da77b200e",
+      "mode": "644",
+      "role": "plugin_skill_codex_render",
+      "packagePath": ".codex-plugin/skills/bee-verifying/LICENSE.pstack"
     },
     {
       "path": ".codex-plugin/skills/bee-verifying/references/feature-map-example/create-note.md",
@@ -6420,11 +6448,25 @@
       "packagePath": "skills/bee-unslop/SKILL.md"
     },
     {
+      "path": "skills/bee-verify-upkeep/LICENSE.pstack",
+      "sha256": "bc957ca6bee02792566a1a028d105e02e247c6e77cf057061674273da77b200e",
+      "mode": "644",
+      "role": "plugin_skill",
+      "packagePath": "skills/bee-verify-upkeep/LICENSE.pstack"
+    },
+    {
       "path": "skills/bee-verify-upkeep/SKILL.md",
       "sha256": "ddaad3f5d99ad51b9fc8cba76958d11b05c8cbeabc5144a242114e7a829fa214",
       "mode": "644",
       "role": "plugin_skill",
       "packagePath": "skills/bee-verify-upkeep/SKILL.md"
+    },
+    {
+      "path": "skills/bee-verifying/LICENSE.pstack",
+      "sha256": "bc957ca6bee02792566a1a028d105e02e247c6e77cf057061674273da77b200e",
+      "mode": "644",
+      "role": "plugin_skill",
+      "packagePath": "skills/bee-verifying/LICENSE.pstack"
     },
     {
       "path": "skills/bee-verifying/references/feature-map-example/create-note.md",
