@@ -1,0 +1,88 @@
+{
+  "id": "rel2104-1c",
+  "feature": "release-2-104-0",
+  "title": "Check the published 2.104.0 release",
+  "lane": "small",
+  "role": "test",
+  "deps": [
+    "rel2104-1"
+  ],
+  "decisions": [
+    "8097faaf-6d24-44c6-957e-e1b4ddae3351",
+    "913115b3-e1f1-4004-902c-bc574fabb2f1"
+  ],
+  "files": [
+    "docs/history/release-2-104-0/reports/rel2104-1c.md"
+  ],
+  "read_first": [
+    "docs/history/release-2-104-0/CONTEXT.md",
+    "docs/history/release-2-104-0/plan.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Check the release independently, read-only: both plugin manifests on main report 2.104.0; tag v2.104.0 exists locally and on origin (git ls-remote --tags origin v2.104.0); the GitHub release v2.104.0 lists the five binaries and SHA256SUMS (gh release view v2.104.0 --json assets); the release-binaries run for v2.104.0 concluded success. Write each check with its command and output to docs/history/release-2-104-0/reports/rel2104-1c.md and commit it with the trailer cell: rel2104-1c. Bee commands you may run: bee herding notify; never bee dispatch.",
+  "verify": "gh release view v2.104.0 --json assets --jq '.assets | length'",
+  "must_haves": {
+    "truths": [
+      "the report shows each of the four checks with its command and output"
+    ],
+    "prohibitions": [
+      "No edit outside the report file"
+    ]
+  },
+  "behavior_change": false,
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "w-rel2104-1c",
+    "outcome": "Checked 2.104.0 independently: both manifests show 2.104.0, the local and origin tags point at 5eafc688c, the release has 5 binaries and SHA256SUMS, and release-binaries run 43685890060 succeeded; report committed as 4a82b6f61",
+    "files_changed": [
+      "docs/history/release-2-104-0/reports/rel2104-1c.md"
+    ],
+    "deviations": [
+      "sync-ack: checker writes only its report under docs/history"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-15T06:38:11.943Z",
+    "behavior_change": false,
+    "verification_evidence": "four read-only checks pass, report docs/history/release-2-104-0/reports/rel2104-1c.md; release https://github.com/thanhsmind/beehive/releases/tag/v2.104.0",
+    "verify_output": "green:live",
+    "verify_passed": true,
+    "claim_session": "1fe39916-f67e-4233-a4da-ffc17046e993",
+    "verify_command": "gh release view v2.104.0 --json assets --jq '.assets | length'",
+    "claimed_at": "2026-11-15T06:37:06.630Z",
+    "knowledge_delta": [],
+    "sync_ack": "checker writes only its report under docs/history",
+    "no_mistakes": true,
+    "no_knowledge_used": true,
+    "no_principles_used": true,
+    "report": {
+      "outcome": "Checked 2.104.0 independently: both manifests show 2.104.0, the local and origin tags point at 5eafc688c, the release has 5 binaries and SHA256SUMS, and release-binaries run 43685890060 succeeded; report committed as 4a82b6f61",
+      "commit": "4a82b6f61559432201546ed5f057aa039c391c98",
+      "files": [
+        "docs/history/release-2-104-0/reports/rel2104-1c.md"
+      ],
+      "tests": "gh release view v2.104.0 --json assets --jq '.assets | length' — green:live — four read-only checks pass, report docs/history/release-2-104-0/reports/rel2104-1c.md; release https://github.com/thanhsmind/beehive/releases/tag/v2.104.0",
+      "deviations": [],
+      "knowledge_used": [],
+      "patch_id": "32a78cf6572a530e11bc8705ff27f04c10ff9068"
+    },
+    "warnings": [],
+    "tests": "boundary"
+  },
+  "usage": {
+    "new": 31232,
+    "cached": 153497,
+    "total": 184729,
+    "models": {
+      "claude-opus-5-5": {
+        "new": 31232,
+        "cached": 153497,
+        "total": 184729
+      }
+    },
+    "jobs": [
+      "job-1794724627040-424470-1"
+    ]
+  }
+}
