@@ -1173,6 +1173,115 @@ mod tests {
         assert!(lines.iter().any(|l| l.starts_with("outcomes not comparable") && l.ends_with("28 more knowledge, 28 more holdout")), "{lines:?}");
     }
 
+    fn mixed_arm_store() -> tempfile::TempDir {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        std::fs::create_dir_all(root.join(".bee").join("logs")).unwrap();
+        let log = arm_row("p1", "knowledge", Some("principles"))
+            + &arm_row("p2", "holdout", Some("principles"))
+            + &arm_row("p3", "knowledge", Some("principles"))
+            + &arm_row("h1", "knowledge", Some("holdout"))
+            + &arm_row("h2", "holdout", Some("holdout"))
+            + &arm_row("m1", "holdout", None)
+            + &arm_row("m2", "knowledge", None)
+            + &arm_row("open", "knowledge", Some("principles"));
+        std::fs::write(root.join(".bee").join("logs").join("dispatch.jsonl"), log).unwrap();
+        closed_cell(root, "p1", json!({"blocked_reason": "x"}));
+        closed_cell(root, "p2", json!({"reopened_at": "2026-11-10T00:00:00Z"}));
+        closed_cell(root, "p3", json!({}));
+        closed_cell(root, "h1", json!({"attempts": [{}], "mistakes": ["m"]}));
+        closed_cell(root, "h2", json!({"blocked_reason": ""}));
+        closed_cell(root, "m1", json!({"mistakes": ["m"]}));
+        closed_cell(root, "m2", json!({"reopened_for_rework": true}));
+        closed_cell(root, "u", json!({"blocked_reason": "y"}));
+        let open = json!({"id": "open", "feature": "demo", "status": "claimed", "trace": {"blocked_reason": "z"}});
+        std::fs::write(root.join(".bee").join("cells").join("open.json"), open.to_string()).unwrap();
+        tmp
+    }
+
+    #[test]
+    fn principles_outcomes_on_a_mixed_store_count_only_rows_that_carry_principles_arm() {
+        let tmp = mixed_arm_store();
+        let (section, lines) = build_arm_outcomes(tmp.path(), "principles_arm", PRINCIPLE_ARMS, "principle outcomes");
+        let expected = json!({
+            "arms": {
+                "principles": {
+                    "cells": 3, "blocked": 1, "reopened": 1, "red_rounds": 0, "with_mistakes": 0,
+                    "rates": {"blocked": 0.333, "reopened": 0.333, "red_rounds": 0.0, "with_mistakes": 0.0}
+                },
+                "holdout": {
+                    "cells": 2, "blocked": 0, "reopened": 0, "red_rounds": 1, "with_mistakes": 1,
+                    "rates": {"blocked": 0.0, "reopened": 0.0, "red_rounds": 0.5, "with_mistakes": 0.5}
+                }
+            },
+            "unrecorded": 3,
+            "min_per_arm": 30,
+            "comparable": false
+        });
+        assert_eq!(section, expected);
+        assert_eq!(
+            lines,
+            vec![
+                "principle outcomes principles: 3 cell(s), 1 blocked, 1 reopened, 0 red round(s), 0 with mistakes".to_string(),
+                "principle outcomes holdout: 2 cell(s), 0 blocked, 0 reopened, 1 red round(s), 1 with mistakes".to_string(),
+                "principle outcomes unrecorded: 3 closed cell(s) with no recorded arm".to_string(),
+                "principle outcomes not comparable: each arm needs 30 cells — 27 more principles, 28 more holdout".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn knowledge_outcomes_on_a_mixed_store_match_the_block_before_principles_outcomes() {
+        let tmp = mixed_arm_store();
+        let (section, lines) = build_arm_outcomes(tmp.path(), "knowledge_arm", ARMS, "outcomes");
+        let expected = json!({
+            "arms": {
+                "knowledge": {
+                    "cells": 4, "blocked": 1, "reopened": 1, "red_rounds": 1, "with_mistakes": 1,
+                    "rates": {"blocked": 0.25, "reopened": 0.25, "red_rounds": 0.25, "with_mistakes": 0.25}
+                },
+                "holdout": {
+                    "cells": 3, "blocked": 0, "reopened": 1, "red_rounds": 0, "with_mistakes": 1,
+                    "rates": {"blocked": 0.0, "reopened": 0.333, "red_rounds": 0.0, "with_mistakes": 0.333}
+                }
+            },
+            "unrecorded": 1,
+            "min_per_arm": 30,
+            "comparable": false
+        });
+        assert_eq!(section, expected);
+        assert_eq!(
+            lines,
+            vec![
+                "outcomes knowledge: 4 cell(s), 1 blocked, 1 reopened, 1 red round(s), 1 with mistakes".to_string(),
+                "outcomes holdout: 3 cell(s), 0 blocked, 1 reopened, 0 red round(s), 1 with mistakes".to_string(),
+                "outcomes unrecorded: 1 closed cell(s) with no recorded arm".to_string(),
+                "outcomes not comparable: each arm needs 30 cells — 26 more knowledge, 27 more holdout".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn principles_outcomes_turn_comparable_at_thirty_cells_per_arm() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        std::fs::create_dir_all(root.join(".bee").join("logs")).unwrap();
+        let mut log = String::new();
+        for i in 0..MIN_PER_ARM {
+            for arm in PRINCIPLE_ARMS {
+                let id = format!("{arm}-{i}");
+                log += &arm_row(&id, "knowledge", Some(arm));
+                closed_cell(root, &id, json!({}));
+            }
+        }
+        std::fs::write(root.join(".bee").join("logs").join("dispatch.jsonl"), log).unwrap();
+        let (section, lines) = build_arm_outcomes(root, "principles_arm", PRINCIPLE_ARMS, "principle outcomes");
+        assert_eq!(section["comparable"], true, "{section}");
+        assert_eq!(section["arms"]["principles"]["cells"], MIN_PER_ARM);
+        assert_eq!(section["arms"]["holdout"]["cells"], MIN_PER_ARM);
+        assert!(!lines.iter().any(|l| l.contains("not comparable")), "{lines:?}");
+    }
+
     #[test]
     fn report_knowledge_used_counts_answered_used_none_and_silent() {
         let tmp = tempfile::tempdir().unwrap();
