@@ -11,9 +11,9 @@
     "uat": false
   },
   "summary": "Feature \"cited-claims\" started at phase \"exploring\" (lane).",
-  "next_action": "Continue bee-exploring for \"cited-claims\" (lane).",
+  "next_action": "Merged into main at f37b4c0; capture what settled, then bee close --feature cited-claims.",
   "created_at": "2026-11-15T12:07:12.650Z",
-  "run_state": "awaiting-approval",
+  "run_state": null,
   "waiting_on": null,
   "route": {
     "class": "feature",
@@ -428,12 +428,5 @@
   },
   "gate_revoked_at": {
     "execution": "2026-11-15T12:09:20.038Z"
-  },
-  "merge_ready": {
-    "since": "2026-11-15T12:26:22.730Z",
-    "branch": "wt/cited-claims",
-    "worktree_id": "beehive--wt--cited-claims",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
