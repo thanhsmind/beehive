@@ -167,6 +167,10 @@
       "sha256": "bfc09cc7469b6e2f15cfc0a960f96163098bc09e3813fe2e893cd7c888e2a80b"
     },
     {
+      "name": "bee-show-me-your-work",
+      "sha256": "63935d491ca82f4b9d14791ec18bcb700500007635f3211dc21d0bd3d4e6a6bd"
+    },
+    {
       "name": "bee-swarming",
       "sha256": "4960c2bfb4418f4e3a0e43f061102b022359bae63130b99ad0f1c67361978e5b"
     },

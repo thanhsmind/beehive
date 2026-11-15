@@ -160,5 +160,12 @@
   {"brief": "Cho vài người đánh giá độc lập soi kỹ thay đổi này rồi tổng hợp thành một kết luận, đừng tự sửa gì cả.", "expect": ["bee-interrogate"]},
   {"brief": "Before I merge, challenge this diff from independent angles and rank what each reviewer found.", "expect": ["bee-interrogate"]},
   {"brief": "Review everything unreviewed in this feature and tell me whether it can merge.", "expect": ["bee-reviewing"], "near": "bee-interrogate"},
-  {"brief": "Explain how this change flows through the code from the command to the file it writes.", "expect": ["bee-how"], "near": "bee-interrogate"}
+  {"brief": "Explain how this change flows through the code from the command to the file it writes.", "expect": ["bee-how"], "near": "bee-interrogate"},
+
+  {"brief": "Keep a decision log for this overnight migration so I can see what was decided and why when I am back.", "expect": ["bee-show-me-your-work"]},
+  {"brief": "Log one row per decision with the evidence for each, so I can audit the run afterwards.", "expect": ["bee-show-me-your-work"]},
+  {"brief": "Ghi lại từng quyết định trong lần chạy tự động này thành một bảng, kèm bằng chứng, để sáng mai tôi kiểm tra.", "expect": ["bee-show-me-your-work"]},
+  {"brief": "This long unattended run needs a trail a reviewer can check without reading the whole transcript.", "expect": ["bee-show-me-your-work"]},
+  {"brief": "We agreed the retry limit is three, lock that rule in as a recorded decision.", "expect": ["bee-capturing"], "near": "bee-show-me-your-work"},
+  {"brief": "Review everything unreviewed from today and tell me whether it can merge.", "expect": ["bee-reviewing"], "near": "bee-show-me-your-work"}
 ]
