@@ -688,7 +688,9 @@ mod tests {
     fn static_check_repo(files: &[(&str, &str)], config: Option<Value>) -> tempfile::TempDir {
         let dir = tempfile::tempdir().unwrap();
         for (name, body) in files {
-            std::fs::write(dir.path().join(name), body).unwrap();
+            let path = dir.path().join(name);
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(path, body).unwrap();
         }
         if let Some(config) = config {
             std::fs::create_dir_all(dir.path().join(".bee")).unwrap();
@@ -857,6 +859,98 @@ mod tests {
             commands_notices(dir.path(), false),
             vec!["No standard commands recorded. Detected candidates: test: npm test — package.json. Present them to the user as one pre-filled confirmation question (skippable) and write only confirmed values to .bee/config.json `commands` — never write unconfirmed values (D3). They power the session CI status gate.".to_string()]
         );
+    }
+
+    fn static_check_pairs(dir: &tempfile::TempDir) -> Vec<(String, String)> {
+        detect_static_checks(dir.path()).into_iter().map(|c| (c.command, c.source)).collect()
+    }
+
+    #[test]
+    fn static_check_nested_manifest_names_its_location() {
+        let dir = static_check_repo(&[("packages/app/Cargo.toml", "[package]\n")], None);
+        assert_eq!(
+            static_check_pairs(&dir),
+            vec![(
+                "cargo clippy --manifest-path packages/app/Cargo.toml -- -D warnings".to_string(),
+                "packages/app/Cargo.toml".to_string()
+            )]
+        );
+    }
+
+    #[test]
+    fn static_check_nested_manifest_loses_to_a_root_manifest() {
+        let dir = static_check_repo(
+            &[("Cargo.toml", "[workspace]\n"), ("packages/app/Cargo.toml", "[package]\n"), ("app/Cargo.toml", "[package]\n")],
+            None,
+        );
+        assert_eq!(
+            static_check_pairs(&dir),
+            vec![("cargo clippy -- -D warnings".to_string(), "Cargo.toml".to_string())]
+        );
+        let dir = static_check_repo(
+            &[("packages/app/Cargo.toml", "[package]\n"), ("tools/Cargo.toml", "[package]\n")],
+            None,
+        );
+        assert_eq!(
+            static_check_pairs(&dir),
+            vec![("cargo clippy --manifest-path tools/Cargo.toml -- -D warnings".to_string(), "tools/Cargo.toml".to_string())]
+        );
+    }
+
+    #[test]
+    fn static_check_nested_manifest_too_deep_or_in_a_skipped_dir_is_not_found() {
+        let dir = static_check_repo(
+            &[
+                ("a/b/c/Cargo.toml", "[package]\n"),
+                ("node_modules/x/Cargo.toml", "[package]\n"),
+                ("target/Cargo.toml", "[package]\n"),
+                ("packages/target/Cargo.toml", "[package]\n"),
+                (".hidden/Cargo.toml", "[package]\n"),
+                ("packages/.cache/Cargo.toml", "[package]\n"),
+            ],
+            None,
+        );
+        assert!(detect_static_checks(dir.path()).is_empty());
+        let dir = static_check_repo(&[("a/b/c/go.mod", "module x\n"), ("node_modules/p/go.mod", "module x\n")], None);
+        assert!(detect_commands(dir.path()).is_empty());
+    }
+
+    #[test]
+    fn static_check_nested_manifest_pyproject_needs_the_ruff_table() {
+        let dir = static_check_repo(
+            &[("packages/a/pyproject.toml", "[project]\n"), ("packages/b/pyproject.toml", "[tool.ruff]\n")],
+            None,
+        );
+        assert_eq!(
+            static_check_pairs(&dir),
+            vec![("ruff check packages/b".to_string(), "packages/b/pyproject.toml".to_string())]
+        );
+        let dir = static_check_repo(&[("packages/a/pyproject.toml", "[project]\n")], None);
+        assert!(detect_static_checks(dir.path()).is_empty());
+    }
+
+    #[test]
+    fn nested_manifest_go_mod_gives_a_located_go_test() {
+        let dir = static_check_repo(&[("services/api/go.mod", "module x\n")], None);
+        let got: Vec<(&str, String, String)> =
+            detect_commands(dir.path()).into_iter().map(|c| (c.key, c.value, c.source)).collect();
+        assert_eq!(
+            got,
+            vec![("test", "go -C services/api test ./...".to_string(), "services/api/go.mod".to_string())]
+        );
+    }
+
+    #[test]
+    fn static_check_nested_manifest_is_named_by_commands_notices() {
+        let dir = static_check_repo(
+            &[("packages/app/Cargo.toml", "[package]\n")],
+            Some(json!({"commands": {"test": "cargo test"}})),
+        );
+        let n = commands_notices(dir.path(), false);
+        assert_eq!(n.len(), 1);
+        assert!(n[0].contains(
+            "cargo clippy --manifest-path packages/app/Cargo.toml -- -D warnings — packages/app/Cargo.toml"
+        ));
     }
 
     #[test]
