@@ -886,6 +886,9 @@
     "thin-boot",
     "contract:peer-brief",
     "contract:principles-outcomes",
-    "contract:herding-principles-answer"
+    "contract:herding-principles-answer",
+    "contract:orient-host-playbook",
+    "contract:principle-naming-stop-check",
+    "contract:close-principles-line"
   ]
 }
