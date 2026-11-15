@@ -8,7 +8,7 @@ bee:
   lifecycle: active
   areas: [okf-profile]
   required_context: [areas/okf-profile/overview.md]
-  decisions: ["U6 (knowledge-usable, PBI p-355d4740): bee.critical earns a written bar — recurrence-prone AND cross-feature AND costly-when-missed; existing patterns re-graded to at most ~30 critical, re-grade recorded per-pattern in the commit, never a bulk strip)", "knowledge-in-the-flow D8 (feature outcomes and pack pull tracking in knowledge report)", "knowledge-useful-rules CONTEXT.md D5 (knowledge report records concept use counts and loaded-never-used findings)", "knowledge-skill-pair D5, D8 (the knowledge-wrong cap answer and its report section)"]
+  decisions: ["U6 (knowledge-usable, PBI p-355d4740): bee.critical earns a written bar — recurrence-prone AND cross-feature AND costly-when-missed; existing patterns re-graded to at most ~30 critical, re-grade recorded per-pattern in the commit, never a bulk strip)", "knowledge-in-the-flow D8 (feature outcomes and pack pull tracking in knowledge report)", "knowledge-useful-rules CONTEXT.md D5 (knowledge report records concept use counts and loaded-never-used findings)", "knowledge-skill-pair D5, D8 (the knowledge-wrong cap answer and its report section)", "peer-brief-craft D3 (principles_outcomes compares principle and holdout cells in the report)"]
   sources: ["docs/history/knowledge-outcome-measure/plan.md (D1-D5: the outcomes measure)", "docs/history/knowledge-usable/CONTEXT.md (U6 rationale: 85/101 critical = no filter; the ranker needs a selective pool)", "knowledge-usable cell ku-6 (the re-grade this concept authors; trace in `.bee/cells/`, 2026-08-10)", "knowledge-in-the-flow cell kitf-3 (feature outcomes by feature arm and pack pull rate in knowledge report, commit 8794b2917, 2026-11-09)", "CONTEXT.md docs/history/knowledge-in-the-flow/CONTEXT.md", "docs/history/knowledge-useful-rules/CONTEXT.md"]
   authoritative_for: "okf-profile: the bee.critical bar and what earns a pattern that label"
   anchors: [packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs, packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs, packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs, packages/bee-rs/crates/bee/src/verbs/knowledge/frame.rs, packages/bee-rs/crates/bee/src/verbs/report_outcomes.rs, packages/bee-rs/crates/bee/tests/knowledge_outcomes.rs]
@@ -87,6 +87,14 @@ such row are tallied as unrecorded. For each arm, the report counts features, ce
 friction signals (blocked, reopened, red rounds, with mistakes). In the Pull rate table,
 `knowledge pack` is counted alongside `search`, `context`, and `show` as an active knowledge pull
 contributing to feature-level and total pull rates.
+
+**Principle outcomes (peer-brief-craft D3).** The same report carries a `principles_outcomes` section and
+text lines prefixed `principle outcomes`, printed after the `outcomes` lines. It is the one arm-outcome
+builder run over a second key: the earliest prepare cell row's `principles_arm` (`principles`, or `holdout`
+with no Principles block; recorded by `prepare.rs` beside `knowledge_arm`, never assigned after the fact).
+The two keys are independent, so a cell can sit in the knowledge arm and the holdout principles arm. Cells,
+signals, rates, `unrecorded`, `min_per_arm` and `comparable` follow the rules above; a cell whose row has
+no `principles_arm` counts as unrecorded. The `outcomes` JSON and text stay byte-identical.
 
 **The use measure — which concepts answered, and which were loaded and never used (knowledge-useful-rules
 D5).** The outcome signals above say whether a brief helped; this section says which concept did. It reads

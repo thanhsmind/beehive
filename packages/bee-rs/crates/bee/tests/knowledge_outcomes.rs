@@ -220,7 +220,7 @@ fn text_output_has_no_too_few_line_when_comparable() {
     write_dispatch(&fx.root, &log);
     let (text, _) = report(&fx, false);
     assert!(text.lines().any(|l| l.starts_with("outcomes knowledge:")), "{text}");
-    assert!(!text.contains("not comparable"), "{text}");
+    assert!(!text.lines().any(|l| l.starts_with("outcomes not comparable")), "{text}");
 }
 
 #[test]

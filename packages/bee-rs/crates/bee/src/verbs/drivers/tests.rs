@@ -174,7 +174,9 @@ use std::time::Instant;
         assert!(rendered.starts_with("Nickname (reservation identity): w\n"));
         // Zero residue: both block markers and their newlines are gone.
         assert!(!rendered.contains("{{"));
-        assert!(rendered.contains("- docs/history/f/plan.md (when present)\n\nContract:\n"));
+        assert!(rendered.contains(
+            "- docs/history/f/plan.md (when present)\n\nDepth on demand — when a principle line or the cell's work needs more than the brief, follow that principle's Depth line or route .bee/expertise/INDEX.md and read only the one guide section it names; never load the whole shelf.\n\nContract:\n"
+        ));
     }
 
     // ── oneLine ────────────────────────────────────────────────────────────
@@ -294,6 +296,7 @@ use std::time::Instant;
             rendered.contains("An empty `knowledge_used` array means no concept changed a decision."),
             "{rendered}"
         );
+        assert!(!rendered.contains("principles_used"), "{rendered}");
         let herded = prompt_body_for(
             std::path::Path::new("/unused"),
             "cell",
@@ -314,6 +317,58 @@ use std::time::Instant;
             herded.contains("The result file may carry the same `knowledge_used` array"),
             "{herded}"
         );
+        assert!(
+            herded.contains("the result file also carries a `principles_used` array"),
+            "{herded}"
+        );
+    }
+
+    fn worker_prompt_render(is_herding: bool, expertise: Option<&str>) -> String {
+        let cell = json!({"id": "c-1", "feature": "feat", "status": "claimed"});
+        prompt_body_for(
+            std::path::Path::new("/unused"),
+            "cell",
+            Some(&cell),
+            Some("w1"),
+            None,
+            expertise,
+            None,
+            None,
+            None,
+            None,
+            None,
+            is_herding,
+        )
+        .unwrap()
+        .unwrap()
+    }
+
+    #[test]
+    fn worker_prompt_native_and_herding_renders_both_carry_the_depth_on_demand_line() {
+        let native = worker_prompt_render(false, None);
+        let herded = worker_prompt_render(true, None);
+        assert_ne!(native, herded, "the two renders must differ or this test proves one path twice");
+        for (render, text) in [("native", &native), ("herding", &herded)] {
+            let depth = text
+                .lines()
+                .find(|l| l.starts_with("Depth on demand"))
+                .unwrap_or_else(|| panic!("{render} render lost the depth line:\n{text}"));
+            assert!(depth.contains(".bee/expertise/INDEX.md"), "{render}: {depth}");
+            assert!(depth.contains("Depth line"), "{render}: {depth}");
+        }
+    }
+
+    #[test]
+    fn worker_prompt_without_expertise_carries_no_expertise_body_in_either_render() {
+        let body = "EXPERTISE-BODY-SENTINEL tests.md section";
+        let header = "Expertise — dispatcher-picked";
+        for is_herding in [false, true] {
+            let with = worker_prompt_render(is_herding, Some(body));
+            assert!(with.contains(header) && with.contains(body), "herding={is_herding}: {with}");
+            let without = worker_prompt_render(is_herding, None);
+            assert!(!without.contains(header), "herding={is_herding}: {without}");
+            assert!(!without.contains(body), "herding={is_herding}: {without}");
+        }
     }
 
     #[test]
@@ -10841,6 +10896,8 @@ Inputs — read these; nothing else is provided:
 - docs/history/feat-golden/CONTEXT.md
 - docs/history/feat-golden/plan.md (when present)
 
+Depth on demand — when a principle line or the cell's work needs more than the brief, follow that principle's Depth line or route .bee/expertise/INDEX.md and read only the one guide section it names; never load the whole shelf.
+
 Advisor: fable
 
 Contract:
@@ -13030,7 +13087,7 @@ Finish with: .bee/bin/bee cells finish --id c-golden --outcome "<one line>" --fi
         );
         assert!(prompt.contains(&block), "{prompt}");
         assert!(prompt.contains(
-            "- docs/history/demo/plan.md (when present)\n\nLearned context (machine-assembled"
+            "- docs/history/demo/plan.md (when present)\n\nDepth on demand — when a principle line or the cell's work needs more than the brief, follow that principle's Depth line or route .bee/expertise/INDEX.md and read only the one guide section it names; never load the whole shelf.\n\nLearned context (machine-assembled"
         ));
     }
 
@@ -13109,6 +13166,35 @@ Finish with: .bee/bin/bee cells finish --id c-golden --outcome "<one line>" --fi
 
     fn principles_arm_of(root: &Path, cell: Value) -> &'static str {
         cell_principles(root, root, &cell).0
+    }
+
+    const PRINCIPLES_USED_ASK: &str = "When a Principles block appears above, the result file also carries a `principles_used` array";
+
+    fn principled_worker_prompt(is_herding: bool) -> String {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = principles_root(&tmp, Some("0"));
+        let cell = json!({"id": "c-1", "feature": "demo", "status": "claimed"});
+        let rendered = prompt_body_for(
+            &root, "cell", Some(&cell), Some("w1"), None, None, None, None, None, None, None, is_herding,
+        )
+        .unwrap()
+        .unwrap();
+        assert!(rendered.contains(PRINCIPLES_HEADER), "herding={is_herding}: {rendered}");
+        assert!(rendered.contains("- Principles (class=bugfix)"), "herding={is_herding}: {rendered}");
+        rendered
+    }
+
+    #[test]
+    fn worker_prompt_herding_render_with_principles_asks_for_principles_used() {
+        let herded = principled_worker_prompt(true);
+        assert!(herded.contains(PRINCIPLES_USED_ASK), "{herded}");
+        assert!(herded.contains("`[]` when none changed a decision"), "{herded}");
+    }
+
+    #[test]
+    fn worker_prompt_native_render_with_principles_omits_the_principles_used_sentence() {
+        let native = principled_worker_prompt(false);
+        assert!(!native.contains("principles_used"), "{native}");
     }
 
     #[test]

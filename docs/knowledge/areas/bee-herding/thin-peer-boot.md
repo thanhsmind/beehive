@@ -50,6 +50,11 @@ block sets for one of these names wins over the default.
 A herded worker normally exits 0 silently from `bee hook session-init`. With the thin boot on and
 `BEE_HERDING_WORKER` set, that hook prints only `packages/bee/prompts/peer-boot.md` — the hard
 boundaries and the one finish instruction (thin-worker-boot D2, D3) — and registers no session.
+The env layer drops AGENTS.md from the peer's own load, so the preamble tells the peer to read it
+first: it is the one thin shared file with the project's hard rules (search tools, comments,
+secrets), and the preamble forbids only CLAUDE.md, `.bee/LEADER.md` and bee process docs
+(peer-brief-craft D1, touching thin-worker-boot D2). A peer told not to read it blocked on a
+`grep` against the repo's `rg` rule.
 Without the marker the hook never takes this path, so a leader or any non-herded session keeps its
 full boot.
 
