@@ -103,7 +103,7 @@ rule `agents-name-applied-principles`. When that output listed a `situation:`
 line and the turn neither `Read` nor `cat`/`sed`/`head`-ed a path under
 `/playbooks/`, it adds a line saying the playbook was never opened. Both are
 advisory in the same way as B2 and a turn without `bee orient --class` adds
-neither (orient-host-playbook D2, `dae9d3c7`). The match is on fixed text, so a
+neither (orient-host-playbook D2). The match is on fixed text, so a
 reworded orient header silently disables the principle line. Pointer:
 `routed_reply_warnings` in the same `claims.rs`.
 
