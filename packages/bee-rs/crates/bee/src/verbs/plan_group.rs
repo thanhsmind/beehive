@@ -409,6 +409,57 @@ mod tests {
         assert_eq!(details(&v, "playbook").len(), 1, "{text}");
     }
 
+    const SITUATED: &str = "# Bugfix\n\n## Situations\n\n- `fixture-fix` — bug — delivers: a fix\n- `fixture-two` — crash — delivers: a fix\n\n## Steps\n";
+
+    fn playbook_details(class: Option<&str>, citation: &str) -> Vec<String> {
+        let plan = plan_body("").replace("`skills/bee-planning/playbooks/feature.md`", citation);
+        let tmp = repo(&plan, Some(CONTEXT));
+        let dir = tmp.path().join("skills/bee-planning/playbooks");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("bugfix.md"), SITUATED).unwrap();
+        std::fs::write(dir.join("perf.md"), "# Perf\n\n## Steps\n").unwrap();
+        plan_report(&tmp.path().join("docs/history/demo/plan.md"), &plan, class)
+            .findings
+            .into_iter()
+            .filter(|f| f.check == "playbook")
+            .map(|f| f.detail)
+            .collect()
+    }
+
+    #[test]
+    fn plan_group_situation_citation_passes_for_a_class_with_situations() {
+        assert!(playbook_details(Some("bugfix"), "`skills/bee-planning/playbooks/bugfix/fixture-fix.md`").is_empty());
+        assert!(playbook_details(Some("bugfix"), "`skills/bee-planning/playbooks/bugfix/fixture-two.md`").is_empty());
+    }
+
+    #[test]
+    fn plan_group_index_only_citation_names_every_situation_path() {
+        let found = playbook_details(Some("bugfix"), "`skills/bee-planning/playbooks/bugfix.md`");
+        assert_eq!(found.len(), 1, "{found:?}");
+        assert!(found[0].contains("skills/bee-planning/playbooks/bugfix/fixture-fix.md"), "{found:?}");
+        assert!(found[0].contains("skills/bee-planning/playbooks/bugfix/fixture-two.md"), "{found:?}");
+    }
+
+    #[test]
+    fn plan_group_unlisted_situation_name_is_not_a_citation() {
+        let found = playbook_details(Some("bugfix"), "`skills/bee-planning/playbooks/bugfix/not-listed.md`");
+        assert_eq!(found.len(), 1, "{found:?}");
+        assert!(found[0].contains("bugfix/fixture-fix.md"), "{found:?}");
+    }
+
+    #[test]
+    fn plan_group_class_without_situations_keeps_the_index_rule() {
+        assert!(playbook_details(Some("perf"), "`skills/bee-planning/playbooks/perf.md`").is_empty());
+        let found = playbook_details(Some("perf"), "`skills/bee-planning/playbooks/bugfix/fixture-fix.md`");
+        assert_eq!(found, vec!["plan.md does not cite skills/bee-planning/playbooks/perf.md".to_string()]);
+    }
+
+    #[test]
+    fn plan_group_no_class_accepts_a_situation_path() {
+        assert!(playbook_details(None, "`skills/bee-planning/playbooks/bugfix/fixture-fix.md`").is_empty());
+        assert_eq!(playbook_details(None, "`skills/bee-planning/playbooks/bugfix/.md`").len(), 1);
+    }
+
     #[test]
     fn plan_group_missing_decision_number_is_named() {
         let body = plan_body("").replace("D1 and D2.", "D1 only.");
