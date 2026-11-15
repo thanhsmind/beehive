@@ -174,7 +174,9 @@ use std::time::Instant;
         assert!(rendered.starts_with("Nickname (reservation identity): w\n"));
         // Zero residue: both block markers and their newlines are gone.
         assert!(!rendered.contains("{{"));
-        assert!(rendered.contains("- docs/history/f/plan.md (when present)\n\nContract:\n"));
+        assert!(rendered.contains(
+            "- docs/history/f/plan.md (when present)\n\nDepth on demand — when a principle line or the cell's work needs more than the brief, follow that principle's Depth line or route .bee/expertise/INDEX.md and read only the one guide section it names; never load the whole shelf.\n\nContract:\n"
+        ));
     }
 
     // ── oneLine ────────────────────────────────────────────────────────────
@@ -13085,7 +13087,7 @@ Finish with: .bee/bin/bee cells finish --id c-golden --outcome "<one line>" --fi
         );
         assert!(prompt.contains(&block), "{prompt}");
         assert!(prompt.contains(
-            "- docs/history/demo/plan.md (when present)\n\nLearned context (machine-assembled"
+            "- docs/history/demo/plan.md (when present)\n\nDepth on demand — when a principle line or the cell's work needs more than the brief, follow that principle's Depth line or route .bee/expertise/INDEX.md and read only the one guide section it names; never load the whole shelf.\n\nLearned context (machine-assembled"
         ));
     }
 
