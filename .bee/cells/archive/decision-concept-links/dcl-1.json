@@ -1,0 +1,183 @@
+{
+  "id": "dcl-1",
+  "feature": "decision-concept-links",
+  "title": "Link decision search results to the concepts that cite them",
+  "lane": "small",
+  "role": "code",
+  "deps": [],
+  "decisions": [
+    "D1",
+    "D2",
+    "d9374293-0ef8-4b54-8770-66cf13d555bc",
+    "c1124936-188a-48fd-9d48-8421d93681e9"
+  ],
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/decision-memory/overview.md"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/decisions/verbs_read.rs",
+    "packages/bee-rs/crates/bee/src/verbs/decisions/scanners.rs",
+    "packages/bee-rs/crates/bee/src/verbs/decisions/concept_links.rs",
+    "packages/bee-rs/crates/bee/src/verbs/decisions/mod.rs",
+    "packages/bee-rs/crates/bee/src/verbs/decisions/tests.rs",
+    "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+    "docs/knowledge/areas/decision-memory/overview.md",
+    "docs/history/decision-concept-links/delivery.md"
+  ],
+  "read_first": [
+    "docs/history/decision-concept-links/CONTEXT.md",
+    "docs/knowledge/areas/decision-memory/overview.md",
+    "packages/bee-rs/crates/bee/src/verbs/decisions/verbs_read.rs",
+    "packages/bee-rs/crates/bee/src/verbs/decisions/scanners.rs",
+    "packages/bee-rs/crates/bee/src/verbs/decisions/tests.rs"
+  ],
+  "action": "RED FIRST in packages/bee-rs/crates/bee/src/verbs/decisions/tests.rs, beside the existing search tests. Build a temp repo with a decisions store and docs/knowledge/areas/x/a.md and b.md. Tests named with concept_link: (a) a decision whose short id appears in a.md gets concepts [\"docs/knowledge/areas/x/a.md:<line>\"] in --json and a text line '  knowledge: docs/knowledge/areas/x/a.md:<line>' after why/alternatives; (b) a decision with feature field 'feat-x' and text 'feat-x D2: ...' links to a line 'feat-x D1-D3' and not to a line 'feat-x D4'; (c) a decision with no link has no concepts key and its text has no knowledge line; (d) decisions active output never carries concepts. Run them and record the red output. FIX: add concept_links.rs in the decisions module: one function reads every *.md under <root>/docs/knowledge/ once (missing dir gives empty), and one function returns up to three 'path:line' strings for an event per D1 (short id = first 8 chars of id; feature from the feature field else the '<slug> D<n>' text prefix; D tokens on a line parsed after the slug: single Dn, lists separated by '/' or ', ', ranges 'Da-Db' or 'Da-b'; with a known n, require a token equal to n or a range covering it; without n, any D token; first matching line per concept; id hits first, then path order). In run_active_or_search, only when is_search, insert the concepts array into each linked result before emit, and append the knowledge line to that result's text. Keep decisions active untouched. Update the decisions search description in generated/registry_payload.json with one sentence naming the concepts key and the knowledge line (keep the file's JSON form; if a registry test pins the text, update it in the same commit). Add to docs/knowledge/areas/decision-memory/overview.md R5 one sentence: search results name the concept lines that cite them (decision-concept-links D1, D2). Write docs/history/decision-concept-links/delivery.md. No code comments. One commit.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- concept_link",
+  "must_haves": {
+    "truths": [
+      "a search result whose short id or feature D-number is cited in a concept carries concepts and a knowledge line",
+      "a search result with no link keeps today's JSON and text bytes",
+      "decisions active output is unchanged",
+      "a repo without docs/knowledge searches without error"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/decisions/concept_links.rs",
+        "substantive": "the concept scan and the link rule"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/decisions/verbs_read.rs",
+        "substantive": "concepts key and knowledge line on the search path only"
+      }
+    ],
+    "key_links": [
+      "the link rule follows decision-concept-links D1",
+      "the output shape follows contract decision-concept-links"
+    ],
+    "prohibitions": [
+      "No code comments",
+      "No stored concept index",
+      "No change to decisions active"
+    ],
+    "open_choices": [
+      "Helper names",
+      "How the D-token parser is written"
+    ]
+  },
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "dcl-1-fix",
+    "outcome": "d_tokens reads only the D-token run after the slug; 14 concept_link tests pass; committed 2174dc8af82858e519ba66cf148c54a05deba477",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/decisions/concept_links.rs"
+    ],
+    "deviations": [
+      "sync-ack: Fix touches concept_links.rs only; the owning concept decision-memory/overview.md R5 was updated in the first round; the six suspect concepts anchor the crate broadly"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-15T15:26:56.907Z",
+    "behavior_change": false,
+    "verification_evidence": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- concept_link — green:unit — 14 concept_link tests pass incl. other_feature_d_number case; full suite left to leader",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "1266bdf8-61aa-4b16-a19c-af0931b795e2",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- concept_link",
+    "claimed_at": "2026-11-15T15:22:07.023Z",
+    "knowledge_delta": [],
+    "sync_ack": "Fix touches concept_links.rs only; the owning concept decision-memory/overview.md R5 was updated in the first round; the six suspect concepts anchor the crate broadly",
+    "no_mistakes": true,
+    "principles_used": [
+      {
+        "slug": "bee-principle-red-before-green",
+        "changed": "the dcl-2 red test drove the fix"
+      }
+    ],
+    "report": {
+      "outcome": "d_tokens reads only the D-token run after the slug; 14 concept_link tests pass; committed 2174dc8af82858e519ba66cf148c54a05deba477",
+      "commit": "2174dc8af82858e519ba66cf148c54a05deba477",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/decisions/concept_links.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- concept_link — green:unit — PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- concept_link — green:unit — 14 concept_link tests pass incl. other_feature_d_number case; full suite left to leader",
+      "deviations": [],
+      "patch_id": "c17957eb871721148a0edc4f9919610343b88718"
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "verified_at": null,
+    "baseline": null,
+    "reaction": null,
+    "skipped": null,
+    "unknowns": null,
+    "found": null,
+    "stopped": null,
+    "blocked_reason": null,
+    "dropped_reason": null,
+    "reopened_at": "2026-11-15T15:21:53.048Z",
+    "reopened_reason": "dcl-2 test concept_link_other_feature_d_number_on_the_same_line_does_not_link is red: decision 'feat-x D5' links to line 'feat-x D1 and other-feat D5'. line_cites_feature scans D tokens to the end of the line. Fix: after the slug, read only the D-token run (D tokens joined by '/', ', ', ',', ' and ', '-' ranges) and stop at the first other word. Keep all other concept_link tests green; do not edit dcl-2's tests.",
+    "mistakes": [
+      {
+        "wrong": "first round scanned D tokens to the end of the line, so a two-feature line over-linked",
+        "better": "stop the scan at the end of the D-token run",
+        "fix_at": "check"
+      }
+    ],
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "a search result whose short id or feature D-number is cited in a concept carries concepts and a knowledge line",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/decisions/concept_links.rs"
+          },
+          {
+            "requirement": "a search result with no link keeps today's JSON and text bytes",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/decisions/concept_links.rs"
+          },
+          {
+            "requirement": "decisions active output is unchanged",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/decisions/concept_links.rs"
+          },
+          {
+            "requirement": "a repo without docs/knowledge searches without error",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/decisions/concept_links.rs"
+          },
+          {
+            "requirement": "the link rule follows decision-concept-links D1",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/decisions/concept_links.rs"
+          },
+          {
+            "requirement": "the output shape follows contract decision-concept-links",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/decisions/concept_links.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/decisions/concept_links.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/decisions/concept_links.rs"
+          }
+        ],
+        "recorded_at": "2026-11-15T15:31:36.139Z",
+        "recorded_by": "1266bdf8-61aa-4b16-a19c-af0931b795e2",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": {
+    "new": 142662,
+    "cached": 1674094,
+    "total": 1816756,
+    "models": {
+      "claude-sonnet-5-5": {
+        "new": 142662,
+        "cached": 1674094,
+        "total": 1816756
+      }
+    },
+    "jobs": [
+      "job-1794755398792-3743425-1",
+      "job-1794756131274-3972406-1",
+      "job-1794756369948-4073171-1"
+    ]
+  }
+}

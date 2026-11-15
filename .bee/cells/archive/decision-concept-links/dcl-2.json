@@ -1,0 +1,158 @@
+{
+  "id": "dcl-2",
+  "feature": "decision-concept-links",
+  "title": "Test the decision-concept-links contract edges",
+  "lane": "small",
+  "role": "test",
+  "deps": [
+    "dcl-1"
+  ],
+  "decisions": [
+    "D1",
+    "D2",
+    "c1124936-188a-48fd-9d48-8421d93681e9"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/decisions/tests.rs",
+    "docs/history/decision-concept-links/reports/dcl-2.md"
+  ],
+  "read_first": [
+    "docs/history/decision-concept-links/CONTEXT.md",
+    "docs/history/decision-concept-links/delivery.md",
+    "packages/bee-rs/crates/bee/src/verbs/decisions/concept_links.rs"
+  ],
+  "action": "Separate tester for dcl-1: do not change product code. Add tests named with concept_link in packages/bee-rs/crates/bee/src/verbs/decisions/tests.rs for: the list forms 'feat-x D1/D5' and 'feat-x D1, D2' (D5 and D2 link, D3 does not); a range 'feat-x D1-D3' covers D3 and not D4; a slug that is only a prefix of another word does not link ('feat-x' vs 'feat-xy D2'); a decision with no D-number links to any 'feat-x D<n>' line; four citing concepts give exactly three, id hits first; a root with no docs/knowledge returns results with no concepts key and exit 0. If a test exposes a defect, return BLOCKED with the failing output; never fix product code. Run the verify, then a live run: .bee/bin/bee is not rebuilt, so run the built binary from the cargo target dir with 'decisions search --text \"trust-layers D1\" --json' at the repo root and record whether a concepts entry names docs/knowledge/areas/onboarding/host-project-artifacts.md. Write docs/history/decision-concept-links/reports/dcl-2.md with each test name, the verify output count and the live run output. One commit.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- concept_link",
+  "must_haves": {
+    "truths": [
+      "list, range, prefix, no-D-number, cap and missing-dir cases each have a passing concept_link test",
+      "the report quotes the verify pass count and the live run output"
+    ],
+    "artifacts": [
+      {
+        "path": "docs/history/decision-concept-links/reports/dcl-2.md",
+        "substantive": "tester report"
+      }
+    ],
+    "key_links": [
+      "dcl-2 tests dcl-1"
+    ],
+    "prohibitions": [
+      "No product code edits",
+      "No code comments"
+    ],
+    "open_choices": [
+      "Fixture layout"
+    ]
+  },
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "dcl-2-test",
+    "outcome": "concept_link verify 14 passed 0 failed at 2174dc8af; live trust-layers D1 search links host-project-artifacts.md:326; dcl-2 report updated in ea8646384247577ebfc09e87336b1a808c6e2798",
+    "files_changed": [
+      "docs/history/decision-concept-links/reports/dcl-2.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-11-15T15:28:03.453Z",
+    "behavior_change": false,
+    "verification_evidence": "14 passed, 0 failed, the round-1 red test now passes; plus target/release/bee decisions search --text \"trust-layers D1\" --json — green:live — exit 0, 420c8c96 concepts names host-project-artifacts.md:326",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "1266bdf8-61aa-4b16-a19c-af0931b795e2",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- concept_link",
+    "claimed_at": "2026-11-15T15:27:02.664Z",
+    "attempts": [
+      {
+        "n": 1,
+        "at": "2026-11-15T15:22:06.468Z",
+        "claim_session": "1266bdf8-61aa-4b16-a19c-af0931b795e2",
+        "claimed_at": "2026-11-15T15:19:20.849Z",
+        "acquired_at": "2026-11-15T15:18:10.237Z",
+        "worker": "dcl-2-test",
+        "verdict": "blocked",
+        "failure_signature": "4cac855b1bf1",
+        "note": "BLOCKED by worker: concept_link_other_feature_d_number_on_the_same_line_does_not_link red (commit 407cc851e); dcl-1 reopened for the fix, dcl-2 reruns after"
+      }
+    ],
+    "blocked_reason": null,
+    "verified_at": null,
+    "baseline": null,
+    "reaction": null,
+    "skipped": null,
+    "unknowns": null,
+    "found": null,
+    "stopped": null,
+    "dropped_reason": null,
+    "reopened_at": "2026-11-15T15:27:02.147Z",
+    "reopened_reason": "dcl-1 fix 2174dc8af landed; rerun the verify, update the report, cap",
+    "knowledge_delta": [],
+    "no_mistakes": true,
+    "principles_used": [
+      {
+        "slug": "bee-principle-prove-it-works",
+        "changed": "rebuilt-check the release binary timestamp against concept_links.rs before trusting the live run"
+      }
+    ],
+    "report": {
+      "outcome": "concept_link verify 14 passed 0 failed at 2174dc8af; live trust-layers D1 search links host-project-artifacts.md:326; dcl-2 report updated in ea8646384247577ebfc09e87336b1a808c6e2798",
+      "commit": "ea8646384247577ebfc09e87336b1a808c6e2798",
+      "files": [
+        "docs/history/decision-concept-links/reports/dcl-2.md"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- concept_link — green:unit — 14 passed, 0 failed, the round-1 red test now passes; plus target/release/bee decisions search --text \"trust-layers D1\" --json — green:live — exit 0, 420c8c96 concepts names host-project-artifacts.md:326",
+      "deviations": [],
+      "principles_used": [
+        "bee-principle-prove-it-works — rebuilt-check the release binary timestamp against concept_links.rs before trusting the live run"
+      ],
+      "patch_id": "d778d0bef82b477679fa1843047514d9481f69be"
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "list, range, prefix, no-D-number, cap and missing-dir cases each have a passing concept_link test",
+            "artifact": "docs/history/decision-concept-links/reports/dcl-2.md"
+          },
+          {
+            "requirement": "the report quotes the verify pass count and the live run output",
+            "artifact": "docs/history/decision-concept-links/reports/dcl-2.md"
+          },
+          {
+            "requirement": "dcl-2 tests dcl-1",
+            "artifact": "docs/history/decision-concept-links/reports/dcl-2.md"
+          },
+          {
+            "requirement": "docs/history/decision-concept-links/reports/dcl-2.md",
+            "artifact": "docs/history/decision-concept-links/reports/dcl-2.md"
+          }
+        ],
+        "recorded_at": "2026-11-15T15:31:36.163Z",
+        "recorded_by": "1266bdf8-61aa-4b16-a19c-af0931b795e2",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": {
+    "new": 94358,
+    "cached": 841249,
+    "total": 935607,
+    "models": {
+      "claude-opus-5-5": {
+        "new": 94358,
+        "cached": 841249,
+        "total": 935607
+      }
+    },
+    "jobs": [
+      "job-1794755901504-3849868-1",
+      "job-1794756430558-4082779-1"
+    ]
+  }
+}
