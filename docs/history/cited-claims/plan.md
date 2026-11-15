@@ -13,7 +13,7 @@ string check beside the existing one.
 - Smallest safe decomposition: two implementer cells; cc-2 gets a tester
   cell (cc-3), cc-1 gets a docs checker cell (cc-4).
 
-## Cells
+## Cell map
 
 | Cell | Role | Does | Decisions |
 |---|---|---|---|
