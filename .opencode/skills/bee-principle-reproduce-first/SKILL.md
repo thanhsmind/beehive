@@ -14,11 +14,19 @@ The repro is also the finish line. "I changed something and the report stopped
 coming in" is not a verified fix. "The repro failed before the change and
 passes after it" is.
 
+**When it will not fail on demand, stop guessing and instrument.** Add logging
+at the suspect value, read the actual error, and vary one input at a time.
+An edit made in hope changes the scene without telling you anything; an
+observation aimed at one question does. Treat a restart as part of the repro
+when the report says it fails after one: stale state is an input.
+
 **Not the same as `bee-principle-red-before-green`.** This one is about getting the
 bug to happen at all, by any means — a shell command, a curl, a click path.
 That one is about the shape of the proof once you have it: a test that fails
 for the reported reason before the fix exists. Reproduce first, then red before
 green.
+
+**Check:** can you make it fail now, with a command someone else can run?
 
 **Why:** without a repro every later step is guesswork. You cannot narrow the
 search, you cannot tell a fix from a coincidence, and you cannot tell the

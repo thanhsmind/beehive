@@ -12,7 +12,7 @@ bee:
   decisions: ["per-task-router D1-D5 (docs/history/per-task-router/CONTEXT.md, 2026-11-14)", "per-task-router planning choices after the hat wave (docs/history/per-task-router/reports/hat-wave.md)"]
   sources: [docs/history/per-task-router/CONTEXT.md, docs/history/per-task-router/plan.md, docs/history/per-task-router/reports/hat-wave.md, docs/history/per-task-router/delivery.md]
   authoritative_for: "doctrine-layer: per-task route, tester pairing and proof floors"
-  anchors: [packages/bee-rs/crates/bee/src/principles.rs, packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs, packages/bee-rs/crates/bee/src/verbs/status_full/orient.rs, packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs, packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs, packages/bee-rs/crates/bee/src/verbs/cells/proof.rs, packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs, packages/bee/LEADER.md, packages/bee/prompts/worker-cell.md, skills/bee-planning/SKILL.md, skills/bee-swarming/SKILL.md]
+  anchors: [packages/bee-rs/crates/bee/src/principles.rs, packages/bee-rs/crates/bee/src/situations.rs, packages/bee-rs/crates/bee/src/verbs/plan_group.rs, packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs, packages/bee-rs/crates/bee/src/verbs/status_full/orient.rs, packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs, packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs, packages/bee-rs/crates/bee/src/verbs/cells/proof.rs, packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs, packages/bee/LEADER.md, packages/bee/prompts/worker-cell.md, skills/bee-planning/SKILL.md, skills/bee-swarming/SKILL.md]
 ---
 
 # Doctrine Layer — per-task route, tester pairing and proof floors
@@ -26,6 +26,8 @@ Three failures shared one root: the code writer chose its own proof, and the ses
 ## Behaviors & Operations
 
 **The per-task route.** The leader classifies the task in front of it and loads that class's playbook and principles; the lane record's stored route is not the source. The preamble prints Route and principles only when the route belongs to the session, meaning the session is bound by either bind path, or the repo has no lane records. Otherwise it prints one hint line naming `bee orient --class <c>`. That flag prints the playbook path and the class principles and writes nothing. The ownership test lives in one helper so the preamble and `bee orient` cannot disagree. The leader's todo list opens with the playbook steps; a skipped step stays with `skip:` and its reason.
+
+**The plan's playbook citation.** `bee plan check` reads the routed class's situations through `situations.rs`: when the class lists any, the plan must cite one listed `playbooks/<class>/<name>.md` and the bare class index no longer passes; a class listing none keeps the index rule. With no class known, `playbooks/<class>/<name>.md` counts as a citation too.
 
 **The tester pairing.** The implementer writes the code; a separate dispatched tester, with no shared context, verifies it and adds the new tests. This holds for every code-touching cell in every lane, `tiny` included, and an inline cap on a code cell is refused. A cell whose files are all `.md` or under `docs/` needs no tester; a second worker runs its parity and pointer checks. `bee cells add` stamps the cell and only warns when no dependent tester exists. Close and merge, through the one shared proof door, refuse a stamped cell without a capped tester or checker. A cell with no stamp is exempt, so work started before the rule still closes. An implementer owns the existing test edits its change forces; the tester adds new tests only.
 
@@ -41,13 +43,16 @@ Three failures shared one root: the code writer chose its own proof, and the ses
 - Implementer first, tester second, never the reverse (D2).
 - The trigger index in `LEADER.md` points to the skill that owns a situation and never restates it.
 
+- `bee orient --class` lists a class's situations from the class index's `## Situations` section through `situations.rs`, the one reader; the repo file wins, a compiled-in copy answers when the tree is absent, and a malformed line is skipped, never an error.
 ## Rejected options
 
+<!-- bee:not-a-deferral: a record or description of work already done, never a promise to act -->
 - A keyword classifier in Rust for the task class: it guesses wrong silently, and the leader's own classification is the signal.
 - Floors written only in the playbooks: host repos do not carry skill files at a fixed path the cap could read.
 - Refusing the pairing at `cells add`: breaks every fixture and every later single fix cell; close and merge already share one door.
 - A same-worker identity check between implementer and tester: each cell is its own dispatch and under herding the leader caps both, so it fires falsely.
 - Gating Route on a lane source alone: hides the route for a session bound through `session_binding` and for every lane-less repo.
+<!-- /bee:not-a-deferral -->
 
 ## Pointers
 

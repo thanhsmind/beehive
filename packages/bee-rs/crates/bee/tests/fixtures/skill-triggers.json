@@ -138,5 +138,77 @@
   {"brief": "There is no knowledge bundle here at all — set one up from scratch.", "expect": ["bee-knowledge-setup"], "near": "bee-knowledge-upkeep"},
   {"brief": "Run the periodic pass over the existing knowledge base after this release.", "expect": ["bee-knowledge-upkeep"]},
   {"brief": "We just agreed the retry cap lives in the loop — record that decision now.", "expect": ["bee-capturing"], "near": "bee-knowledge-upkeep"},
-  {"brief": "Find the dead code and stale docs in this repo and clean them up.", "expect": ["bee-grooming"], "near": "bee-knowledge-upkeep"}
+  {"brief": "Find the dead code and stale docs in this repo and clean them up.", "expect": ["bee-grooming"], "near": "bee-knowledge-upkeep"},
+
+  {"brief": "Before any code, sketch the types, signatures and module layout for the new billing engine.", "expect": ["bee-architect"]},
+  {"brief": "Thiết kế trước cấu trúc module và chữ ký hàm cho tính năng đồng bộ dữ liệu, rồi mới viết mã.", "expect": ["bee-architect"]},
+  {"brief": "Design this twice: give me two structurally different shapes for the plugin API and pick one.", "expect": ["bee-architect"]},
+  {"brief": "Jumping straight to code would lock in the wrong shape here — draw up the interfaces first.", "expect": ["bee-architect"]},
+  {"brief": "The design is approved — break it into cells and pick the lane for each.", "expect": ["bee-planning"], "near": "bee-architect"},
+  {"brief": "Lock the product decisions for the notification settings before anyone designs anything.", "expect": ["bee-shaping"], "near": "bee-architect"},
+  {"brief": "Giải thích cho tôi cách module thanh toán hiện tại chạy từ đầu đến cuối.", "expect": ["bee-how"], "near": "bee-architect"},
+
+  {"brief": "Try this refactor four different ways in parallel, keep the best one and borrow the good parts of the rest.", "expect": ["bee-arena"]},
+  {"brief": "Cho nhiều bản làm song song cùng một việc, chọn bản tốt nhất rồi ghép phần hay của các bản còn lại vào.", "expect": ["bee-arena"]},
+  {"brief": "One attempt at this API shape would lock in the wrong design — run competing candidates and compare them.", "expect": ["bee-arena"]},
+  {"brief": "Draft the migration script several independent ways and fold the strongest ideas into the winner.", "expect": ["bee-arena"]},
+  {"brief": "Have independent reviewers go over this diff and report what is wrong with it.", "expect": ["bee-reviewing"], "near": "bee-arena"},
+  {"brief": "Lay out the types and module map for the new queue before writing any of it.", "expect": ["bee-architect"], "near": "bee-arena"},
+
+  {"brief": "Stress-test this change with several skeptical reviewers and give me one verdict on what to fix.", "expect": ["bee-interrogate"]},
+  {"brief": "Tear this branch apart: find the blind spots, filter the noise, and tell me what actually matters.", "expect": ["bee-interrogate"]},
+  {"brief": "Cho vài người đánh giá độc lập soi kỹ thay đổi này rồi tổng hợp thành một kết luận, đừng tự sửa gì cả.", "expect": ["bee-interrogate"]},
+  {"brief": "Before I merge, challenge this diff from independent angles and rank what each reviewer found.", "expect": ["bee-interrogate"]},
+  {"brief": "Review everything unreviewed in this feature and tell me whether it can merge.", "expect": ["bee-reviewing"], "near": "bee-interrogate"},
+  {"brief": "Explain how this change flows through the code from the command to the file it writes.", "expect": ["bee-how"], "near": "bee-interrogate"},
+
+  {"brief": "Keep a decision log for this overnight migration so I can see what was decided and why when I am back.", "expect": ["bee-show-me-your-work"]},
+  {"brief": "Log one row per decision with the evidence for each, so I can audit the run afterwards.", "expect": ["bee-show-me-your-work"]},
+  {"brief": "Ghi lại từng quyết định trong lần chạy tự động này thành một bảng, kèm bằng chứng, để sáng mai tôi kiểm tra.", "expect": ["bee-show-me-your-work"]},
+  {"brief": "This long unattended run needs a trail a reviewer can check without reading the whole transcript.", "expect": ["bee-show-me-your-work"]},
+  {"brief": "We agreed the retry limit is three, lock that rule in as a recorded decision.", "expect": ["bee-capturing"], "near": "bee-show-me-your-work"},
+  {"brief": "Review everything unreviewed from today and tell me whether it can merge.", "expect": ["bee-reviewing"], "near": "bee-show-me-your-work"},
+
+  {"brief": "Launch eight parallel workers, one per package, each checking its own slice, and give me one table back.", "expect": ["bee-fanout"]},
+  {"brief": "Race five workers on the same brief and tell me which one finishes the exploration best.", "expect": ["bee-fanout"]},
+  {"brief": "Chạy song song nhiều worker, mỗi worker phụ trách một phần của codebase, rồi gộp thành một báo cáo duy nhất.", "expect": ["bee-fanout"]},
+  {"brief": "I want parallel coverage of every route handler, one worker per handler, drained into a single report.", "expect": ["bee-fanout"]},
+  {"brief": "The cells are approved and open — run them to done with workers.", "expect": ["bee-swarming"], "near": "bee-fanout"},
+  {"brief": "Try the same refactor several independent ways, keep the strongest and graft in the good parts of the rest.", "expect": ["bee-arena"], "near": "bee-fanout"},
+
+  {"brief": "The date parser drops the last day of a month. Write a failing test for it first, watch it fail, then fix the bug.", "expect": ["bee-tdd"]},
+  {"brief": "Add a regression test for this off-by-one crash that fails before the fix and passes after it.", "expect": ["bee-tdd"]},
+  {"brief": "Sửa lỗi này theo kiểu TDD: viết test thất bại trước, xác nhận nó đỏ đúng lý do rồi mới sửa code.", "expect": ["bee-tdd"]},
+  {"brief": "The cells are approved and open, testers included — run them all to done with workers.", "expect": ["bee-swarming"], "near": "bee-tdd"},
+  {"brief": "We agreed regression tests never mock the database, lock that in as a recorded decision.", "expect": ["bee-capturing"], "near": "bee-tdd"},
+
+  {"brief": "Reflect on this session: what did we learn that is worth keeping, and which skill should change because of it?", "expect": ["bee-reflect"]},
+  {"brief": "Let's run a retrospective over the conversation and turn the durable lessons into concrete skill edits.", "expect": ["bee-reflect"]},
+  {"brief": "Nhìn lại phiên làm việc này, rút ra những bài học đáng giữ và đề xuất sửa skill nào.", "expect": ["bee-reflect"]},
+  {"brief": "Just agreed that every migration needs a rollback script — record that decision now.", "expect": ["bee-capturing"], "near": "bee-reflect"},
+  {"brief": "Review everything unreviewed from today and give me a verdict on the diff.", "expect": ["bee-reviewing"], "near": "bee-reflect"},
+
+  {"brief": "Catch me up on what I was working on in the auth refactor before I start again.", "expect": ["bee-recall"]},
+  {"brief": "Where did I leave off on the billing migration? Give me a tight current-state brief before I resume.", "expect": ["bee-recall"]},
+  {"brief": "Nhắc lại giúp tôi tuần qua tôi đã làm gì với phần thanh toán và giờ nên làm tiếp việc gì.", "expect": ["bee-recall"]},
+  {"brief": "Why does the claim sweep skip expired claims? Give me the recorded reason for it.", "expect": ["bee-why"], "near": "bee-recall"},
+  {"brief": "I don't get how the dispatch door picks a worker, explain it to me step by step.", "expect": ["bee-teach"], "near": "bee-recall"},
+
+  {"brief": "What's the blast radius of changing the claim file format? I don't trust this small diff.", "expect": ["bee-blast-radius"]},
+  {"brief": "Before I merge this, what could this change break somewhere else that grep won't show me?", "expect": ["bee-blast-radius"]},
+  {"brief": "Phạm vi ảnh hưởng của thay đổi này là gì? Tìm xem nó có thể làm hỏng chỗ nào khác trước khi ship.", "expect": ["bee-blast-radius"]},
+  {"brief": "Trace how the dispatch door picks a worker, step by step, with the files I can open.", "expect": ["bee-how"], "near": "bee-blast-radius"},
+  {"brief": "Review the diff from main to this branch with independent reviewers and give me one verdict.", "expect": ["bee-reviewing"], "near": "bee-blast-radius"},
+
+  {"brief": "Strip the comments out of this diff: delete the narration and the workaround sermons, and fix whatever hack each one was apologizing for.", "expect": ["bee-comment-review"]},
+  {"brief": "Audit the comments in these files with a fresh pair of eyes. I keep defending mine and I don't trust that.", "expect": ["bee-comment-review"]},
+  {"brief": "Xóa hết comment thừa trong phần thay đổi này, còn comment nào ghi 'đừng xoá' thì kiểm tra xem có cần giữ thật không.", "expect": ["bee-comment-review"]},
+  {"brief": "Run the review gate over everything unreviewed on this branch before it merges.", "expect": ["bee-reviewing"], "near": "bee-comment-review"},
+  {"brief": "Why was the no-comments rule built this way? Give me the recorded reason for it.", "expect": ["bee-why"], "near": "bee-comment-review"},
+
+  {"brief": "Migrate every call site of the old session API to the new one across the whole repo. It is big, I will be away for hours, and I want to audit every decision when I'm back.", "expect": ["bee-figure-it-out"]},
+  {"brief": "None of the usual playbooks fits this task, so figure it out: define done as something checkable, design the phases, then run them with a trail I can review.", "expect": ["bee-figure-it-out"]},
+  {"brief": "Việc này lớn và cắt ngang nhiều module, không quy trình nào có sẵn khớp. Hãy tự thiết kế các giai đoạn, đặt tiêu chí xong kiểm chứng được, rồi chạy và để lại nhật ký quyết định để tôi xem lại.", "expect": ["bee-figure-it-out"]},
+  {"brief": "Turn the locked decisions for this feature into an executable plan with a lane, a work shape and cells.", "expect": ["bee-planning"], "near": "bee-figure-it-out"},
+  {"brief": "I have a vague itch to make onboarding better but cannot name the outcome yet. Help me chart it before we decide anything.", "expect": ["bee-wayfinding"], "near": "bee-figure-it-out"}
 ]

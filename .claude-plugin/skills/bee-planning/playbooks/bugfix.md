@@ -1,31 +1,11 @@
 # bugfix
 
-1. Reproduce the symptom on the real interface, because the user met it there,
-   not in a unit.
-2. Watch that reproduction FAIL before the fix. This step's rule already has a
-   home — `bee-swarming/references/worker-details.md:33-35`
-   ("red-before-green is craft, applied by judgment and enforced by review,
-   not by flags"). Read it there; it is deliberately not copied here, so a
-   cold execution worker never has to open a planning reference.
-3. Find the mechanism, not the symptom — trace the bad value back to where
-   it was made (`bee-principle-crash-site-versus-fault-site`).
-4. Fix the mechanism — a guard at the symptom leaves the cause free to strike
-   again.
-5. Re-run the same reproduction, on the same interface, because only that run
-   proves this bug is gone. An inconclusive run, or a run on a different
-   surface, is not a pass.
+A defect to find and remove: pick the situation below and open its file.
 
-**When the cause is not known.** List the candidate causes. Each pass, test
-the split that removes the most candidates, with runtime evidence, not a
-reading of the code (`.bee/expertise/tests.md` ("Instrument before
-guessing")). A symptom that turns on event order — a late, doubled or
-reordered message, a retry, a stuck flow — takes the `statechart` model of
-`feature.md` step 6 as one candidate split. A fix in code that a
-project-local formal verify skill covers reruns that skill (`feature.md`
-step 7). Revert every edit that a refuted hypothesis motivated. A
-one-line fix whose cause is already known keeps the short path. If the
-deciding fact took a deep dig to find, propose the cheap, always-on signal
-that would have shown it at first look.
+## Situations
 
-Proof line: the reproduction's output, red and then green, verbatim.
+- `bug-fix` — bug, broken, regression, crash, wrong output, it used to work, stopped working, lỗi, hỏng, sửa lỗi, không chạy, chạy sai — delivers: the root cause confirmed with runtime evidence, the fix, and the repro shown failing and then passing on the same surface
+
+No situation fits, or the work is large and cross-cutting: use bee-figure-it-out.
+
 Proof floor: the cap refuses a result weaker than this class's floor and names it; the table is the cap's own (`bee cells finish --help`).

@@ -31,7 +31,7 @@
 
 **What to leave out:**
 - The port's host-only frontmatter. The skill now carries bee frontmatter: `name`, a folded description with "Use when" and "Not for", and `metadata`.
-- Nothing from the rule catalog.
+- Nothing from the rule catalog. Cell ppb-34 later restored rules 1, 2, 4, 6 and 21 and added the Adding voice section from the pstack source, so the catalog has no gaps below 33.
 
 **Named deviation:** The Iron Law of bee-writing-skills says to delete content and rewrite it from observed failures. That step does not apply here. The content is a port that was already in use in the field, so the cell kept it and added only the bee adaptations above.
 
@@ -40,7 +40,7 @@
 ## Structure Decisions
 
 1. Scope comes right after Process, before the catalog. The agent reads what never to touch before it reads what to rewrite.
-2. The rule numbers keep their gaps (no 1, 2, 4, 6 or 21). Renumbering would break citations.
+2. The rule numbers never change. Renumbering would break citations. Rules 1, 2, 4, 6 and 21 came back under their original numbers in cell ppb-34.
 
 ---
 

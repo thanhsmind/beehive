@@ -13,8 +13,8 @@ bee:
   sources: [docs/history/router-cost/CONTEXT.md, "docs/history/router-cost/ (cell rc-2, capped)", "tick-contract-inline (cells tci-1/tci-2/tci-3, decisions T1-T7, traces .bee/cells/tci-{1,2,3}.json, reports docs/history/tick-contract-inline/reports/, 2026-07-29)"]
   authoritative_for: "verify-pipeline: skill reference pointer integrity"
   anchors: [skills/, skills/bee-planning/playbooks/spike.md, packages/bee-rs/crates/bee/tests/pointer_integrity.rs]
-  verified_at: 2026-11-07
-  verified_commit: 9861c1b430dc099ce4e0ba481503579ad3a2d738
+  verified_at: 2026-11-15
+  verified_commit: a963c71a41249647b5aa15a64118f007f39c4c67
 ---
 
 ## Purpose

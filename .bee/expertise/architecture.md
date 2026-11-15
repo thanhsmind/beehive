@@ -10,6 +10,7 @@ is about a known trade-off rather than taste.
 | Situation | Principle |
 |---|---|
 | The solution feels complex; unsure if the problem is | Simplicity First |
+| About to add a layer, a wrapper or a threaded signal; sizing a diff | Laziness Protocol |
 | Building for a need nobody has yet | YAGNI |
 | Two working designs; one needs explaining | Prefer the Obvious Approach |
 | One change forces edits across unrelated concerns | Separation of Concerns |
@@ -22,6 +23,9 @@ is about a known trade-off rather than taste.
 | A class hierarchy is bending to share behavior | Composition over Inheritance |
 | The same fact lives in two places | Single Source of Truth |
 | Code is littered with "this can't happen" checks | Make Illegal States Unrepresentable |
+| About to write logic before the core types are settled | Foundational Thinking: Data Structures First |
+| A new requirement is landing on an existing design | Redesign From First Principles |
+| A new feature grows an if/else chain, or a flag must stay in sync with another | Model the Domain |
 | Two actors write the same mutable state | One Writer for Shared State |
 | Two ids or flags of the same primitive type get swapped | Make Illegal States Unrepresentable |
 | A new internal API ships while old callers remain | Migrate Callers, Then Delete |
@@ -322,6 +326,128 @@ not a rewrite. A module split into `helper()` and `validate()` with
 their own unit tests, then merged behind one deep function: once tests
 against the merged function's interface cover the same ground, delete
 the two old unit tests the same day the replacement lands.
+
+### Foundational Thinking: Data Structures First
+
+When you are about to write logic, or choose the first types of a new area
+→ settle the data shape first. The right shape makes the code that reads and
+writes it obvious; the wrong one is rewritten around for as long as it
+lives. Define the core types early, trace every access pattern against them,
+and choose the structure that matches the dominant paths. A data-structure
+change made late is a rewrite; made early it is often a one-line diff.
+
+Two kinds of decision, two kinds of protection. A *structural* decision (the
+core types, what is shared, what runs first) protects option value: the
+right foundation keeps doors open, and over-engineering is often a
+premature structural decision that closes one. A *code-level* decision
+protects simplicity: make the structure converge on one definition rather
+than every line, since three similar statements still beat a premature
+abstraction, and explicit beats clever. Test behavior and edge cases, not
+line counts.
+
+- **Concurrency corollary.** Before two actors share state, ask what
+  happens if the other modifies it at the same moment. If the answer is not
+  "nothing", isolate them (see One Writer for Shared State).
+- **Scaffold first.** Ask of each piece of groundwork: does every later
+  phase benefit from this existing? CI, linting, test infrastructure and
+  shared types do. Sequence for option value, setup before features and
+  tests before fixes, in small single-purpose commits.
+- **One abstraction per increment.** Each increment lands a coherent
+  abstraction or deepens one that exists; a new capability is not spread
+  across its callers as special-case coordination.
+- **Subtraction comes first.** Remove dead weight before laying
+  foundations (see planning.md, Subtract before you add).
+
+### Redesign From First Principles
+
+When a new requirement lands on an existing design → do not bolt it on.
+Redesign as if the requirement had been a foundational assumption from day
+one, so the result reads like what you would have built had you known. A
+bolt-on keeps the old design intact beside a special case, and the special
+cases pile up until nobody can say what the design is.
+
+1. **Read every affected file** and hold the current design whole before
+   touching any of it.
+2. **Ask the from-scratch question.** If we were writing this now, with this
+   requirement, what would we build? The answer is the target, even where it
+   moves what already works.
+3. **Carry the change through every reference**: types, docs, examples and
+   the rationale sections, so nothing still describes the design without the
+   requirement.
+4. **Think holistically, deliver incrementally.** The redesign is one
+   picture; it lands as small steps, each a coherent state (see Split only on
+   a real dependency in planning.md for when a step needs its own phase).
+
+This is the method for keeping option value when a design changes: the cost
+of the redesign is paid once, where bolting on is paid at every later change.
+
+### Laziness Protocol
+
+When you are about to refactor, add a layer, or pass a new signal through
+several types → remember that writing code costs you almost nothing, which is
+exactly why over-engineering comes easily. Borrow a human maintainer's
+fatigue: the aim is the most result for the least code and complexity, and
+the prime test is whether a person would find the result exhausting to
+maintain.
+
+- **Prefer deletion.** Asked to refactor or improve, look for removals before
+  additions (see planning.md, Subtract before you add).
+- **Keep the call hierarchy flat.** A rich interface that hides substantial
+  work is not a deep chain. If answering a question means tracing through
+  more than three files or layers, flatten it.
+- **Consolidate decisions.** Never repeat the same choice in several places.
+  Put it behind one source of truth and pass the result on as a simple flag
+  (see Single Source of Truth).
+- **Minimize the diff.** The smallest change that solves the problem wins;
+  fewer lines beat elegant boilerplate.
+- **Question the threading.** A task that asks you to pass a new signal
+  through types, schemas or pipelines is the cue to stop and look for a more
+  direct path.
+- **Sweat the small leaks.** Remove a tiny pass-through, a representation
+  that escapes its owner, or a duplicated choice before it spreads; small
+  leaks compound into permanent coordination cost.
+
+The limit is the same as for YAGNI: laziness trims structure, never quality.
+Tests, clear names and honest error handling are what keep a small diff safe.
+
+### Model the Domain
+
+When you write stateful logic, or code starts to branch a lot or to repeat
+the same assumption about a shape in several files → encode the domain in a
+structure instead of in conditionals. Scattered booleans, repeated shape
+assumptions and branching spread across files are accidental complexity. A
+structure that matches the domain makes invalid states unrepresentable and
+deletes branches, and it costs least to choose at write time; recovered
+later it reads as a refactor and gets deferred.
+
+Reach for the structure the domain already has:
+
+- A state machine instead of scattered booleans, phases or lifecycle checks.
+- A typed object instead of loose parameters or a repeated shape assumption.
+- A map, registry, lookup table or tagged union instead of branching spread
+  across files.
+- A reducer or command and event model instead of ad hoc mutation.
+- A module organised around one body of domain knowledge instead of a
+  sequence such as load, validate, transform and save. Execution order is not
+  ownership.
+- A small module boundary that gathers repeated behavior, ownership or
+  invariants.
+- A queue, cache, index, graph, tree or normalized collection where the
+  access pattern calls for one.
+- Any other structure that fits. When none of the above does, work out what
+  the code must never allow and how the data gets read, then find the
+  structure that encodes exactly that.
+
+Two tells that you skipped this: a new feature that grows an existing if/else
+chain by one more branch, or a second boolean that must stay in sync with the
+first. Temporal decomposition is a third: phase-named modules repeat the same
+domain rules in every step.
+
+Do not force an abstraction. Prefer boring code when the current shape is
+already clear, local and unlikely to grow, and distrust an abstraction that
+adds indirection without removing branches, duplicated rules, invalid states
+or lifecycle risk (see Make Illegal States Unrepresentable for the type-level
+half, and The Rule of Three for when to extract).
 
 ## Anti-patterns to Name on Sight
 

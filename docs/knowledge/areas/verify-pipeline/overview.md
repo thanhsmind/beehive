@@ -15,8 +15,8 @@ bee:
   owns.skills: []
   owns.tests: [packages/bee-rs/crates/bee/tests/proof_gate.rs, packages/bee-rs/crates/bee/tests/concurrency.rs]
   anchors: [.bee/verify/verify-app/control-bee, scripts/release.sh, skills/bee-verifying/SKILL.md, skills/bee-deploying/references/deploy.sh.template, packages/bee/LEADER.md, packages/bee-rs/crates/bee/src/verbs/test_runner.rs, packages/bee-rs/crates/bee/src/verbs/cells/validate.rs, packages/bee-rs/crates/bee/src/verbs/cells/proof.rs, packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs, packages/bee-rs/crates/bee/tests/full_suite_verify.rs, packages/bee-rs/crates/bee/tests/proof_gate.rs, packages/bee-rs/crates/bee/tests/concurrency.rs]
-  verified_at: 2026-11-07
-  verified_commit: 1f3dccd95e6ae4a66ff339a5fe63d93e5825799d
+  verified_at: 2026-11-15
+  verified_commit: a963c71a41249647b5aa15a64118f007f39c4c67
 ---
 
 # Verify Pipeline — Purpose, Test Execution, and Proof Discipline

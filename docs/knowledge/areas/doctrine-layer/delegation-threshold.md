@@ -13,8 +13,8 @@ bee:
   authoritative_for: "doctrine-layer: the delegation threshold"
   applied_at: [skills/bee-hive/references/gates-and-delegation.md]
   anchors: [skills/bee-hive/references/routing-and-contracts.md, packages/bee-rs/crates/bee/src/hooks/model_guard.rs]
-  verified_at: 2026-09-08
-  verified_commit: 99c2f5a2965cc7629f17071d6144fd9ab9604671
+  verified_at: 2026-11-15
+  verified_commit: a963c71a41249647b5aa15a64118f007f39c4c67
 ---
 
 # Doctrine Layer — The Delegation Threshold

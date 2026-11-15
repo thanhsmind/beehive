@@ -1,31 +1,12 @@
 # feature
 
-1. Name the DATA shape first — the record the feature turns on, before any
-   verb, flag or screen reads it.
-2. Build a walking skeleton end to end, with no stub left on that path —
-   wiring breaks then show up first, while they are still cheap.
-3. Build the CURRENT slice only, because a cell for a later slice is planned on
-   guesses; headline the rest and leave it out of the cells.
-4. Prove the user-visible path, not only the unit sitting under it — the user
-   walks the path, never the unit.
-5. Sync `docs/knowledge/` in the SAME change when behavior moves — it is the
-   state layer, not a write-up.
-6. Model an event-order flow with the `statechart` skill, so that TLC walks
-   every step order and finds the stuck state a unit test never reaches —
-   payment hold, capture and refund with retry, a message queue, a re-run or
-   idempotent job, a multi-state workflow, a lock or lease. Do it before the
-   flow's code, when the host has that skill. Each break it reports stays a
-   guess until a test on the real code fails the same way. With no
-   `statechart` skill on the host, skip this step and say so.
-7. Keep a model that must stay true as the code moves with the
-   `create-formal-verification-skill` skill: it picks the code where a break
-   costs most, proves the property can fail, and leaves a project-local verify
-   skill under `.bee/verify/<name>/` with the files it covers and its sync
-   commit. A change to covered code runs that verify skill; drift that piled
-   up across merges takes `maintain-formal-verification-skill`. With neither
-   skill on the host, skip this step and say so.
+New or changed behavior, built from a named data shape: pick the situation below and open its file.
 
-A green unit behind a path nobody can walk is not a result.
+## Situations
 
-Proof line: the user-visible path driven, with its evidence (`green:live`).
+- `feature` — build this feature, add a feature, implement this, new capability, change how X behaves, add support for, thêm tính năng, xây dựng tính năng, làm tính năng mới, triển khai, thêm chức năng, thay đổi hành vi — delivers: what was built, the data shape it turns on, what was chosen and why, the open decisions, and the user-visible path driven with its evidence
+- `multi-phase-plan` — plan this program, multi-phase plan, multi-PR plan, stacked PRs plan, break this into phases, write the plan for these PRs, lập kế hoạch nhiều giai đoạn, kế hoạch nhiều PR, chia thành các giai đoạn, lên kế hoạch chương trình — delivers: the plan file in the skeleton's shape with a section per PR, the execution playbook it names, the review-gated set, what the prototypes proved, and the shape check
+
+No situation fits, or the work is large and cross-cutting: use bee-figure-it-out.
+
 Proof floor: the cap refuses a result weaker than this class's floor and names it; the table is the cap's own (`bee cells finish --help`).

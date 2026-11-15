@@ -1,21 +1,11 @@
 # content
 
-1. Name the audience, and the ONE claim or fact the piece puts at risk — step 3
-   checks the draft against them, so name them before you write a line.
-2. Draft — step 3, not the first pass, is where errors get caught.
-3. Check the draft against the project's OWN rule, because only it says what
-   this project promises: when the project has documented a style, fact, or
-   brand rule, cite that rule by its path. When it has none, do a second read
-   and write down what that read checked: the claim from step 1, each fact
-   against its source, and the tone for the audience.
-4. Ship — the check from step 3, written down, is the piece's proof.
+A piece of writing that makes claims to an audience: open the situation below.
 
-This playbook names no tool or skill: it is read in every host repo, and a
-check only one host has would break in the rest (per D6, decision
-`8fd45bbb`).
+## Situations
 
-Proof line: the artifact checked against the project's own
-style/fact/brand rule when the project has one (name it), otherwise a
-documented second read naming what was checked —
-`<check> — <result> — <scope reason>`.
+- `content` — content, blog post, announcement, changelog entry, marketing copy, landing page text, bài viết, nội dung, thông báo, bản tin phát hành — delivers: the piece, checked against the project's own style, fact or brand rule or a documented second read
+
+No situation fits, or the work is large and cross-cutting: use bee-figure-it-out.
+
 Proof floor: the cap refuses a result weaker than this class's floor and names it; the table is the cap's own (`bee cells finish --help`).

@@ -27,6 +27,7 @@
 
 **What to include:**
 - All four layers, the three top rules, the worked example and the review checklist, unchanged.
+- Cell ppb-35 later merged three pstack lines the port lacked: the compass cue "reach for it whenever you feel unsure", the "read the awkward sentence aloud" rule, and the worked example's "fixes, by layer" breakdown. The skill also carries the pstack MIT notice as `LICENSE.pstack`.
 - Every mention of the unslop skill now names `bee-unslop`.
 - The port's STE note said that this repo's CLAUDE.md asks for ASD-STE100 Simplified Technical English. That note was true only in the bee source repo. The cell deleted it. In its place, the project's own writing standard, code style or language wins where the two disagree, including over the tabs rule. The hat-user-impact seat found that the port would override a host project's language rules and that unslop, as ported, would rewrite progress ticks. This line and bee-unslop's Scope section answer both findings (decision D4).
 - One Voice line: never rewrite quoted evidence, ids, commands or code.

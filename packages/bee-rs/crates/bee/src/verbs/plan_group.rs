@@ -1,4 +1,5 @@
 use crate::jsjson;
+use crate::situations::class_situations;
 use crate::verbs::knowledge::{g_prelude_at, pre_json_scan, GPre};
 use crate::verbs::reservations::{keys_known, parse_flags, Err2, FlagV};
 use crate::verbs::state_group::{
@@ -78,23 +79,40 @@ fn section_findings(text: &str, mode: Option<&str>, out: &mut Vec<Finding>) {
     }
 }
 
-fn playbook_findings(text: &str, class: Option<&str>, out: &mut Vec<Finding>) {
+fn playbook_findings(text: &str, class: Option<&str>, repo: &Path, out: &mut Vec<Finding>) {
     let cited = |name: &str| text.contains(&format!("{PLAYBOOKS}{name}.md"));
     match class.filter(|c| ROUTE_CLASS_VALUES.contains(c)) {
         Some(class) => {
-            if !cited(class) {
+            let paths: Vec<String> = class_situations(repo, class)
+                .iter()
+                .map(|s| format!("{PLAYBOOKS}{class}/{}.md", s.name))
+                .collect();
+            if paths.is_empty() {
+                if !cited(class) {
+                    out.push(Finding {
+                        check: "playbook",
+                        detail: format!("plan.md does not cite {PLAYBOOKS}{class}.md"),
+                    });
+                }
+            } else if !paths.iter().any(|p| text.contains(p.as_str())) {
                 out.push(Finding {
                     check: "playbook",
-                    detail: format!("plan.md does not cite {PLAYBOOKS}{class}.md"),
+                    detail: format!("plan.md cites no situation of {class}; cite one of: {}", paths.join(", ")),
                 });
             }
         }
         None => {
+            let name_len = |s: &str| s.chars().take_while(|c| c.is_ascii_alphanumeric() || *c == '-' || *c == '_').count();
             let any = text.match_indices(PLAYBOOKS).any(|(at, _)| {
                 let rest = &text[at + PLAYBOOKS.len()..];
-                let name: String =
-                    rest.chars().take_while(|c| c.is_ascii_alphanumeric() || *c == '-' || *c == '_').collect();
-                !name.is_empty() && rest[name.len()..].starts_with(".md")
+                let mut len = name_len(rest);
+                if len > 0 && rest[len..].starts_with('/') {
+                    let tail = name_len(&rest[len + 1..]);
+                    if tail > 0 {
+                        len += 1 + tail;
+                    }
+                }
+                len > 0 && rest[len..].starts_with(".md")
             });
             if !any {
                 out.push(Finding { check: "playbook", detail: format!("plan.md cites no {PLAYBOOKS}<class>.md") });
@@ -193,7 +211,7 @@ pub(crate) fn plan_report(plan_path: &Path, plan: &str, class: Option<&str>) -> 
     let repo = plan_path.ancestors().nth(4);
     let mut findings = Vec::new();
     section_findings(plan, mode.as_deref(), &mut findings);
-    playbook_findings(plan, class, &mut findings);
+    playbook_findings(plan, class, repo.unwrap_or(Path::new(".")), &mut findings);
     decision_findings(plan, context.as_deref(), &mut findings);
     if let Some(repo) = repo {
         evidence_findings(plan, repo, &mut findings);
@@ -389,6 +407,57 @@ mod tests {
         let (code, v, text) = check(tmp.path());
         assert_eq!(code, Some(10), "{text}");
         assert_eq!(details(&v, "playbook").len(), 1, "{text}");
+    }
+
+    const SITUATED: &str = "# Bugfix\n\n## Situations\n\n- `fixture-fix` — bug — delivers: a fix\n- `fixture-two` — crash — delivers: a fix\n\n## Steps\n";
+
+    fn playbook_details(class: Option<&str>, citation: &str) -> Vec<String> {
+        let plan = plan_body("").replace("`skills/bee-planning/playbooks/feature.md`", citation);
+        let tmp = repo(&plan, Some(CONTEXT));
+        let dir = tmp.path().join("skills/bee-planning/playbooks");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("bugfix.md"), SITUATED).unwrap();
+        std::fs::write(dir.join("perf.md"), "# Perf\n\n## Steps\n").unwrap();
+        plan_report(&tmp.path().join("docs/history/demo/plan.md"), &plan, class)
+            .findings
+            .into_iter()
+            .filter(|f| f.check == "playbook")
+            .map(|f| f.detail)
+            .collect()
+    }
+
+    #[test]
+    fn plan_group_situation_citation_passes_for_a_class_with_situations() {
+        assert!(playbook_details(Some("bugfix"), "`skills/bee-planning/playbooks/bugfix/fixture-fix.md`").is_empty());
+        assert!(playbook_details(Some("bugfix"), "`skills/bee-planning/playbooks/bugfix/fixture-two.md`").is_empty());
+    }
+
+    #[test]
+    fn plan_group_index_only_citation_names_every_situation_path() {
+        let found = playbook_details(Some("bugfix"), "`skills/bee-planning/playbooks/bugfix.md`");
+        assert_eq!(found.len(), 1, "{found:?}");
+        assert!(found[0].contains("skills/bee-planning/playbooks/bugfix/fixture-fix.md"), "{found:?}");
+        assert!(found[0].contains("skills/bee-planning/playbooks/bugfix/fixture-two.md"), "{found:?}");
+    }
+
+    #[test]
+    fn plan_group_unlisted_situation_name_is_not_a_citation() {
+        let found = playbook_details(Some("bugfix"), "`skills/bee-planning/playbooks/bugfix/not-listed.md`");
+        assert_eq!(found.len(), 1, "{found:?}");
+        assert!(found[0].contains("bugfix/fixture-fix.md"), "{found:?}");
+    }
+
+    #[test]
+    fn plan_group_class_without_situations_keeps_the_index_rule() {
+        assert!(playbook_details(Some("perf"), "`skills/bee-planning/playbooks/perf.md`").is_empty());
+        let found = playbook_details(Some("perf"), "`skills/bee-planning/playbooks/bugfix/fixture-fix.md`");
+        assert_eq!(found, vec!["plan.md does not cite skills/bee-planning/playbooks/perf.md".to_string()]);
+    }
+
+    #[test]
+    fn plan_group_no_class_accepts_a_situation_path() {
+        assert!(playbook_details(None, "`skills/bee-planning/playbooks/bugfix/fixture-fix.md`").is_empty());
+        assert_eq!(playbook_details(None, "`skills/bee-planning/playbooks/bugfix/.md`").len(), 1);
     }
 
     #[test]

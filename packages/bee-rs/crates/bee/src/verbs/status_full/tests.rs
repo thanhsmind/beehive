@@ -439,6 +439,7 @@ use crate::version::BEE_VERSION;
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
         write(root, crate::principles::PRINCIPLE_INDEX, crate::principles::TEST_INDEX);
+        write(root, "skills/bee-planning/playbooks/refactor.md", "# Refactor\n");
         let before = walk_count(root);
         let packet = class_packet(root, "refactor");
         assert_eq!(
@@ -515,6 +516,7 @@ use crate::version::BEE_VERSION;
     fn bee_orient_class_research_prints_the_research_playbook_and_principles_and_writes_nothing() {
         let tmp = class_fixture();
         let root = tmp.path();
+        write(root, "skills/bee-planning/playbooks/research.md", "# Research\n");
         let before = file_snapshot(root);
         let out = std::process::Command::new(bee_bin())
             .args(["orient", "--class", "research"])
@@ -568,6 +570,81 @@ use crate::version::BEE_VERSION;
             assert!(stderr.contains(class), "{class} missing from: {stderr}");
         }
         assert_eq!(file_snapshot(root), before);
+    }
+
+    #[test]
+    fn bee_orient_class_bugfix_lists_each_compiled_in_situation_in_a_repo_with_no_skills_tree() {
+        let tmp = class_fixture();
+        let root = tmp.path();
+        assert!(!root.join("skills").exists());
+        let expected = crate::situations::class_situations(root, "bugfix");
+        assert!(expected.iter().any(|s| s.name == "bug-fix"), "{expected:?}");
+        let out = std::process::Command::new(bee_bin())
+            .args(["orient", "--class", "bugfix"])
+            .current_dir(root)
+            .output()
+            .unwrap();
+        assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+        let stdout = String::from_utf8(out.stdout).unwrap();
+        let lines: Vec<&str> = stdout.lines().collect();
+        assert_eq!(lines[0], "playbook: skills/bee-planning/playbooks/bugfix.md");
+        let situation_lines: Vec<String> = expected
+            .iter()
+            .map(|s| format!("situation: skills/bee-planning/playbooks/bugfix/{}.md — {}", s.name, s.triggers))
+            .collect();
+        assert_eq!(lines[1..=situation_lines.len()], situation_lines[..], "{stdout}");
+        assert_eq!(lines.iter().filter(|l| l.starts_with("situation: ")).count(), expected.len());
+        let out = std::process::Command::new(bee_bin())
+            .args(["orient", "--class", "bugfix", "--json"])
+            .current_dir(root)
+            .output()
+            .unwrap();
+        let packet: Value = serde_json::from_slice(&out.stdout).unwrap();
+        let rows: Vec<Value> = expected
+            .iter()
+            .map(|s| json!({"name": s.name, "triggers": s.triggers, "deliverable": s.deliverable}))
+            .collect();
+        assert_eq!(packet["situations"], Value::Array(rows));
+    }
+
+    #[test]
+    fn orient_class_lists_the_repo_copy_situations_over_the_compiled_in_ones() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write(
+            root,
+            "skills/bee-planning/playbooks/bugfix.md",
+            "## Situations\n\n- `local-only` — here, ở đây — delivers: there\n",
+        );
+        let packet = class_packet(root, "bugfix");
+        assert_eq!(
+            packet["situations"],
+            json!([{"name": "local-only", "triggers": "here, ở đây", "deliverable": "there"}])
+        );
+        let text = render_class_text(&packet);
+        assert_eq!(
+            text.lines().take(2).collect::<Vec<_>>(),
+            [
+                "playbook: skills/bee-planning/playbooks/bugfix.md",
+                "situation: skills/bee-planning/playbooks/bugfix/local-only.md — here, ở đây",
+            ]
+        );
+        assert_eq!(text.lines().filter(|l| l.starts_with("situation: ")).count(), 1, "{text}");
+    }
+
+    #[test]
+    fn bee_orient_class_perf_json_carries_an_empty_situations_key() {
+        let tmp = class_fixture();
+        let root = tmp.path();
+        write(root, "skills/bee-planning/playbooks/perf.md", "# Perf\n");
+        let out = std::process::Command::new(bee_bin())
+            .args(["orient", "--json", "--class", "perf"])
+            .current_dir(root)
+            .output()
+            .unwrap();
+        assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+        let packet: Value = serde_json::from_slice(&out.stdout).unwrap();
+        assert_eq!(packet.get("situations"), Some(&json!([])));
     }
 
     #[test]

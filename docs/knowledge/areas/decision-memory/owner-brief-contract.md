@@ -12,8 +12,8 @@ bee:
   sources: [docs/history/owner-brief/CONTEXT.md, docs/history/owner-brief/spec.md, docs/briefs/owner-brief.md]
   authoritative_for: "decision-memory: the owner brief contract"
   anchors: [packages/bee-rs/crates/bee/src/verbs/brief.rs, packages/bee-rs/crates/bee/src/verbs/backlog.rs, packages/bee-rs/crates/bee/src/doctor.rs, skills/bee-shaping/SKILL.md, skills/bee-planning/SKILL.md, skills/bee-capturing/SKILL.md]
-  verified_at: 2026-10-28
-  verified_commit: 8a2420dd6c96e53ae68f3cf57ceea28508305c64
+  verified_at: 2026-11-15
+  verified_commit: a963c71a41249647b5aa15a64118f007f39c4c67
 ---
 
 # Decision Memory — The Owner Brief Contract

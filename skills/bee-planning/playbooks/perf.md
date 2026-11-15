@@ -1,28 +1,12 @@
 # perf
 
-1. Before the first run, write down the result that would change the
-   decision and the noise floor — the run-to-run spread on an unchanged
-   build. Stop when the spread is larger than the effect: a number with no
-   decision written before it gets fitted to whatever it shows.
-2. Capture a baseline with the real command or trace, and record the number —
-   without it, no later number means anything.
-3. State the hypothesis — a mechanism the baseline shows. First ask whether
-   the slow path must exist at all: a deleted path beats a faster one.
-4. Change ONE thing, so that the delta has one cause.
-5. Re-measure the same way, with the same command, so that the delta measures
-   the change and not the method.
-6. Keep the win, discard the loss, and record BOTH numbers — a loss on record
-   stops the next attempt from trying it again.
+A speed or resource cost to measure and cut: pick the situation below and open its file.
 
-**When the ask is a sustained metric target.** Prove the harness separates
-the target case, then freeze it. Report the median of several runs. Set the
-stop rule before the first attempt: the target reached, plus a minimum
-number of attempts. Log one row per attempt. Revert an attempt that does
-not clear the noise. Never loosen the stop rule. A plateau is not a stop —
-it means pivot the hypothesis, not give up.
+## Situations
 
-"It feels faster" is not a result (per D2, decision `1593e365`).
+- `perf-issue` — slow, too slow, latency, lag, memory, cpu, startup time, regression in speed, profile this, make it faster, chậm, giật, ngốn bộ nhớ, tối ưu hiệu năng, khởi động lâu — delivers: the baseline number, the post-fix number, the delta, the command, and the artifact path
+- `hillclimb` — hillclimb on X, make startup 50% faster, drive the metric down, keep trying until it improves by N%, systematically improve a number, tối ưu liên tục, kéo chỉ số xuống, thử đến khi đạt mục tiêu — delivers: the metric and target, baseline to final with the percent delta, the iterations kept and reverted, and the decision trail path
 
-Proof line: the baseline, the after, the delta, the command, and the
-artifact path.
+No situation fits, or the work is large and cross-cutting: use bee-figure-it-out.
+
 Proof floor: the cap refuses a result weaker than this class's floor and names it; the table is the cap's own (`bee cells finish --help`).

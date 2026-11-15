@@ -739,12 +739,27 @@ pub(crate) fn class_packet(root: &Path, class: &str) -> JMap {
     let mut packet = JMap::new();
     packet.insert("class".into(), json!(class));
     packet.insert("playbook".into(), json!(format!("skills/bee-planning/playbooks/{class}.md")));
+    let situations: Vec<Value> = crate::situations::class_situations(root, class)
+        .into_iter()
+        .map(|s| json!({"name": s.name, "triggers": s.triggers, "deliverable": s.deliverable}))
+        .collect();
+    packet.insert("situations".into(), Value::Array(situations));
     packet.insert("principles".into(), json!(crate::principles::principle_lines(root, Some(class))));
     packet
 }
 
 pub(crate) fn render_class_text(packet: &JMap) -> String {
     let mut lines = vec![format!("playbook: {}", tpl(packet.get("playbook")))];
+    if let Some(Value::Array(situations)) = packet.get("situations") {
+        let class = tpl(packet.get("class"));
+        for s in situations {
+            lines.push(format!(
+                "situation: skills/bee-planning/playbooks/{class}/{}.md — {}",
+                tpl(vget(s, "name")),
+                tpl(vget(s, "triggers"))
+            ));
+        }
+    }
     if let Some(Value::Array(principles)) = packet.get("principles") {
         lines.extend(principles.iter().filter_map(Value::as_str).map(str::to_string));
     }

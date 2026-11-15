@@ -12,8 +12,8 @@ bee:
   sources: ["knowledge-first-lean-decisions cells kbc-2, kbc-3, kbc-4 (traces in .bee/cells/, 2026-11-07)", packages/bee-rs/crates/bee/src/audit.rs, packages/bee-rs/crates/bee/src/verbs/audit.rs, packages/bee/LEADER.md (§ Capture what settles)]
   authoritative_for: "decision-memory: what belongs in the audit log and what stays a decision"
   anchors: [packages/bee/LEADER.md, packages/bee-rs/crates/bee/src/audit.rs, packages/bee-rs/crates/bee/src/verbs/upkeep_group.rs]
-  verified_at: 2026-11-07
-  verified_commit: f8b881980b5525db18d7810bcd7dea239ede692f
+  verified_at: 2026-11-15
+  verified_commit: a963c71a41249647b5aa15a64118f007f39c4c67
 ---
 
 # Decision Memory — the audit log for bookkeeping

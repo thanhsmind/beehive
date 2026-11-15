@@ -11,30 +11,30 @@
       "INDEX.md": "dbb0bb767c29e8640f9047c304fb6ed74017306462c02a85e798f7b23150d887",
       "README.md": "3f9ad922145df53981bce91ae306dd96b7e48283918e7cd2da0074b2ce930e7d",
       "apis.md": "b7350c145f4442d4d0cf0f58a4e21e118ab4bb96654256a6837e10ccd5a070a8",
-      "architecture.md": "1c4f0d5a77863d05bea1c7397c10cd5e6812ec84e9fbab03b1d8a2fc024c9e9f",
+      "architecture.md": "acace3dc7a8d839e3058607df4bd4816ea125807e3c0f20d7b30d6da3f212ca6",
       "data.md": "799000e64e6c274447e94571ec8b78dfeba8df015a3d566e7b9afc7ea7ef7785",
       "debugging.md": "8b2d4018fc461c68f7582c53967f2d76bdbb9f17a4d9461579862959e1423572",
-      "decisions.md": "599b07310c5ae8b037a02ee9464c209b9f50e4a7a35744a36c5f5ad38832b9e9",
+      "decisions.md": "47542962c99424bbcf3ff214bba46a6c5d7e2a96ed9517c3f158b7832822fa61",
       "documentation.md": "7b3cf8afcea9dcb969d2a6965671f0282b53897da9275d09da5686b53f8aca19",
       "frontend.md": "1abcec2e73165a5c2c1b4537a377a30d0da9608de64d1cacab97434e77a78439",
       "knowledge.md": "23ab9373261a9fe0e9c93fe28c892f3578a048e0f840ff6230b06b0db4d09e3c",
       "knowledge/patterns/attribution-that-survives-rewrites.md": "5d1e08dc87500c610d4e954986d0356328224fd2221d3d52b6d2957410b1aaff",
       "knowledge/patterns/rules-that-ship-as-a-check.md": "73100f56893c0f2c78c58604878d06949acdd3b0d2ba5a4166a2dbe7561d188e",
       "merges.md": "bca07c0dce2296d5d1b1b4b5d2714bd92085371589de6383037ca13d4277af1d",
-      "operations.md": "464a6e355d640422c617e9f9e6c09a63f495d69c95ef0d0163bbf95d1ed88dba",
+      "operations.md": "3ed0389975c84cfb6276ca01aa7cbb9fe6646b84ab3b4096d7f7e09ab545ef05",
       "performance.md": "71afb3cb39be78c6538a0eb12baa0f3b460194140d3d70e35bfcdb66052088e8",
-      "planning.md": "3e0f7ea2cbee6b94cb4a15ced1b2c94c527b3929467fb205f682c09cd0a5345a",
-      "review.md": "320e48016138df67c3b4082bd8a588d190317e4f2623bfb370023ae914c0c681",
+      "planning.md": "1e19f1daab82d2cda72934ca1729692921db9380bbd351a66ceaa4a85122c921",
+      "review.md": "8f81efce730d2996c7c8222c5511d46d9791287ed14586b572c24999b37e114e",
       "security.md": "c39709516b888a41ae620fa7b070f8c2b28623c8f1d8f4639267385de4edeed8",
       "static-rules.md": "35cb07f73d6eef338d8625864d4e523713c49d0ecb3d146596613c8ea9b78a74",
-      "tests.md": "f98ac132b9562658caa93cb50448cf96ac6d956002d804d556e833cc0c77ab25",
+      "tests.md": "44e8293dd39ef80e19c75e0f061c0e7f79f5f9cf8d6213f7f25300456781ac6a",
       "tests/patterns/asserting-on-generated-output.md": "4f7c229210b0c8ee952d21881b3a616259f0ac3cfc6c7719efbe473521065626",
       "tests/patterns/comparing-structured-data.md": "708d72115b3c9c0e5dfad84ac27c8ef153dc36620a4d1c5ce7050e005da363e7",
       "tests/patterns/differential-testing.md": "2c089b719275b401ae62c5f6f6af4cdcdfc7e5a2528fc64ce16eff8a1d0b6add",
       "tests/patterns/environment-limited-tests.md": "b55575b8822948848f355abe62508388c3a3f2d50ba59a6d06bfedf8aafcc72e",
       "tests/patterns/pinning-against-a-live-oracle.md": "c6251f5fd518cdc1ef7d323ddc7e2b5b6ae9a6cda810cb15cc76d2c43e3a2928",
       "tests/patterns/proving-the-code-under-test-ran.md": "6e9e895c3c83a726dd6f5f3c86bc686513db460491cbf51804c4a990d747c9da",
-      "thinking.md": "3b38bad95aa29ffd0c84bd470334bcc9018892c85b70d532fab6b40931312617"
+      "thinking.md": "ac4ffabd9c2222f2fa27ac2953a3ba08914aa641775669550c85201f1746a5ab"
     },
     "prompts": {
       "advisor.md": "6b191a961073dc460c835498d1f07d8fc38bc2e0eb765de3cd25d10871a149dd",
@@ -44,7 +44,7 @@
       "worker-cell.md": "fbda47fb4e82ea15080f44b93c1142b97f9534a6f748ea97d69a0865295a3992"
     },
     "leader": {
-      "LEADER.md": "ef354afff6aeda9444b245141725621f1923526fa8a90afab5ef30d238bc3594"
+      "LEADER.md": "52d966d787350c0f1fc5036edb91b75dd7d919f554cf4a101e618aca4fe7285d"
     },
     "playbooks": {
       "bee-defects.md": "128820aaccc3644492f753d10cfba5231bfd7939624aba943da7ab74340a5dc5",
@@ -188,5 +188,5 @@
   },
   "design_role_offered": true,
   "created_at": "2026-07-24T03:53:44.750Z",
-  "updated_at": "2026-11-14T22:34:10.739Z"
+  "updated_at": "2026-11-15T05:51:04.478Z"
 }

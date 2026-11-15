@@ -22,6 +22,7 @@ that produces thirty observations.
 | Writing the finding up | Evidence standards |
 | Found a bug outside the requested scope | Scope discipline |
 | Tempted to file formatting or naming notes | Style versus substance |
+| The change is hard to trace, or adds a layer or a piece of state | Reader load |
 | Handing a change to a reviewer | Asking for a review |
 | A finding has landed on your change | Receiving a finding |
 | No fresh reviewer available | Reviewing your own work |
@@ -383,6 +384,41 @@ judgement call, never a hard violation:
 - **Dual Path** — an old API or path kept alive beside its replacement,
   with no external consumer left -> delete the old path in the same
   change.
+
+## Reader load
+
+A diff is read far more often than it is written, so the cost that matters in
+review is the work a future reader must do, not the line count or the
+cyclomatic score. Measure it on two independent axes. **Layers to trace**: how
+many indirections sit between a question and its answer. **State to hold**:
+how much hidden or mutable context the reader must keep in their head. A flat
+file with fifty globals can be as hard to reason about as a six-layer adapter
+stack, so check both. The same limit holds for an agent reading the code:
+working memory is finite for readers of every kind.
+
+When the diff makes code harder to trace, look for these and name the one you
+find:
+
+- **A layer that does not earn its keep**: a wrapper with one caller, an
+  adapter with no second implementation, indirection built for a future that
+  never came. Ask for it to be inlined (see The Deletion Test in
+  architecture.md).
+- **A layer that repeats its neighbour**: the same methods and arguments one
+  level up, with no change of abstraction. Pass-through layers add load
+  without compression.
+- **A broad interface that hides little**: the reader must learn the surface
+  and the implementation. Prefer a boundary that hides a meaningful decision.
+- **State wider than it needs to be**: prefer pure functions over mutation,
+  locals over fields, fields over module state, module state over globals, and
+  a derived value over a synced copy.
+- **An invariant restated in every consumer** instead of named once at the
+  boundary where the reader learns it.
+
+Before accepting a new layer or a new piece of state, ask whether it removes
+at least as much load somewhere else. The test for the change as a whole: can
+a new reader say where X comes from, and what can change X, in under thirty
+seconds? If not, the finding is to cut layers or cut state, and it is a
+finding only when you can point at the line a reader gets lost on.
 
 ## Asking for a review
 

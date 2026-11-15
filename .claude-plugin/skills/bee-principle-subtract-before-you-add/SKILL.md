@@ -10,8 +10,12 @@ contract asks for, a stub that holds no content: remove these first, so the
 new work lands on a smaller base and every later step costs less.
 
 Reach the minimum before you polish it, and build for use you have seen, not
-for edge cases nobody has hit. Leave the design slightly simpler than you
-found it — the same capability behind the same surface or a smaller one.
+for edge cases nobody has hit. A feature outside the spec drags validators
+behind it: persistence, retry on startup and schema migration each need
+guards to defend their inputs, so cutting the feature cuts the guards. Prompts
+and instructions shrink the same way: drop the redundant line and the
+oversized template. Leave the design slightly simpler than you found it — the
+same capability behind the same surface or a smaller one.
 
 **Check:** is there a removal step ahead of the construction step in this
 plan, and if not, what did you look at to decide there was nothing to

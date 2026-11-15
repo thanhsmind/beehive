@@ -27,6 +27,7 @@ mod onboard;
 mod output_spill;
 mod path_identity;
 mod principles;
+mod situations;
 mod registry;
 mod roots;
 mod router;

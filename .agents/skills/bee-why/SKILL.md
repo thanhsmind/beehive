@@ -1,7 +1,7 @@
 ---
 name: bee-why
 description: >-
-  Answer why this repo is the way it is, from recorded evidence, never memory. Use when the user types /bee-why or asks for the recorded reason behind a rule, guard or design ("why was X built this way"). Not for how code runs (bee-how), learning (bee-teach) or outside libraries.
+  Answer why this repo is the way it is, from recorded evidence, never memory. Use when the user types /bee-why or asks for the recorded reason behind a rule, guard, threshold or design ("why was X built this way"). Not for how code runs (bee-how), learning (bee-teach) or outside libraries.
 metadata:
   version: '0.1'
   ecosystem: bee
@@ -23,7 +23,7 @@ Read-only. Write no brief file. The account is the reply.
 
 ## Scope the question
 
-- Pin the target before the sweep: the `path:line` range, the symbols, and the search terms.
+- Pin the target before the sweep: the `path:line` range, the symbols, the search terms, and the kind of question, as the sweep lists the kinds.
 - Sweep every row. The user asked for the reasons, so a narrow sweep is not the default here.
 - A guess inside the question is one hypothesis to check, per the sweep's phrasing rules.
 - When the user means to change the code, end with the sweep's constraint set.

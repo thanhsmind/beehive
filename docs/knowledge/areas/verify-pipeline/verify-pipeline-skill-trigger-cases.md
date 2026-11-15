@@ -10,8 +10,8 @@ bee:
   areas: [verify-pipeline]
   decisions: ["skill-trigger-cases D2+D3+D4 (39b02fdb): one fixture of briefs with expect and near cases, and a brief never names its skill", "skill-trigger-cases D5+D6+D7 (516b603e): a model-free fence runs in the declared suite and an opt-in eval asks a real agent", "skill-description-trim D1-D3 (docs/history/skill-description-trim/CONTEXT.md): every routable description fits 300 characters and the eval must not fall below its baseline"]
   anchors: [skills/, packages/bee-rs/crates/bee/tests/skill_triggers.rs, packages/bee-rs/crates/bee/tests/fixtures/skill-triggers.json, skills/bee-writing-skills/SKILL.md]
-  verified_at: 2026-09-23
-  verified_commit: 00330b47416a8a64323e15cd6c1d286e3029bcee
+  verified_at: 2026-11-15
+  verified_commit: a963c71a41249647b5aa15a64118f007f39c4c67
 ---
 
 ## Purpose

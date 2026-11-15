@@ -12,8 +12,8 @@ bee:
   sources: ["i54-closeout cell i54-closeout-9 (fresh-install write-guard crash fix: vendor tokenize-command.mjs + import-closure regression suite; trace in .bee/cells/, 2026-07-24)", "docs/history/i54-closeout/reports/validation-canary.md section 1 (P5 red, real bug: ERR_MODULE_NOT_FOUND on a fresh repo-hooks install)"]
   authoritative_for: "onboarding: hook vendoring import-closure completeness"
   anchors: [packages/bee-rs/crates/bee/src/main.rs]
-  verified_at: 2026-11-07
-  verified_commit: 9861c1b430dc099ce4e0ba481503579ad3a2d738
+  verified_at: 2026-11-15
+  verified_commit: a963c71a41249647b5aa15a64118f007f39c4c67
 ---
 
 # Onboarding — Hook Vendoring Import-Closure Completeness
