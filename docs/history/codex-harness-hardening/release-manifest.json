@@ -142,7 +142,7 @@
     },
     {
       "path": ".claude-plugin/skills/.bee-render.json",
-      "sha256": "13500d3e02995f537303087505ef050cb36147ae2cc8e246d91c181f465bb74c",
+      "sha256": "aa4945a519d318bc91961ec5b56a0bd117834987cc24e6b7a3305095a5568d28",
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/.bee-render.json"
@@ -1016,6 +1016,48 @@
       "packagePath": ".claude-plugin/skills/bee-principle-verify-before-reporting/SKILL.md"
     },
     {
+      "path": ".claude-plugin/skills/bee-reflect/LICENSE.pstack",
+      "sha256": "bc957ca6bee02792566a1a028d105e02e247c6e77cf057061674273da77b200e",
+      "mode": "644",
+      "role": "plugin_skill_claude_render",
+      "packagePath": ".claude-plugin/skills/bee-reflect/LICENSE.pstack"
+    },
+    {
+      "path": ".claude-plugin/skills/bee-reflect/references/divergent-reviewer.md",
+      "sha256": "2e67c32d00f68ff405dd857907345c886f3f99c7e939b0ca8e9a94c075872ef6",
+      "mode": "644",
+      "role": "plugin_skill_claude_render",
+      "packagePath": ".claude-plugin/skills/bee-reflect/references/divergent-reviewer.md"
+    },
+    {
+      "path": ".claude-plugin/skills/bee-reflect/references/judgment-reviewer.md",
+      "sha256": "79d4ce4662cdab4be95c2614ac9e8c294b80fe71264472a321255a83e076f709",
+      "mode": "644",
+      "role": "plugin_skill_claude_render",
+      "packagePath": ".claude-plugin/skills/bee-reflect/references/judgment-reviewer.md"
+    },
+    {
+      "path": ".claude-plugin/skills/bee-reflect/references/synthesizer.md",
+      "sha256": "59588d99096805240f253f1eb27df320f3257987dc427a940f39485acbba6c76",
+      "mode": "644",
+      "role": "plugin_skill_claude_render",
+      "packagePath": ".claude-plugin/skills/bee-reflect/references/synthesizer.md"
+    },
+    {
+      "path": ".claude-plugin/skills/bee-reflect/references/tooling-reviewer.md",
+      "sha256": "962c1de97c76c426a91671060a1c34e1269488b8f0421fd25375fedc3a628be8",
+      "mode": "644",
+      "role": "plugin_skill_claude_render",
+      "packagePath": ".claude-plugin/skills/bee-reflect/references/tooling-reviewer.md"
+    },
+    {
+      "path": ".claude-plugin/skills/bee-reflect/SKILL.md",
+      "sha256": "a8b538c3b2d32f6eb80ede3f60e5f03dae65c14abdaa56865663ab36d91bb10e",
+      "mode": "644",
+      "role": "plugin_skill_claude_render",
+      "packagePath": ".claude-plugin/skills/bee-reflect/SKILL.md"
+    },
+    {
       "path": ".claude-plugin/skills/bee-researching/agents/openai.yaml",
       "sha256": "570dae59f20daa8f6ce712e1c4d7c7671c15191600c93a56060d29013180146f",
       "mode": "644",
@@ -1409,7 +1451,7 @@
     },
     {
       "path": ".codex-plugin/skills/.bee-render.json",
-      "sha256": "4eb7d86cc6b65fcca840796d26701d899366e3738739cd4007f435b68da42b0f",
+      "sha256": "b1488b5c7fa6dea1ffb5a54c8afdd560fe6aa72d16e730dc75d7029ecfec9a5e",
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/.bee-render.json"
@@ -2281,6 +2323,48 @@
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/bee-principle-verify-before-reporting/SKILL.md"
+    },
+    {
+      "path": ".codex-plugin/skills/bee-reflect/LICENSE.pstack",
+      "sha256": "bc957ca6bee02792566a1a028d105e02e247c6e77cf057061674273da77b200e",
+      "mode": "644",
+      "role": "plugin_skill_codex_render",
+      "packagePath": ".codex-plugin/skills/bee-reflect/LICENSE.pstack"
+    },
+    {
+      "path": ".codex-plugin/skills/bee-reflect/references/divergent-reviewer.md",
+      "sha256": "2e67c32d00f68ff405dd857907345c886f3f99c7e939b0ca8e9a94c075872ef6",
+      "mode": "644",
+      "role": "plugin_skill_codex_render",
+      "packagePath": ".codex-plugin/skills/bee-reflect/references/divergent-reviewer.md"
+    },
+    {
+      "path": ".codex-plugin/skills/bee-reflect/references/judgment-reviewer.md",
+      "sha256": "79d4ce4662cdab4be95c2614ac9e8c294b80fe71264472a321255a83e076f709",
+      "mode": "644",
+      "role": "plugin_skill_codex_render",
+      "packagePath": ".codex-plugin/skills/bee-reflect/references/judgment-reviewer.md"
+    },
+    {
+      "path": ".codex-plugin/skills/bee-reflect/references/synthesizer.md",
+      "sha256": "59588d99096805240f253f1eb27df320f3257987dc427a940f39485acbba6c76",
+      "mode": "644",
+      "role": "plugin_skill_codex_render",
+      "packagePath": ".codex-plugin/skills/bee-reflect/references/synthesizer.md"
+    },
+    {
+      "path": ".codex-plugin/skills/bee-reflect/references/tooling-reviewer.md",
+      "sha256": "962c1de97c76c426a91671060a1c34e1269488b8f0421fd25375fedc3a628be8",
+      "mode": "644",
+      "role": "plugin_skill_codex_render",
+      "packagePath": ".codex-plugin/skills/bee-reflect/references/tooling-reviewer.md"
+    },
+    {
+      "path": ".codex-plugin/skills/bee-reflect/SKILL.md",
+      "sha256": "a8b538c3b2d32f6eb80ede3f60e5f03dae65c14abdaa56865663ab36d91bb10e",
+      "mode": "644",
+      "role": "plugin_skill_codex_render",
+      "packagePath": ".codex-plugin/skills/bee-reflect/SKILL.md"
     },
     {
       "path": ".codex-plugin/skills/bee-researching/agents/openai.yaml",
@@ -5039,6 +5123,48 @@
       "mode": "644",
       "role": "plugin_skill",
       "packagePath": "skills/bee-principle-verify-before-reporting/SKILL.md"
+    },
+    {
+      "path": "skills/bee-reflect/LICENSE.pstack",
+      "sha256": "bc957ca6bee02792566a1a028d105e02e247c6e77cf057061674273da77b200e",
+      "mode": "644",
+      "role": "plugin_skill",
+      "packagePath": "skills/bee-reflect/LICENSE.pstack"
+    },
+    {
+      "path": "skills/bee-reflect/references/divergent-reviewer.md",
+      "sha256": "2e67c32d00f68ff405dd857907345c886f3f99c7e939b0ca8e9a94c075872ef6",
+      "mode": "644",
+      "role": "plugin_skill",
+      "packagePath": "skills/bee-reflect/references/divergent-reviewer.md"
+    },
+    {
+      "path": "skills/bee-reflect/references/judgment-reviewer.md",
+      "sha256": "79d4ce4662cdab4be95c2614ac9e8c294b80fe71264472a321255a83e076f709",
+      "mode": "644",
+      "role": "plugin_skill",
+      "packagePath": "skills/bee-reflect/references/judgment-reviewer.md"
+    },
+    {
+      "path": "skills/bee-reflect/references/synthesizer.md",
+      "sha256": "59588d99096805240f253f1eb27df320f3257987dc427a940f39485acbba6c76",
+      "mode": "644",
+      "role": "plugin_skill",
+      "packagePath": "skills/bee-reflect/references/synthesizer.md"
+    },
+    {
+      "path": "skills/bee-reflect/references/tooling-reviewer.md",
+      "sha256": "962c1de97c76c426a91671060a1c34e1269488b8f0421fd25375fedc3a628be8",
+      "mode": "644",
+      "role": "plugin_skill",
+      "packagePath": "skills/bee-reflect/references/tooling-reviewer.md"
+    },
+    {
+      "path": "skills/bee-reflect/SKILL.md",
+      "sha256": "a8b538c3b2d32f6eb80ede3f60e5f03dae65c14abdaa56865663ab36d91bb10e",
+      "mode": "644",
+      "role": "plugin_skill",
+      "packagePath": "skills/bee-reflect/SKILL.md"
     },
     {
       "path": "skills/bee-researching/agents/openai.yaml",

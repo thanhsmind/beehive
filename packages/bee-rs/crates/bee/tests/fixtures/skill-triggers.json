@@ -180,5 +180,11 @@
   {"brief": "Add a regression test for this off-by-one crash that fails before the fix and passes after it.", "expect": ["bee-tdd"]},
   {"brief": "Sửa lỗi này theo kiểu TDD: viết test thất bại trước, xác nhận nó đỏ đúng lý do rồi mới sửa code.", "expect": ["bee-tdd"]},
   {"brief": "The cells are approved and open, testers included — run them all to done with workers.", "expect": ["bee-swarming"], "near": "bee-tdd"},
-  {"brief": "We agreed regression tests never mock the database, lock that in as a recorded decision.", "expect": ["bee-capturing"], "near": "bee-tdd"}
+  {"brief": "We agreed regression tests never mock the database, lock that in as a recorded decision.", "expect": ["bee-capturing"], "near": "bee-tdd"},
+
+  {"brief": "Reflect on this session: what did we learn that is worth keeping, and which skill should change because of it?", "expect": ["bee-reflect"]},
+  {"brief": "Let's run a retrospective over the conversation and turn the durable lessons into concrete skill edits.", "expect": ["bee-reflect"]},
+  {"brief": "Nhìn lại phiên làm việc này, rút ra những bài học đáng giữ và đề xuất sửa skill nào.", "expect": ["bee-reflect"]},
+  {"brief": "Just agreed that every migration needs a rollback script — record that decision now.", "expect": ["bee-capturing"], "near": "bee-reflect"},
+  {"brief": "Review everything unreviewed from today and give me a verdict on the diff.", "expect": ["bee-reviewing"], "near": "bee-reflect"}
 ]
