@@ -140,7 +140,7 @@ Review is on demand: no lane auto-dispatches a reviewer wave or asks Gate 3 afte
 | `standard` | full `CONTEXT.md` + `plan.md` | SMALLER PATH check + the plan-step hat wave as the plan check — 3 seats dispatched `--kind advisor`, no review-tier reviewer (home: `gates-and-delegation.md` ("Hat wave")); ≤5-file diff (0 hard-gate flags): inline self-review, no dispatch | swarm workers | on user request only: session panel scaled to scope risk (4 core reviewers) | 2 — Gate 1, Gate 2 (merged shape+execution) |
 | `high-risk` | full `CONTEXT.md` + `plan.md` + brief | SMALLER PATH check + the plan-step hat wave, all 5 seats `--kind advisor`; its synthesis IS the gate's advisor consult, recorded with `bee state advisor-ref record` | swarm workers | on user request only: session panel scaled to scope risk (full wave + conditionals) | 2 — Gate 1, Gate 2 (merged shape+execution) |
 
-The situation the task matches seeds the leader's session todo list as a projection: `bee orient --class <c>` prints the class's situation lines, the leader opens the matching situation file, its numbered steps open the list, and a skipped step stays with `skip:` and its reason. The situation file stays the one home of the steps; the list never replaces it.
+The playbook of the task's class seeds the leader's session todo list as a projection: `bee orient --class <c>` names the playbook, its numbered steps open the list, and a skipped step stays with `skip:` and its reason. The playbook file stays the one home of the steps; the list never replaces it.
 
 No added plan ceremony rides along with any of this (D1): `tiny`/`small`/`docs` gain exactly a brief and a recorded approval, never a `plan.md` requirement they didn't already have.
 

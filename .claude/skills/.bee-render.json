@@ -3,24 +3,8 @@
   "target_runtime": "claude",
   "skills": [
     {
-      "name": "bee-architect",
-      "sha256": "4d1dad67c4f28d0213c838959198dfd37d15dc0b770ba151fc7c8f6e4c9bdc03"
-    },
-    {
-      "name": "bee-arena",
-      "sha256": "e69471da76c86bd69e6d5b9a06aaf57ebffb5707901cbb387ba55dfbf21a6fcd"
-    },
-    {
-      "name": "bee-blast-radius",
-      "sha256": "67fba6ee379719675e65d270d1393b076db94f74ac84f674bb816b68e342e559"
-    },
-    {
       "name": "bee-capturing",
       "sha256": "31449bf5ecb2f35b9d5154a628483752f2d359c51868d112d7965d22e447f684"
-    },
-    {
-      "name": "bee-comment-review",
-      "sha256": "76f87ef52393722cf7cc0b22595c10b8becd8c52de4768a01f103a7010a83269"
     },
     {
       "name": "bee-deploying",
@@ -29,14 +13,6 @@
     {
       "name": "bee-evolving",
       "sha256": "2c6e0319b63d5db0b918e38a431ef2e89963efd71d67410a4d201cf4eb1680bc"
-    },
-    {
-      "name": "bee-fanout",
-      "sha256": "b6f711ae785e116b7869208cc4a1c455b0e9c8f8a8b5dac2801cc2e0514f6eae"
-    },
-    {
-      "name": "bee-figure-it-out",
-      "sha256": "d2f25f2746ec5b56f87171753f12ed932ec022f871431431720d8aff987b1f9d"
     },
     {
       "name": "bee-grooming",
@@ -52,15 +28,11 @@
     },
     {
       "name": "bee-hive",
-      "sha256": "6aac7e3552c6978916c5143285c2f59cabc5724d0ae477f000413468059a3539"
+      "sha256": "d1d56b3727ad15b26067c6edd8227cec9f328360e83142e6d3cccb6aa2894ec9"
     },
     {
       "name": "bee-how",
-      "sha256": "4452b6ca8b17f2615a88a0c9f03c73c81f4a6824106a8933c796680be5b6f508"
-    },
-    {
-      "name": "bee-interrogate",
-      "sha256": "3b3d73436b9a6765125eada27aa2cb94b81246a9cec7981692d248ddfc820c00"
+      "sha256": "9d25a40ca38b8f2047c79e05744b4f7570043d4797409d8da733aadd8ded87f7"
     },
     {
       "name": "bee-knowledge-setup",
@@ -72,7 +44,7 @@
     },
     {
       "name": "bee-planning",
-      "sha256": "cfc45d563c63f54a729b5d2325216fa353cb32bdcc4c0c1aac461707bdcf927d"
+      "sha256": "2720633bd44764dc5234d8d4f8738faf46865b298f3b8bc45fc4432d15b185b2"
     },
     {
       "name": "bee-principle-attack-the-premise",
@@ -80,11 +52,11 @@
     },
     {
       "name": "bee-principle-boundary-discipline",
-      "sha256": "692772683bba6db025f21eb37e38cd786ed0bd4f89bd0ac72bbcc7c0d36acb9b"
+      "sha256": "0e2e4287cb94bd3ec7fe64bcd071d9a8eae5f1521d1a8d8dd326abfd6bbecfd1"
     },
     {
       "name": "bee-principle-build-the-lever",
-      "sha256": "ccfca35467b43caff630b2e632db92bd333f0eb011152272a64652fe981f4884"
+      "sha256": "04debd13c174163abd05b9f304c95a627398594551a8b9cccb6b4a3981a95fd4"
     },
     {
       "name": "bee-principle-chestertons-fence",
@@ -92,31 +64,11 @@
     },
     {
       "name": "bee-principle-crash-site-versus-fault-site",
-      "sha256": "97d6b76717607021b7877900795547a2a415ed1a42281ae02707bf138487a899"
+      "sha256": "ff446600bed647741133fbba1b715d9a36a74cdc2375553bfe6eb7d6efa22fa5"
     },
     {
       "name": "bee-principle-encode-lessons-in-structure",
-      "sha256": "65ecff7558bab4c283e9e0ebc273acc8c16be8eb102652e230be6860f54559e6"
-    },
-    {
-      "name": "bee-principle-exhaust-the-design-space",
-      "sha256": "f8ba1f1861222e7f05a5fd49c817e2b2502fee63b7c48452ed2c535d0c2f0792"
-    },
-    {
-      "name": "bee-principle-experience-first",
-      "sha256": "8e6d372fcfdf23361aa346dbd50b8a1d682479a7deba1295f68e299f5db40cd5"
-    },
-    {
-      "name": "bee-principle-foundational-thinking",
-      "sha256": "99834f95444389504cc4faae4c5844944fabac77aca05aa80187555cc5d8f5a6"
-    },
-    {
-      "name": "bee-principle-guard-the-context-window",
-      "sha256": "f9cbc7633c7e818b34a44bd9751c0c75d5daa9f1be75182581c8f2b4dfac7dfc"
-    },
-    {
-      "name": "bee-principle-laziness-protocol",
-      "sha256": "9ac9feede4acebb0b75a1535f71db1bb1fd8cd7082b8c1b8d517c935540475f1"
+      "sha256": "2b52522f5168bcf933ad7b5feb4a49d68c7e97b9b26c7e58b9accbfcf4cbe171"
     },
     {
       "name": "bee-principle-lock-the-contract",
@@ -124,27 +76,11 @@
     },
     {
       "name": "bee-principle-make-illegal-states-unrepresentable",
-      "sha256": "85037229de471035ce3d11d4bd965725d6f552c05c93af92043c50efbe0883d3"
-    },
-    {
-      "name": "bee-principle-make-operations-idempotent",
-      "sha256": "792b552cafca3e6ab97efacbbd2e9ac11e91e6529d3a1bce168544e995581305"
+      "sha256": "2e06df6002f1a752b3df91de5f92bee4c4d2334e11b54af84c2d82d8ffc77046"
     },
     {
       "name": "bee-principle-migrate-callers-then-delete",
-      "sha256": "8eb2a9fd927752598edc8819cc58d4b93bcc92664d18cf559cf72fa0b6e1d9ff"
-    },
-    {
-      "name": "bee-principle-minimize-reader-load",
-      "sha256": "f5795a055e5948482d8e1408dac5cefd85dbf00a14122903fb9559b10964e044"
-    },
-    {
-      "name": "bee-principle-model-the-domain",
-      "sha256": "922e10a115e7064b409bd9fe3ae7f50e88fd161eb9af3f202f4df7c52034cb63"
-    },
-    {
-      "name": "bee-principle-never-block-on-the-human",
-      "sha256": "4b56f371798344d0a2712c62309fd7f014f49b6c62f151c0ec16182febbbdf51"
+      "sha256": "19116b6f8fb7577f0f3473cd4b0950549272d7fa867e08e30cfe89693ff44822"
     },
     {
       "name": "bee-principle-never-invent-behavior-neither-side-has",
@@ -155,14 +91,6 @@
       "sha256": "972b58f76a6ee07ec828bc9aae75135ae64770a4b94a1c4a8eba0027768f164e"
     },
     {
-      "name": "bee-principle-outcome-oriented-execution",
-      "sha256": "f9c9e04e9b8af128c63f7a245fc2bdfda69c63025be182e6973da5d87c8121d0"
-    },
-    {
-      "name": "bee-principle-prove-it-works",
-      "sha256": "d9c1a0ebdbecc72405f9322898bd86aaf01ffcb7130fabc51e1fe74d4150e575"
-    },
-    {
       "name": "bee-principle-record-at-the-moment-of-settlement",
       "sha256": "744ddd34ba71e8985287a31e88a22591fbfee675b2aad060213ea839a84d9f9b"
     },
@@ -171,20 +99,12 @@
       "sha256": "15d19dde8601127fa50c3118f3364e88643777b33ccded4f332ddae714593a42"
     },
     {
-      "name": "bee-principle-redesign-from-first-principles",
-      "sha256": "412aa5a3af86d718f697a9b5b91c5ff0853c7ebbe2cc1f0da02fa2d16cbaa968"
-    },
-    {
       "name": "bee-principle-reproduce-first",
-      "sha256": "6d6bf0867f5f06b4205c2f0456148424845c42e1fb88981ccc8087dff46c453d"
+      "sha256": "8d6b1e464137a2f91f0abb4e5cc3a26952b13f7f96d514b952c6dc794f386b0d"
     },
     {
       "name": "bee-principle-separate-before-serializing-shared-state",
-      "sha256": "bef8ef568dee2059f389856a93246a5e6881bfcd7a7d687f6b01d1fd2321ac21"
-    },
-    {
-      "name": "bee-principle-sequence-verifiable-units",
-      "sha256": "96e7f17a51c8e9c231dc2ca9c36f6ba7cb4c3ea6e6dd8d57b4a9a0c6cb04f327"
+      "sha256": "78065b6d0553fa74322243f208090141628561c30ae29f91f4514a4699a814e7"
     },
     {
       "name": "bee-principle-single-source-of-truth",
@@ -204,7 +124,7 @@
     },
     {
       "name": "bee-principle-subtract-before-you-add",
-      "sha256": "f91d8ba0e40161dde76facb35d757efdb075cdef596cc2682b1e39adbe729899"
+      "sha256": "24edbdaf3a47e627c2620d9e725d757e494bcaf7af162b6dec147a4e3091c9f9"
     },
     {
       "name": "bee-principle-test-behavior-not-structure",
@@ -223,16 +143,8 @@
       "sha256": "f69469be586bae36bf026e4084e68c5c7db024040e0df6ea5d75352b091b5d31"
     },
     {
-      "name": "bee-recall",
-      "sha256": "1bc345baee0b1c3030677efefd83ab801964fbda69998347cfc7d37ab64633a4"
-    },
-    {
-      "name": "bee-reflect",
-      "sha256": "afe17398c08e4f484fc7f56440c2995631b937c6cf5be59a2c8dd626762bc34a"
-    },
-    {
       "name": "bee-researching",
-      "sha256": "34f1d5c3fd932ca99909b2e22d9712bf400ed7e80ef064ddb7d928a6260a3e6e"
+      "sha256": "d8cddcb04dc26ea2e3ff848e682f95aa0d8e818dcd9c1aa3c91895c7f0943194"
     },
     {
       "name": "bee-reviewing",
@@ -243,36 +155,28 @@
       "sha256": "bfc09cc7469b6e2f15cfc0a960f96163098bc09e3813fe2e893cd7c888e2a80b"
     },
     {
-      "name": "bee-show-me-your-work",
-      "sha256": "63935d491ca82f4b9d14791ec18bcb700500007635f3211dc21d0bd3d4e6a6bd"
-    },
-    {
       "name": "bee-swarming",
       "sha256": "4960c2bfb4418f4e3a0e43f061102b022359bae63130b99ad0f1c67361978e5b"
     },
     {
-      "name": "bee-tdd",
-      "sha256": "5db627096fe7303722ae224fd7e003f3c5c0ebfc9cf7a79c355b00549c184a4a"
-    },
-    {
       "name": "bee-teach",
-      "sha256": "fa09466e3f41dab4680618e2ee04b1c0f83989c5c2f65bd7ce541e3b7aa915e7"
+      "sha256": "e75b23d4f4a3eba3a211a0afa36f16494cbaab29c31ee2642418f76293d25b01"
     },
     {
       "name": "bee-technical-writing",
-      "sha256": "269722de201cc254ef4fcbca43c5e511b9af712380ce2520dc851bdd03dcf1e5"
+      "sha256": "2561831eafecab15c44100afde2789109be4ea0d4a5280fa03835c4b4ec3cdf8"
     },
     {
       "name": "bee-unslop",
-      "sha256": "8bde487659dee96115d9cab88eac673b344ed0d0cb2da4286e1bdbe302d53a03"
+      "sha256": "819acf92f0691c036060619cc048475abcc1c5946158261d02f1b5f3d58dfdcd"
     },
     {
       "name": "bee-verify-upkeep",
-      "sha256": "4f9fc09a9ed686adc4d689ef11176a02369b277e25d3a94c0c8b8068c07daa74"
+      "sha256": "a919de08e56ecbfe669d36065e103b90b27bd0013fb1f2fa322a45596d099b41"
     },
     {
       "name": "bee-verifying",
-      "sha256": "b786a3898bb1f5ca74b44cd28f8f5246838d9ae8116c0ac9c6cc0eae8f07da0e"
+      "sha256": "84bb93f5b37703e497050b40812bf7355254c9afc35e3985f4339053778f1413"
     },
     {
       "name": "bee-wayfinding",
@@ -280,7 +184,7 @@
     },
     {
       "name": "bee-why",
-      "sha256": "3c9bfe57d96e0a3d2d9703b9e90c3fc53aeff7b41cec5439c94a899e30dd9ebf"
+      "sha256": "a3d854b8f76c526b442822dc0a3d6c409be2aeb32e7188039519f562af5432ff"
     },
     {
       "name": "bee-writing-skills",

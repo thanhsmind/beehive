@@ -235,10 +235,8 @@ NOT bind the cell-level `change_class` enum
 different taxonomy that overlaps this one on `bugfix` and `refactor` only — a
 cell's `change_class` never selects a playbook.
 
-Every route class has one index file, at
-`skills/bee-planning/playbooks/<class>.md`; a class with situations lists
-them there, each in its own file at
-`skills/bee-planning/playbooks/<class>/<situation>.md`:
+Every route class has one playbook file, at
+`skills/bee-planning/playbooks/<class>.md`:
 
 - [perf](../playbooks/perf.md)
 - [bugfix](../playbooks/bugfix.md)
@@ -251,10 +249,9 @@ them there, each in its own file at
 - [content](../playbooks/content.md)
 
 **How a plan uses one (per D1, decision `132551fb`; file location per
-playbook-file-split, decision `bed1853c`).** The plan **cites** the situation
-file by path — `skills/bee-planning/playbooks/<class>/<situation>.md` — and
-the class index (`skills/bee-planning/playbooks/<class>.md`) only for a
-class with no situations; it never transcribes the steps into `plan.md`. The steps live in that file, in one
+playbook-file-split, decision `bed1853c`).** The plan **cites** its class's
+playbook by path — `skills/bee-planning/playbooks/<class>.md` — and never
+transcribes the steps into `plan.md`. The steps live in that file, in one
 home, and are read there; a copied list goes stale and can be satisfied by
 transcription. A step that does not apply stays VISIBLE and carries its
 recorded reason — "named deviation is the system working" (`AGENTS.md`

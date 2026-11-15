@@ -1,11 +1,16 @@
 # release
 
-A version to cut and publish: open the situation below.
+1. Run the repo's release script end to end — in bee, `scripts/release.sh
+   <VERSION>`. The script IS the release; a hand-walked checklist is a step
+   that gets skipped.
+2. Let the declared suite run BEFORE anything is tagged, because a pushed tag
+   is public. Skipping it is a flag you own out loud, never a quiet shortcut.
+3. Wait for the script's final `OK` line — tag pushed, release CI green,
+   published assets verified.
+4. Re-run the same version when a run dies mid-flight, because the script is
+   idempotent and picks the release back up.
 
-## Situations
+A release commit without that `OK` line is not a release.
 
-- `release` — release, cut a release, tag, publish, ship a version, bump the version, phát hành, ra bản, đóng gói phiên bản, gắn tag — delivers: the release script's final `OK` line, with the tag pushed, release CI green and published assets verified
-
-No situation fits, or the work is large and cross-cutting: use bee-figure-it-out.
-
+Proof line: the script's final `OK` line, verbatim.
 Proof floor: the cap refuses a result weaker than this class's floor and names it; the table is the cap's own (`bee cells finish --help`).

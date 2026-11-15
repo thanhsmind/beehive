@@ -55,11 +55,9 @@ release/publish workflows, and a repo adds rows under `rigor_floor` in
 `.bee/config.json` — a row raises a floor, never lowers it. `bee cells add`
 and `bee cells update` refuse a cell below its floor with `RIGOR_FLOOR`;
 the remedy is to raise the route, never to drop the file.
-That same step cites the matched situation file
-`skills/bee-planning/playbooks/<class>/<situation>.md` into plan.md — the
-class index only for a class with no situations — by name and anchor
-(`references/planning-reference.md` ("Playbooks")), never by copying its
-steps.
+That same step cites the matched class playbook into plan.md by name and
+anchor — `references/planning-reference.md` ("Playbooks") — never by
+copying its steps.
 Code truth changes only in the feature worktree, the
 user tests at staging once the slice is ready, and main receives the branch
 only after its uat gate.
