@@ -125,8 +125,8 @@ so a reader who only wants to understand never wades through critique.
    would solve, and do not flag an intentional tradeoff with a clear
    benefit. A sound architecture gets "it is sound"; an empty critique is a
    valid result.
-4. Judge as the lead, per `bee-interrogate` Step 5 and its
-   `references/lead-judgment.md`: bucket every finding Act on, Consider,
+4. Judge as the lead, per `bee-interrogate` Step 5 and
+   `bee-interrogate/references/lead-judgment.md`: bucket every finding Act on, Consider,
    Noted or Dismissed, a pragmatic lead and not an aggregator. A finding
    about behavior reaches the verdict only after you traced it.
 

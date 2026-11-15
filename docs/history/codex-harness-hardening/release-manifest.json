@@ -142,7 +142,7 @@
     },
     {
       "path": ".claude-plugin/skills/.bee-render.json",
-      "sha256": "f836292cf09f6d700bdee58ae4a6883ac97846d2324d4c64ecf889639ccc5ad6",
+      "sha256": "8a00d3501dfc2965522bd7efa6b150587ba4d5b7aaccdb00107d1918d21bf422",
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/.bee-render.json"
@@ -1402,7 +1402,7 @@
     },
     {
       "path": ".claude-plugin/skills/bee-researching/references/trace-and-provenance.md",
-      "sha256": "24fbce28487b3c3da276288931c749f700741891435ff6fb85a80088bdfc2242",
+      "sha256": "d2540d7cfd19f17efcff169c64520ebb5603ac26c52569a5e930248443405bcb",
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/bee-researching/references/trace-and-provenance.md"
@@ -1808,7 +1808,7 @@
     },
     {
       "path": ".codex-plugin/skills/.bee-render.json",
-      "sha256": "c1fd426c8eb5ff5ba2d9136b01f8068268972ea901f953a3247149815cd3411d",
+      "sha256": "c20e706f240fe43602197a6b8b8b8824857c96823d6b689f35e125a68896496f",
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/.bee-render.json"
@@ -3068,7 +3068,7 @@
     },
     {
       "path": ".codex-plugin/skills/bee-researching/references/trace-and-provenance.md",
-      "sha256": "24fbce28487b3c3da276288931c749f700741891435ff6fb85a80088bdfc2242",
+      "sha256": "d2540d7cfd19f17efcff169c64520ebb5603ac26c52569a5e930248443405bcb",
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/bee-researching/references/trace-and-provenance.md"
@@ -6225,7 +6225,7 @@
     },
     {
       "path": "skills/bee-researching/references/trace-and-provenance.md",
-      "sha256": "24fbce28487b3c3da276288931c749f700741891435ff6fb85a80088bdfc2242",
+      "sha256": "d2540d7cfd19f17efcff169c64520ebb5603ac26c52569a5e930248443405bcb",
       "mode": "644",
       "role": "plugin_skill",
       "packagePath": "skills/bee-researching/references/trace-and-provenance.md"
