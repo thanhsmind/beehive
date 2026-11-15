@@ -238,5 +238,14 @@
         }
       ]
     }
+  },
+  "route": {
+    "class": "release",
+    "lane": "small",
+    "flags": [],
+    "product_files": 3,
+    "rationale": null,
+    "updated_at": "2026-11-15T11:59:24.175Z",
+    "feature": "release-2-105-0"
   }
 }

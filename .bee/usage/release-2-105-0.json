@@ -1,0 +1,90 @@
+{
+  "schema": "bee-usage/v1",
+  "feature": "release-2-105-0",
+  "closed_at": "2026-11-15T12:00:43.029Z",
+  "sessions": [
+    {
+      "session_id": "08e1c9b9-c58f-481b-a4b7-0cd8b72258c7",
+      "models": {
+        "claude-opus-5-5": {
+          "input": 582,
+          "output": 122377,
+          "cache_write": 291057,
+          "cache_read": 51671738,
+          "new": 414016,
+          "cached": 51671738,
+          "total": 52085754
+        }
+      },
+      "subagent_models": {},
+      "subagent_count": 0,
+      "started_ms": 1794734168692,
+      "ended_ms": 1794744040901,
+      "totals": {
+        "new": 414016,
+        "cached": 51671738,
+        "total": 52085754
+      }
+    }
+  ],
+  "skipped": 0,
+  "totals": {
+    "main": {
+      "new": 414016,
+      "cached": 51671738,
+      "total": 52085754
+    },
+    "subagents": {
+      "new": 0,
+      "cached": 0,
+      "total": 0
+    },
+    "total": {
+      "new": 446030,
+      "cached": 51858905,
+      "total": 52304935
+    },
+    "herding": {
+      "new": 32014,
+      "cached": 187167,
+      "total": 219181,
+      "models": {
+        "claude-opus-5-5": {
+          "input": 14,
+          "output": 4485,
+          "cache_write": 27515,
+          "cache_read": 187167,
+          "new": 32014,
+          "cached": 187167,
+          "total": 219181
+        }
+      }
+    }
+  },
+  "herding_sessions": [
+    {
+      "session_id": "456726c9-c9ed-4f1b-8aa6-b81bbc184a28",
+      "models": {
+        "claude-opus-5-5": {
+          "input": 14,
+          "output": 4485,
+          "cache_write": 27515,
+          "cache_read": 187167,
+          "new": 32014,
+          "cached": 187167,
+          "total": 219181
+        }
+      },
+      "subagent_models": {},
+      "subagent_count": 0,
+      "started_ms": 1794743969214,
+      "ended_ms": 1794744017509,
+      "totals": {
+        "new": 32014,
+        "cached": 187167,
+        "total": 219181
+      },
+      "job_id": "job-1794743967691-2486487-1"
+    }
+  ]
+}

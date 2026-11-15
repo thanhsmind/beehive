@@ -1,0 +1,107 @@
+{
+  "id": "rel2105-1c",
+  "feature": "release-2-105-0",
+  "title": "Check the published 2.105.0 release",
+  "lane": "small",
+  "role": "test",
+  "deps": [
+    "rel2105-1"
+  ],
+  "decisions": [
+    "50750a60-7238-4bcc-a4ba-e68cf85fd85c",
+    "88f11807-910f-4b70-9aa7-a132124460bb"
+  ],
+  "files": [
+    "docs/history/release-2-105-0/reports/rel2105-1c.md"
+  ],
+  "read_first": [
+    "docs/history/release-2-105-0/CONTEXT.md",
+    "docs/history/release-2-105-0/plan.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Check the release independently, read-only: both plugin manifests on main report 2.105.0; tag v2.105.0 exists locally and on origin (git ls-remote --tags origin v2.105.0); the GitHub release v2.105.0 lists the five binaries and SHA256SUMS (gh release view v2.105.0 --json assets); the release-binaries run for v2.105.0 concluded success. Write each check with its command and output to docs/history/release-2-105-0/reports/rel2105-1c.md and commit it with the trailer cell: rel2105-1c. Bee commands you may run: bee herding notify; never bee dispatch.",
+  "verify": "gh release view v2.105.0 --json assets --jq '.assets | length'",
+  "must_haves": {
+    "truths": [
+      "the report shows each of the four checks with its command and output"
+    ],
+    "prohibitions": [
+      "No edit outside the report file"
+    ]
+  },
+  "behavior_change": false,
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "w-rel2105-1c",
+    "outcome": "Checked 2.105.0 independently: manifests 2.105.0, tag v2.105.0 local+origin at 38013830f, 5 binaries + SHA256SUMS, release-binaries run 43711134790 success; report committed 0f0675fa3",
+    "files_changed": [
+      "docs/history/release-2-105-0/reports/rel2105-1c.md"
+    ],
+    "deviations": [
+      "sync-ack: independent checker read the published release; leader reviewed report commit 0f0675fa3"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-15T12:00:29.141Z",
+    "behavior_change": false,
+    "verification_evidence": "reads the published release directly: https://github.com/thanhsmind/beehive/releases/tag/v2.105.0 and https://github.com/thanhsmind/beehive/actions/runs/43711134790; report docs/history/release-2-105-0/reports/rel2105-1c.md",
+    "verify_output": "green:live",
+    "verify_passed": true,
+    "claim_session": "08e1c9b9-c58f-481b-a4b7-0cd8b72258c7",
+    "verify_command": "gh release view v2.105.0 --json assets --jq '.assets | length'",
+    "claimed_at": "2026-11-15T11:59:24.747Z",
+    "knowledge_delta": [],
+    "sync_ack": "independent checker read the published release; leader reviewed report commit 0f0675fa3",
+    "no_mistakes": true,
+    "no_knowledge_used": true,
+    "no_principles_used": true,
+    "report": {
+      "outcome": "Checked 2.105.0 independently: manifests 2.105.0, tag v2.105.0 local+origin at 38013830f, 5 binaries + SHA256SUMS, release-binaries run 43711134790 success; report committed 0f0675fa3",
+      "commit": "0f0675fa303d6651c8212f84e88dd6f1b8d57279",
+      "files": [
+        "docs/history/release-2-105-0/reports/rel2105-1c.md"
+      ],
+      "tests": "gh release view v2.105.0 --json assets --jq '.assets | length' — green:live — reads the published release directly: https://github.com/thanhsmind/beehive/releases/tag/v2.105.0 and https://github.com/thanhsmind/beehive/actions/runs/43711134790; report docs/history/release-2-105-0/reports/rel2105-1c.md",
+      "deviations": [],
+      "knowledge_used": [],
+      "principles_used": [],
+      "patch_id": "1e976ff60eaf46431802e6671cc1da4d5e8d9120"
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "the report shows each of the four checks with its command and output",
+            "artifact": "docs/history/release-2-105-0/reports/rel2105-1c.md"
+          },
+          {
+            "requirement": "docs/history/release-2-105-0/reports/rel2105-1c.md",
+            "artifact": "docs/history/release-2-105-0/reports/rel2105-1c.md"
+          }
+        ],
+        "recorded_at": "2026-11-15T12:00:40.961Z",
+        "recorded_by": "08e1c9b9-c58f-481b-a4b7-0cd8b72258c7",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": {
+    "new": 32014,
+    "cached": 187167,
+    "total": 219181,
+    "models": {
+      "claude-opus-5-5": {
+        "new": 32014,
+        "cached": 187167,
+        "total": 219181
+      }
+    },
+    "jobs": [
+      "job-1794743967691-2486487-1"
+    ]
+  }
+}
