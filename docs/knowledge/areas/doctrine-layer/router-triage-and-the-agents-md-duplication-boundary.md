@@ -223,7 +223,7 @@ Discipline rules are homed in `packages/bee/LEADER.md` or a file under `packages
     - `skills/bee-swarming/SKILL.md`
     - `skills/bee-swarming/references/swarming-reference.md`
 - `agents-verify-before-agreeing` (packages/bee/LEADER.md § Prove, then say so):
-  spoken: open with a triage line, cite each checked code claim with a numbered source listed under the reply, and agree only once the key assumption has a citation — a pushback states the goal, the code with file:line, then options, because an unchecked agreement ships a wrong premise
+  spoken: open with a triage line, cite each checked code claim with a numbered source listed under the reply, and agree only once the key assumption has a citation, cite how-it-works claims from the `docs/knowledge` concept then code file:line and `docs/history` only for why a decision was made (cite-knowledge-first D1) — a pushback states the goal, the code with file:line, then options, because an unchecked agreement ships a wrong premise
   - applied_at:
     - `skills/bee-hive/references/routing-and-contracts.md`
     - `skills/bee-hive/references/scout-and-ticks.md`
@@ -305,7 +305,7 @@ Discipline rules are homed in `packages/bee/LEADER.md` or a file under `packages
   spoken: name each principle you applied and the decision it changed — or say plainly it changed nothing
   - applied_at:
 - `agents-knowledge-before-code` (packages/bee/LEADER.md § Start a session):
-  spoken: search the knowledge store before your first code read of a turn, because a search answers in milliseconds what a code hunt answers in dozens of tool calls
+  spoken: search the knowledge store before your first code read of a turn, and the same search comes first when a turn answers how something works, before `docs/history` is opened for it (cite-knowledge-first D2), because a search answers in milliseconds what a code hunt answers in dozens of tool calls
   - applied_at:
     - `docs/knowledge/areas/hook-runtime/advisories-and-turn-control.md`
 

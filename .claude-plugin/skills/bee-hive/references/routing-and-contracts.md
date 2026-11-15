@@ -310,6 +310,16 @@ Triage: high-risk — touches auth flag, data-model change
 
 **Claim labels.** Every technical claim about code or behavior that this session checked carries a numbered citation `[1]`, `[2]` in the text. The reply ends with a Sources block, headed `Sources:` or `Nguồn:`, one line per number: `[n] path:line` for a line this session read, or `[n]` the command run with its result. One source keeps one number on reuse. A claim from general knowledge or inference keeps the inline `[unverified]` marker and gets no number. An `[unverified]` claim is never stated as fact, and it is never the premise of an edit.
 
+**Source order.** A claim about how something works now cites the `docs/knowledge` concept that holds it, then code `file:line`. `docs/history` is cited only for why a decision was made, or for its locked wording. A decision hit from `bee decisions search` leads to the concept that cites its D-number first; open `docs/history` only when the reason itself is the claim.
+
+```text
+Onboarding offers a detected lint check as a member of `commands.test` [1]. It stays propose-only because bee never writes a detected command [2].
+
+Sources:
+[1] docs/knowledge/areas/onboarding/host-project-artifacts.md:322
+[2] docs/history/trust-layers/CONTEXT.md D1
+```
+
 ```text
 The handler rejects an unknown lane [1], and the route test covers it [2].
 Most CLIs retry a failed write once [unverified — checking before I rely on it].

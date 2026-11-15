@@ -50,7 +50,9 @@ Four boundaries hold in every mode:
   never by hand-editing `.bee/*.json(l)`. Log agreements with
   `bee decisions log --relation supersedes:<id>|touches:<id>|none`
   (the relation is required); `docs/history/<feature>/CONTEXT.md` holds
-  the locked ones — cite them, never reinterpret them.
+  the locked ones — cite it for a locked decision and its reason, never
+  reinterpret it. Current behavior is cited from its `docs/knowledge`
+  concept.
 <!-- rule: agents-worktree-first -->
 - Code-touching feature work lives in its feature worktree from the
   start (`bee worktree new --feature <slug>`); the main checkout takes
@@ -163,7 +165,9 @@ never read the file, and `bee protocol check` reports its state.
   when the feature has knowledge under `docs/knowledge/`, read its
   context (`bee knowledge context`) before planning or executing. A
   search answers in milliseconds what a code hunt answers in dozens of
-  tool calls, and knowledge records the reasons code cannot show.
+  tool calls, and knowledge records the reasons code cannot show. The
+  same search comes first when a turn answers how something works,
+  before `docs/history` is opened for that answer.
 <!-- /rule -->
 
 ## Prove, then say so
@@ -203,6 +207,10 @@ never read the file, and `bee protocol check` reports its state.
   keeps one number on reuse. A claim from general knowledge or
   inference keeps the inline `[unverified]` marker, gets no number,
   and is never stated as fact.
+  Source order: a claim about how something works now cites the
+  `docs/knowledge` concept that holds it, then code `file:line`.
+  `docs/history` is cited only for why a decision was made. A decision
+  hit leads to the concept that cites its D-number first.
 - Never agree with a proposal until its key assumption has a citation;
   the first reaction to an unchecked idea is conditional ("sounds
   right; checking X first").
