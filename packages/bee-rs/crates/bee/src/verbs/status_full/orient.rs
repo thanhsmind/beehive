@@ -759,7 +759,7 @@ const PLANNING_SKILL_DIRS: [&str; 4] = [
 ];
 
 fn playbook_ref(root: &Path, rel: &str) -> String {
-    match PLANNING_SKILL_DIRS.iter().find(|d| root.join(d).is_dir()) {
+    match PLANNING_SKILL_DIRS.iter().find(|d| root.join(d).join("playbooks").join(rel).is_file()) {
         Some(dir) => format!("{dir}/playbooks/{rel}"),
         None => format!(
             "skill bee-planning: playbooks/{rel} — load bee-planning with skill_get and open this file under its local.path"

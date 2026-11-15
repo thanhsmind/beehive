@@ -625,6 +625,7 @@ use crate::version::BEE_VERSION;
             "skills/bee-planning/playbooks/bugfix.md",
             "## Situations\n\n- `local-only` — here, ở đây — delivers: there\n",
         );
+        write(root, "skills/bee-planning/playbooks/bugfix/local-only.md", "# Local\n\n1. step\n");
         let packet = class_packet(root, "bugfix");
         assert_eq!(
             packet["situations"],
@@ -656,6 +657,9 @@ use crate::version::BEE_VERSION;
             let tmp = tempfile::tempdir().unwrap();
             let root = tmp.path();
             write(root, &format!("{dir}/playbooks/bugfix.md"), "# Bugfix\n");
+            for s in crate::situations::class_situations(Path::new("/nonexistent-bee-root"), "bugfix") {
+                write(root, &format!("{dir}/playbooks/bugfix/{}.md", s.name), "# Situation\n");
+            }
             for other in others {
                 write(root, &format!("{other}/playbooks/bugfix.md"), "# Bugfix\n");
             }
