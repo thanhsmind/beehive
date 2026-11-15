@@ -204,5 +204,11 @@
   {"brief": "Audit the comments in these files with a fresh pair of eyes. I keep defending mine and I don't trust that.", "expect": ["bee-comment-review"]},
   {"brief": "Xóa hết comment thừa trong phần thay đổi này, còn comment nào ghi 'đừng xoá' thì kiểm tra xem có cần giữ thật không.", "expect": ["bee-comment-review"]},
   {"brief": "Run the review gate over everything unreviewed on this branch before it merges.", "expect": ["bee-reviewing"], "near": "bee-comment-review"},
-  {"brief": "Why was the no-comments rule built this way? Give me the recorded reason for it.", "expect": ["bee-why"], "near": "bee-comment-review"}
+  {"brief": "Why was the no-comments rule built this way? Give me the recorded reason for it.", "expect": ["bee-why"], "near": "bee-comment-review"},
+
+  {"brief": "Migrate every call site of the old session API to the new one across the whole repo. It is big, I will be away for hours, and I want to audit every decision when I'm back.", "expect": ["bee-figure-it-out"]},
+  {"brief": "None of the usual playbooks fits this task, so figure it out: define done as something checkable, design the phases, then run them with a trail I can review.", "expect": ["bee-figure-it-out"]},
+  {"brief": "Việc này lớn và cắt ngang nhiều module, không quy trình nào có sẵn khớp. Hãy tự thiết kế các giai đoạn, đặt tiêu chí xong kiểm chứng được, rồi chạy và để lại nhật ký quyết định để tôi xem lại.", "expect": ["bee-figure-it-out"]},
+  {"brief": "Turn the locked decisions for this feature into an executable plan with a lane, a work shape and cells.", "expect": ["bee-planning"], "near": "bee-figure-it-out"},
+  {"brief": "I have a vague itch to make onboarding better but cannot name the outcome yet. Help me chart it before we decide anything.", "expect": ["bee-wayfinding"], "near": "bee-figure-it-out"}
 ]

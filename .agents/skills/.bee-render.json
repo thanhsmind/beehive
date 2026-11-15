@@ -35,6 +35,10 @@
       "sha256": "b6f711ae785e116b7869208cc4a1c455b0e9c8f8a8b5dac2801cc2e0514f6eae"
     },
     {
+      "name": "bee-figure-it-out",
+      "sha256": "e158444f7d5c44c1b503f81942426c5f1620cfa3a6109f7f996fa025c2eedb9c"
+    },
+    {
       "name": "bee-grooming",
       "sha256": "5d8782f484ff8fab5912ba20e6d1448001f8d57b1f6ecefd9d875004e002fe3e"
     },
