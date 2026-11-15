@@ -57,7 +57,7 @@ Risk map:
 - a parity test reds on the changed spoken line / LOW / Lands in ckf-1 / `rule_index_parity`.
 - a new path in the prose does not resolve / LOW / Lands in ckf-1 / `pointer_integrity`.
 
-Waves: one cell.
+Waves: ckf-1, then the checker ckf-2 (depends on ckf-1). Slice 2 adds ckf-2 after the close tests door named the missing checker.
 
 ## Role assignments
 
@@ -69,7 +69,7 @@ Waves: one cell.
   "stages": [
     {"stage":"documentation","classification":"required","role":"docs","reason":"ckf-1 edits doctrine prose and runs the regen chain."},
     {"stage":"implementation","classification":"not-applicable","role":"code","reason":"No code changes."},
-    {"stage":"test-and-live-proof","classification":"not-applicable","role":"test","reason":"Docs cell; parity and pointer tests are its proof."},
+    {"stage":"test-and-live-proof","classification":"required","role":"test","reason":"ckf-2: a separate checker re-runs the parity, pointer, manifest and onboard checks over ckf-1 and reads the rendered copies."},
     {"stage":"knowledge-consolidation","classification":"not-applicable","role":"writer","reason":"ckf-1 owns the rule-index edit and delivery.md."},
     {"stage":"planning","classification":"not-applicable","role":"plan","reason":"The leader wrote this plan."},
     {"stage":"deployment","classification":"not-applicable","role":"deploy","reason":"No release unless the owner asks."},
@@ -103,6 +103,7 @@ Waves: one cell.
 | id | title | files | deps | you see | proof |
 |---|---|---|---|---|---|
 | ckf-1 | Cite the knowledge concept before history | `packages/bee/LEADER.md`, `routing-and-contracts.md`, rule index concept, regen outputs, release manifest, delivery | — | `.bee/LEADER.md` says a how-it-works claim cites the knowledge concept and history is cited for why | `cargo test … --test rule_index_parity --test pointer_integrity --test instruction_laws` green, `bee dev release-manifest --check` |
+| ckf-2 | Check the source-order doctrine edit | `docs/history/cite-knowledge-first/reports/ckf-2.md` | ckf-1 | a report that quotes the three test counts, the manifest check and the byte-equal LEADER copies | same verify as ckf-1 |
 
 ```json
 [
@@ -113,9 +114,18 @@ Waves: one cell.
     "lane": "small",
     "role": "docs",
     "deps": [],
-    "decisions": ["D1", "D2", "eaddc44a-abeb-4ee0-99c4-3f8f77850b49", "0124ee8b-f135-431b-bff8-121ad5cae3ff"],
-    "affects_skills": ["skills/bee-hive/references/routing-and-contracts.md"],
-    "affects_specs": ["docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md"],
+    "decisions": [
+      "D1",
+      "D2",
+      "eaddc44a-abeb-4ee0-99c4-3f8f77850b49",
+      "0124ee8b-f135-431b-bff8-121ad5cae3ff"
+    ],
+    "affects_skills": [
+      "skills/bee-hive/references/routing-and-contracts.md"
+    ],
+    "affects_specs": [
+      "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md"
+    ],
     "files": [
       "packages/bee/LEADER.md",
       ".bee/LEADER.md",
@@ -145,8 +155,14 @@ Waves: one cell.
         ".bee/LEADER.md is byte-equal to packages/bee/LEADER.md after regen"
       ],
       "artifacts": [
-        {"path": "packages/bee/LEADER.md", "substantive": "source order in two rule blocks and the scoped history line"},
-        {"path": "skills/bee-hive/references/routing-and-contracts.md", "substantive": "Source order paragraph in Claim labels"}
+        {
+          "path": "packages/bee/LEADER.md",
+          "substantive": "source order in two rule blocks and the scoped history line"
+        },
+        {
+          "path": "skills/bee-hive/references/routing-and-contracts.md",
+          "substantive": "Source order paragraph in Claim labels"
+        }
       ],
       "key_links": [
         "Claim labels stays the full form of agents-verify-before-agreeing",
@@ -160,6 +176,56 @@ Waves: one cell.
       "open_choices": [
         "Exact wording",
         "Example paths in the Source order paragraph"
+      ]
+    }
+  },
+  {
+    "id": "ckf-2",
+    "feature": "cite-knowledge-first",
+    "title": "Check the source-order doctrine edit",
+    "lane": "small",
+    "role": "test",
+    "deps": [
+      "ckf-1"
+    ],
+    "decisions": [
+      "D1",
+      "D2",
+      "eaddc44a-abeb-4ee0-99c4-3f8f77850b49",
+      "0124ee8b-f135-431b-bff8-121ad5cae3ff",
+      "c75ee651-7123-4a5a-9fe2-1d48032df70c"
+    ],
+    "affects_skills": [],
+    "affects_specs": [],
+    "files": [
+      "docs/history/cite-knowledge-first/reports/ckf-2.md"
+    ],
+    "read_first": [
+      "docs/history/cite-knowledge-first/CONTEXT.md",
+      "docs/history/cite-knowledge-first/delivery.md"
+    ],
+    "action": "Checker for ckf-1, no product edits. Run the verify command. Check that packages/bee/LEADER.md and .bee/LEADER.md are byte-equal, that the five rendered copies of skills/bee-hive/references/routing-and-contracts.md carry the Source order paragraph, and that each path in the Source order example resolves. Check each ckf-1 must_have truth against the text. Write docs/history/cite-knowledge-first/reports/ckf-2.md with the test counts, the manifest result and one line per truth (met or not, with file:line). One commit.",
+    "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test rule_index_parity --test pointer_integrity --test instruction_laws && .bee/bin/bee dev release-manifest --check && .bee/bin/bee onboard --repo-root . --json",
+    "must_haves": {
+      "truths": [
+        "the report quotes fresh pass counts for rule_index_parity, pointer_integrity and instruction_laws",
+        "the report states each ckf-1 truth as met or not with a file:line"
+      ],
+      "artifacts": [
+        {
+          "path": "docs/history/cite-knowledge-first/reports/ckf-2.md",
+          "substantive": "checker report"
+        }
+      ],
+      "key_links": [
+        "ckf-2 checks ckf-1"
+      ],
+      "prohibitions": [
+        "No product file edits",
+        "No code comments"
+      ],
+      "open_choices": [
+        "Report layout"
       ]
     }
   }
