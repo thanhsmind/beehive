@@ -12,7 +12,7 @@ bee:
   decisions: ["per-task-router D1-D5 (docs/history/per-task-router/CONTEXT.md, 2026-11-14)", "per-task-router planning choices after the hat wave (docs/history/per-task-router/reports/hat-wave.md)"]
   sources: [docs/history/per-task-router/CONTEXT.md, docs/history/per-task-router/plan.md, docs/history/per-task-router/reports/hat-wave.md, docs/history/per-task-router/delivery.md]
   authoritative_for: "doctrine-layer: per-task route, tester pairing and proof floors"
-  anchors: [packages/bee-rs/crates/bee/src/principles.rs, packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs, packages/bee-rs/crates/bee/src/verbs/status_full/orient.rs, packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs, packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs, packages/bee-rs/crates/bee/src/verbs/cells/proof.rs, packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs, packages/bee/LEADER.md, packages/bee/prompts/worker-cell.md, skills/bee-planning/SKILL.md, skills/bee-swarming/SKILL.md]
+  anchors: [packages/bee-rs/crates/bee/src/principles.rs, packages/bee-rs/crates/bee/src/situations.rs, packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs, packages/bee-rs/crates/bee/src/verbs/status_full/orient.rs, packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs, packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs, packages/bee-rs/crates/bee/src/verbs/cells/proof.rs, packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs, packages/bee/LEADER.md, packages/bee/prompts/worker-cell.md, skills/bee-planning/SKILL.md, skills/bee-swarming/SKILL.md]
 ---
 
 # Doctrine Layer — per-task route, tester pairing and proof floors
@@ -41,6 +41,7 @@ Three failures shared one root: the code writer chose its own proof, and the ses
 - Implementer first, tester second, never the reverse (D2).
 - The trigger index in `LEADER.md` points to the skill that owns a situation and never restates it.
 
+- `bee orient --class` lists a class's situations from the class index's `## Situations` section through `situations.rs`, the one reader; the repo file wins, a compiled-in copy answers when the tree is absent, and a malformed line is skipped, never an error.
 ## Rejected options
 
 - A keyword classifier in Rust for the task class: it guesses wrong silently, and the leader's own classification is the signal.
