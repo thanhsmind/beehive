@@ -142,7 +142,7 @@
     },
     {
       "path": ".claude-plugin/skills/.bee-render.json",
-      "sha256": "aa4945a519d318bc91961ec5b56a0bd117834987cc24e6b7a3305095a5568d28",
+      "sha256": "5174ea6a92f795507c7fab38be2f1a086372deeedd202d4876e003c13a39b84c",
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/.bee-render.json"
@@ -1016,6 +1016,20 @@
       "packagePath": ".claude-plugin/skills/bee-principle-verify-before-reporting/SKILL.md"
     },
     {
+      "path": ".claude-plugin/skills/bee-recall/LICENSE.pstack",
+      "sha256": "bc957ca6bee02792566a1a028d105e02e247c6e77cf057061674273da77b200e",
+      "mode": "644",
+      "role": "plugin_skill_claude_render",
+      "packagePath": ".claude-plugin/skills/bee-recall/LICENSE.pstack"
+    },
+    {
+      "path": ".claude-plugin/skills/bee-recall/SKILL.md",
+      "sha256": "a7d6ca7632043a145ba0fd36d70c8a80817657a56955d15cef12b2da2acefadd",
+      "mode": "644",
+      "role": "plugin_skill_claude_render",
+      "packagePath": ".claude-plugin/skills/bee-recall/SKILL.md"
+    },
+    {
       "path": ".claude-plugin/skills/bee-reflect/LICENSE.pstack",
       "sha256": "bc957ca6bee02792566a1a028d105e02e247c6e77cf057061674273da77b200e",
       "mode": "644",
@@ -1451,7 +1465,7 @@
     },
     {
       "path": ".codex-plugin/skills/.bee-render.json",
-      "sha256": "b1488b5c7fa6dea1ffb5a54c8afdd560fe6aa72d16e730dc75d7029ecfec9a5e",
+      "sha256": "379270214a4eafc0bcb8f94aa15c652cf4765fe40ac99d3389065046945d83b1",
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/.bee-render.json"
@@ -2323,6 +2337,20 @@
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/bee-principle-verify-before-reporting/SKILL.md"
+    },
+    {
+      "path": ".codex-plugin/skills/bee-recall/LICENSE.pstack",
+      "sha256": "bc957ca6bee02792566a1a028d105e02e247c6e77cf057061674273da77b200e",
+      "mode": "644",
+      "role": "plugin_skill_codex_render",
+      "packagePath": ".codex-plugin/skills/bee-recall/LICENSE.pstack"
+    },
+    {
+      "path": ".codex-plugin/skills/bee-recall/SKILL.md",
+      "sha256": "a7d6ca7632043a145ba0fd36d70c8a80817657a56955d15cef12b2da2acefadd",
+      "mode": "644",
+      "role": "plugin_skill_codex_render",
+      "packagePath": ".codex-plugin/skills/bee-recall/SKILL.md"
     },
     {
       "path": ".codex-plugin/skills/bee-reflect/LICENSE.pstack",
@@ -5123,6 +5151,20 @@
       "mode": "644",
       "role": "plugin_skill",
       "packagePath": "skills/bee-principle-verify-before-reporting/SKILL.md"
+    },
+    {
+      "path": "skills/bee-recall/LICENSE.pstack",
+      "sha256": "bc957ca6bee02792566a1a028d105e02e247c6e77cf057061674273da77b200e",
+      "mode": "644",
+      "role": "plugin_skill",
+      "packagePath": "skills/bee-recall/LICENSE.pstack"
+    },
+    {
+      "path": "skills/bee-recall/SKILL.md",
+      "sha256": "a7d6ca7632043a145ba0fd36d70c8a80817657a56955d15cef12b2da2acefadd",
+      "mode": "644",
+      "role": "plugin_skill",
+      "packagePath": "skills/bee-recall/SKILL.md"
     },
     {
       "path": "skills/bee-reflect/LICENSE.pstack",

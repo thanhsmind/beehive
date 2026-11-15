@@ -186,5 +186,11 @@
   {"brief": "Let's run a retrospective over the conversation and turn the durable lessons into concrete skill edits.", "expect": ["bee-reflect"]},
   {"brief": "Nhìn lại phiên làm việc này, rút ra những bài học đáng giữ và đề xuất sửa skill nào.", "expect": ["bee-reflect"]},
   {"brief": "Just agreed that every migration needs a rollback script — record that decision now.", "expect": ["bee-capturing"], "near": "bee-reflect"},
-  {"brief": "Review everything unreviewed from today and give me a verdict on the diff.", "expect": ["bee-reviewing"], "near": "bee-reflect"}
+  {"brief": "Review everything unreviewed from today and give me a verdict on the diff.", "expect": ["bee-reviewing"], "near": "bee-reflect"},
+
+  {"brief": "Catch me up on what I was working on in the auth refactor before I start again.", "expect": ["bee-recall"]},
+  {"brief": "Where did I leave off on the billing migration? Give me a tight current-state brief before I resume.", "expect": ["bee-recall"]},
+  {"brief": "Nhắc lại giúp tôi tuần qua tôi đã làm gì với phần thanh toán và giờ nên làm tiếp việc gì.", "expect": ["bee-recall"]},
+  {"brief": "Why does the claim sweep skip expired claims? Give me the recorded reason for it.", "expect": ["bee-why"], "near": "bee-recall"},
+  {"brief": "I don't get how the dispatch door picks a worker, explain it to me step by step.", "expect": ["bee-teach"], "near": "bee-recall"}
 ]

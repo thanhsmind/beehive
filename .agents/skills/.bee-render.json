@@ -159,6 +159,10 @@
       "sha256": "f69469be586bae36bf026e4084e68c5c7db024040e0df6ea5d75352b091b5d31"
     },
     {
+      "name": "bee-recall",
+      "sha256": "1bc345baee0b1c3030677efefd83ab801964fbda69998347cfc7d37ab64633a4"
+    },
+    {
       "name": "bee-reflect",
       "sha256": "afe17398c08e4f484fc7f56440c2995631b937c6cf5be59a2c8dd626762bc34a"
     },
