@@ -50,17 +50,17 @@ the evidence column is the bytes found at the anchor.
 | # | Claim | Label | Anchor | Verbatim evidence |
 |---|-------|-------|--------|-------------------|
 | 1 | `bee orient --class` maps a class to one playbook file path | read | `packages/bee-rs/crates/bee/src/verbs/status_full/orient.rs:741` | `packet.insert("playbook".into(), json!(format!("skills/bee-planning/playbooks/{class}.md")));` |
-| 2 | orient matches its argv by exact slice patterns, so a new flag needs new patterns | read | `packages/bee-rs/crates/bee/src/verbs/status_full/orient.rs:866` | `["orient", "--class", class] => return run_class(class, false, t0),` |
+| 2 | orient matches its argv by exact slice patterns, so a new flag needs new patterns | read | `packages/bee-rs/crates/bee/src/verbs/status_full/orient.rs:881` | `["orient", "--class", class] => return run_class(class, false, t0),` |
 | 3 | The route record is built field by field; this plan leaves it unchanged | read | `packages/bee-rs/crates/bee/src/verbs/state_group/workflows.rs:647` | `route.insert("class".into(), json!(class_value.unwrap()));` |
 | 4 | The route verb has a closed flag list; this plan adds no flag | read | `packages/bee-rs/crates/bee/src/verbs/state_group/workflows.rs:844` | `&["set", "show", "class", "lane", "lane-record", "flags", "files", "rationale", "no-lane"],` |
 | 5 | Feature start reads route flags itself; this plan leaves it unchanged | read | `packages/bee-rs/crates/bee/src/verbs/feature_group.rs:68` | `if let Some(v) = flags.get("class") {` |
-| 6 | The plan check matches one `<name>.md` directly under the playbooks directory | read | `packages/bee-rs/crates/bee/src/verbs/plan_group.rs:82` | `let cited = \|name: &str\| text.contains(&format!("{PLAYBOOKS}{name}.md"));` |
+| 6 | The plan check matches one `<name>.md` directly under the playbooks directory | read | `packages/bee-rs/crates/bee/src/verbs/plan_group.rs:83` | `let cited = \|name: &str\| text.contains(&format!("{PLAYBOOKS}{name}.md"));` |
 | 7 | The parity fence reads only `.md` entries of the playbooks directory, so subdirectories leave its two tests intact | read | `packages/bee-rs/crates/bee/tests/class_playbook_parity.rs:102` | `entry.file_name().to_str().and_then(\|n\| n.strip_suffix(".md")).map(str::to_string)` |
 | 8 | There are nine route classes | read | `packages/bee-rs/crates/bee/src/verbs/state_group/workflows.rs:356` | `pub(crate) const ROUTE_CLASS_VALUES: [&str; 9] =` |
 | 9 | The release manifest walks the whole skills tree, so new playbook and skill files vendor with no manifest code change | read | `packages/bee-rs/crates/bee/src/devtools/release_manifest.rs:387` | `records.extend(enumerate_tree(root, &root.join("skills"), "plugin_skill", &[])?);` |
 | 10 | Each new `bee-` skill needs a description under 300 characters | read | `packages/bee-rs/crates/bee/tests/skill_triggers.rs:15` | `const DESCRIPTION_BUDGET: usize = 300;` |
 | 11 | Each new `bee-` skill needs at least three trigger briefs in the fixture | read | `packages/bee-rs/crates/bee/tests/skill_triggers.rs:11` | `const MIN_EXPECT: usize = 3;` |
-| 12 | Every class playbook ends on the class proof floor line a merge must keep | read | `skills/bee-planning/playbooks/bugfix.md:31` | `Proof floor: the cap refuses a result weaker than this class's floor and names it; the table is the cap's own (`bee cells finish --help`).` |
+| 12 | Every class playbook ends on the class proof floor line a merge must keep | read | `skills/bee-planning/playbooks/bugfix.md:9` | `Proof floor: the cap refuses a result weaker than this class's floor and names it; the table is the cap's own (`bee cells finish --help`).` |
 | 13 | The pstack source is MIT, so the port carries its notice | ran | `head -3 /home/thanhsmind/Projects/refs/ai-skills/cursor-plugins/pstack/LICENSE` | `MIT License` |
 | 14 | Skills reach host repos through rendered plugin trees, not a `skills/` tree at the host root, so a host verb cannot read playbooks from disk | read | `packages/bee-rs/crates/bee/src/devtools/release_manifest.rs:79` | `".claude-plugin/skills",` |
 | 15 | principles.rs already compiles its index into the binary as the host fallback, the shape situations.rs copies | read | `packages/bee-rs/crates/bee/src/principles.rs:26` | `const BUILT_IN_INDEX: &str = include_str!(` |
@@ -181,173 +181,37 @@ the full regen (deps 2, 3, 4).
 
 ## Cells — current slice (preview)
 
-All `cargo test` proofs run with `--manifest-path packages/bee-rs/Cargo.toml -p bee`.
+Slice 1 (ppb-1 to ppb-4t) is capped: orient lists situations, the plan check holds a situation citation, the bugfix class is ported, and the parity fence guards situation files. This is slice 2: the other 22 playbooks, eight class indexes and the session index.
+
+Waves: the eight docs cells write disjoint directories and run in parallel, except ppb-12, which appends to the session index ppb-11 creates. Each checker follows its docs cell. Every docs cell carries `regen_obligation_ack: wave-barrier`; the leader runs `bee dev regen` once at wave close and commits the rendered trees and the release manifest. Port notes go to one file per class under `docs/history/pstack-playbook-port/port-notes/`.
 
 | id | title | files | deps | you see | proof |
 |---|---|---|---|---|---|
-| ppb-1 | List a class's situations in orient | `situations.rs` (new), `main.rs`, `orient.rs`, `status_full/tests.rs` | — | `bee orient --class bugfix` adds one line per bugfix situation; the playbook line is unchanged | `cargo test status_full — green:unit — touched orient.rs` |
-| ppb-1t | Test the situation reader and orient listing | `status_full/tests.rs`, `situations.rs` | ppb-1 | tests pin the parser, the fallback and the JSON key | `cargo test situations status_full — green:unit — tester for ppb-1` |
-| ppb-2 | Hold a plan to a situation playbook | `plan_group.rs` | ppb-1t | `bee plan check` names the situation files a bugfix plan forgot to cite | `cargo test plan_group — green:unit — touched plan_group.rs` |
-| ppb-2t | Test the situation citation rule | `plan_group.rs` | ppb-2 | tests pin cited, index-only, no-situation class and no-class cases | `cargo test plan_group — green:unit — tester for ppb-2` |
-| ppb-3 | Port the pstack bug-fix playbook as the first situation | `skills/bee-planning/playbooks/bugfix.md`, `bugfix/bug-fix.md` (new), `LICENSE.pstack` (new), `port-notes.md` (new), the rendered trees, the release manifest | — | the bugfix class lists its situation with trigger phrases; the situation holds the pstack method and bee's enforced lines | `diff -r of the rendered tree and release-manifest --check — green:static — docs port` |
-| ppb-3c | Check the bug-fix port against its sources | its report only | ppb-3 | a report of every source step present or missing | `rg pstack-only tools — green:static — checker for ppb-3` |
-| ppb-4 | Fence the situation files against their index | `class_playbook_parity.rs` | ppb-2t, ppb-3c | the suite goes red when a situation file and its index disagree | `cargo test --test class_playbook_parity — green:unit — fence` |
-| ppb-4t | Check the situation fence goes red for each break | its report only | ppb-4 | each break shown red, the clean tree green | `cargo test --test class_playbook_parity — green:unit — checker for ppb-4` |
+| ppb-5 | Port the perf-issue and hillclimb playbooks | `perf.md`, `perf/perf-issue.md`, `perf/hillclimb.md`, `docs/history/pstack-playbook-port/port-notes/perf.md` | — | the class index lists its situations with trigger phrases; each situation holds the pstack method in bee's terms | `cargo test --test class_playbook_parity — green:unit — docs port` |
+| ppb-6 | Port the investigation, forensics and eval playbooks | `research.md`, `research/investigation.md`, `research/runtime-forensics.md`, `research/trace-forensics.md`, `research/eval.md`, `docs/history/pstack-playbook-port/port-notes/research.md` | — | the class index lists its situations with trigger phrases; each situation holds the pstack method in bee's terms | `cargo test --test class_playbook_parity — green:unit — docs port` |
+| ppb-7 | Port the refactoring and visual-parity playbooks | `refactor.md`, `refactor/refactoring.md`, `refactor/visual-parity.md`, `docs/history/pstack-playbook-port/port-notes/refactor.md` | — | the class index lists its situations with trigger phrases; each situation holds the pstack method in bee's terms | `cargo test --test class_playbook_parity — green:unit — docs port` |
+| ppb-8 | Port the prototype playbook | `spike.md`, `spike/prototype.md`, `docs/history/pstack-playbook-port/port-notes/spike.md` | — | the class index lists its situations with trigger phrases; each situation holds the pstack method in bee's terms | `cargo test --test class_playbook_parity — green:unit — docs port` |
+| ppb-9 | Port the feature and multi-phase-plan playbooks | `feature.md`, `feature/feature.md`, `feature/multi-phase-plan.md`, `docs/history/pstack-playbook-port/port-notes/feature.md` | — | the class index lists its situations with trigger phrases; each situation holds the pstack method in bee's terms | `cargo test --test class_playbook_parity — green:unit — docs port` |
+| ppb-10 | Give docs, release and content their situations and port authoring-a-skill | `docs.md`, `docs/docs.md`, `docs/authoring-a-skill.md`, `release.md`, `release/release.md`, `content.md`, `content/content.md`, `docs/history/pstack-playbook-port/port-notes/docs.md` | — | the class index lists its situations with trigger phrases; each situation holds the pstack method in bee's terms | `cargo test --test class_playbook_parity — green:unit — docs port` |
+| ppb-11 | Port the session pickup, pause, autonomous, orchestrate and cleanup playbooks | `session/index.md`, `session/session-pickup.md`, `session/pause-safely.md`, `session/autonomous-run.md`, `session/orchestrate.md`, `session/worktree-cleanup.md`, `docs/history/pstack-playbook-port/port-notes/session-ppb-11.md` | — | the class index lists its situations with trigger phrases; each situation holds the pstack method in bee's terms | `cargo test --test class_playbook_parity — green:unit — docs port` |
+| ppb-12 | Port the babysit, shipping, autopilot and PR playbooks | `session/index.md`, `session/babysit.md`, `session/shipping.md`, `session/autopilot-full.md`, `session/autopilot-stack.md`, `session/opening-a-pr.md`, `docs/history/pstack-playbook-port/port-notes/session-ppb-12.md` | ppb-11 | the class index lists its situations with trigger phrases; each situation holds the pstack method in bee's terms | `cargo test --test class_playbook_parity — green:unit — docs port` |
+| ppb-5c | Check the perf port against its sources | its report only | ppb-5 | a report of every source step present, dropped or missing | `rg pstack-only tools — green:static — checker` |
+| ppb-6c | Check the research port against its sources | its report only | ppb-6 | a report of every source step present, dropped or missing | `rg pstack-only tools — green:static — checker` |
+| ppb-7c | Check the refactor port against its sources | its report only | ppb-7 | a report of every source step present, dropped or missing | `rg pstack-only tools — green:static — checker` |
+| ppb-8c | Check the spike port against its sources | its report only | ppb-8 | a report of every source step present, dropped or missing | `rg pstack-only tools — green:static — checker` |
+| ppb-9c | Check the feature port against its sources | its report only | ppb-9 | a report of every source step present, dropped or missing | `rg pstack-only tools — green:static — checker` |
+| ppb-10c | Check the docs port against its sources | its report only | ppb-10 | a report of every source step present, dropped or missing | `rg pstack-only tools — green:static — checker` |
+| ppb-11c | Check the session port against its sources | its report only | ppb-11 | a report of every source step present, dropped or missing | `rg pstack-only tools — green:static — checker` |
+| ppb-12c | Check the session port against its sources | its report only | ppb-12 | a report of every source step present, dropped or missing | `rg pstack-only tools — green:static — checker` |
 
 Packet (authoritative for the preview):
 
 ```json
 [
  {
-  "id": "ppb-1",
+  "id": "ppb-5",
   "feature": "pstack-playbook-port",
-  "title": "List a class's situations in orient",
-  "lane": "standard",
-  "role": "code",
-  "deps": [],
-  "decisions": [
-   "41bbba68-9de8-48b3-a9c7-ba1abfdd6410",
-   "c64c5827-e110-4add-988c-5b668e93ccfe"
-  ],
-  "files": [
-   "packages/bee-rs/crates/bee/src/situations.rs",
-   "packages/bee-rs/crates/bee/src/main.rs",
-   "packages/bee-rs/crates/bee/src/verbs/status_full/orient.rs",
-   "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs"
-  ],
-  "read_first": [
-   "docs/history/pstack-playbook-port/CONTEXT.md",
-   "docs/history/pstack-playbook-port/plan.md",
-   "packages/bee-rs/crates/bee/src/principles.rs",
-   "packages/bee-rs/crates/bee/src/verbs/status_full/orient.rs"
-  ],
-  "affects_skills": [],
-  "affects_specs": [],
-  "action": "Add situations.rs, the one reader of a class index's situations, shaped like principles.rs: read skills/bee-planning/playbooks/<class>.md from the repo root when it exists, otherwise a copy compiled in with include_str! for each of the nine class indexes; parse the '## Situations' section into (name, triggers, deliverable) rows; an absent section or a malformed line yields no row for that line, never an error. The class index grammar: a '## Situations' heading, then one line per situation of the exact form - `<name>` — <trigger phrases, English and Vietnamese> — delivers: <deliverable>, where <name> matches [a-z0-9-]+ and names playbooks/<class>/<name>.md; the section ends at the next '## ' heading. Register the module in main.rs. In orient.rs class_packet add a situations array (always present, empty for a class with none) and render_class_text one line per situation after the playbook line: `situation: skills/bee-planning/playbooks/<class>/<name>.md — <triggers>`. The existing playbook line stays byte-identical. Existing tests your change flips are yours; new tests belong to ppb-1t.",
-  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee status_full",
-  "must_haves": {
-   "truths": [
-    "orient --class bugfix prints one situation line per row of the bugfix index's Situations section",
-    "orient --class perf --json carries situations: [] while perf has no Situations section",
-    "a repo with no skills/ tree gets the situations of the compiled-in index"
-   ],
-   "prohibitions": [
-    "No new orient flag",
-    "No change to the route record",
-    "orient --class stays write-free"
-   ]
-  }
- },
- {
-  "id": "ppb-1t",
-  "feature": "pstack-playbook-port",
-  "title": "Test the situation reader and orient listing",
-  "lane": "standard",
-  "role": "test",
-  "deps": [
-   "ppb-1"
-  ],
-  "decisions": [
-   "41bbba68-9de8-48b3-a9c7-ba1abfdd6410"
-  ],
-  "files": [
-   "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs",
-   "packages/bee-rs/crates/bee/src/situations.rs"
-  ],
-  "read_first": [
-   "docs/history/pstack-playbook-port/CONTEXT.md",
-   "docs/history/pstack-playbook-port/plan.md",
-   "packages/bee-rs/crates/bee/src/situations.rs",
-   "packages/bee-rs/crates/bee/src/verbs/status_full/orient.rs",
-   "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs"
-  ],
-  "affects_skills": [],
-  "affects_specs": [],
-  "action": "Cite the existing orient --class tests by name, then add only the gap: the parser on a well-formed section, a malformed line skipped, an absent section, the repo copy winning over the compiled-in copy, the compiled-in fallback with no skills/ tree, and the JSON situations key present and empty for a class with none. Parser unit tests go in situations.rs's own test module.",
-  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee situations && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee status_full",
-  "must_haves": {
-   "truths": [
-    "each truth of ppb-1 has a test that fails if the behavior is removed"
-   ],
-   "prohibitions": [
-    "No edit to non-test code"
-   ]
-  }
- },
- {
-  "id": "ppb-2",
-  "feature": "pstack-playbook-port",
-  "title": "Hold a plan to a situation playbook",
-  "lane": "standard",
-  "role": "code",
-  "deps": [
-   "ppb-1t"
-  ],
-  "decisions": [
-   "41bbba68-9de8-48b3-a9c7-ba1abfdd6410"
-  ],
-  "files": [
-   "packages/bee-rs/crates/bee/src/verbs/plan_group.rs"
-  ],
-  "read_first": [
-   "docs/history/pstack-playbook-port/CONTEXT.md",
-   "docs/history/pstack-playbook-port/plan.md",
-   "packages/bee-rs/crates/bee/src/verbs/plan_group.rs",
-   "packages/bee-rs/crates/bee/src/situations.rs"
-  ],
-  "affects_skills": [],
-  "affects_specs": [],
-  "action": "In plan_group.rs playbook_findings, read the routed class's situations through situations.rs. When the class lists one or more situations: a plan citing skills/bee-planning/playbooks/<class>/<name>.md for a listed name passes; a plan citing only the class index is a finding whose detail names each listed situation path. When the class lists none, today's class-index rule holds unchanged. With no class known, a citation of playbooks/<class>/<name>.md counts as a playbook citation as well as playbooks/<name>.md. The inline tests your change flips are yours; new tests belong to ppb-2t.",
-  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee plan_group",
-  "must_haves": {
-   "truths": [
-    "a bugfix route whose plan cites only bugfix.md yields one playbook finding naming bugfix/bug-fix.md",
-    "a bugfix route whose plan cites bugfix/bug-fix.md has no playbook finding",
-    "a perf route citing perf.md still passes while perf lists no situation",
-    "a plan with no route class citing only bugfix/bug-fix.md has no playbook finding"
-   ],
-   "prohibitions": [
-    "No other plan-check finding changes"
-   ]
-  }
- },
- {
-  "id": "ppb-2t",
-  "feature": "pstack-playbook-port",
-  "title": "Test the situation citation rule",
-  "lane": "standard",
-  "role": "test",
-  "deps": [
-   "ppb-2"
-  ],
-  "decisions": [
-   "41bbba68-9de8-48b3-a9c7-ba1abfdd6410"
-  ],
-  "files": [
-   "packages/bee-rs/crates/bee/src/verbs/plan_group.rs"
-  ],
-  "read_first": [
-   "docs/history/pstack-playbook-port/CONTEXT.md",
-   "docs/history/pstack-playbook-port/plan.md",
-   "packages/bee-rs/crates/bee/src/verbs/plan_group.rs"
-  ],
-  "affects_skills": [],
-  "affects_specs": [],
-  "action": "Cite plan_group_missing_playbook_citation_is_a_playbook_finding and its neighbours, then add only the gap in the inline test module: situation cited passes, index-only cited fails naming the situation paths, a class with no situations keeps the index rule, a no-class plan citing only a situation path passes, a name not listed on the index does not count.",
-  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee plan_group",
-  "must_haves": {
-   "truths": [
-    "each truth of ppb-2 has a test that fails if the behavior is removed"
-   ],
-   "prohibitions": [
-    "No edit outside the test module"
-   ]
-  }
- },
- {
-  "id": "ppb-3",
-  "feature": "pstack-playbook-port",
-  "title": "Port the pstack bug-fix playbook as the first situation",
+  "title": "Port the perf-issue and hillclimb playbooks",
   "lane": "standard",
   "role": "docs",
   "deps": [],
@@ -356,70 +220,468 @@ Packet (authoritative for the preview):
    "063a21e4-bccc-46a4-8fe8-1f1f99874c72",
    "5a1fc656-5549-462a-be0c-6bce5d919188",
    "c64c5827-e110-4add-988c-5b668e93ccfe",
-   "41bbba68-9de8-48b3-a9c7-ba1abfdd6410"
+   "41bbba68-9de8-48b3-a9c7-ba1abfdd6410",
+   "913115b3-e1f1-4004-902c-bc574fabb2f1"
   ],
   "files": [
-   "skills/bee-planning/playbooks/bugfix.md",
-   "skills/bee-planning/playbooks/bugfix/bug-fix.md",
-   "skills/bee-planning/playbooks/LICENSE.pstack",
-   "docs/history/pstack-playbook-port/port-notes.md",
-   "docs/history/codex-harness-hardening/release-manifest.json",
-   ".claude-plugin/skills/bee-planning/",
-   ".codex-plugin/skills/bee-planning/"
+   "skills/bee-planning/playbooks/perf.md",
+   "skills/bee-planning/playbooks/perf/perf-issue.md",
+   "skills/bee-planning/playbooks/perf/hillclimb.md",
+   "docs/history/pstack-playbook-port/port-notes/perf.md"
   ],
   "read_first": [
    "docs/history/pstack-playbook-port/CONTEXT.md",
    "docs/history/pstack-playbook-port/plan.md",
    "skills/bee-planning/playbooks/bugfix.md",
-   "/home/thanhsmind/Projects/refs/ai-skills/cursor-plugins/pstack/skills/poteto-mode/playbooks/bug-fix.md",
-   "/home/thanhsmind/Projects/refs/ai-skills/cursor-plugins/pstack/LICENSE"
+   "skills/bee-planning/playbooks/bugfix/bug-fix.md",
+   "docs/history/pstack-playbook-port/port-notes.md",
+   "skills/bee-planning/playbooks/perf.md",
+   "/home/thanhsmind/Projects/refs/ai-skills/cursor-plugins/pstack/skills/poteto-mode/playbooks/perf-issue.md",
+   "/home/thanhsmind/Projects/refs/ai-skills/cursor-plugins/pstack/skills/poteto-mode/playbooks/hillclimb.md"
   ],
-  "affects_skills": [],
+  "affects_skills": [
+   "skills/bee-planning/playbooks/perf.md",
+   "skills/bee-planning/playbooks/perf/perf-issue.md",
+   "skills/bee-planning/playbooks/perf/hillclimb.md"
+  ],
   "affects_specs": [],
-  "action": "Write playbooks/bugfix/bug-fix.md: the pstack bug-fix method is the body (scientific stance, reproduce on the real surface, binary-search hypotheses with runtime evidence, revert what a refuted hypothesis motivated, confirm the mechanism before the fix, verify on the same surface, the failing repro lands before the fix), with every pstack tool swapped for its bee counterpart per D2 (how and why become bee-how and bee-why, subagent delegation becomes bee dispatch prepare, the control skill becomes the project's verify-app or the real interface) and every enforced line of the current bugfix.md kept per D3 (the red-before-green home pointer, the crash-site principle, the event-order statechart split, the formal verify rerun, the always-on signal sentence, Proof line, Proof floor). Rewrite playbooks/bugfix.md as the class index: one intro line, then The class index grammar: a '## Situations' heading, then one line per situation of the exact form - `<name>` — <trigger phrases, English and Vietnamese> — delivers: <deliverable>, where <name> matches [a-z0-9-]+ and names playbooks/<class>/<name>.md; the section ends at the next '## ' heading. List bug-fix as the one situation, then keep the Proof floor line. Name no skill that does not exist yet. Write docs/history/pstack-playbook-port/port-notes.md with one section per ported playbook listing each tool swap and each dropped step; that file is the only place a pstack-only tool is named. Copy the pstack LICENSE text verbatim to playbooks/LICENSE.pstack. Run bee dev regen so the rendered plugin trees match.",
-  "verify": "rg -n 'Proof floor' skills/bee-planning/playbooks/bugfix.md skills/bee-planning/playbooks/bugfix/bug-fix.md && rg -c 'Lauren Tan' skills/bee-planning/playbooks/LICENSE.pstack && diff -r skills/bee-planning/playbooks .claude-plugin/skills/bee-planning/playbooks && .bee/bin/bee dev release-manifest --check",
+  "regen_obligation_ack": "wave-barrier",
+  "action": "Port into the perf class. Write one situation file per row: playbooks/perf/perf-issue.md from pstack perf-issue.md; playbooks/perf/hillclimb.md from pstack hillclimb.md. perf-issue merges with the current perf.md steps per D3; the current sustained-target paragraph and plateau-pivot sentence move into hillclimb.md. Rewrite playbooks/perf.md as the class index: title, one intro line, the Situations section listing every situation above, then the class Proof floor line kept byte-identical. Index grammar (contract 913115b3): a '## Situations' heading, then one line per situation of the exact form - `<name>` — <trigger phrases, English and Vietnamese> — delivers: <deliverable>, <name> matching [a-z0-9-]+; the section ends at the next '## ' heading. Port rules: the pstack method text is the body (D1); every pstack tool is swapped for its bee counterpart per D2 (how and why become bee-how and bee-why gathers, subagent delegation becomes bee dispatch prepare, the control skill becomes the project's verify-app or the real interface, Opening a PR becomes the bee close and worktree merge path, show-me-your-work becomes a decision trail under docs/history/<feature>/); a step whose tool bee does not have yet (architect, arena, interrogate, swarm, tdd, figure-it-out, show-me-your-work) is dropped from the playbook text and named in your port notes file, because slice 3 brings those skills and re-adds the steps. Name no skill that does not exist in skills/ today. No line under skills/bee-planning/playbooks/ names Cursor, Graphite, bugbot or poteto-agent. Every step states why it holds, as decision 61b52e96 requires of class playbooks; keep the pstack reason where it gives one. Follow bugfix.md and bugfix/bug-fix.md as the worked example of shape and voice. Do not run bee dev regen: the leader runs it once at wave close (regen_obligation_ack wave-barrier). Sibling cells edit other class directories in this same worktree at the same time: if the parity fence is red only for a directory you did not touch, that is a sibling mid-edit; wait, rerun, and name it in your report.  Write docs/history/pstack-playbook-port/port-notes/perf.md with one section per ported playbook listing each tool swap and each dropped step.",
+  "verify": "rg -n 'Proof floor' skills/bee-planning/playbooks/perf.md && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test class_playbook_parity",
   "must_haves": {
    "truths": [
-    "bugfix/bug-fix.md carries every step of pstack bug-fix and every enforced line of the old bugfix.md",
-    "no file under skills/ names Cursor, Graphite, bugbot or poteto-agent",
-    "the bugfix index Situations section parses under the grammar"
+    "every situation file listed on perf.md exists and carries its pstack source's steps",
+    "every enforced line of the old class playbook survives in a situation file",
+    "no file under skills/bee-planning/playbooks/ names Cursor, Graphite, bugbot or poteto-agent"
    ],
    "prohibitions": [
-    "No other class playbook is edited"
+    "No playbook of another class is edited",
+    "No skill named that does not exist in skills/"
    ]
   }
  },
  {
-  "id": "ppb-3c",
+  "id": "ppb-6",
   "feature": "pstack-playbook-port",
-  "title": "Check the bug-fix port against its sources",
+  "title": "Port the investigation, forensics and eval playbooks",
   "lane": "standard",
-  "role": "test",
-  "deps": [
-   "ppb-3"
-  ],
+  "role": "docs",
+  "deps": [],
   "decisions": [
+   "d480d467-1a0d-4feb-bbe6-3f181aa86f4b",
    "063a21e4-bccc-46a4-8fe8-1f1f99874c72",
-   "5a1fc656-5549-462a-be0c-6bce5d919188"
+   "5a1fc656-5549-462a-be0c-6bce5d919188",
+   "c64c5827-e110-4add-988c-5b668e93ccfe",
+   "41bbba68-9de8-48b3-a9c7-ba1abfdd6410",
+   "913115b3-e1f1-4004-902c-bc574fabb2f1"
   ],
   "files": [
-   "docs/history/pstack-playbook-port/reports/ppb-3c.md"
+   "skills/bee-planning/playbooks/research.md",
+   "skills/bee-planning/playbooks/research/investigation.md",
+   "skills/bee-planning/playbooks/research/runtime-forensics.md",
+   "skills/bee-planning/playbooks/research/trace-forensics.md",
+   "skills/bee-planning/playbooks/research/eval.md",
+   "docs/history/pstack-playbook-port/port-notes/research.md"
   ],
   "read_first": [
    "docs/history/pstack-playbook-port/CONTEXT.md",
    "docs/history/pstack-playbook-port/plan.md",
-   "skills/bee-planning/playbooks/bugfix/bug-fix.md",
    "skills/bee-planning/playbooks/bugfix.md",
-   "/home/thanhsmind/Projects/refs/ai-skills/cursor-plugins/pstack/skills/poteto-mode/playbooks/bug-fix.md",
-   "docs/history/pstack-playbook-port/port-notes.md"
+   "skills/bee-planning/playbooks/bugfix/bug-fix.md",
+   "docs/history/pstack-playbook-port/port-notes.md",
+   "skills/bee-planning/playbooks/research.md",
+   "/home/thanhsmind/Projects/refs/ai-skills/cursor-plugins/pstack/skills/poteto-mode/playbooks/investigation.md",
+   "/home/thanhsmind/Projects/refs/ai-skills/cursor-plugins/pstack/skills/poteto-mode/playbooks/runtime-forensics.md",
+   "/home/thanhsmind/Projects/refs/ai-skills/cursor-plugins/pstack/skills/poteto-mode/playbooks/trace-forensics.md",
+   "/home/thanhsmind/Projects/refs/ai-skills/cursor-plugins/pstack/skills/poteto-mode/playbooks/eval.md"
+  ],
+  "affects_skills": [
+   "skills/bee-planning/playbooks/research.md",
+   "skills/bee-planning/playbooks/research/investigation.md",
+   "skills/bee-planning/playbooks/research/runtime-forensics.md",
+   "skills/bee-planning/playbooks/research/trace-forensics.md",
+   "skills/bee-planning/playbooks/research/eval.md"
+  ],
+  "affects_specs": [],
+  "regen_obligation_ack": "wave-barrier",
+  "action": "Port into the research class. Write one situation file per row: playbooks/research/investigation.md from pstack investigation.md; playbooks/research/runtime-forensics.md from pstack runtime-forensics.md; playbooks/research/trace-forensics.md from pstack trace-forensics.md; playbooks/research/eval.md from pstack eval.md. investigation merges with the current research.md steps per D3, keeping the trace-and-provenance home pointer; the current live-runtime paragraph moves into runtime-forensics.md. Rewrite playbooks/research.md as the class index: title, one intro line, the Situations section listing every situation above, then the class Proof floor line kept byte-identical. Index grammar (contract 913115b3): a '## Situations' heading, then one line per situation of the exact form - `<name>` — <trigger phrases, English and Vietnamese> — delivers: <deliverable>, <name> matching [a-z0-9-]+; the section ends at the next '## ' heading. Port rules: the pstack method text is the body (D1); every pstack tool is swapped for its bee counterpart per D2 (how and why become bee-how and bee-why gathers, subagent delegation becomes bee dispatch prepare, the control skill becomes the project's verify-app or the real interface, Opening a PR becomes the bee close and worktree merge path, show-me-your-work becomes a decision trail under docs/history/<feature>/); a step whose tool bee does not have yet (architect, arena, interrogate, swarm, tdd, figure-it-out, show-me-your-work) is dropped from the playbook text and named in your port notes file, because slice 3 brings those skills and re-adds the steps. Name no skill that does not exist in skills/ today. No line under skills/bee-planning/playbooks/ names Cursor, Graphite, bugbot or poteto-agent. Every step states why it holds, as decision 61b52e96 requires of class playbooks; keep the pstack reason where it gives one. Follow bugfix.md and bugfix/bug-fix.md as the worked example of shape and voice. Do not run bee dev regen: the leader runs it once at wave close (regen_obligation_ack wave-barrier). Sibling cells edit other class directories in this same worktree at the same time: if the parity fence is red only for a directory you did not touch, that is a sibling mid-edit; wait, rerun, and name it in your report.  Write docs/history/pstack-playbook-port/port-notes/research.md with one section per ported playbook listing each tool swap and each dropped step.",
+  "verify": "rg -n 'Proof floor' skills/bee-planning/playbooks/research.md && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test class_playbook_parity",
+  "must_haves": {
+   "truths": [
+    "every situation file listed on research.md exists and carries its pstack source's steps",
+    "every enforced line of the old class playbook survives in a situation file",
+    "no file under skills/bee-planning/playbooks/ names Cursor, Graphite, bugbot or poteto-agent"
+   ],
+   "prohibitions": [
+    "No playbook of another class is edited",
+    "No skill named that does not exist in skills/"
+   ]
+  }
+ },
+ {
+  "id": "ppb-7",
+  "feature": "pstack-playbook-port",
+  "title": "Port the refactoring and visual-parity playbooks",
+  "lane": "standard",
+  "role": "docs",
+  "deps": [],
+  "decisions": [
+   "d480d467-1a0d-4feb-bbe6-3f181aa86f4b",
+   "063a21e4-bccc-46a4-8fe8-1f1f99874c72",
+   "5a1fc656-5549-462a-be0c-6bce5d919188",
+   "c64c5827-e110-4add-988c-5b668e93ccfe",
+   "41bbba68-9de8-48b3-a9c7-ba1abfdd6410",
+   "913115b3-e1f1-4004-902c-bc574fabb2f1"
+  ],
+  "files": [
+   "skills/bee-planning/playbooks/refactor.md",
+   "skills/bee-planning/playbooks/refactor/refactoring.md",
+   "skills/bee-planning/playbooks/refactor/visual-parity.md",
+   "docs/history/pstack-playbook-port/port-notes/refactor.md"
+  ],
+  "read_first": [
+   "docs/history/pstack-playbook-port/CONTEXT.md",
+   "docs/history/pstack-playbook-port/plan.md",
+   "skills/bee-planning/playbooks/bugfix.md",
+   "skills/bee-planning/playbooks/bugfix/bug-fix.md",
+   "docs/history/pstack-playbook-port/port-notes.md",
+   "skills/bee-planning/playbooks/refactor.md",
+   "/home/thanhsmind/Projects/refs/ai-skills/cursor-plugins/pstack/skills/poteto-mode/playbooks/refactoring.md",
+   "/home/thanhsmind/Projects/refs/ai-skills/cursor-plugins/pstack/skills/poteto-mode/playbooks/visual-parity.md"
+  ],
+  "affects_skills": [
+   "skills/bee-planning/playbooks/refactor.md",
+   "skills/bee-planning/playbooks/refactor/refactoring.md",
+   "skills/bee-planning/playbooks/refactor/visual-parity.md"
+  ],
+  "affects_specs": [],
+  "regen_obligation_ack": "wave-barrier",
+  "action": "Port into the refactor class. Write one situation file per row: playbooks/refactor/refactoring.md from pstack refactoring.md; playbooks/refactor/visual-parity.md from pstack visual-parity.md. refactoring merges with the current refactor.md steps per D3. Rewrite playbooks/refactor.md as the class index: title, one intro line, the Situations section listing every situation above, then the class Proof floor line kept byte-identical. Index grammar (contract 913115b3): a '## Situations' heading, then one line per situation of the exact form - `<name>` — <trigger phrases, English and Vietnamese> — delivers: <deliverable>, <name> matching [a-z0-9-]+; the section ends at the next '## ' heading. Port rules: the pstack method text is the body (D1); every pstack tool is swapped for its bee counterpart per D2 (how and why become bee-how and bee-why gathers, subagent delegation becomes bee dispatch prepare, the control skill becomes the project's verify-app or the real interface, Opening a PR becomes the bee close and worktree merge path, show-me-your-work becomes a decision trail under docs/history/<feature>/); a step whose tool bee does not have yet (architect, arena, interrogate, swarm, tdd, figure-it-out, show-me-your-work) is dropped from the playbook text and named in your port notes file, because slice 3 brings those skills and re-adds the steps. Name no skill that does not exist in skills/ today. No line under skills/bee-planning/playbooks/ names Cursor, Graphite, bugbot or poteto-agent. Every step states why it holds, as decision 61b52e96 requires of class playbooks; keep the pstack reason where it gives one. Follow bugfix.md and bugfix/bug-fix.md as the worked example of shape and voice. Do not run bee dev regen: the leader runs it once at wave close (regen_obligation_ack wave-barrier). Sibling cells edit other class directories in this same worktree at the same time: if the parity fence is red only for a directory you did not touch, that is a sibling mid-edit; wait, rerun, and name it in your report.  Write docs/history/pstack-playbook-port/port-notes/refactor.md with one section per ported playbook listing each tool swap and each dropped step.",
+  "verify": "rg -n 'Proof floor' skills/bee-planning/playbooks/refactor.md && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test class_playbook_parity",
+  "must_haves": {
+   "truths": [
+    "every situation file listed on refactor.md exists and carries its pstack source's steps",
+    "every enforced line of the old class playbook survives in a situation file",
+    "no file under skills/bee-planning/playbooks/ names Cursor, Graphite, bugbot or poteto-agent"
+   ],
+   "prohibitions": [
+    "No playbook of another class is edited",
+    "No skill named that does not exist in skills/"
+   ]
+  }
+ },
+ {
+  "id": "ppb-8",
+  "feature": "pstack-playbook-port",
+  "title": "Port the prototype playbook",
+  "lane": "standard",
+  "role": "docs",
+  "deps": [],
+  "decisions": [
+   "d480d467-1a0d-4feb-bbe6-3f181aa86f4b",
+   "063a21e4-bccc-46a4-8fe8-1f1f99874c72",
+   "5a1fc656-5549-462a-be0c-6bce5d919188",
+   "c64c5827-e110-4add-988c-5b668e93ccfe",
+   "41bbba68-9de8-48b3-a9c7-ba1abfdd6410",
+   "913115b3-e1f1-4004-902c-bc574fabb2f1"
+  ],
+  "files": [
+   "skills/bee-planning/playbooks/spike.md",
+   "skills/bee-planning/playbooks/spike/prototype.md",
+   "docs/history/pstack-playbook-port/port-notes/spike.md"
+  ],
+  "read_first": [
+   "docs/history/pstack-playbook-port/CONTEXT.md",
+   "docs/history/pstack-playbook-port/plan.md",
+   "skills/bee-planning/playbooks/bugfix.md",
+   "skills/bee-planning/playbooks/bugfix/bug-fix.md",
+   "docs/history/pstack-playbook-port/port-notes.md",
+   "skills/bee-planning/playbooks/spike.md",
+   "/home/thanhsmind/Projects/refs/ai-skills/cursor-plugins/pstack/skills/poteto-mode/playbooks/prototype.md"
+  ],
+  "affects_skills": [
+   "skills/bee-planning/playbooks/spike.md",
+   "skills/bee-planning/playbooks/spike/prototype.md"
+  ],
+  "affects_specs": [],
+  "regen_obligation_ack": "wave-barrier",
+  "action": "Port into the spike class. Write one situation file per row: playbooks/spike/prototype.md from pstack prototype.md. prototype merges with the current spike.md steps per D3. Rewrite playbooks/spike.md as the class index: title, one intro line, the Situations section listing every situation above, then the class Proof floor line kept byte-identical. Index grammar (contract 913115b3): a '## Situations' heading, then one line per situation of the exact form - `<name>` — <trigger phrases, English and Vietnamese> — delivers: <deliverable>, <name> matching [a-z0-9-]+; the section ends at the next '## ' heading. Port rules: the pstack method text is the body (D1); every pstack tool is swapped for its bee counterpart per D2 (how and why become bee-how and bee-why gathers, subagent delegation becomes bee dispatch prepare, the control skill becomes the project's verify-app or the real interface, Opening a PR becomes the bee close and worktree merge path, show-me-your-work becomes a decision trail under docs/history/<feature>/); a step whose tool bee does not have yet (architect, arena, interrogate, swarm, tdd, figure-it-out, show-me-your-work) is dropped from the playbook text and named in your port notes file, because slice 3 brings those skills and re-adds the steps. Name no skill that does not exist in skills/ today. No line under skills/bee-planning/playbooks/ names Cursor, Graphite, bugbot or poteto-agent. Every step states why it holds, as decision 61b52e96 requires of class playbooks; keep the pstack reason where it gives one. Follow bugfix.md and bugfix/bug-fix.md as the worked example of shape and voice. Do not run bee dev regen: the leader runs it once at wave close (regen_obligation_ack wave-barrier). Sibling cells edit other class directories in this same worktree at the same time: if the parity fence is red only for a directory you did not touch, that is a sibling mid-edit; wait, rerun, and name it in your report.  Write docs/history/pstack-playbook-port/port-notes/spike.md with one section per ported playbook listing each tool swap and each dropped step.",
+  "verify": "rg -n 'Proof floor' skills/bee-planning/playbooks/spike.md && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test class_playbook_parity",
+  "must_haves": {
+   "truths": [
+    "every situation file listed on spike.md exists and carries its pstack source's steps",
+    "every enforced line of the old class playbook survives in a situation file",
+    "no file under skills/bee-planning/playbooks/ names Cursor, Graphite, bugbot or poteto-agent"
+   ],
+   "prohibitions": [
+    "No playbook of another class is edited",
+    "No skill named that does not exist in skills/"
+   ]
+  }
+ },
+ {
+  "id": "ppb-9",
+  "feature": "pstack-playbook-port",
+  "title": "Port the feature and multi-phase-plan playbooks",
+  "lane": "standard",
+  "role": "docs",
+  "deps": [],
+  "decisions": [
+   "d480d467-1a0d-4feb-bbe6-3f181aa86f4b",
+   "063a21e4-bccc-46a4-8fe8-1f1f99874c72",
+   "5a1fc656-5549-462a-be0c-6bce5d919188",
+   "c64c5827-e110-4add-988c-5b668e93ccfe",
+   "41bbba68-9de8-48b3-a9c7-ba1abfdd6410",
+   "913115b3-e1f1-4004-902c-bc574fabb2f1"
+  ],
+  "files": [
+   "skills/bee-planning/playbooks/feature.md",
+   "skills/bee-planning/playbooks/feature/feature.md",
+   "skills/bee-planning/playbooks/feature/multi-phase-plan.md",
+   "docs/history/pstack-playbook-port/port-notes/feature.md"
+  ],
+  "read_first": [
+   "docs/history/pstack-playbook-port/CONTEXT.md",
+   "docs/history/pstack-playbook-port/plan.md",
+   "skills/bee-planning/playbooks/bugfix.md",
+   "skills/bee-planning/playbooks/bugfix/bug-fix.md",
+   "docs/history/pstack-playbook-port/port-notes.md",
+   "skills/bee-planning/playbooks/feature.md",
+   "/home/thanhsmind/Projects/refs/ai-skills/cursor-plugins/pstack/skills/poteto-mode/playbooks/feature.md",
+   "/home/thanhsmind/Projects/refs/ai-skills/cursor-plugins/pstack/skills/poteto-mode/playbooks/multi-phase-plan.md"
+  ],
+  "affects_skills": [
+   "skills/bee-planning/playbooks/feature.md",
+   "skills/bee-planning/playbooks/feature/feature.md",
+   "skills/bee-planning/playbooks/feature/multi-phase-plan.md"
+  ],
+  "affects_specs": [],
+  "regen_obligation_ack": "wave-barrier",
+  "action": "Port into the feature class. Write one situation file per row: playbooks/feature/feature.md from pstack feature.md; playbooks/feature/multi-phase-plan.md from pstack multi-phase-plan.md. feature merges with the current feature.md steps per D3, keeping the statechart and formal-verification steps; multi-phase-plan keeps bee's phase-plan-vs-epic-map rule from skills/bee-planning/references/planning-reference.md by pointer. Rewrite playbooks/feature.md as the class index: title, one intro line, the Situations section listing every situation above, then the class Proof floor line kept byte-identical. Index grammar (contract 913115b3): a '## Situations' heading, then one line per situation of the exact form - `<name>` — <trigger phrases, English and Vietnamese> — delivers: <deliverable>, <name> matching [a-z0-9-]+; the section ends at the next '## ' heading. Port rules: the pstack method text is the body (D1); every pstack tool is swapped for its bee counterpart per D2 (how and why become bee-how and bee-why gathers, subagent delegation becomes bee dispatch prepare, the control skill becomes the project's verify-app or the real interface, Opening a PR becomes the bee close and worktree merge path, show-me-your-work becomes a decision trail under docs/history/<feature>/); a step whose tool bee does not have yet (architect, arena, interrogate, swarm, tdd, figure-it-out, show-me-your-work) is dropped from the playbook text and named in your port notes file, because slice 3 brings those skills and re-adds the steps. Name no skill that does not exist in skills/ today. No line under skills/bee-planning/playbooks/ names Cursor, Graphite, bugbot or poteto-agent. Every step states why it holds, as decision 61b52e96 requires of class playbooks; keep the pstack reason where it gives one. Follow bugfix.md and bugfix/bug-fix.md as the worked example of shape and voice. Do not run bee dev regen: the leader runs it once at wave close (regen_obligation_ack wave-barrier). Sibling cells edit other class directories in this same worktree at the same time: if the parity fence is red only for a directory you did not touch, that is a sibling mid-edit; wait, rerun, and name it in your report.  Write docs/history/pstack-playbook-port/port-notes/feature.md with one section per ported playbook listing each tool swap and each dropped step.",
+  "verify": "rg -n 'Proof floor' skills/bee-planning/playbooks/feature.md && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test class_playbook_parity",
+  "must_haves": {
+   "truths": [
+    "every situation file listed on feature.md exists and carries its pstack source's steps",
+    "every enforced line of the old class playbook survives in a situation file",
+    "no file under skills/bee-planning/playbooks/ names Cursor, Graphite, bugbot or poteto-agent"
+   ],
+   "prohibitions": [
+    "No playbook of another class is edited",
+    "No skill named that does not exist in skills/"
+   ]
+  }
+ },
+ {
+  "id": "ppb-10",
+  "feature": "pstack-playbook-port",
+  "title": "Give docs, release and content their situations and port authoring-a-skill",
+  "lane": "standard",
+  "role": "docs",
+  "deps": [],
+  "decisions": [
+   "d480d467-1a0d-4feb-bbe6-3f181aa86f4b",
+   "063a21e4-bccc-46a4-8fe8-1f1f99874c72",
+   "5a1fc656-5549-462a-be0c-6bce5d919188",
+   "c64c5827-e110-4add-988c-5b668e93ccfe",
+   "41bbba68-9de8-48b3-a9c7-ba1abfdd6410",
+   "913115b3-e1f1-4004-902c-bc574fabb2f1"
+  ],
+  "files": [
+   "skills/bee-planning/playbooks/docs.md",
+   "skills/bee-planning/playbooks/docs/docs.md",
+   "skills/bee-planning/playbooks/docs/authoring-a-skill.md",
+   "skills/bee-planning/playbooks/release.md",
+   "skills/bee-planning/playbooks/release/release.md",
+   "skills/bee-planning/playbooks/content.md",
+   "skills/bee-planning/playbooks/content/content.md",
+   "docs/history/pstack-playbook-port/port-notes/docs.md"
+  ],
+  "read_first": [
+   "docs/history/pstack-playbook-port/CONTEXT.md",
+   "docs/history/pstack-playbook-port/plan.md",
+   "skills/bee-planning/playbooks/bugfix.md",
+   "skills/bee-planning/playbooks/bugfix/bug-fix.md",
+   "docs/history/pstack-playbook-port/port-notes.md",
+   "skills/bee-planning/playbooks/docs.md",
+   "/home/thanhsmind/Projects/refs/ai-skills/cursor-plugins/pstack/skills/poteto-mode/playbooks/authoring-a-skill.md"
+  ],
+  "affects_skills": [
+   "skills/bee-planning/playbooks/docs.md",
+   "skills/bee-planning/playbooks/docs/docs.md",
+   "skills/bee-planning/playbooks/docs/authoring-a-skill.md",
+   "skills/bee-planning/playbooks/release.md",
+   "skills/bee-planning/playbooks/release/release.md",
+   "skills/bee-planning/playbooks/content.md",
+   "skills/bee-planning/playbooks/content/content.md"
+  ],
+  "affects_specs": [],
+  "regen_obligation_ack": "wave-barrier",
+  "action": "Port into the docs class. Write one situation file per row: playbooks/docs/docs.md from the current bee text; playbooks/docs/authoring-a-skill.md from pstack authoring-a-skill.md. docs/docs.md is the current docs.md steps moved unchanged; authoring-a-skill points at bee-writing-skills as its skill. Also move the current release.md steps unchanged into playbooks/release/release.md and the current content.md steps into playbooks/content/content.md, and rewrite release.md and content.md as class indexes listing that one situation each, Proof floor kept. Rewrite playbooks/docs.md as the class index: title, one intro line, the Situations section listing every situation above, then the class Proof floor line kept byte-identical. Index grammar (contract 913115b3): a '## Situations' heading, then one line per situation of the exact form - `<name>` — <trigger phrases, English and Vietnamese> — delivers: <deliverable>, <name> matching [a-z0-9-]+; the section ends at the next '## ' heading. Port rules: the pstack method text is the body (D1); every pstack tool is swapped for its bee counterpart per D2 (how and why become bee-how and bee-why gathers, subagent delegation becomes bee dispatch prepare, the control skill becomes the project's verify-app or the real interface, Opening a PR becomes the bee close and worktree merge path, show-me-your-work becomes a decision trail under docs/history/<feature>/); a step whose tool bee does not have yet (architect, arena, interrogate, swarm, tdd, figure-it-out, show-me-your-work) is dropped from the playbook text and named in your port notes file, because slice 3 brings those skills and re-adds the steps. Name no skill that does not exist in skills/ today. No line under skills/bee-planning/playbooks/ names Cursor, Graphite, bugbot or poteto-agent. Every step states why it holds, as decision 61b52e96 requires of class playbooks; keep the pstack reason where it gives one. Follow bugfix.md and bugfix/bug-fix.md as the worked example of shape and voice. Do not run bee dev regen: the leader runs it once at wave close (regen_obligation_ack wave-barrier). Sibling cells edit other class directories in this same worktree at the same time: if the parity fence is red only for a directory you did not touch, that is a sibling mid-edit; wait, rerun, and name it in your report.  Write docs/history/pstack-playbook-port/port-notes/docs.md with one section per ported playbook listing each tool swap and each dropped step.",
+  "verify": "rg -n 'Proof floor' skills/bee-planning/playbooks/docs.md && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test class_playbook_parity",
+  "must_haves": {
+   "truths": [
+    "every situation file listed on docs.md exists and carries its pstack source's steps",
+    "every enforced line of the old class playbook survives in a situation file",
+    "no file under skills/bee-planning/playbooks/ names Cursor, Graphite, bugbot or poteto-agent"
+   ],
+   "prohibitions": [
+    "No playbook of another class is edited",
+    "No skill named that does not exist in skills/"
+   ]
+  }
+ },
+ {
+  "id": "ppb-11",
+  "feature": "pstack-playbook-port",
+  "title": "Port the session pickup, pause, autonomous, orchestrate and cleanup playbooks",
+  "lane": "standard",
+  "role": "docs",
+  "deps": [],
+  "decisions": [
+   "d480d467-1a0d-4feb-bbe6-3f181aa86f4b",
+   "063a21e4-bccc-46a4-8fe8-1f1f99874c72",
+   "b749c98d-65e2-4346-b07f-6dc52dbd78ca",
+   "c64c5827-e110-4add-988c-5b668e93ccfe",
+   "913115b3-e1f1-4004-902c-bc574fabb2f1"
+  ],
+  "files": [
+   "skills/bee-planning/playbooks/session/index.md",
+   "skills/bee-planning/playbooks/session/session-pickup.md",
+   "skills/bee-planning/playbooks/session/pause-safely.md",
+   "skills/bee-planning/playbooks/session/autonomous-run.md",
+   "skills/bee-planning/playbooks/session/orchestrate.md",
+   "skills/bee-planning/playbooks/session/worktree-cleanup.md",
+   "docs/history/pstack-playbook-port/port-notes/session-ppb-11.md"
+  ],
+  "read_first": [
+   "docs/history/pstack-playbook-port/CONTEXT.md",
+   "docs/history/pstack-playbook-port/plan.md",
+   "skills/bee-planning/playbooks/bugfix.md",
+   "skills/bee-planning/playbooks/bugfix/bug-fix.md",
+   "docs/history/pstack-playbook-port/port-notes.md",
+   "/home/thanhsmind/Projects/refs/ai-skills/cursor-plugins/pstack/skills/poteto-mode/playbooks/session-pickup.md",
+   "/home/thanhsmind/Projects/refs/ai-skills/cursor-plugins/pstack/skills/poteto-mode/playbooks/pause-safely.md",
+   "/home/thanhsmind/Projects/refs/ai-skills/cursor-plugins/pstack/skills/poteto-mode/playbooks/autonomous-run.md",
+   "/home/thanhsmind/Projects/refs/ai-skills/cursor-plugins/pstack/skills/poteto-mode/playbooks/orchestrate.md",
+   "/home/thanhsmind/Projects/refs/ai-skills/cursor-plugins/pstack/skills/poteto-mode/playbooks/worktree-cleanup.md"
+  ],
+  "affects_skills": [
+   "skills/bee-planning/playbooks/session/index.md",
+   "skills/bee-planning/playbooks/session/session-pickup.md",
+   "skills/bee-planning/playbooks/session/pause-safely.md",
+   "skills/bee-planning/playbooks/session/autonomous-run.md",
+   "skills/bee-planning/playbooks/session/orchestrate.md",
+   "skills/bee-planning/playbooks/session/worktree-cleanup.md"
+  ],
+  "affects_specs": [],
+  "regen_obligation_ack": "wave-barrier",
+  "action": "Port into playbooks/session/: session/session-pickup.md from pstack session-pickup.md; session/pause-safely.md from pstack pause-safely.md; session/autonomous-run.md from pstack autonomous-run.md; session/orchestrate.md from pstack orchestrate.md; session/worktree-cleanup.md from pstack worktree-cleanup.md. Create playbooks/session/index.md: title, one intro line saying these situations belong to a session, not a feature route, and a Situations section in the contract grammar listing the five situations of this cell. Index grammar (contract 913115b3): a '## Situations' heading, then one line per situation of the exact form - `<name>` — <trigger phrases, English and Vietnamese> — delivers: <deliverable>, <name> matching [a-z0-9-]+; the section ends at the next '## ' heading. Port rules: the pstack method text is the body (D1); every pstack tool is swapped for its bee counterpart per D2 (how and why become bee-how and bee-why gathers, subagent delegation becomes bee dispatch prepare, the control skill becomes the project's verify-app or the real interface, Opening a PR becomes the bee close and worktree merge path, show-me-your-work becomes a decision trail under docs/history/<feature>/); a step whose tool bee does not have yet (architect, arena, interrogate, swarm, tdd, figure-it-out, show-me-your-work) is dropped from the playbook text and named in your port notes file, because slice 3 brings those skills and re-adds the steps. Name no skill that does not exist in skills/ today. No line under skills/bee-planning/playbooks/ names Cursor, Graphite, bugbot or poteto-agent. Every step states why it holds, as decision 61b52e96 requires of class playbooks; keep the pstack reason where it gives one. Follow bugfix.md and bugfix/bug-fix.md as the worked example of shape and voice. Do not run bee dev regen: the leader runs it once at wave close (regen_obligation_ack wave-barrier). Sibling cells edit other class directories in this same worktree at the same time: if the parity fence is red only for a directory you did not touch, that is a sibling mid-edit; wait, rerun, and name it in your report. bee counterparts: session pickup and pause safely use .bee/HANDOFF.json, bee state handoff write and bee state handoff adopt; autonomous run and orchestrate use bee-herding and its control loop; worktree cleanup uses bee worktree prune; babysit, shipping, autopilot-full and autopilot-stack land work with bee worktree merge on green without asking (D4, uat_stop close) and stop at the uat door of bee close, which stays the owner's; opening a PR follows the ship_visibility draft-PR rule. Write docs/history/pstack-playbook-port/port-notes/session-ppb-11.md with one section per ported playbook listing each tool swap and each dropped step.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test class_playbook_parity",
+  "must_haves": {
+   "truths": [
+    "every session situation file is listed on session/index.md and the reverse",
+    "a playbook that lands work merges on green and stops at the uat door",
+    "no file under skills/bee-planning/playbooks/ names Cursor, Graphite, bugbot or poteto-agent"
+   ],
+   "prohibitions": [
+    "No class playbook is edited",
+    "No skill named that does not exist in skills/"
+   ]
+  }
+ },
+ {
+  "id": "ppb-12",
+  "feature": "pstack-playbook-port",
+  "title": "Port the babysit, shipping, autopilot and PR playbooks",
+  "lane": "standard",
+  "role": "docs",
+  "deps": [
+   "ppb-11"
+  ],
+  "decisions": [
+   "d480d467-1a0d-4feb-bbe6-3f181aa86f4b",
+   "063a21e4-bccc-46a4-8fe8-1f1f99874c72",
+   "b749c98d-65e2-4346-b07f-6dc52dbd78ca",
+   "c64c5827-e110-4add-988c-5b668e93ccfe",
+   "913115b3-e1f1-4004-902c-bc574fabb2f1"
+  ],
+  "files": [
+   "skills/bee-planning/playbooks/session/index.md",
+   "skills/bee-planning/playbooks/session/babysit.md",
+   "skills/bee-planning/playbooks/session/shipping.md",
+   "skills/bee-planning/playbooks/session/autopilot-full.md",
+   "skills/bee-planning/playbooks/session/autopilot-stack.md",
+   "skills/bee-planning/playbooks/session/opening-a-pr.md",
+   "docs/history/pstack-playbook-port/port-notes/session-ppb-12.md"
+  ],
+  "read_first": [
+   "docs/history/pstack-playbook-port/CONTEXT.md",
+   "docs/history/pstack-playbook-port/plan.md",
+   "skills/bee-planning/playbooks/bugfix.md",
+   "skills/bee-planning/playbooks/bugfix/bug-fix.md",
+   "docs/history/pstack-playbook-port/port-notes.md",
+   "/home/thanhsmind/Projects/refs/ai-skills/cursor-plugins/pstack/skills/poteto-mode/playbooks/babysit.md",
+   "/home/thanhsmind/Projects/refs/ai-skills/cursor-plugins/pstack/skills/poteto-mode/playbooks/shipping.md",
+   "/home/thanhsmind/Projects/refs/ai-skills/cursor-plugins/pstack/skills/poteto-mode/playbooks/autopilot-full.md",
+   "/home/thanhsmind/Projects/refs/ai-skills/cursor-plugins/pstack/skills/poteto-mode/playbooks/autopilot-stack.md",
+   "/home/thanhsmind/Projects/refs/ai-skills/cursor-plugins/pstack/skills/poteto-mode/playbooks/opening-a-pr.md"
+  ],
+  "affects_skills": [
+   "skills/bee-planning/playbooks/session/index.md",
+   "skills/bee-planning/playbooks/session/babysit.md",
+   "skills/bee-planning/playbooks/session/shipping.md",
+   "skills/bee-planning/playbooks/session/autopilot-full.md",
+   "skills/bee-planning/playbooks/session/autopilot-stack.md",
+   "skills/bee-planning/playbooks/session/opening-a-pr.md"
+  ],
+  "affects_specs": [],
+  "regen_obligation_ack": "wave-barrier",
+  "action": "Port into playbooks/session/: session/babysit.md from pstack babysit.md; session/shipping.md from pstack shipping.md; session/autopilot-full.md from pstack autopilot-full.md; session/autopilot-stack.md from pstack autopilot-stack.md; session/opening-a-pr.md from pstack opening-a-pr.md. Append the five situations of this cell to the Situations section of playbooks/session/index.md, keeping the existing lines. Index grammar (contract 913115b3): a '## Situations' heading, then one line per situation of the exact form - `<name>` — <trigger phrases, English and Vietnamese> — delivers: <deliverable>, <name> matching [a-z0-9-]+; the section ends at the next '## ' heading. Port rules: the pstack method text is the body (D1); every pstack tool is swapped for its bee counterpart per D2 (how and why become bee-how and bee-why gathers, subagent delegation becomes bee dispatch prepare, the control skill becomes the project's verify-app or the real interface, Opening a PR becomes the bee close and worktree merge path, show-me-your-work becomes a decision trail under docs/history/<feature>/); a step whose tool bee does not have yet (architect, arena, interrogate, swarm, tdd, figure-it-out, show-me-your-work) is dropped from the playbook text and named in your port notes file, because slice 3 brings those skills and re-adds the steps. Name no skill that does not exist in skills/ today. No line under skills/bee-planning/playbooks/ names Cursor, Graphite, bugbot or poteto-agent. Every step states why it holds, as decision 61b52e96 requires of class playbooks; keep the pstack reason where it gives one. Follow bugfix.md and bugfix/bug-fix.md as the worked example of shape and voice. Do not run bee dev regen: the leader runs it once at wave close (regen_obligation_ack wave-barrier). Sibling cells edit other class directories in this same worktree at the same time: if the parity fence is red only for a directory you did not touch, that is a sibling mid-edit; wait, rerun, and name it in your report. bee counterparts: session pickup and pause safely use .bee/HANDOFF.json, bee state handoff write and bee state handoff adopt; autonomous run and orchestrate use bee-herding and its control loop; worktree cleanup uses bee worktree prune; babysit, shipping, autopilot-full and autopilot-stack land work with bee worktree merge on green without asking (D4, uat_stop close) and stop at the uat door of bee close, which stays the owner's; opening a PR follows the ship_visibility draft-PR rule. Write docs/history/pstack-playbook-port/port-notes/session-ppb-12.md with one section per ported playbook listing each tool swap and each dropped step.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test class_playbook_parity",
+  "must_haves": {
+   "truths": [
+    "every session situation file is listed on session/index.md and the reverse",
+    "a playbook that lands work merges on green and stops at the uat door",
+    "no file under skills/bee-planning/playbooks/ names Cursor, Graphite, bugbot or poteto-agent"
+   ],
+   "prohibitions": [
+    "No class playbook is edited",
+    "No skill named that does not exist in skills/"
+   ]
+  }
+ },
+ {
+  "id": "ppb-5c",
+  "feature": "pstack-playbook-port",
+  "title": "Check the perf port against its sources",
+  "lane": "standard",
+  "role": "test",
+  "deps": [
+   "ppb-5"
+  ],
+  "decisions": [
+   "063a21e4-bccc-46a4-8fe8-1f1f99874c72",
+   "5a1fc656-5549-462a-be0c-6bce5d919188",
+   "913115b3-e1f1-4004-902c-bc574fabb2f1"
+  ],
+  "files": [
+   "docs/history/pstack-playbook-port/reports/ppb-5c.md"
+  ],
+  "read_first": [
+   "docs/history/pstack-playbook-port/CONTEXT.md",
+   "docs/history/pstack-playbook-port/plan.md",
+   "skills/bee-planning/playbooks/perf.md",
+   "docs/history/pstack-playbook-port/port-notes/perf.md",
+   "/home/thanhsmind/Projects/refs/ai-skills/cursor-plugins/pstack/skills/poteto-mode/playbooks/perf-issue.md",
+   "/home/thanhsmind/Projects/refs/ai-skills/cursor-plugins/pstack/skills/poteto-mode/playbooks/hillclimb.md"
   ],
   "affects_skills": [],
   "affects_specs": [],
-  "action": "Read pstack bug-fix.md and the old bugfix.md (git show of the commit before ppb-3) beside the new files. Report each pstack step and each old enforced line as present or missing, any pstack-only tool name under skills/, whether port-notes.md names every swap and drop, and whether the index lines match the grammar in the plan. Write the report to docs/history/pstack-playbook-port/reports/ppb-3c.md; no other edits.",
-  "verify": "rg -n -i 'cursor|graphite|bugbot|poteto-agent' skills/bee-planning/ ; test $? -eq 1",
+  "action": "Read each pstack source and the old perf playbook text (git show of the commit before ppb-5) beside the new files. Report each source step and each old enforced line as present, or dropped with its port-notes entry, or missing; any pstack-only tool name under skills/bee-planning/playbooks/; any skill named that does not exist in skills/; and whether each index line matches the contract grammar. Write the report to docs/history/pstack-playbook-port/reports/ppb-5c.md; no other edits.",
+  "verify": "rg -n -i 'cursor|graphite|bugbot|poteto-agent' skills/bee-planning/playbooks/ ; test $? -eq 1",
   "must_haves": {
    "truths": [
-    "the report lists every source step with present or missing"
+    "the report lists every source step with present, dropped or missing"
    ],
    "prohibitions": [
     "No edit outside the report file"
@@ -427,73 +689,274 @@ Packet (authoritative for the preview):
   }
  },
  {
-  "id": "ppb-4",
+  "id": "ppb-6c",
   "feature": "pstack-playbook-port",
-  "title": "Fence the situation files against their index",
+  "title": "Check the research port against its sources",
   "lane": "standard",
   "role": "test",
   "deps": [
-   "ppb-2t",
-   "ppb-3c"
+   "ppb-6"
   ],
   "decisions": [
-   "c64c5827-e110-4add-988c-5b668e93ccfe",
-   "41bbba68-9de8-48b3-a9c7-ba1abfdd6410"
+   "063a21e4-bccc-46a4-8fe8-1f1f99874c72",
+   "5a1fc656-5549-462a-be0c-6bce5d919188",
+   "913115b3-e1f1-4004-902c-bc574fabb2f1"
   ],
   "files": [
-   "packages/bee-rs/crates/bee/tests/class_playbook_parity.rs"
+   "docs/history/pstack-playbook-port/reports/ppb-6c.md"
   ],
   "read_first": [
    "docs/history/pstack-playbook-port/CONTEXT.md",
    "docs/history/pstack-playbook-port/plan.md",
-   "packages/bee-rs/crates/bee/tests/class_playbook_parity.rs",
-   "packages/bee-rs/crates/bee/src/verbs/state_group/workflows.rs"
+   "skills/bee-planning/playbooks/research.md",
+   "docs/history/pstack-playbook-port/port-notes/research.md",
+   "/home/thanhsmind/Projects/refs/ai-skills/cursor-plugins/pstack/skills/poteto-mode/playbooks/investigation.md",
+   "/home/thanhsmind/Projects/refs/ai-skills/cursor-plugins/pstack/skills/poteto-mode/playbooks/runtime-forensics.md",
+   "/home/thanhsmind/Projects/refs/ai-skills/cursor-plugins/pstack/skills/poteto-mode/playbooks/trace-forensics.md",
+   "/home/thanhsmind/Projects/refs/ai-skills/cursor-plugins/pstack/skills/poteto-mode/playbooks/eval.md"
   ],
   "affects_skills": [],
   "affects_specs": [],
-  "action": "Extend class_playbook_parity.rs without touching its two existing tests: every subdirectory of playbooks/ is a route class or session; every .md in a class subdirectory is listed on its class index's Situations section, and every listed name has its file; every .md in session/ other than index.md is listed in session/index.md and the reverse, when session/ exists; the class list stays read as text from workflows.rs. The class index grammar: a '## Situations' heading, then one line per situation of the exact form - `<name>` — <trigger phrases, English and Vietnamese> — delivers: <deliverable>, where <name> matches [a-z0-9-]+ and names playbooks/<class>/<name>.md; the section ends at the next '## ' heading.",
-  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test class_playbook_parity",
+  "action": "Read each pstack source and the old research playbook text (git show of the commit before ppb-6) beside the new files. Report each source step and each old enforced line as present, or dropped with its port-notes entry, or missing; any pstack-only tool name under skills/bee-planning/playbooks/; any skill named that does not exist in skills/; and whether each index line matches the contract grammar. Write the report to docs/history/pstack-playbook-port/reports/ppb-6c.md; no other edits.",
+  "verify": "rg -n -i 'cursor|graphite|bugbot|poteto-agent' skills/bee-planning/playbooks/ ; test $? -eq 1",
   "must_haves": {
    "truths": [
-    "an unlisted situation file fails the fence",
-    "a listed name with no file fails the fence",
-    "a subdirectory that is neither a class nor session fails the fence"
+    "the report lists every source step with present, dropped or missing"
    ],
    "prohibitions": [
-    "No private copy of the class list"
+    "No edit outside the report file"
    ]
   }
  },
  {
-  "id": "ppb-4t",
+  "id": "ppb-7c",
   "feature": "pstack-playbook-port",
-  "title": "Check the situation fence goes red for each break",
+  "title": "Check the refactor port against its sources",
   "lane": "standard",
   "role": "test",
   "deps": [
-   "ppb-4"
+   "ppb-7"
   ],
   "decisions": [
-   "c64c5827-e110-4add-988c-5b668e93ccfe"
+   "063a21e4-bccc-46a4-8fe8-1f1f99874c72",
+   "5a1fc656-5549-462a-be0c-6bce5d919188",
+   "913115b3-e1f1-4004-902c-bc574fabb2f1"
   ],
   "files": [
-   "docs/history/pstack-playbook-port/reports/ppb-4t.md"
+   "docs/history/pstack-playbook-port/reports/ppb-7c.md"
   ],
   "read_first": [
    "docs/history/pstack-playbook-port/CONTEXT.md",
    "docs/history/pstack-playbook-port/plan.md",
-   "packages/bee-rs/crates/bee/tests/class_playbook_parity.rs"
+   "skills/bee-planning/playbooks/refactor.md",
+   "docs/history/pstack-playbook-port/port-notes/refactor.md",
+   "/home/thanhsmind/Projects/refs/ai-skills/cursor-plugins/pstack/skills/poteto-mode/playbooks/refactoring.md",
+   "/home/thanhsmind/Projects/refs/ai-skills/cursor-plugins/pstack/skills/poteto-mode/playbooks/visual-parity.md"
   ],
   "affects_skills": [],
   "affects_specs": [],
-  "action": "Break the tree three ways with temporary edits you revert before reporting (an unlisted situation file, a listed missing file, a stray subdirectory), record the fence output for each, then confirm the clean tree is green. Write the report to docs/history/pstack-playbook-port/reports/ppb-4t.md; every other file ends byte-identical.",
-  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test class_playbook_parity",
+  "action": "Read each pstack source and the old refactor playbook text (git show of the commit before ppb-7) beside the new files. Report each source step and each old enforced line as present, or dropped with its port-notes entry, or missing; any pstack-only tool name under skills/bee-planning/playbooks/; any skill named that does not exist in skills/; and whether each index line matches the contract grammar. Write the report to docs/history/pstack-playbook-port/reports/ppb-7c.md; no other edits.",
+  "verify": "rg -n -i 'cursor|graphite|bugbot|poteto-agent' skills/bee-planning/playbooks/ ; test $? -eq 1",
   "must_haves": {
    "truths": [
-    "each break is shown red with its message"
+    "the report lists every source step with present, dropped or missing"
    ],
    "prohibitions": [
-    "Every file but the report ends byte-identical"
+    "No edit outside the report file"
+   ]
+  }
+ },
+ {
+  "id": "ppb-8c",
+  "feature": "pstack-playbook-port",
+  "title": "Check the spike port against its sources",
+  "lane": "standard",
+  "role": "test",
+  "deps": [
+   "ppb-8"
+  ],
+  "decisions": [
+   "063a21e4-bccc-46a4-8fe8-1f1f99874c72",
+   "5a1fc656-5549-462a-be0c-6bce5d919188",
+   "913115b3-e1f1-4004-902c-bc574fabb2f1"
+  ],
+  "files": [
+   "docs/history/pstack-playbook-port/reports/ppb-8c.md"
+  ],
+  "read_first": [
+   "docs/history/pstack-playbook-port/CONTEXT.md",
+   "docs/history/pstack-playbook-port/plan.md",
+   "skills/bee-planning/playbooks/spike.md",
+   "docs/history/pstack-playbook-port/port-notes/spike.md",
+   "/home/thanhsmind/Projects/refs/ai-skills/cursor-plugins/pstack/skills/poteto-mode/playbooks/prototype.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Read each pstack source and the old spike playbook text (git show of the commit before ppb-8) beside the new files. Report each source step and each old enforced line as present, or dropped with its port-notes entry, or missing; any pstack-only tool name under skills/bee-planning/playbooks/; any skill named that does not exist in skills/; and whether each index line matches the contract grammar. Write the report to docs/history/pstack-playbook-port/reports/ppb-8c.md; no other edits.",
+  "verify": "rg -n -i 'cursor|graphite|bugbot|poteto-agent' skills/bee-planning/playbooks/ ; test $? -eq 1",
+  "must_haves": {
+   "truths": [
+    "the report lists every source step with present, dropped or missing"
+   ],
+   "prohibitions": [
+    "No edit outside the report file"
+   ]
+  }
+ },
+ {
+  "id": "ppb-9c",
+  "feature": "pstack-playbook-port",
+  "title": "Check the feature port against its sources",
+  "lane": "standard",
+  "role": "test",
+  "deps": [
+   "ppb-9"
+  ],
+  "decisions": [
+   "063a21e4-bccc-46a4-8fe8-1f1f99874c72",
+   "5a1fc656-5549-462a-be0c-6bce5d919188",
+   "913115b3-e1f1-4004-902c-bc574fabb2f1"
+  ],
+  "files": [
+   "docs/history/pstack-playbook-port/reports/ppb-9c.md"
+  ],
+  "read_first": [
+   "docs/history/pstack-playbook-port/CONTEXT.md",
+   "docs/history/pstack-playbook-port/plan.md",
+   "skills/bee-planning/playbooks/feature.md",
+   "docs/history/pstack-playbook-port/port-notes/feature.md",
+   "/home/thanhsmind/Projects/refs/ai-skills/cursor-plugins/pstack/skills/poteto-mode/playbooks/feature.md",
+   "/home/thanhsmind/Projects/refs/ai-skills/cursor-plugins/pstack/skills/poteto-mode/playbooks/multi-phase-plan.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Read each pstack source and the old feature playbook text (git show of the commit before ppb-9) beside the new files. Report each source step and each old enforced line as present, or dropped with its port-notes entry, or missing; any pstack-only tool name under skills/bee-planning/playbooks/; any skill named that does not exist in skills/; and whether each index line matches the contract grammar. Write the report to docs/history/pstack-playbook-port/reports/ppb-9c.md; no other edits.",
+  "verify": "rg -n -i 'cursor|graphite|bugbot|poteto-agent' skills/bee-planning/playbooks/ ; test $? -eq 1",
+  "must_haves": {
+   "truths": [
+    "the report lists every source step with present, dropped or missing"
+   ],
+   "prohibitions": [
+    "No edit outside the report file"
+   ]
+  }
+ },
+ {
+  "id": "ppb-10c",
+  "feature": "pstack-playbook-port",
+  "title": "Check the docs port against its sources",
+  "lane": "standard",
+  "role": "test",
+  "deps": [
+   "ppb-10"
+  ],
+  "decisions": [
+   "063a21e4-bccc-46a4-8fe8-1f1f99874c72",
+   "5a1fc656-5549-462a-be0c-6bce5d919188",
+   "913115b3-e1f1-4004-902c-bc574fabb2f1"
+  ],
+  "files": [
+   "docs/history/pstack-playbook-port/reports/ppb-10c.md"
+  ],
+  "read_first": [
+   "docs/history/pstack-playbook-port/CONTEXT.md",
+   "docs/history/pstack-playbook-port/plan.md",
+   "skills/bee-planning/playbooks/docs.md",
+   "docs/history/pstack-playbook-port/port-notes/docs.md",
+   "/home/thanhsmind/Projects/refs/ai-skills/cursor-plugins/pstack/skills/poteto-mode/playbooks/authoring-a-skill.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Read each pstack source and the old docs playbook text (git show of the commit before ppb-10) beside the new files. Report each source step and each old enforced line as present, or dropped with its port-notes entry, or missing; any pstack-only tool name under skills/bee-planning/playbooks/; any skill named that does not exist in skills/; and whether each index line matches the contract grammar. Write the report to docs/history/pstack-playbook-port/reports/ppb-10c.md; no other edits.",
+  "verify": "rg -n -i 'cursor|graphite|bugbot|poteto-agent' skills/bee-planning/playbooks/ ; test $? -eq 1",
+  "must_haves": {
+   "truths": [
+    "the report lists every source step with present, dropped or missing"
+   ],
+   "prohibitions": [
+    "No edit outside the report file"
+   ]
+  }
+ },
+ {
+  "id": "ppb-11c",
+  "feature": "pstack-playbook-port",
+  "title": "Check the session port against its sources",
+  "lane": "standard",
+  "role": "test",
+  "deps": [
+   "ppb-11"
+  ],
+  "decisions": [
+   "063a21e4-bccc-46a4-8fe8-1f1f99874c72",
+   "5a1fc656-5549-462a-be0c-6bce5d919188",
+   "913115b3-e1f1-4004-902c-bc574fabb2f1"
+  ],
+  "files": [
+   "docs/history/pstack-playbook-port/reports/ppb-11c.md"
+  ],
+  "read_first": [
+   "docs/history/pstack-playbook-port/CONTEXT.md",
+   "docs/history/pstack-playbook-port/plan.md",
+   "skills/bee-planning/playbooks/session/index.md",
+   "docs/history/pstack-playbook-port/port-notes/session-ppb-11.md",
+   "/home/thanhsmind/Projects/refs/ai-skills/cursor-plugins/pstack/skills/poteto-mode/playbooks/session-pickup.md",
+   "/home/thanhsmind/Projects/refs/ai-skills/cursor-plugins/pstack/skills/poteto-mode/playbooks/pause-safely.md",
+   "/home/thanhsmind/Projects/refs/ai-skills/cursor-plugins/pstack/skills/poteto-mode/playbooks/autonomous-run.md",
+   "/home/thanhsmind/Projects/refs/ai-skills/cursor-plugins/pstack/skills/poteto-mode/playbooks/orchestrate.md",
+   "/home/thanhsmind/Projects/refs/ai-skills/cursor-plugins/pstack/skills/poteto-mode/playbooks/worktree-cleanup.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Read each pstack source and the old session playbook text (git show of the commit before ppb-11) beside the new files. Report each source step and each old enforced line as present, or dropped with its port-notes entry, or missing; any pstack-only tool name under skills/bee-planning/playbooks/; any skill named that does not exist in skills/; and whether each index line matches the contract grammar. Write the report to docs/history/pstack-playbook-port/reports/ppb-11c.md; no other edits.",
+  "verify": "rg -n -i 'cursor|graphite|bugbot|poteto-agent' skills/bee-planning/playbooks/ ; test $? -eq 1",
+  "must_haves": {
+   "truths": [
+    "the report lists every source step with present, dropped or missing"
+   ],
+   "prohibitions": [
+    "No edit outside the report file"
+   ]
+  }
+ },
+ {
+  "id": "ppb-12c",
+  "feature": "pstack-playbook-port",
+  "title": "Check the session port against its sources",
+  "lane": "standard",
+  "role": "test",
+  "deps": [
+   "ppb-12"
+  ],
+  "decisions": [
+   "063a21e4-bccc-46a4-8fe8-1f1f99874c72",
+   "5a1fc656-5549-462a-be0c-6bce5d919188",
+   "913115b3-e1f1-4004-902c-bc574fabb2f1"
+  ],
+  "files": [
+   "docs/history/pstack-playbook-port/reports/ppb-12c.md"
+  ],
+  "read_first": [
+   "docs/history/pstack-playbook-port/CONTEXT.md",
+   "docs/history/pstack-playbook-port/plan.md",
+   "skills/bee-planning/playbooks/session/index.md",
+   "docs/history/pstack-playbook-port/port-notes/session-ppb-12.md",
+   "/home/thanhsmind/Projects/refs/ai-skills/cursor-plugins/pstack/skills/poteto-mode/playbooks/babysit.md",
+   "/home/thanhsmind/Projects/refs/ai-skills/cursor-plugins/pstack/skills/poteto-mode/playbooks/shipping.md",
+   "/home/thanhsmind/Projects/refs/ai-skills/cursor-plugins/pstack/skills/poteto-mode/playbooks/autopilot-full.md",
+   "/home/thanhsmind/Projects/refs/ai-skills/cursor-plugins/pstack/skills/poteto-mode/playbooks/autopilot-stack.md",
+   "/home/thanhsmind/Projects/refs/ai-skills/cursor-plugins/pstack/skills/poteto-mode/playbooks/opening-a-pr.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Read each pstack source and the old session playbook text (git show of the commit before ppb-12) beside the new files. Report each source step and each old enforced line as present, or dropped with its port-notes entry, or missing; any pstack-only tool name under skills/bee-planning/playbooks/; any skill named that does not exist in skills/; and whether each index line matches the contract grammar. Write the report to docs/history/pstack-playbook-port/reports/ppb-12c.md; no other edits.",
+  "verify": "rg -n -i 'cursor|graphite|bugbot|poteto-agent' skills/bee-planning/playbooks/ ; test $? -eq 1",
+  "must_haves": {
+   "truths": [
+    "the report lists every source step with present, dropped or missing"
+   ],
+   "prohibitions": [
+    "No edit outside the report file"
    ]
   }
  }
@@ -504,15 +967,11 @@ Packet (authoritative for the preview):
 
 | Cell | Happy path | Edge case | Error path |
 |---|---|---|---|
-| ppb-1 | `orient --class bugfix`. Pass when the output has one `situation:` line naming `bugfix/bug-fix.md` | `orient --class perf --json`. Pass when `situations` is `[]` | repo with no `skills/` tree. Pass when the compiled-in situations print |
-| ppb-1 | parser on a well-formed section. Pass when one row per line | malformed line. Pass when that line yields no row and the rest parse | absent section. Pass when the list is empty, no error |
-| ppb-2 | bugfix plan citing `bugfix/bug-fix.md`. Pass when no playbook finding | no-class plan citing only a situation path. Pass when no playbook finding | bugfix plan citing only `bugfix.md`. Pass when one finding names `bugfix/bug-fix.md` |
-| ppb-3 | bug-fix.md beside its sources. Pass when ppb-3c lists every step present | English and Vietnamese triggers on the index line. Pass when both appear | a pstack-only tool under `skills/bee-planning/`. Pass when `rg` finds none |
-| ppb-4 | clean tree. Pass when the fence is green | `session/` absent. Pass when accepted | unlisted file, listed missing file, stray directory. Pass when each is red with its message |
+| ppb-5 to ppb-10 | class index and its situation files. Pass when the parity fence is green | a merged situation keeps the old enforced lines. Pass when its checker lists every old line present | a pstack-only tool under `skills/bee-planning/playbooks/`. Pass when `rg` finds none |
+| ppb-11, ppb-12 | `session/index.md` and its files. Pass when the fence is green | a landing playbook. Pass when it merges on green and stops at the uat door | an index line with no file. Pass when the fence is red naming it |
+| ppb-5c to ppb-12c | each source step. Pass when present, or dropped with a port-notes entry | a skill named that does not exist. Pass when the report names none | a missing step. Pass when the report names it |
 
-The run on main and on head for changed behavior: `bee orient --class bugfix`
-on main prints the playbook line and principles; on head the same lines plus
-one `situation:` line.
+The run on main and on head for changed behavior: `bee orient --class perf` on main prints the playbook line only; on head it adds one `situation:` line per perf situation.
 
 ## Open Questions
 
