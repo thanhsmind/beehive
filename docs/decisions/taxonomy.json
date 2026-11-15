@@ -890,6 +890,8 @@
     "contract:orient-host-playbook",
     "contract:principle-naming-stop-check",
     "contract:close-principles-line",
-    "contract:release-2-105-0-check"
+    "contract:release-2-105-0-check",
+    "contract:cited-claims-doctrine",
+    "contract:cited-claims-stop-check"
   ]
 }
