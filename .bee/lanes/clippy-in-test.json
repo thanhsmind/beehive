@@ -11,9 +11,9 @@
     "uat": false
   },
   "summary": "Feature \"clippy-in-test\" started at phase \"exploring\" (lane).",
-  "next_action": "Continue bee-exploring for \"clippy-in-test\" (lane).",
+  "next_action": "Merged into main at 6f5d329; capture what settled, then bee close --feature clippy-in-test.",
   "created_at": "2026-11-15T23:26:38.691Z",
-  "run_state": "awaiting-approval",
+  "run_state": null,
   "waiting_on": null,
   "route": {
     "class": "feature",
@@ -455,12 +455,5 @@
         }
       ]
     }
-  },
-  "merge_ready": {
-    "since": "2026-11-15T23:38:58.903Z",
-    "branch": "wt/clippy-in-test",
-    "worktree_id": "beehive--wt--clippy-in-test",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
