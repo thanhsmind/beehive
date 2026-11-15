@@ -147,6 +147,13 @@ block at all, byte-identically to the pre-anchor payload. The anchor itself
 is owned by
 [`../hook-runtime/the-intent-anchor-and-compaction-survival.md`](../hook-runtime/the-intent-anchor-and-compaction-survival.md).
 
+**The worker brief carries one depth line, never an expertise body (peer-brief-craft D2).**
+`worker-cell.md` has one line under Inputs, outside every `{{#if}}`, so the native and the herding
+render both carry it: follow a principle's Depth line, or route `.bee/expertise/INDEX.md` and read
+only the one guide section it names. Rejected: injecting `tests.md` and `debugging.md` into every
+code cell (about 950 lines per brief, repeats the principle lines); `--expertise` stays the
+leader's explicit choice.
+
 **A cell may not run against an unsettled or retired contract decision
 (slp-contract-original-request, cell scor-4, 2026-08-29).** The cell's
 existing `decisions` field is the citation slot, and one shared check reads

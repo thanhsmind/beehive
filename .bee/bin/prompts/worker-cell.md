@@ -36,6 +36,8 @@ Inputs — read these; nothing else is provided:
 - AGENTS.md
 - docs/history/{{feature}}/CONTEXT.md
 - docs/history/{{feature}}/plan.md (when present)
+
+Depth on demand — when a principle line or the cell's work needs more than the brief, follow that principle's Depth line or route .bee/expertise/INDEX.md and read only the one guide section it names; never load the whole shelf.
 {{#if learned_context}}
 
 Learned context (machine-assembled — read before implementing; prefer it over re-deriving):

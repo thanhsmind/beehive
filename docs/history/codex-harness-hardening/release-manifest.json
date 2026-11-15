@@ -4932,7 +4932,7 @@
     },
     {
       "path": "packages/bee/prompts/peer-boot.md",
-      "sha256": "bf9e4a6bc4fe17a669f59963a038ed32a71332d2c73683f478108d91da14f4f3",
+      "sha256": "00a70323ef9d92b71369281068a6f53b3e4ef3445f72fdd8412293dfb9a52cdd",
       "mode": "644",
       "role": "package_payload",
       "packagePath": "packages/bee/prompts/peer-boot.md"
@@ -4946,7 +4946,7 @@
     },
     {
       "path": "packages/bee/prompts/worker-cell.md",
-      "sha256": "fbda47fb4e82ea15080f44b93c1142b97f9534a6f748ea97d69a0865295a3992",
+      "sha256": "907eafb599f385258b73ca63a211722fd79560cf5e01fbb4d0d7e9677fa49df6",
       "mode": "644",
       "role": "package_payload",
       "packagePath": "packages/bee/prompts/worker-cell.md"

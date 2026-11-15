@@ -10841,6 +10841,8 @@ Inputs — read these; nothing else is provided:
 - docs/history/feat-golden/CONTEXT.md
 - docs/history/feat-golden/plan.md (when present)
 
+Depth on demand — when a principle line or the cell's work needs more than the brief, follow that principle's Depth line or route .bee/expertise/INDEX.md and read only the one guide section it names; never load the whole shelf.
+
 Advisor: fable
 
 Contract:
