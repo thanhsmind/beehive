@@ -176,11 +176,18 @@ never by memory. Before the rows, fix the target and its anchor:
 
 - When the target is vague, write your reading of it as the first line of
   the account and go on. Never stop to ask.
+- **Kind of question** — name which one it is, because the kind sets what a
+  Direct source looks like, never which rows run: a design rationale ("why
+  built this way"), a tradeoff ("why X and not Y"), an edge case ("what
+  motivated this guard"), an outside forcing function (a product, business
+  or operations constraint), survival ("why does this still exist" — dead
+  code, where the honest answer may be that no reason survives), or history
+  ("what is the story of X", a wide sweep of the file's life).
 - **Anchor** — write the `path:line` range, the symbols it holds, and a few
   search terms. Run `git blame -L <a>,<b> <path>` for the commits that last
-  touched those lines, and take the PR numbers from their subjects. Every
-  row below searches these terms, symbols, and PR numbers, so all seven
-  rows look at the same thing.
+  touched those lines, and take the PR numbers and any ticket ids from their
+  subjects and bodies. Every row below searches these terms, symbols, PR
+  numbers and ticket ids, so all seven rows look at the same thing.
 
 Then sweep all seven categories, in this order.
 
@@ -189,30 +196,66 @@ Then sweep all seven categories, in this order.
 2. **Git history** — `git log -S "<string>"` for the line's birth,
    `git log --follow <path>` for the file's. Read the commit bodies. Read
    back to the first commit that brought the line in, not the last one
-   that touched it — the reason lives at the birth. Skip bot commits. When
-   the line copies a pattern from elsewhere, find where that pattern first
-   appeared and read that commit too.
+   that touched it — the reason lives at the birth. Use `git log -G
+   "<regex>"` when the exact string changed shape. Read the diff as well as
+   the message: a "small refactor" can hide a behavior change. Skip bot
+   commits. When the line copies a pattern from elsewhere, find where that
+   pattern first appeared and read that commit too. When the repo squashes
+   its PRs the branch commits are gone, so the PR body and its comments carry
+   the reason. A CHANGELOG or release-note entry that names the change
+   counts here, and so do the files that changed in the same commits.
 3. **Feature history** — `docs/history/<feature>/`: `CONTEXT.md` for the
    locked decisions, `plan.md` for the approach, `reports/` for what shipped.
 4. **Knowledge bundle** — `bee knowledge search --text "<term>"`, then open
    the matching files under `docs/knowledge/`.
 5. **Code comments** — `rg -n "<symbol>"` to find the OWNING source file, then
    read its comments and doc-comments at the site, not from the snippet.
+   Read the TODO, FIXME and HACK notes near the target too.
 6. **Tests** — `rg -n "<behavior>" $(fd -t d '^tests$')`. A test name is often the
    plainest statement of intent this repo holds.
 7. **External tracker** — `gh issue list --search "<term>"` and `gh pr list
-   --search "<term>"`, and `gh pr view <number>` for each PR number the
-   Anchor found. Often absent here; report it as absent rather than
-   dropping the row.
+   --search "<term>"`, and `gh pr view <number> --json
+   title,body,comments,reviews,closingIssuesReferences` for each PR number
+   the Anchor found. The review threads and the linked issues are where the
+   debated alternatives sit. Often absent here; report it as absent rather
+   than dropping the row.
 
 When the target is defensive — a guard, a retry, a timeout, a sleep, or a
 flag — add `revert`, `hotfix`, `incident`, and the error string it handles
 to the search terms of rows 2 and 7. Defensive code is often born from an
-incident the code itself never names.
+incident the code itself never names. A revert followed by a re-apply, or a
+commit named for an incident, is a strong signal. When a postmortem or an
+incident record turns up, read it whole, action items included, since those
+tie to code changes. A postmortem that names the target is Direct; several
+records that converge on one incident, none naming the target, are
+Supported.
+
+When this session exposes tools for records beyond the seven — a team chat
+history, an observability or error-tracking tool, a product-analytics store
+— each is one more row under the same report rules, swept in the same
+pass. A tool that needs a login you lack ends its row as UNSWEPT with the
+reason; never write a finding from a row you could not read. Skipping a row
+as irrelevant needs proof, not a hunch: a build-time script has no runtime
+error trail, but "probably not in there" is a row to run.
 
 When row 2 or row 7 returns more than a screen of hits, fan that row alone
 through the dispatch door of Trace step 3 as a gather, briefed with the
 Anchor. Keep the other rows inline, and write the account yourself.
+
+Brief that worker to gather evidence and never to answer the why, and to
+walk its row this way:
+
+- Cast a wide net first, then narrow; read each PR or thread whole, since
+  the reason often sits in a late comment.
+- Quote verbatim where the exact wording matters, with its location
+  (commit sha, PR number, `path:line`), its author and its date.
+- Record the queries as run, so an empty result says what was looked for.
+- A reference that points at another row is recorded as a lead, never
+  chased; that row holds it.
+- Return: what it searched; Direct evidence, each with its quote and one
+  line on how it bears; indirect evidence, each with what it suggests, the
+  chain and the other readings it allows; contradictions, both sides cited;
+  gaps; leads.
 
 Report rules, which are the point of the procedure:
 
@@ -250,12 +293,41 @@ Phrasing rules:
   exists. Move such a claim to Inferred, or drop it.
 - A guess inside the question ("I assume it is for speed?") is one
   hypothesis to check, never the conclusion to confirm.
+- Collect the evidence first, then see which story it supports. Never pick
+  a story and recruit the evidence that fits it.
+- Before you conclude, ask what you would expect to see if another reading
+  were true, and whether a row looked for it.
+- Code that makes sense today may have been written for reasons that no
+  longer apply, or for none. Never retrofit a clean reason onto messy
+  history. A pattern repeated across files may be copy-paste, and a silence
+  ("nobody raised security") is not evidence that the concern was absent.
+- Never drop a hedge to sound more authoritative, in the account or when
+  you pass a worker's return on.
+- "obviously", "clearly", "of course", "just" (as in "it is just for
+  speed") and "I think" stay out of the account. It reports the record;
+  it is not an opinion.
 - Before you call a claim Supported, ask: would this evidence look
   different if the reading were wrong? If not, the claim is Inferred.
 - Evidence about a neighbor feature never answers a question about this
   one. Name the gap instead.
 - When two sources disagree, report both with their citations. Never pick
   the tidier story.
+
+Reading a source:
+
+- A signal near the ship date — a spike, a monitor, a resolved issue — is
+  suggestive. Other changes may sit in the same window, so check the
+  neighboring commits. That something was measured shows someone cared, not
+  why this line exists, and a "resolved" mark is a human's word, not proof
+  the code fixed it.
+- Check dates. A ticket or doc written before the code may describe a plan
+  that then changed; set it beside what shipped.
+- A "why" field filled with boilerplate ("improve user experience") is not
+  a reason, and a passing remark in chat is not a decision. Look for
+  considered discussion and open the whole thread.
+- A record that is gone — retention, a deleted thread, a page you cannot
+  open, a renamed metric — is a gap, not an empty result. "Found nothing"
+  is EMPTY; "could not look" is UNSWEPT.
 
 ### Provenance answer shape
 
@@ -271,7 +343,9 @@ Write the account in these sections:
 - **What we do not know** — each gap: the question, the sources searched,
   the terms used, and who would likely know (the commit author, the
   decision owner). An account with no gap is suspect; check it again.
-- **Sources** — the seven category rows, per the report rules above.
+- **Sources** — the seven category rows, per the report rules above, each
+  as what was searched and then what was found, EMPTY, or UNSWEPT with its
+  reason.
 - **Confidence** — one line on the overall confidence.
 
 When the why question comes before a change, end with a constraint set for
@@ -281,7 +355,8 @@ evidence lets move), **Avoid** (what the evidence warns against), and
 
 Before you send, run this self-check and fix what fails:
 
-- Every claim under What we found has its source beside it.
+- Every claim under What we found has its source beside it, and you opened
+  that source once to see it says what the claim says.
 - Each claim's wording matches its tier.
 - No claim uses the code as its own reason.
 - The guess in the question, if any, was checked as a hypothesis.

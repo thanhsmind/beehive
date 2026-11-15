@@ -139,7 +139,13 @@ govern the working residue of a cell rather than its content.
   in Trace's `Critique` (pstack-playbook-port ppb-31): reviewers go out through
   the reviewer door, the lead buckets findings by `bee-interrogate`'s judgment,
   and the lenses cite their principles. It lives in the same home, so `/bee-how`
-  gained a scope line, not a step.
+  gained a scope line, not a step. The Provenance sweep also took pstack why's
+  reading discipline (pstack-playbook-port ppb-32): the kind of question, the
+  evidence-first and counterfactual rules, the retrofit and silence warnings, and a
+  worker brief that gathers evidence and never answers. A record that is gone is a
+  gap and stays distinct from an empty row, so the sweep keeps its seven rows and
+  gains rows only for tools the session exposes; `/bee-why` gained a scope clause,
+  not a step.
 - **R22** — A saved document with no bee template (a README, a guide, a
   handbook page) is written through `bee-technical-writing`: the document type
   comes first, one type per file, split and linked where types meet. Two places
