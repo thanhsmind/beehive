@@ -167,5 +167,12 @@
   {"brief": "Ghi lại từng quyết định trong lần chạy tự động này thành một bảng, kèm bằng chứng, để sáng mai tôi kiểm tra.", "expect": ["bee-show-me-your-work"]},
   {"brief": "This long unattended run needs a trail a reviewer can check without reading the whole transcript.", "expect": ["bee-show-me-your-work"]},
   {"brief": "We agreed the retry limit is three, lock that rule in as a recorded decision.", "expect": ["bee-capturing"], "near": "bee-show-me-your-work"},
-  {"brief": "Review everything unreviewed from today and tell me whether it can merge.", "expect": ["bee-reviewing"], "near": "bee-show-me-your-work"}
+  {"brief": "Review everything unreviewed from today and tell me whether it can merge.", "expect": ["bee-reviewing"], "near": "bee-show-me-your-work"},
+
+  {"brief": "Launch eight parallel workers, one per package, each checking its own slice, and give me one table back.", "expect": ["bee-fanout"]},
+  {"brief": "Race five workers on the same brief and tell me which one finishes the exploration best.", "expect": ["bee-fanout"]},
+  {"brief": "Chạy song song nhiều worker, mỗi worker phụ trách một phần của codebase, rồi gộp thành một báo cáo duy nhất.", "expect": ["bee-fanout"]},
+  {"brief": "I want parallel coverage of every route handler, one worker per handler, drained into a single report.", "expect": ["bee-fanout"]},
+  {"brief": "The cells are approved and open — run them to done with workers.", "expect": ["bee-swarming"], "near": "bee-fanout"},
+  {"brief": "Try the same refactor several independent ways, keep the strongest and graft in the good parts of the rest.", "expect": ["bee-arena"], "near": "bee-fanout"}
 ]
