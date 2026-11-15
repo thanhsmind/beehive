@@ -1,0 +1,157 @@
+{
+  "id": "ohp-4",
+  "feature": "orient-host-playbook",
+  "title": "Prove orient paths in host-shaped repos",
+  "lane": "small",
+  "role": "test",
+  "deps": [
+    "ohp-1"
+  ],
+  "decisions": [
+    "D1",
+    "0d0c78b2-fd0f-4cb3-9ef8-312767e6a808"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/orient-host-playbook/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/verbs/status_full/orient.rs"
+  ],
+  "action": "Test only, no product code. Build temp repos shaped like hosts: (a) only .claude/skills/bee-planning/playbooks/bugfix/bug-fix.md present; (b) only .agents/skills/bee-planning/...; (c) both skills/ and .claude/skills present (skills/ wins); (d) no bee-planning tree at all. Drive the orient class rendering the verb uses and assert the printed playbook and situation paths, that each printed path exists in (a)-(c), the skill_get wording in (d), the single trailing next line, and that the --json packet carries the same paths. Show each new test red against a mutation of the resolver order. A red against the product is a finding returned as blocked. Bee commands you may run: none beyond the verify. Run no dispatch verb, not even its help.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- status_full",
+  "must_haves": {
+    "truths": [
+      "a test fails if orient prints a path that does not exist in a host-shaped repo that has the playbook",
+      "a test fails if the next line disappears or repeats"
+    ],
+    "artifacts": [],
+    "key_links": [],
+    "prohibitions": [
+      "No code comments",
+      "No product code edits"
+    ]
+  },
+  "affects_skills": [],
+  "affects_specs": [],
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "ohp-4-r2",
+    "outcome": "Four host-shaped orient tests pass against 94bb2936a and each went red under resolver-order, per-dir, dropped-root and next-line mutations; committed tests.rs only — ed551ac7f",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs"
+    ],
+    "deviations": [
+      "red-first is real: round 1 of this cell ran the host-shaped test red against ohp-1 round 1 (per-directory resolver), ohp-1 round 2 fixed it, round 2 shows the same tests green at 94bb2936a plus mutation reds — hit an unforeseen obstacle",
+      "sync-ack: herded tester done; leader reviewed commit ed551ac7f"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-15T11:34:39.666Z",
+    "behavior_change": false,
+    "verification_evidence": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- status_full (135 passed; 0 failed) and full --no-fail-fast suite exit 0 — green:unit — tests-only cell over orient class rendering and resolver",
+    "verify_output": "green:red-first",
+    "verify_passed": true,
+    "claim_session": "08e1c9b9-c58f-481b-a4b7-0cd8b72258c7",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- status_full",
+    "claimed_at": "2026-11-15T11:25:50.081Z",
+    "attempts": [
+      {
+        "n": 1,
+        "at": "2026-11-15T11:18:54.808Z",
+        "claim_session": "08e1c9b9-c58f-481b-a4b7-0cd8b72258c7",
+        "claimed_at": "2026-11-15T11:17:55.833Z",
+        "acquired_at": "2026-11-15T11:08:47.294Z",
+        "worker": "ohp-4-w",
+        "verdict": "blocked",
+        "failure_signature": "ef667e113e4d",
+        "note": "red finding: orient resolves the bee-planning dir by directory existence, so a host dir without playbooks/bugfix.md still gets that missing path printed; test orient_class_never_prints_a_missing_file_when_the_host_has_only_one_situation fails; tests left uncommitted in status_full/tests.rs"
+      }
+    ],
+    "blocked_reason": null,
+    "verified_at": null,
+    "baseline": null,
+    "reaction": null,
+    "skipped": null,
+    "unknowns": null,
+    "found": null,
+    "stopped": null,
+    "dropped_reason": null,
+    "reopened_at": "2026-11-15T11:25:26.584Z",
+    "reopened_reason": "implementer round 2 (94bb2936a) resolves per file; the four host-shaped tests already sit uncommitted in status_full/tests.rs: run them, confirm green, and commit only that file path-scoped",
+    "knowledge_delta": [],
+    "sync_ack": "herded tester done; leader reviewed commit ed551ac7f",
+    "no_mistakes": true,
+    "no_knowledge_used": true,
+    "principles_used": [
+      {
+        "slug": "bee-principle-red-before-green",
+        "changed": "showed each new test red under five orient.rs mutations before committing"
+      },
+      {
+        "slug": "bee-principle-test-behavior-not-structure",
+        "changed": "tests assert printed paths exist on disk and the next-line count, not resolver internals"
+      },
+      {
+        "slug": "bee-principle-laziness-protocol",
+        "changed": "reused the existing no-skills-tree test for case (d) instead of adding a duplicate"
+      }
+    ],
+    "report": {
+      "outcome": "Four host-shaped orient tests pass against 94bb2936a and each went red under resolver-order, per-dir, dropped-root and next-line mutations; committed tests.rs only — ed551ac7f",
+      "commit": "ed551ac7fd6cba671408318b57a5595a9a6799a6",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- status_full — green:red-first — PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- status_full (135 passed; 0 failed) and full --no-fail-fast suite exit 0 — green:unit — tests-only cell over orient class rendering and resolver",
+      "deviations": [],
+      "knowledge_used": [],
+      "principles_used": [
+        "bee-principle-red-before-green — showed each new test red under five orient.rs mutations before committing",
+        "bee-principle-test-behavior-not-structure — tests assert printed paths exist on disk and the next-line count, not resolver internals",
+        "bee-principle-laziness-protocol — reused the existing no-skills-tree test for case (d) instead of adding a duplicate"
+      ],
+      "patch_id": "37e613704cb3a391604853cbba1f7b0cd6bb5cff"
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "a test fails if orient prints a path that does not exist in a host-shaped repo that has the playbook",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs"
+          },
+          {
+            "requirement": "a test fails if the next line disappears or repeats",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs"
+          }
+        ],
+        "recorded_at": "2026-11-15T11:37:15.162Z",
+        "recorded_by": "08e1c9b9-c58f-481b-a4b7-0cd8b72258c7",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": {
+    "new": 103595,
+    "cached": 880002,
+    "total": 983597,
+    "models": {
+      "claude-opus-5-5": {
+        "new": 103595,
+        "cached": 880002,
+        "total": 983597
+      }
+    },
+    "jobs": [
+      "job-1794740933723-2076860-1",
+      "job-1794741953787-2147867-1"
+    ]
+  }
+}

@@ -1,0 +1,168 @@
+{
+  "id": "ohp-1",
+  "feature": "orient-host-playbook",
+  "title": "Point orient at the playbook file the project really has",
+  "lane": "small",
+  "role": "code",
+  "deps": [],
+  "decisions": [
+    "D1",
+    "0d0c78b2-fd0f-4cb3-9ef8-312767e6a808"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/status_full/orient.rs",
+    "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs",
+    "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+    "docs/knowledge/areas/doctrine-layer/situation-layer-class-index-session-group-and-parity-fence.md",
+    "docs/history/codex-harness-hardening/release-manifest.json",
+    ".bee/onboarding.json"
+  ],
+  "read_first": [
+    "docs/history/orient-host-playbook/CONTEXT.md",
+    "docs/knowledge/areas/doctrine-layer/situation-layer-class-index-session-group-and-parity-fence.md",
+    "packages/bee-rs/crates/bee/src/verbs/status_full/orient.rs",
+    "packages/bee-rs/crates/bee/src/situations.rs"
+  ],
+  "action": "D1. orient.rs builds the class packet with playbook = skills/bee-planning/playbooks/<class>.md (line ~741) and render_class_text prints situation lines with the same fixed root (line ~757). Add one resolver that, given the project root, returns the first existing bee-planning skill directory among skills/bee-planning, .claude/skills/bee-planning, .agents/skills/bee-planning, .opencode/skills/bee-planning, and use it for the packet playbook path and every situation path, so --json and text agree; store each situation's resolved path in the packet. When none exists, the playbook and situation values name the skill instead: 'skill bee-planning: playbooks/<class>/<name>.md — load bee-planning with skill_get and open this file under its local.path'. render_class_text ends with exactly one line starting 'next: ' that tells the agent to pick the situation whose trigger phrases match the task, open that file, and make the todo list from its numbered steps (when the class has no situation lines: open the playbook file). Update orient's --help text if it names the fixed path and run bee dev regen so registry_payload.json, the release manifest and onboarding.json follow; restore any .claude/skills churn regen makes before committing. Update existing tests in status_full/tests.rs that pin the old text. Sync the situation-layer concept (orient prints resolved paths and the next line, citing orient-host-playbook D1). One commit. Bee commands you may run: bee dev regen, bee dev release-manifest --check, bee onboard --repo-root . --json, bee orient --class bugfix, bee knowledge check. Run no dispatch verb, not even its help.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- status_full situations orient && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test class_playbook_parity && .bee/bin/bee dev release-manifest --check && .bee/bin/bee onboard --repo-root . --json",
+  "must_haves": {
+    "truths": [
+      "in a repo with skills/bee-planning, orient prints skills/bee-planning/playbooks paths as before",
+      "in a repo with only .claude/skills/bee-planning, every orient path starts with .claude/skills/bee-planning/playbooks",
+      "in a repo with no bee-planning tree, orient names the bee-planning skill and skill_get instead of a file path",
+      "orient --class text ends with one next line that says to open the matching situation file and build the todo list from its steps",
+      "orient --class --json carries the same resolved paths as the text"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/status_full/orient.rs",
+        "substantive": "one path resolver used by packet and text"
+      }
+    ],
+    "key_links": [
+      "situations.rs class_situations still supplies the situation names and triggers",
+      "onboarding installs skills under .claude/skills, .agents/skills or .opencode/skills"
+    ],
+    "prohibitions": [
+      "No code comments",
+      "No second copy of the path order",
+      "No change to situations.rs parsing"
+    ]
+  },
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/doctrine-layer/situation-layer-class-index-session-group-and-parity-fence.md"
+  ],
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "ohp-1-r2",
+    "outcome": "orient resolves each playbook/situation path per file across the four roots, else skill_get wording; commit 94bb2936a",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/status_full/orient.rs",
+      "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs",
+      "docs/knowledge/areas/doctrine-layer/situation-layer-class-index-session-group-and-parity-fence.md"
+    ],
+    "deviations": [
+      "sync-ack: round 2 per-file resolver reviewed at 94bb2936a; worker left principles_used out though its brief asked; leader saw no principle-driven choice in the one-line diff"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-15T11:25:45.924Z",
+    "behavior_change": false,
+    "verification_evidence": "cargo test --release --bin bee -- status_full situations orient (143 passed, incl. tester tests) && --test class_playbook_parity (9 passed) && bee dev release-manifest --check — green:unit — per-file resolver and packet/text agreement",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "08e1c9b9-c58f-481b-a4b7-0cd8b72258c7",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- status_full situations orient && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test class_playbook_parity && .bee/bin/bee dev release-manifest --check && .bee/bin/bee onboard --repo-root . --json",
+    "claimed_at": "2026-11-15T11:19:06.908Z",
+    "knowledge_delta": [
+      "docs/knowledge/areas/doctrine-layer/situation-layer-class-index-session-group-and-parity-fence.md"
+    ],
+    "sync_ack": "round 2 per-file resolver reviewed at 94bb2936a; worker left principles_used out though its brief asked; leader saw no principle-driven choice in the one-line diff",
+    "no_mistakes": true,
+    "no_principles_used": true,
+    "report": {
+      "outcome": "orient resolves each playbook/situation path per file across the four roots, else skill_get wording; commit 94bb2936a",
+      "commit": "94bb2936ab7f4080f05b1b18edbbde5d01810388",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/status_full/orient.rs",
+        "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs",
+        "docs/knowledge/areas/doctrine-layer/situation-layer-class-index-session-group-and-parity-fence.md"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- status_full situations orient && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test class_playbook_parity && .bee/bin/bee dev release-manifest --check && .bee/bin/bee onboard --repo-root . --json — green:unit — cargo test --release --bin bee -- status_full situations orient (143 passed, incl. tester tests) && --test class_playbook_parity (9 passed) && bee dev release-manifest --check — green:unit — per-file resolver and packet/text agreement",
+      "deviations": [],
+      "patch_id": "89789b2f14b2991444b6a819b55f499a1d349bad"
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "verified_at": null,
+    "baseline": null,
+    "reaction": null,
+    "skipped": null,
+    "unknowns": null,
+    "found": null,
+    "stopped": null,
+    "blocked_reason": null,
+    "dropped_reason": null,
+    "reopened_at": "2026-11-15T11:18:55.096Z",
+    "reopened_reason": "tester ohp-4 red: playbook_ref picks the first existing bee-planning DIRECTORY, not the first place the FILE exists, so it can print a missing path (D1 says each path at the first place it exists). Resolve per file: for each playbook or situation file, take the first of the four roots where that file exists; when none has it, use the skill_get wording. Uncommitted tester tests in status_full/tests.rs are the proof; leave them uncommitted and commit only orient.rs and any knowledge sync, path-scoped.",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "in a repo with skills/bee-planning, orient prints skills/bee-planning/playbooks paths as before",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/status_full/orient.rs"
+          },
+          {
+            "requirement": "in a repo with only .claude/skills/bee-planning, every orient path starts with .claude/skills/bee-planning/playbooks",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/status_full/orient.rs"
+          },
+          {
+            "requirement": "in a repo with no bee-planning tree, orient names the bee-planning skill and skill_get instead of a file path",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/status_full/orient.rs"
+          },
+          {
+            "requirement": "orient --class text ends with one next line that says to open the matching situation file and build the todo list from its steps",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/status_full/orient.rs"
+          },
+          {
+            "requirement": "orient --class --json carries the same resolved paths as the text",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/status_full/orient.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/status_full/orient.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/status_full/orient.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs"
+          },
+          {
+            "requirement": "docs/knowledge/areas/doctrine-layer/situation-layer-class-index-session-group-and-parity-fence.md",
+            "artifact": "docs/knowledge/areas/doctrine-layer/situation-layer-class-index-session-group-and-parity-fence.md"
+          }
+        ],
+        "recorded_at": "2026-11-15T11:37:15.123Z",
+        "recorded_by": "08e1c9b9-c58f-481b-a4b7-0cd8b72258c7",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": {
+    "new": 107583,
+    "cached": 1135398,
+    "total": 1242981,
+    "models": {
+      "claude-sonnet-5-5": {
+        "new": 107583,
+        "cached": 1135398,
+        "total": 1242981
+      }
+    },
+    "jobs": [
+      "job-1794740661526-2054670-1",
+      "job-1794741551504-2119016-1"
+    ]
+  }
+}

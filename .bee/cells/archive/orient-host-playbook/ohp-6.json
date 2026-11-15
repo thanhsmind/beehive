@@ -1,0 +1,130 @@
+{
+  "id": "ohp-6",
+  "feature": "orient-host-playbook",
+  "title": "Check the Principles close sentence and its skill pointers",
+  "lane": "small",
+  "role": "test",
+  "deps": [
+    "ohp-3"
+  ],
+  "decisions": [
+    "D3",
+    "aa9308de-5c42-4bf1-b963-14d1ac9781e5"
+  ],
+  "files": [
+    "docs/history/orient-host-playbook/ohp-6-check.md"
+  ],
+  "read_first": [
+    "docs/history/orient-host-playbook/CONTEXT.md",
+    "skills/bee-hive/references/routing-and-contracts.md"
+  ],
+  "action": "Docs checker, no edits to skills or code. Read the ohp-3 commit. Confirm the Communication contract turn shape now asks a multi-step routed task's close for one Principles line (slug and decision, or none) citing agents-name-applied-principles, that the five numbered rules are unchanged, and that no other section repeats the sentence. Run the skill pointer integrity and render parity tests named in the verify. Write docs/history/orient-host-playbook/ohp-6-check.md with what you checked, the command output summary and a pass or fail verdict. A fail is returned as blocked with the evidence. Bee commands you may run: bee dev release-manifest --check. Run no dispatch verb, not even its help.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- skill_reference pointer render_skill_trees && .bee/bin/bee dev release-manifest --check",
+  "judge_obligation_ack": "docs checker over one sentence, no guard logic",
+  "must_haves": {
+    "truths": [
+      "the checker report states pass only when the Principles close sentence is present once and the five rules are unchanged",
+      "skill pointer and render parity tests pass"
+    ],
+    "artifacts": [
+      {
+        "path": "docs/history/orient-host-playbook/ohp-6-check.md",
+        "substantive": "check record with verdict"
+      }
+    ],
+    "key_links": [],
+    "prohibitions": [
+      "No edits outside the check record"
+    ]
+  },
+  "affects_skills": [],
+  "affects_specs": [],
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "ohp-6-w",
+    "outcome": "Checked ohp-3: the Principles close sentence (D3, rule agents-name-applied-principles) appears once per tree and the five rules are unchanged; verify and supplemental pointer/parity tests pass; verdict pass recorded in 3e4ee342560129a16c820ed2d4d6a9b9f3abae53",
+    "files_changed": [
+      "docs/history/orient-host-playbook/ohp-6-check.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-11-15T11:19:29.451Z",
+    "behavior_change": false,
+    "verification_evidence": "docs-only check of one sentence across source and rendered trees",
+    "verify_output": "green:static",
+    "verify_passed": true,
+    "claim_session": "08e1c9b9-c58f-481b-a4b7-0cd8b72258c7",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- skill_reference pointer render_skill_trees && .bee/bin/bee dev release-manifest --check",
+    "claimed_at": "2026-11-15T11:13:48.864Z",
+    "knowledge_delta": [],
+    "no_mistakes": true,
+    "knowledge_used": [
+      {
+        "path": "docs/knowledge/patterns/20260818-a-green-count-is-not-evidence-that-your-new-test-ran.md",
+        "changed": "led me to list the filtered tests, which showed two of the three verify filters match nothing"
+      }
+    ],
+    "principles_used": [
+      {
+        "slug": "bee-principle-prove-it-works",
+        "changed": "ran the real pointer integrity and skill_trees parity targets instead of trusting the verify's green count"
+      }
+    ],
+    "report": {
+      "outcome": "Checked ohp-3: the Principles close sentence (D3, rule agents-name-applied-principles) appears once per tree and the five rules are unchanged; verify and supplemental pointer/parity tests pass; verdict pass recorded in 3e4ee342560129a16c820ed2d4d6a9b9f3abae53",
+      "commit": "3e4ee342560129a16c820ed2d4d6a9b9f3abae53",
+      "files": [
+        "docs/history/orient-host-playbook/ohp-6-check.md"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- skill_reference pointer render_skill_trees && .bee/bin/bee dev release-manifest --check — green:static — docs-only check of one sentence across source and rendered trees",
+      "deviations": [],
+      "knowledge_used": [
+        "docs/knowledge/patterns/20260818-a-green-count-is-not-evidence-that-your-new-test-ran.md — led me to list the filtered tests, which showed two of the three verify filters match nothing"
+      ],
+      "principles_used": [
+        "bee-principle-prove-it-works — ran the real pointer integrity and skill_trees parity targets instead of trusting the verify's green count"
+      ],
+      "patch_id": "2540d7f50741dea094d7b49f55008d4d6cd0067b"
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "the checker report states pass only when the Principles close sentence is present once and the five rules are unchanged",
+            "artifact": "docs/history/orient-host-playbook/ohp-6-check.md"
+          },
+          {
+            "requirement": "skill pointer and render parity tests pass",
+            "artifact": "docs/history/orient-host-playbook/ohp-6-check.md"
+          },
+          {
+            "requirement": "docs/history/orient-host-playbook/ohp-6-check.md",
+            "artifact": "docs/history/orient-host-playbook/ohp-6-check.md"
+          }
+        ],
+        "recorded_at": "2026-11-15T11:37:15.189Z",
+        "recorded_by": "08e1c9b9-c58f-481b-a4b7-0cd8b72258c7",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": {
+    "new": 39037,
+    "cached": 412209,
+    "total": 451246,
+    "models": {
+      "claude-opus-5-5": {
+        "new": 39037,
+        "cached": 412209,
+        "total": 451246
+      }
+    },
+    "jobs": [
+      "job-1794741234734-2099476-1"
+    ]
+  }
+}

@@ -1,0 +1,149 @@
+{
+  "id": "ohp-5",
+  "feature": "orient-host-playbook",
+  "title": "Prove the routed-reply warnings on transcript fixtures",
+  "lane": "standard",
+  "role": "test",
+  "deps": [
+    "ohp-2"
+  ],
+  "decisions": [
+    "D2",
+    "dae9d3c7-e370-45c3-a911-dc5b78bda15f"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/hooks/session_close/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/orient-host-playbook/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/hooks/session_close/claims.rs"
+  ],
+  "action": "Test only, no product code. Write transcript event fixtures in both the Claude shape (assistant tool_use Bash + user tool_result + assistant text) and the Codex shape (response_item function_call + function_call_output + message). Cover: orient with principles and a reply with no slug (warns); same with a slug (quiet); same with 'no principle changed anything' (quiet); orient with a situation line and a Read of .claude/skills/bee-planning/playbooks/bugfix/bug-fix.md (no playbook warning); orient with a situation line and no playbooks read (playbook warning); orient in an earlier turn than the last user message (quiet); no orient (quiet). Drive the Stop hook entry end to end where the existing session_close tests do, and assert it never blocks. Show each new test red against a mutation. A red against the product is a finding returned as blocked. Bee commands you may run: none beyond the verify. Run no dispatch verb, not even its help.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- session_close",
+  "must_haves": {
+    "truths": [
+      "a test fails if the principle warning fires on a reply that names a slug",
+      "a test fails if the playbook warning misses a turn that opened no playbook",
+      "a test fails if either warning blocks the Stop"
+    ],
+    "artifacts": [],
+    "key_links": [],
+    "prohibitions": [
+      "No code comments",
+      "No product code edits"
+    ]
+  },
+  "affects_skills": [],
+  "affects_specs": [],
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "ohp-5-w",
+    "outcome": "Two-shape (Claude+Codex) routed-reply fixture table tested via routed_reply_warnings and the Stop hook entry end to end (never blocks); fixed ohp-2's e2e test that was nested and never ran; 7 mutations all red — 93921096c",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/hooks/session_close/tests.rs"
+    ],
+    "deviations": [
+      "red-first shown by mutation: the tester removed or bent the ohp-2 warning logic in 7 ways and each new test went red, then green on the real code — the fix landed in ohp-2 before this test cell existed — the plan was wrong about a fact",
+      "sync-ack: herded tester done; leader reviewed commit 93921096c"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-15T11:25:46.152Z",
+    "behavior_change": false,
+    "verification_evidence": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- session_close — green:unit — 84 passed incl. both new tests; cell scope is the session_close Stop hook; each new test shown red against 7 product mutations in a private /tmp copy",
+    "verify_output": "green:red-first",
+    "verify_passed": true,
+    "claim_session": "08e1c9b9-c58f-481b-a4b7-0cd8b72258c7",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- session_close",
+    "claimed_at": "2026-11-15T11:08:48.230Z",
+    "knowledge_delta": [],
+    "sync_ack": "herded tester done; leader reviewed commit 93921096c",
+    "no_mistakes": true,
+    "knowledge_used": [
+      {
+        "path": "docs/knowledge/patterns/20260818-a-green-count-is-not-evidence-that-your-new-test-ran.md",
+        "changed": "made me check the build warnings and the test list instead of the pass count, which exposed the nested test"
+      }
+    ],
+    "principles_used": [
+      {
+        "slug": "bee-principle-red-before-green",
+        "changed": "every new test was shown red against a product mutation (M1–M7), not only green"
+      },
+      {
+        "slug": "bee-principle-prove-it-works",
+        "changed": "I checked that the e2e test actually runs (the cannot-test-inner-items warning is gone, the test is in the output), which is how I found ohp-2's never-run test"
+      },
+      {
+        "slug": "bee-principle-test-behavior-not-structure",
+        "changed": "the tests assert the observable warning text and the absence of a block in Stop hook stdout, not internal TurnTools state"
+      },
+      {
+        "slug": "bee-principle-laziness-protocol",
+        "changed": "I deleted 6 single-shape tests the two-shape table covers instead of adding beside them"
+      }
+    ],
+    "report": {
+      "outcome": "Two-shape (Claude+Codex) routed-reply fixture table tested via routed_reply_warnings and the Stop hook entry end to end (never blocks); fixed ohp-2's e2e test that was nested and never ran; 7 mutations all red — 93921096c",
+      "commit": "94bb2936ab7f4080f05b1b18edbbde5d01810388",
+      "files": [
+        "packages/bee-rs/crates/bee/src/hooks/session_close/tests.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- session_close — green:red-first — PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- session_close — green:unit — 84 passed incl. both new tests; cell scope is the session_close Stop hook; each new test shown red against 7 product mutations in a private /tmp copy",
+      "deviations": [],
+      "knowledge_used": [
+        "docs/knowledge/patterns/20260818-a-green-count-is-not-evidence-that-your-new-test-ran.md — made me check the build warnings and the test list instead of the pass count, which exposed the nested test"
+      ],
+      "principles_used": [
+        "bee-principle-red-before-green — every new test was shown red against a product mutation (M1–M7), not only green",
+        "bee-principle-prove-it-works — I checked that the e2e test actually runs (the cannot-test-inner-items warning is gone, the test is in the output), which is how I found ohp-2's never-run test",
+        "bee-principle-test-behavior-not-structure — the tests assert the observable warning text and the absence of a block in Stop hook stdout, not internal TurnTools state",
+        "bee-principle-laziness-protocol — I deleted 6 single-shape tests the two-shape table covers instead of adding beside them"
+      ],
+      "patch_id": "89789b2f14b2991444b6a819b55f499a1d349bad"
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "a test fails if the principle warning fires on a reply that names a slug",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/session_close/tests.rs"
+          },
+          {
+            "requirement": "a test fails if the playbook warning misses a turn that opened no playbook",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/session_close/tests.rs"
+          },
+          {
+            "requirement": "a test fails if either warning blocks the Stop",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/session_close/tests.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/hooks/session_close/tests.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/session_close/tests.rs"
+          }
+        ],
+        "recorded_at": "2026-11-15T11:37:15.175Z",
+        "recorded_by": "08e1c9b9-c58f-481b-a4b7-0cd8b72258c7",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": {
+    "new": 94815,
+    "cached": 1755754,
+    "total": 1850569,
+    "models": {
+      "claude-opus-5-5": {
+        "new": 94815,
+        "cached": 1755754,
+        "total": 1850569
+      }
+    },
+    "jobs": [
+      "job-1794740935626-2077244-1"
+    ]
+  }
+}
