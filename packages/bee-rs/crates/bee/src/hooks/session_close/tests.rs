@@ -2313,47 +2313,6 @@ so the next session can resume cleanly, or record a capture stub for what settle
     }
 
     #[test]
-    fn agreement_with_a_verified_label_stays_quiet() {
-        let events = claude_turn("use a cache?", &["Good idea. [verified] the loader reads the file twice."]);
-        assert_eq!(unverified_agreement_warning(&events), None);
-    }
-
-    #[test]
-    fn agreement_with_a_numbered_source_stays_quiet() {
-        let reply = "Good idea. The loader reads the file twice [1].\n\nSources:\n[1] src/loader.rs:42 reads the file in open and in parse";
-        let events = claude_turn("use a cache?", &[reply]);
-        assert_eq!(unverified_agreement_warning(&events), None);
-    }
-
-    #[test]
-    fn agreement_with_a_citation_but_no_sources_block_warns() {
-        let events = claude_turn("use a cache?", &["Good idea. The loader reads the file twice [1]."]);
-        let warning = unverified_agreement_warning(&events).expect("warns");
-        assert!(warning.contains("agents-verify-before-agreeing"), "{warning}");
-        assert!(warning.contains("Sources"), "{warning}");
-    }
-
-    #[test]
-    fn agreement_with_a_vietnamese_sources_block_stays_quiet() {
-        let reply = "Ý này hợp lý, loader đọc file hai lần [1].\n\n**Nguồn:**\n[1] src/loader.rs:42";
-        let events = claude_turn("dùng cache nhé?", &[reply]);
-        assert_eq!(unverified_agreement_warning(&events), None);
-    }
-
-    #[test]
-    fn agreement_with_a_sources_entry_that_matches_no_inline_number_warns() {
-        let reply = "Good idea [1].\n\n## Sources\n[2] src/loader.rs:42";
-        let events = claude_turn("use a cache?", &[reply]);
-        assert!(unverified_agreement_warning(&events).is_some());
-    }
-
-    #[test]
-    fn a_conditional_first_reaction_stays_quiet() {
-        let events = claude_turn("use a cache?", &["Sounds right; checking the loader first."]);
-        assert_eq!(unverified_agreement_warning(&events), None);
-    }
-
-    #[test]
     fn vietnamese_agreement_without_a_label_warns() {
         let events = claude_turn("dùng cache nhé?", &["Ý này hợp lý, em làm luôn."]);
         assert!(unverified_agreement_warning(&events).is_some());
@@ -2555,6 +2514,41 @@ so the next session can resume cleanly, or record a capture stub for what settle
             }
         }
     }
+    const AGREEMENT_RULE: &str = "agents-verify-before-agreeing";
+
+    struct AgreementCase {
+        name: &'static str,
+        events: Vec<Value>,
+        warns: bool,
+    }
+
+    fn agreement_cases(shape: Shape) -> Vec<AgreementCase> {
+        let turn = |reply: &str| vec![user_message(shape, "use a cache?"), assistant_reply(shape, reply)];
+        let case = |name, reply: &str, warns| AgreementCase { name, events: turn(reply), warns };
+        vec![
+            case("inline [1], Sources: [1]", "Good idea. The loader reads the file twice [1].\n\nSources:\n[1] src/loader.rs:42", false),
+            case("inline [2], Nguồn heading, [2] line", "Ý này hợp lý, loader đọc file hai lần [2].\n\n## Nguồn\n[2] cargo test loader — 3 passed", false),
+            case("inline [1], Sources lists only [3]", "Good idea. The loader reads the file twice [1].\n\nSources:\n[3] src/loader.rs:42", true),
+            case("inline [1], no Sources heading", "Good idea. The loader reads the file twice [1].\n[1] src/loader.rs:42", true),
+            case("array index v[1], no Sources block", "You're right, v[1] holds the cached loader.", true),
+            case("legacy [verified]", "Good idea. [verified: src/loader.rs:42] the loader reads the file twice.", false),
+            case("conditional, checking first", "Sounds right; checking the loader first.", false),
+        ]
+    }
+
+    #[test]
+    fn agreement_warning_matches_each_claude_and_codex_fixture() {
+        for shape in SHAPES {
+            for case in agreement_cases(shape) {
+                let warning = unverified_agreement_warning(&case.events);
+                assert_eq!(warning.is_some(), case.warns, "{shape:?} / {}: {warning:?}", case.name);
+                if let Some(w) = warning {
+                    assert!(w.contains(AGREEMENT_RULE) && w.contains("Sources"), "{shape:?} / {}: {w}", case.name);
+                }
+            }
+        }
+    }
+
     #[cfg(unix)]
     fn stdout_of(f: impl FnOnce()) -> String {
         use std::os::fd::AsRawFd;
@@ -2571,48 +2565,6 @@ so the next session can resume cleanly, or record a capture stub for what settle
         let mut out = String::new();
         sink.read_to_string(&mut out).unwrap();
         out
-    }
-
-    #[cfg(unix)]
-    #[test]
-    fn stop_hook_output_carries_the_unverified_agreement_warning() {
-        let _perf_guard = lock_perf_env();
-        let _transcript_guard = lock_transcript_env();
-        let perf = tempfile::tempdir().unwrap();
-        let config = tempfile::tempdir().unwrap();
-        unsafe { std::env::set_var("BEEHIVE_PERF_DIR", perf.path()) };
-        unsafe { std::env::set_var("CLAUDE_CONFIG_DIR", config.path()) };
-
-        let fx = fixture();
-        let root_canon = dunce::canonicalize(fx.path()).unwrap();
-        let root = root_canon.as_path();
-        write_json_file(&root.join(".bee").join("config.json"), &json!({}));
-        write_json_file(&root.join(".bee").join("state.json"), &json!({"phase": "idle"}));
-        write_transcript(
-            config.path(),
-            root,
-            "s-1",
-            &[
-                r#"{"type":"user","message":{"content":"use a cache?"}}"#,
-                r#"{"type":"assistant","message":{"content":[{"type":"text","text":"You're right, a cache is the way to go."}]}}"#,
-            ],
-        );
-        let stdin = serde_json::to_string(&json!({
-            "hook_event_name": "Stop",
-            "cwd": root.to_string_lossy(),
-            "session_id": "s-1",
-        }))
-        .unwrap();
-
-        let mut result = Err(());
-        let out = stdout_of(|| result = run_inner(&[], &stdin));
-
-        unsafe { std::env::remove_var("BEEHIVE_PERF_DIR") };
-        unsafe { std::env::remove_var("CLAUDE_CONFIG_DIR") };
-
-        assert_eq!(result, Ok(()));
-        assert!(out.contains("agents-verify-before-agreeing"), "{out}");
-        assert!(!out.contains("\"decision\":\"block\""), "{out}");
     }
 
     #[cfg(unix)]
@@ -2658,5 +2610,52 @@ so the next session can resume cleanly, or record a capture stub for what settle
             assert_eq!(*result, Ok(()), "{shape:?} / {}", case.name);
             assert!(!out.contains("\"decision\":\"block\""), "{shape:?} / {}: {out}", case.name);
             check_warnings(*shape, case, out);
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn stop_hook_carries_the_agreement_warning_per_fixture_and_never_blocks() {
+        let _perf_guard = lock_perf_env();
+        let _transcript_guard = lock_transcript_env();
+        let perf = tempfile::tempdir().unwrap();
+        let config = tempfile::tempdir().unwrap();
+        unsafe { std::env::set_var("BEEHIVE_PERF_DIR", perf.path()) };
+        unsafe { std::env::set_var("CLAUDE_CONFIG_DIR", config.path()) };
+
+        let fx = fixture();
+        let root_canon = dunce::canonicalize(fx.path()).unwrap();
+        let root = root_canon.as_path();
+        write_json_file(&root.join(".bee").join("config.json"), &json!({}));
+        write_json_file(&root.join(".bee").join("state.json"), &json!({"phase": "idle"}));
+
+        let mut runs = Vec::new();
+        for shape in SHAPES {
+            for (i, case) in agreement_cases(shape).into_iter().enumerate() {
+                let session = format!("a-{shape:?}-{i}");
+                let lines: Vec<String> = case.events.iter().map(Value::to_string).collect();
+                let lines: Vec<&str> = lines.iter().map(String::as_str).collect();
+                write_transcript(config.path(), root, &session, &lines);
+                let stdin = serde_json::to_string(&json!({
+                    "hook_event_name": "Stop",
+                    "cwd": root.to_string_lossy(),
+                    "session_id": session,
+                }))
+                .unwrap();
+                let mut result = Err(());
+                let out = stdout_of(|| result = run_inner(&[], &stdin));
+                runs.push((shape, case, result, out));
+            }
+        }
+
+        unsafe { std::env::remove_var("BEEHIVE_PERF_DIR") };
+        unsafe { std::env::remove_var("CLAUDE_CONFIG_DIR") };
+
+        assert_eq!(runs.len(), 14);
+        assert!(runs.iter().any(|(_, case, ..)| case.warns));
+        for (shape, case, result, out) in &runs {
+            assert_eq!(*result, Ok(()), "{shape:?} / {}", case.name);
+            assert!(!out.contains("\"decision\":\"block\""), "{shape:?} / {}: {out}", case.name);
+            assert_eq!(out.contains(AGREEMENT_RULE), case.warns, "{shape:?} / {}: {out}", case.name);
         }
     }
