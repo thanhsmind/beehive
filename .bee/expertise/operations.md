@@ -28,6 +28,7 @@ away from a long night, no matter how good the change was.
 | Something is broken right now | Stabilize, then diagnose |
 | The incident is over | The postmortem asks what let it through |
 | A recurring job needs to run | Scheduled work is a system |
+| A command, lifecycle step or loop must survive a crash and a retry | Make operations idempotent |
 | Load is growing, or a spike is expected | Degrade on purpose |
 | A procedure exists only in someone's head | Write the runbook before you need it |
 
@@ -298,6 +299,42 @@ watching when it does. Decide explicitly:
 Pin the timezone deliberately, and remember that schedules interact with
 offset changes: an hourly job runs twice or not at all on the days the
 clocks move.
+
+## Make operations idempotent
+
+When you design a command, a lifecycle step or a processing loop → make it
+converge on the correct state however many times it runs and wherever it
+starts. Ask of every state-changing operation: what happens if this runs
+twice, and what happens if the previous run crashed halfway? Crashes,
+restarts and retries are the normal condition of this code, so if partial
+state changes the next run's outcome, every restart becomes a debugging
+session.
+
+The pattern:
+
+- **Convergent startup.** Scan for existing state first, clean stale
+  artifacts, and adopt live sessions instead of assuming a blank slate.
+- **Content-based cleanup.** Compare by content equivalence, not by creation
+  order: the newest copy is not always the right one.
+- **Self-healing locks.** Detect a stale lock by checking that its holder, a
+  PID for example, is gone, so a crash never leaves a lock that blocks every
+  later run.
+- **Idempotent scheduling.** Failed work respawns cleanly, and fresh input is
+  regenerated after each cycle instead of carried over from the failed one.
+
+The test, in three questions:
+
+1. What happens if this runs twice in a row?
+2. What happens if the previous run crashed at every possible point?
+3. Does re-execution converge to the same end state?
+
+If any answer is "it depends on what state was left behind," the operation
+needs a reconciliation step: a pass that reads the state that exists and moves
+it to the state that should.
+
+For the neighbouring cases, see Scheduled work is a system above, `data.md`
+"Backfills are jobs, not statements" for bulk rewrites, and `apis.md` "Every
+unsafe operation needs a retry story" for a call that may arrive twice.
 
 ## Degrade on purpose
 

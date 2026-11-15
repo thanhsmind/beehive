@@ -115,6 +115,10 @@
       "sha256": "2e06df6002f1a752b3df91de5f92bee4c4d2334e11b54af84c2d82d8ffc77046"
     },
     {
+      "name": "bee-principle-make-operations-idempotent",
+      "sha256": "792b552cafca3e6ab97efacbbd2e9ac11e91e6529d3a1bce168544e995581305"
+    },
+    {
       "name": "bee-principle-migrate-callers-then-delete",
       "sha256": "19116b6f8fb7577f0f3473cd4b0950549272d7fa867e08e30cfe89693ff44822"
     },
@@ -139,6 +143,10 @@
       "sha256": "f9c9e04e9b8af128c63f7a245fc2bdfda69c63025be182e6973da5d87c8121d0"
     },
     {
+      "name": "bee-principle-prove-it-works",
+      "sha256": "d9c1a0ebdbecc72405f9322898bd86aaf01ffcb7130fabc51e1fe74d4150e575"
+    },
+    {
       "name": "bee-principle-record-at-the-moment-of-settlement",
       "sha256": "744ddd34ba71e8985287a31e88a22591fbfee675b2aad060213ea839a84d9f9b"
     },
@@ -157,6 +165,10 @@
     {
       "name": "bee-principle-separate-before-serializing-shared-state",
       "sha256": "78065b6d0553fa74322243f208090141628561c30ae29f91f4514a4699a814e7"
+    },
+    {
+      "name": "bee-principle-sequence-verifiable-units",
+      "sha256": "96e7f17a51c8e9c231dc2ca9c36f6ba7cb4c3ea6e6dd8d57b4a9a0c6cb04f327"
     },
     {
       "name": "bee-principle-single-source-of-truth",

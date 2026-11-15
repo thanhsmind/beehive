@@ -21,13 +21,13 @@
       "knowledge/patterns/attribution-that-survives-rewrites.md": "5d1e08dc87500c610d4e954986d0356328224fd2221d3d52b6d2957410b1aaff",
       "knowledge/patterns/rules-that-ship-as-a-check.md": "73100f56893c0f2c78c58604878d06949acdd3b0d2ba5a4166a2dbe7561d188e",
       "merges.md": "bca07c0dce2296d5d1b1b4b5d2714bd92085371589de6383037ca13d4277af1d",
-      "operations.md": "464a6e355d640422c617e9f9e6c09a63f495d69c95ef0d0163bbf95d1ed88dba",
+      "operations.md": "3ed0389975c84cfb6276ca01aa7cbb9fe6646b84ab3b4096d7f7e09ab545ef05",
       "performance.md": "71afb3cb39be78c6538a0eb12baa0f3b460194140d3d70e35bfcdb66052088e8",
-      "planning.md": "9e4edfeab889190cc3927c3b0ad9e618fb3eced909e1c23299dfc15bd0d26139",
+      "planning.md": "1e19f1daab82d2cda72934ca1729692921db9380bbd351a66ceaa4a85122c921",
       "review.md": "8f81efce730d2996c7c8222c5511d46d9791287ed14586b572c24999b37e114e",
       "security.md": "c39709516b888a41ae620fa7b070f8c2b28623c8f1d8f4639267385de4edeed8",
       "static-rules.md": "35cb07f73d6eef338d8625864d4e523713c49d0ecb3d146596613c8ea9b78a74",
-      "tests.md": "f98ac132b9562658caa93cb50448cf96ac6d956002d804d556e833cc0c77ab25",
+      "tests.md": "44e8293dd39ef80e19c75e0f061c0e7f79f5f9cf8d6213f7f25300456781ac6a",
       "tests/patterns/asserting-on-generated-output.md": "4f7c229210b0c8ee952d21881b3a616259f0ac3cfc6c7719efbe473521065626",
       "tests/patterns/comparing-structured-data.md": "708d72115b3c9c0e5dfad84ac27c8ef153dc36620a4d1c5ce7050e005da363e7",
       "tests/patterns/differential-testing.md": "2c089b719275b401ae62c5f6f6af4cdcdfc7e5a2528fc64ce16eff8a1d0b6add",
@@ -188,5 +188,5 @@
   },
   "design_role_offered": true,
   "created_at": "2026-07-24T03:53:44.750Z",
-  "updated_at": "2026-11-15T04:47:01.854Z"
+  "updated_at": "2026-11-15T04:49:57.413Z"
 }

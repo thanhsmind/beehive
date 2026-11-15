@@ -535,6 +535,28 @@ Slice 4 (pstack-playbook-port D5, cell ppb-27): classes follow each pstack
   - applied_at:
     - `skills/bee-principle-model-the-domain/SKILL.md`
 
+The three rows from prove-it-works to make-operations-idempotent continue pstack
+Slice 4 (pstack-playbook-port D5, cell ppb-28): classes follow each pstack
+"when it applies" line.
+
+- `bee-principle-prove-it-works` (expertise/tests.md § Prove it works):
+  spoken: before you call a task done, check the real artifact — run the feature, read the actual value, inspect the diff — never a proxy, a self-report or "it compiles"; when a check fails, suspect how you observed before you suspect the system
+  classes: feature, bugfix, refactor, perf, release, docs
+  - applied_at:
+    - `skills/bee-principle-prove-it-works/SKILL.md`
+
+- `bee-principle-sequence-verifiable-units` (expertise/planning.md § Sequence work into verifiable units):
+  spoken: cut a sweep or migration into small units that each end in a checkable state, verify each before the next, and order commits so the sequence proves itself — the failing test first, the fix on top
+  classes: refactor, feature, bugfix
+  - applied_at:
+    - `skills/bee-principle-sequence-verifiable-units/SKILL.md`
+
+- `bee-principle-make-operations-idempotent` (expertise/operations.md § Make operations idempotent):
+  spoken: make every command, lifecycle step and loop converge on the same end state however many times it runs or wherever a crashed run stopped — run it twice, then crash it at every point
+  classes: feature, refactor, release
+  - applied_at:
+    - `skills/bee-principle-make-operations-idempotent/SKILL.md`
+
 ## Open Gaps
 
 - **The realised saving is smaller than first projected.** The router fell 18.7%, about 1,675 tokens

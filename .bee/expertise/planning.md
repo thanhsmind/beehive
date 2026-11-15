@@ -15,6 +15,7 @@ amount of careful coding can recover. This guide is about choosing well.
 | Breaking a plan into pickable, provable pieces | What makes a good unit of work |
 | Writing what a unit must keep versus how it is built | Lock the contract |
 | Ordering units; deciding what to verify first | Build order versus discovery order |
+| A sweep, migration or run of similar edits; ordering commits for a reviewer | Sequence work into verifiable units |
 | Sequencing an addition, refactor or rewrite | Subtract before you add |
 | A plan proposes phases, slices or expand-migrate-contract | Split only on a real dependency |
 | A planned rewrite or migration with declared phase boundaries | Outcome-oriented execution |
@@ -171,6 +172,48 @@ you find at unit 4 that invalidates units 1 through 3.
 **No edges means parallel.** Draw the dependency edges explicitly, then
 look for what is *not* there: units with no edges between them can proceed
 in parallel, and pretending otherwise serializes work for no reason.
+
+## Sequence work into verifiable units
+
+When work is a sweep, a migration or a run of similar edits, and when you
+order commits and cells for a reviewer → cut it into small units that each end
+in a state you can check, and do not advance until the current unit is green.
+One discipline, two altitudes: how you execute and how you deliver.
+
+**Execution.** Verify each change before starting the next. Never batch the
+edits and verify once at the end. Each unit is a before and after bracket: a
+known-good state, one change, run the check, then proceed. Start from a clean
+base first, so every check measures against the real baseline and not against
+leftover failures. When a lever does the edits (Build the lever), the per-unit
+check is nearly free; run it anyway.
+
+**Delivery.** Order commits, and the cells that produce them, in the order
+that proves the work. The canonical shape is the failing test first and the
+fix on top: the first unit shows the bug is real (red), the next shows it
+resolved (green), so a reviewer sees both the problem and the proof (Red
+before green in `tests.md`). Other story orders: a subtraction before the
+reshape (Subtract before you add), a baseline capture before the treatment,
+the scaffold before the feature. Each commit lands on its own, and the
+sequence reads as an argument.
+
+The pattern in three lines:
+
+- Pick the smallest unit that ends in a check: an edit and its test, or a
+  commit that stands alone.
+- Verify before advancing: red to green per unit, never deferred to a final
+  batch.
+- Order the units so the sequence builds confidence by itself, for you while
+  you execute and for the reviewer reading it.
+
+**Why.** A break caught at the unit that caused it is cheap to localize. A
+break caught after a batch is buried, and you have already built further on a
+broken base. Sequencing the same units into a delivery a reviewer can replay
+turns "trust me" into "watch it go red, then green."
+
+This is the sequencing complement to Prove it works in `tests.md`, which keeps
+each check real, and to Build the lever, which makes the per-unit check cheap.
+A unit that cannot be checked alone is not a unit; fold it into the one before
+(Split only on a real dependency).
 
 ## Split only on a real dependency
 

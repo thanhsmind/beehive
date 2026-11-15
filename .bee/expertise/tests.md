@@ -18,6 +18,7 @@
 | Picking which cases to cover | Choosing cases |
 | The cases multiply and every one looks the same | Properties, when examples multiply |
 | Fixing a reported bug | Red before green |
+| Finished a task and about to call it done | Prove it works |
 | The code under test is hard to reach | Test the real code, never the twin |
 | Tempted to test everything | What not to test |
 | The suite is slow, or a case needs a human to judge it | Fast, automated, unattended |
@@ -347,6 +348,52 @@ its output is the red line.
 write "green," "passing," or "fixed" only next to actual command output
 from a run you just performed. "Tests should pass now" is a prediction,
 not a result. If you have not run it, say so.
+
+## Prove it works
+
+When a task is finished and you are about to call it done → ask how you would
+prove it works, then check the real thing directly. Do not infer from a
+proxy: "it compiles", a file's modification time, an output that looks fresh,
+a cached screenshot, or an agent's account of what it did. The indirect check
+feels cheaper than looking at the source, and acting on a wrong inference
+costs far more than the look.
+
+Check the real thing, not something derived from it:
+
+- Ask whether a process is alive by asking the process, not by reading state
+  derived from it.
+- Read the actual value, not a cached or derived representation of it.
+- When a check fails, suspect the way you observed before you suspect the
+  system. A stale cache or a wrong path fails the check and leaves the system
+  untouched.
+
+For code and features, in order:
+
+1. Build it. Necessary, never sufficient.
+2. Run it and exercise the actual feature path.
+3. Follow the whole chain: does the data flow from input to output?
+4. For an integration, test the full communication path end to end.
+
+**Delegated work: trust artifacts, not self-reports.** Open the diff, the file
+contents or the running behavior, never the delegate's summary: an agent
+reports what it meant to do, which is not always what happened. When the check
+itself goes to someone else, the reviewer goes out as
+`bee dispatch prepare --runtime claude --kind reviewer` and is handed the
+artifact, not your account of it. The cap's proof line is this principle's
+record: the command you ran and the scope it covered.
+
+**Script the check when you can.** The strongest proof is a deterministic
+script that re-runs the same comparison, not a one-time look. Write it, run
+it, and keep its output as an artifact a reviewer can re-run instead of
+taking your word. A script that compares the old and the new compiled output
+catches what a glance misses. Keep the artifact visible to the human. Commit
+it only for large or complex work whose trail must be auditable later, such
+as a big port or migration (the `bee-show-me-your-work` skill); most work
+needs it seen, not committed.
+
+Two sections sit beside this one. Red before green holds that "green" is
+written only beside fresh output, and Test the real code, never the twin keeps
+the check pointed at the code that ships.
 
 ## Test the real code, never the twin
 
