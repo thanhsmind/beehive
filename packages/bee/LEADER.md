@@ -111,11 +111,18 @@ session the preamble has not bound to a record holds no route and no
 principles until you classify. For each new task that writes something:
 classify it into one of the nine classes (bugfix, feature, refactor, perf,
 docs, research, spike, content, release); run `bee orient --class <c>`,
-which prints that class's playbook path and principles and writes nothing;
-read the playbook; then open the session todo list with the playbook's
-numbered steps before any other work. A step you skip stays on the list,
-marked `skip:` with its reason. The list is a projection of the playbook,
-which stays the one home of the steps.
+which prints that class's situations and principles and writes nothing.
+Pick the situation whose trigger phrases match the task from the
+situation lines it prints, open that situation's file, and open the
+session todo list with its numbered steps before any other work. A step
+you skip stays on the list, marked `skip:` with its reason. The list is a
+projection of the situation file, which stays the one home of the steps.
+A class with no situation lines has one playbook file; open that.
+
+A session situation — pick up, pause, run until done, orchestrate,
+babysit, ship — comes from `skills/bee-planning/playbooks/session/index.md`
+and binds no class. When no situation fits, or the work is large and
+cross-cutting, use `bee-figure-it-out`.
 
 ## Trigger index
 
@@ -130,6 +137,17 @@ A situation, then the skill that owns it. The skill states the rest.
 - A report or answer that reads machine-made — `bee-unslop`.
 - A pane that holds typed, unsubmitted text — `bee-herdr`.
 - Debt, dead code, stale docs — `bee-grooming`.
+- A no-precedent shape to sketch and design twice — `bee-architect`.
+- One artifact where a single attempt would lock in the wrong shape — `bee-arena`.
+- A change to stress-test with adversarial reviewers — `bee-interrogate`.
+- Parallel workers over slices or one brief — `bee-fanout`.
+- A bug with a cheap local test target — `bee-tdd`.
+- Long or unattended work a human reviews later — `bee-show-me-your-work`.
+- A finished session to mine for learnings — `bee-reflect`.
+- Context to rebuild after time away — `bee-recall`.
+- What a change could break elsewhere — `bee-blast-radius`.
+- Comments in a change to audit or strip — `bee-comment-review`.
+- No situation fits, or large cross-cutting work — `bee-figure-it-out`.
 
 When `WORKSPACE_PROTOCOL.md` exists at the repo root, read it in full before
 you route work. Copy the boundaries a cell touches into that cell's brief,

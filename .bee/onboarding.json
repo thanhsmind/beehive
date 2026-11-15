@@ -44,7 +44,7 @@
       "worker-cell.md": "fbda47fb4e82ea15080f44b93c1142b97f9534a6f748ea97d69a0865295a3992"
     },
     "leader": {
-      "LEADER.md": "ef354afff6aeda9444b245141725621f1923526fa8a90afab5ef30d238bc3594"
+      "LEADER.md": "52d966d787350c0f1fc5036edb91b75dd7d919f554cf4a101e618aca4fe7285d"
     },
     "playbooks": {
       "bee-defects.md": "128820aaccc3644492f753d10cfba5231bfd7939624aba943da7ab74340a5dc5",
@@ -188,5 +188,5 @@
   },
   "design_role_offered": true,
   "created_at": "2026-07-24T03:53:44.750Z",
-  "updated_at": "2026-11-15T05:21:21.002Z"
+  "updated_at": "2026-11-15T05:28:54.948Z"
 }
