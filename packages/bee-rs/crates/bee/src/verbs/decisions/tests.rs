@@ -2853,3 +2853,204 @@ use std::time::Instant;
         let ids = vec![D_A.to_string()];
         assert_eq!(resolve_store_citation(&ids, "aaaaaaa"), None);
     }
+
+    fn concept_link_repo(files: &[(&str, &str)]) -> tempfile::TempDir {
+        let tmp = fixture_root();
+        for (rel, body) in files {
+            let p = tmp.path().join(rel);
+            std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+            std::fs::write(p, body).unwrap();
+        }
+        tmp
+    }
+
+    fn concept_link_event(id: &str, decision: &str, feature: Option<&str>) -> Value {
+        let mut ev = json!({
+            "id": id, "type": "decide", "date": "2026-01-01T00:00:00.000Z",
+            "decision": decision, "rationale": "because",
+        });
+        if let Some(f) = feature {
+            ev["feature"] = json!(f);
+        }
+        ev
+    }
+
+    #[test]
+    fn concept_link_short_id_in_a_concept_gets_concepts_and_knowledge_line() {
+        let tmp = concept_link_repo(&[
+            ("docs/knowledge/areas/x/a.md", "# A\n\nsee 12345678 here\n"),
+            ("docs/knowledge/areas/x/b.md", "nothing\n"),
+        ]);
+        let ev = concept_link_event("12345678-aaaa-bbbb-cccc-dddddddddddd", "plain text", None);
+        let (json_out, text) = search_output(tmp.path(), vec![ev]);
+        assert_eq!(
+            json_out["decisions"][0]["concepts"],
+            json!(["docs/knowledge/areas/x/a.md:3"])
+        );
+        assert!(text.ends_with("\n  knowledge: docs/knowledge/areas/x/a.md:3"), "{text}");
+    }
+
+    #[test]
+    fn concept_link_feature_d_number_matches_lists_and_ranges_only() {
+        let tmp = concept_link_repo(&[
+            ("docs/knowledge/areas/x/a.md", "intro\nfeat-x D4\nfeat-x D1-D3\n"),
+            ("docs/knowledge/areas/x/b.md", "feat-x D1/D5 and feat-x D6, D7\n"),
+        ]);
+        let ev = concept_link_event(
+            "99999999-aaaa-bbbb-cccc-dddddddddddd",
+            "feat-x D2: pick it",
+            Some("feat-x"),
+        );
+        let (json_out, _) = search_output(tmp.path(), vec![ev]);
+        assert_eq!(
+            json_out["decisions"][0]["concepts"],
+            json!(["docs/knowledge/areas/x/a.md:3"])
+        );
+    }
+
+    #[test]
+    fn concept_link_unlinked_result_keeps_bytes_without_concepts_key() {
+        let tmp = concept_link_repo(&[("docs/knowledge/areas/x/a.md", "feat-y D1\n")]);
+        let ev = concept_link_event("77777777-aaaa-bbbb-cccc-dddddddddddd", "other", None);
+        let plain_text = format_decision(&ev);
+        let (json_out, text) = search_output(tmp.path(), vec![ev.clone()]);
+        assert!(json_out["decisions"][0].get("concepts").is_none());
+        assert_eq!(json_out["decisions"][0], ev);
+        assert_eq!(text, plain_text);
+        assert!(!text.contains("knowledge:"));
+    }
+
+    #[test]
+    fn concept_link_missing_knowledge_dir_searches_without_links() {
+        let tmp = fixture_root();
+        let ev = concept_link_event("77777777-aaaa-bbbb-cccc-dddddddddddd", "feat-x D1: t", Some("feat-x"));
+        let (json_out, text) = search_output(tmp.path(), vec![ev.clone()]);
+        assert_eq!(json_out["decisions"][0], ev);
+        assert!(!text.contains("knowledge:"));
+    }
+
+    #[test]
+    fn concept_link_caps_at_three_with_id_hits_first() {
+        let tmp = concept_link_repo(&[
+            ("docs/knowledge/a.md", "feat-x D1\n"),
+            ("docs/knowledge/b.md", "feat-x D1\n"),
+            ("docs/knowledge/c.md", "feat-x D1\n"),
+            ("docs/knowledge/d.md", "id 55555555\n"),
+        ]);
+        let ev = concept_link_event("55555555-aaaa-bbbb-cccc-dddddddddddd", "feat-x D1: t", Some("feat-x"));
+        let (json_out, _) = search_output(tmp.path(), vec![ev]);
+        assert_eq!(
+            json_out["decisions"][0]["concepts"],
+            json!(["docs/knowledge/d.md:1", "docs/knowledge/a.md:1", "docs/knowledge/b.md:1"])
+        );
+    }
+
+    #[test]
+    fn concept_link_decisions_active_output_never_carries_concepts() {
+        let tmp = concept_link_repo(&[("docs/knowledge/a.md", "see 12345678\n")]);
+        write_events(
+            tmp.path(),
+            &[r#"{"id":"12345678-aaaa-bbbb-cccc-dddddddddddd","type":"decide","date":"2026-01-01T00:00:00.000Z","decision":"d","rationale":"r"}"#],
+        );
+        let active = active_decisions(tmp.path(), false).ok().unwrap();
+        assert_eq!(active.len(), 1);
+        assert!(active[0].get("concepts").is_none());
+        assert!(!format_decision(&active[0]).contains("knowledge:"));
+    }
+
+    fn concept_link_concepts_for(files: &[(&str, &str)], decision: &str, feature: Option<&str>) -> Value {
+        let tmp = concept_link_repo(files);
+        let ev = concept_link_event("abcdef01-aaaa-bbbb-cccc-dddddddddddd", decision, feature);
+        let (json_out, _) = search_output(tmp.path(), vec![ev]);
+        json_out["decisions"][0].get("concepts").cloned().unwrap_or(Value::Null)
+    }
+
+    #[test]
+    fn concept_link_slash_list_links_d5_and_not_d3() {
+        let files = [("docs/knowledge/a.md", "intro\nfeat-x D1/D5\n")];
+        assert_eq!(
+            concept_link_concepts_for(&files, "feat-x D5: t", Some("feat-x")),
+            json!(["docs/knowledge/a.md:2"])
+        );
+        assert_eq!(concept_link_concepts_for(&files, "feat-x D3: t", Some("feat-x")), Value::Null);
+    }
+
+    #[test]
+    fn concept_link_comma_list_links_d2_and_not_d3() {
+        let files = [("docs/knowledge/a.md", "feat-x D1, D2\n")];
+        assert_eq!(
+            concept_link_concepts_for(&files, "feat-x D2: t", Some("feat-x")),
+            json!(["docs/knowledge/a.md:1"])
+        );
+        assert_eq!(concept_link_concepts_for(&files, "feat-x D3: t", Some("feat-x")), Value::Null);
+    }
+
+    #[test]
+    fn concept_link_range_covers_d3_and_not_d4() {
+        let files = [("docs/knowledge/a.md", "feat-x D1-D3\n")];
+        assert_eq!(
+            concept_link_concepts_for(&files, "feat-x D3: t", Some("feat-x")),
+            json!(["docs/knowledge/a.md:1"])
+        );
+        assert_eq!(concept_link_concepts_for(&files, "feat-x D4: t", Some("feat-x")), Value::Null);
+    }
+
+    #[test]
+    fn concept_link_slug_that_is_only_a_word_prefix_does_not_link() {
+        let files = [("docs/knowledge/a.md", "feat-xy D2\n")];
+        assert_eq!(concept_link_concepts_for(&files, "feat-x D2: t", Some("feat-x")), Value::Null);
+        assert_eq!(
+            concept_link_concepts_for(&files, "feat-xy D2: t", Some("feat-xy")),
+            json!(["docs/knowledge/a.md:1"])
+        );
+    }
+
+    #[test]
+    fn concept_link_decision_without_d_number_links_any_feature_d_line() {
+        let files = [("docs/knowledge/a.md", "feat-x alone\nfeat-x D7\n")];
+        assert_eq!(
+            concept_link_concepts_for(&files, "pick the thing", Some("feat-x")),
+            json!(["docs/knowledge/a.md:2"])
+        );
+    }
+
+    #[test]
+    fn concept_link_other_feature_d_number_on_the_same_line_does_not_link() {
+        let files = [("docs/knowledge/a.md", "feat-x D1 and other-feat D5\n")];
+        assert_eq!(
+            concept_link_concepts_for(&files, "feat-x D1: t", Some("feat-x")),
+            json!(["docs/knowledge/a.md:1"])
+        );
+        assert_eq!(concept_link_concepts_for(&files, "feat-x D5: t", Some("feat-x")), Value::Null);
+    }
+
+    #[test]
+    fn concept_link_four_citing_concepts_give_three_with_id_hits_first() {
+        let tmp = concept_link_repo(&[
+            ("docs/knowledge/a.md", "feat-x D1\n"),
+            ("docs/knowledge/b.md", "feat-x D1\n"),
+            ("docs/knowledge/c.md", "see abcdef01\n"),
+            ("docs/knowledge/d.md", "and abcdef01\n"),
+        ]);
+        let ev = concept_link_event("abcdef01-aaaa-bbbb-cccc-dddddddddddd", "feat-x D1: t", Some("feat-x"));
+        let (json_out, text) = search_output(tmp.path(), vec![ev]);
+        assert_eq!(
+            json_out["decisions"][0]["concepts"],
+            json!(["docs/knowledge/c.md:1", "docs/knowledge/d.md:1", "docs/knowledge/a.md:1"])
+        );
+        assert!(
+            text.ends_with("\n  knowledge: docs/knowledge/c.md:1, docs/knowledge/d.md:1, docs/knowledge/a.md:1"),
+            "{text}"
+        );
+    }
+
+    #[test]
+    fn concept_link_root_without_knowledge_dir_returns_results_without_concepts_key() {
+        let tmp = fixture_root();
+        assert!(!tmp.path().join("docs").join("knowledge").exists());
+        let a = concept_link_event("abcdef01-aaaa-bbbb-cccc-dddddddddddd", "feat-x D1: t", Some("feat-x"));
+        let b = concept_link_event("12345678-aaaa-bbbb-cccc-dddddddddddd", "plain", None);
+        let (json_out, text) = search_output(tmp.path(), vec![a.clone(), b.clone()]);
+        assert_eq!(json_out, json!({ "decisions": [a, b] }));
+        assert!(!text.contains("knowledge:"));
+    }
