@@ -129,6 +129,7 @@ mod tests;
 mod store;
 pub(crate) mod scanners;
 mod read;
+mod concept_links;
 mod verbs_read;
 mod verbs_write;
 mod render;

@@ -180,6 +180,10 @@ pub(crate) fn run_active_or_search(
             let take = if n >= decisions.len() as f64 { decisions.len() } else { n as usize };
             decisions.truncate(take);
         }
+        if is_search && !decisions.is_empty() {
+            let (result, text_out) = search_output(&ctx.root, decisions);
+            return Ok(Out::Emit(result, text_out, 0));
+        }
         let text_out = if decisions.is_empty() {
             if is_search {
                 "No active decisions matching the given filters.".to_string()
@@ -192,6 +196,23 @@ pub(crate) fn run_active_or_search(
         Ok(Out::Emit(json!({ "decisions": decisions }), text_out, 0))
     })();
     finish(&ctx, out)
+}
+
+pub(crate) fn search_output(root: &Path, mut decisions: Vec<Value>) -> (Value, String) {
+    let files = super::concept_links::read_concepts(root);
+    let mut blocks = Vec::new();
+    for event in decisions.iter_mut() {
+        let links = super::concept_links::concept_links(&files, event);
+        let mut block = format_decision(event);
+        if !links.is_empty() {
+            block.push_str(&format!("\n  knowledge: {}", links.join(", ")));
+            if let Some(obj) = event.as_object_mut() {
+                obj.insert("concepts".to_string(), json!(links));
+            }
+        }
+        blocks.push(block);
+    }
+    (json!({ "decisions": decisions }), blocks.join("\n"))
 }
 
 // ─── decisions log ─────────────────────────────────────────────────────────
