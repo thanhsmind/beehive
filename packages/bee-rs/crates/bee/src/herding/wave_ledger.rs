@@ -858,6 +858,20 @@ mod tests {
     }
 
     #[test]
+    fn empty_fleet_names_closed_wave_mixing_dry_run_and_failed_workers() {
+        let row = WaveRow {
+            wave_id: "w-mixed".to_string(),
+            started_at: iso(0),
+            workers: vec![
+                worker("w1", Some("dry_run")),
+                worker("w2", Some("blocked")),
+            ],
+        };
+        assert!(is_empty_fleet(&row), "a closed wave with no done outcome and not every worker dry_run is an empty fleet");
+        assert!(empty_fleet_verdict(&row).is_some());
+    }
+
+    #[test]
     fn empty_fleet_caps_returned_worker_names_when_wave_exceeds_cap() {
         let mut workers = Vec::new();
         for i in 0..15 {
