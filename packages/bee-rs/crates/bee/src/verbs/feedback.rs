@@ -2744,6 +2744,27 @@ mod tests {
         assert!(line.ends_with("(67% clean)") || line.contains("mistakes:"), "{line}");
     }
 
+    #[test]
+    fn prose_load_doc_parity_the_digest_concept_names_every_key() {
+        let tmp = tempfile::tempdir().unwrap();
+        prose_load_fixture(tmp.path());
+        let value = prose_load_value(tmp.path());
+        let keys: Vec<String> = value.as_object().unwrap().keys().cloned().collect();
+        assert!(!keys.is_empty());
+        let repo = Path::new(env!("CARGO_MANIFEST_DIR")).ancestors().nth(4).unwrap();
+        let concept = std::fs::read_to_string(
+            repo.join("docs/knowledge/areas/feedback-digest/ranking-and-self-improvement.md"),
+        )
+        .unwrap();
+        let missing_in = |text: &str| -> Vec<String> {
+            keys.iter().filter(|k| !text.contains(k.as_str())).cloned().collect()
+        };
+        let dropped = &keys[0];
+        let without_one = concept.replace(dropped.as_str(), "");
+        assert!(missing_in(&without_one).contains(dropped), "the parity check cannot see a dropped key");
+        assert_eq!(missing_in(&concept), Vec::<String>::new(), "prose_load keys the concept does not name");
+    }
+
     #[cfg(unix)]
     #[test]
     fn prose_load_counts_a_symlink_to_a_counted_file_once() {

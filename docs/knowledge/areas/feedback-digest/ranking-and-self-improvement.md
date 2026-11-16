@@ -70,7 +70,9 @@ each group is scored and the groups are returned most-pressing-first.
   newest finding. It also carries `preamble_bytes` and `preamble_lines`, the SessionStart preamble
   rendered for the repository with runtime `claude` inside the hook's budget; a snapshot of the
   session that ran it, null on a render failure, never a digest failure. Digest entries are not
-  filtered by closure: rank already retires closed groups.
+  filtered by closure: rank already retires closed groups. These sit beside the older keys
+  `project_files`, `project_lines`, `bee_lines`, `critical_patterns`, `fix_at_check_rows` and
+  `fix_at_architecture_rows`.
 
 **What blocks it:** nothing new — it consumes only the already-validated collected view (B2) and
 reads nothing itself.
