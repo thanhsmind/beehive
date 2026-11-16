@@ -185,7 +185,10 @@ SMALLER PATH: doctrine only (tell agents to dedupe and close by hand) is cheaper
     "role": "code",
     "status": "open",
     "deps": [],
-    "decisions": ["45d56b6f-68ef-4d86-a1a3-4f321a25f7b3", "61540fb2-c57a-4159-8688-34adda64a1b0"],
+    "decisions": [
+      "45d56b6f-68ef-4d86-a1a3-4f321a25f7b3",
+      "61540fb2-c57a-4159-8688-34adda64a1b0"
+    ],
     "files": [
       "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
       "packages/bee-rs/crates/bee/src/verbs/backlog.rs"
@@ -197,7 +200,9 @@ SMALLER PATH: doctrine only (tell agents to dedupe and close by hand) is cheaper
       "packages/bee-rs/crates/bee/src/verbs/backlog.rs"
     ],
     "affects_skills": [],
-    "affects_specs": ["docs/knowledge/areas/human-mailbox/"],
+    "affects_specs": [
+      "docs/knowledge/areas/human-mailbox/"
+    ],
     "action": "Implement docs/history/fix-at-loop/CONTEXT.md D1. Anchors: in verbs/drivers/close.rs `fn file_fix_at_rows(root: &Path, feature: &str) -> FixAtRows {` and its call `if backlog::backlog_finding_exists(root, feature, &layer, &title) {`; in verbs/backlog.rs `pub(crate) fn backlog_finding_exists(root: &Path, feature: &str, layer: &str, title: &str) -> bool {`. Add a sibling helper in backlog.rs that, per D10, returns the feature of a finding row with this layer and the same crate::verbs::feedback::normalize_title in the CURRENT close epoch (its ts is newer than the newest backlog-closed row with the same normalized title), or None; call it from file_fix_at_rows in place of the per-feature check. After a close, the same mistake files a new row. A skip still counts in rows.skipped; when the owning feature differs from the closing one, the close line's `bee backlog findings --feature` pointer names the owning feature (anchor: the `(M already there)` line near close.rs:3217). backlog_finding_exists and bee backlog add stay unchanged. Update the doc comments the change makes false only by deleting them; write no new comment. Edit only the existing tests the change forces; the tester cell adds the new ones. Run the related tests and quote the count the filter matched.",
     "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- fix_at",
     "must_haves": {
@@ -207,11 +212,30 @@ SMALLER PATH: doctrine only (tell agents to dedupe and close by hand) is cheaper
         "Two different titles still file two rows",
         "bee backlog add keeps its per-feature dedupe"
       ],
-      "artifacts": [{"path": "packages/bee-rs/crates/bee/src/verbs/backlog.rs", "substantive": "the cross-feature finding check"}],
-      "key_links": ["file_fix_at_rows calls the cross-feature check"],
-      "prohibitions": ["Never rewrite .bee/backlog.jsonl", "No code comments", "No change to backlog_finding_exists"]
+      "artifacts": [
+        {
+          "path": "packages/bee-rs/crates/bee/src/verbs/backlog.rs",
+          "substantive": "the cross-feature finding check"
+        }
+      ],
+      "key_links": [
+        "file_fix_at_rows calls the cross-feature check"
+      ],
+      "prohibitions": [
+        "Never rewrite .bee/backlog.jsonl",
+        "No code comments",
+        "No change to backlog_finding_exists"
+      ]
     },
-    "trace": {"worker": null, "outcome": null, "files_changed": [], "deviations": [], "friction": null, "capped_at": null, "behavior_change": true}
+    "trace": {
+      "worker": null,
+      "outcome": null,
+      "files_changed": [],
+      "deviations": [],
+      "friction": null,
+      "capped_at": null,
+      "behavior_change": true
+    }
   },
   {
     "id": "fal-1t",
@@ -220,8 +244,13 @@ SMALLER PATH: doctrine only (tell agents to dedupe and close by hand) is cheaper
     "lane": "standard",
     "role": "test",
     "status": "open",
-    "deps": ["fal-1"],
-    "decisions": ["45d56b6f-68ef-4d86-a1a3-4f321a25f7b3", "61540fb2-c57a-4159-8688-34adda64a1b0"],
+    "deps": [
+      "fal-1"
+    ],
+    "decisions": [
+      "45d56b6f-68ef-4d86-a1a3-4f321a25f7b3",
+      "61540fb2-c57a-4159-8688-34adda64a1b0"
+    ],
     "files": [
       "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
       "packages/bee-rs/crates/bee/src/verbs/backlog.rs"
@@ -236,12 +265,30 @@ SMALLER PATH: doctrine only (tell agents to dedupe and close by hand) is cheaper
     "action": "Contract C1 of docs/history/fix-at-loop/CONTEXT.md. First cite the existing tests that already cover file_fix_at_rows by name, then add only the gap, each test name containing fix_at_identity: (1) a finding with layer fix-at:check and title T under feature A exists, file_fix_at_rows for feature B with a mechanizable mistake titled T files nothing and counts one skip; (2) a different title under feature B files one row; (3) bee backlog add with the same title under a new feature still appends (its per-feature dedupe is unchanged); (4) finding T under feature A, then a backlog-closed row titled T, then file_fix_at_rows for feature B with mistake T files one new row; (5) a whitespace variant of T is treated as T. Show each new test red against the parent commit of fal-1 where the contract changed (tests 1), or state why it passes on both (tests 2, 3). Quote the count the filter matched. No code comments.",
     "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- fix_at_identity",
     "must_haves": {
-      "truths": ["fix_at_identity tests exist and pass, with a matched count above zero"],
-      "artifacts": [{"path": "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs", "substantive": "fix_at_identity tests"}],
+      "truths": [
+        "fix_at_identity tests exist and pass, with a matched count above zero"
+      ],
+      "artifacts": [
+        {
+          "path": "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+          "substantive": "fix_at_identity tests"
+        }
+      ],
       "key_links": [],
-      "prohibitions": ["No change to product code", "No code comments"]
+      "prohibitions": [
+        "No change to product code",
+        "No code comments"
+      ]
     },
-    "trace": {"worker": null, "outcome": null, "files_changed": [], "deviations": [], "friction": null, "capped_at": null, "behavior_change": false}
+    "trace": {
+      "worker": null,
+      "outcome": null,
+      "files_changed": [],
+      "deviations": [],
+      "friction": null,
+      "capped_at": null,
+      "behavior_change": false
+    }
   },
   {
     "id": "fal-2",
@@ -250,7 +297,9 @@ SMALLER PATH: doctrine only (tell agents to dedupe and close by hand) is cheaper
     "lane": "standard",
     "role": "code",
     "status": "open",
-    "deps": ["fal-1t"],
+    "deps": [
+      "fal-1t"
+    ],
     "decisions": [
       "097acbf6-840e-4647-a782-848c39627fd6",
       "6f4070cf-faa5-4e9c-94b6-3e38e1cd4939",
@@ -258,7 +307,9 @@ SMALLER PATH: doctrine only (tell agents to dedupe and close by hand) is cheaper
       "cc75554e-1d15-46d6-9bb9-9f07007a0173",
       "61540fb2-c57a-4159-8688-34adda64a1b0"
     ],
-    "files": ["packages/bee-rs/crates/bee/src/verbs/feedback.rs"],
+    "files": [
+      "packages/bee-rs/crates/bee/src/verbs/feedback.rs"
+    ],
     "read_first": [
       "docs/history/fix-at-loop/CONTEXT.md",
       "docs/knowledge/areas/feedback-digest/ranking-and-self-improvement.md",
@@ -267,7 +318,9 @@ SMALLER PATH: doctrine only (tell agents to dedupe and close by hand) is cheaper
       "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs"
     ],
     "affects_skills": [],
-    "affects_specs": ["docs/knowledge/areas/feedback-digest/"],
+    "affects_specs": [
+      "docs/knowledge/areas/feedback-digest/"
+    ],
     "action": "Implement D2, D6 and D8 of docs/history/fix-at-loop/CONTEXT.md (D3 is superseded, D4 narrowed by D8). Anchors in verbs/feedback.rs: the backlog ingestion `raw.push(RawCandidate {` under `match resolve_in_scope(&real_root, SRC_BACKLOG) {`, `fn fix_at_row_counts(root: &Path) -> (Option<u64>, Option<u64>) {`, `fn prose_load_value(root: &Path) -> Value {`, `fn prose_load_line(digest: &Value) -> String {`. (1) D2 with D10: during backlog ingestion, a finding or friction row whose (type, layer, normalize_title, close epoch) equals an earlier row's is folded into that row's candidate instead of pushed: the candidate keeps the earliest ts as first_seen and its pain is not summed. The close epoch of a row is the count of backlog-closed rows with the same normalize_title and an older ts. Other row types and other sources are untouched; backlog-closed rows are never folded. So a copy filed after a close stays its own entry and rank still reports the group as recurred. (2) D8: prose_load gains fix_at_check_open, fix_at_architecture_open and fix_at_closed. A distinct (layer, title) of a fix-at finding is closed when a backlog-closed row whose normalize_title equals the finding's normalize_title has a ts newer than the newest finding row of that key; otherwise it is open. Distinct keys are counted, never raw rows; the existing fix_at_check_rows and fix_at_architecture_rows stay raw and unchanged. The printed prose line names the open and closed counts and the preamble size, for example `fix-at: 129 open (110 check, 19 architecture), 1 closed; preamble 8,912 bytes / 151 lines`. (3) D6: prose_load gains preamble_bytes and preamble_lines from the preamble rendered for root by crate::hooks::session_preamble::budget::build_session_preamble_within with PREAMBLE_BUDGET_BYTES as the budget, runtime claude, and no session id or handoff (the number is a snapshot of the current state); when the render panics or root is not a bee project both are null (wrap with std::panic::catch_unwind or check the builder's own fail-open contract first and say which). The digest never fails because of these fields. Edit only the existing tests the change forces (the prose_load_reports_lines_patterns_and_rows_in_object_and_sentence fixture may need new keys); the tester adds the new tests. No code comments. Quote the matched test count.",
     "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- feedback",
     "must_haves": {
@@ -277,11 +330,30 @@ SMALLER PATH: doctrine only (tell agents to dedupe and close by hand) is cheaper
         "prose_load carries preamble_bytes and preamble_lines, null on a render failure",
         "The existing raw row counts are unchanged"
       ],
-      "artifacts": [{"path": "packages/bee-rs/crates/bee/src/verbs/feedback.rs", "substantive": "fold, open/closed counts, preamble load"}],
-      "key_links": ["prose_load_value calls build_session_preamble_within"],
-      "prohibitions": ["Never rewrite .bee/backlog.jsonl", "No new verb or flag", "No code comments"]
+      "artifacts": [
+        {
+          "path": "packages/bee-rs/crates/bee/src/verbs/feedback.rs",
+          "substantive": "fold, open/closed counts, preamble load"
+        }
+      ],
+      "key_links": [
+        "prose_load_value calls build_session_preamble_within"
+      ],
+      "prohibitions": [
+        "Never rewrite .bee/backlog.jsonl",
+        "No new verb or flag",
+        "No code comments"
+      ]
     },
-    "trace": {"worker": null, "outcome": null, "files_changed": [], "deviations": [], "friction": null, "capped_at": null, "behavior_change": true}
+    "trace": {
+      "worker": null,
+      "outcome": null,
+      "files_changed": [],
+      "deviations": [],
+      "friction": null,
+      "capped_at": null,
+      "behavior_change": true
+    }
   },
   {
     "id": "fal-2t",
@@ -290,21 +362,51 @@ SMALLER PATH: doctrine only (tell agents to dedupe and close by hand) is cheaper
     "lane": "standard",
     "role": "test",
     "status": "open",
-    "deps": ["fal-2"],
-    "decisions": ["3bc9f528-d5d9-4c23-9d07-085ef094cf45", "6f4070cf-faa5-4e9c-94b6-3e38e1cd4939", "097acbf6-840e-4647-a782-848c39627fd6", "61540fb2-c57a-4159-8688-34adda64a1b0"],
-    "files": ["packages/bee-rs/crates/bee/src/verbs/feedback.rs"],
-    "read_first": ["docs/history/fix-at-loop/CONTEXT.md", "packages/bee-rs/crates/bee/src/verbs/feedback.rs"],
+    "deps": [
+      "fal-2"
+    ],
+    "decisions": [
+      "3bc9f528-d5d9-4c23-9d07-085ef094cf45",
+      "6f4070cf-faa5-4e9c-94b6-3e38e1cd4939",
+      "097acbf6-840e-4647-a782-848c39627fd6",
+      "61540fb2-c57a-4159-8688-34adda64a1b0"
+    ],
+    "files": [
+      "packages/bee-rs/crates/bee/src/verbs/feedback.rs"
+    ],
+    "read_first": [
+      "docs/history/fix-at-loop/CONTEXT.md",
+      "packages/bee-rs/crates/bee/src/verbs/feedback.rs"
+    ],
     "affects_skills": [],
     "affects_specs": [],
     "action": "Contracts C2 and C4 of docs/history/fix-at-loop/CONTEXT.md. Cite the existing prose_load and rank tests by name, then add the gap. Names containing fix_at_open: (1) three identical fix-at:check rows give one digest entry and fix_at_check_open 1; (2) a backlog-closed row with the same title and a newer ts moves it to fix_at_closed 1 and open 0, and rank lists it as retired; (3) a finding row newer than that close moves it back to open, stays a separate digest entry, and rank reports the group as recurred; (3b) a friction row and a pbi row are never folded. Names containing prose_load: (4) a fixture bee root gives preamble_bytes above 0 and at most 9500 and preamble_lines above 0; (5) an empty directory gives null for both and the digest still succeeds. Show each red on the parent commit of fal-2 where the behavior is new. Quote the matched counts. No code comments.",
     "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- fix_at_open prose_load",
     "must_haves": {
-      "truths": ["fix_at_open and prose_load tests exist and pass with matched counts above zero"],
-      "artifacts": [{"path": "packages/bee-rs/crates/bee/src/verbs/feedback.rs", "substantive": "fix_at_open and prose_load tests"}],
+      "truths": [
+        "fix_at_open and prose_load tests exist and pass with matched counts above zero"
+      ],
+      "artifacts": [
+        {
+          "path": "packages/bee-rs/crates/bee/src/verbs/feedback.rs",
+          "substantive": "fix_at_open and prose_load tests"
+        }
+      ],
       "key_links": [],
-      "prohibitions": ["No change to product code", "No code comments"]
+      "prohibitions": [
+        "No change to product code",
+        "No code comments"
+      ]
     },
-    "trace": {"worker": null, "outcome": null, "files_changed": [], "deviations": [], "friction": null, "capped_at": null, "behavior_change": false}
+    "trace": {
+      "worker": null,
+      "outcome": null,
+      "files_changed": [],
+      "deviations": [],
+      "friction": null,
+      "capped_at": null,
+      "behavior_change": false
+    }
   },
   {
     "id": "fal-3",
@@ -313,8 +415,13 @@ SMALLER PATH: doctrine only (tell agents to dedupe and close by hand) is cheaper
     "lane": "standard",
     "role": "code",
     "status": "open",
-    "deps": ["fal-2t"],
-    "decisions": ["9471088f-fd3f-4dc4-8ed0-0ccd8b859967", "54872359-dfb9-4090-808a-a67210a0fffc"],
+    "deps": [
+      "fal-2t"
+    ],
+    "decisions": [
+      "9471088f-fd3f-4dc4-8ed0-0ccd8b859967",
+      "54872359-dfb9-4090-808a-a67210a0fffc"
+    ],
     "files": [
       "packages/bee-rs/clippy.toml",
       "packages/bee-rs/crates/bee/src/path_identity.rs",
@@ -355,13 +462,34 @@ SMALLER PATH: doctrine only (tell agents to dedupe and close by hand) is cheaper
         "Writing Path::strip_prefix in src makes clippy print a reason that names both helpers"
       ],
       "artifacts": [
-        {"path": "packages/bee-rs/clippy.toml", "substantive": "the disallowed-methods rule with its reason"},
-        {"path": "packages/bee-rs/crates/bee/src/path_identity.rs", "substantive": "strip_root_lexical and relative_to"}
+        {
+          "path": "packages/bee-rs/clippy.toml",
+          "substantive": "the disallowed-methods rule with its reason"
+        },
+        {
+          "path": "packages/bee-rs/crates/bee/src/path_identity.rs",
+          "substantive": "strip_root_lexical and relative_to"
+        }
       ],
-      "key_links": ["leader_check.rs calls relative_to"],
-      "prohibitions": ["No #[allow(clippy::disallowed_methods)] outside the two helpers", "No edit under crates/bee/tests", "No code comments"]
+      "key_links": [
+        "leader_check.rs calls relative_to"
+      ],
+      "prohibitions": [
+        "No #[allow(clippy::disallowed_methods)] outside the two helpers",
+        "No edit under crates/bee/tests",
+        "No code comments"
+      ]
     },
-    "trace": {"worker": null, "outcome": null, "files_changed": [], "deviations": [], "friction": null, "capped_at": null, "behavior_change": true}
+    "trace": {
+      "worker": null,
+      "outcome": null,
+      "files_changed": [],
+      "deviations": [],
+      "friction": null,
+      "capped_at": null,
+      "behavior_change": true
+    },
+    "full_suite_reason": "cargo clippy here is the lint rule this cell adds, run once as its own red-to-green proof; the cargo test part is filtered"
   },
   {
     "id": "fal-3t",
@@ -370,21 +498,50 @@ SMALLER PATH: doctrine only (tell agents to dedupe and close by hand) is cheaper
     "lane": "standard",
     "role": "test",
     "status": "open",
-    "deps": ["fal-3"],
-    "decisions": ["9471088f-fd3f-4dc4-8ed0-0ccd8b859967", "54872359-dfb9-4090-808a-a67210a0fffc"],
-    "files": ["packages/bee-rs/crates/bee/src/path_identity.rs"],
-    "read_first": ["docs/history/fix-at-loop/CONTEXT.md", "packages/bee-rs/crates/bee/src/path_identity.rs"],
+    "deps": [
+      "fal-3"
+    ],
+    "decisions": [
+      "9471088f-fd3f-4dc4-8ed0-0ccd8b859967",
+      "54872359-dfb9-4090-808a-a67210a0fffc"
+    ],
+    "files": [
+      "packages/bee-rs/crates/bee/src/path_identity.rs"
+    ],
+    "read_first": [
+      "docs/history/fix-at-loop/CONTEXT.md",
+      "packages/bee-rs/crates/bee/src/path_identity.rs"
+    ],
     "affects_skills": [],
     "affects_specs": [],
     "action": "Contract C3 of docs/history/fix-at-loop/CONTEXT.md. Add tests whose names contain relative_to: (1) plain match returns the tail for both helpers; (2) a root reached through a symlink (tempdir, std::os::unix::fs::symlink under cfg(unix)) gives None from strip_root_lexical and the tail from relative_to; (3) an unrelated path gives None from both; (4) a path equal to the root gives an empty tail. Show the rule red once: write a throwaway Path::strip_prefix call in a scratch src file, run cargo clippy -- -D warnings, quote the disallowed_methods error naming both helpers, then remove the call; do not commit it. Quote the matched test count. No code comments.",
     "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- relative_to",
     "must_haves": {
-      "truths": ["relative_to tests exist and pass", "the clippy error text was shown once and names both helpers"],
-      "artifacts": [{"path": "packages/bee-rs/crates/bee/src/path_identity.rs", "substantive": "relative_to tests"}],
+      "truths": [
+        "relative_to tests exist and pass",
+        "the clippy error text was shown once and names both helpers"
+      ],
+      "artifacts": [
+        {
+          "path": "packages/bee-rs/crates/bee/src/path_identity.rs",
+          "substantive": "relative_to tests"
+        }
+      ],
       "key_links": [],
-      "prohibitions": ["No change to product code", "No code comments"]
+      "prohibitions": [
+        "No change to product code",
+        "No code comments"
+      ]
     },
-    "trace": {"worker": null, "outcome": null, "files_changed": [], "deviations": [], "friction": null, "capped_at": null, "behavior_change": false}
+    "trace": {
+      "worker": null,
+      "outcome": null,
+      "files_changed": [],
+      "deviations": [],
+      "friction": null,
+      "capped_at": null,
+      "behavior_change": false
+    }
   },
   {
     "id": "fal-4",
@@ -393,12 +550,18 @@ SMALLER PATH: doctrine only (tell agents to dedupe and close by hand) is cheaper
     "lane": "standard",
     "role": "docs",
     "status": "open",
-    "deps": ["fal-3t"],
-    "decisions": ["fb1807c1-5a39-44e1-ad3e-f2d902ca8339", "3bc9f528-d5d9-4c23-9d07-085ef094cf45"],
+    "deps": [
+      "fal-3t"
+    ],
+    "decisions": [
+      "fb1807c1-5a39-44e1-ad3e-f2d902ca8339",
+      "3bc9f528-d5d9-4c23-9d07-085ef094cf45"
+    ],
     "files": [
       "expertise/static-rules.md",
       "skills/bee-capturing/references/promotion.md",
-      ".bee/backlog.jsonl"
+      ".bee/backlog.jsonl",
+      "docs/history/codex-harness-hardening/release-manifest.json"
     ],
     "read_first": [
       "docs/history/fix-at-loop/CONTEXT.md",
@@ -406,17 +569,43 @@ SMALLER PATH: doctrine only (tell agents to dedupe and close by hand) is cheaper
       "skills/bee-capturing/references/promotion.md",
       "docs/knowledge/areas/feedback-digest/ranking-and-self-improvement.md"
     ],
-    "affects_skills": ["bee-capturing"],
+    "affects_skills": [
+      "skills/bee-capturing/SKILL.md"
+    ],
     "affects_specs": [],
     "action": "Implement D7 with D8's verb shape. In expertise/static-rules.md, section `## Show it red, then green`, add a closing step: after the rule is green, close the fix-at row it guards with bee backlog add --type backlog-closed --title \"<exact finding title>\" --layer <same fix-at layer> --severity P3 --detail \"guard: <rule> (<commit>)\"; say that a newer finding with the same title reopens it in bee feedback rank. In skills/bee-capturing/references/promotion.md step 2 (`2. Mechanizable?`), add one line pointing to that step. Short sentences, active voice, no new section. Then run bee dev regen so the vendored copies match, and include its outputs in the commit. Last, use the documented command once for real: close the strip_prefix finding (its exact title starts with `lcwr-1 compared absolute paths with a plain strip_prefix`; read it with .bee/bin/bee backlog findings --feature leader-check-windows-paths) with layer fix-at:check and detail `guard: packages/bee-rs/clippy.toml disallowed-methods std::path::Path::strip_prefix (<fal-3 commit>)`, then quote the line of .bee/bin/bee feedback rank that lists it as retired. The knowledge concepts are fal-5's.",
-    "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pointer_integrity --test instruction_laws",
+    "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pointer_integrity --test instruction_laws && .bee/bin/bee dev release-manifest --check",
     "must_haves": {
-      "truths": ["static-rules.md tells the agent to file the backlog-closed row after the rule goes green", "promotion.md step 2 points to it", "vendored copies match after regen", "the strip_prefix finding shows as retired in bee feedback rank"],
-      "artifacts": [{"path": "expertise/static-rules.md", "substantive": "the closing step"}],
-      "key_links": ["promotion.md step 2 names static-rules.md"],
-      "prohibitions": ["No new verb named", "No edit to LEADER.md", "Append to .bee/backlog.jsonl only through bee backlog add, one row"]
+      "truths": [
+        "static-rules.md tells the agent to file the backlog-closed row after the rule goes green",
+        "promotion.md step 2 points to it",
+        "vendored copies match after regen",
+        "the strip_prefix finding shows as retired in bee feedback rank"
+      ],
+      "artifacts": [
+        {
+          "path": "expertise/static-rules.md",
+          "substantive": "the closing step"
+        }
+      ],
+      "key_links": [
+        "promotion.md step 2 names static-rules.md"
+      ],
+      "prohibitions": [
+        "No new verb named",
+        "No edit to LEADER.md",
+        "Append to .bee/backlog.jsonl only through bee backlog add, one row"
+      ]
     },
-    "trace": {"worker": null, "outcome": null, "files_changed": [], "deviations": [], "friction": null, "capped_at": null, "behavior_change": false}
+    "trace": {
+      "worker": null,
+      "outcome": null,
+      "files_changed": [],
+      "deviations": [],
+      "friction": null,
+      "capped_at": null,
+      "behavior_change": false
+    }
   },
   {
     "id": "fal-4c",
@@ -425,21 +614,47 @@ SMALLER PATH: doctrine only (tell agents to dedupe and close by hand) is cheaper
     "lane": "standard",
     "role": "review",
     "status": "open",
-    "deps": ["fal-4"],
-    "decisions": ["fb1807c1-5a39-44e1-ad3e-f2d902ca8339"],
-    "files": ["expertise/static-rules.md", "skills/bee-capturing/references/promotion.md"],
-    "read_first": ["docs/history/fix-at-loop/CONTEXT.md", "expertise/static-rules.md", "skills/bee-capturing/references/promotion.md"],
+    "deps": [
+      "fal-4"
+    ],
+    "decisions": [
+      "fb1807c1-5a39-44e1-ad3e-f2d902ca8339"
+    ],
+    "files": [
+      "expertise/static-rules.md",
+      "skills/bee-capturing/references/promotion.md"
+    ],
+    "read_first": [
+      "docs/history/fix-at-loop/CONTEXT.md",
+      "expertise/static-rules.md",
+      "skills/bee-capturing/references/promotion.md"
+    ],
     "affects_skills": [],
     "affects_specs": [],
     "action": "Read-only check of fal-4: the bee backlog add line in static-rules.md uses only flags bee backlog add --help lists; the type backlog-closed is accepted (run bee backlog add --help and read the KIND_ALIASES note, never append a row); the vendored copies equal their sources; pointer_integrity, instruction_laws and rule_index_parity pass. Report PASS or the exact mismatch.",
     "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pointer_integrity --test instruction_laws --test rule_index_parity",
     "must_haves": {
-      "truths": ["the parity and pointer tests pass", "the documented command uses real flags"],
+      "truths": [
+        "the parity and pointer tests pass",
+        "the documented command uses real flags"
+      ],
       "artifacts": [],
       "key_links": [],
-      "prohibitions": ["Never edit a file", "Never append to .bee/backlog.jsonl"]
+      "prohibitions": [
+        "Never edit a file",
+        "Never append to .bee/backlog.jsonl"
+      ]
     },
-    "trace": {"worker": null, "outcome": null, "files_changed": [], "deviations": [], "friction": null, "capped_at": null, "behavior_change": false}
+    "trace": {
+      "worker": null,
+      "outcome": null,
+      "files_changed": [],
+      "deviations": [],
+      "friction": null,
+      "capped_at": null,
+      "behavior_change": false
+    },
+    "regen_obligation_ack": "read-only check cell; fal-4 runs the regen chain and the manifest check"
   },
   {
     "id": "fal-5",
@@ -448,25 +663,66 @@ SMALLER PATH: doctrine only (tell agents to dedupe and close by hand) is cheaper
     "lane": "standard",
     "role": "writer",
     "status": "open",
-    "deps": ["fal-1", "fal-1t", "fal-2", "fal-2t", "fal-3", "fal-3t", "fal-4", "fal-4c"],
-    "decisions": ["45d56b6f-68ef-4d86-a1a3-4f321a25f7b3", "097acbf6-840e-4647-a782-848c39627fd6", "3bc9f528-d5d9-4c23-9d07-085ef094cf45", "6f4070cf-faa5-4e9c-94b6-3e38e1cd4939", "9471088f-fd3f-4dc4-8ed0-0ccd8b859967", "54872359-dfb9-4090-808a-a67210a0fffc", "fb1807c1-5a39-44e1-ad3e-f2d902ca8339"],
+    "deps": [
+      "fal-1",
+      "fal-1t",
+      "fal-2",
+      "fal-2t",
+      "fal-3",
+      "fal-3t",
+      "fal-4",
+      "fal-4c"
+    ],
+    "decisions": [
+      "45d56b6f-68ef-4d86-a1a3-4f321a25f7b3",
+      "097acbf6-840e-4647-a782-848c39627fd6",
+      "3bc9f528-d5d9-4c23-9d07-085ef094cf45",
+      "6f4070cf-faa5-4e9c-94b6-3e38e1cd4939",
+      "9471088f-fd3f-4dc4-8ed0-0ccd8b859967",
+      "54872359-dfb9-4090-808a-a67210a0fffc",
+      "fb1807c1-5a39-44e1-ad3e-f2d902ca8339"
+    ],
     "files": [
       "docs/knowledge/areas/human-mailbox/overview.md",
       "docs/knowledge/areas/feedback-digest/ranking-and-self-improvement.md",
       "docs/history/fix-at-loop/delivery.md"
     ],
-    "read_first": ["docs/history/fix-at-loop/CONTEXT.md", "docs/history/fix-at-loop/plan.md"],
+    "read_first": [
+      "docs/history/fix-at-loop/CONTEXT.md",
+      "docs/history/fix-at-loop/plan.md"
+    ],
     "affects_skills": [],
-    "affects_specs": ["docs/knowledge/areas/human-mailbox/", "docs/knowledge/areas/feedback-digest/"],
+    "affects_specs": [
+      "docs/knowledge/areas/human-mailbox/",
+      "docs/knowledge/areas/feedback-digest/"
+    ],
     "action": "Run bee knowledge consolidate --feature fix-at-loop. Update docs/knowledge/areas/human-mailbox/overview.md item 17 (identity is layer and normalized title across features within the current close epoch, D1 and D10) and `## A mistake seen twice` (a landed guard files the backlog-closed row, D7, D8). Update docs/knowledge/areas/feedback-digest/ranking-and-self-improvement.md with the fold of copies within a close epoch (D2, D10) and the open, closed and preamble fields of prose_load (D6, D8). Cite history D-numbers as fix-at-loop D<n>, never raw decision ids. Name packages/bee-rs/clippy.toml and path_identity.rs in the Pointers of the concept that fits, or of a new pattern if none fits. Write docs/history/fix-at-loop/delivery.md.",
     "verify": ".bee/bin/bee knowledge check",
     "must_haves": {
-      "truths": ["the two concepts describe the new behavior", "delivery.md exists"],
-      "artifacts": [{"path": "docs/history/fix-at-loop/delivery.md", "substantive": "what shipped and the proof"}],
+      "truths": [
+        "the two concepts describe the new behavior",
+        "delivery.md exists"
+      ],
+      "artifacts": [
+        {
+          "path": "docs/history/fix-at-loop/delivery.md",
+          "substantive": "what shipped and the proof"
+        }
+      ],
       "key_links": [],
-      "prohibitions": ["No raw decision ids in area docs"]
+      "prohibitions": [
+        "No raw decision ids in area docs"
+      ]
     },
-    "trace": {"worker": null, "outcome": null, "files_changed": [], "deviations": [], "friction": null, "capped_at": null, "behavior_change": false}
+    "trace": {
+      "worker": null,
+      "outcome": null,
+      "files_changed": [],
+      "deviations": [],
+      "friction": null,
+      "capped_at": null,
+      "behavior_change": false
+    }
   }
 ]
 ```
