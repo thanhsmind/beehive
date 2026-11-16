@@ -45,7 +45,7 @@
 
 use super::feedback::{
     backlog_allowed_type, emit_error, emit_success, find_ci, js_is_space, js_trim, js_truthy,
-    now_iso, parse_shape, random_bytes, read_jsonl, require_flag, value_js_safe, ParsedArgs,
+    normalize_title, now_iso, parse_shape, random_bytes, read_jsonl, require_flag, value_js_safe, ParsedArgs,
 };
 use crate::fsutil::append_jsonl;
 use crate::jsjson;
@@ -432,6 +432,7 @@ pub(crate) fn backlog_finding_row(
 /// carries no id, so the three fields ARE its identity; equality is exact on
 /// all three, never fuzzy — a near-match is a different mistake, and the
 /// digest reads `title` verbatim.
+#[cfg(test)]
 pub(crate) fn backlog_finding_exists(root: &Path, feature: &str, layer: &str, title: &str) -> bool {
     read_jsonl(&backlog_jsonl_path(root)).rows.iter().any(|row| {
         if !is_finding_row(row) {
@@ -440,6 +441,24 @@ pub(crate) fn backlog_finding_exists(root: &Path, feature: &str, layer: &str, ti
         let field = |name: &str| row.get(name).and_then(Value::as_str).unwrap_or("");
         field("feature") == feature && field("layer") == layer && field("title") == title
     })
+}
+
+pub(crate) fn current_epoch_finding_feature(root: &Path, layer: &str, title: &str) -> Option<String> {
+    let rows = read_jsonl(&backlog_jsonl_path(root)).rows;
+    let key = normalize_title(&Value::String(title.to_string()));
+    let field = |row: &Value, name: &str| row.get(name).and_then(Value::as_str).unwrap_or("").to_string();
+    let same_title = |row: &Value| normalize_title(&row.get("title").cloned().unwrap_or(Value::Null)) == key;
+    let closed_at = rows
+        .iter()
+        .filter(|row| {
+            (field(row, "type") == "backlog-closed" || field(row, "kind") == "backlog-closed") && same_title(row)
+        })
+        .map(|row| field(row, "ts"))
+        .max();
+    rows.iter()
+        .filter(|row| is_finding_row(row) && field(row, "layer") == layer && same_title(row))
+        .find(|row| closed_at.as_ref().is_none_or(|c| field(row, "ts") > *c))
+        .map(|row| field(row, "feature"))
 }
 
 /// matchesBacklogFeature: String(row.feature) whole-token match.

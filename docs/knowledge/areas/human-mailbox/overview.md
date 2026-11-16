@@ -12,7 +12,7 @@ bee:
   sources: [docs/history/human-mailbox/CONTEXT.md (the locked decisions), "docs/history/human-mailbox/plan.md (four phases, strictly ordered)", docs/discovery/human-mailbox/MAP.md (the discovery map and its 14 tickets), "cells hm-1..hm-10 (four slices, merged 2026-08-25/26)"]
   authoritative_for: "human-mailbox: the letter record, when it is filed, and the one command a consumer may call"
   owns.code: [packages/bee-rs/crates/bee/src/verbs/mailbox.rs]
-  anchors: [packages/bee-rs/crates/bee/src/verbs/mailbox.rs, packages/bee-rs/crates/bee/src/verbs/mailbox_digest.rs, packages/bee-rs/crates/bee/src/verbs/work.rs, packages/bee-rs/crates/bee/src/verbs/cells/audit.rs, packages/bee-rs/crates/bee/src/verbs/feedback.rs, packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs, packages/bee-rs/crates/bee/src/verbs/drivers/close.rs]
+  anchors: [packages/bee-rs/crates/bee/src/verbs/mailbox.rs, packages/bee-rs/crates/bee/src/verbs/mailbox_digest.rs, packages/bee-rs/crates/bee/src/verbs/work.rs, packages/bee-rs/crates/bee/src/verbs/cells/audit.rs, packages/bee-rs/crates/bee/src/verbs/feedback.rs, packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs, packages/bee-rs/crates/bee/src/verbs/drivers/close.rs, packages/bee-rs/crates/bee/src/verbs/backlog.rs]
   verified_at: 2026-10-16
   verified_commit: bce76a97d58a512b181a260c6f4a6461148ebd58
 ---
@@ -186,7 +186,12 @@ scheduler being introduced to watch for this.
     the cell or run it came from. The source set is the feature's capped
     cells' `trace.mistakes` (archive included) and the closing run's own
     entries — nothing else carries a feature. The same row is never filed
-    twice: (feature, layer, title) is re-read per row. `doctrine` and `none`
+    twice: (layer, normalized title) is re-read per row across every
+    feature, within the current close epoch (newer than the latest
+    `backlog-closed` row of that title), so one reflection seen by two
+    features files once and the later close's pointer names the owner, while
+    a mistake repeated after a close files anew (fix-at-loop D1/D10; `bee
+    backlog add` keeps its per-feature dedupe). `doctrine` and `none`
     file nothing and stay on the two-run lesson rule. The close then says
     `Filed for "<feature>": N fix-at row(s) to .bee/backlog.jsonl (M already
     there) — bee backlog findings --feature <feature> to read them.`, and

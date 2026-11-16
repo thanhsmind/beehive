@@ -314,6 +314,7 @@ struct FixAtRows {
     filed: usize,
     /// Mistakes whose row was already on disk — the re-close count.
     skipped: usize,
+    owner: Option<String>,
     /// FAIL-OPEN (CONTEXT.md, the mailbox rule): a backlog that cannot be
     /// written warns and never refuses the close. One line, however many
     /// rows failed, naming the path.
@@ -401,21 +402,24 @@ fn mechanizable_mistakes(root: &Path, feature: &str) -> Vec<Mechanizable> {
 /// and appended by `fsutil::append_jsonl`, the two homes `bee backlog add`
 /// itself uses, so there is no second row shape.
 ///
-/// Dedupe is `backlog_finding_exists` on (feature, layer, title) — re-read
+/// Dedupe is `current_epoch_finding_feature` on (layer, title) — re-read
 /// per row, which is also what keeps two identical mistakes in ONE close
 /// from filing twice: the first append is on disk before the second is asked
 /// about.
 fn file_fix_at_rows(root: &Path, feature: &str) -> FixAtRows {
     use crate::verbs::backlog;
-    let mut rows = FixAtRows { filed: 0, skipped: 0, warning: None };
+    let mut rows = FixAtRows { filed: 0, skipped: 0, owner: None, warning: None };
     let path = backlog::backlog_jsonl_path(root);
     for m in mechanizable_mistakes(root, feature) {
         let layer = format!("fix-at:{}", m.fix_at);
         // The title rides the same `--title` cap `bee backlog add` enforces,
         // so a filed row is one a human could have filed by hand.
         let title = crate::textutil::truncate_chars_head(&m.wrong, backlog::BACKLOG_MAX_TITLE);
-        if backlog::backlog_finding_exists(root, feature, &layer, &title) {
+        if let Some(owner) = backlog::current_epoch_finding_feature(root, &layer, &title) {
             rows.skipped += 1;
+            if owner != feature && rows.owner.is_none() {
+                rows.owner = Some(owner);
+            }
             continue;
         }
         let detail = format!("{} (from {})", m.better, m.source);
@@ -3214,8 +3218,10 @@ fn close_handler_core(
     // there)" would be noise on most closes.
     if fix_at_rows.filed > 0 || fix_at_rows.skipped > 0 {
         lines.push(format!(
-            "Filed for \"{feature}\": {} fix-at row(s) to .bee/backlog.jsonl ({} already there) — bee backlog findings --feature {feature} to read them.",
-            fix_at_rows.filed, fix_at_rows.skipped
+            "Filed for \"{feature}\": {} fix-at row(s) to .bee/backlog.jsonl ({} already there) — bee backlog findings --feature {} to read them.",
+            fix_at_rows.filed,
+            fix_at_rows.skipped,
+            fix_at_rows.owner.as_deref().unwrap_or(feature)
         ));
     }
     if let Some(warning) = &fix_at_rows.warning {
