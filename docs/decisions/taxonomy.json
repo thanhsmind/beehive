@@ -900,6 +900,12 @@
     "contract:clippy-warnings-clean",
     "contract:release-2-108-0-check",
     "contract:clippy-1100-fix",
-    "contract:cargo-build-dir-tests"
+    "contract:cargo-build-dir-tests",
+    "contract:team-guard",
+    "contract:config-verbs",
+    "contract:team-json-seed",
+    "commands",
+    "contract:commands-notice-names-config-set",
+    "contract:set-up-checks-procedure"
   ]
 }
