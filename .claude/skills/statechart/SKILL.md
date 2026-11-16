@@ -6,6 +6,6 @@ metadata:
   skillstation_alias: statechart
 ---
 This skill lives in the Skillstation hub.
-Call the skillstation MCP tool `skill_get` with skill_id `statechart`.
-Follow the returned content as this skill.
-If the tool is missing, tell the user to run `skillstation connect -g`.
+Load it with the CLI first: run `skillstation skill show statechart --json` and follow its content field as this skill when manifest.status is active.
+Call the skillstation MCP tool `skill_get` with skill_id `statechart` instead when that content sends you to a relative file of the skill, when the status is not active, or when the CLI is missing or fails.
+If neither works, tell the user to run `skillstation connect -g`.

@@ -6,6 +6,6 @@ metadata:
   skillstation_alias: maintain-formal-verification-skill
 ---
 This skill lives in the Skillstation hub.
-Call the skillstation MCP tool `skill_get` with skill_id `maintain-formal-verification-skill`.
-Follow the returned content as this skill.
-If the tool is missing, tell the user to run `skillstation connect -g`.
+Load it with the CLI first: run `skillstation skill show maintain-formal-verification-skill --json` and follow its content field as this skill when manifest.status is active.
+Call the skillstation MCP tool `skill_get` with skill_id `maintain-formal-verification-skill` instead when that content sends you to a relative file of the skill, when the status is not active, or when the CLI is missing or fails.
+If neither works, tell the user to run `skillstation connect -g`.
