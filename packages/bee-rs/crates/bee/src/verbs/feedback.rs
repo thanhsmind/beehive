@@ -994,6 +994,9 @@ fn collect_feedback(root: &Path) -> Option<CollectData> {
             // whole command; read_jsonl now skips it like any other corrupt
             // line and it lands in the same `skipped` tally Node counted.
             skipped += read.bad_lines;
+            let closes = close_stamps(&read.rows);
+            let mut folded: std::collections::HashMap<(String, String, String, usize), usize> =
+                std::collections::HashMap::new();
             for row in read.rows {
                 match &row {
                     Value::Object(m) => {
@@ -1008,14 +1011,43 @@ fn collect_feedback(root: &Path) -> Option<CollectData> {
                             Some("P3") => 1.0,
                             _ => 1.0,
                         };
-                        raw.push(RawCandidate {
+                        let candidate = RawCandidate {
                             ty: m.get("type").cloned().unwrap_or(Value::Null),
                             title: m.get("title").cloned().unwrap_or(Value::Null),
                             layer: m.get("layer").cloned().unwrap_or(Value::Null),
                             first_seen: m.get("ts").cloned().unwrap_or(Value::Null),
                             pain,
                             source: SRC_BACKLOG.to_string(),
-                        });
+                        };
+                        let foldable = matches!(candidate.ty.as_str(), Some("finding" | "friction"));
+                        if !foldable {
+                            raw.push(candidate);
+                            continue;
+                        }
+                        let title = normalize_title(&candidate.title);
+                        let epoch = close_epoch(&closes, &title, ts_str(&candidate.first_seen));
+                        let key = (
+                            candidate.ty.as_str().unwrap_or("").to_string(),
+                            candidate.layer.as_str().unwrap_or("").to_string(),
+                            title,
+                            epoch,
+                        );
+                        match folded.get(&key) {
+                            Some(&at) => {
+                                let earlier = &mut raw[at];
+                                let older = matches!(
+                                    (candidate.first_seen.as_str(), earlier.first_seen.as_str()),
+                                    (Some(new), Some(old)) if new < old
+                                );
+                                if older {
+                                    earlier.first_seen = candidate.first_seen;
+                                }
+                            }
+                            None => {
+                                folded.insert(key, raw.len());
+                                raw.push(candidate);
+                            }
+                        }
                     }
                     // JS: typeof [] === 'object' — arrays reach the candidate
                     // path with every field undefined (-> unknown_type drop).
@@ -1666,22 +1698,100 @@ fn critical_pattern_count(root: &Path) -> Option<u64> {
     found.then_some(n)
 }
 
-fn fix_at_row_counts(root: &Path) -> (Option<u64>, Option<u64>) {
-    let Ok(real_root) = dunce::canonicalize(root) else {
-        return (None, None);
-    };
+fn ts_str(ts: &Value) -> &str {
+    ts.as_str().unwrap_or("")
+}
+
+fn close_stamps(rows: &[Value]) -> Vec<(String, String)> {
+    rows.iter()
+        .filter(|r| r.get("type").and_then(Value::as_str) == Some("backlog-closed"))
+        .map(|r| {
+            (
+                normalize_title(r.get("title").unwrap_or(&Value::Null)),
+                ts_str(r.get("ts").unwrap_or(&Value::Null)).to_string(),
+            )
+        })
+        .collect()
+}
+
+fn close_epoch(closes: &[(String, String)], title: &str, ts: &str) -> usize {
+    closes.iter().filter(|(t, c)| t == title && c.as_str() < ts).count()
+}
+
+struct FixAtLoad {
+    check_rows: u64,
+    architecture_rows: u64,
+    check_open: u64,
+    architecture_open: u64,
+    closed: u64,
+}
+
+fn fix_at_load(root: &Path) -> Option<FixAtLoad> {
+    let real_root = dunce::canonicalize(root).ok()?;
     let Scope::Ok(path) = resolve_in_scope(&real_root, SRC_BACKLOG) else {
-        return (None, None);
+        return None;
     };
-    let (mut check, mut architecture) = (0u64, 0u64);
-    for row in read_jsonl(&path).rows {
-        match row.get("layer").and_then(Value::as_str) {
-            Some("fix-at:check") => check += 1,
-            Some("fix-at:architecture") => architecture += 1,
-            _ => {}
+    let rows = read_jsonl(&path).rows;
+    let closes = close_stamps(&rows);
+    let mut load = FixAtLoad {
+        check_rows: 0,
+        architecture_rows: 0,
+        check_open: 0,
+        architecture_open: 0,
+        closed: 0,
+    };
+    let mut newest: std::collections::HashMap<(&str, String), &str> =
+        std::collections::HashMap::new();
+    for row in &rows {
+        let layer = match row.get("layer").and_then(Value::as_str) {
+            Some(l @ "fix-at:check") => {
+                load.check_rows += 1;
+                l
+            }
+            Some(l @ "fix-at:architecture") => {
+                load.architecture_rows += 1;
+                l
+            }
+            _ => continue,
+        };
+        if row.get("type").and_then(Value::as_str) == Some("backlog-closed") {
+            continue;
+        }
+        let ts = ts_str(row.get("ts").unwrap_or(&Value::Null));
+        let seen = newest
+            .entry((layer, normalize_title(row.get("title").unwrap_or(&Value::Null))))
+            .or_insert(ts);
+        if ts > *seen {
+            *seen = ts;
         }
     }
-    (Some(check), Some(architecture))
+    for ((layer, title), ts) in newest {
+        if closes.iter().any(|(t, c)| *t == title && c.as_str() > ts) {
+            load.closed += 1;
+        } else if layer == "fix-at:check" {
+            load.check_open += 1;
+        } else {
+            load.architecture_open += 1;
+        }
+    }
+    Some(load)
+}
+
+fn preamble_load(root: &Path) -> Option<(u64, u64)> {
+    if !root.join(".bee").is_dir() {
+        return None;
+    }
+    let text = std::panic::catch_unwind(|| {
+        crate::hooks::session_preamble::build_session_preamble_within(
+            root,
+            None,
+            None,
+            "claude",
+            crate::hooks::session_preamble::PREAMBLE_BUDGET_BYTES,
+        )
+    })
+    .ok()?;
+    Some((text.len() as u64, text.lines().count() as u64))
 }
 
 fn prose_load_value(root: &Path) -> Value {
@@ -1705,24 +1815,52 @@ fn prose_load_value(root: &Path) -> Value {
             *project_lines.get_or_insert(0) += lines;
         }
     }
-    let (check, architecture) = fix_at_row_counts(root);
+    let load = fix_at_load(root);
+    let preamble = preamble_load(root);
     serde_json::json!({
         "project_files": project_files,
         "project_lines": project_lines,
         "bee_lines": bee_lines,
         "critical_patterns": critical_pattern_count(root),
-        "fix_at_check_rows": check,
-        "fix_at_architecture_rows": architecture,
+        "fix_at_check_rows": load.as_ref().map(|l| l.check_rows),
+        "fix_at_architecture_rows": load.as_ref().map(|l| l.architecture_rows),
+        "fix_at_check_open": load.as_ref().map(|l| l.check_open),
+        "fix_at_architecture_open": load.as_ref().map(|l| l.architecture_open),
+        "fix_at_closed": load.as_ref().map(|l| l.closed),
+        "preamble_bytes": preamble.map(|p| p.0),
+        "preamble_lines": preamble.map(|p| p.1),
     })
+}
+
+fn group_thousands(n: u64) -> String {
+    let digits = n.to_string();
+    let mut out = String::new();
+    for (i, c) in digits.chars().enumerate() {
+        if i > 0 && (digits.len() - i).is_multiple_of(3) {
+            out.push(',');
+        }
+        out.push(c);
+    }
+    out
 }
 
 fn prose_load_line(digest: &Value) -> String {
     let p = &digest["prose_load"];
     let n = |key: &str| p[key].as_u64().map_or("not present".to_string(), |v| v.to_string());
-    let rows = match (p["fix_at_check_rows"].as_u64(), p["fix_at_architecture_rows"].as_u64()) {
-        (Some(c), Some(a)) => format!("{c} check and {a} architecture rows filed"),
+    let mut rows = match (
+        p["fix_at_check_open"].as_u64(),
+        p["fix_at_architecture_open"].as_u64(),
+        p["fix_at_closed"].as_u64(),
+    ) {
+        (Some(c), Some(a), Some(closed)) => {
+            format!("fix-at: {} open ({c} check, {a} architecture), {closed} closed", c + a)
+        }
         _ => "rows filed not present".to_string(),
     };
+    if let (Some(bytes), Some(lines)) = (p["preamble_bytes"].as_u64(), p["preamble_lines"].as_u64())
+    {
+        rows.push_str(&format!("; preamble {} bytes / {lines} lines", group_thousands(bytes)));
+    }
     let lead = |key: &str, noun: &str| match p[key].as_u64() {
         Some(v) => format!("{v} {noun}"),
         None => format!("{noun} {}", n(key)),
@@ -2590,11 +2728,16 @@ mod tests {
         assert_eq!(p["critical_patterns"], json!(3));
         assert_eq!(p["fix_at_check_rows"], json!(2));
         assert_eq!(p["fix_at_architecture_rows"], json!(1));
+        assert_eq!(p["fix_at_check_open"], json!(2));
+        assert_eq!(p["fix_at_architecture_open"], json!(1));
+        assert_eq!(p["fix_at_closed"], json!(0));
+        assert!(p["preamble_bytes"].as_u64().unwrap() > 0);
+        assert!(p["preamble_lines"].as_u64().unwrap() > 0);
         assert_eq!(p["project_files"], json!([{"path": "AGENTS.md", "lines": 3}]));
         let line = digest_summary_line(&digest);
         assert!(
             line.contains(
-                "prose load: 3 project lines, 2 bee lines, 3 critical patterns, 2 check and 1 architecture rows filed"
+                "prose load: 3 project lines, 2 bee lines, 3 critical patterns, fix-at: 3 open (2 check, 1 architecture), 0 closed; preamble "
             ),
             "{line}"
         );

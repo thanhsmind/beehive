@@ -118,3 +118,4 @@ previous change never counts as approval of the next publication.
 
 - **P3** — The self-improvement process: `docs/handbook/evolving.md`; contract in
   `docs/07-contracts.md`; decision record `docs/decisions/0022-evolving-loop.md`
+- **Fix-at fold and load** — Read when: the digest shows one entry for many filed copies, or `prose_load` reports open and closed counts. Backlog finding and friction rows with the same type, layer, normalized title and close epoch (the count of older `backlog-closed` rows with that title) fold into one entry at read time, earliest `ts` kept, pain not summed; a post-close copy stays its own entry so rank still says `recurred`. `prose_load` counts distinct (layer, title) keys as open or closed and renders the SessionStart preamble size; find them in `verbs/feedback.rs` (`close_epoch`, `fix_at_load`, `preamble_load`). Decisions: `docs/history/fix-at-loop/CONTEXT.md` D2, D6, D8, D10.
