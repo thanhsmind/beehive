@@ -277,6 +277,11 @@ seats and instruments, budget, quorum, idempotence, headless, bypass, and
 communication. This section is what planning consumes, by pointer; it never
 restates that procedure.
 
+The wave opens the moment the shape is drafted, concurrent with the SMALLER
+PATH check — the stage costs `max(wave, planning)`, never the sum. Findings
+block nothing until the gate presentation, and the gate never happens while
+the wave is outstanding.
+
 **Scaling.** `standard` with ≤5 product files and zero hard-gate flags: no
 dispatch — the session model runs both mandates inline, same vocabularies,
 same caps. A hard-gate flag, a 6th product file, or doubt about self-review
