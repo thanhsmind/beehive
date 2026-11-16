@@ -113,7 +113,7 @@ Waves: serial, tgc-1 → tgc-2 → tgc-3 → tgc-4 → tgc-5 → tgc-6 → tgc-7
   "roster_sha256": "d4e696dbde7989d6388dacce3fd7057cb3a6935b46024b79698596a46f6f41d3",
   "stages": [
     {"stage":"implementation","classification":"required","role":"code","reason":"tgc-1 to tgc-5 and tgc-8 write Rust and their red-first tests."},
-    {"stage":"test-and-live-proof","classification":"required","role":"test","reason":"tgc-6: a tester that shares no context with the implementers drives the built binary and adds tests."},
+    {"stage":"test-and-live-proof","classification":"required","role":"test","reason":"tgc-6 and tgc-9: a tester that shares no context with the implementers drives the built binary, re-proves each cell contract and adds tests."},
     {"stage":"docs","classification":"required","role":"docs","reason":"tgc-7 syncs config-reference, knowledge and delivery."},
     {"stage":"hat-facts-gaps","classification":"required","role":"hat-facts-gaps","reason":"High-risk: all five seats run the plan check."},
     {"stage":"hat-alternatives","classification":"required","role":"hat-alternatives","reason":"High-risk seat."},
@@ -176,6 +176,7 @@ PLAN CHECK (five seats, one round): `reports/hat-wave.md`. BLOCKERS, all closed 
 | tgc-6 | Drive the global layer and split-team end to end | tests/config_verbs.rs, .bee/verify/verify-app/features/ | tgc-5 | sandbox evidence for every path above | verify-app drive + added tests |
 | tgc-8 | Refuse global-config writes and governed team.json changes in a herded pane | hooks/write_guard/worker_tree.rs, hooks/write_guard/tests.rs | tgc-6 | a herded worker's write to the global file, or a governed team.json change, is refused | `cargo test … --bin bee -- herded_team_guard` |
 | tgc-7 | Document the config layers and write the delivery | docs/config-reference.md, docs/knowledge/**, delivery.md (new) | tgc-8 | config-reference and five concepts describe the layers | `bee knowledge check` |
+| tgc-9 | Independent tester pass over the code and docs cells | packages/bee-rs/crates/bee/tests/config_verbs.rs, docs/history/team-global-config/reports/tester.md (new) | tgc-1, tgc-2, tgc-3, tgc-4, tgc-7, tgc-8 | each code cell's contract re-proved by a tester that shares no context with its implementer; docs pointers checked | `cargo test … --bin bee -- config_layers team_guard herded_team_guard config_global split_team` + `--test config_verbs` |
 
 ```json
 [
@@ -722,6 +723,70 @@ PLAN CHECK (five seats, one round): `reports/hat-wave.md`. BLOCKERS, all closed 
       "prohibitions": [
         "No raw decision ids in area docs",
         "No change to .bee/config.json in this cell"
+      ],
+      "open_choices": []
+    },
+    "trace": {
+      "worker": null,
+      "outcome": null,
+      "files_changed": [],
+      "deviations": [],
+      "friction": null,
+      "capped_at": null,
+      "behavior_change": false
+    }
+  },
+  {
+    "id": "tgc-9",
+    "feature": "team-global-config",
+    "title": "Independent tester pass over the code and docs cells",
+    "lane": "high-risk",
+    "role": "test",
+    "status": "open",
+    "deps": [
+      "tgc-1",
+      "tgc-2",
+      "tgc-3",
+      "tgc-4",
+      "tgc-7",
+      "tgc-8"
+    ],
+    "decisions": [
+      "70e20aff-e422-4e0a-bacc-3b1b03d13c8f",
+      "09763647-9caf-4532-bfa6-4ddb380901ad",
+      "ab46d221-2783-472a-bec7-db80111b7a9d",
+      "a0f6985d-2d1f-46de-b93b-25fa649f5434"
+    ],
+    "files": [
+      "packages/bee-rs/crates/bee/tests/config_verbs.rs",
+      "docs/history/team-global-config/reports/tester.md"
+    ],
+    "read_first": [
+      "docs/history/team-global-config/CONTEXT.md",
+      "docs/history/team-global-config/plan.md",
+      "packages/bee-rs/crates/bee/src/config_layers.rs",
+      "docs/config-reference.md"
+    ],
+    "affects_skills": [],
+    "affects_specs": [],
+    "action": "You are the tester for cells tgc-1, tgc-2, tgc-3, tgc-4, tgc-7 and tgc-8; you share no context with their implementers. Read CONTEXT.md D1-D14 and C1-C3. For each code cell, read its diff (git log on this branch names each commit by its `cell: <id>` trailer) and check its contract against the decisions, not against the implementer's own tests: C1 config-layers (precedence for each adjacent pair, forbidden global keys dropped, team.json foreign keys ignored, corrupt layer read as empty) for tgc-1 and tgc-2; C2 team-guard (governed team.json change refused, equal-view move allowed, global-file write refused) for tgc-3; C3 config-verbs for tgc-4; D14 herded pane for tgc-8. Where a contract point has no test that would fail if the behavior broke, add one to tests/config_verbs.rs (integration, BEEHIVE_CONFIG_DIR set to a temp dir) whose name contains config_tester, and watch it fail by a temporary local break that you revert before the commit. For tgc-7, check that every path and D-number cited in docs/config-reference.md and the five concepts it changed resolves (file exists, D-number exists in CONTEXT.md). Write docs/history/team-global-config/reports/tester.md: one row per cell, its contract points, the test that proves each, any gap found and what you added. A defect in production code is reported, never fixed here. No code comments. Quote the matched test counts, above zero.",
+    "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- config_layers team_guard herded_team_guard config_global split_team && cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test config_verbs",
+    "must_haves": {
+      "truths": [
+        "Each of tgc-1, tgc-2, tgc-3, tgc-4, tgc-8 has its contract points mapped to a test that fails when the behavior breaks",
+        "Every path and D-number tgc-7 cites resolves",
+        "reports/tester.md lists each cell, its proof and any gap"
+      ],
+      "artifacts": [
+        {
+          "path": "docs/history/team-global-config/reports/tester.md",
+          "substantive": "per-cell tester verdicts"
+        }
+      ],
+      "key_links": [],
+      "prohibitions": [
+        "No production code change",
+        "No code comments"
       ],
       "open_choices": []
     },
