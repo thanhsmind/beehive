@@ -671,7 +671,8 @@ already an index).
 ],
 "affects_skills": [],
 "affects_specs": [],
-"action": "Implement CONTEXT.md D3 using audit F-execution.md findings F1 to F15. Keep the bee-swarming description clause about the worker for one cell id (skill trigger fixture). Keep the herding test that asserts the herding prompt has no skill-load line passing. Before naming worker-cell.md the Result form home, check its form against the cells finish report validation and say which form the code accepts. Decision ids go to skills/bee-swarming/references/provenance.md. Keep the F-execution.md do-not-touch list. Update the golden prompt constant and any test forced by the change; no other new tests (stdi-16 owns them). Edit sources only; do not run regen. Rules for every cell: keep every rule and its why-clause (agents-block-diet D6); keep test-pinned wording unless this action names the pin; never add a size limit (D1). Write no code comments. Plain English, short sentences. Allowed bee commands: the cell verify, .bee/bin/bee knowledge check, .bee/bin/bee knowledge search. Do not run any bee dispatch or herding verb, not even its help. Run only the cell verify, never the full suite. Commit only the files of this cell, one commit, trailer cell: <id>."
+"action": "Implement CONTEXT.md D3 using audit F-execution.md findings F1 to F15. Keep the bee-swarming description clause about the worker for one cell id (skill trigger fixture). Keep the herding test that asserts the herding prompt has no skill-load line passing. Before naming worker-cell.md the Result form home, check its form against the cells finish report validation and say which form the code accepts. Decision ids go to skills/bee-swarming/references/provenance.md. Keep the F-execution.md do-not-touch list. Update the golden prompt constant and any test forced by the change; no other new tests (stdi-16 owns them). Edit sources only; do not run regen. Rules for every cell: keep every rule and its why-clause (agents-block-diet D6); keep test-pinned wording unless this action names the pin; never add a size limit (D1). Write no code comments. Plain English, short sentences. Allowed bee commands: the cell verify, .bee/bin/bee knowledge check, .bee/bin/bee knowledge search. Do not run any bee dispatch or herding verb, not even its help. Run only the cell verify, never the full suite. Commit only the files of this cell, one commit, trailer cell: <id>.",
+"regen_obligation_ack": "source edits only; stdi-19 runs the regen chain once for every writer"
 },
 {
 "id": "stdi-16",
@@ -795,7 +796,7 @@ already an index).
 "stdi-16",
 "stdi-18"
 ],
-"verify": ".bee/bin/bee dev release-manifest --check && .bee/bin/bee knowledge check",
+"verify": ".bee/bin/bee onboard --repo-root . --json && .bee/bin/bee dev release-manifest --check && .bee/bin/bee knowledge check",
 "must_haves": {
 "truths": [
 "bee dev regen ran once after every writer cell and the rendered copies match their sources",
