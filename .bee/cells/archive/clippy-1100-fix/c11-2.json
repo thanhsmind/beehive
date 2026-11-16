@@ -1,0 +1,147 @@
+{
+  "id": "c11-2",
+  "feature": "clippy-1100-fix",
+  "title": "Verify clippy 1.100 cleanliness and the empty-fleet truth table",
+  "lane": "small",
+  "role": "test",
+  "deps": [
+    "c11-1"
+  ],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo +1.100.0 clippy --manifest-path packages/bee-rs/Cargo.toml -- -D warnings && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo clippy --manifest-path packages/bee-rs/Cargo.toml -- -D warnings && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml",
+  "full_suite_reason": "Removing a crate dependency can break any target that builds fleet; the full suite is the related test.",
+  "must_haves": {
+    "truths": [
+      "clippy 1.100.0 -D warnings exits 0 with no warning line",
+      "default-toolchain clippy -D warnings exits 0",
+      "the full cargo test is green",
+      "the existing is_empty_fleet tests cover every arm of its truth table, or a new test adds the missing arm",
+      "the report under docs/history/clippy-1100-fix/reports/ lists each check with its result"
+    ]
+  },
+  "decisions": [
+    "e6d916ce-9dfe-435d-abb6-14c3a4ec0bce",
+    "7bb9fb4c-36e5-4486-bbc3-81240abd9d1f"
+  ],
+  "files": [
+    "docs/history/clippy-1100-fix/reports/c11-2.md",
+    "packages/bee-rs/crates/bee/src/herding/wave_ledger.rs"
+  ],
+  "read_first": [
+    "docs/history/clippy-1100-fix/CONTEXT.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Check contract clippy-1100-fix (decision e6d916ce) on the c11-1 commit. Run the verify (CARGO_TARGET_DIR=/home/thanhsmind/.cache/cargo-target-r100 for the +1.100.0 run). Read the is_empty_fleet tests in wave_ledger.rs (around 795-874) and map them to the truth table; add a test in that tests module only for an arm no test covers. Edit no production code. Write docs/history/clippy-1100-fix/reports/c11-2.md with each check, command and result. If a check fails, return BLOCKED with the evidence. Commit once (cell trailer).",
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "c11-2-worker",
+    "outcome": "clippy 1.100.0 and default-toolchain clippy -D warnings both exit 0, full release suite 5828 passed / 0 failed; added the missing mixed dry_run+failed is_empty_fleet test (mutation-proven); commit 81a99858e",
+    "files_changed": [
+      "docs/history/clippy-1100-fix/reports/c11-2.md",
+      "packages/bee-rs/crates/bee/src/herding/wave_ledger.rs"
+    ],
+    "deviations": [
+      "sync-ack: Test and report only; red first: CI run 43789475981 and local cargo +1.100.0 clippy reported needless_bool before c11-1; green after on both toolchains; the new mixed-row test was mutation-proven red"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-16T02:20:14.369Z",
+    "behavior_change": false,
+    "verification_evidence": "cargo +1.100.0 clippy -- -D warnings && cargo clippy -- -D warnings && cargo test --release --no-fail-fast (packages/bee-rs) — green:static+green:unit — the cell's full verify, since dropping a crate dependency can break any target",
+    "verify_output": "green:red-first",
+    "verify_passed": true,
+    "claim_session": "542c65ba-d0f1-433f-bdc0-b1f702334e00",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo +1.100.0 clippy --manifest-path packages/bee-rs/Cargo.toml -- -D warnings && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo clippy --manifest-path packages/bee-rs/Cargo.toml -- -D warnings && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml",
+    "claimed_at": "2026-11-16T02:11:46.031Z",
+    "knowledge_delta": [],
+    "sync_ack": "Test and report only; red first: CI run 43789475981 and local cargo +1.100.0 clippy reported needless_bool before c11-1; green after on both toolchains; the new mixed-row test was mutation-proven red",
+    "no_mistakes": true,
+    "no_knowledge_used": true,
+    "principles_used": [
+      {
+        "slug": "bee-principle-red-before-green",
+        "changed": "kept the new test only after it failed against an .all->.any mutation"
+      },
+      {
+        "slug": "bee-principle-test-behavior-not-structure",
+        "changed": "the new test asserts the is_empty_fleet return value and that a verdict exists"
+      },
+      {
+        "slug": "bee-principle-prove-it-works",
+        "changed": "re-ran both clippy checks after the edit because the first run was served from cache"
+      }
+    ],
+    "report": {
+      "outcome": "clippy 1.100.0 and default-toolchain clippy -D warnings both exit 0, full release suite 5828 passed / 0 failed; added the missing mixed dry_run+failed is_empty_fleet test (mutation-proven); commit 81a99858e",
+      "commit": "81a99858e4828e0abf1fd1bd0276ce78446b0943",
+      "files": [
+        "docs/history/clippy-1100-fix/reports/c11-2.md",
+        "packages/bee-rs/crates/bee/src/herding/wave_ledger.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo +1.100.0 clippy --manifest-path packages/bee-rs/Cargo.toml -- -D warnings && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo clippy --manifest-path packages/bee-rs/Cargo.toml -- -D warnings && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml — green:red-first — cargo +1.100.0 clippy -- -D warnings && cargo clippy -- -D warnings && cargo test --release --no-fail-fast (packages/bee-rs) — green:static+green:unit — the cell's full verify, since dropping a crate dependency can break any target",
+      "deviations": [],
+      "knowledge_used": [],
+      "principles_used": [
+        "bee-principle-red-before-green — kept the new test only after it failed against an .all->.any mutation",
+        "bee-principle-test-behavior-not-structure — the new test asserts the is_empty_fleet return value and that a verdict exists",
+        "bee-principle-prove-it-works — re-ran both clippy checks after the edit because the first run was served from cache"
+      ],
+      "patch_id": "45a074a570815c3cf82ee955c9a8635c2d1bca09"
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "clippy 1.100.0 -D warnings exits 0 with no warning line",
+            "artifact": "docs/history/clippy-1100-fix/reports/c11-2.md"
+          },
+          {
+            "requirement": "default-toolchain clippy -D warnings exits 0",
+            "artifact": "docs/history/clippy-1100-fix/reports/c11-2.md"
+          },
+          {
+            "requirement": "the full cargo test is green",
+            "artifact": "docs/history/clippy-1100-fix/reports/c11-2.md"
+          },
+          {
+            "requirement": "the existing is_empty_fleet tests cover every arm of its truth table, or a new test adds the missing arm",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/wave_ledger.rs"
+          },
+          {
+            "requirement": "the report under docs/history/clippy-1100-fix/reports/ lists each check with its result",
+            "artifact": "docs/history/clippy-1100-fix/reports/c11-2.md"
+          },
+          {
+            "requirement": "docs/history/clippy-1100-fix/reports/c11-2.md",
+            "artifact": "docs/history/clippy-1100-fix/reports/c11-2.md"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/herding/wave_ledger.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/wave_ledger.rs"
+          }
+        ],
+        "recorded_at": "2026-11-16T02:20:17.977Z",
+        "recorded_by": "542c65ba-d0f1-433f-bdc0-b1f702334e00",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": {
+    "new": 41149,
+    "cached": 346114,
+    "total": 387263,
+    "models": {
+      "claude-opus-5-5": {
+        "new": 41149,
+        "cached": 346114,
+        "total": 387263
+      }
+    },
+    "jobs": [
+      "job-1794795118157-3136030-1"
+    ]
+  }
+}
