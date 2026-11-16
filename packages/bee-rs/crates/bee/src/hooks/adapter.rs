@@ -71,7 +71,7 @@ fn read_gitdir_file(file: &Path, base: &Path) -> Option<PathBuf> {
     if raw.is_empty() {
         return None;
     }
-    let sep_fixed = if cfg!(windows) { raw.replace('\\', "\\") } else { raw.replace('\\', "/") };
+    let sep_fixed = if cfg!(windows) { raw.to_string() } else { raw.replace('\\', "/") };
     std::path::absolute(base.join(sep_fixed)).ok()
 }
 

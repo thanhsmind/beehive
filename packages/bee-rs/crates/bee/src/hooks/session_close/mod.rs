@@ -511,7 +511,7 @@ pub(crate) fn final_assistant_text_line(events: &[Value]) -> Option<String> {
                             .and_then(|b| b.get("text").and_then(Value::as_str))
                     } else if let Some(text_str) = payload.get("content").and_then(Value::as_str) {
                         Some(text_str)
-                    } else { payload.get("text").and_then(Value::as_str).map(|text_str| text_str) };
+                    } else { payload.get("text").and_then(Value::as_str) };
 
                     let line = text_opt.and_then(last_non_empty_line).unwrap_or_default();
 

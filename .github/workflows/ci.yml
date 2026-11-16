@@ -98,7 +98,7 @@ jobs:
       # had been there. Windows CI, which does not pipe, was the only honest
       # report.
       - name: Run clippy before the verify chain
-        run: cargo clippy --manifest-path packages/bee-rs/Cargo.toml
+        run: cargo clippy --manifest-path packages/bee-rs/Cargo.toml -- -D warnings
 
       - name: Run verify chain
         shell: bash

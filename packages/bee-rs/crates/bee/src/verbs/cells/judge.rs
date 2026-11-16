@@ -186,9 +186,7 @@ pub(crate) fn glob_covers(pattern: &str, text: &str) -> bool {
                     }
                 }
                 Tok::Any => {
-                    for k in pos..=m {
-                        dp[ti + 1][k] = true;
-                    }
+                    dp[ti + 1][pos..=m].fill(true);
                 }
             }
         }

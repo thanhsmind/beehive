@@ -149,14 +149,10 @@ pub(crate) fn default_wf_gates() -> Map<String, Value> {
 /// silently persisting.
 pub(crate) fn merge_gates(base: Option<&Value>, overrides: Option<&Value>) -> Result<Value, Err2> {
     let mut merged = default_wf_gates();
-    match base {
-        Some(Value::Object(b)) => {
-            for (k, v) in b {
-                merged.insert(k.clone(), v.clone());
-            }
+    if let Some(Value::Object(b)) = base {
+        for (k, v) in b {
+            merged.insert(k.clone(), v.clone());
         }
-        // `{...base}` of a falsy or property-less primitive adds nothing.
-        _ => {}
     }
     if let Some(Value::Object(over)) = overrides {
         for (name, value) in over {

@@ -94,10 +94,10 @@ impl Engine {
     ///      (review B-P2-3). Outside any repo (no `.git` anywhere above cwd)
     ///      the walk still reaches `/`, so a bare host directory whose
     ///      PARENT holds a bee checkout still onboards.
-    /// `Err` ⇒ every candidate declined the command, naming both the
-    /// `--repo-root` candidate (when the caller passed one) and the walk's
-    /// invocation root: without a source tree there is nothing authoritative
-    /// to vendor FROM.
+    ///      `Err` ⇒ every candidate declined the command, naming both the
+    ///      `--repo-root` candidate (when the caller passed one) and the walk's
+    ///      invocation root: without a source tree there is nothing authoritative
+    ///      to vendor FROM.
     ///
     /// The marker is the AGENTS block template, chosen on three properties:
     /// it lives in `packages/bee` (so finding it proves `templates_dir`

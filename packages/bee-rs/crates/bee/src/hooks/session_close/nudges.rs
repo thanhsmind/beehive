@@ -397,7 +397,7 @@ pub(crate) fn maybe_bypass_block(
     }
     let pipeline = resolve_pipeline(root, ctx, session_id, stderr)?;
     let record = match pipeline {
-        Pipeline::Ok { record } => record,
+        Pipeline::Ok { record } => *record,
         Pipeline::Refused => read_state_record(root)?,
     };
     let phase_val = if js_truthy(&record.phase) { record.phase.clone() } else { Value::String("idle".into()) };

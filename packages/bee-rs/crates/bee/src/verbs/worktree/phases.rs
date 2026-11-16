@@ -84,8 +84,8 @@ pub(crate) enum StageOut {
 /// is worse than no warning: no merge base, a git call that did not run, or
 /// a recorded sha this repo does not have (`--is-ancestor` exits 128, not
 /// 1) all say nothing. Only a definite "not a descendant" — exit 1 — is
-/// reported stale. Caps with no recorded commit never reach here at all;
-/// `feature_proof_check` drops the `"none"` sentinel at the read.
+///    reported stale. Caps with no recorded commit never reach here at all;
+///    `feature_proof_check` drops the `"none"` sentinel at the read.
 ///
 /// The merge base is computed HERE rather than taken from
 /// `branch_changed_files` (merge.rs): that helper's own base is a local,

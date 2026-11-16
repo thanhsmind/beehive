@@ -786,7 +786,7 @@ pub(crate) fn run_handoff_dismiss(flags: Flags, use_json: bool, t0: Instant) -> 
             Ok(HandoffDismiss::Fail { reason }) => {
                 Ok(Out::Thrown(format!("state handoff dismiss: {reason}")))
             }
-            Ok(HandoffDismiss::Ok { record: _ }) => {
+            Ok(HandoffDismiss::Ok { .. }) => {
                 let mut result = Map::new();
                 result.insert("ok".into(), json!(true));
                 let text = "Dismissed \"pause\" handoff; handoff cleared.".to_string();

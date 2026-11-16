@@ -140,13 +140,6 @@ pub fn resolve_opencode_agent_model(repo_root: &Path, agent_name: &str) -> Optio
     resolve_agent_model_generic(repo_root, roles, "opencode", AGENT_TIER_DEFAULTS_OPENCODE)
 }
 
-/// renderAgentTemplate (l. 2007): `source.split("{{TIER_MODEL}}").join(model)`.
-pub fn render_agent_template(engine: &Engine, agent_name: &str, model: &str) -> String {
-    let source =
-        read_text_if_exists(&engine.templates_agents_dir.join(format!("{agent_name}.md.tmpl")));
-    source.replace("{{TIER_MODEL}}", model)
-}
-
 /// agent-model-unpin D1: the Claude agent file carries NO model pin — the
 /// dispatch door's `model` param is the one model authority (it overrides
 /// frontmatter in the harness), so the render needs no resolved model and a

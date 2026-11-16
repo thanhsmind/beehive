@@ -96,7 +96,6 @@ impl SupervisorSummarizer for RealSupervisor {
 }
 
 pub(crate) struct ProgressNote {
-    pub(crate) ts: Option<String>,
     pub(crate) step: Option<String>,
     pub(crate) note: String,
 }
@@ -122,9 +121,8 @@ fn read_progress_notes(progress_path: &Path) -> Vec<ProgressNote> {
             Some(n) if !n.trim().is_empty() => n.trim().to_string(),
             _ => continue,
         };
-        let ts = val.get("ts").or_else(|| val.get("at")).and_then(Value::as_str).map(str::to_string);
         let step = val.get("step").and_then(Value::as_str).map(str::trim).filter(|s| !s.is_empty()).map(str::to_string);
-        notes.push(ProgressNote { ts, step, note });
+        notes.push(ProgressNote { step, note });
     }
     notes
 }

@@ -357,11 +357,11 @@ pub(crate) fn sweep_reset_cell(
 ///     unbound session record is, by definition, working the default
 ///     pipeline (`.bee/state.json`) right now, so while one exists the
 ///     default pipeline itself must not be pushed into the fallback pool.
-/// A record whose heartbeat is stale (`heartbeat_stale`) counts as neither —
-/// a dead session must never park work forever. The acting session's own
-/// record is skipped outright: it can never be its own peer (D2), and the
-/// existing `own_feature` comparisons at each push site already keep an
-/// unbound acting session claiming its own default pipeline unblocked.
+///     A record whose heartbeat is stale (`heartbeat_stale`) counts as neither —
+///     a dead session must never park work forever. The acting session's own
+///     record is skipped outright: it can never be its own peer (D2), and the
+///     existing `own_feature` comparisons at each push site already keep an
+///     unbound acting session claiming its own default pipeline unblocked.
 pub(crate) fn live_session_facts(
     control: &Path,
     session: &str,

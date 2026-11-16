@@ -185,7 +185,9 @@ pub(super) fn observed_mode(meta: &std::fs::Metadata) -> Option<String> {
 fn index_modes(root: &Path) -> std::sync::Arc<std::collections::HashMap<String, String>> {
     use std::collections::HashMap;
     use std::sync::{Arc, Mutex, OnceLock};
-    static CACHE: OnceLock<Mutex<HashMap<PathBuf, Arc<HashMap<String, String>>>>> =
+    type ManifestCache = Mutex<HashMap<PathBuf, Arc<HashMap<String, String>>>>;
+
+    static CACHE: OnceLock<ManifestCache> =
         OnceLock::new();
     let cache = CACHE.get_or_init(|| Mutex::new(HashMap::new()));
     if let Some(hit) = cache.lock().unwrap().get(root) {
@@ -574,12 +576,14 @@ fn compare_manifests(stored: &[Value], current: &[Value]) -> Option<Diff> {
     let stored_by = index(stored);
     let current_by = index(current);
 
-    let mut diff = Diff::default();
-    diff.missing = stored_by
-        .iter()
-        .map(|(k, _)| k.clone())
-        .filter(|k| !current_by.iter().any(|(c, _)| c == k))
-        .collect();
+    let mut diff = Diff {
+        missing: stored_by
+            .iter()
+            .map(|(k, _)| k.clone())
+            .filter(|k| !current_by.iter().any(|(c, _)| c == k))
+            .collect(),
+        ..Diff::default()
+    };
     super::js_default_sort(&mut diff.missing);
     diff.added = current_by
         .iter()

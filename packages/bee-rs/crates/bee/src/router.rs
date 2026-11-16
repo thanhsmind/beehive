@@ -307,13 +307,13 @@ fn dispatch(args: &[OsString], t0: Instant) -> Option<ExitCode> {
 /// situations it was collapsing (see crate::catalog):
 ///
 ///   * UNKNOWN      — nothing in the registry spells this. Suggest the
-///                    nearest spellings, or list the group's verbs when the
-///                    first token IS a group.
+///     nearest spellings, or list the group's verbs when the
+///     first token IS a group.
 ///   * UNAVAILABLE  — the registry declares it and this build has no
-///                    implementation. Name the gap instead of implying a typo.
+///     implementation. Name the gap instead of implying a typo.
 ///   * BAD ARGS     — a real, built command declined this argv. Name the
-///                    missing required flags, and quote the command's own
-///                    example.
+///     missing required flags, and quote the command's own
+///     example.
 ///
 /// Every branch still ends in a non-zero exit with output on exactly one
 /// stream, and `--json` still yields `{"error": …}` on stdout so a script that

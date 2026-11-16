@@ -105,7 +105,7 @@ concurrency-safe and hermetic is `concurrency-and-hermetic-runs.md`.
   `commands.test` is the one declared test path, run by `bee cells finish`
   at every cap and re-run by `bee close`; `bee worktree merge` re-runs
   `commands.test` against the staged merge instead.)*
-  *(Beehive's own `commands.test` is a list: `cargo clippy` without `-D warnings`, then the cargo suite, and CI runs both — clippy-in-test D1/D2.)*
+  *(Beehive's own `commands.test` is a list: `cargo clippy -- -D warnings` (with `too_many_arguments` and `result_large_err` allowed once in the workspace lint table), then the cargo suite, and CI runs both — clippy-in-test D1/D2, clippy-warnings-clean D1/D2.)*
 - **The transitive impacted run has a ceiling, and level-1 is exempt from
   it.** A single hot file (imported almost everywhere) can make the
   transitive impacted set balloon to nearly the whole suite pool, erasing

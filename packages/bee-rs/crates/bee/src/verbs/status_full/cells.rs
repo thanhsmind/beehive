@@ -802,11 +802,8 @@ pub(crate) fn active_workers(ctx: &Ctx, root: &Path, exclude_session_id: Option<
             "cell".into(),
             claim_cell_by_session.get(sid).cloned().unwrap_or(Value::Null),
         );
-        match session.get("last_heartbeat") {
-            Some(v) => {
-                row.insert("last_heartbeat".into(), v.clone());
-            }
-            None => {} // undefined -> key dropped by JSON.stringify
+        if let Some(v) = session.get("last_heartbeat") {
+            row.insert("last_heartbeat".into(), v.clone());
         }
         // D2/D4: the row carries the activity object the hook wrote, verbatim,
         // plus the signal DERIVED from that same object — one shape, read the

@@ -2018,8 +2018,6 @@ pub(crate) fn claim_cell_cross_session_ex(
     let claim_result = (|| -> MR<Value> {
         let mut guard = acquire_named_lock(root, &format!("cells:{cell_id}"))?;
         let outcome = (|| -> MR<Value> {
-            let root = root;
-            let worker = worker;
             {
                 assert_not_archived(root, "claimCell", &cell_id)?;
                 let cell = read_cell_norm(root, &cell_id)?;

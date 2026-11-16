@@ -4,6 +4,9 @@ version.workspace = true
 edition.workspace = true
 description = "bee harness CLI — gated, verified agent-coding workflow (state, cells, hooks, worktrees)"
 
+[lints]
+workspace = true
+
 [dependencies]
 fleet.workspace = true
 anyhow.workspace = true

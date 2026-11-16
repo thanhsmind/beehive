@@ -396,8 +396,8 @@ pub(crate) fn derive_economics(
         "unverified"
     };
 
-    let requested_model = if (channel == "cli-exec" || channel == "herding-exec") && declared.is_some() {
-        Value::String(declared.unwrap().to_string())
+    let requested_model = if let Some(d) = declared.filter(|_| channel == "cli-exec" || channel == "herding-exec") {
+        Value::String(d.to_string())
     } else if channel == "cli-exec" || channel == "herding-exec" || channel == "session-model" {
         Value::Null
     } else {

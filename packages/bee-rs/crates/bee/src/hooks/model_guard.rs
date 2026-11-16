@@ -399,6 +399,7 @@ fn resolved_model_name(resolved: &Resolved) -> Option<&str> {
 /// before it clips. The door block is injected into EVERY session, so a
 /// description is a one-line hint, never a paragraph; past this the line
 /// says `...` and `.bee/config.json` carries the rest.
+#[cfg(test)]
 const ROLE_DESCRIPTION_MAX: usize = 60;
 
 /// The operator's own one-line purpose for a role, as the door prints it.
@@ -415,6 +416,7 @@ const ROLE_DESCRIPTION_MAX: usize = 60;
 /// has nowhere to put a description and renders exactly as it always did;
 /// so does an object slot without the key, an empty one, and a whitespace
 /// one — the door never prints an empty pair of quotes.
+#[cfg(test)]
 fn role_slot_description(models_raw: Option<&Value>, runtime: &str, role: &str) -> Option<String> {
     let text = models_raw?
         .as_object()?

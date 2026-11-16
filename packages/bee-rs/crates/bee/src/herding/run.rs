@@ -141,7 +141,7 @@ fn find_prompt_diagnosis(pane_text: &str) -> Option<String> {
 // ═══════════════════════════════════════════════════════════════════════════
 
 #[derive(Debug)]
-struct Options {
+pub(super) struct Options {
     task: String,
     cwd: PathBuf,
     job_id: String,
@@ -2097,7 +2097,7 @@ enum RunOutcome {
     /// A `result-N.json` was found and parsed — `status` may be `done` or
     /// `blocked`; either is a WELL-FORMED completion signal (D6's "valid
     /// result").
-    Result(MailboxResult),
+    Result(Box<MailboxResult>),
     /// A result file appeared but could not be read or did not pass the
     /// mailbox schema — never a valid result. `report_path` carries the
     /// round's report when one is on disk (pi-result-mailbox D1): a good
@@ -2123,7 +2123,7 @@ enum RunOutcome {
     ModelMismatch(String),
 }
 
-struct ExecResult {
+pub(super) struct ExecResult {
     outcome: RunOutcome,
     pane_id: Option<String>,
     closed_pane: bool,
@@ -2212,7 +2212,7 @@ fn read_result_for_round(bee_dir: &Path, job_id: &str, round: u32) -> RunOutcome
     match mailbox::parse_result_text(round, &text) {
         Ok(mut r) => {
             resolve_report(bee_dir, job_id, &mut r);
-            RunOutcome::Result(r)
+            RunOutcome::Result(Box::new(r))
         }
         // D1: the report is found even here — a broken result JSON is exactly
         // when the worker's own write-up is worth the most.
@@ -3504,7 +3504,7 @@ pub(super) fn execute_no_pane(opts: &Options) -> ExecResult {
     }
 
     ExecResult {
-        outcome: RunOutcome::Result(res),
+        outcome: RunOutcome::Result(Box::new(res)),
         pane_id: None,
         closed_pane: false,
     }
@@ -3573,6 +3573,7 @@ fn adopted_agent_after_spawn_timeout(listed: &str, argv: &[String], error: &str)
     named_agent_in_ls(listed, spawn_title(argv)?)
 }
 
+#[cfg(test)]
 pub(super) fn execute_paseo(opts: &Options, spec: &PaseoSpec, cli: &dyn PaseoCli) -> ExecResult {
     execute_paseo_steered(opts, spec, cli, None)
 }
@@ -4679,6 +4680,7 @@ impl WaitSource for RealWaitSource {
                 if let Some(mut out) = child.stdout.take() {
                     let _ = std::io::Read::read_to_end(&mut out, &mut stdout);
                 }
+                let _ = child.wait();
                 let stdout_str = String::from_utf8_lossy(&stdout);
                 paseo::parse_wait(&stdout_str).or(Some(paseo::WaitStatus::Error))
             }
@@ -9263,7 +9265,7 @@ mod tests {
         let opts = test_options(tmp.path(), false);
         let cases = vec![
             RunOutcome::Died { pid: Some(1234) },
-            RunOutcome::Result(MailboxResult {
+            RunOutcome::Result(Box::new(MailboxResult {
                 round: 1,
                 status: MailboxStatus::Blocked,
                 summary: "blocked".to_string(),
@@ -9279,7 +9281,7 @@ mod tests {
                 report_path: None,
                 report_note: None,
                 question: None,
-            }),
+            })),
             RunOutcome::Interrupted,
             RunOutcome::Cancelled,
             RunOutcome::TimedOutIdle("idle timeout".to_string()),
@@ -9305,7 +9307,7 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let opts = test_options(tmp.path(), false);
         let done_result = ExecResult {
-            outcome: RunOutcome::Result(MailboxResult {
+            outcome: RunOutcome::Result(Box::new(MailboxResult {
                 round: 1,
                 status: MailboxStatus::Done,
                 summary: "done".to_string(),
@@ -9321,7 +9323,7 @@ mod tests {
                 report_path: None,
                 report_note: None,
                 question: None,
-            }),
+            })),
             pane_id: None,
             closed_pane: true,
         };
@@ -11491,7 +11493,7 @@ mod tests {
         opts.cwd = work_dir.clone();
 
         let done_res = ExecResult {
-            outcome: RunOutcome::Result(MailboxResult {
+            outcome: RunOutcome::Result(Box::new(MailboxResult {
                 round: 1,
                 status: MailboxStatus::Done,
                 summary: "done".to_string(),
@@ -11507,7 +11509,7 @@ mod tests {
                 dissent: None,
                 handback: Default::default(),
                 question: None,
-            }),
+            })),
             pane_id: Some("p1".to_string()),
             closed_pane: true,
         };
@@ -11519,7 +11521,7 @@ mod tests {
         assert_eq!(env_done["files_changed"], serde_json::json!(["worker_reported.txt"]), "files_changed stays untouched");
 
         let blocked_res = ExecResult {
-            outcome: RunOutcome::Result(MailboxResult {
+            outcome: RunOutcome::Result(Box::new(MailboxResult {
                 round: 1,
                 status: MailboxStatus::Blocked,
                 summary: "blocked".to_string(),
@@ -11535,7 +11537,7 @@ mod tests {
                 dissent: None,
                 handback: Default::default(),
                 question: None,
-            }),
+            })),
             pane_id: Some("p1".to_string()),
             closed_pane: false,
         };
@@ -11556,7 +11558,7 @@ mod tests {
         let mut opts = test_options(tmp.path(), false);
         opts.cwd = non_git;
         let done_res = ExecResult {
-            outcome: RunOutcome::Result(MailboxResult {
+            outcome: RunOutcome::Result(Box::new(MailboxResult {
                 round: 1,
                 status: MailboxStatus::Done,
                 summary: "done".to_string(),
@@ -11572,7 +11574,7 @@ mod tests {
                 dissent: None,
                 handback: Default::default(),
                 question: None,
-            }),
+            })),
             pane_id: None,
             closed_pane: false,
         };
@@ -12201,7 +12203,7 @@ mod tests {
     }
 
     fn done_outcome() -> RunOutcome {
-        RunOutcome::Result(MailboxResult {
+        RunOutcome::Result(Box::new(MailboxResult {
             round: 1,
             status: MailboxStatus::Done,
             summary: "did work".to_string(),
@@ -12217,7 +12219,7 @@ mod tests {
             report_path: None,
             report_note: None,
             question: None,
-        })
+        }))
     }
 
     #[test]
@@ -12253,7 +12255,7 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let main_root = tmp.path();
         seed_cell(main_root, "cell-1"); // uncapped
-        let outcome = RunOutcome::Result(MailboxResult {
+        let outcome = RunOutcome::Result(Box::new(MailboxResult {
             round: 1,
             status: MailboxStatus::Blocked,
             summary: "blocked on something".to_string(),
@@ -12269,7 +12271,7 @@ mod tests {
             report_path: None,
             report_note: None,
             question: None,
-        });
+        }));
 
         // Cap check proceeds (does not refuse); exit_code_for handles the blocked outcome
         assert_eq!(
@@ -12481,7 +12483,7 @@ mod tests {
         opts.cell_id = Some(cell_id.to_string());
         opts.cwd = wt;
 
-        let outcome = RunOutcome::Result(MailboxResult {
+        let outcome = RunOutcome::Result(Box::new(MailboxResult {
             round: 1,
             status: MailboxStatus::Done,
             summary: "completed work".to_string(),
@@ -12497,7 +12499,7 @@ mod tests {
             report_path: None,
             report_note: None,
             question: None,
-        });
+        }));
 
         assert_eq!(
             try_cap_finished_cell(&opts, cell_id, &outcome),
@@ -12523,7 +12525,7 @@ mod tests {
         opts.cwd = wt.clone();
 
         write_cap_test_result(&main, job_id, "cargo test — red — test failed");
-        let red_outcome = RunOutcome::Result(MailboxResult {
+        let red_outcome = RunOutcome::Result(Box::new(MailboxResult {
             round: 1,
             status: MailboxStatus::Done,
             summary: "completed work".to_string(),
@@ -12539,14 +12541,14 @@ mod tests {
             report_path: None,
             report_note: None,
             question: None,
-        });
+        }));
         assert_eq!(
             try_cap_finished_cell(&opts, cell_id, &red_outcome),
             PostflightCapResult::Uncapped
         );
 
         write_cap_test_result(&main, job_id, "missing separators");
-        let missing_outcome = RunOutcome::Result(MailboxResult {
+        let missing_outcome = RunOutcome::Result(Box::new(MailboxResult {
             round: 1,
             status: MailboxStatus::Done,
             summary: "completed work".to_string(),
@@ -12562,7 +12564,7 @@ mod tests {
             report_path: None,
             report_note: None,
             question: None,
-        });
+        }));
         assert_eq!(
             try_cap_finished_cell(&opts, cell_id, &missing_outcome),
             PostflightCapResult::Uncapped
@@ -12604,7 +12606,7 @@ mod tests {
         opts_no_commit.job_id = job_no_commit.to_string();
         opts_no_commit.cell_id = Some(cell_no_commit.to_string());
         opts_no_commit.cwd = wt;
-        let no_commit_outcome = RunOutcome::Result(MailboxResult {
+        let no_commit_outcome = RunOutcome::Result(Box::new(MailboxResult {
             round: 1,
             status: MailboxStatus::Done,
             summary: "completed work".to_string(),
@@ -12620,7 +12622,7 @@ mod tests {
             report_path: None,
             report_note: None,
             question: None,
-        });
+        }));
         assert_eq!(
             try_cap_finished_cell(&opts_no_commit, cell_no_commit, &no_commit_outcome),
             PostflightCapResult::Uncapped
@@ -12744,7 +12746,7 @@ mod tests {
         std::fs::write(sup_dir.join("broker-heartbeat.json"), format!(r#"{{"ts":"{now_str}"}}"#)).unwrap();
 
         let question_res = ExecResult {
-            outcome: RunOutcome::Result(MailboxResult {
+            outcome: RunOutcome::Result(Box::new(MailboxResult {
                 round: 1,
                 status: MailboxStatus::Question,
                 summary: "need assistance".to_string(),
@@ -12763,7 +12765,7 @@ mod tests {
                     text: "what is the policy?".to_string(),
                     kind: "technical".to_string(),
                 }),
-            }),
+            })),
             pane_id: None,
             closed_pane: false,
         };

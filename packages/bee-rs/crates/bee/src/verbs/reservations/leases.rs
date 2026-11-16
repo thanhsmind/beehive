@@ -603,13 +603,6 @@ pub(crate) fn heartbeat_stale(session: &Map<String, Value>, now: f64) -> Ex<bool
     }
 }
 
-pub(crate) fn env_nonempty(name: &str) -> Option<String> {
-    match std::env::var(name) {
-        Ok(v) if !js_trim(&v).is_empty() => Some(js_trim(&v).to_string()),
-        _ => None,
-    }
-}
-
 /// provenance: claims.mjs resolveSessionId (flag → BEE_SESSION_ID →
 /// CLAUDE_CODE_SESSION_ID → single-live-session adoption → null).
 ///

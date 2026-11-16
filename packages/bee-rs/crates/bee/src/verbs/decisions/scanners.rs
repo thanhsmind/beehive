@@ -417,9 +417,7 @@ pub(crate) fn datamark(v: Option<&Value>) -> String {
                 n += 1;
             }
             if n < 3 {
-                for _ in 0..n {
-                    pass1.push('`');
-                }
+                pass1.extend(std::iter::repeat_n('`', n));
             }
             i += n;
         } else {

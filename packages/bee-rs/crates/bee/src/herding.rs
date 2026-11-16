@@ -1625,8 +1625,8 @@ fn status(flags: &[&str]) -> ExitCode {
             i += 2;
             continue;
         }
-        if arg.starts_with("--job=") {
-            job_id = Some(&arg["--job=".len()..]);
+        if let Some(rest) = arg.strip_prefix("--job=") {
+            job_id = Some(rest);
             i += 1;
             continue;
         }
@@ -1635,8 +1635,8 @@ fn status(flags: &[&str]) -> ExitCode {
             i += 2;
             continue;
         }
-        if arg.starts_with("--main-root=") {
-            explicit = Some(&arg["--main-root=".len()..]);
+        if let Some(rest) = arg.strip_prefix("--main-root=") {
+            explicit = Some(rest);
             i += 1;
             continue;
         }

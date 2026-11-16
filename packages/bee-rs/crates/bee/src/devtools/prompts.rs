@@ -181,7 +181,7 @@ fn usage() -> ExitCode {
 }
 
 pub(super) fn run(args: &[&str]) -> Option<ExitCode> {
-    let Some(root) = bee_source_root() else { return None };
+    let root = bee_source_root()?;
 
     let mut name: Option<&str> = None;
     let mut vars: Vec<(String, String)> = Vec::new();

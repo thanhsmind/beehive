@@ -42,7 +42,9 @@ pub(crate) fn brief_language(root: &Path) -> (String, Option<String>) {
     }
 }
 
-fn split_frontmatter(text: &str) -> Result<(Vec<(String, String)>, Vec<&str>, Vec<String>), String> {
+type Frontmatter<'a> = (Vec<(String, String)>, Vec<&'a str>, Vec<String>);
+
+fn split_frontmatter(text: &str) -> Result<Frontmatter<'_>, String> {
     let lines: Vec<&str> = text.split('\n').collect();
     if lines.first() != Some(&"---") {
         return Err("the brief does not start with a --- frontmatter line".into());

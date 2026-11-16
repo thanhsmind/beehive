@@ -305,6 +305,7 @@ fn rule_intersects(rule: &RuleHome, plan_paths: &[String]) -> bool {
 /// D5's candidate list for one feature: active decisions the plan's terms
 /// select, then rule homes the plan's paths touch. Ids are unique — the first
 /// occurrence wins — so a rule declared in two homes contributes one row.
+#[cfg(test)]
 pub(crate) fn derive_candidates(root: &Path, feature: &str) -> Result<Vec<Value>, Err2> {
     Ok(derive_candidates_reported(root, feature)?.0)
 }
@@ -380,7 +381,7 @@ pub(crate) fn derive_candidates_reported(
             // under D3's floor identical to today row for row. The sort is
             // stable, so equal hit counts hold that same order.
             if scored.len() > MAX_DECISION_CANDIDATES {
-                scored.sort_by(|a, b| b.1.cmp(&a.1));
+                scored.sort_by_key(|a| std::cmp::Reverse(a.1));
                 capped_away = scored.len() - MAX_DECISION_CANDIDATES;
                 scored.truncate(MAX_DECISION_CANDIDATES);
             }

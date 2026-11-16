@@ -750,11 +750,13 @@ fn archive_one_feature(root: &Path, feature: &str) -> MR<(Vec<Value>, f64, f64)>
     }
 }
 
+type TerminalFeatures = (Vec<String>, Vec<(String, String)>);
+
 /// Features whose ACTIVE cells are all terminal, excluding the active feature.
 /// Returns (eligible, skipped-with-reason) — nothing is dropped silently: a
 /// sweep that quietly passed over a feature would look identical to one that
 /// had nothing to do.
-fn terminal_features(root: &Path, active: Option<&str>) -> MR<(Vec<String>, Vec<(String, String)>)> {
+fn terminal_features(root: &Path, active: Option<&str>) -> MR<TerminalFeatures> {
     let cells = list_cells(root, None, None).map_err(|_| Fail::Delegate)?;
     let mut order: Vec<String> = Vec::new();
     let mut by_feature: std::collections::HashMap<String, Vec<&Value>> =
@@ -836,7 +838,9 @@ pub(crate) fn run_archive(flags: rsv::Flags, use_json: bool, t0: Instant) -> Opt
             };
             let (eligible, skipped) = terminal_features(&root, Some(active_feature))?;
             let mut guard = acquire_named_lock(&root, "cells-archive")?;
-            let outcome = (|| -> MR<(Vec<Value>, f64, f64, Vec<(String, String)>)> {
+            type ListOutcome = (Vec<Value>, f64, f64, Vec<(String, String)>);
+
+            let outcome = (|| -> MR<ListOutcome> {
                 let (mut rows, mut capped_total, mut dropped_total) = (Vec::new(), 0f64, 0f64);
                 let mut failed: Vec<(String, String)> = Vec::new();
                 for feature in &eligible {

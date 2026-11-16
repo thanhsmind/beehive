@@ -1049,7 +1049,7 @@ pub fn apply_remove_skill(target_root: &Path, name: &str) -> Option<String> {
         return Some(format!("refusing to remove {name}: outside the bee-* namespace"));
     }
     let target_dir = target_root.join(name);
-    let Some(st) = lstat_if_exists(&target_dir) else { return None }; // already gone
+    let st = lstat_if_exists(&target_dir)?; // already gone
     if st.is_symlink {
         return Some(format!(
             "installed {name} is a symlink (plausibly a live checkout) - skipped, never unlinked"

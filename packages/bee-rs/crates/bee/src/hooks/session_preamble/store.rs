@@ -395,11 +395,13 @@ pub(crate) fn decisions_path(root: &Path) -> PathBuf {
     root.join(".bee").join("decisions.jsonl")
 }
 
+pub(crate) type TagOverlayEntry = (Value, (Option<Value>, Option<Value>));
+
 /// decisions.mjs buildTagOverlay — latest tag event wins (date, then file
 /// order). A mixed finite/NaN date set delegated in the verb port; here the
 /// NaN rows simply keep file order, which is what V8's sort does for them in
 /// practice and is the fail-open direction for an orientation block.
-pub(crate) fn build_tag_overlay(events: &[Value]) -> Vec<(Value, (Option<Value>, Option<Value>))> {
+pub(crate) fn build_tag_overlay(events: &[Value]) -> Vec<TagOverlayEntry> {
     let mut tag_events: Vec<(usize, &Value, f64)> = Vec::new();
     for (idx, e) in events.iter().enumerate() {
         if truthy(e)
@@ -417,7 +419,7 @@ pub(crate) fn build_tag_overlay(events: &[Value]) -> Vec<(Value, (Option<Value>,
         };
         ord.then(a.0.cmp(&b.0))
     });
-    let mut overlay: Vec<(Value, (Option<Value>, Option<Value>))> = Vec::new();
+    let mut overlay: Vec<TagOverlayEntry> = Vec::new();
     for (_, e, _) in tag_events {
         let target = vget(e, "target").cloned().unwrap_or(Value::Null);
         let patch = (
@@ -441,7 +443,7 @@ pub(crate) fn build_tag_overlay(events: &[Value]) -> Vec<(Value, (Option<Value>,
 
 pub(crate) fn apply_tag_overlay(
     event: &Value,
-    overlay: &[(Value, (Option<Value>, Option<Value>))],
+    overlay: &[TagOverlayEntry],
 ) -> Value {
     let Some(id) = vget(event, "id") else { return event.clone() };
     let Some((_, (tags, scope))) = overlay.iter().find(|(k, _)| strict_eq(Some(k), Some(id))) else {
@@ -508,9 +510,7 @@ pub(crate) fn datamark(text: Option<&Value>) -> String {
                 j += 1;
             }
             if j - i < 3 {
-                for k in i..j {
-                    no_ticks.push(chars[k]);
-                }
+                no_ticks.extend(&chars[i..j]);
             }
             i = j;
             continue;

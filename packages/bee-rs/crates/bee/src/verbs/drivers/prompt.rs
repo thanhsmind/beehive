@@ -216,7 +216,6 @@ pub(crate) fn load_prompt(name: &str) -> Option<String> {
 
 #[derive(Debug)]
 pub(crate) enum PromptSkew {
-    NoEmbedded,
     Disk(std::path::PathBuf),
 }
 
@@ -268,12 +267,6 @@ pub(crate) fn prompt_skew(root: &Path, name: &str) -> Option<PromptSkew> {
 /// delegate TO: name the file, the cause, and the remedy.
 pub(crate) fn prompt_skew_message(cmd: &str, name: &str, skew: &PromptSkew) -> String {
     match skew {
-        PromptSkew::NoEmbedded => format!(
-            "bee {cmd}: no prompt template named `{name}` is compiled into this binary \
-             (bee {}), so no worker prompt can be rendered. FIX: rebuild from a source tree \
-             that carries packages/bee/prompts/{name}.md.",
-            crate::version::BEE_VERSION
-        ),
         PromptSkew::Disk(path) => format!(
             "bee {cmd}: prompt skew — {} does not match the `{name}` template compiled into \
              this binary (bee {}), so a worker would be handed a prompt that is not the one on \
@@ -298,7 +291,7 @@ pub(crate) fn prompt_skew_message(cmd: &str, name: &str, skew: &PromptSkew) -> S
 ///     surviving `{{#if `/`{{/if}}` after the block pass.
 ///   * `{{NAME}}` placeholders substitute String(vars[NAME]); an
 ///     undefined/null value is a loud refusal.
-/// Names are `[A-Za-z0-9_]+` in both markers.
+///     Names are `[A-Za-z0-9_]+` in both markers.
 pub(crate) fn render(template: &str, vars: &[(&str, &str)]) -> Result<String, String> {
     let lookup = |name: &str| -> Option<&str> {
         vars.iter().find(|(k, _)| *k == name).map(|(_, v)| *v)

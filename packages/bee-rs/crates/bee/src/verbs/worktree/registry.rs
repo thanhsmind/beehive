@@ -657,12 +657,12 @@ pub(crate) fn parse_git_ls_files_cells_output(stdout: &[u8]) -> Option<HashSet<S
 ///   2. FILL — copy in the main store's matching-feature cells that are not
 ///      already present (a from-scratch `worktree register` adopting a bare
 ///      checkout, or a main-store cell not yet committed to git).
-/// Feature-neutral content under `.bee` (config, expertise, prompts,
-/// decisions/backlog, `cells/archive/summary.json`, …) is untouched — this
-/// function only ever looks inside `cells/`.
-/// review B-P1-1 / D23: whether the whole cell sync ran, or was refused
-/// because one of the fixed store paths it is about to prune or fill
-/// through is a SYMLINK.
+///      Feature-neutral content under `.bee` (config, expertise, prompts,
+///      decisions/backlog, `cells/archive/summary.json`, …) is untouched — this
+///      function only ever looks inside `cells/`.
+///      review B-P1-1 / D23: whether the whole cell sync ran, or was refused
+///      because one of the fixed store paths it is about to prune or fill
+///      through is a SYMLINK.
 enum CellsSync {
     /// review D-P3-2: `pruned` names every file the prune arm actually
     /// removed, `.bee/cells/`-relative (a bare `name.json` for a top-level

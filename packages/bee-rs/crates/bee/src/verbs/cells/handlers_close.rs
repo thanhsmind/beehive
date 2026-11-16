@@ -502,11 +502,8 @@ pub(crate) fn cap_cell_from_flags(root: &Path, f: &CapFlags, finish: bool) -> MR
                 None => {
                     entry.insert("last_verdict".into(), Value::Null);
                 }
-                Some(l) => match l.get("verdict") {
-                    Some(v) => {
-                        entry.insert("last_verdict".into(), v.clone());
-                    }
-                    None => {} // {last_verdict: undefined} — JSON.stringify drops the key
+                Some(l) => if let Some(v) = l.get("verdict") {
+                    entry.insert("last_verdict".into(), v.clone());
                 },
             }
             let worker_disp = match trace.get("worker") {
@@ -1651,13 +1648,13 @@ pub(crate) fn run_cap(finish: bool, flags: rsv::Flags, use_json: bool, t0: Insta
 ///     `release_reservations_for_agent` used to hardcode (holder `"main"`,
 ///     ledger at whatever `root` happened to be) — the un-ported piece
 ///     roots.rs:91-100 names as the reason cells stayed narrow.
-/// From the MAIN checkout `roots.linked` is `None`, so `finish_topology`
-/// answers `(root, Some((root, "main")))` — byte-identical to what the
-/// narrow door produced before this cell. decision 13ce1858
-/// (test-cadence-boundary D1): `finish_topology` used to also answer the
-/// calling worktree's own root, the declared test command's cwd — dropped
-/// with the per-cap test run itself; the cap no longer spawns that command
-/// from either root.
+///     From the MAIN checkout `roots.linked` is `None`, so `finish_topology`
+///     answers `(root, Some((root, "main")))` — byte-identical to what the
+///     narrow door produced before this cell. decision 13ce1858
+///     (test-cadence-boundary D1): `finish_topology` used to also answer the
+///     calling worktree's own root, the declared test command's cwd — dropped
+///     with the per-cap test run itself; the cap no longer spawns that command
+///     from either root.
 fn run_finish(
     cmd: &'static str,
     use_json: bool,

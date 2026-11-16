@@ -24,6 +24,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode, Stdio};
 use std::time::Instant;
 
+#[cfg(test)]
 pub(crate) static TEST_CWD_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
 // ═══ dispatch prepare ══════════════════════════════════════════════════════
@@ -1184,10 +1185,6 @@ pub(crate) fn learned_context_lines(root: &Path, cell: &Value) -> D<Vec<String>>
 }
 
 const KNOWLEDGE_HOLDOUT_DEFAULT_PERCENT: u64 = 10;
-
-pub(crate) fn knowledge_holdout_percent(root: &Path) -> u64 {
-    holdout_percent(root, "knowledge_holdout_percent")
-}
 
 fn holdout_percent(root: &Path, key: &str) -> u64 {
     match read_config_raw(root).get(key) {
@@ -3811,6 +3808,8 @@ pub(crate) fn installed_native_transport_classification(root: &Path, cmd: &str, 
     native_transport_classification_with_cmd(root, cmd, timeout)
 }
 
+type PreparedBrief = (Value, Vec<Value>, bool, Option<String>);
+
 /// bee.mjs's `claimAndReserveForDispatch` — the claim, then one reserve per
 /// declared file IN DECLARATION ORDER, stopping at the first conflict and
 /// unwinding everything this call created, in REVERSE (reservations first,
@@ -3838,7 +3837,7 @@ pub(crate) fn claim_and_reserve_for_dispatch(
     cell_id: &str,
     worker: &str,
     session_flag: Option<&str>,
-) -> Result<Result<(Value, Vec<Value>, bool, Option<String>), String>, (Err2, bool)> {
+) -> Result<Result<PreparedBrief, String>, (Err2, bool)> {
     use crate::verbs::cells;
     // ttl/isolate are structurally absent: bee.mjs builds `{id, worker}` plus
     // `session-id` only when one was passed.
@@ -3850,7 +3849,7 @@ pub(crate) fn claim_and_reserve_for_dispatch(
     // The claim STANDS from here on — wrap the remainder so any further
     // unproven-shape error reports `claim_taken: true`, never folded into
     // the pre-claim `false` case above.
-    (move || -> R2<Result<(Value, Vec<Value>, bool, Option<String>), String>> {
+    (move || -> R2<Result<PreparedBrief, String>> {
         let cell = door.cell;
         let claimed_id = match cell.get("id") {
             Some(Value::String(s)) => s.clone(),

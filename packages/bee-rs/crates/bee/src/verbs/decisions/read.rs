@@ -231,7 +231,7 @@ pub(crate) fn active_decisions(root: &Path, all: bool) -> Ex<Vec<Value>> {
                 .then(b.0.cmp(&a.0))
         });
     } else {
-        filtered.sort_by(|a, b| b.0.cmp(&a.0)); // all-NaN: idx desc (== reverse)
+        filtered.sort_by_key(|a| std::cmp::Reverse(a.0)); // all-NaN: idx desc (== reverse)
     }
     Ok(filtered
         .into_iter()
@@ -580,7 +580,7 @@ pub(crate) fn filter_decision_events(decisions: Vec<Value>, f: &DecisionFilters)
                 scored.push((e, hits));
             }
         }
-        scored.sort_by(|a, b| b.1.cmp(&a.1)); // stable: preserves date order on ties
+        scored.sort_by_key(|a| std::cmp::Reverse(a.1)); // stable: preserves date order on ties
         result = scored.into_iter().map(|(e, _)| e).collect();
     }
     Ok(result)
@@ -638,7 +638,7 @@ pub(crate) fn conflict_candidates(
             scored.push((e.clone(), hits));
         }
     }
-    scored.sort_by(|a, b| b.1.cmp(&a.1)); // stable: preserves active's newest-first order on ties
+    scored.sort_by_key(|a| std::cmp::Reverse(a.1)); // stable: preserves active's newest-first order on ties
     scored.truncate(3);
     scored
         .into_iter()

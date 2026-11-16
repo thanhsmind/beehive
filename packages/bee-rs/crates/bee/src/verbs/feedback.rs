@@ -2042,9 +2042,7 @@ pub(crate) fn normalize_title(title: &Value) -> String {
         if js_is_space(c) {
             in_ws = true;
         } else {
-            if in_ws && !out.is_empty() {
-                out.push(' ');
-            } else if in_ws {
+            if in_ws {
                 out.push(' ');
             }
             in_ws = false;

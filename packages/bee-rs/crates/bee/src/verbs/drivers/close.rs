@@ -149,6 +149,7 @@ pub(crate) fn declared_test_commands(root: &Path) -> D<Option<Vec<String>>> {
 // module's own test fixtures still probe it before building a `commands.test`
 // fixture that threads a (now-ignored) shell through `close_handler`'s
 // still-compatible signature.
+#[cfg(test)]
 pub(crate) fn posix_shell() -> Option<&'static str> {
     crate::shell::posix_shell()
 }

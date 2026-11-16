@@ -162,6 +162,7 @@ fn scan(text: &str) -> Scan {
     Scan { keys, duplicates }
 }
 
+#[cfg(test)]
 pub(crate) fn parse(text: &str) -> BTreeMap<String, ProtocolValue> {
     scan(text).keys
 }

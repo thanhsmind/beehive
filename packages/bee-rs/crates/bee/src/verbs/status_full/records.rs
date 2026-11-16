@@ -143,9 +143,7 @@ pub(crate) fn datamark(text: Option<&Value>) -> String {
                 i = j;
                 continue;
             }
-            for k in i..j {
-                no_ticks.push(chars[k]);
-            }
+            no_ticks.extend(&chars[i..j]);
             i = j;
             continue;
         }

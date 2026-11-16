@@ -1384,6 +1384,7 @@ pub(crate) fn mark_delivered_for_session(root: &Path, id: &str) -> Result<(), St
 /// Where the mailbox of a WORK root lives. The delivery caller needs this only
 /// to assert about the store it never otherwise touches — one owner for the
 /// path, here.
+#[cfg(test)]
 pub(crate) fn interventions_store_path(root: &Path) -> PathBuf {
     interventions_path(&control_root_path(root))
 }
@@ -2366,7 +2367,7 @@ fn render_report_markdown(
             candidates.push((item.needs_human, item.rank, si, ii));
         }
     }
-    candidates.sort_by(|a, b| (b.0, b.1).cmp(&(a.0, a.1)));
+    candidates.sort_by_key(|a| std::cmp::Reverse((a.0, a.1)));
     let kept: Vec<(usize, usize)> =
         candidates.iter().take(allowance).map(|(_, _, si, ii)| (*si, *ii)).collect();
 

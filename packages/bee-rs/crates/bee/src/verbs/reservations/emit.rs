@@ -64,7 +64,7 @@ pub(crate) fn prelude(cmd: &'static str, use_json: bool, t0: Instant) -> Option<
 /// started REFUSING that one shape by name; only the reservations verbs, which
 /// do carry it, opt in here.
 pub(crate) enum PreWt {
-    Go(Ctx, StoreRoots),
+    Go(Ctx, Box<StoreRoots>),
     Emitted(ExitCode),
 }
 
@@ -87,7 +87,7 @@ pub(crate) fn prelude_worktree(cmd: &'static str, use_json: bool, t0: Instant) -
             drift_changed: drift.manifest_changed,
             drift_hint: drift.hint,
         },
-        roots,
+        Box::new(roots),
     ))
 }
 

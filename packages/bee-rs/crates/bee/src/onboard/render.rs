@@ -43,12 +43,14 @@ impl Walk {
     }
 }
 
+pub type ContentTransform<'a> = &'a dyn Fn(&[u8]) -> Vec<u8>;
+
 /// walkSkillTree(rootDir, transform) — lstat-only, symlinks never followed.
 /// The first symlink (or other non-file/dir entry) blocks the WHOLE skill.
 /// `transform` maps a file's raw bytes to the bytes that would be
 /// materialized (the per-runtime render); source walks pass it, target walks
 /// omit it.
-pub fn walk_skill_tree(root_dir: &Path, transform: Option<&dyn Fn(&[u8]) -> Vec<u8>>) -> Walk {
+pub fn walk_skill_tree(root_dir: &Path, transform: Option<ContentTransform<'_>>) -> Walk {
     let mut walk = Walk::default();
     walk_inner(root_dir, "", transform, &mut walk);
     walk
@@ -57,7 +59,7 @@ pub fn walk_skill_tree(root_dir: &Path, transform: Option<&dyn Fn(&[u8]) -> Vec<
 fn walk_inner(
     dir: &Path,
     rel_prefix: &str,
-    transform: Option<&dyn Fn(&[u8]) -> Vec<u8>>,
+    transform: Option<ContentTransform<'_>>,
     out: &mut Walk,
 ) {
     for entry in read_dir_sorted(dir) {

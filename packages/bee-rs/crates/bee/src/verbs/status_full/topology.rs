@@ -56,7 +56,7 @@ pub(crate) fn build_contention_summary(ctx: &Ctx) -> R<Option<JMap>> {
         .map(|n| (n.clone(), lock_counts[n]))
         .collect();
     // sort((a,b) => b[1]-a[1]) — stable, insertion order on ties.
-    ranked.sort_by(|a, b| b.1.cmp(&a.1));
+    ranked.sort_by_key(|a| std::cmp::Reverse(a.1));
     let top_locks: Vec<Value> = ranked
         .into_iter()
         .take(CONTENTION_TOP_LOCKS_LIMIT)

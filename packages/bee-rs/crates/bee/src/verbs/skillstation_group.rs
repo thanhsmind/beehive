@@ -15,7 +15,10 @@ pub(crate) fn principles_on_hub(root: &Path) -> bool {
 }
 
 #[cfg(not(test))]
-pub(crate) fn hub_runner(root: &Path) -> Box<dyn Fn(&[&str]) -> Result<Value, String>> {
+type HubRunner = Box<dyn Fn(&[&str]) -> Result<Value, String>>;
+
+#[cfg(not(test))]
+pub(crate) fn hub_runner(root: &Path) -> HubRunner {
     let root = root.to_path_buf();
     Box::new(move |args| run_skillstation(&root, args))
 }

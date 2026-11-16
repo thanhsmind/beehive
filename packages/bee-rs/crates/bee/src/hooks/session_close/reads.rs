@@ -297,7 +297,7 @@ pub(crate) fn lane_record_from(feature: &str, parsed: &Value) -> Result<Option<R
 }
 
 pub(crate) enum Pipeline {
-    Ok { record: Record },
+    Ok { record: Box<Record> },
     /// LANE_INVALID / LANE_MISSING / LANE_CORRUPT — callers on the Stop path
     /// only ever branch on ok-ness and fall back to readState.
     Refused,
@@ -355,7 +355,7 @@ pub(crate) fn resolve_pipeline(
     stderr: &mut String,
 ) -> Result<Pipeline, Flow> {
     let Some(sid) = session_id else {
-        return Ok(Pipeline::Ok { record: read_state_record(root)? });
+        return Ok(Pipeline::Ok { record: Box::new(read_state_record(root)?) });
     };
     if ctx.worktree_resolution == "linked-invalid" {
         // state.mjs resolveRootsCore throws WorktreeLinkInvalidError here.
@@ -367,7 +367,7 @@ pub(crate) fn resolve_pipeline(
     let ctl = control_root(root, ctx);
     // readSession (fail-open id validation).
     if !is_plain_id(sid) {
-        return Ok(Pipeline::Ok { record: read_state_record(root)? });
+        return Ok(Pipeline::Ok { record: Box::new(read_state_record(root)?) });
     }
     let session_file = ctl.join(".bee").join("sessions").join(format!("{sid}.json"));
     // Corrupt → warned, then reads as "no session" (readJson's null fallback
@@ -385,7 +385,7 @@ pub(crate) fn resolve_pipeline(
         ReadJson::Parsed(_) => None,
     };
     let Some(session) = session else {
-        return Ok(Pipeline::Ok { record: read_state_record(root)? });
+        return Ok(Pipeline::Ok { record: Box::new(read_state_record(root)?) });
     };
     let bound = session
         .get("lane")
@@ -394,7 +394,7 @@ pub(crate) fn resolve_pipeline(
         .filter(|s| !s.is_empty())
         .map(String::from);
     let Some(bound) = bound else {
-        return Ok(Pipeline::Ok { record: read_state_record(root)? });
+        return Ok(Pipeline::Ok { record: Box::new(read_state_record(root)?) });
     };
     if !is_plain_id(&bound) {
         return Ok(Pipeline::Refused); // LANE_INVALID
@@ -421,7 +421,7 @@ through readLaneStrict will refuse loudly. FIX: inspect/restore the file (e.g. \
             Ok(Pipeline::Refused)
         }
         ReadJson::Parsed(parsed) => match lane_record_from(&bound, &parsed)? {
-            Some(record) => Ok(Pipeline::Ok { record }),
+            Some(record) => Ok(Pipeline::Ok { record: Box::new(record) }),
             None => {
                 // readLane's deterministic console.warn (corrupt lane shape).
                 let rel = format!(".bee{s}lanes{s}{bound}.json", s = std::path::MAIN_SEPARATOR);

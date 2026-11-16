@@ -1004,15 +1004,15 @@ pub(crate) fn read_grants(main_store_root: &Path) -> JMap {
 /// resolved storeRoot), NOT cwd. That distinction is what makes this a
 /// two-line function rather than a second walk:
 ///   * ordinary checkout        -> resolveRootsCore(root) is ordinary,
-///                                 controlRoot === workspaceRoot === root.
+///     controlRoot === workspaceRoot === root.
 ///   * UNGRANTED linked worktree-> `root` already fell back to mainRoot, and
-///                                 resolveRootsCore(mainRoot) is ordinary,
-///                                 so controlRoot === root again.
+///     resolveRootsCore(mainRoot) is ordinary,
+///     so controlRoot === root again.
 ///   * GRANTED linked worktree  -> `root` IS the worktree checkout, so
-///                                 resolveRootsCore(root) is linked-valid and
-///                                 controlRoot === its mainRoot.
-/// So the only case that moves is the granted one, and `ctx.linked` (resolved
-/// from the same cwd `root` was) already carries its mainRoot.
+///     resolveRootsCore(root) is linked-valid and
+///     controlRoot === its mainRoot.
+///     So the only case that moves is the granted one, and `ctx.linked` (resolved
+///     from the same cwd `root` was) already carries its mainRoot.
 ///
 /// The resolveContext side effects Node performs anyway are replicated for
 /// warning parity: readGrants over the MAIN store's `.bee` (silent), and

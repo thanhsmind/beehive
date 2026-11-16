@@ -785,6 +785,7 @@ fn find_paseo_agent(main_root: &Path, id: &str) -> Option<String> {
     None
 }
 
+#[cfg(test)]
 pub(crate) fn dispatch_pane(
     sub: &str,
     args: &[&str],

@@ -489,6 +489,7 @@ pub fn archive_argv(id: &str) -> Vec<String> {
     ]
 }
 
+#[cfg(test)]
 pub fn logs_argv(id: &str) -> Vec<String> {
     vec![
         "logs".to_string(),

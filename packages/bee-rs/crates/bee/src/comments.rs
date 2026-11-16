@@ -70,8 +70,8 @@ pub(crate) fn is_comment_line(lang: Lang, line: &str, in_block: &mut bool) -> bo
             if trimmed.starts_with("//") {
                 return true;
             }
-            if trimmed.starts_with("/*") {
-                *in_block = !trimmed[2..].contains("*/");
+            if let Some(rest) = trimmed.strip_prefix("/*") {
+                *in_block = !rest.contains("*/");
                 return true;
             }
             false

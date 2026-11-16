@@ -283,7 +283,7 @@ fn plan(root: &Path, payload: &Map<String, Value>) -> Pf<Option<Plan>> {
     // nudge read (fresh-session-handoff fsh-6 / codex-loop-p0).
     let pipeline = resolve_pipeline(root, &control_root, session_id.as_deref())?;
     let record = match &pipeline {
-        Pipeline::Ok(rec) => rec.clone(),
+        Pipeline::Ok(rec) => (**rec).clone(),
         Pipeline::Refused => read_state(root)?,
     };
     // D2/D4 (ah-2): the resolved record's own feature, if any — carried into
@@ -471,17 +471,13 @@ fn clear_and_reap_waiting_on_best_effort(
     if let Err(e) = crate::verbs::workflow_store::clear_default_state_waiting_on(root) {
         log_crash(Some(root), HOOK_NAME, &waiting_on_err_message(e), ctx.source);
     }
-    if let Some(feature) = feature.filter(|f| !f.trim().is_empty()) {
-        match crate::verbs::workflow_store::list_workflows(root) {
-            Ok(workflows) => {
-                if let Some(wf) = crate::verbs::workflow_store::find_live_workflow(&workflows, feature) {
-                    let id = crate::verbs::workflow_store::wf_id(wf);
-                    if let Err(e) = crate::verbs::workflow_store::clear_workflow_waiting_on(root, &id) {
-                        log_crash(Some(root), HOOK_NAME, &waiting_on_err_message(e), ctx.source);
-                    }
-                }
-            }
-            Err(_) => {} // best-effort: an unreadable workflows dir is silently skipped
+    if let Some(feature) = feature.filter(|f| !f.trim().is_empty())
+        && let Ok(workflows) = crate::verbs::workflow_store::list_workflows(root)
+        && let Some(wf) = crate::verbs::workflow_store::find_live_workflow(&workflows, feature)
+    {
+        let id = crate::verbs::workflow_store::wf_id(wf);
+        if let Err(e) = crate::verbs::workflow_store::clear_workflow_waiting_on(root, &id) {
+            log_crash(Some(root), HOOK_NAME, &waiting_on_err_message(e), ctx.source);
         }
     }
     // D4: the stale-expiry backstop for a mark left by a session that will
@@ -823,7 +819,7 @@ fn read_lane_record(control_root: &Path, feature: &str) -> Pf<Option<StateRecord
 }
 
 enum Pipeline {
-    Ok(StateRecord),
+    Ok(Box<StateRecord>),
     /// LANE_INVALID / LANE_MISSING / LANE_CORRUPT-adjacent typed refusal:
     /// the reminder falls back to readState, the nudge goes silent.
     Refused,
@@ -832,20 +828,20 @@ enum Pipeline {
 /// state.mjs resolvePipeline — session record → bound lane → default state.
 fn resolve_pipeline(root: &Path, control_root: &Path, session_id: Option<&str>) -> Pf<Pipeline> {
     let Some(sid) = session_id else {
-        return Ok(Pipeline::Ok(read_state(root)?));
+        return Ok(Pipeline::Ok(Box::new(read_state(root)?)));
     };
     let Some(session) = read_session(control_root, sid)? else {
-        return Ok(Pipeline::Ok(read_state(root)?));
+        return Ok(Pipeline::Ok(Box::new(read_state(root)?)));
     };
     let bound = match session.get("lane") {
         Some(Value::String(s)) if !s.trim().is_empty() => s.trim().to_string(),
-        _ => return Ok(Pipeline::Ok(read_state(root)?)),
+        _ => return Ok(Pipeline::Ok(Box::new(read_state(root)?))),
     };
     if !is_plain_id(&bound) {
         return Ok(Pipeline::Refused); // LANE_INVALID
     }
     match read_lane_record(control_root, &bound)? {
-        Some(record) => Ok(Pipeline::Ok(record)),
+        Some(record) => Ok(Pipeline::Ok(Box::new(record))),
         None => Ok(Pipeline::Refused), // LANE_MISSING
     }
 }
