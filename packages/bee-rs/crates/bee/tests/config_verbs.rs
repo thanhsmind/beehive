@@ -528,3 +528,120 @@ fn split_team_without_drop_global_never_compares_with_global() {
     assert_eq!(v["dropped"], json!([]));
     assert_eq!(file(&r, ".bee/team.json")["herding"]["agent_command"], json!("paseo-claude"));
 }
+
+fn run(repo: &Path, args: &[&str]) -> (bool, String, String) {
+    let out = Command::cargo_bin("bee")
+        .unwrap()
+        .args(args)
+        .current_dir(repo)
+        .env("BEEHIVE_CONFIG_DIR", global_dir(repo))
+        .env_remove("BEE_HERDING_WORKER")
+        .env_remove("BEE_HERDING_JOB_ID")
+        .output()
+        .unwrap();
+    (out.status.success(), String::from_utf8_lossy(&out.stdout).into_owned(), String::from_utf8_lossy(&out.stderr).into_owned())
+}
+
+fn team_show(repo: &Path) -> Value {
+    let (ok, out, err) = run(repo, &["team", "show", "--json"]);
+    assert!(ok, "{out}{err}");
+    serde_json::from_str(out.trim()).unwrap()
+}
+
+fn agent_command_template(repo: &Path) -> String {
+    run(repo, &["herding", "command-template", "agent_command", "--main-root", repo.to_str().unwrap()]).1
+}
+
+fn claude_role_model(show: &Value, role: &str) -> Value {
+    show["runtimes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|rt| rt["runtime"] == json!("claude"))
+        .flat_map(|rt| rt["roles"].as_array().unwrap().iter())
+        .find(|r| r["role"] == json!(role))
+        .map(|r| r["model"].clone())
+        .unwrap_or(Value::Null)
+}
+
+#[test]
+fn config_global_forbidden_keys_never_reach_the_merged_view() {
+    let tmp = tempfile::tempdir().unwrap();
+    let r = repo(tmp.path(), r#"{"uat_stop":"close"}"#);
+    put_global(
+        &r,
+        json!({"gate_bypass":"total","hooks":{"write-guard":false},"guards":{"cross_project":false},"fine":1}),
+    );
+    for key in ["gate_bypass", "hooks", "hooks.write-guard", "guards", "guards.cross_project"] {
+        let (ok, v, out) = bee(&r, &["explain", "--key", key]);
+        assert!(ok, "{out}");
+        assert_eq!(
+            (v["source"].clone(), v["effective"].clone(), v["global"].clone()),
+            (json!("unset"), Value::Null, Value::Null),
+            "{key}: {out}"
+        );
+    }
+    assert_eq!(effective(&r, "fine"), json!(1));
+}
+
+#[test]
+fn config_global_corrupt_file_is_named_and_read_as_empty() {
+    let tmp = tempfile::tempdir().unwrap();
+    let r = repo(tmp.path(), r#"{"team":{"claude":{"code":{"model":"opus"}}}}"#);
+    std::fs::create_dir_all(global_dir(&r)).unwrap();
+    std::fs::write(global_dir(&r).join("config.json"), "{not json").unwrap();
+    let path = global_dir(&r).join("config.json").display().to_string();
+    let (ok, v, out) = bee(&r, &["validate"]);
+    assert!(!ok, "{out}");
+    assert!(
+        v["problems"].as_array().unwrap().iter().any(|p| p["code"] == json!("config-unparseable") && p["file"] == json!(path)),
+        "{out}"
+    );
+    let (ok, v, out) = bee(&r, &["explain", "--key", "team"]);
+    assert!(!ok && v["error"].as_str().is_some_and(|e| e.contains(&path)), "{out}");
+    let (ok, out, err) = run(&r, &["team", "show", "--runtime", "claude", "--json"]);
+    assert!(ok, "{out}{err}");
+    assert!(err.contains(&path), "{err}");
+    assert_eq!(claude_role_model(&serde_json::from_str(out.trim()).unwrap(), "code"), json!("opus"));
+}
+
+#[test]
+fn config_global_team_slots_show_in_team_show_and_a_project_slot_wins() {
+    let tmp = tempfile::tempdir().unwrap();
+    let r = repo(tmp.path(), "{}");
+    put_global(&r, json!({"team":{"claude":{"code":{"model":"opus"},"review":{"model":"haiku"}}}}));
+    put(&r, ".bee/team.json", json!({"team":{"claude":{"review":{"model":"sonnet"}}}}));
+    let show = team_show(&r);
+    assert_eq!(claude_role_model(&show, "code"), json!("opus"));
+    assert_eq!(claude_role_model(&show, "review"), json!("sonnet"));
+}
+
+#[test]
+fn split_team_and_drop_global_keep_team_show_and_the_agent_command_identical() {
+    let tmp = tempfile::tempdir().unwrap();
+    let r = repo(tmp.path(), "{}");
+    let mut cfg = real_shaped_config();
+    cfg["herding"]["agent_command"] = json!(["claude", "--model", "sonnet"]);
+    put(&r, ".bee/config.json", cfg);
+    let (show, command) = (team_show(&r), agent_command_template(&r));
+    assert_eq!(command, "claude\n--model\nsonnet\n");
+
+    let (ok, v, out) = bee(&r, &["split-team"]);
+    assert!(ok, "{out}");
+    assert_eq!(v["moved"], json!(["team", "herding.agents", "herding.agent_command"]));
+    assert_eq!((team_show(&r), agent_command_template(&r)), (show.clone(), command.clone()));
+    let (ok, v, out) = bee(&r, &["split-team"]);
+    assert!(ok && v["moved"] == json!([]), "{out}");
+
+    put_global(&r, file(&r, ".bee/team.json"));
+    let (ok, v, out) = bee(&r, &["split-team", "--drop-global"]);
+    assert!(ok && v["dropped"].as_array().is_some_and(|d| !d.is_empty()), "{out}");
+    assert_eq!(file(&r, ".bee/team.json"), json!({}));
+    assert!(file(&r, ".bee/config.json").get("team").is_none());
+    assert_eq!((team_show(&r), agent_command_template(&r)), (show, command));
+
+    let team_bytes = raw(&r, ".bee/team.json");
+    let (ok, v, out) = bee(&r, &["split-team", "--drop-global"]);
+    assert!(ok && v["moved"] == json!([]) && v["dropped"] == json!([]), "{out}");
+    assert_eq!(raw(&r, ".bee/team.json"), team_bytes);
+}
