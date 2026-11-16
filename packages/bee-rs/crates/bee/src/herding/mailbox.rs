@@ -1642,6 +1642,27 @@ the report file's exact final name"),
     }
 
     #[test]
+    fn render_brief_omits_proof_command_for_a_job_without_a_cell() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let worktree_root = tmp.path();
+        let bee_dir = worktree_root.join(".bee");
+        std::fs::create_dir_all(&bee_dir).expect("create .bee");
+        std::fs::write(
+            bee_dir.join("config.json"),
+            r#"{"commands":{"test":"cargo test -p bee"}}"#,
+        )
+        .expect("write config.json");
+
+        let files = sample_files();
+        let spec = sample_spec(worktree_root, &bee_dir, &files, 1);
+        assert_eq!(spec.cell_id, None);
+        let text = render_brief(&spec);
+
+        assert!(!text.contains("# Proof command"), "a job with no cell id must not render # Proof command:\n{text}");
+        assert!(!text.contains("cargo test -p bee"), "a job with no cell id must not carry the commands.test line:\n{text}");
+    }
+
+    #[test]
     fn parse_result_text_treats_empty_dissent_claim_as_no_dissent() {
         // prf-5: an empty-string dissent claim parses as no dissent
         let text = r#"{"status":"blocked","summary":"stuck","files_changed":[],"proof":"n/a","dissent":{"claim":"","alternative":"a","severity":"blocker"}}"#;
