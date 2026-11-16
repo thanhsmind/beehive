@@ -107,11 +107,10 @@ pub(crate) fn sweep_expired_claims(
         let Some(preview) = read_claim(control, cell)? else { continue }; // corrupt: never touch
         // D6 self-exclusion — before ANY other gate (claim_expired,
         // heartbeat, .adopting).
-        if let Some(caller) = caller_session {
-            if matches!(preview.get("session"), Some(Value::String(s)) if s == caller) {
+        if let Some(caller) = caller_session
+            && matches!(preview.get("session"), Some(Value::String(s)) if s == caller) {
                 continue;
             }
-        }
         if !claim_expired(&preview, now)? {
             continue;
         }
@@ -685,11 +684,10 @@ pub(crate) fn run_claim_next(flags: rsv::Flags, use_json: bool, t0: Instant) -> 
                 "claim-next: --session-id or CLAUDE_CODE_SESSION_ID env is required.".into(),
             ));
         };
-        if let Some(t) = ttl {
-            if !t.is_finite() || t <= 0.0 {
+        if let Some(t) = ttl
+            && (!t.is_finite() || t <= 0.0) {
                 return Err(Fail::Thrown("--ttl must be a positive integer (seconds).".into()));
             }
-        }
         // applyWritePolicy — a no-op for this verb (see the section header);
         // readConfig's corrupt-file case now warns and reads as absent.
         bstate::read_config_raw(&root);
@@ -712,8 +710,8 @@ pub(crate) fn run_claim_next(flags: rsv::Flags, use_json: bool, t0: Instant) -> 
 
         let now = rsv::now_ms();
         let mut candidate: Option<Value> = None;
-        if let Some(feature) = &own_feature {
-            if own_approved {
+        if let Some(feature) = &own_feature
+            && own_approved {
                 for cell in ready_cells(&root, Some(feature))? {
                     if candidate_ok(&root, &control, &session, &cell, now)? {
                         candidate = Some(cell);
@@ -721,7 +719,6 @@ pub(crate) fn run_claim_next(flags: rsv::Flags, use_json: bool, t0: Instant) -> 
                     }
                 }
             }
-        }
 
         if candidate.is_none() {
             let state = bstate::read_state_brief(&root);
@@ -738,15 +735,14 @@ pub(crate) fn run_claim_next(flags: rsv::Flags, use_json: bool, t0: Instant) -> 
             // default pipeline right now (docs/history/default-pipeline-liveness).
             let (live_owned, default_pipeline_live_peer) =
                 live_session_facts(&control, &session, now)?;
-            if let Some(f) = &state_feature {
-                if own_feature.as_deref() != Some(f.as_str()) && !default_pipeline_live_peer {
+            if let Some(f) = &state_feature
+                && own_feature.as_deref() != Some(f.as_str()) && !default_pipeline_live_peer {
                     pipelines.push((
                         f.clone(),
                         matches!(state.gates.get("execution"), Some(Value::Bool(true))),
                         Value::Null,
                     ));
                 }
-            }
             for lane in crate::verbs::workflow_store::list_lanes(&root)? {
                 let feature = match lane.get("feature") {
                     Some(v) if js_truthy(v) => jsjson::js_to_string(v),
@@ -757,7 +753,7 @@ pub(crate) fn run_claim_next(flags: rsv::Flags, use_json: bool, t0: Instant) -> 
                 {
                     continue;
                 }
-                if live_owned.iter().any(|l| *l == feature) {
+                if live_owned.contains(&feature) {
                     continue;
                 }
                 let approved = lane

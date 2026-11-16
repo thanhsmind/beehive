@@ -293,11 +293,10 @@ pub(crate) fn run_workflows_close(flags: Flags, use_json: bool, t0: Instant) -> 
             if record.get("status").unwrap_or(&Value::Null) == &json!("closed") {
                 continue;
             }
-            if let Some(keep) = &keep {
-                if record.get("feature").unwrap_or(&Value::Null) == &Value::String(keep.clone()) {
+            if let Some(keep) = &keep
+                && record.get("feature").unwrap_or(&Value::Null) == &Value::String(keep.clone()) {
                     continue;
                 }
-            }
             target_ids.push(wf_id(record));
         }
         if target_ids.is_empty() {
@@ -701,7 +700,7 @@ pub(crate) fn other_live_work_present(root: &Path) -> Ex<bool> {
             None => read_state_peek(root)?.get("phase").cloned(),
         };
         let live = match phase {
-            Some(p) => truthy(&p) && &p != &json!("idle") && &p != &json!("compounding-complete"),
+            Some(p) => truthy(&p) && p != json!("idle") && p != json!("compounding-complete"),
             None => false,
         };
         if live {
@@ -781,7 +780,7 @@ pub(crate) fn live_lane_features(root: &Path) -> Ex<Vec<String>> {
             _ => continue,
         };
         let phase = lane.get("phase").cloned().unwrap_or(Value::Null);
-        if !truthy(&phase) || &phase == &json!("idle") || &phase == &json!("compounding-complete") {
+        if !truthy(&phase) || phase == json!("idle") || phase == json!("compounding-complete") {
             continue;
         }
         out.push(feature);
@@ -919,8 +918,8 @@ pub(crate) fn run_route(flags: Flags, use_json: bool, t0: Instant) -> Option<Exi
         let phase = target.record().get("phase").cloned().unwrap_or(Value::Null);
         let feature_set = target.record().get("feature").map(truthy).unwrap_or(false);
         if !feature_set
-            || &phase == &json!("idle")
-            || &phase == &json!("compounding-complete")
+            || phase == json!("idle")
+            || phase == json!("compounding-complete")
         {
             // `${phase ?? 'idle'}` / `${state.feature ?? 'none'}` — nullish.
             let phase_disp = match target.record().get("phase") {
@@ -949,8 +948,8 @@ pub(crate) fn run_route(flags: Flags, use_json: bool, t0: Instant) -> Option<Exi
         // (rti-1) so is a route recorded for a DIFFERENT feature, or one
         // pre-dating this fix that carries no "feature" field at all: either
         // one is treated as no route, never as this feature's own history.
-        if let Some(Value::Object(existing_route)) = target.record().get("route") {
-            if route_belongs_to_feature(existing_route, &route_owner_feature) {
+        if let Some(Value::Object(existing_route)) = target.record().get("route")
+            && route_belongs_to_feature(existing_route, &route_owner_feature) {
                 let new_flags: Vec<String> = match route_object.get("flags") {
                     Some(Value::Array(a)) => a.iter().map(js_disp).collect(),
                     _ => Vec::new(),
@@ -963,7 +962,6 @@ pub(crate) fn run_route(flags: Flags, use_json: bool, t0: Instant) -> Option<Exi
                     Err(message) => return Ok(Out::Thrown(message)),
                 }
             }
-        }
         let lane_note = target.lane_note();
         let target_lane = target.lane().map(str::to_string);
         target

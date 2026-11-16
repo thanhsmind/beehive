@@ -157,9 +157,9 @@ fn run(use_json: bool, t0: Instant) -> Option<ExitCode> {
         eprintln!("manifest_changed: true — {}", drift.hint);
     }
     if use_json {
-        print!("{}\n", jsjson::stringify_pretty(&Value::Object(result)));
+        println!("{}", jsjson::stringify_pretty(&Value::Object(result)));
     } else {
-        print!("{text}\n");
+        println!("{text}");
     }
     record_timing(&root, "test", t0, exit_code == 0);
     Some(ExitCode::from(exit_code))
@@ -171,7 +171,7 @@ fn emit_error(message: &str, use_json: bool) -> ExitCode {
     if use_json {
         let mut m = Map::new();
         m.insert("error".into(), Value::from(message));
-        print!("{}\n", jsjson::stringify(&Value::Object(m)));
+        println!("{}", jsjson::stringify(&Value::Object(m)));
     } else {
         eprintln!("{message}");
     }

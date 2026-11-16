@@ -336,16 +336,14 @@ pub(crate) fn derive_run_state(status: &str, gates: &Value, cells: &CellCounts) 
     // failed this same check, the highest one would too, since every later
     // gate that defeats a lower pending gate's check also postdates the
     // higher one.
-    if let Some(&p) = pending_at.iter().max() {
-        if !approved_at.iter().any(|&a| a > p) {
+    if let Some(&p) = pending_at.iter().max()
+        && !approved_at.iter().any(|&a| a > p) {
             return "awaiting-approval";
         }
-    }
-    if let Some(r) = rejected_at {
-        if !approved_at.iter().any(|&a| a > r) {
+    if let Some(r) = rejected_at
+        && !approved_at.iter().any(|&a| a > r) {
             return "blocked";
         }
-    }
     if cells.open > 0 || cells.claimed > 0 {
         return "running";
     }
@@ -600,11 +598,10 @@ pub(crate) fn reap_stale_waiting_on(root: &Path, now: f64) {
     let default_live = read_state_peek(root)
         .ok()
         .and_then(|s| s.get("waiting_on").filter(|m| waiting_on_is_live(Some(m))).cloned());
-    if let Some(mark) = default_live {
-        if waiting_on_expired(&mark, now, mark_owner_heartbeat_stale(root, &mark, now)) {
+    if let Some(mark) = default_live
+        && waiting_on_expired(&mark, now, mark_owner_heartbeat_stale(root, &mark, now)) {
             let _ = reap_default_state_waiting_on(root, now);
         }
-    }
     let Ok(workflows) = list_workflows(root) else { return };
     for wf in &workflows {
         let Some(mark) = wf.get("waiting_on").filter(|m| waiting_on_is_live(Some(m))) else { continue };
@@ -615,11 +612,10 @@ pub(crate) fn reap_stale_waiting_on(root: &Path, now: f64) {
         let Ok(guard) = acquire_workflow_lock(root, &id) else { continue };
         let _ = update_workflow_assuming_lock_with(root, &id, |current| {
             let mut patch = Map::new();
-            if let Some(mark) = current.get("waiting_on").filter(|m| waiting_on_is_live(Some(m))) {
-                if waiting_on_expired(mark, now, mark_owner_heartbeat_stale(root, mark, now)) {
+            if let Some(mark) = current.get("waiting_on").filter(|m| waiting_on_is_live(Some(m)))
+                && waiting_on_expired(mark, now, mark_owner_heartbeat_stale(root, mark, now)) {
                     patch.insert("waiting_on".into(), Value::Null);
                 }
-            }
             Ok(patch)
         });
         drop(guard);
@@ -739,15 +735,14 @@ pub(crate) fn read_workflow_record(root: &Path, id: &str) -> Result<Map<String, 
     // pre-migration `null`) — a hand-edited or corrupt value refuses rather
     // than silently passing through, the same discipline the gates map just
     // applied to itself above.
-    if let Some(rs) = merged.get("run_state") {
-        if !valid_run_state_value(rs) {
+    if let Some(rs) = merged.get("run_state")
+        && !valid_run_state_value(rs) {
             return Err(WfSkip(format!(
                 "readWorkflow: \"{file_str}\" exists but its run_state is corrupt (must be one of {} or null, got {}). The bee CLI refuses to guess at a workflow record it cannot read — that could silently clobber real state (gates, phase). FIX: inspect/restore the file (e.g. \"git checkout -- {rel}\").",
                 RUN_STATE_VALUES.join("/"),
                 jsjson::stringify(rs)
             )));
         }
-    }
     Ok(merged)
 }
 

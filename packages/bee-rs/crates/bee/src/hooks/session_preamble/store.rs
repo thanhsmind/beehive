@@ -36,16 +36,14 @@ pub(crate) fn list_cells(root: &Path, feature: Option<&Value>, status: Option<&s
         }
         let Some(cell) = read_json_object(&entry.path()) else { continue };
         // JS `if (feature && cell.feature !== feature) continue`.
-        if let Some(f) = feature.filter(|f| truthy(f)) {
-            if !strict_eq(cell.get("feature"), Some(f)) {
+        if let Some(f) = feature.filter(|f| truthy(f))
+            && !strict_eq(cell.get("feature"), Some(f)) {
                 continue;
             }
-        }
-        if let Some(s) = status {
-            if !str_eq(cell.get("status"), s) {
+        if let Some(s) = status
+            && !str_eq(cell.get("status"), s) {
                 continue;
             }
-        }
         cells.push(cell);
     }
     cells.sort_by(|a, b| {
@@ -97,16 +95,14 @@ pub(crate) fn list_cells_including_archive(
                 continue;
             }
             let Some(cell) = read_json_object(&entry.path()) else { continue };
-            if let Some(f) = feature.filter(|f| truthy(f)) {
-                if !strict_eq(cell.get("feature"), Some(f)) {
+            if let Some(f) = feature.filter(|f| truthy(f))
+                && !strict_eq(cell.get("feature"), Some(f)) {
                     continue;
                 }
-            }
-            if let Some(s) = status {
-                if !str_eq(cell.get("status"), s) {
+            if let Some(s) = status
+                && !str_eq(cell.get("status"), s) {
                     continue;
                 }
-            }
             let id = tpl(cell.get("id"));
             if !seen_ids.insert(id) {
                 continue; // the live copy above already claimed this id
@@ -143,11 +139,10 @@ pub(crate) fn best_scribing_stamp_ms(
 ) -> Option<f64> {
     let mut best: Option<f64> = None;
     let mut consider = |ms: Option<f64>| {
-        if let Some(v) = ms {
-            if best.is_none() || v > best.unwrap() {
+        if let Some(v) = ms
+            && (best.is_none() || v > best.unwrap()) {
                 best = Some(v);
             }
-        }
     };
     for entry in ledger {
         if !truthy(entry) || !strict_eq(vget(entry, "feature"), Some(feature)) {
@@ -159,11 +154,10 @@ pub(crate) fn best_scribing_stamp_ms(
     if let Some(lane) = read_lane(root, Some(feature)) {
         consider(scribing_run_stamp_ms(lane.get("last_scribing_run")));
     }
-    if let Some(run) = state.get("last_scribing_run") {
-        if truthy(run) && strict_eq(vget(run, "feature"), Some(feature)) {
+    if let Some(run) = state.get("last_scribing_run")
+        && truthy(run) && strict_eq(vget(run, "feature"), Some(feature)) {
             consider(scribing_run_stamp_ms(Some(run)));
         }
-    }
     best
 }
 
@@ -635,13 +629,11 @@ pub(crate) fn read_backlog_counts(root: &Path) -> Option<JMap> {
                     items.insert(id, status);
                 }
                 "status" => {
-                    if let Some(item) = items.get_mut(&id) {
-                        if let Some(s) = vget(&row, "status").and_then(|v| v.as_str()) {
-                            if PBI_STATUSES.contains(&s) {
+                    if let Some(item) = items.get_mut(&id)
+                        && let Some(s) = vget(&row, "status").and_then(|v| v.as_str())
+                            && PBI_STATUSES.contains(&s) {
                                 *item = s.to_string();
                             }
-                        }
-                    }
                 }
                 _ => {}
             }

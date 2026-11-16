@@ -182,16 +182,14 @@ pub(crate) fn list_path_lease_records(root: &str) -> Ex<Vec<Map<String, Value>>>
             if !is_file {
                 continue;
             }
-            if let Ok(text) = std::fs::read_to_string(dir.join(&name)) {
-                if let Ok(parsed) = serde_json::from_str::<Value>(&text) {
-                    if let Value::Object(m) = js_numberify(&parsed)? {
+            if let Ok(text) = std::fs::read_to_string(dir.join(&name))
+                && let Ok(parsed) = serde_json::from_str::<Value>(&text)
+                    && let Value::Object(m) = js_numberify(&parsed)? {
                         let is_path = matches!(m.get("resource"), Some(Value::String(s)) if s.starts_with("path:"));
                         if is_path {
                             out.push(m);
                         }
                     }
-                }
-            }
         }
     }
     Ok(out)
@@ -426,11 +424,10 @@ pub(crate) fn read_holds_store(root: &Path) -> Ex<Value> {
         return Ok(json!({ "holds": [] }));
     }
     let store = store.unwrap();
-    if let Some(Value::Array(holds)) = jget(&store, "holds") {
-        if holds.iter().any(|h| h.is_null()) {
+    if let Some(Value::Array(holds)) = jget(&store, "holds")
+        && holds.iter().any(|h| h.is_null()) {
             return Err(Exotic); // `hold.released_at` on null throws in Node
         }
-    }
     Ok(store)
 }
 
@@ -583,11 +580,10 @@ pub(crate) fn list_session_records(control_root: &str) -> Ex<Vec<Map<String, Val
                 continue;
             }
             ReadJson::Parsed(v) => {
-                if let Value::Object(m) = js_numberify(&v)? {
-                    if matches!(m.get("id"), Some(Value::String(s)) if s == id) {
+                if let Value::Object(m) = js_numberify(&v)?
+                    && matches!(m.get("id"), Some(Value::String(s)) if s == id) {
                         out.push(m);
                     }
-                }
             }
         }
     }
@@ -620,11 +616,10 @@ pub(crate) fn env_nonempty(name: &str) -> Option<String> {
 /// pub(crate) since the `worktree new` port: bee.mjs's handleWorktreeNew
 /// resolves the acting session the same way, against controlRootFor(mainRoot).
 pub(crate) fn resolve_session_id(flag: Option<&str>, control_root: &str) -> Ex<Option<String>> {
-    if let Some(f) = flag {
-        if !js_trim(f).is_empty() {
+    if let Some(f) = flag
+        && !js_trim(f).is_empty() {
             return Ok(Some(js_trim(f).to_string()));
         }
-    }
     if let Some(v) = crate::session_identity::env_session_id() {
         return Ok(Some(v));
     }
@@ -635,11 +630,10 @@ pub(crate) fn resolve_session_id(flag: Option<&str>, control_root: &str) -> Ex<O
             fresh.push(r);
         }
     }
-    if fresh.len() == 1 {
-        if let Some(Value::String(id)) = fresh[0].get("id") {
+    if fresh.len() == 1
+        && let Some(Value::String(id)) = fresh[0].get("id") {
             return Ok(Some(id.clone()));
         }
-    }
     Ok(None)
 }
 

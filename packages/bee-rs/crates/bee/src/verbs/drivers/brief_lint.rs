@@ -317,7 +317,7 @@ pub(crate) fn lint_brief(brief: &str) -> Result<(), Value> {
         let opener = lines[at].trim().to_string();
         return Err(brief_refusal(
             "brief_fence_unclosed",
-            &[("line".into(), Value::String(opener.clone()))],
+            &[("line", Value::String(opener.clone()))],
             format!(
                 "the brief opens a fenced block at \"{opener}\" and never closes it, so every line below it would go unread. Close the block with a matching fence line, then re-run the dispatch."
             ),
@@ -381,7 +381,7 @@ fn lint_brief_shape(lines: &[&str], fences: &Fences) -> Result<(), Value> {
         };
         return Err(brief_refusal(
             "brief_section_unexpected",
-            &[("section".into(), Value::String((*found).to_string()))],
+            &[("section", Value::String((*found).to_string()))],
             format!(
                 "the brief must carry exactly four level-2 sections, in this order: {expected}. Here {why}. Remove that section, or fold its content into the one of the four it belongs to."
             ),
@@ -391,7 +391,7 @@ fn lint_brief_shape(lines: &[&str], fences: &Fences) -> Result<(), Value> {
         if !headings.iter().any(|h| h.eq_ignore_ascii_case(want)) {
             return Err(brief_refusal(
                 "brief_section_missing",
-                &[("section".into(), Value::String(want.to_string()))],
+                &[("section", Value::String(want.to_string()))],
                 format!(
                     "the brief has no \"## {want}\" section. A LaneBrief carries exactly four level-2 sections, in this order: {expected}. Add \"## {want}\" in that position and re-run the dispatch."
                 ),
@@ -403,7 +403,7 @@ fn lint_brief_shape(lines: &[&str], fences: &Fences) -> Result<(), Value> {
         if !found.eq_ignore_ascii_case(want) {
             return Err(brief_refusal(
                 "brief_section_out_of_order",
-                &[("section".into(), Value::String(found.to_string()))],
+                &[("section", Value::String(found.to_string()))],
                 format!(
                     "the brief's sections are out of order: \"{found}\" stands where \"{want}\" is due. The four sections must read in this order: {expected}. Move \"{found}\" back below \"{want}\"."
                 ),
@@ -428,8 +428,8 @@ fn lint_brief_shape(lines: &[&str], fences: &Fences) -> Result<(), Value> {
             return Err(brief_refusal(
                 "brief_question_enumerates_answers",
                 &[
-                    ("section".into(), Value::String(BRIEF_SECTIONS[0].to_string())),
-                    ("line".into(), Value::String(quoted.to_string())),
+                    ("section", Value::String(BRIEF_SECTIONS[0].to_string())),
+                    ("line", Value::String(quoted.to_string())),
                 ],
                 format!(
                     "the Question section enumerates candidate answers — the line \"{quoted}\" starts a list, and a brief that lists the options has already led the witness. Lanes exist to GENERATE the options: state the question as prose, and move any material the lane needs into \"## Constraints\" or \"## Read diet\"."

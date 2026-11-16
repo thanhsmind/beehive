@@ -198,11 +198,10 @@ fn normalize_term(raw: &str) -> Option<String> {
 pub(crate) fn plan_terms(cells: &[Value]) -> Vec<String> {
     let mut out: Vec<String> = Vec::new();
     let push = |raw: &str, out: &mut Vec<String>| {
-        if let Some(t) = normalize_term(raw) {
-            if !out.contains(&t) {
+        if let Some(t) = normalize_term(raw)
+            && !out.contains(&t) {
                 out.push(t);
             }
-        }
     };
     for cell in cells {
         if let Some(Value::String(title)) = jget(cell, "title") {
@@ -551,8 +550,7 @@ pub(crate) fn run_plan_conflicts_derive(flags: Flags, use_json: bool, t0: Instan
         Ok(c) => c,
         Err(code) => return Some(code),
     };
-    let out = (|| -> R2<Out> {
-        with_lane_workflow(&ctx, &flags, "state plan-conflicts derive", |current, lane| {
+    let out = with_lane_workflow(&ctx, &flags, "state plan-conflicts derive", |current, lane| {
             let plan_rev = current.get("plan_rev").cloned().unwrap_or(json!(0));
             let (candidates, capped_away) = derive_candidates_reported(&ctx.root, lane)?;
             let count = candidates.len();
@@ -576,8 +574,7 @@ pub(crate) fn run_plan_conflicts_derive(flags: Flags, use_json: bool, t0: Instan
                 ));
             }
             Ok(Ok((patch, review, text)))
-        })
-    })();
+        });
     finish(&ctx, out)
 }
 

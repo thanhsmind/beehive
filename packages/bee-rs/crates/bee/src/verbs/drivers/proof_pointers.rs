@@ -7,7 +7,7 @@ pub(crate) fn candidate_paths(proof: &str) -> Vec<String> {
     for raw in proof.split_whitespace() {
         let token = raw
             .trim_matches(|c: char| matches!(c, '"' | '\'' | '`' | ',' | '(' | ')'))
-            .trim_end_matches(|c: char| c == ':' || c == '.');
+            .trim_end_matches([':', '.']);
         let token = strip_line_suffix(token);
         if token.is_empty()
             || !token.contains('/')

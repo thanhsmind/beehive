@@ -403,7 +403,8 @@ fn wiring_row(root: &Path, runtime: Runtime, hooks_bytes: Option<&[u8]>) -> Row 
         }
         Runtime::Pi => {
             let legacy_path = root.join(".pi/extensions/bee-guard.ts");
-            let extension_match = if legacy_path.exists() {
+            
+            if legacy_path.exists() {
                 Row {
                     key: "wiring_matches_binary",
                     ok: Some(false),
@@ -495,8 +496,7 @@ fn wiring_row(root: &Path, runtime: Runtime, hooks_bytes: Option<&[u8]>) -> Row 
                         }
                     }
                 }
-            };
-            extension_match
+            }
         }
     }
 }
@@ -759,8 +759,8 @@ fn binary_freshness_row_impl(root: &Path, is_pi: bool) -> Option<Row> {
         ProbedBeeVersion::Failed(reason) => probe_failed = Some(reason),
     }
 
-    if is_source_checkout {
-        if let Ok(bin_mtime) = std::fs::metadata(&bin).and_then(|m| m.modified()) {
+    if is_source_checkout
+        && let Ok(bin_mtime) = std::fs::metadata(&bin).and_then(|m| m.modified()) {
             let mut newest: Option<(PathBuf, std::time::SystemTime)> = None;
             for path in source_inputs(root) {
                 let Ok(mtime) = std::fs::metadata(&path).and_then(|m| m.modified()) else { continue };
@@ -782,7 +782,6 @@ fn binary_freshness_row_impl(root: &Path, is_pi: bool) -> Option<Row> {
                 });
             }
         }
-    }
 
     if let Some(reason) = probe_failed {
         return Some(Row {
@@ -861,13 +860,11 @@ fn team_pi_paseo_specs(cfg: &Value) -> Vec<Result<crate::herding::paseo::PaseoSp
     };
     let mut specs = Vec::new();
     for slot in slots.values() {
-        if slot.get("kind").and_then(Value::as_str) == Some("herding") {
-            if let Some(agent_name) = slot.get("agent").and_then(Value::as_str) {
-                if let Some(spec) = crate::herding::paseo::PaseoSpec::from_config(cfg, agent_name) {
+        if slot.get("kind").and_then(Value::as_str) == Some("herding")
+            && let Some(agent_name) = slot.get("agent").and_then(Value::as_str)
+                && let Some(spec) = crate::herding::paseo::PaseoSpec::from_config(cfg, agent_name) {
                     specs.push(spec);
                 }
-            }
-        }
     }
     specs
 }
@@ -1240,14 +1237,13 @@ fn paseo_ready_row_with_env_and_cli(
                 })
                 .unwrap_or(agent_id);
 
-            if let Some(del_failed) = parsed.as_ref().and_then(|v| v.get("delete_failed")) {
-                if !del_failed.is_null() {
+            if let Some(del_failed) = parsed.as_ref().and_then(|v| v.get("delete_failed"))
+                && !del_failed.is_null() {
                     let reason = del_failed.as_str().unwrap_or("failed delete");
                     failures.push(format!(
                         "marker {file_name} carries delete_failed ({reason}) — FIX: delete the orphan heartbeat with paseo heartbeat delete {schedule_id} and remove the marker"
                     ));
                 }
-            }
 
             let inspect_argv = crate::herding::paseo::inspect_argv(agent_id);
             let inspect_res = cli.call(&inspect_argv);
@@ -1487,7 +1483,7 @@ fn read_attestation(root: &Path, runtime: Runtime) -> Attestation {
 
 fn emit(payload: &Value, as_json: bool, lines: &[String]) {
     if as_json {
-        print!("{}\n", jsjson::stringify_pretty(payload));
+        println!("{}", jsjson::stringify_pretty(payload));
     } else {
         for l in lines {
             println!("{l}");
@@ -1499,7 +1495,7 @@ fn run_doctor(runtime: Runtime, as_json: bool) -> ExitCode {
     let Some(root) = repo_root() else {
         let msg = "bee doctor: no bee repo here (looked upward for a .bee/ directory). FIX: run it inside an onboarded project.";
         if as_json {
-            print!("{}\n", jsjson::stringify(&json!({"error": msg, "kind": "no_repo"})));
+            println!("{}", jsjson::stringify(&json!({"error": msg, "kind": "no_repo"})));
         } else {
             eprintln!("{msg}");
         }
@@ -1613,7 +1609,7 @@ fn run_attest(runtime: Runtime, session: Option<&str>, as_json: bool) -> ExitCod
             Runtime::Codex => unreachable!(),
         };
         if as_json {
-            print!("{}\n", jsjson::stringify(&json!({"error": msg, "kind": "not_applicable"})));
+            println!("{}", jsjson::stringify(&json!({"error": msg, "kind": "not_applicable"})));
         } else {
             eprintln!("{msg}");
         }
@@ -1637,7 +1633,7 @@ fn run_attest(runtime: Runtime, session: Option<&str>, as_json: bool) -> ExitCod
     let Some(version) = codex_version() else {
         let msg = "bee doctor attest: `codex --version` did not answer, so the version leg cannot be pinned and the attestation would be inert on sight. FIX: run this where the codex CLI works.";
         if as_json {
-            print!("{}\n", jsjson::stringify(&json!({"error": msg, "kind": "unprobed_version"})));
+            println!("{}", jsjson::stringify(&json!({"error": msg, "kind": "unprobed_version"})));
         } else {
             eprintln!("{msg}");
         }

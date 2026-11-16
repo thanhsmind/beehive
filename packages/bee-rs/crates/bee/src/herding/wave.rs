@@ -1031,11 +1031,10 @@ pub(super) fn occupancy_with_panes_and_paseo(
         None => live_pane_ids(&main_root),
     };
 
-    if let (Some(cli), Some(set)) = (p_ref, live_panes.as_mut()) {
-        if let Some(ids) = paseo_live_ids(cli) {
+    if let (Some(cli), Some(set)) = (p_ref, live_panes.as_mut())
+        && let Some(ids) = paseo_live_ids(cli) {
             set.extend(ids);
         }
-    }
 
     let mut sweep_lines = Vec::new();
     if let Some(ref panes) = live_panes {

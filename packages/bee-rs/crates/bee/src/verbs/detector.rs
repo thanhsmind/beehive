@@ -336,7 +336,7 @@ fn slug(text: &str) -> String {
 fn collect_paths(raw: &str, out: &mut Vec<String>) {
     for line in raw.lines() {
         let path = js_trim(line).replace('\\', "/");
-        if path.is_empty() || excluded_path(&path) || out.iter().any(|p| *p == path) {
+        if path.is_empty() || excluded_path(&path) || out.contains(&path) {
             continue;
         }
         out.push(path);
@@ -498,8 +498,8 @@ pub(crate) fn rule_budget(snap: &JobSnapshot, tokens_per_job: Option<f64>, now_m
             .and_then(Value::as_object)
             .and_then(|u| u.get("total_tokens"))
             .and_then(Value::as_f64);
-        if let Some(total) = total {
-            if total >= BUDGET_THRESHOLD * budget {
+        if let Some(total) = total
+            && total >= BUDGET_THRESHOLD * budget {
                 out.push(snap.event(
                     "budget-80",
                     &format!("budget-80-tokens-{}", snap.job_id),
@@ -510,7 +510,6 @@ pub(crate) fn rule_budget(snap: &JobSnapshot, tokens_per_job: Option<f64>, now_m
                     "config",
                 ));
             }
-        }
     }
     out
 }

@@ -153,11 +153,10 @@ fn can_render_prompt(name: &str, template: &str) -> bool {
             }
         } else {
             let var = raw.strip_prefix("#if ").unwrap_or(raw);
-            if !var.is_empty() && var.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
-                if !supported.contains(&var) {
+            if !var.is_empty() && var.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
+                && !supported.contains(&var) {
                     return false;
                 }
-            }
         }
         rest = &after[close + 2..];
     }
@@ -368,8 +367,8 @@ pub(crate) fn render(template: &str, vars: &[(&str, &str)]) -> Result<String, St
     let mut i = 0usize;
     while i < out.len() {
         let rest = &out[i..];
-        if let Some(after) = rest.strip_prefix("{{") {
-            if let Some(close) = after.find("}}") {
+        if let Some(after) = rest.strip_prefix("{{")
+            && let Some(close) = after.find("}}") {
                 let name = &after[..close];
                 if !name.is_empty() && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
                     match lookup(name) {
@@ -384,7 +383,6 @@ pub(crate) fn render(template: &str, vars: &[(&str, &str)]) -> Result<String, St
                     continue;
                 }
             }
-        }
         let ch = rest.chars().next().unwrap();
         result.push(ch);
         i += ch.len_utf8();

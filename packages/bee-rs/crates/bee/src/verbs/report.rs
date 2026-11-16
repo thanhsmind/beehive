@@ -248,12 +248,11 @@ fn scrub(args: &Args, ctx: &Ctx) -> Result<(String, String, Counts), Fail> {
             text = strip_code_blocks(&text, &mut counts.code_blocks);
         }
         text = rewrite(&text, ctx, &mut counts);
-        if let Some(cap) = cap {
-            if text.chars().count() > cap {
+        if let Some(cap) = cap
+            && text.chars().count() > cap {
                 text = text.chars().take(cap).collect::<String>() + "\n[truncated]";
                 counts.truncated += 1;
             }
-        }
         if HOME_MARKERS.iter().any(|m| text.contains(m)) {
             return Err(refuse(field, "a home-directory path that survived the scrub"));
         }

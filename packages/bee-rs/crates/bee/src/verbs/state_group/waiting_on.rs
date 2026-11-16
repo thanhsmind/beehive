@@ -137,25 +137,23 @@ pub(crate) fn resolve_waiting_on_target(
         if let Some(wf) = find_live_workflow(&workflows, &bound) {
             return Ok(Some((wf_id(wf), bound)));
         }
-        if clear_verb {
-            if let Some(wf) = newest_workflow_for_feature(&workflows, &bound)? {
+        if clear_verb
+            && let Some(wf) = newest_workflow_for_feature(&workflows, &bound)? {
                 return Ok(Some((wf_id(&wf), bound)));
             }
-        }
         return Err(Err2::Msg(format!(
             "{verb}: refused \u{2014} calling session \"{}\" is bound to lane \"{bound}\" but no live workflow names it. FIX: start the lane, unbind the session, or pass --no-lane to target the default record explicitly.",
             sid_disp(&sid)
         )));
     }
     let default_record = read_state_strict(root)?;
-    if let Some(v) = default_record.get("feature") {
-        if truthy(v) {
+    if let Some(v) = default_record.get("feature")
+        && truthy(v) {
             let f = js_disp(v);
             if let Some(wf) = find_live_workflow(&workflows, &f) {
                 return Ok(Some((wf_id(wf), f)));
             }
         }
-    }
     Ok(None) // nothing resolves — D3's session-scoped default-record case
 }
 

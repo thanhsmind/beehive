@@ -146,21 +146,18 @@ pub(crate) fn list_cells(root: &Path, feature: Option<&str>, status: Option<&str
             Value::Array(_) => return Err(Delegate), // JS-exotic: typeof [] === 'object'
             _ => continue,                           // primitives fail `typeof === 'object'`
         };
-        if let Some(scope) = island_feature.as_deref() {
-            if !matches!(map.get("feature"), Some(Value::String(s)) if s == scope) {
+        if let Some(scope) = island_feature.as_deref()
+            && !matches!(map.get("feature"), Some(Value::String(s)) if s == scope) {
                 continue; // foreign-feature residue in a granted island — never surfaced
             }
-        }
-        if let Some(f) = feature {
-            if !matches!(map.get("feature"), Some(Value::String(s)) if s == f) {
+        if let Some(f) = feature
+            && !matches!(map.get("feature"), Some(Value::String(s)) if s == f) {
                 continue; // strict !==; absent/non-string never equals the filter
             }
-        }
-        if let Some(st) = status {
-            if !matches!(map.get("status"), Some(Value::String(s)) if s == st) {
+        if let Some(st) = status
+            && !matches!(map.get("status"), Some(Value::String(s)) if s == st) {
                 continue;
             }
-        }
         cells.push(cell);
     }
     cells.sort_by(|a, b| {

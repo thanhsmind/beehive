@@ -555,7 +555,7 @@ pub(crate) fn record_into(
         kind: kind.to_string(),
         signal: signal.to_string(),
         note,
-        target_session: target_session.map(|s| one_line(s)).filter(|s| !s.is_empty()),
+        target_session: target_session.map(one_line).filter(|s| !s.is_empty()),
         tick,
         events,
     };
@@ -1481,11 +1481,10 @@ pub(crate) fn read_presence(control: &Path) -> PresenceStore {
                     .map(str::to_string);
                 match (id, at) {
                     (Some(id), Some(at)) => {
-                        if let Some(w) = windows.iter_mut().find(|w| w.id == id) {
-                            if w.back_at.is_none() {
+                        if let Some(w) = windows.iter_mut().find(|w| w.id == id)
+                            && w.back_at.is_none() {
                                 w.back_at = Some(at);
                             }
-                        }
                     }
                     _ => folded = false,
                 }
@@ -1530,15 +1529,14 @@ pub(crate) fn away_into(
         ));
     }
     let note = note.map(one_line).filter(|s| !s.is_empty());
-    if let Some(text) = &note {
-        if text.chars().count() > MAX_NOTE_CHARS {
+    if let Some(text) = &note
+        && text.chars().count() > MAX_NOTE_CHARS {
             return Err(format!(
                 "bee {cmd}: --note is {} characters; it is one line on a report \
                  ({MAX_NOTE_CHARS} max).",
                 text.chars().count()
             ));
         }
-    }
     let win = PresenceWindow { id: new_row_id(), away_at: now_iso(), note, back_at: None };
     if append_jsonl(&presence_path(control), &win.away_event()).is_err() {
         return Err(format!("bee {cmd}: could not append to the presence store."));
@@ -2913,11 +2911,10 @@ fn read_cells(control: &Path) -> Vec<Value> {
             continue;
         }
         let Ok(text) = std::fs::read_to_string(entry.path()) else { continue };
-        if let Ok(v) = serde_json::from_str::<Value>(&text) {
-            if v.is_object() {
+        if let Ok(v) = serde_json::from_str::<Value>(&text)
+            && v.is_object() {
                 out.push(v);
             }
-        }
     }
     out
 }

@@ -1556,11 +1556,10 @@ fn y_scalar(s: &str) -> Value {
         "true" => Value::Bool(true),
         "false" => Value::Bool(false),
         _ => {
-            if t.starts_with('"') {
-                if let Ok(v) = serde_json::from_str::<Value>(t) {
+            if t.starts_with('"')
+                && let Ok(v) = serde_json::from_str::<Value>(t) {
                     return v;
                 }
-            }
             Value::String(t.to_string())
         }
     }
@@ -2536,11 +2535,10 @@ pub(crate) fn silent_run_candidates(root: &Path, current_run: &str) -> Vec<Strin
         // D2: a letter no longer proves the run reached its end — only that it
         // reached a feature close. A run whose entries outran its letter is a
         // candidate again.
-        if let Some(letter) = lettered.get(&short_run_slug(&id)) {
-            if !entries_outran_letter(root, &id, letter) {
+        if let Some(letter) = lettered.get(&short_run_slug(&id))
+            && !entries_outran_letter(root, &id, letter) {
                 continue;
             }
-        }
         out.push(id);
     }
     out

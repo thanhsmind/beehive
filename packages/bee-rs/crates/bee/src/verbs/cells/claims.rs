@@ -306,16 +306,14 @@ pub(crate) fn release_claim_file_best_effort(root: &Path, id: &str, seen: Option
         if !acquire_gate_with_retry(&control, id)? {
             return Ok(());
         }
-        if let Ok(Some(claim)) = read_claim(&control, id) {
-            if carries_seen(&claim) {
-                if let Ok(file) = claim_path(&control, id) {
+        if let Ok(Some(claim)) = read_claim(&control, id)
+            && carries_seen(&claim)
+                && let Ok(file) = claim_path(&control, id) {
                     let _ = transient_fs_retry(|| match std::fs::remove_file(&file) {
                         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
                         other => other,
                     });
                 }
-            }
-        }
         release_gate(&control, id);
         Ok(())
     })();
@@ -538,11 +536,10 @@ pub(crate) fn renew_claim_ttl(
                 Some(Value::String(s)) if *s == session => {}
                 _ => return Ok(RenewStep::Untouched), // adopted away between listing and gating
             }
-            if let Some(presented) = presented_epoch {
-                if let Some(refusal) = claim_fence_refusal("renew", &cell, presented, &claim) {
+            if let Some(presented) = presented_epoch
+                && let Some(refusal) = claim_fence_refusal("renew", &cell, presented, &claim) {
                     return Ok(RenewStep::Refused(refusal));
                 }
-            }
             // The `...claim` spread carries acquired_at AND fence_epoch
             // forward untouched — only claimed_at, the expiry clock, advances.
             let mut next = claim.clone();
@@ -615,11 +612,10 @@ pub(crate) fn release_claim_typed(
                 ),
             )));
         }
-        if let Some(presented) = presented_epoch {
-            if let Some(refusal) = claim_fence_refusal("release", &cell, presented, &claim) {
+        if let Some(presented) = presented_epoch
+            && let Some(refusal) = claim_fence_refusal("release", &cell, presented, &claim) {
                 return Ok(ReleaseClaimOutcome::Refused(refusal));
             }
-        }
         let file = claim_path(control, &cell)?;
         let _ = transient_fs_retry(|| match std::fs::remove_file(&file) {
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
@@ -725,11 +721,10 @@ pub(crate) fn env_nonempty(name: &str) -> Option<String> {
 /// (no `root`: the durable single-live-session fallback stays with callers
 /// that pass one).
 pub(crate) fn resolve_session_flag_env(flag: Option<&str>) -> Option<String> {
-    if let Some(f) = flag {
-        if !js_trim(f).is_empty() {
+    if let Some(f) = flag
+        && !js_trim(f).is_empty() {
             return Some(js_trim(f).to_string());
         }
-    }
     crate::session_identity::env_session_id()
 }
 
@@ -743,11 +738,10 @@ pub(crate) fn resolve_session_adopt(control: &Path) -> MR<Option<String>> {
             fresh.push(record);
         }
     }
-    if fresh.len() == 1 {
-        if let Some(Value::String(id)) = fresh[0].get("id") {
+    if fresh.len() == 1
+        && let Some(Value::String(id)) = fresh[0].get("id") {
             return Ok(Some(id.clone()));
         }
-    }
     Ok(None)
 }
 
@@ -791,15 +785,12 @@ pub(crate) fn claim_cell_file(
     let _ = std::fs::create_dir_all(claims_dir(control));
     // msn-19: workspace_id auto-looked-up from the acting session's record.
     let mut workspace_id: Option<String> = None;
-    if let Some(s) = &session {
-        if let Some(record) = read_session(control, s)? {
-            if let Some(Value::String(w)) = record.get("workspace_id") {
-                if !w.is_empty() {
+    if let Some(s) = &session
+        && let Some(record) = read_session(control, s)?
+            && let Some(Value::String(w)) = record.get("workspace_id")
+                && !w.is_empty() {
                     workspace_id = Some(w.clone());
                 }
-            }
-        }
-    }
     let mut claim = Map::new();
     claim.insert("cell".into(), Value::String(cell.clone()));
     if let Some(s) = &session {

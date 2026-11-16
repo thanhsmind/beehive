@@ -333,11 +333,10 @@ pub(crate) fn validate_judge_verdict(obj: &Value) -> (bool, Vec<String>) {
         errors.push(
             "failure_signature is required (non-empty string) when any check has status FAIL.".to_string(),
         );
-    } else if let Some(v) = fs {
-        if !matches!(v, Value::Null) && !is_nonempty_string_value(Some(v)) {
+    } else if let Some(v) = fs
+        && !matches!(v, Value::Null) && !is_nonempty_string_value(Some(v)) {
             errors.push("failure_signature, when present, must be a non-empty string.".to_string());
         }
-    }
     (errors.is_empty(), errors)
 }
 

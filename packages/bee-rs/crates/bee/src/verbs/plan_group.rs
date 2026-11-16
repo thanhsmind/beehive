@@ -66,15 +66,14 @@ fn section_findings(text: &str, mode: Option<&str>, out: &mut Vec<Finding>) {
             out.push(Finding { check: "sections", detail: format!("missing section \"{wanted}\"") });
             continue;
         };
-        if let Some((prev_at, prev)) = last {
-            if at < prev_at {
+        if let Some((prev_at, prev)) = last
+            && at < prev_at {
                 out.push(Finding {
                     check: "sections",
                     detail: format!("\"{wanted}\" comes before \"## {prev}\" but must come after it"),
                 });
                 continue;
             }
-        }
         last = Some((at, name));
     }
 }
@@ -254,7 +253,7 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
         return None;
     }
     let toks: Vec<&str> = args[2..].iter().map(|a| a.to_str()).collect::<Option<Vec<_>>>()?;
-    if toks.iter().any(|t| *t == "--help") {
+    if toks.contains(&"--help") {
         return None;
     }
     let pre_json = pre_json_scan(&toks);

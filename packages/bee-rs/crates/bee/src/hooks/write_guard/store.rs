@@ -826,14 +826,13 @@ pub(crate) fn list_path_lease_records(root: &str) -> Vec<Map<String, Value>> {
             if !is_file {
                 continue;
             }
-            if let Ok(text) = std::fs::read_to_string(dir.join(&name)) {
-                if let Ok(Value::Object(m)) = serde_json::from_str::<Value>(&text) {
+            if let Ok(text) = std::fs::read_to_string(dir.join(&name))
+                && let Ok(Value::Object(m)) = serde_json::from_str::<Value>(&text) {
                     let is_path = matches!(m.get("resource"), Some(Value::String(s)) if s.starts_with("path:"));
                     if is_path {
                         out.push(m);
                     }
                 }
-            }
         }
     }
     out

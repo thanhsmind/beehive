@@ -216,8 +216,8 @@ pub fn ship_visibility(config: &Map<String, Value>) -> String {
         None | Some(Value::Null) => "off".to_string(),
         Some(Value::String(s)) if s == "off" || s == "draft-pr" => s.clone(),
         Some(other) => {
-            eprint!(
-                "config: unrecognized ship_visibility \"{}\" in .bee/config.json — normalized to \"off\". Allowed: off, draft-pr.\n",
+            eprintln!(
+                "config: unrecognized ship_visibility \"{}\" in .bee/config.json — normalized to \"off\". Allowed: off, draft-pr.",
                 jsjson::js_to_string(other)
             );
             "off".to_string()
@@ -259,8 +259,8 @@ pub fn doc_viewer_prefix(config: &Map<String, Value>) -> Option<String> {
 }
 
 fn warn_half_set_doc_viewer() -> Option<String> {
-    eprint!(
-        "config: doc_viewer is set but incomplete in .bee/config.json — base_url and project must both be non-empty strings; doc links disabled.\n"
+    eprintln!(
+        "config: doc_viewer is set but incomplete in .bee/config.json — base_url and project must both be non-empty strings; doc links disabled."
     );
     None
 }
@@ -308,9 +308,9 @@ pub fn capture_queue_threshold(config: &Map<String, Value>) -> CaptureQueueThres
 }
 
 fn warn_malformed_capture_queue_threshold() -> CaptureQueueThreshold {
-    eprint!(
+    eprintln!(
         "config: capture_queue_threshold in .bee/config.json must be an object {{count, days}} \
-with non-negative numbers — ignoring it and using the default (count: 5, days: 7).\n"
+with non-negative numbers — ignoring it and using the default (count: 5, days: 7)."
     );
     DEFAULT_CAPTURE_QUEUE_THRESHOLD
 }

@@ -136,17 +136,15 @@ pub(crate) fn glob_match(toks: &[GlobTok], input: &[char]) -> bool {
 pub(crate) fn is_exclusive_path(root: &Path, normalized: &str) -> R<bool> {
     let config = read_config(root)?;
     let mut globs: Vec<String> = DEFAULT_EXCLUSIVE_PATHS.iter().map(|s| s.to_string()).collect();
-    if let Some(Value::Object(g)) = config.get("guards") {
-        if let Some(Value::Array(extra)) = g.get("exclusive_paths") {
+    if let Some(Value::Object(g)) = config.get("guards")
+        && let Some(Value::Array(extra)) = g.get("exclusive_paths") {
             for e in extra {
-                if let Value::String(s) = e {
-                    if !js_trim(s).is_empty() {
+                if let Value::String(s) = e
+                    && !js_trim(s).is_empty() {
                         globs.push(s.clone());
                     }
-                }
             }
         }
-    }
     let input: Vec<char> = normalized.chars().collect();
     Ok(globs.iter().any(|g| glob_match(&glob_tokens(g), &input)))
 }
@@ -284,7 +282,7 @@ pub(crate) fn resolve_git_mutation_paths(cwd: &str, subcommand: &str, rest: &[St
         let unstaged = run_git_capture(cwd, &["diff", "--name-only"])?;
         let mut seen = std::collections::HashSet::new();
         let mut out = Vec::new();
-        for p in staged.into_iter().chain(unstaged.into_iter()) {
+        for p in staged.into_iter().chain(unstaged) {
             if seen.insert(p.clone()) {
                 out.push(p);
             }
@@ -346,11 +344,10 @@ pub(crate) fn classify_concurrent_tree_verb(subcommand: Option<&str>, rest: &[St
     }
     if sub == "stash" {
         let first_word = rest.iter().find(|t| !t.starts_with('-'));
-        if let Some(w) = first_word {
-            if matches!(w.as_str(), "list" | "show") {
+        if let Some(w) = first_word
+            && matches!(w.as_str(), "list" | "show") {
                 return None;
             }
-        }
         return Some(TreeVerbClass {
             verb: "stash".into(),
             why: "it sweeps every uncommitted change in the checkout out of the tree, including edits a sibling worker is still writing.",
@@ -365,8 +362,8 @@ pub(crate) fn classify_concurrent_tree_verb(subcommand: Option<&str>, rest: &[St
             why: "it rewrites tree content wholesale, and reservations cannot protect a tree.",
         });
     }
-    if sub == "reset" {
-        if let Some(idx) = rest.iter().position(|t| t == "--") {
+    if sub == "reset"
+        && let Some(idx) = rest.iter().position(|t| t == "--") {
             let pathspecs: Vec<String> = rest[idx + 1..].to_vec();
             let whole_tree = rest[..idx]
                 .iter()
@@ -380,7 +377,6 @@ pub(crate) fn classify_concurrent_tree_verb(subcommand: Option<&str>, rest: &[St
                 return None;
             }
         }
-    }
     if matches!(sub, "reset" | "clean" | "checkout" | "restore" | "revert" | "rebase" | "cherry-pick" | "merge") {
         return Some(TreeVerbClass {
             verb: sub.to_string(),

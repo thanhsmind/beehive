@@ -496,11 +496,8 @@ pub(crate) fn build_status_with_state(ctx: &mut Ctx, lanes_full: bool, state: JM
                     }
                     None => {} // undefined -> dropped by JSON.stringify
                 }
-                match vget(event, "date") {
-                    Some(v) => {
-                        o.insert("date".into(), v.clone());
-                    }
-                    None => {}
+                if let Some(v) = vget(event, "date") {
+                    o.insert("date".into(), v.clone());
                 }
                 o.insert("decision".into(), json!(datamark(vget(event, "decision"))));
                 Value::Object(o)

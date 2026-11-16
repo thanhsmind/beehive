@@ -312,7 +312,7 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
         _ => return None,
     };
     let toks: Vec<&str> = args[2..].iter().map(|a| a.to_str()).collect::<Option<Vec<_>>>()?;
-    if toks.iter().any(|t| *t == "--help") {
+    if toks.contains(&"--help") {
         return None;
     }
     let pre_json = pre_json_scan(&toks);

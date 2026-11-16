@@ -197,8 +197,7 @@ fn index_modes(root: &Path) -> std::sync::Arc<std::collections::HashMap<String, 
         .arg(root)
         .args(["ls-files", "-s", "-z"])
         .output()
-    {
-        if out.status.success() {
+        && out.status.success() {
             // Each entry is "<mode> <sha> <stage>\t<path>\0".
             for entry in String::from_utf8_lossy(&out.stdout).split('\0') {
                 let Some((meta, path)) = entry.split_once('\t') else { continue };
@@ -207,7 +206,6 @@ fn index_modes(root: &Path) -> std::sync::Arc<std::collections::HashMap<String, 
                 map.insert(path.to_string(), recorded.to_string());
             }
         }
-    }
     let shared = Arc::new(map);
     cache.lock().unwrap().insert(root.to_path_buf(), Arc::clone(&shared));
     shared
@@ -637,15 +635,14 @@ fn run_write(root: &Path) -> Result<ExitCode, Option<ExitCode>> {
     let file = manifest_path(root);
     // CUTOVER: both write failures used to delegate (Node printed a libuv
     // message). They refuse natively now, same channel and exit code.
-    if let Some(dir) = file.parent() {
-        if let Err(e) = std::fs::create_dir_all(dir) {
+    if let Some(dir) = file.parent()
+        && let Err(e) = std::fs::create_dir_all(dir) {
             return Err(Some(fail(&format!(
                 "release_manifest: cannot create {} ({})",
                 dir.display(),
                 e.kind()
             ))));
         }
-    }
     if let Err(e) = std::fs::write(&file, manifest_bytes(&records)) {
         return Err(Some(fail(&format!(
             "release_manifest: cannot write {} ({})",

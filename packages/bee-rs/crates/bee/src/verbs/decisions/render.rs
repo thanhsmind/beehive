@@ -397,7 +397,7 @@ pub(crate) fn word_bounded_ci_test(line: &str, needle: &str) -> bool {
     }
     for start in 0..=(l.len() - n.len()) {
         let matched = (0..n.len())
-            .all(|k| l[start + k].to_ascii_lowercase() == n[k].to_ascii_lowercase());
+            .all(|k| l[start + k].eq_ignore_ascii_case(&n[k]));
         if !matched {
             continue;
         }

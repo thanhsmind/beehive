@@ -298,12 +298,11 @@ pub(crate) fn perf_refresh(root: &Path, session_id: Option<&str>) -> PerfRefresh
 /// resolved transcript and its events by reference, so a failure here leaves
 /// them whole for the caller.
 fn perf_rollup(resolved: Option<&(PathBuf, Vec<Value>)>) -> Result<(), String> {
-    if let Some((transcript, events)) = resolved {
-        if let Some(rollup) = rollup_from_events(transcript, events) {
+    if let Some((transcript, events)) = resolved
+        && let Some(rollup) = rollup_from_events(transcript, events) {
             let record = session_record(&rollup)?;
             upsert_session_records(&[record])?;
         }
-    }
     if !read_session_records().is_empty() {
         let projects = build_matrix_from_log();
         let html = render_matrix_html(&projects, &now_iso())?;

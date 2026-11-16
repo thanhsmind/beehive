@@ -22,13 +22,11 @@ const CRATE_ROOT: &str = "packages/bee-rs/crates/";
 const LICENSE_MARKERS: [&str; 3] = ["Copyright", "SPDX-License-Identifier", "Licensed under"];
 
 pub(crate) fn under_code_root(rel: &str) -> bool {
-    if let Some(rest) = rel.strip_prefix(CRATE_ROOT) {
-        if let Some((krate, tail)) = rest.split_once('/') {
-            if !krate.is_empty() && tail.starts_with("src/") {
+    if let Some(rest) = rel.strip_prefix(CRATE_ROOT)
+        && let Some((krate, tail)) = rest.split_once('/')
+            && !krate.is_empty() && tail.starts_with("src/") {
                 return true;
             }
-        }
-    }
     CODE_ROOTS.iter().any(|root| rel.starts_with(root))
 }
 

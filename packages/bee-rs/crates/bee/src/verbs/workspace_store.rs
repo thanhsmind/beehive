@@ -542,7 +542,7 @@ fn decide_ownership(
         return Outcome::AlreadyOwner;
     }
     // No predicate => the SAFE default: "the owner is live".
-    let live = is_owner_live.map_or(true, |f| f(&owner, now));
+    let live = is_owner_live.is_none_or(|f| f(&owner, now));
     if !live {
         return Outcome::Reclaim;
     }

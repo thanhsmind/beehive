@@ -297,13 +297,11 @@ pub(crate) fn read_backlog_counts(ctx: &mut Ctx) -> R<Option<JMap>> {
                     items.insert(id, status);
                 }
                 "status" => {
-                    if let Some(item) = items.get_mut(&id) {
-                        if let Some(s) = vget(&row, "status").and_then(|v| v.as_str()) {
-                            if PBI_STATUSES.contains(&s) {
+                    if let Some(item) = items.get_mut(&id)
+                        && let Some(s) = vget(&row, "status").and_then(|v| v.as_str())
+                            && PBI_STATUSES.contains(&s) {
                                 *item = s.to_string();
                             }
-                        }
-                    }
                 }
                 _ => {}
             }
@@ -766,11 +764,10 @@ pub(crate) fn build_review_block(ctx: &mut Ctx) -> R<JMap> {
         }
         // Only when the pass actually learned something — an unchanged cache
         // is not rewritten, so a repeated `status` does no disk work at all.
-        if let Some(head) = cache_head.as_deref() {
-            if memo.len() > seeded {
+        if let Some(head) = cache_head.as_deref()
+            && memo.len() > seeded {
                 store_git_cache(&ctx.root, head, &memo);
             }
-        }
         let open_sessions: Vec<Value> = sessions
             .iter()
             .filter(|s| is_session_open(s))

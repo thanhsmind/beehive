@@ -196,13 +196,12 @@ pub(crate) fn is_secret_path(normalized: &str) -> bool {
     if base == ".env" {
         return true;
     }
-    if let Some(rest) = base.strip_prefix(".env.") {
-        if !rest.is_empty()
+    if let Some(rest) = base.strip_prefix(".env.")
+        && !rest.is_empty()
             && rest.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-'))
         {
             return true;
         }
-    }
     if lower.ends_with(".pem") || lower.ends_with(".key") || lower.ends_with(".p12") {
         return true;
     }
@@ -221,11 +220,10 @@ pub(crate) fn is_secret_path(normalized: &str) -> bool {
         }
     }
     // /(^|[\\/])secrets\.[^\\/]+$/i
-    if let Some(rest) = base.strip_prefix("secrets.") {
-        if !rest.is_empty() {
+    if let Some(rest) = base.strip_prefix("secrets.")
+        && !rest.is_empty() {
             return true;
         }
-    }
     false
 }
 
@@ -433,8 +431,8 @@ fn expand_wrappers(tokens: Vec<String>, depth: usize, truncated: &mut bool) -> V
             continue;
         }
         let base = wrapper_basename(token);
-        if is_wrapper_shell_name(&base) && tokens.get(i + 1).map(String::as_str) == Some("-c") {
-            if let Some(payload) = tokens.get(i + 2) {
+        if is_wrapper_shell_name(&base) && tokens.get(i + 1).map(String::as_str) == Some("-c")
+            && let Some(payload) = tokens.get(i + 2) {
                 let inner = expand_wrappers(tokenize(payload), depth + 1, truncated);
                 out.push(";".to_string());
                 out.extend(inner);
@@ -442,7 +440,6 @@ fn expand_wrappers(tokens: Vec<String>, depth: usize, truncated: &mut bool) -> V
                 i += 3;
                 continue;
             }
-        }
         if token == "eval" {
             let mut j = i + 1;
             while j < tokens.len() && !is_separator(&tokens[j]) {
@@ -806,12 +803,11 @@ pub(crate) fn extract_bash_targets(command: &str) -> BashTargets {
                 if !inline.starts_with('&') {
                     add_target(&inline, &mut broad_write, &mut paths);
                 }
-            } else if let Some(next) = tokens.get(i + 1) {
-                if !is_separator(next) && !next.starts_with('&') {
+            } else if let Some(next) = tokens.get(i + 1)
+                && !is_separator(next) && !next.starts_with('&') {
                     add_target(next, &mut broad_write, &mut paths);
                     i += 1;
                 }
-            }
             i += 1;
             continue;
         }
@@ -842,12 +838,11 @@ pub(crate) fn extract_bash_targets(command: &str) -> BashTargets {
                         if !inline.starts_with('&') {
                             add_target(&inline, &mut broad_write, &mut paths);
                         }
-                    } else if let Some(next) = tokens.get(end + 1) {
-                        if !is_separator(next) && !next.starts_with('&') {
+                    } else if let Some(next) = tokens.get(end + 1)
+                        && !is_separator(next) && !next.starts_with('&') {
                             add_target(next, &mut broad_write, &mut paths);
                             end += 1;
                         }
-                    }
                     end += 1;
                     break;
                 }
@@ -985,8 +980,8 @@ pub(crate) fn extract_bash_targets(command: &str) -> BashTargets {
                     }
                     continue;
                 }
-                if is_cp_mv && (t == "-t" || t == "--target-directory") {
-                    if let Some(dir) = tokens.get(j + 1) {
+                if is_cp_mv && (t == "-t" || t == "--target-directory")
+                    && let Some(dir) = tokens.get(j + 1) {
                         // P1-3: a separator right after -t/--target-directory
                         // is never its argument — that would swallow the
                         // separator and merge the NEXT command's tokens into
@@ -1000,16 +995,14 @@ pub(crate) fn extract_bash_targets(command: &str) -> BashTargets {
                             continue;
                         }
                     }
-                }
-                if is_cp_mv {
-                    if let Some(dir) = t.strip_prefix("--target-directory=") {
+                if is_cp_mv
+                    && let Some(dir) = t.strip_prefix("--target-directory=") {
                         target_dir = Some(dir.to_string());
                         saw_any = true;
                         last = j;
                         j += 1;
                         continue;
                     }
-                }
                 if !is_flag(t) {
                     if is_cp {
                         operands.push(t.clone());
@@ -1031,14 +1024,13 @@ pub(crate) fn extract_bash_targets(command: &str) -> BashTargets {
                 } else if let Some(dst) = operands.last() {
                     add_target(dst, &mut broad_write, &mut paths);
                 }
-            } else if is_mv {
-                if let Some(dir) = target_dir {
+            } else if is_mv
+                && let Some(dir) = target_dir {
                     // mv -t/--target-directory: the directory is also a
                     // write target — every source operand was already
                     // extracted above.
                     add_target(&dir, &mut broad_write, &mut paths);
                 }
-            }
             if cmd == "rm" && !saw_any {
                 broad_write = true;
             }

@@ -549,11 +549,10 @@ fn recover_transcript(transcript: String, spill: &Path) -> String {
         .find(|line| !line.trim().is_empty())
         .unwrap_or("")
         .trim();
-    if last_line.contains(spill_str.as_ref()) {
-        if let Ok(spilled) = std::fs::read_to_string(spill) {
+    if last_line.contains(spill_str.as_ref())
+        && let Ok(spilled) = std::fs::read_to_string(spill) {
             return spilled;
         }
-    }
     transcript
 }
 

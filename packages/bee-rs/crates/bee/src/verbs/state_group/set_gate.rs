@@ -45,7 +45,7 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
         .iter()
         .map(|a| a.to_str())
         .collect::<Option<Vec<_>>>()?;
-    if toks.iter().any(|t| *t == "--help") {
+    if toks.contains(&"--help") {
         return None; // main()'s group-scoped help path
     }
     // splitCommandTokens: leading command tokens end at the first "--" token.
@@ -334,13 +334,12 @@ pub(crate) fn run_set(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitC
 pub(crate) fn run_set_body(root: &Path, flags: &Flags) -> R2<Out> {
     (|| -> R2<Out> {
         let phase_flag = flag_string(flags, "phase");
-        if let Some(p) = &phase_flag {
-            if !is_known_phase(p) {
+        if let Some(p) = &phase_flag
+            && !is_known_phase(p) {
                 return Ok(Out::Thrown(format!(
                     "set: invalid phase \"{p}\" \u{2014} not in the known-phase enum (isKnownPhase, not the bare PHASES array \u{2014} the terminal alias \"compounding-complete\" must pass). FIX: use one of {KNOWN_PHASES_JOINED}."
                 )));
             }
-        }
         if ["phase", "mode", "feature", "next-action", "summary"]
             .iter()
             .all(|n| flags.get(n).is_none())
@@ -374,13 +373,12 @@ pub(crate) fn run_set_body(root: &Path, flags: &Flags) -> R2<Out> {
             resolve_mutation_target(root, lane_feature.as_deref(), "set", no_lane)?;
         // i54-closeout-7 (D7): a session-AUTO-resolved lane refuses --feature too
         // (the flag-level guard above only ever sees an EXPLICIT --lane).
-        if flags.get("feature").is_some() {
-            if let Some(lane) = target.lane() {
+        if flags.get("feature").is_some()
+            && let Some(lane) = target.lane() {
                 return Ok(Out::Thrown(format!(
                     "set: --feature cannot target lane \"{lane}\" (auto-resolved from this session's lane binding) \u{2014} a lane's feature is its identity (the lane record's filename), not a mutable field. FIX: omit --feature, or pass --no-lane to address the default record."
                 )));
             }
-        }
         let mut waived_scribing: Option<Vec<Value>> = None;
         let mut waived_compounding_feature: Option<String> = None;
         let mut waived_swap: Option<(String, Vec<Value>)> = None;
@@ -419,8 +417,8 @@ pub(crate) fn run_set_body(root: &Path, flags: &Flags) -> R2<Out> {
         // session is left to hit the compounding-complete wall for it).
         // Lanes never reach here: --feature is already refused alongside
         // --lane (and against a session-auto-resolved lane) above.
-        if target.lane().is_none() {
-            if let Some(f) = flag_string(flags, "feature") {
+        if target.lane().is_none()
+            && let Some(f) = flag_string(flags, "feature") {
                 let current = target.record().get("feature");
                 if current.map(truthy).unwrap_or(false)
                     && !opt_strict_eq(current, Some(&Value::String(f.clone())))
@@ -435,7 +433,6 @@ pub(crate) fn run_set_body(root: &Path, flags: &Flags) -> R2<Out> {
                     }
                 }
             }
-        }
         let selected = target.selected_record();
         let lane_note = target.lane_note();
         let phase_known =
@@ -860,14 +857,13 @@ pub(crate) fn run_gate_body(root: &Path, flags: &Flags) -> R2<Out> {
         ));
     }
     let bypass_level = flag_value(flags, "bypass-level").filter(|s| !s.is_empty());
-    if let Some(bl) = &bypass_level {
-        if !GATE_BYPASS_LEVELS.contains(&bl.as_str()) {
+    if let Some(bl) = &bypass_level
+        && !GATE_BYPASS_LEVELS.contains(&bl.as_str()) {
             return Ok(Out::Thrown(format!(
                 "gate: --bypass-level \"{bl}\" is not recognized \u{2014} must be one of {}.",
                 GATE_BYPASS_LEVELS.join("/")
             )));
         }
-    }
     let reason = flag_value(flags, "reason").filter(|s| !s.is_empty());
     if actor == "auto" && (bypass_level.is_none() || reason.is_none()) {
         // D2: "an auto-approval writes the same record with actor: auto plus
@@ -925,8 +921,8 @@ pub(crate) fn run_gate_body(root: &Path, flags: &Flags) -> R2<Out> {
     // and this door only speaks for a plan that got past them. One call site
     // is enough here — unlike a record field, plan.md is not mutated under the
     // lock this verb takes, so there is no peek/lock race to re-check.
-    if approved && (merge || name == "shape") {
-        if let Some(peek) = peek_target_record(root, &scope, lane_feature.as_deref())? {
+    if approved && (merge || name == "shape")
+        && let Some(peek) = peek_target_record(root, &scope, lane_feature.as_deref())? {
             let lane = match &scope.feature {
                 Some(f) if scope.lane => Some(f.as_str()),
                 _ => None,
@@ -941,19 +937,16 @@ pub(crate) fn run_gate_body(root: &Path, flags: &Flags) -> R2<Out> {
                 return Ok(Out::Thrown(msg));
             }
         }
-    }
     let locks = acquire_mutation_locks(root, &scope, &workflows)?;
     let mut target = resolve_mutation_target(root, lane_feature.as_deref(), "gate", no_lane)?;
-    if owner_first_door {
-        if let Some(msg) = owner_first_gate_refusal(root, target.record(), target.lane()) {
+    if owner_first_door
+        && let Some(msg) = owner_first_gate_refusal(root, target.record(), target.lane()) {
             return Ok(Out::Thrown(msg));
         }
-    }
-    if approved && (merge || name == "shape") {
-        if let Some(msg) = gate_preview_refusal(root, target.record(), target.lane()) {
+    if approved && (merge || name == "shape")
+        && let Some(msg) = gate_preview_refusal(root, target.record(), target.lane()) {
             return Ok(Out::Thrown(msg));
         }
-    }
     // D5 (koh-9): the `conflicts` verdicts standing behind this approval,
     // read INSIDE the lock right after the precondition that validated
     // them — surfaced on the output, never a refusal.
@@ -975,8 +968,8 @@ pub(crate) fn run_gate_body(root: &Path, flags: &Flags) -> R2<Out> {
     // multisession-native-9 D7 / validation-diet D15 — the plan-rev stamp is
     // LANE-ONLY and reads the live workflow's CURRENT plan_rev.
     let mut stamps: Vec<(String, Value)> = Vec::new();
-    if exec_component {
-        if let Some(lane) = target.lane() {
+    if exec_component
+        && let Some(lane) = target.lane() {
             let live = list_workflows(root)?;
             if let Some(wf) = find_live_workflow(&live, lane) {
                 let rev = if approved {
@@ -990,7 +983,6 @@ pub(crate) fn run_gate_body(root: &Path, flags: &Flags) -> R2<Out> {
                 stamps.push(("execution".to_string(), rev));
             }
         }
-    }
     {
         let state = target.record_mut();
         // Revocation tracking (AO13) — execution component only.
@@ -1016,11 +1008,10 @@ pub(crate) fn run_gate_body(root: &Path, flags: &Flags) -> R2<Out> {
             gates.insert(name.clone(), json!(approved));
         }
         state.insert("approved_gates".into(), Value::Object(gates));
-        if approved && (merge || name == "shape") {
-            if let Some(prev) = state.get("gate_preview").cloned() {
+        if approved && (merge || name == "shape")
+            && let Some(prev) = state.get("gate_preview").cloned() {
                 state.insert("approved_cell_packet".into(), prev);
             }
-        }
     }
     let record = target.record().clone();
     write_through_projection(root, &target, &record, &stamps)?;
@@ -1111,11 +1102,10 @@ pub(crate) fn run_gate_body(root: &Path, flags: &Flags) -> R2<Out> {
     // answer is dropped — this verb's text, JSON, and exit code are
     // byte-identical either way. D3: the uat gate itself never READS the
     // fact; this is a write-only projection.
-    if !merge && name == "uat" {
-        if let Some(feature) = routed_feature.as_deref() {
+    if !merge && name == "uat"
+        && let Some(feature) = routed_feature.as_deref() {
             let _ = crate::verbs::workflow_store::merge_ready::set_uat(root, feature, approved);
         }
-    }
     let text = if merge {
         format!("Gates \"shape\" and \"execution\" set to {approved}.{lane_note}")
     } else {

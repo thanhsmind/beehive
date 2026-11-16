@@ -89,7 +89,7 @@ const DECISION_GATE_FIELD_LEGACY: &str = "gate4";
 /// accidentally ship a `gate4`-blind lookup against a store that still holds
 /// pre-rename sessions, and the back-compat test below is its exercise.
 #[allow(dead_code)]
-fn decision_gate<'a>(decision: &'a Map<String, Value>) -> Option<&'a Value> {
+fn decision_gate(decision: &Map<String, Value>) -> Option<&Value> {
     decision.get(DECISION_GATE_FIELD).or_else(|| decision.get(DECISION_GATE_FIELD_LEGACY))
 }
 
@@ -818,7 +818,7 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
         _ => return None,
     };
     let toks: Vec<&str> = args[rest_from..].iter().map(|a| a.to_str()).collect::<Option<Vec<_>>>()?;
-    if toks.iter().any(|t| *t == "--help") {
+    if toks.contains(&"--help") {
         return None;
     }
     let pre_json = pre_json_scan(&toks);
@@ -951,11 +951,10 @@ fn run_create(ctx: &GCtx, flags: &Flags) -> R<Out2> {
         let mut entry = Map::new();
         entry.insert("type".into(), Value::String(entry_type));
         entry.insert("id".into(), Value::String(entry_id));
-        if let Some(Value::String(reason)) = obj.get("reason") {
-            if !js_trim(reason).is_empty() {
+        if let Some(Value::String(reason)) = obj.get("reason")
+            && !js_trim(reason).is_empty() {
                 entry.insert("reason".into(), Value::String(js_trim(reason).to_string()));
             }
-        }
         Ok(entry)
     };
 
@@ -1073,14 +1072,13 @@ fn run_record(ctx: &GCtx, flags: &Flags) -> R<Out2> {
     // late once stdin is gone). The Ok(Err(..)) refusal is deliberately
     // IGNORED here — Node raises a missing/corrupt session only AFTER the
     // payload is read, and that order is part of the contract.
-    if matches!(flags.get("stdin"), Some(FlagV::Present)) {
-        if let Ok(Ok(existing)) = read_review_strict(&ctx.root, &id) {
+    if matches!(flags.get("stdin"), Some(FlagV::Present))
+        && let Ok(Ok(existing)) = read_review_strict(&ctx.root, &id) {
             match existing.get("id") {
                 Some(Value::String(s)) if id_pattern_ok(s) => {}
                 _ => return Err(Delegate),
             }
         }
-    }
     let payload = match read_json_input(flags, "payload")? {
         Ok(v) => v,
         Err(msg) => return Ok(Out2::Thrown(msg)),
@@ -1126,11 +1124,10 @@ fn run_record(ctx: &GCtx, flags: &Flags) -> R<Out2> {
                     js_str_or_undefined(payload_map.get("status"))
                 )));
             }
-            if matches!(payload_map.get("status"), Some(Value::String(s)) if s == "approved") {
-                if let Some(msg) = unresolved_p1_refusal(&session, payload_map) {
+            if matches!(payload_map.get("status"), Some(Value::String(s)) if s == "approved")
+                && let Some(msg) = unresolved_p1_refusal(&session, payload_map) {
                     return Ok(Out2::Thrown(msg));
                 }
-            }
             let mut decision = payload_map.clone();
             normalize_decision_gate_field(&mut decision);
             session.insert("decision".into(), Value::Object(decision));

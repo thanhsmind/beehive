@@ -462,13 +462,12 @@ pub(crate) fn cell_commit_trailer(id: &str) -> String {
 /// `fallback_root` is the store root `cap_cell_from_flags` already has in
 /// hand — the ordinary-checkout case needs no extra resolution at all.
 pub(crate) fn commit_trailer_history_root(fallback_root: &Path, feature: Option<&str>) -> PathBuf {
-    if let Some(feature) = feature {
-        if let Some((_, worktree_root)) =
+    if let Some(feature) = feature
+        && let Some((_, worktree_root)) =
             crate::verbs::status_full::find_granted_worktree_for_feature(fallback_root, feature)
         {
             return PathBuf::from(worktree_root);
         }
-    }
     fallback_root.to_path_buf()
 }
 
@@ -558,11 +557,10 @@ pub(crate) fn read_holds_store(root: &Path) -> MR<Value> {
         return Ok(json!({ "holds": [] }));
     }
     let store = store.unwrap();
-    if let Some(Value::Array(holds)) = store.get("holds") {
-        if holds.iter().any(|h| h.is_null()) {
+    if let Some(Value::Array(holds)) = store.get("holds")
+        && holds.iter().any(|h| h.is_null()) {
             return Err(Fail::Delegate);
         }
-    }
     Ok(store)
 }
 
@@ -584,8 +582,8 @@ pub(crate) fn list_path_lease_records(root: &Path) -> MR<Vec<Map<String, Value>>
             if !is_file {
                 continue;
             }
-            if let Ok(text) = std::fs::read_to_string(dir.join(&name)) {
-                if let Ok(parsed) = serde_json::from_str::<Value>(&text) {
+            if let Ok(text) = std::fs::read_to_string(dir.join(&name))
+                && let Ok(parsed) = serde_json::from_str::<Value>(&text) {
                     // readLeaseSafe: corrupt silently skipped (no warn in Node).
                     if let Value::Object(m) = rsv::js_numberify(&parsed).map_err(|_| Fail::Delegate)? {
                         let is_path =
@@ -595,7 +593,6 @@ pub(crate) fn list_path_lease_records(root: &Path) -> MR<Vec<Map<String, Value>>
                         }
                     }
                 }
-            }
         }
     }
     Ok(out)
@@ -700,7 +697,7 @@ pub(crate) fn release_reservations_for_agent(
         let key = format!(
             "{}::{}",
             jsjson::js_to_string(cell_v),
-            session_v.as_ref().map(|s| jsjson::js_to_string(s)).unwrap_or_default()
+            session_v.as_ref().map(jsjson::js_to_string).unwrap_or_default()
         );
         if !seen.contains(&key) {
             seen.push(key);
@@ -772,11 +769,10 @@ pub(crate) fn release_reservations_for_agent(
                         {
                             continue;
                         }
-                        if let Some(s) = session_v {
-                            if !matches!(hold.get("session"), Some(v) if v == s) {
+                        if let Some(s) = session_v
+                            && !matches!(hold.get("session"), Some(v) if v == s) {
                                 continue;
                             }
-                        }
                         if !matches!(hold.get("cell"), Some(v) if v == cell_v) {
                             continue;
                         }
@@ -1085,11 +1081,10 @@ pub(crate) fn report_from_job(
     }
     let tests = format!("{cell_verify}{PROOF_SEPARATOR}{proof_result}{PROOF_SEPARATOR}{reason}");
     let mut deviations = Vec::new();
-    if let Some(dissent) = &result.dissent {
-        if !dissent.claim.trim().is_empty() {
+    if let Some(dissent) = &result.dissent
+        && !dissent.claim.trim().is_empty() {
             deviations.push(Value::String(dissent.claim.clone()));
         }
-    }
     let mut map = serde_json::Map::new();
     map.insert("outcome".to_string(), Value::String(outcome.to_string()));
     map.insert("commit".to_string(), Value::String(commit.to_string()));
@@ -1144,8 +1139,8 @@ pub(crate) fn read_job_git_facts(cwd: &Path, main_root: &Path) -> Option<GitFact
                 if !base_sha.is_empty() {
                     let range = format!("{base_sha}..HEAD");
                     let diff_out = run_git(cwd, &["diff", "--name-only", &range]);
-                    if diff_out.status == Some(0) {
-                        if let Some(stdout) = &diff_out.stdout {
+                    if diff_out.status == Some(0)
+                        && let Some(stdout) = &diff_out.stdout {
                             for line in stdout.lines() {
                                 let path = line.trim();
                                 if !path.is_empty() {
@@ -1153,15 +1148,14 @@ pub(crate) fn read_job_git_facts(cwd: &Path, main_root: &Path) -> Option<GitFact
                                 }
                             }
                         }
-                    }
                 }
             }
         }
     }
 
     let porcelain_out = run_git(cwd, &["status", "--porcelain"]);
-    if porcelain_out.status == Some(0) {
-        if let Some(stdout) = &porcelain_out.stdout {
+    if porcelain_out.status == Some(0)
+        && let Some(stdout) = &porcelain_out.stdout {
             for line in stdout.lines() {
                 let line = line.trim_end_matches(['\r', '\n']);
                 if line.len() >= 4 {
@@ -1176,7 +1170,6 @@ pub(crate) fn read_job_git_facts(cwd: &Path, main_root: &Path) -> Option<GitFact
                 }
             }
         }
-    }
 
     Some(GitFacts {
         head,

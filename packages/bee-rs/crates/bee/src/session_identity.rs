@@ -113,8 +113,8 @@ where
     }
     if let Some(val) = lookup("BEE_SESSION_ID") {
         let trimmed_id = js_trim(&val);
-        if !trimmed_id.is_empty() {
-            if let Some(rt_val) = lookup("BEE_RUNTIME") {
+        if !trimmed_id.is_empty()
+            && let Some(rt_val) = lookup("BEE_RUNTIME") {
                 let trimmed_rt = js_trim(&rt_val);
                 if !trimmed_rt.is_empty() {
                     return Some(CallerSession {
@@ -123,7 +123,6 @@ where
                     });
                 }
             }
-        }
     }
     if let Some(val) = lookup("CLAUDE_CODE_SESSION_ID") {
         let trimmed = js_trim(&val);

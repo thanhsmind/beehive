@@ -149,15 +149,13 @@ fn claims_problems(text: &str, root: &Path) -> Vec<String> {
         }
         // A `read` row promises somebody opened that file at that line. The
         // cheapest half of that promise is checkable: the file exists.
-        if label == "read" {
-            if let Some(p) = anchor_path(cell(cells, anchor)) {
-                if !root.join(p).exists() {
+        if label == "read"
+            && let Some(p) = anchor_path(cell(cells, anchor))
+                && !root.join(p).exists() {
                     problems.push(format!(
                         "row {n} is labeled `read` but its anchor path \"{p}\" does not exist under the repo root"
                     ));
                 }
-            }
-        }
     }
     problems
 }

@@ -175,12 +175,7 @@ fn is_frontmatter_delim(line: &str) -> bool {
 /// fenceChar: `/^[ \t]*(`{3,}|~{3,})/` → the fence character, if any.
 fn fence_char(line: &str) -> Option<char> {
     let rest = line.trim_start_matches([' ', '\t']);
-    for ch in ['`', '~'] {
-        if rest.chars().take(3).filter(|c| *c == ch).count() == 3 {
-            return Some(ch);
-        }
-    }
-    None
+    ['`', '~'].into_iter().find(|&ch| rest.chars().take(3).filter(|c| *c == ch).count() == 3)
 }
 
 enum MarkerClass<'a> {

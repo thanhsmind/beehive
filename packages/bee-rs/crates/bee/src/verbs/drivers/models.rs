@@ -171,42 +171,35 @@ pub(crate) fn normalize_tier_value(value: Option<&Value>) -> Option<Value> {
     }
     let obj = value.as_object().unwrap();
     // { kind: 'cli', command }
-    if matches!(obj.get("kind"), Some(Value::String(k)) if k == "cli") {
-        if let Some(Value::String(cmd)) = obj.get("command") {
-            if !js_trim(cmd).is_empty() {
+    if matches!(obj.get("kind"), Some(Value::String(k)) if k == "cli")
+        && let Some(Value::String(cmd)) = obj.get("command")
+            && !js_trim(cmd).is_empty() {
                 let mut out = Map::new();
                 out.insert("kind".into(), Value::String("cli".into()));
                 out.insert("command".into(), Value::String(js_trim(cmd).to_string()));
                 return Some(Value::Object(out));
             }
-        }
-    }
     // { kind: 'native', model, effort?, fork_turns?, agent_type? }
-    if matches!(obj.get("kind"), Some(Value::String(k)) if k == "native") {
-        if let Some(Value::String(model)) = obj.get("model") {
-            if !js_trim(model).is_empty() {
+    if matches!(obj.get("kind"), Some(Value::String(k)) if k == "native")
+        && let Some(Value::String(model)) = obj.get("model")
+            && !js_trim(model).is_empty() {
                 let mut out = Map::new();
                 out.insert("kind".into(), Value::String("native".into()));
                 out.insert("model".into(), Value::String(js_trim(model).to_string()));
-                if let Some(Value::String(e)) = obj.get("effort") {
-                    if EFFORT_LEVELS.contains(&js_trim(e)) {
+                if let Some(Value::String(e)) = obj.get("effort")
+                    && EFFORT_LEVELS.contains(&js_trim(e)) {
                         out.insert("effort".into(), Value::String(js_trim(e).to_string()));
                     }
-                }
-                if let Some(Value::String(f)) = obj.get("fork_turns") {
-                    if js_trim(f) == "none" {
+                if let Some(Value::String(f)) = obj.get("fork_turns")
+                    && js_trim(f) == "none" {
                         out.insert("fork_turns".into(), Value::String("none".into()));
                     }
-                }
-                if let Some(Value::String(a)) = obj.get("agent_type") {
-                    if !js_trim(a).is_empty() {
+                if let Some(Value::String(a)) = obj.get("agent_type")
+                    && !js_trim(a).is_empty() {
                         out.insert("agent_type".into(), Value::String(js_trim(a).to_string()));
                     }
-                }
                 return Some(Value::Object(out));
             }
-        }
-    }
     // { kind: 'herding', agent?, fallback? } — a router value, no other
     // fields required; unknown extras (e.g. a stray `command`) are dropped,
     // same as cli/native. herd-registry D2: `agent` names a
@@ -219,19 +212,18 @@ pub(crate) fn normalize_tier_value(value: Option<&Value>) -> Option<Value> {
     if matches!(obj.get("kind"), Some(Value::String(k)) if k == "herding") {
         let mut out = Map::new();
         out.insert("kind".into(), Value::String("herding".into()));
-        if let Some(Value::String(a)) = obj.get("agent") {
-            if !js_trim(a).is_empty() {
+        if let Some(Value::String(a)) = obj.get("agent")
+            && !js_trim(a).is_empty() {
                 out.insert("agent".into(), Value::String(js_trim(a).to_string()));
             }
-        }
         if matches!(obj.get("fallback"), Some(Value::String(f)) if f == "default") {
             out.insert("fallback".into(), Value::String("default".into()));
         }
         return Some(Value::Object(out));
     }
     // Explicit-fallback composite: { primary: {kind:'native', model}, ... }
-    if let Some(primary) = obj.get("primary") {
-        if is_plain_object(primary) {
+    if let Some(primary) = obj.get("primary")
+        && is_plain_object(primary) {
             let p = primary.as_object().unwrap();
             let native_primary = matches!(p.get("kind"), Some(Value::String(k)) if k == "native")
                 && matches!(p.get("model"), Some(Value::String(m)) if !js_trim(m).is_empty());
@@ -240,12 +232,12 @@ pub(crate) fn normalize_tier_value(value: Option<&Value>) -> Option<Value> {
                 out.insert("primary".into(), normalize_tier_value(Some(primary))?);
                 if matches!(obj.get("fallback_policy"), Some(Value::String(s)) if s == "explicit-only") {
                     out.insert("fallback_policy".into(), Value::String("explicit-only".into()));
-                    if let Some(fb) = obj.get("fallback") {
-                        if is_plain_object(fb) {
+                    if let Some(fb) = obj.get("fallback")
+                        && is_plain_object(fb) {
                             let f = fb.as_object().unwrap();
                             let cli = matches!(f.get("kind"), Some(Value::String(k)) if k == "cli");
-                            if let (true, Some(Value::String(cmd))) = (cli, f.get("command")) {
-                                if !js_trim(cmd).is_empty() {
+                            if let (true, Some(Value::String(cmd))) = (cli, f.get("command"))
+                                && !js_trim(cmd).is_empty() {
                                     let mut fbo = Map::new();
                                     fbo.insert("kind".into(), Value::String("cli".into()));
                                     fbo.insert(
@@ -254,29 +246,23 @@ pub(crate) fn normalize_tier_value(value: Option<&Value>) -> Option<Value> {
                                     );
                                     out.insert("fallback".into(), Value::Object(fbo));
                                 }
-                            }
                         }
-                    }
                 }
                 return Some(Value::Object(out));
             }
         }
-    }
     // { model, effort? } — only when `kind` is absent.
-    if obj.get("kind").is_none() {
-        if let Some(Value::String(model)) = obj.get("model") {
-            if !js_trim(model).is_empty() {
+    if obj.get("kind").is_none()
+        && let Some(Value::String(model)) = obj.get("model")
+            && !js_trim(model).is_empty() {
                 let mut out = Map::new();
                 out.insert("model".into(), Value::String(js_trim(model).to_string()));
-                if let Some(Value::String(e)) = obj.get("effort") {
-                    if EFFORT_LEVELS.contains(&js_trim(e)) {
+                if let Some(Value::String(e)) = obj.get("effort")
+                    && EFFORT_LEVELS.contains(&js_trim(e)) {
                         out.insert("effort".into(), Value::String(js_trim(e).to_string()));
                     }
-                }
                 return Some(Value::Object(out));
             }
-        }
-    }
     None
 }
 
@@ -294,8 +280,8 @@ pub(crate) fn normalize_models(raw: Option<&Value>) -> Map<String, Value> {
     for rt in RUNTIMES {
         out.insert(rt.to_string(), Value::Object(default_models(rt)));
     }
-    if let Some(raw) = raw {
-        if is_plain_object(raw) {
+    if let Some(raw) = raw
+        && is_plain_object(raw) {
             for rt in RUNTIMES {
                 let Some(src) = raw.get(rt) else { continue };
                 let Some(src) = src.as_object() else { continue };
@@ -309,7 +295,6 @@ pub(crate) fn normalize_models(raw: Option<&Value>) -> Map<String, Value> {
                 }
             }
         }
-    }
     out
 }
 
@@ -338,11 +323,10 @@ pub(crate) fn fold_team_key(map: &mut Map<String, Value>) -> bool {
 /// warns and reads as "no config", readJson's own fallback.)
 pub(crate) fn read_models(root: &Path) -> D<Map<String, Value>> {
     let config = read_config_raw(root);
-    if let Some(Value::Array(items)) = config.get("dogfood_repos") {
-        if !items.is_empty() {
+    if let Some(Value::Array(items)) = config.get("dogfood_repos")
+        && !items.is_empty() {
             return Err(Delegate); // normalizeDogfoodRepos may warn to stderr
         }
-    }
     Ok(normalize_models(config.get("team")))
 }
 
@@ -417,15 +401,12 @@ pub(crate) fn composite_resolved(obj: &Map<String, Value>) -> Option<Resolved> {
         return None;
     }
     let mut fallback = None;
-    if matches!(obj.get("fallback_policy"), Some(Value::String(s)) if s == "explicit-only") {
-        if let Some(fb) = obj.get("fallback") {
-            if matches!(fb.get("kind"), Some(Value::String(k)) if k == "cli") {
-                if let Some(Value::String(cmd)) = fb.get("command") {
+    if matches!(obj.get("fallback_policy"), Some(Value::String(s)) if s == "explicit-only")
+        && let Some(fb) = obj.get("fallback")
+            && matches!(fb.get("kind"), Some(Value::String(k)) if k == "cli")
+                && let Some(Value::String(cmd)) = fb.get("command") {
                     fallback = Some(cmd.clone());
                 }
-            }
-        }
-    }
     Some(native_resolved(primary.as_object().unwrap(), fallback))
 }
 
@@ -1148,11 +1129,10 @@ pub(crate) fn resolve_fallback_chain(
     let mut keys: Vec<String> = Vec::new();
     if !model.is_empty() {
         keys.push(model.to_string());
-        if let Some((provider, _)) = model.split_once('/') {
-            if !provider.is_empty() {
+        if let Some((provider, _)) = model.split_once('/')
+            && !provider.is_empty() {
                 keys.push(format!("{provider}/*"));
             }
-        }
     }
     if !role.is_empty() && !keys.iter().any(|k| k == role) {
         keys.push(role.to_string());

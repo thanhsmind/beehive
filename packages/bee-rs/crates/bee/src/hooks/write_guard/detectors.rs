@@ -17,11 +17,10 @@ use std::process::ExitCode;
 
 pub(crate) fn apply_patch_text(tool_input: &Map<String, Value>) -> Option<String> {
     for key in ["input", "patch", "command"] {
-        if let Some(Value::String(s)) = tool_input.get(key) {
-            if s.contains("*** Begin Patch") {
+        if let Some(Value::String(s)) = tool_input.get(key)
+            && s.contains("*** Begin Patch") {
                 return Some(s.clone());
             }
-        }
     }
     None
 }
@@ -38,12 +37,11 @@ pub(crate) fn extract_apply_patch_targets(patch_text: &str) -> Vec<String> {
         }
         let mut matched = None;
         for verb in ["Add File", "Update File", "Delete File", "Move to"] {
-            if let Some(rest) = after_ws.strip_prefix(verb) {
-                if let Some(rest) = rest.strip_prefix(':') {
+            if let Some(rest) = after_ws.strip_prefix(verb)
+                && let Some(rest) = rest.strip_prefix(':') {
                     matched = Some(rest);
                     break;
                 }
-            }
         }
         let Some(rest) = matched else { continue };
         if rest.is_empty() {
@@ -79,11 +77,10 @@ pub(crate) fn apply_patch_added_lines(patch_text: &str) -> Vec<(String, Vec<Stri
                 continue;
             }
         }
-        if let Some((_, added)) = current.as_mut() {
-            if let Some(rest) = line.strip_prefix('+') {
+        if let Some((_, added)) = current.as_mut()
+            && let Some(rest) = line.strip_prefix('+') {
                 added.push(rest.to_string());
             }
-        }
     }
     if let Some(done) = current.take() {
         out.push(done);
@@ -177,7 +174,7 @@ pub(crate) fn check_ask_user_question(tool_input: &Map<String, Value>) -> R<AskR
         _ => return Ok(AskResult::Allow),
     };
     let n = questions.len();
-    if n < 1 || n > 4 {
+    if !(1..=4).contains(&n) {
         return Ok(AskResult::Deny(format!(
             "bee AskUserQuestion guard: {n} question(s) — the tool takes 1–4 per call. Split into separate calls."
         )));
@@ -199,7 +196,7 @@ pub(crate) fn check_ask_user_question(tool_input: &Map<String, Value>) -> R<AskR
         }
         if let Some(Value::Array(options)) = q.get("options") {
             let on = options.len();
-            if on < 2 || on > 4 {
+            if !(2..=4).contains(&on) {
                 return Ok(AskResult::Deny(format!(
                     "bee AskUserQuestion guard: {on} option(s){where_} — each question needs 2–4 options (an \"Other\" free-text choice is added automatically). Fold overflow into a follow-up question."
                 )));
@@ -289,11 +286,10 @@ pub(crate) fn has_node_inline_eval(command: &str) -> bool {
             continue;
         }
         for (k, token) in segment.iter().enumerate() {
-            if matches!(token.as_str(), "-e" | "--eval" | "-p") {
-                if segment.get(k + 1).is_some() {
+            if matches!(token.as_str(), "-e" | "--eval" | "-p")
+                && segment.get(k + 1).is_some() {
                     return true;
                 }
-            }
             if token.starts_with("--eval=") {
                 return true;
             }

@@ -56,7 +56,7 @@ pub(crate) fn sync_refusal(
                 let app_norm = normalize_cell_path(app);
                 let is_touched = touched.iter().any(|t| {
                     let t_norm = normalize_cell_path(t);
-                    t_norm == app_norm || matches_owned(&[app.clone()], t)
+                    t_norm == app_norm || matches_owned(std::slice::from_ref(app), t)
                 });
                 if !is_touched {
                     untouched.push(app.to_string());

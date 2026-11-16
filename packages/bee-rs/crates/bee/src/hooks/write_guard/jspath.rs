@@ -128,11 +128,10 @@ pub(crate) fn np_check_modelable(p: &str) -> R<()> {
             return Err(Nd); // drive-relative "C:foo"
         }
         let mut ch = p.chars();
-        if let (Some(a), Some(b)) = (ch.next(), ch.next()) {
-            if is_sep(a) && is_sep(b) {
+        if let (Some(a), Some(b)) = (ch.next(), ch.next())
+            && is_sep(a) && is_sep(b) {
                 return Err(Nd); // UNC-ish
             }
-        }
     }
     Ok(())
 }
@@ -523,7 +522,7 @@ pub(crate) fn clear_corrupt_json_warnings() {
 pub(crate) fn queue_guard_warning_once(line: String) {
     CORRUPT_JSON_WARNINGS.with(|q| {
         let mut q = q.borrow_mut();
-        if !q.iter().any(|queued| *queued == line) {
+        if !q.contains(&line) {
             q.push(line);
         }
     });

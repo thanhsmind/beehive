@@ -215,13 +215,12 @@ fn token_key(token: &str) -> String {
     let mut chars = token.chars().peekable();
     while let Some(c) = chars.next() {
         if c == '-' {
-            if let Some(&n) = chars.peek() {
-                if n.is_ascii_lowercase() {
+            if let Some(&n) = chars.peek()
+                && n.is_ascii_lowercase() {
                     out.push(n.to_ascii_uppercase());
                     chars.next();
                     continue;
                 }
-            }
             out.push('-');
         } else {
             out.push(c);
@@ -527,11 +526,10 @@ fn add_pbi(
     // delegated.)
     {
         let fold = fold_pbis(root);
-        if let Some(id) = requested {
-            if fold.items.contains_key(id) {
+        if let Some(id) = requested
+            && fold.items.contains_key(id) {
                 return PbiAdd::Delegate; // duplicate add refused — Node's text
             }
-        }
     }
 
     let mut attempt = 0u32;
@@ -726,11 +724,10 @@ fn run_findings(parsed: ParsedArgs, t0: Instant) -> Option<ExitCode> {
     // `flags.text !== undefined && !== true ? String(flags.text) : null` —
     // '' stays '' (falsy: filter disabled), matching Node.
     let text_filter = parsed.flags.get("text").cloned();
-    if let Some(t) = &text_filter {
-        if !t.is_ascii() {
+    if let Some(t) = &text_filter
+        && !t.is_ascii() {
             return None;
         }
-    }
     let ctx = match preamble("backlog findings", parsed.pre_json, t0) {
         Err(code) => return Some(code),
         Ok(c) => c?,
@@ -1251,11 +1248,10 @@ fn run_pbi_list(parsed: ParsedArgs, t0: Instant) -> Option<ExitCode> {
     };
     let fold = fold_pbis(&ctx.root);
     let mut list: Vec<&Pbi> = fold.order.iter().map(|id| &fold.items[id]).collect();
-    if let Some(s) = &status {
-        if !s.is_empty() {
+    if let Some(s) = &status
+        && !s.is_empty() {
             list.retain(|item| &item.status == s);
         }
-    }
     list.sort_by(|a, b| a.id.cmp(&b.id));
     let text = if list.is_empty() {
         "No PBIs.".to_string()

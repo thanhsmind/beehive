@@ -674,8 +674,8 @@ fn archive_one_feature(root: &Path, feature: &str) -> MR<(Vec<Value>, f64, f64)>
                     "archiveFeature: feature \"{feature}\" has non-terminal cell(s) — {named} — only a feature whose cells are ALL capped/dropped can be archived."
                 )));
             }
-            let archive_dir = cells_archive_dir(&root, &feature);
-            assert_archive_dir_contained("archiveFeature", &root, &archive_dir)?;
+            let archive_dir = cells_archive_dir(root, feature);
+            assert_archive_dir_contained("archiveFeature", root, &archive_dir)?;
             std::fs::create_dir_all(&archive_dir).map_err(|e| Fail::Thrown(format!("{e}")))?;
             // Every cell.id must be a plain string for path.join — anything
             // else takes a V8 TypeError in Node.
@@ -686,7 +686,7 @@ fn archive_one_feature(root: &Path, feature: &str) -> MR<(Vec<Value>, f64, f64)>
                 planned.push((
                     cell.get("id").cloned().unwrap_or(Value::Null),
                     status,
-                    cell_file(&root, cid),
+                    cell_file(root, cid),
                     archive_dir.join(format!("{cid}.json")),
                 ));
             }
@@ -714,7 +714,7 @@ fn archive_one_feature(root: &Path, feature: &str) -> MR<(Vec<Value>, f64, f64)>
                     .collect(),
             );
             write_json_atomic(
-                &archive_journal_path(&root, &feature),
+                &archive_journal_path(root, feature),
                 &json!({"op": "archive", "feature": feature, "planned": planned_value, "started_at": utc_now()}),
             )
             .map_err(|e| Fail::Thrown(format!("{e}")))?;
@@ -726,7 +726,7 @@ fn archive_one_feature(root: &Path, feature: &str) -> MR<(Vec<Value>, f64, f64)>
                     for (from_r, to_r, _) in moved.iter().rev() {
                         let _ = std::fs::rename(to_r, from_r); // best-effort rollback
                     }
-                    crate::fsutil::remove_file_if_exists(&archive_journal_path(&root, &feature));
+                    crate::fsutil::remove_file_if_exists(&archive_journal_path(root, feature));
                     return Err(Fail::Thrown(format!("{e}"))); // residual: libuv message in Node
                 }
                 moved.push((from.clone(), to.clone(), id.clone()));
@@ -736,13 +736,13 @@ fn archive_one_feature(root: &Path, feature: &str) -> MR<(Vec<Value>, f64, f64)>
                     dropped += 1.0;
                 }
             }
-            let mut summary = archived_summary(&root)?;
+            let mut summary = archived_summary(root)?;
             let mut entry = Map::new();
             entry.insert("capped".into(), Value::Number(Number::from_f64(capped).unwrap()));
             entry.insert("dropped".into(), Value::Number(Number::from_f64(dropped).unwrap()));
             entry.insert("archived_at".into(), Value::String(utc_now()));
             summary.insert(feature.clone(), Value::Object(entry));
-            write_json_atomic(&archive_summary_file(&root), &Value::Object(summary))
+            write_json_atomic(&archive_summary_file(root), &Value::Object(summary))
                 .map_err(|e| Fail::Thrown(format!("{e}")))?;
             crate::fsutil::remove_file_if_exists(&archive_journal_path(root, feature));
             Ok((moved.into_iter().map(|(_, _, id)| id).collect(), capped, dropped))

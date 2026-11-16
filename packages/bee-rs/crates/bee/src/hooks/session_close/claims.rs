@@ -221,11 +221,10 @@ fn collect_assistant_text<'a>(event: &'a Value, out: &mut Vec<&'a str>) {
             }
         }
         "event_msg" => {
-            if let Some(p) = payload {
-                if p.get("type").and_then(Value::as_str) == Some("task_complete") {
+            if let Some(p) = payload
+                && p.get("type").and_then(Value::as_str) == Some("task_complete") {
                     out.extend(p.get("last_agent_message").and_then(Value::as_str));
                 }
-            }
         }
         _ => {}
     }

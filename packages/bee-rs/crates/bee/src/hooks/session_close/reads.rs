@@ -83,11 +83,10 @@ pub(crate) fn preflight(root: &Path) -> Result<Map<String, Value>, ()> {
     for cache in [bee.join("cache").join("inject-cache.json"), bee.join(".inject-cache.json")] {
         // Deliberately plain read_json: a corrupt cache is NOT screened here
         // (read_inject_cache warns for it), so this probe never double-warns.
-        if let ReadJson::Parsed(v) = read_json(&cache) {
-            if !matches!(v, Value::Object(_) | Value::Null | Value::Bool(false)) {
+        if let ReadJson::Parsed(v) = read_json(&cache)
+            && !matches!(v, Value::Object(_) | Value::Null | Value::Bool(false)) {
                 return Err(());
             }
-        }
     }
     Ok(config)
 }
@@ -339,11 +338,10 @@ pub(crate) fn read_session_record(root: &Path, sid: &str) -> Option<Map<String, 
         _ => {
             if ctl != root {
                 let direct_file = root.join(".bee").join("sessions").join(format!("{sid}.json"));
-                if let ReadJson::Parsed(Value::Object(m)) = read_json_failopen(&direct_file) {
-                    if m.get("id").and_then(Value::as_str) == Some(sid) {
+                if let ReadJson::Parsed(Value::Object(m)) = read_json_failopen(&direct_file)
+                    && m.get("id").and_then(Value::as_str) == Some(sid) {
                         return Some(m);
                     }
-                }
             }
             None
         }
@@ -522,20 +520,16 @@ pub(crate) fn newest_active_decision(root: &Path) -> Option<(Value, Value)> {
     let mut superseded: HashSet<String> = HashSet::new();
     let mut redacted: HashSet<String> = HashSet::new();
     for event in &events {
-        if event.get("type").and_then(Value::as_str) == Some("supersede") {
-            if let Some(target) = event.get("supersedes").filter(|v| js_truthy(v)) {
-                if let Some(k) = primitive_key(target) {
+        if event.get("type").and_then(Value::as_str) == Some("supersede")
+            && let Some(target) = event.get("supersedes").filter(|v| js_truthy(v))
+                && let Some(k) = primitive_key(target) {
                     superseded.insert(k);
                 }
-            }
-        }
-        if event.get("type").and_then(Value::as_str) == Some("redact") {
-            if let Some(target) = event.get("redacts").filter(|v| js_truthy(v)) {
-                if let Some(k) = primitive_key(target) {
+        if event.get("type").and_then(Value::as_str) == Some("redact")
+            && let Some(target) = event.get("redacts").filter(|v| js_truthy(v))
+                && let Some(k) = primitive_key(target) {
                     redacted.insert(k);
                 }
-            }
-        }
     }
     let mut newest: Option<&Value> = None;
     for event in &events {
@@ -544,11 +538,10 @@ pub(crate) fn newest_active_decision(root: &Path) -> Option<(Value, Value)> {
             continue;
         }
         let id_key = event.get("id").and_then(primitive_key);
-        if let Some(k) = &id_key {
-            if superseded.contains(k) || redacted.contains(k) {
+        if let Some(k) = &id_key
+            && (superseded.contains(k) || redacted.contains(k)) {
                 continue;
             }
-        }
         newest = Some(event);
     }
     newest.map(|e| {

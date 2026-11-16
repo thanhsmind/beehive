@@ -77,16 +77,14 @@ fn models_role_pairs(runtime_table: Option<&Value>) -> Vec<(String, String)> {
     let Some(Value::Object(table)) = runtime_table else { return Vec::new() };
     let mut order: Vec<&String> = Vec::new();
     for kind in DISPATCH_KINDS {
-        if let Some(slot) = slot_for_kind(kind) {
-            if let Some((name, _)) = table.get_key_value(slot) {
-                if !order.iter().any(|n| n.as_str() == slot) {
+        if let Some(slot) = slot_for_kind(kind)
+            && let Some((name, _)) = table.get_key_value(slot)
+                && !order.iter().any(|n| n.as_str() == slot) {
                     order.push(name);
                 }
-            }
-        }
     }
     for name in table.keys() {
-        if name == ESCALATION_WORD || order.iter().any(|n| *n == name) {
+        if name == ESCALATION_WORD || order.contains(&name) {
             continue;
         }
         order.push(name);
@@ -183,8 +181,8 @@ pub(crate) fn format_lane_summary_line(summary: &Value) -> Option<String> {
     if opt_truthy(vget(summary, "active")) {
         parts.push(format!("active: {}", format_lane_row(vget(summary, "active").unwrap())));
     }
-    if let Some(Value::Array(ids)) = vget(summary, "ids") {
-        if !ids.is_empty() {
+    if let Some(Value::Array(ids)) = vget(summary, "ids")
+        && !ids.is_empty() {
             let counts_str = match vget(summary, "counts") {
                 Some(Value::Object(counts)) => counts
                     .iter()
@@ -199,7 +197,6 @@ pub(crate) fn format_lane_summary_line(summary: &Value) -> Option<String> {
                 js_join(ids, ", ")
             ));
         }
-    }
     if parts.is_empty() {
         None
     } else {
@@ -261,8 +258,8 @@ pub(crate) fn render_status_text(status: &JMap) -> String {
     // cannot: both show as "pending" there. Scoped to a live feature — an
     // idle repo's fallback default (every gate "pending", nobody having
     // acted) is not news worth a line.
-    if opt_truthy(s("feature")) {
-        if let Some(Value::Object(gate_records)) = s("gate_records") {
+    if opt_truthy(s("feature"))
+        && let Some(Value::Object(gate_records)) = s("gate_records") {
             for g in GATE_NAMES {
                 let Some(entry) = gate_records.get(g) else { continue };
                 let state = vget(entry, "state").and_then(|v| v.as_str()).unwrap_or("pending");
@@ -288,7 +285,6 @@ pub(crate) fn render_status_text(status: &JMap) -> String {
                 lines.push(line);
             }
         }
-    }
     let level = s("gate_bypass_level");
     if opt_truthy(level) && !str_eq(level, "off") {
         lines.push(bypass_banner(&tpl(level)).to_string());
@@ -540,22 +536,20 @@ pub(crate) fn render_status_text(status: &JMap) -> String {
             tpl(s("review").and_then(|r| vget(r, "high_risk_unreviewed")))
         ));
     }
-    if let Some(Value::Array(decisions)) = s("recent_decisions") {
-        if !decisions.is_empty() {
+    if let Some(Value::Array(decisions)) = s("recent_decisions")
+        && !decisions.is_empty() {
             lines.push("Recent decisions:".to_string());
             for d in decisions {
                 lines.push(format!("- {} ({})", tpl(vget(d, "decision")), tpl(vget(d, "date"))));
             }
         }
-    }
-    if let Some(Value::Array(warnings)) = s("staleness_warnings") {
-        if !warnings.is_empty() {
+    if let Some(Value::Array(warnings)) = s("staleness_warnings")
+        && !warnings.is_empty() {
             lines.push("Staleness warnings:".to_string());
             for w in warnings {
                 lines.push(format!("- {}", jsjson::js_to_string(w)));
             }
         }
-    }
     // D4 (wayfinding-flow): open discovery maps — resume must be
     // un-missable. Guarded on `open_maps` carrying at least one effort or
     // one unreadable MAP.md; absent or empty `docs/discovery/` prints

@@ -1080,11 +1080,10 @@ pub(crate) fn mark_orphans_with_paseo(
                     }
                 };
 
-                if is_missing || is_dead {
-                    if write_mark(bee_dir, &job_id, Mark::Interrupted, "process_restarted").is_ok() {
+                if (is_missing || is_dead)
+                    && write_mark(bee_dir, &job_id, Mark::Interrupted, "process_restarted").is_ok() {
                         marked.push(job_id);
                     }
-                }
             }
             continue;
         }

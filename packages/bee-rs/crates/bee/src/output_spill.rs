@@ -45,7 +45,7 @@ mod unix {
     }
 
     fn allowlisted(strs: &[&str]) -> bool {
-        if strs.iter().any(|t| *t == "--help") {
+        if strs.contains(&"--help") {
             return true;
         }
         SPILL_VERBS.iter().any(|pat| strs.starts_with(pat))

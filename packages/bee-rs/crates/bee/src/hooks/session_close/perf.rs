@@ -103,8 +103,8 @@ pub(crate) fn verify_transcript_session_identity(path: &Path, sid: &str) -> bool
             continue;
         };
 
-        if val.get("type").and_then(Value::as_str) == Some("session_meta") {
-            if let Some(payload) = val.get("payload") {
+        if val.get("type").and_then(Value::as_str) == Some("session_meta")
+            && let Some(payload) = val.get("payload") {
                 let id_found = payload
                     .get("id")
                     .or_else(|| payload.get("session_id"))
@@ -117,7 +117,6 @@ pub(crate) fn verify_transcript_session_identity(path: &Path, sid: &str) -> bool
                     }
                 }
             }
-        }
 
         let top_sid = val
             .get("session_id")
@@ -186,14 +185,13 @@ pub(crate) fn resolve_transcript_for(root: &Path, session_id: Option<&str>) -> O
     }
 
     // 1. Check session record's stored transcript_path
-    if let Some(session) = read_session_record(root, sid) {
-        if let Some(tp) = session.get("transcript_path").and_then(Value::as_str) {
+    if let Some(session) = read_session_record(root, sid)
+        && let Some(tp) = session.get("transcript_path").and_then(Value::as_str) {
             let p = PathBuf::from(tp);
             if p.is_file() && verify_transcript_session_identity(&p, sid) {
                 return Some(p);
             }
         }
-    }
 
     // 2. Fallback A: Claude projects directory
     let projects_root = claude_projects_root();
@@ -311,18 +309,16 @@ pub(crate) fn aggregate_usage(events: &[Value]) -> UsageAgg {
         let ev_type = ev.get("type").and_then(Value::as_str).unwrap_or("");
         match ev_type {
             "turn_context" => {
-                if let Some(m) = ev.get("payload").and_then(|p| p.get("model")).and_then(Value::as_str) {
-                    if !m.is_empty() {
+                if let Some(m) = ev.get("payload").and_then(|p| p.get("model")).and_then(Value::as_str)
+                    && !m.is_empty() {
                         active_model = Some(m.to_string());
                     }
-                }
             }
             "session_meta" => {
-                if let Some(m) = ev.get("payload").and_then(|p| p.get("model")).and_then(Value::as_str) {
-                    if !m.is_empty() {
+                if let Some(m) = ev.get("payload").and_then(|p| p.get("model")).and_then(Value::as_str)
+                    && !m.is_empty() {
                         active_model = Some(m.to_string());
                     }
-                }
             }
             "assistant" => {
                 let msg = ev.get("message").filter(|m| js_truthy(m)).cloned().unwrap_or(Value::Object(Map::new()));
@@ -365,11 +361,10 @@ pub(crate) fn aggregate_usage(events: &[Value]) -> UsageAgg {
                         .and_then(|ts| ts.get("model"))
                         .or_else(|| payload.get("model"))
                         .and_then(Value::as_str);
-                    if let Some(m) = m {
-                        if !m.is_empty() {
+                    if let Some(m) = m
+                        && !m.is_empty() {
                             active_model = Some(m.to_string());
                         }
-                    }
                 } else if p_type == "token_count" {
                     let info = payload.get("info").and_then(Value::as_object);
                     let tot_opt = info.and_then(|i| i.get("total_token_usage")).and_then(Value::as_object);
@@ -388,11 +383,10 @@ pub(crate) fn aggregate_usage(events: &[Value]) -> UsageAgg {
                         // Dedup repeated token_count records:
                         // In live Codex, identical token_count events are repeated multiple times.
                         // If total_token_usage has not advanced, skip.
-                        if let Some(prev) = last_seen_codex_totals {
-                            if prev == curr_totals {
+                        if let Some(prev) = last_seen_codex_totals
+                            && prev == curr_totals {
                                 continue;
                             }
-                        }
 
                         // Derive incremental usage for this request:
                         // If last_token_usage is present, use it.
@@ -558,8 +552,8 @@ pub(crate) fn detect_parallel(agents: &[AgentSpan], parent_events: &[Value]) -> 
             if agent_calls >= 2 {
                 return true;
             }
-        } else if ev_type == "response_item" {
-            if let Some(payload) = ev.get("payload") {
+        } else if ev_type == "response_item"
+            && let Some(payload) = ev.get("payload") {
                 if let Some(Value::Array(content)) = payload.get("content") {
                     let agent_calls = content
                         .iter()
@@ -596,7 +590,6 @@ pub(crate) fn detect_parallel(agents: &[AgentSpan], parent_events: &[Value]) -> 
                     }
                 }
             }
-        }
     }
     false
 }
@@ -701,19 +694,16 @@ pub(crate) fn extract_validated_session_id_from_stem(stem: &str) -> Option<Strin
         return None;
     }
     // Check if stem ends with a 36-character UUID (e.g. rollout-2026-09-12T14-28-28-01a095e4-8306-70d0-bf1f-7a48da530e71)
-    if let Some(pos) = s.len().checked_sub(36) {
-        if let Some(suffix) = s.get(pos..) {
-            if is_uuid(suffix) {
-                if pos == 0 || s.as_bytes().get(pos - 1) == Some(&b'-') {
+    if let Some(pos) = s.len().checked_sub(36)
+        && let Some(suffix) = s.get(pos..)
+            && is_uuid(suffix)
+                && (pos == 0 || s.as_bytes().get(pos - 1) == Some(&b'-')) {
                     return Some(suffix.to_string());
                 }
-            }
-        }
-    }
     if let Some(after_rollout) = s.strip_prefix("rollout-") {
         if let Some((ts, candidate)) = after_rollout.split_at_checked(20) {
             let b = ts.as_bytes();
-            let is_digit = |idx: usize| b.get(idx).map_or(false, u8::is_ascii_digit);
+            let is_digit = |idx: usize| b.get(idx).is_some_and(u8::is_ascii_digit);
             if is_digit(0) && is_digit(1) && is_digit(2) && is_digit(3)
                 && b.get(4) == Some(&b'-')
                 && is_digit(5) && is_digit(6)
@@ -969,12 +959,12 @@ pub(crate) fn build_matrix_from_log() -> Vec<ProjectAgg> {
         // mergeSessionIntoProject
         p.sessions += 1.0;
         add_raw_models(&mut p.models, r.get("models"));
-        p.running_time_ms += r.get("running_time_ms").map(|v| num_finite(v)).unwrap_or(0.0);
+        p.running_time_ms += r.get("running_time_ms").map(num_finite).unwrap_or(0.0);
         if r.get("parallel").map(js_truthy).unwrap_or(false) {
             p.parallel_sessions += 1.0;
         }
-        p.subagent_count += r.get("subagent_count").map(|v| num_finite(v)).unwrap_or(0.0);
-        p.event_count += r.get("event_count").map(|v| num_finite(v)).unwrap_or(0.0);
+        p.subagent_count += r.get("subagent_count").map(num_finite).unwrap_or(0.0);
+        p.event_count += r.get("event_count").map(num_finite).unwrap_or(0.0);
         for (field, is_first) in [("started_ms", true), ("ended_ms", false)] {
             match r.get(field) {
                 None | Some(Value::Null) => {}

@@ -224,11 +224,10 @@ fn has_near(text: &str, a: &str, b: &str) -> bool {
         let start = from + off + a.len();
         let tail = &text[start..];
         let window: String = tail.chars().take_while(|c| *c != '\n').take(40 + b.len()).collect();
-        if let Some(pos) = window.find(b) {
-            if window[..pos].chars().count() <= 40 && !window[..pos].contains('\n') {
+        if let Some(pos) = window.find(b)
+            && window[..pos].chars().count() <= 40 && !window[..pos].contains('\n') {
                 return true;
             }
-        }
         from = from + off + 1;
         if from >= text.len() {
             break;
@@ -933,11 +932,10 @@ fn compute_job_status(
     // 1. A job with a result file shows its result status
     if let Some(res_round) = result_round {
         let path = mailbox::result_path(bee_dir, job_id, res_round);
-        if let crate::fsutil::ReadJson::Parsed(Value::Object(map)) = crate::fsutil::read_json(&path) {
-            if let Some(status) = map.get("status").and_then(Value::as_str) {
+        if let crate::fsutil::ReadJson::Parsed(Value::Object(map)) = crate::fsutil::read_json(&path)
+            && let Some(status) = map.get("status").and_then(Value::as_str) {
                 return status.to_string();
             }
-        }
         return "done".to_string();
     }
 
@@ -949,14 +947,14 @@ fn compute_job_status(
                     .get("round")
                     .and_then(Value::as_u64)
                     .map(|r| r as u32)
-                    .map_or(true, |r| r >= round);
+                    .is_none_or(|r| r >= round);
                 let at_ms = v
                     .get("at")
                     .and_then(Value::as_str)
                     .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
                     .map(|dt| dt.timestamp_millis());
                 round_matches
-                    && at_ms.map_or(false, |at| {
+                    && at_ms.is_some_and(|at| {
                         now_ms.saturating_sub(at)
                             > mailbox::ACTIVITY_FRESHNESS_SECS.saturating_mul(1000)
                     })
@@ -1200,7 +1198,7 @@ fn collect_jobs(
                     .and_then(|i| i.updated_at.as_deref())
                     .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
                     .map(|dt| dt.timestamp_millis())
-                    .map_or(false, |at| {
+                    .is_some_and(|at| {
                         now_ms.saturating_sub(at)
                             > mailbox::ACTIVITY_FRESHNESS_SECS.saturating_mul(1000)
                     });
@@ -1535,13 +1533,11 @@ pub(crate) fn status_with_panes_and_transport_and_paseo(
         if let Ok(dirs) = std::fs::read_dir(bee_dir.join("mailbox")) {
             for dir in dirs.flatten() {
                 let Some(job_name) = dir.file_name().to_str().map(str::to_string) else { continue };
-                if let crate::fsutil::ReadJson::Parsed(job) = crate::fsutil::read_json(&dir.path().join("job.json")) {
-                    if job.get("transport").and_then(Value::as_str) == Some("paseo") {
-                        if let Some(agent) = job.get("paseo_agent_id").and_then(Value::as_str) {
+                if let crate::fsutil::ReadJson::Parsed(job) = crate::fsutil::read_json(&dir.path().join("job.json"))
+                    && job.get("transport").and_then(Value::as_str) == Some("paseo")
+                        && let Some(agent) = job.get("paseo_agent_id").and_then(Value::as_str) {
                             job_by_agent.insert(agent.trim().to_string(), job_name);
                         }
-                    }
-                }
             }
         }
         let cfg = match crate::fsutil::read_json(&bee_dir.join("config.json")) {

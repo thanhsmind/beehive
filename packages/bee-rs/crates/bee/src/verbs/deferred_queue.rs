@@ -597,11 +597,10 @@ fn decide_claim(root: &Path, id: &str, now_ms: f64) -> ClaimDecision {
     if item.completed {
         return ClaimDecision::Completed;
     }
-    if let Some(claim) = &item.claim {
-        if !claim_reclaimable(root, claim, now_ms) {
+    if let Some(claim) = &item.claim
+        && !claim_reclaimable(root, claim, now_ms) {
             return ClaimDecision::Claimed(claim.clone());
         }
-    }
     ClaimDecision::Claimable(item.clone())
 }
 

@@ -244,11 +244,10 @@ fn resolve_task_with_stdin(
     task_file: Option<&str>,
     read_stdin: impl FnOnce() -> String,
 ) -> Result<String, String> {
-    if let Some(t) = task {
-        if !t.is_empty() {
+    if let Some(t) = task
+        && !t.is_empty() {
             return Ok(t.to_string());
         }
-    }
     if let Some(f) = task_file {
         if f == "-" {
             let text = read_stdin().trim_end_matches('\n').to_string();
@@ -417,11 +416,10 @@ fn parse_options(flags: &[&str]) -> Result<Options, String> {
                 i += 1;
             }
             "--runner" => {
-                if let Some(r) = flags.get(i + 1) {
-                    if *r == "no-pane" || *r == "child" || *r == "process" {
+                if let Some(r) = flags.get(i + 1)
+                    && (*r == "no-pane" || *r == "child" || *r == "process") {
                         no_pane = true;
                     }
-                }
                 i += 2;
             }
             "--question-of" => {
@@ -456,14 +454,13 @@ fn parse_options(flags: &[&str]) -> Result<Options, String> {
                         .to_string(),
                 );
             }
-            if let Some(e) = effort {
-                if !super::claude_session::EFFORTS.contains(&e) {
+            if let Some(e) = effort
+                && !super::claude_session::EFFORTS.contains(&e) {
                     return Err(format!(
                         "--session-effort \"{e}\" is not one of {}",
                         super::claude_session::EFFORTS.join(", ")
                     ));
                 }
-            }
             Some(ClaudeSessionSpec { model: model.to_string(), effort: effort.map(str::to_string) })
         }
     };
@@ -936,7 +933,7 @@ fn parse_process_info(v: &Value) -> Liveness {
     // AGENT-PRESENT: at least one foreground entry whose pid != shell_pid (never a name match)
     let active_pid = fg_array.iter().find_map(|p| {
         let pid = p.get("pid").and_then(Value::as_u64).map(|p| p as u32)?;
-        if shell_pid.map_or(true, |sp| pid != sp) {
+        if shell_pid != Some(pid) {
             Some(pid)
         } else {
             None
@@ -1273,11 +1270,10 @@ fn decide_poll(
         return PollDecision::TimedOutIdle;
     }
     if now_ms.saturating_sub(last_heartbeat_ms) >= (idle_timeout_secs as i64).saturating_mul(1000) {
-        if let Some(text) = pane_text {
-            if find_limit_match(text).is_some() {
+        if let Some(text) = pane_text
+            && find_limit_match(text).is_some() {
                 return PollDecision::PausedLimit;
             }
-        }
         return PollDecision::TimedOutIdle;
     }
     PollDecision::Continue
@@ -1869,7 +1865,7 @@ fn tick_d2_status(
     progress: &mut dyn FnMut(&str),
 ) -> (Option<String>, Option<Liveness>) {
     let is_stale = activity_is_stale(bee_dir, job_id, min_round, tick_now);
-    let liveness = if is_stale || tick_index % 10 == 0 {
+    let liveness = if is_stale || tick_index.is_multiple_of(10) {
         Some(herdr.process_info(pane_id))
     } else {
         None
@@ -1886,13 +1882,11 @@ fn tick_d2_status(
         status_with_activity(bee_dir, job_id, min_round, tick_now, &mut || herdr.agent_status(job_id))
     };
 
-    if let Some(ref word) = status {
-        if let Some((_from, to)) = mailbox::transition_status(bee_dir, job_id, word) {
-            if to != "working" {
+    if let Some(ref word) = status
+        && let Some((_from, to)) = mailbox::transition_status(bee_dir, job_id, word)
+            && to != "working" {
                 progress(&format!("herding: job {job_id} {to}"));
             }
-        }
-    }
 
     (status, liveness)
 }
@@ -2452,7 +2446,7 @@ fn wait_for_round(
         ceiling_secs,
         herdr,
         POLL_INTERVAL,
-        |d| std::thread::sleep(d),
+        std::thread::sleep,
         &mut |line| println!("{line}"),
     )
 }
@@ -2492,27 +2486,23 @@ fn wait_for_round_driven(
                 .and_then(|names| mailbox::latest_result_round(&names))
                 .is_some_and(|round| round >= min_round);
             let mut heartbeat_fresh = false;
-            if let Ok(meta) = std::fs::metadata(&log_file_path) {
-                if let Ok(modified) = meta.modified() {
-                    if last_log_mtime.map_or(true, |prev| modified > prev) {
+            if let Ok(meta) = std::fs::metadata(&log_file_path)
+                && let Ok(modified) = meta.modified()
+                    && last_log_mtime.is_none_or(|prev| modified > prev) {
                         last_log_mtime = Some(modified);
                         heartbeat_fresh = true;
                     }
-                }
-            }
             // herding-prompt-stall D4: the worker's ack file counts as a
             // heartbeat too, the SAME "mtime advanced since last observed"
             // rule as log.txt above — a worker that acked and is now
             // thinking for a long time is never read as dead off the ack
             // alone appearing once.
-            if let Ok(meta) = std::fs::metadata(&ack_file_path) {
-                if let Ok(modified) = meta.modified() {
-                    if last_ack_mtime.map_or(true, |prev| modified > prev) {
+            if let Ok(meta) = std::fs::metadata(&ack_file_path)
+                && let Ok(modified) = meta.modified()
+                    && last_ack_mtime.is_none_or(|prev| modified > prev) {
                         last_ack_mtime = Some(modified);
                         heartbeat_fresh = true;
                     }
-                }
-            }
             // One status read serves both the heartbeat check and the
             // blocked check (herding-prompt-stall D3) — never two herdr
             // calls for one tick. herding-activity-hook D3 puts the agent's
@@ -2631,7 +2621,7 @@ fn is_broker_running_at(main_root: &Path, now_epoch_secs: i64) -> bool {
         return false;
     };
     let age = now_epoch_secs - ts_epoch_secs;
-    age <= 90 && age >= -5
+    (-5..=90).contains(&age)
 }
 
 /// A fresh spawn: split a pane off the caller's own, `agent start` into it,
@@ -2701,11 +2691,10 @@ fn execute_new(opts: &Options, herdr: &dyn PaneTransport) -> ExecResult {
     // (Antigravity's `agy`, e.g.) must find its own workspace already
     // trusted the moment it boots into the freshly split pane. Fail-open:
     // a `Warning` is reported and the run proceeds regardless.
-    if let Some(trust) = &workspace_trust {
-        if let TrustPreflightOutcome::Warning(msg) = preflight_workspace_trust(trust, &opts.cwd) {
+    if let Some(trust) = &workspace_trust
+        && let TrustPreflightOutcome::Warning(msg) = preflight_workspace_trust(trust, &opts.cwd) {
             eprintln!("bee herding run: workspace-trust pre-flight failed ({msg}) — proceeding anyway");
         }
-    }
 
     let own_pane = match herdr.pane_current() {
         Ok(p) => p,
@@ -2791,7 +2780,7 @@ fn execute_new(opts: &Options, herdr: &dyn PaneTransport) -> ExecResult {
                 herdr.agent_wait(&opts.job_id, POLL_INTERVAL.as_millis() as u64)
             })
         },
-        |d| std::thread::sleep(d),
+        std::thread::sleep,
         now_ms,
     );
     match ready {
@@ -3006,14 +2995,13 @@ pub(crate) fn build_child_env(
     let permitted = passthrough
         .get("BEE_DISPATCH_ID")
         .is_some_and(|v| !v.trim().is_empty());
-    if permitted {
-        if let Some(session) = passthrough.get("BEE_SESSION_ID") {
+    if permitted
+        && let Some(session) = passthrough.get("BEE_SESSION_ID") {
             let trimmed = session.trim();
             if !trimmed.is_empty() {
                 env.insert("BEE_SESSION_ID".to_string(), trimmed.to_string());
             }
         }
-    }
 
     env.insert("BEE_HERDING_WORKER".to_string(), "1".to_string());
     env.insert("BEE_HERDING_JOB_ID".to_string(), job_id.to_string());
@@ -3093,11 +3081,10 @@ pub(crate) fn parse_child_jsonl(stdout: &str) -> ChildOutput {
                     if let Some(content) = msg.get("content").and_then(Value::as_array) {
                         let mut texts = Vec::new();
                         for item in content {
-                            if item.get("type").and_then(Value::as_str) == Some("text") {
-                                if let Some(t) = item.get("text").and_then(Value::as_str) {
+                            if item.get("type").and_then(Value::as_str) == Some("text")
+                                && let Some(t) = item.get("text").and_then(Value::as_str) {
                                     texts.push(t);
                                 }
-                            }
                         }
                         if !texts.is_empty() {
                             message_end_text = texts.join("");
@@ -3108,30 +3095,26 @@ pub(crate) fn parse_child_jsonl(stdout: &str) -> ChildOutput {
                 }
             }
             "message_update" => {
-                if let Some(evt) = obj.get("assistantMessageEvent") {
-                    if evt.get("type").and_then(Value::as_str) == Some("text_delta") {
-                        if let Some(delta) = evt.get("delta").and_then(Value::as_str) {
+                if let Some(evt) = obj.get("assistantMessageEvent")
+                    && evt.get("type").and_then(Value::as_str) == Some("text_delta")
+                        && let Some(delta) = evt.get("delta").and_then(Value::as_str) {
                             deltas_text.push_str(delta);
                         }
-                    }
-                }
             }
             "turn_end" => {
-                if let Some(msg) = obj.get("message") {
-                    if let Some(content) = msg.get("content").and_then(Value::as_array) {
+                if let Some(msg) = obj.get("message")
+                    && let Some(content) = msg.get("content").and_then(Value::as_array) {
                         let mut texts = Vec::new();
                         for item in content {
-                            if item.get("type").and_then(Value::as_str) == Some("text") {
-                                if let Some(t) = item.get("text").and_then(Value::as_str) {
+                            if item.get("type").and_then(Value::as_str) == Some("text")
+                                && let Some(t) = item.get("text").and_then(Value::as_str) {
                                     texts.push(t);
                                 }
-                            }
                         }
                         if !texts.is_empty() {
                             turn_end_text = texts.join("");
                         }
                     }
-                }
             }
             _ => {}
         }
@@ -3330,11 +3313,10 @@ pub(super) fn execute_no_pane(opts: &Options) -> ExecResult {
         }
     };
 
-    if let Some(trust) = &workspace_trust {
-        if let TrustPreflightOutcome::Warning(msg) = preflight_workspace_trust(trust, &opts.cwd) {
+    if let Some(trust) = &workspace_trust
+        && let TrustPreflightOutcome::Warning(msg) = preflight_workspace_trust(trust, &opts.cwd) {
             eprintln!("bee herding run: workspace-trust pre-flight failed ({msg}) — proceeding anyway");
         }
-    }
 
     let child_env = build_child_env(
         std::env::vars(),
@@ -3449,15 +3431,14 @@ pub(super) fn execute_no_pane(opts: &Options) -> ExecResult {
     let output = parse_child_jsonl(&stdout_str);
 
     let report_path = mailbox::report_path(&bee_dir, &opts.job_id, 1);
-    if !report_path.exists() {
-        if let Err(e) = crate::fsutil::write_text_atomic(&report_path, &output.assistant_text) {
+    if !report_path.exists()
+        && let Err(e) = crate::fsutil::write_text_atomic(&report_path, &output.assistant_text) {
             return ExecResult {
                 outcome: RunOutcome::SpawnFailed(format!("could not write report {}: {e}", report_path.display())),
                 pane_id: None,
                 closed_pane: false,
             };
         }
-    }
 
     let res_file_path = mailbox::result_path(&bee_dir, &opts.job_id, 1);
     if res_file_path.exists() {
@@ -3614,11 +3595,10 @@ fn execute_paseo_steered(
             closed_pane: false,
         };
     }
-    if opts.read_only && provider_is_claude {
-        if let Some(refusal) = claude_worker_guard_missing(&opts.main_root) {
+    if opts.read_only && provider_is_claude
+        && let Some(refusal) = claude_worker_guard_missing(&opts.main_root) {
             return ExecResult { outcome: RunOutcome::SpawnFailed(refusal), pane_id: None, closed_pane: false };
         }
-    }
     let bee_dir = opts.main_root.join(".bee");
     if !opts.dry_run {
         write_inbox_marker(&bee_dir, opts);
@@ -3782,11 +3762,10 @@ fn execute_paseo_steered(
         opts.cell_id.as_deref(),
         workspace.as_deref(),
     );
-    if opts.claude_session.is_some() {
-        if let Some(at) = argv.iter().position(|a| a == "--title") {
+    if opts.claude_session.is_some()
+        && let Some(at) = argv.iter().position(|a| a == "--title") {
             argv[at + 1] = cs::session_name(opts.cell_id.as_deref(), opts.seat.as_deref(), &opts.job_id);
         }
-    }
     let spawned_at_ms = now_ms();
     let run_res = cli.call_as_caller(&argv);
     let agent_id = match run_res {
@@ -3957,11 +3936,10 @@ fn execute_claude_session_paced(
     poll_interval: Duration,
     agents_every_ticks: u32,
 ) -> ExecResult {
-    if opts.read_only {
-        if let Some(refusal) = claude_worker_guard_missing(&opts.main_root) {
+    if opts.read_only
+        && let Some(refusal) = claude_worker_guard_missing(&opts.main_root) {
             return spawn_refused(refusal);
         }
-    }
     let bee_dir = opts.main_root.join(".bee");
     if !opts.dry_run {
         write_inbox_marker(&bee_dir, opts);
@@ -4082,7 +4060,7 @@ fn execute_claude_session_paced(
         cli,
         poll_interval,
         agents_every_ticks,
-        |d| std::thread::sleep(d),
+        std::thread::sleep,
         now_ms,
     );
 
@@ -4167,14 +4145,13 @@ fn wait_for_round_claude(
                 return tick;
             }
             for (path, last) in [(&log_file_path, &mut last_log_mtime), (&ack_file_path, &mut last_ack_mtime)] {
-                if let Some(modified) = std::fs::metadata(path).ok().and_then(|m| m.modified().ok()) {
-                    if last.map_or(true, |prev| modified > prev) {
+                if let Some(modified) = std::fs::metadata(path).ok().and_then(|m| m.modified().ok())
+                    && last.is_none_or(|prev| modified > prev) {
                         *last = Some(modified);
                         tick.heartbeat_fresh = true;
                     }
-                }
             }
-            let query = ticks % agents_every_ticks.max(1) == 0;
+            let query = ticks.is_multiple_of(agents_every_ticks.max(1));
             ticks = ticks.saturating_add(1);
             if query {
                 let listed = cli.call(&cs::agents_argv()).ok();
@@ -4574,8 +4551,8 @@ fn record_observed_model(
     }
 
     let job_path = mailbox::job_path(bee_dir, job_id);
-    if let crate::fsutil::ReadJson::Parsed(Value::Object(mut map)) = crate::fsutil::read_json(&job_path) {
-        if !map.contains_key("paseo_model_observed") {
+    if let crate::fsutil::ReadJson::Parsed(Value::Object(mut map)) = crate::fsutil::read_json(&job_path)
+        && !map.contains_key("paseo_model_observed") {
             map.insert("paseo_model_observed".into(), Value::String(obs_model_str));
             map.insert("paseo_thinking_observed".into(), Value::String(obs_thinking_str));
             map.insert("paseo_mode_observed".into(), info.mode.clone().map_or(Value::Null, Value::String));
@@ -4586,7 +4563,6 @@ fn record_observed_model(
             }
             let _ = crate::fsutil::write_json_atomic(&job_path, &Value::Object(map));
         }
-    }
     is_mismatch
 }
 
@@ -4773,7 +4749,7 @@ fn wait_for_round_paseo(
         silent_idle_occurred,
         &mut wait_source,
         POLL_INTERVAL,
-        |d| std::thread::sleep(d),
+        std::thread::sleep,
         now_ms,
     );
     let home = super::paseo_state::resolve_home(cmd);
@@ -4856,22 +4832,18 @@ fn wait_for_round_paseo_driven(
                 .is_some_and(|round| round >= min_round);
 
             let mut heartbeat_fresh = false;
-            if let Ok(meta) = std::fs::metadata(&log_file_path) {
-                if let Ok(modified) = meta.modified() {
-                    if last_log_mtime.map_or(true, |prev| modified > prev) {
+            if let Ok(meta) = std::fs::metadata(&log_file_path)
+                && let Ok(modified) = meta.modified()
+                    && last_log_mtime.is_none_or(|prev| modified > prev) {
                         last_log_mtime = Some(modified);
                         heartbeat_fresh = true;
                     }
-                }
-            }
-            if let Ok(meta) = std::fs::metadata(&ack_file_path) {
-                if let Ok(modified) = meta.modified() {
-                    if last_ack_mtime.map_or(true, |prev| modified > prev) {
+            if let Ok(meta) = std::fs::metadata(&ack_file_path)
+                && let Ok(modified) = meta.modified()
+                    && last_ack_mtime.is_none_or(|prev| modified > prev) {
                         last_ack_mtime = Some(modified);
                         heartbeat_fresh = true;
                     }
-                }
-            }
             if heartbeat_fresh {
                 last_heartbeat_ms = current_time_ms;
             }
@@ -4889,9 +4861,9 @@ fn wait_for_round_paseo_driven(
                     last_inspect_full = inspect_full.clone();
                 }
 
-                if !model_recorded {
-                    if let Some(ref info) = inspect_full {
-                        if info.model.is_some() || info.thinking.is_some() {
+                if !model_recorded
+                    && let Some(ref info) = inspect_full
+                        && (info.model.is_some() || info.thinking.is_some()) {
                             model_recorded = true;
                             if record_observed_model(bee_dir, job_id, agent_id, info, spec)
                                 && refuse_mismatch
@@ -4901,8 +4873,6 @@ fn wait_for_round_paseo_driven(
                                 return stop_for_model_mismatch(cli, agent_id);
                             }
                         }
-                    }
-                }
 
                 let paseo_state = inspect_full.as_ref().and_then(|i| i.state);
                 match paseo_state {
@@ -4957,9 +4927,9 @@ fn wait_for_round_paseo_driven(
                         last_inspect_full = inspect_full.clone();
                     }
 
-                    if !model_recorded {
-                        if let Some(ref info) = inspect_full {
-                            if info.model.is_some() || info.thinking.is_some() {
+                    if !model_recorded
+                        && let Some(ref info) = inspect_full
+                            && (info.model.is_some() || info.thinking.is_some()) {
                                 model_recorded = true;
                                 if record_observed_model(bee_dir, job_id, agent_id, info, spec)
                                     && refuse_mismatch
@@ -4969,8 +4939,6 @@ fn wait_for_round_paseo_driven(
                                     return stop_for_model_mismatch(cli, agent_id);
                                 }
                             }
-                        }
-                    }
 
                     let paseo_state = inspect_full.as_ref().and_then(|i| i.state);
                     match paseo_state {
@@ -5001,12 +4969,11 @@ fn wait_for_round_paseo_driven(
                                     );
                                     let send_args = paseo::send_argv(agent_id, &text);
                                     let _ = cli.call(&send_args);
-                                } else if let Some(sent_at) = nudge_sent_at_ms {
-                                    if current_time_ms.saturating_sub(sent_at) >= 3000 {
+                                } else if let Some(sent_at) = nudge_sent_at_ms
+                                    && current_time_ms.saturating_sub(sent_at) >= 3000 {
                                         silent_idle = true;
                                         silent_idle_occurred.set(true);
                                     }
-                                }
                             }
                             can_rearm = true;
                             last_wait_returned_at_ms = Some(current_time_ms);
@@ -5055,12 +5022,11 @@ fn wait_for_round_paseo_driven(
                                         );
                                         let send_args = paseo::send_argv(agent_id, &text);
                                         let _ = cli.call(&send_args);
-                                    } else if let Some(sent_at) = nudge_sent_at_ms {
-                                        if current_time_ms.saturating_sub(sent_at) >= 3000 {
+                                    } else if let Some(sent_at) = nudge_sent_at_ms
+                                        && current_time_ms.saturating_sub(sent_at) >= 3000 {
                                             silent_idle = true;
                                             silent_idle_occurred.set(true);
                                         }
-                                    }
                                 }
                                 can_rearm = true;
                             }
@@ -5089,7 +5055,7 @@ fn wait_for_round_paseo_driven(
                     && !in_error_fallback
                     && can_rearm
                     && !silent_idle
-                    && last_wait_returned_at_ms.map_or(true, |t| current_time_ms.saturating_sub(t) >= 3000)
+                    && last_wait_returned_at_ms.is_none_or(|t| current_time_ms.saturating_sub(t) >= 3000)
                 {
                     let elapsed_idle = (current_time_ms.saturating_sub(last_heartbeat_ms) / 1000) as u64;
                     let remaining_idle = idle_timeout_secs.saturating_sub(elapsed_idle);
@@ -5122,11 +5088,10 @@ fn wait_for_round_paseo_driven(
     if model_refused {
         return PollDecision::ModelMismatch;
     }
-    if !model_recorded {
-        if let Some(ref info) = last_inspect_full {
+    if !model_recorded
+        && let Some(ref info) = last_inspect_full {
             record_observed_model(bee_dir, job_id, agent_id, info, spec);
         }
-    }
 
     decision
 }
@@ -5921,11 +5886,10 @@ fn emit_result(opts: &Options, result: &ExecResult, transport: &str, dissent: Op
             outcome_label(&result.outcome),
             if result.closed_pane { " (pane closed)" } else { "" }
         );
-        if let RunOutcome::Result(r) = &result.outcome {
-            if r.status == MailboxStatus::Question {
+        if let RunOutcome::Result(r) = &result.outcome
+            && r.status == MailboxStatus::Question {
                 println!("next: the broker owns the job and the final result arrives as a new job");
             }
-        }
     }
 }
 

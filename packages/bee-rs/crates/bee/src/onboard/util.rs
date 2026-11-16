@@ -290,7 +290,7 @@ pub fn path_resolve(p: &str) -> PathBuf {
         format!("{}{}{}", &p[..2], sep, &p[2..])
     } else if rooted {
         // Root-relative: keep the cwd's drive prefix on win32.
-        let drive = if cwd_s.as_bytes().len() >= 2 && cwd_s.as_bytes()[1] == b':' {
+        let drive = if cwd_s.len() >= 2 && cwd_s.as_bytes()[1] == b':' {
             &cwd_s[..2]
         } else {
             ""

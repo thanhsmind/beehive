@@ -484,11 +484,10 @@ impl PaneTransport for RealTmux {
     /// transport was already chosen from config before this runs. It only
     /// answers "which pane am I".
     fn pane_current(&self) -> Result<String, String> {
-        if let Ok(pane) = std::env::var("TMUX_PANE") {
-            if !pane.trim().is_empty() {
+        if let Ok(pane) = std::env::var("TMUX_PANE")
+            && !pane.trim().is_empty() {
                 return Ok(pane.trim().to_string());
             }
-        }
         let pane = self.call(&["display-message", "-p", "#{pane_id}"])?;
         if pane.is_empty() {
             return Err("tmux display-message -p '#{pane_id}' returned nothing".to_string());

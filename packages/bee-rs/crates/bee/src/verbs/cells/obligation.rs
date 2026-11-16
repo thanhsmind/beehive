@@ -158,11 +158,10 @@ pub(crate) fn path_under_root(file: &str, root_path: &str) -> bool {
 
 /// lib/cells.mjs regenObligationRefusal — None when nothing is owed.
 pub(crate) fn regen_obligation_refusal(cell: &Map<String, Value>, verb: &str) -> MR<Option<String>> {
-    if let Some(ack) = cell.get(REGEN_ACK_FIELD) {
-        if matches!(ack, Value::String(s) if !js_trim(s).is_empty()) {
+    if let Some(ack) = cell.get(REGEN_ACK_FIELD)
+        && matches!(ack, Value::String(s) if !js_trim(s).is_empty()) {
             return Ok(None); // D1 escape hatch
         }
-    }
     let files: Vec<String> = match cell.get("files") {
         Some(Value::Array(a)) => a
             .iter()
@@ -281,11 +280,10 @@ pub(crate) const JUDGE_REQUIRED_ROOTS: &[&str] = &["packages/bee-rs/crates/bee/s
 /// files are scanned for a hit, then the offending file/root/reason/escapes
 /// are assembled into one refusal naming both ways out.
 pub(crate) fn judge_obligation_refusal(cell: &Map<String, Value>, verb: &str) -> Option<String> {
-    if let Some(ack) = cell.get(JUDGE_ACK_FIELD) {
-        if matches!(ack, Value::String(s) if !js_trim(s).is_empty()) {
+    if let Some(ack) = cell.get(JUDGE_ACK_FIELD)
+        && matches!(ack, Value::String(s) if !js_trim(s).is_empty()) {
             return None; // named escape #2: a recorded one-line reason
         }
-    }
     let lane = match cell.get("lane") {
         Some(Value::String(s)) => s.clone(),
         _ => String::new(),

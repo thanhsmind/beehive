@@ -101,7 +101,7 @@ pub(crate) fn apply_write_policy(
             .iter()
             .filter(|p| {
                 !active.iter().any(|r| {
-                    session_id.is_some_and(|sid| &r.session.clone().unwrap_or(Value::Null) == &json!(sid)) && !r.path.ends_with('*')
+                    session_id.is_some_and(|sid| r.session.clone().unwrap_or(Value::Null) == json!(sid)) && !r.path.ends_with('*')
                         && paths_overlap(&r.path, p)
                 })
             })
@@ -305,8 +305,8 @@ pub(crate) fn start_lane(
     let existing = read_lane_strict(root, feature)?;
     if let Some(existing) = &existing {
         let existing_phase = cell_field(existing, "phase");
-        if &existing_phase != &json!("idle")
-            && &existing_phase != &json!("compounding-complete")
+        if existing_phase != json!("idle")
+            && existing_phase != json!("compounding-complete")
         {
             return Ok(Err(format!(
                 "startFeature: refused — lane \"{feature}\" is mid-flight at phase \"{}\", not idle or the terminal alias \"compounding-complete\". FIX: bee state session attach --lane {feature} --session-id <session id>.",
@@ -328,14 +328,13 @@ pub(crate) fn start_lane(
     }
 
     // (b) the global handoff blocks a LANE start only when it names this feature.
-    if let Some(handoff) = read_handoff(root)? {
-        if &jget(&handoff, "feature").cloned().unwrap_or(Value::Null) == &json!(feature)
+    if let Some(handoff) = read_handoff(root)?
+        && jget(&handoff, "feature").cloned().unwrap_or(Value::Null) == json!(feature)
         {
             return Ok(Err(format!(
                 "startFeature: refused — .bee/HANDOFF.json names feature \"{feature}\"; its paused work must resume or close before this lane restarts. FIX: resume the handoff (or explicitly delete HANDOFF.json once its work is truly abandoned), then retry."
             )));
         }
-    }
 
     // (c) an OTHER live worker whose claimed cell derives to this feature.
     let lane_workers: Vec<String> = active_workers(control_root, session_id)?
@@ -344,7 +343,7 @@ pub(crate) fn start_lane(
             let Some(cell_id) = &w.cell else { return false };
             cells.iter().any(|c| {
                 &cell_field(c, "id") == cell_id
-                    && &cell_field(c, "feature") == &json!(feature)
+                    && cell_field(c, "feature") == json!(feature)
             })
         })
         .map(|w| format!("{}({})", w.session_id, js_disp_opt(w.cell.as_ref())))
@@ -441,8 +440,8 @@ pub(crate) fn start_default(
     let mut state = read_state_strict(root)?;
 
     let current_phase = state.get("phase").cloned().unwrap_or(Value::Null);
-    if &current_phase != &json!("idle")
-        && &current_phase != &json!("compounding-complete")
+    if current_phase != json!("idle")
+        && current_phase != json!("compounding-complete")
     {
         // The lane road (D1): a concrete, runnable escape that never reads
         // `state.json` at all, so it starts cleanly no matter who — or what —
@@ -482,14 +481,13 @@ pub(crate) fn start_default(
 
     // F5: scoped per-feature — a handoff naming a DIFFERENT feature no longer
     // blocks this start.
-    if let Some(handoff) = read_handoff(root)? {
-        if &jget(&handoff, "feature").cloned().unwrap_or(Value::Null) == &json!(feature)
+    if let Some(handoff) = read_handoff(root)?
+        && jget(&handoff, "feature").cloned().unwrap_or(Value::Null) == json!(feature)
         {
             return Ok(Err(format!(
                 "startFeature: refused — .bee/HANDOFF.json names feature \"{feature}\"; its paused work must resume or close before this feature restarts. FIX: resume the handoff (or explicitly delete HANDOFF.json once its work is truly abandoned), then retry."
             )));
         }
-    }
 
     // msn-20 D3 RETIRED the old "another session is active, wait" precondition
     // — applyWritePolicy above is its replacement, so nothing stands here.
@@ -508,7 +506,7 @@ pub(crate) fn start_default(
     if let Some(acting) = acting_session {
         let own_holds: Vec<_> = active_reservations
             .iter()
-            .filter(|r| &r.session.clone().unwrap_or(Value::Null) == &json!(acting))
+            .filter(|r| r.session.clone().unwrap_or(Value::Null) == json!(acting))
             .collect();
         if !own_holds.is_empty() {
             let mut agents: Vec<String> = Vec::new();
@@ -540,7 +538,7 @@ pub(crate) fn start_default(
             .iter()
             .filter(|r| {
                 let same_session =
-                    acting_session.is_some_and(|a| &r.session.clone().unwrap_or(Value::Null) == &json!(a));
+                    acting_session.is_some_and(|a| r.session.clone().unwrap_or(Value::Null) == json!(a));
                 !same_session && declared.iter().any(|d| paths_overlap(&r.path, d))
             })
             .collect();
@@ -555,7 +553,7 @@ pub(crate) fn start_default(
     let cells = list_all_cells_for_start(root)?;
     let claimed: Vec<String> = cells
         .iter()
-        .filter(|c| &cell_field(c, "status") == &json!("claimed"))
+        .filter(|c| cell_field(c, "status") == json!("claimed"))
         .map(cell_id_disp)
         .collect();
     if !claimed.is_empty() {

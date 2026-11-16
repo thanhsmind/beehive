@@ -426,8 +426,8 @@ fn execute_to<W: std::io::Write>(
     if let Some(warning) = &plan.handoff_warning {
         parts.push(warning.clone());
     }
-    if let Some(nudge) = &plan.nudge {
-        if nudge.inject {
+    if let Some(nudge) = &plan.nudge
+        && nudge.inject {
             // maybeAnchorNudge's own try/catch: a markInjected throw is
             // logged with source "anchor-nudge" and the nudge is dropped.
             match mark_injected(root, ANCHOR_NUDGE_KEY, &nudge.hash) {
@@ -435,7 +435,6 @@ fn execute_to<W: std::io::Write>(
                 Err(err) => log_crash(Some(root), HOOK_NAME, &err, Some("anchor-nudge")),
             }
         }
-    }
     // c80debd7 delivery. Stamp FIRST, print second — the anchor nudge's own
     // order, and for the same reason: a row whose stamp failed stays pending
     // and is offered again next turn, while a printed-then-unstamped row
@@ -1147,11 +1146,10 @@ fn list_cells_top(root: &Path) -> Pf<Vec<Value>> {
         if entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
             continue;
         }
-        if let Some(cell) = read_json_pf(&entry.path())? {
-            if js_truthy(&cell) && (cell.is_object() || cell.is_array()) {
+        if let Some(cell) = read_json_pf(&entry.path())?
+            && js_truthy(&cell) && (cell.is_object() || cell.is_array()) {
                 cells.push(cell);
             }
-        }
     }
     // listCells sorts by String(id).localeCompare(.., 'en', {numeric:true});
     // the order is unobservable downstream (see module header) — a natural
@@ -1239,22 +1237,20 @@ fn read_cell(root: &Path, id: &str) -> Pf<Option<Value>> {
         return Ok(None);
     }
     let cells_dir = root.join(".bee").join("cells");
-    if let Some(v) = read_json_pf(&cells_dir.join(format!("{id}.json")))? {
-        if !v.is_null() {
+    if let Some(v) = read_json_pf(&cells_dir.join(format!("{id}.json")))?
+        && !v.is_null() {
             return Ok(Some(v));
         }
-    }
     let archive = cells_dir.join("archive");
     let Ok(entries) = std::fs::read_dir(&archive) else { return Ok(None) };
     for entry in entries.flatten() {
         if !entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
             continue;
         }
-        if let Some(v) = read_json_pf(&entry.path().join(format!("{id}.json")))? {
-            if !v.is_null() {
+        if let Some(v) = read_json_pf(&entry.path().join(format!("{id}.json")))?
+            && !v.is_null() {
                 return Ok(Some(v));
             }
-        }
     }
     Ok(None)
 }
@@ -1305,11 +1301,10 @@ fn claim_store_cell_ids(control_root: &Path, session: &str) -> Pf<Vec<String>> {
     for entry in entries.flatten() {
         let name = entry.file_name().to_string_lossy().into_owned();
         let Some(id) = name.strip_suffix(".json") else { continue };
-        if let Some(claim) = read_claim(control_root, id)? {
-            if claim_session_of(&claim).as_deref() == Some(session) {
+        if let Some(claim) = read_claim(control_root, id)?
+            && claim_session_of(&claim).as_deref() == Some(session) {
                 ids.push(id.to_string());
             }
-        }
     }
     Ok(ids)
 }
@@ -1322,11 +1317,10 @@ fn claimed_cells(root: &Path, control_root: &Path, session: Option<&str>) -> Pf<
         let Some(id) = cell.get("id").and_then(Value::as_str).map(str::to_string) else {
             continue;
         };
-        if attributed_to_session(root, control_root, &cell, session)? {
-            if seen.insert(id.clone()) {
+        if attributed_to_session(root, control_root, &cell, session)?
+            && seen.insert(id.clone()) {
                 owned.push((id, cell));
             }
-        }
     }
     if let Some(s) = session {
         for id in claim_store_cell_ids(control_root, s)? {
@@ -1381,7 +1375,7 @@ fn claimed_cell_id(cells: &[Value]) -> Option<String> {
     sorted
         .first()
         .and_then(|c| c.get("id"))
-        .map(|v| jsjson::js_to_string(v))
+        .map(jsjson::js_to_string)
 }
 
 // ─── intent.mjs: anchor presence ────────────────────────────────────────────
@@ -1426,11 +1420,10 @@ fn intent_anchor_present(
     if let Some(f) = feature {
         candidates.push(sanitize_intent_key(&f));
     }
-    if let Some(sid) = session_id {
-        if !sid.trim().is_empty() {
+    if let Some(sid) = session_id
+        && !sid.trim().is_empty() {
             candidates.push(sanitize_intent_key(sid));
         }
-    }
     candidates.push("default".to_string());
     let mut uniq: Vec<String> = Vec::new();
     for c in candidates {
@@ -1440,11 +1433,10 @@ fn intent_anchor_present(
     }
     for key in uniq {
         let file = root.join(".bee").join("intent").join(format!("{key}.json"));
-        if let Some(Value::Object(raw)) = read_json_pf(&file)? {
-            if matches!(raw.get("request"), Some(Value::String(s)) if !s.trim().is_empty()) {
+        if let Some(Value::Object(raw)) = read_json_pf(&file)?
+            && matches!(raw.get("request"), Some(Value::String(s)) if !s.trim().is_empty()) {
                 return Ok(true);
             }
-        }
     }
     Ok(false)
 }
@@ -1488,11 +1480,10 @@ fn anchor_missing(
     let mut message = String::from("bee: work is active and NO INTENT ANCHOR is stored");
     if feature_truthy {
         message.push_str(&format!(" (feature={}", jsjson::js_to_string(&feature)));
-        if let Some(c) = &cell {
-            if !c.is_empty() {
+        if let Some(c) = &cell
+            && !c.is_empty() {
                 message.push_str(&format!(" cell={c}"));
             }
-        }
         message.push(')');
     }
     message.push_str(". ");
@@ -1655,11 +1646,10 @@ fn try_stale_takeover(lock_path: &Path, now_ms: i64) -> bool {
         let _ = std::fs::remove_file(&stale_path);
         return true;
     }
-    if std::fs::metadata(lock_path).is_err() {
-        if std::fs::rename(&stale_path, lock_path).is_ok() {
+    if std::fs::metadata(lock_path).is_err()
+        && std::fs::rename(&stale_path, lock_path).is_ok() {
             return false;
         }
-    }
     let _ = std::fs::remove_file(&stale_path);
     false
 }
@@ -1751,13 +1741,11 @@ fn acquire_store_lock_once(root: &Path, name: &str) -> Result<Option<LockGuard>,
     let mut acquired = try_acquire(&lock_path, &Value::Object(body.clone()))?;
     let mut contended_holder_session: Option<Value> = None;
     if !acquired {
-        if let Some(contending) = read_holder(&lock_path) {
-            if contending.is_object() {
-                if let Some(s) = contending.get("session").filter(|v| js_truthy(v)) {
+        if let Some(contending) = read_holder(&lock_path)
+            && contending.is_object()
+                && let Some(s) = contending.get("session").filter(|v| js_truthy(v)) {
                     contended_holder_session = Some(s.clone());
                 }
-            }
-        }
         if try_stale_takeover(&lock_path, now) {
             body.insert("ts".into(), Value::String(now_iso()));
             acquired = try_acquire(&lock_path, &Value::Object(body))?;
@@ -1948,17 +1936,15 @@ fn renew_claim_ttl(root: &Path, sid: &str, now: i64) -> Result<(), String> {
             continue; // skipped — never waited on
         }
         let result = (|| -> Result<(), String> {
-            if let Some(claim) = read_claim_lenient(root, cell) {
-                if claim_session_of(&claim).as_deref() == Some(sid) {
-                    if let Value::Object(mut m) = claim {
+            if let Some(claim) = read_claim_lenient(root, cell)
+                && claim_session_of(&claim).as_deref() == Some(sid)
+                    && let Value::Object(mut m) = claim {
                         m.insert("claimed_at".into(), Value::String(iso_from_ms(now)));
                         write_json_retry(
                             &claims_dir(root).join(format!("{cell}.json")),
                             &Value::Object(m),
                         )?;
                     }
-                }
-            }
             Ok(())
         })();
         release_gate(root, cell);
@@ -2046,11 +2032,10 @@ fn renew_holds_by_session(root: &Path, sid: &str, now: i64) -> Result<(), String
                 continue;
             }
             // readLeaseSafe: corrupt → silently treated as "no info".
-            if let Ok(text) = std::fs::read_to_string(entry.path()) {
-                if let Ok(v) = serde_json::from_str::<Value>(&text) {
+            if let Ok(text) = std::fs::read_to_string(entry.path())
+                && let Ok(v) = serde_json::from_str::<Value>(&text) {
                     records.push(v);
                 }
-            }
         }
     }
     for record in records {

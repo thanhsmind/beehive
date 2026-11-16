@@ -130,11 +130,10 @@ pub(crate) fn dangling_source_candidate(entry: &str) -> Option<String> {
         return None;
     }
     let slash = token.find('/')?;
-    if let Some(colon) = token.find(':') {
-        if colon < slash {
+    if let Some(colon) = token.find(':')
+        && colon < slash {
             return None; // scheme-shaped prefix — a URL or an ssh remote, never a repo path
         }
-    }
     Some(token.to_string())
 }
 
@@ -422,11 +421,10 @@ pub(crate) fn target_resolves(
         if glob_resolves(dir, target) {
             return true;
         }
-    } else if let Ok(Some(p)) = resolve_inside_bundle(dir, target) {
-        if p.exists() {
+    } else if let Ok(Some(p)) = resolve_inside_bundle(dir, target)
+        && p.exists() {
             return true;
         }
-    }
     // 2. Repo-root
     if let Some(root) = repo_root {
         if target.contains('*') {
@@ -459,11 +457,10 @@ pub(crate) fn resolve_target_files(
         if !bundle_matches.is_empty() {
             return bundle_matches;
         }
-    } else if let Ok(Some(p)) = resolve_inside_bundle(dir, target) {
-        if p.is_file() {
+    } else if let Ok(Some(p)) = resolve_inside_bundle(dir, target)
+        && p.is_file() {
             return vec![p];
         }
-    }
     if let Some(root) = repo_root {
         if target.contains('*') {
             return resolve_glob_paths(root, target)
@@ -560,14 +557,13 @@ pub(crate) fn collect_files_recursive(dir: &Path, root: &Path, out: &mut Vec<(St
             let path = entry.path();
             if path.is_dir() {
                 collect_files_recursive(&path, root, out);
-            } else if path.is_file() {
-                if let Ok(rel) = path.strip_prefix(root) {
+            } else if path.is_file()
+                && let Ok(rel) = path.strip_prefix(root) {
                     let rel_str = rel.to_string_lossy().replace('\\', "/");
                     if !is_exempt_tree(&rel_str) {
                         out.push((rel_str, path));
                     }
                 }
-            }
         }
     }
 }
@@ -913,15 +909,14 @@ pub(crate) fn check_bundle(dir: &Path, strict: bool) -> Option<CheckReport> {
                 }
             }
         }
-        if let Some(sup) = str_field(&bee, "supersedes") {
-            if !by_id.iter().any(|(k, _)| k == sup) {
+        if let Some(sup) = str_field(&bee, "supersedes")
+            && !by_id.iter().any(|(k, _)| k == sup) {
                 warnings.push(finding(
                     &concept.path,
                     "dangling_supersedes",
                     format!("supersedes target id \"{sup}\" matches no concept's bee.id in the bundle"),
                 ));
             }
-        }
         if let (Some(root), Some(Value::Array(sources))) = (repo_root, bee.get("sources")) {
             for source in sources {
                 let Value::String(s) = source else { continue };
@@ -996,8 +991,8 @@ pub(crate) fn check_bundle(dir: &Path, strict: bool) -> Option<CheckReport> {
             }
         }
         for (key, val) in &bee {
-            if key.starts_with("owns.") {
-                if let Value::Array(targets) = val {
+            if key.starts_with("owns.")
+                && let Value::Array(targets) = val {
                     for target in targets {
                         let Value::String(s) = target else { continue };
                         if !target_resolves(dir, repo_root, s, &mut notes) {
@@ -1012,7 +1007,6 @@ pub(crate) fn check_bundle(dir: &Path, strict: bool) -> Option<CheckReport> {
                         }
                     }
                 }
-            }
         }
     }
 

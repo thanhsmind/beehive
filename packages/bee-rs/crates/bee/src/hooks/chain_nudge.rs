@@ -178,11 +178,10 @@ When the wave is clean, move to the next wave or the next chain step."
 
 fn get_agent_name(payload: &Map<String, Value>) -> String {
     for key in ["agent_name", "agentName", "agent_nickname", "subagent_type", "agent_type"] {
-        if let Some(Value::String(s)) = payload.get(key) {
-            if !s.trim().is_empty() {
+        if let Some(Value::String(s)) = payload.get(key)
+            && !s.trim().is_empty() {
                 return s.trim().to_string();
             }
-        }
     }
     String::new()
 }
@@ -202,11 +201,10 @@ fn worker_name_matches(entry: &Value, agent: &str) -> bool {
         Value::String(s) => s == agent,
         Value::Object(m) => {
             for key in ["nickname", "name", "agent", "worker"] {
-                if let Some(v) = m.get(key) {
-                    if truthy(v) {
+                if let Some(v) = m.get(key)
+                    && truthy(v) {
                         return matches!(v, Value::String(s) if s == agent);
                     }
-                }
             }
             false // all falsy -> "" — caller guarantees agent != ""
         }
@@ -821,11 +819,10 @@ fn best_scribing_stamp_ms(
     let ledger = read_jsonl(&root.join(".bee").join("logs").join("scribing-runs.jsonl"));
     let mut best: Option<f64> = None;
     let mut consider = |ms: Option<f64>| {
-        if let Some(v) = ms {
-            if best.is_none() || v > best.unwrap() {
+        if let Some(v) = ms
+            && (best.is_none() || v > best.unwrap()) {
                 best = Some(v);
             }
-        }
     };
     for entry in &ledger {
         // JS `if (!entry || entry.feature !== feature) continue` — a truthy
@@ -842,15 +839,14 @@ fn best_scribing_stamp_ms(
         let name = f.trim();
         if !name.is_empty() && well_formed_id(name) {
             let file = root.join(".bee").join("lanes").join(format!("{name}.json"));
-            if file.exists() {
-                if let Some(lane) = read_lane_record(root, name, &file) {
+            if file.exists()
+                && let Some(lane) = read_lane_record(root, name, &file) {
                     consider(scribing_run_stamp_ms(lane.get("last_scribing_run")));
                 }
-            }
         }
     }
-    if let Some(run) = state.get("last_scribing_run") {
-        if truthy(run) {
+    if let Some(run) = state.get("last_scribing_run")
+        && truthy(run) {
             let run_feature = match run {
                 Value::Object(m) => m.get("feature"),
                 _ => None,
@@ -859,7 +855,6 @@ fn best_scribing_stamp_ms(
                 consider(scribing_run_stamp_ms(Some(run)));
             }
         }
-    }
     best
 }
 

@@ -443,11 +443,10 @@ pub(crate) fn resolve_session_id_no_flag(root: &Path) -> R2<Option<String>> {
             fresh.push(r);
         }
     }
-    if fresh.len() == 1 {
-        if let Some(Value::String(id)) = fresh[0].get("id") {
+    if fresh.len() == 1
+        && let Some(Value::String(id)) = fresh[0].get("id") {
             return Ok(Some(id.clone()));
         }
-    }
     Ok(None)
 }
 

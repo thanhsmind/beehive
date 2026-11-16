@@ -557,16 +557,14 @@ fn compute_skill_sync_target(input: TargetInput<'_>) -> SkillTarget {
         return target;
     }
     let mut older: Vec<String> = Vec::new();
-    if let (Some(sv), Some(hv)) = (input.source_version.value(), input.host_version.value()) {
-        if compare_versions(sv, hv).is_lt() {
+    if let (Some(sv), Some(hv)) = (input.source_version.value(), input.host_version.value())
+        && compare_versions(sv, hv).is_lt() {
             older.push(format!("host_helpers {hv}"));
         }
-    }
-    if let (Some(sv), Some(iv)) = (input.source_version.value(), installed_version.value()) {
-        if compare_versions(sv, iv).is_lt() {
+    if let (Some(sv), Some(iv)) = (input.source_version.value(), installed_version.value())
+        && compare_versions(sv, iv).is_lt() {
             older.push(format!("installed_skills {iv}"));
         }
-    }
     if !older.is_empty() {
         let all_numeric = input.source_version.is_resolved()
             && input.host_version.is_resolved()
@@ -708,11 +706,10 @@ fn compute_legacy_global_refresh(
             Some(&global_root),
         )
     };
-    if let (Some(sv), Some(iv)) = (source_version.value(), installed_version.value()) {
-        if compare_versions(sv, iv).is_lt() {
+    if let (Some(sv), Some(iv)) = (source_version.value(), installed_version.value())
+        && compare_versions(sv, iv).is_lt() {
             return out; // never downgrade the legacy global
         }
-    }
     for it in compute_skill_items(sources, &global_root, "claude") {
         let action = it["action"].as_str().unwrap_or("").to_string();
         if action == "remove_skill" {

@@ -164,23 +164,22 @@ pub(crate) fn rebuild_state_projection_reporting(
     if truthy(&feature) {
         // Branch (1) — feature-matched (msn-10).
         // A non-string truthy feature never `===` a record's string feature.
-        if let Value::String(f) = &feature {
-            if let Some(wf) = find_live_workflow(&workflows, f) {
+        if let Value::String(f) = &feature
+            && let Some(wf) = find_live_workflow(&workflows, f) {
                 let source = wf.get("id").cloned().unwrap_or(Value::Null);
                 let mut next = current.clone();
                 apply_workflow_d1_fields(&mut next, wf);
                 write_state(root, &next)?;
                 return Ok(Proj { authoritative: true, source, record: next });
             }
-        }
         // feature set, no live workflow names it → the idle-bootstrap branch
         // below requires `!current.feature`, so this is always a no-op.
         return Ok(no_op(current));
     }
     // Branch (2) — idle bootstrap (msn-7).
     let phase = current.get("phase").cloned().unwrap_or(Value::Null);
-    let current_is_idle = &phase == &json!("idle")
-        || &phase == &json!("compounding-complete")
+    let current_is_idle = phase == json!("idle")
+        || phase == json!("compounding-complete")
         || !truthy(&phase);
     if !current_is_idle {
         return Ok(no_op(current));

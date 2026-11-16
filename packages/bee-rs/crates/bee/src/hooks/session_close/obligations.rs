@@ -60,8 +60,8 @@ fn matches_scope_words(text: &str, words: &[&str]) -> bool {
         }
         for (start, matched) in text_lower.match_indices(&w_lower) {
             let end = start + matched.len();
-            let left_ok = start == 0 || text_lower[..start].chars().next_back().map_or(true, |c| !c.is_alphanumeric());
-            let right_ok = end == text_lower.len() || text_lower[end..].chars().next().map_or(true, |c| !c.is_alphanumeric());
+            let left_ok = start == 0 || text_lower[..start].chars().next_back().is_none_or(|c| !c.is_alphanumeric());
+            let right_ok = end == text_lower.len() || text_lower[end..].chars().next().is_none_or(|c| !c.is_alphanumeric());
             if left_ok && right_ok {
                 return true;
             }
@@ -79,21 +79,18 @@ fn text_sha256(text: &str) -> String {
 fn resolve_feature(root: &Path, ctl: &Path) -> String {
     for base in [root, ctl] {
         let state_file = base.join(".bee").join("state.json");
-        if let ReadJson::Parsed(Value::Object(m)) = read_json_failopen(&state_file) {
-            if let Some(f) = m.get("feature").and_then(Value::as_str) {
-                if !f.is_empty() {
+        if let ReadJson::Parsed(Value::Object(m)) = read_json_failopen(&state_file)
+            && let Some(f) = m.get("feature").and_then(Value::as_str)
+                && !f.is_empty() {
                     return f.to_string();
                 }
-            }
-        }
     }
     for base in [root, ctl] {
         for cell in list_claimed_cells(base).unwrap_or_default() {
-            if let Some(f) = cell.get("feature").and_then(Value::as_str) {
-                if !f.is_empty() {
+            if let Some(f) = cell.get("feature").and_then(Value::as_str)
+                && !f.is_empty() {
                     return f.to_string();
                 }
-            }
         }
     }
     String::new()
@@ -109,20 +106,16 @@ fn has_decision_after(root: &Path, ctl: &Path, input_time: &str) -> bool {
     let mut superseded: std::collections::HashSet<String> = std::collections::HashSet::new();
     let mut redacted: std::collections::HashSet<String> = std::collections::HashSet::new();
     for event in &events {
-        if event.get("type").and_then(Value::as_str) == Some("supersede") {
-            if let Some(target) = event.get("supersedes") {
-                if let Some(k) = super::primitive_key(target) {
+        if event.get("type").and_then(Value::as_str) == Some("supersede")
+            && let Some(target) = event.get("supersedes")
+                && let Some(k) = super::primitive_key(target) {
                     superseded.insert(k);
                 }
-            }
-        }
-        if event.get("type").and_then(Value::as_str) == Some("redact") {
-            if let Some(target) = event.get("redacts") {
-                if let Some(k) = super::primitive_key(target) {
+        if event.get("type").and_then(Value::as_str) == Some("redact")
+            && let Some(target) = event.get("redacts")
+                && let Some(k) = super::primitive_key(target) {
                     redacted.insert(k);
                 }
-            }
-        }
     }
     for event in &events {
         let ty = event.get("type").and_then(Value::as_str);
@@ -130,16 +123,14 @@ fn has_decision_after(root: &Path, ctl: &Path, input_time: &str) -> bool {
             continue;
         }
         let id_key = event.get("id").and_then(super::primitive_key);
-        if let Some(k) = &id_key {
-            if superseded.contains(k) || redacted.contains(k) {
+        if let Some(k) = &id_key
+            && (superseded.contains(k) || redacted.contains(k)) {
                 continue;
             }
-        }
-        if let Some(date) = event.get("date").and_then(Value::as_str) {
-            if date > input_time {
+        if let Some(date) = event.get("date").and_then(Value::as_str)
+            && date > input_time {
                 return true;
             }
-        }
     }
     false
 }
@@ -319,11 +310,9 @@ Log it with bee decisions log or ask the user: \
 a change to an approved plan reopens the gate and only the user answers it. \
 For a false match, skip it: /bee-obligation-skip {key}"
             ),
-            "user_notice": format!(
-                "bee: typed input reads as a scope change to an approved plan. \
+            "user_notice": "bee: typed input reads as a scope change to an approved plan. \
 One extra turn starts now to log it or ask the user. \
-(Esc stops it. This message will not repeat for this input.)"
-            ),
+(Esc stops it. This message will not repeat for this input.)".to_string(),
         }));
     }
     let mut seen = std::collections::HashSet::new();
@@ -361,8 +350,8 @@ fn has_running_registered_worker(root: &Path, cell_id: &str) -> bool {
                 return true;
             }
         }
-        if mailbox_dir.is_dir() {
-            if let Ok(entries) = std::fs::read_dir(&mailbox_dir) {
+        if mailbox_dir.is_dir()
+            && let Ok(entries) = std::fs::read_dir(&mailbox_dir) {
                 for entry in entries.flatten() {
                     let Ok(ft) = entry.file_type() else { continue };
                     if !ft.is_dir() {
@@ -374,7 +363,6 @@ fn has_running_registered_worker(root: &Path, cell_id: &str) -> bool {
                     }
                 }
             }
-        }
     }
     false
 }
@@ -385,56 +373,50 @@ fn has_result_file(dir: &Path) -> bool {
     };
     for entry in entries.flatten() {
         let name = entry.file_name().to_string_lossy().into_owned();
-        if let Some(digits) = name.strip_prefix("result-").and_then(|s| s.strip_suffix(".json")) {
-            if !digits.is_empty() && digits.bytes().all(|b| b.is_ascii_digit()) {
+        if let Some(digits) = name.strip_prefix("result-").and_then(|s| s.strip_suffix(".json"))
+            && !digits.is_empty() && digits.bytes().all(|b| b.is_ascii_digit()) {
                 return true;
             }
-        }
     }
     false
 }
 
 fn job_dir_matches_worker_or_cell(dir: &Path, nickname: Option<&str>, cell_id: &str) -> bool {
     let dir_name = dir.file_name().and_then(|n| n.to_str()).unwrap_or("");
-    if let Some(nick) = nickname {
-        if dir_name == nick {
+    if let Some(nick) = nickname
+        && dir_name == nick {
             return true;
         }
-    }
     let job_file = dir.join("job.json");
     if let ReadJson::Parsed(Value::Object(job)) = read_json_failopen(&job_file) {
         if job.get("cell_id").and_then(Value::as_str) == Some(cell_id) {
             return true;
         }
-        if let Some(nick) = nickname {
-            if job.get("job_id").and_then(Value::as_str) == Some(nick) {
+        if let Some(nick) = nickname
+            && job.get("job_id").and_then(Value::as_str) == Some(nick) {
                 return true;
             }
-        }
-        if let Some(task) = job.get("task").and_then(Value::as_str) {
-            if task.contains(&format!("cell: {cell_id}"))
+        if let Some(task) = job.get("task").and_then(Value::as_str)
+            && (task.contains(&format!("cell: {cell_id}"))
                 || task.contains(&format!("\"cell_id\": \"{cell_id}\""))
-                || task.contains(&format!("Assigned cell id: {cell_id}"))
+                || task.contains(&format!("Assigned cell id: {cell_id}")))
             {
                 return true;
             }
-        }
     }
     if let Ok(rd) = std::fs::read_dir(dir) {
         for e in rd.flatten() {
             let name = e.file_name().to_string_lossy().into_owned();
-            if name.starts_with("ack-") && name.ends_with(".json") {
-                if let ReadJson::Parsed(Value::Object(ack)) = read_json_failopen(&e.path()) {
+            if name.starts_with("ack-") && name.ends_with(".json")
+                && let ReadJson::Parsed(Value::Object(ack)) = read_json_failopen(&e.path()) {
                     if ack.get("cell_id").and_then(Value::as_str) == Some(cell_id) {
                         return true;
                     }
-                    if let Some(nick) = nickname {
-                        if ack.get("nickname").and_then(Value::as_str) == Some(nick) {
+                    if let Some(nick) = nickname
+                        && ack.get("nickname").and_then(Value::as_str) == Some(nick) {
                             return true;
                         }
-                    }
                 }
-            }
         }
     }
     false

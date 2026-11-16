@@ -337,13 +337,12 @@ pub(crate) fn validate_new_cell_problems(root: &Path, cell: &Value) -> MR<Vec<St
     } else {
         None
     };
-    if let Some(id) = &id {
-        if !id_pattern_ok(id) {
+    if let Some(id) = &id
+        && !id_pattern_ok(id) {
             problems.push(format!(
                 "addCell: invalid id \"{id}\" — use letters, digits, dot, dash, underscore (e.g. \"auth-3\")."
             ));
         }
-    }
     // slp-contract S4 (D3, store 9c0104e0): a NEW cell's `status` must be
     // "open", or absent — `normalize_new_cell` defaults an absent or falsy
     // status to "open", and that default is the whole allowed shape.
@@ -429,11 +428,10 @@ pub(crate) fn validate_new_cell_problems(root: &Path, cell: &Value) -> MR<Vec<St
             ROLE_VOCABULARY.join(", ")
         ));
     }
-    if let Some(pbi) = map.get("pbi") {
-        if !matches!(pbi, Value::Null | Value::String(_)) {
+    if let Some(pbi) = map.get("pbi")
+        && !matches!(pbi, Value::Null | Value::String(_)) {
             problems.push("addCell: optional \"pbi\" must be a string backlog id when present.".into());
         }
-    }
     // D4 (store `97ce5225`): there is deliberately NO check on `tier` here
     // any more. The optional add-time enum went with the selector — an author
     // declares `role`, and nothing bee ships tells anyone to set a tier. A
@@ -465,8 +463,8 @@ pub(crate) fn validate_new_cell_problems(root: &Path, cell: &Value) -> MR<Vec<St
             ));
         }
     }
-    if let Some(budgets) = map.get("budgets") {
-        if !matches!(budgets, Value::Null) {
+    if let Some(budgets) = map.get("budgets")
+        && !matches!(budgets, Value::Null) {
             match budgets {
                 Value::Object(budget_map) => {
                     let unknown_key = budget_map.keys().find(|key| !BUDGET_KEYS.contains(&key.as_str()));
@@ -496,19 +494,16 @@ pub(crate) fn validate_new_cell_problems(root: &Path, cell: &Value) -> MR<Vec<St
                 ),
             }
         }
-    }
-    if let Some(ack) = map.get(REGEN_ACK_FIELD) {
-        if !matches!(ack, Value::Null) && !nonblank_string(Some(ack)) {
+    if let Some(ack) = map.get(REGEN_ACK_FIELD)
+        && !matches!(ack, Value::Null) && !nonblank_string(Some(ack)) {
             problems.push(format!(
                 "addCell: optional \"{REGEN_ACK_FIELD}\" must be a non-empty string (the one-line reason the derived regen obligation is being skipped)."
             ));
         }
-    }
-    if let Some(id) = &id {
-        if read_cell_norm(root, id)?.map(|v| js_truthy(&v)).unwrap_or(false) {
+    if let Some(id) = &id
+        && read_cell_norm(root, id)?.map(|v| js_truthy(&v)).unwrap_or(false) {
             problems.push(format!("addCell: cell \"{id}\" already exists."));
         }
-    }
     match assert_regen_obligation(map, "addCell") {
         Ok(()) => {}
         Err(Fail::Thrown(message)) => problems.push(message),
@@ -923,24 +918,20 @@ pub(crate) fn check_cell_budgets(cell: &Map<String, Value>) -> MR<BudgetCheck> {
 /// Resolves the approved preview packet from `.bee/lanes/<feature>.json` or `.bee/state.json`.
 pub(crate) fn get_approved_preview_packet(root: &Path, feature: &str) -> Option<Map<String, Value>> {
     let lane_file = lanes_dir(root).join(format!("{feature}.json"));
-    if let Ok(text) = std::fs::read_to_string(&lane_file) {
-        if let Ok(Value::Object(m)) = serde_json::from_str(&text) {
-            if let Some(Value::Object(p)) = m.get("approved_cell_packet").or_else(|| m.get("gate_preview")) {
+    if let Ok(text) = std::fs::read_to_string(&lane_file)
+        && let Ok(Value::Object(m)) = serde_json::from_str(&text)
+            && let Some(Value::Object(p)) = m.get("approved_cell_packet").or_else(|| m.get("gate_preview")) {
                 return Some(p.clone());
             }
-        }
-    }
     let state_file = root.join(".bee").join("state.json");
-    if let Ok(text) = std::fs::read_to_string(&state_file) {
-        if let Ok(Value::Object(m)) = serde_json::from_str(&text) {
+    if let Ok(text) = std::fs::read_to_string(&state_file)
+        && let Ok(Value::Object(m)) = serde_json::from_str(&text) {
             let feat_match = m.get("feature").and_then(Value::as_str) == Some(feature);
-            if feat_match {
-                if let Some(Value::Object(p)) = m.get("approved_cell_packet").or_else(|| m.get("gate_preview")) {
+            if feat_match
+                && let Some(Value::Object(p)) = m.get("approved_cell_packet").or_else(|| m.get("gate_preview")) {
                     return Some(p.clone());
                 }
-            }
         }
-    }
     None
 }
 

@@ -62,11 +62,10 @@ fn home(root: &Path, feature: &str) -> Home {
         return Home::None;
     }
     // `lane_path` refuses a path-shaped feature; that refusal is "no lane".
-    if let Ok(path) = lane_path(root, feature) {
-        if path.exists() {
+    if let Ok(path) = lane_path(root, feature)
+        && path.exists() {
             return Home::Lane;
         }
-    }
     // The PEEK read (never the strict one): a corrupt default record is
     // "no home", not a throw — fail-open is the whole contract here.
     let Ok(state) = read_state_peek(root) else { return Home::None };

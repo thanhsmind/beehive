@@ -25,7 +25,7 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
     }
     let verb = args.get(1)?.to_str()?;
     let toks: Vec<&str> = args[2..].iter().map(|a| a.to_str()).collect::<Option<Vec<_>>>()?;
-    if toks.iter().any(|t| *t == "--help") {
+    if toks.contains(&"--help") {
         return None; // Node renders command-scoped help
     }
     let pre_json = pre_json_scan(&toks);
@@ -210,16 +210,14 @@ pub(crate) fn run_list(flags: Flags, json: bool, pre_json: bool, t0: Instant) ->
         let c_type = str_field(&concept.data, "type");
         let lifecycle = str_field(&bee, "lifecycle");
         let title = str_field(&concept.data, "title");
-        if let Some(t) = &f_type {
-            if c_type != Some(t.as_str()) {
+        if let Some(t) = &f_type
+            && c_type != Some(t.as_str()) {
                 continue;
             }
-        }
-        if let Some(l) = &f_lifecycle {
-            if lifecycle != Some(l.as_str()) {
+        if let Some(l) = &f_lifecycle
+            && lifecycle != Some(l.as_str()) {
                 continue;
             }
-        }
         if let Some(a) = &f_area {
             let areas = bee.get("areas");
             let member = matches!(areas, Some(Value::Array(items)) if items.iter().any(|v| matches!(v, Value::String(s) if s == a)));

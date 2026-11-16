@@ -149,7 +149,7 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
         .iter()
         .map(|a| a.to_str())
         .collect::<Option<Vec<_>>>()?;
-    if toks.iter().any(|t| *t == "--help") {
+    if toks.contains(&"--help") {
         return None; // Node renders command-scoped help
     }
     let (flags, use_json) = parse_flags(&toks)?;

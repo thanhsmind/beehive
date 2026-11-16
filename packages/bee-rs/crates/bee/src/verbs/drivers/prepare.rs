@@ -108,11 +108,10 @@ pub(crate) fn finish_serving_granted(
     mut out: crate::verbs::reservations::R2<crate::verbs::reservations::Out>,
     served_main: Option<&Path>,
 ) -> Option<ExitCode> {
-    if let Some(main_root) = served_main {
-        if let Ok(crate::verbs::reservations::Out::Emit(ref mut result, ref mut text, _)) = out {
+    if let Some(main_root) = served_main
+        && let Ok(crate::verbs::reservations::Out::Emit(ref mut result, ref mut text, _)) = out {
             augment_served_output(result, text, main_root);
         }
-    }
     crate::verbs::reservations::finish(ctx, out)
 }
 
@@ -271,7 +270,7 @@ pub(crate) fn pi_requires_herding_refusal(slot: &str, resolved: &Resolved, escal
 ///
 /// Returns None if the entry does not match either shape or carries an empty
 /// argv array.
-pub(crate) fn agent_first_argv<'a>(entry: &'a Value) -> Option<&'a str> {
+pub(crate) fn agent_first_argv(entry: &Value) -> Option<&str> {
     match entry {
         Value::Array(tokens) => tokens.first().and_then(Value::as_str),
         Value::Object(obj) => obj
@@ -392,7 +391,7 @@ pub(crate) fn resolve_brief_file(kind: &str, path: Option<&str>) -> Result<Optio
     if kind != "advisor" {
         return Err(brief_refusal(
             "brief_kind_not_advisor",
-            &[("kind".into(), Value::String(kind.to_string()))],
+            &[("kind", Value::String(kind.to_string()))],
             format!(
                 "--brief-file is only valid with --kind advisor (got --kind {kind}). A blind lane never runs as --kind cell — the worker-cell prompt injects learned_context shared across workers, which leaks what blindness protects — and the gather/reviewer prompts carry no brief block, so a brief passed to them would be swallowed with nothing to show for it. Re-run the dispatch as --kind advisor."
             ),
@@ -402,14 +401,14 @@ pub(crate) fn resolve_brief_file(kind: &str, path: Option<&str>) -> Result<Optio
     if trimmed_path.is_empty() {
         return Err(brief_refusal(
             "brief_file_unreadable",
-            &[("path".into(), Value::String(path.to_string()))],
+            &[("path", Value::String(path.to_string()))],
             "--brief-file needs the path of a readable file holding the brief; it was given no path at all. Pass --brief-file <path>.".to_string(),
         ));
     }
     let Ok(bytes) = std::fs::read(trimmed_path) else {
         return Err(brief_refusal(
             "brief_file_unreadable",
-            &[("path".into(), Value::String(trimmed_path.to_string()))],
+            &[("path", Value::String(trimmed_path.to_string()))],
             format!(
                 "--brief-file \"{trimmed_path}\" could not be read. The path is resolved from the current working directory — check the spelling, or pass an absolute path."
             ),
@@ -419,9 +418,9 @@ pub(crate) fn resolve_brief_file(kind: &str, path: Option<&str>) -> Result<Optio
         return Err(brief_refusal(
             "brief_too_large",
             &[
-                ("path".into(), Value::String(trimmed_path.to_string())),
-                ("bytes".into(), Value::Number(Number::from(bytes.len()))),
-                ("max_bytes".into(), Value::Number(Number::from(BRIEF_MAX_BYTES))),
+                ("path", Value::String(trimmed_path.to_string())),
+                ("bytes", Value::Number(Number::from(bytes.len()))),
+                ("max_bytes", Value::Number(Number::from(BRIEF_MAX_BYTES))),
             ],
             format!(
                 "--brief-file \"{trimmed_path}\" is {} bytes; the cap is {BRIEF_MAX_BYTES} bytes. A brief is the QUESTION plus its constraints and read diet — anything longer is context, which the lane reads for itself from the paths the brief names. Cut it, or move the bulk into the read diet.",
@@ -432,7 +431,7 @@ pub(crate) fn resolve_brief_file(kind: &str, path: Option<&str>) -> Result<Optio
     let Ok(text) = String::from_utf8(bytes) else {
         return Err(brief_refusal(
             "brief_not_utf8",
-            &[("path".into(), Value::String(trimmed_path.to_string()))],
+            &[("path", Value::String(trimmed_path.to_string()))],
             format!(
                 "--brief-file \"{trimmed_path}\" is not valid UTF-8. It is refused rather than decoded lossily: a lossy decode would change the very bytes brief_sha256 exists to pin, and every lane would agree on the corrupted text. Save the brief as UTF-8."
             ),
@@ -892,8 +891,8 @@ pub(crate) fn prior_round_event_lines(cell: &Value) -> Vec<String> {
         ));
     }
 
-    if let Some(Value::String(reason)) = vget(&trace, "reopened_reason") {
-        if !js_trim(reason).is_empty() {
+    if let Some(Value::String(reason)) = vget(&trace, "reopened_reason")
+        && !js_trim(reason).is_empty() {
             events.push((
                 at_of(&trace, "reopened_at"),
                 format!(
@@ -902,9 +901,8 @@ pub(crate) fn prior_round_event_lines(cell: &Value) -> Vec<String> {
                 ),
             ));
         }
-    }
-    if let Some(rework) = vget(&trace, "reopened_for_rework") {
-        if truthy(rework) && is_plain_object(rework) {
+    if let Some(rework) = vget(&trace, "reopened_for_rework")
+        && truthy(rework) && is_plain_object(rework) {
             let reason = one_line(vget(rework, "reason"), usize::MAX);
             let reason = if reason.is_empty() {
                 "NEEDS_REVISION verdict after cap".to_string()
@@ -916,7 +914,6 @@ pub(crate) fn prior_round_event_lines(cell: &Value) -> Vec<String> {
                 format!("- (judge) reopened for rework: {reason}"),
             ));
         }
-    }
 
     // Stable sort with Node's own comparator.
     events.sort_by(|a, b| match (&a.0, &b.0) {
@@ -1059,14 +1056,10 @@ pub(crate) fn bundle_mode(root: &Path) -> D<bool> {
             continue;
         }
         let Ok(text) = knowledge::read_file_lossy(&knowledge::join_rel(&dir, &rel)) else { continue };
-        match knowledge::parse_frontmatter(&text) {
-            knowledge::Fm::Parsed { data, .. } => {
-                if matches!(data.get("type"), Some(Value::String(t)) if !t.is_empty()) {
-                    return Ok(true);
-                }
+        if let knowledge::Fm::Parsed { data, .. } = knowledge::parse_frontmatter(&text)
+            && matches!(data.get("type"), Some(Value::String(t)) if !t.is_empty()) {
+                return Ok(true);
             }
-            _ => {}
-        }
     }
     Ok(false)
 }
@@ -1398,13 +1391,11 @@ pub(crate) fn resolve_cell_advisor(
         _ => return None,
     };
 
-    if !is_cli {
-        if let Some(w_model) = worker_model_name {
-            if w_model == advisor_identity {
+    if !is_cli
+        && let Some(w_model) = worker_model_name
+            && w_model == advisor_identity {
                 return None;
             }
-        }
-    }
 
     let line = if is_cli {
         format!("{advisor_identity} — consult via {advisor_identity}, evidence bundle on stdin")
@@ -1906,8 +1897,8 @@ pub(crate) fn prepare_dispatch_wire(
     let mut resolved_worker: Option<String> = None;
 
     let default_reviewer_expertise = if kind == "reviewer"
-        && (expertise.is_none() || expertise.map_or(false, |e| e.trim().is_empty()))
-        && (brief.is_none() || brief.map_or(false, |b| b.trim().is_empty()))
+        && (expertise.is_none() || expertise.is_some_and(|e| e.trim().is_empty()))
+        && (brief.is_none() || brief.is_some_and(|b| b.trim().is_empty()))
     {
         reviewer_default_expertise_block(root)
     } else {
@@ -2064,8 +2055,8 @@ pub(crate) fn prepare_dispatch_wire(
         }
     }
 
-    if let Some(feat) = resolved_feature.as_deref() {
-        if let Some(role_plan) = crate::verbs::state_group::get_approved_role_plan(root, feat) {
+    if let Some(feat) = resolved_feature.as_deref()
+        && let Some(role_plan) = crate::verbs::state_group::get_approved_role_plan(root, feat) {
             // 1. Verify runtime matches
             let plan_runtime = role_plan
                 .get("runtime")
@@ -2179,8 +2170,8 @@ pub(crate) fn prepare_dispatch_wire(
                     }
                 };
 
-                if let Some(declared_role) = role {
-                    if declared_role != effective_role {
+                if let Some(declared_role) = role
+                    && declared_role != effective_role {
                         let mut r = Map::new();
                         r.insert("ok".into(), Value::Bool(false));
                         r.insert("type".into(), Value::String("refused".into()));
@@ -2194,7 +2185,6 @@ pub(crate) fn prepare_dispatch_wire(
                         )));
                         return Ok(Prepared::Value(Value::Object(r)));
                     }
-                }
 
                 let role_reroute_decision = cell.as_ref()
                     .and_then(|c| c.get("role_reroutes"))
@@ -2282,8 +2272,8 @@ pub(crate) fn prepare_dispatch_wire(
                     .and_then(Value::as_str)
                     .unwrap_or_default();
 
-                if let Some(declared_role) = role {
-                    if declared_role != stage_role {
+                if let Some(declared_role) = role
+                    && declared_role != stage_role {
                         let mut r = Map::new();
                         r.insert("ok".into(), Value::Bool(false));
                         r.insert("type".into(), Value::String("refused".into()));
@@ -2297,7 +2287,6 @@ pub(crate) fn prepare_dispatch_wire(
                         )));
                         return Ok(Prepared::Value(Value::Object(r)));
                     }
-                }
 
                 if stage_name == "deployment" {
                     let Some(ver) = release_version else {
@@ -2351,7 +2340,6 @@ pub(crate) fn prepare_dispatch_wire(
                 });
             }
         }
-    }
 
     let role = if role.is_some() {
         role
@@ -2726,12 +2714,11 @@ pub(crate) fn prepare_dispatch_wire(
         )));
     }
 
-    if matches!(resolved, Resolved::Herding { .. }) {
-        if let Some(Value::Object(mut refusal)) = crate::herding::wave::check_limits(root, &cfg) {
+    if matches!(resolved, Resolved::Herding { .. })
+        && let Some(Value::Object(mut refusal)) = crate::herding::wave::check_limits(root, &cfg) {
             refusal.insert("type".into(), Value::String("refused".into()));
             return Ok(Prepared::Value(Value::Object(refusal)));
         }
-    }
 
     let advisor = if kind == "cell" {
         let cell_id = cell
@@ -2969,13 +2956,12 @@ pub(crate) fn prepare_dispatch_wire(
                     command.push_str(" --cwd \"");
                     command.push_str(&root.to_string_lossy());
                     command.push('"');
-                } else if let Some((worktree_root, _control_root)) = &worktree_location {
-                    if !worktree_root.is_empty() {
+                } else if let Some((worktree_root, _control_root)) = &worktree_location
+                    && !worktree_root.is_empty() {
                         command.push_str(" --cwd \"");
                         command.push_str(worktree_root);
                         command.push('"');
                     }
-                }
                 if let Some(agent) = agent {
                     command.push_str(" --agent \"");
                     command.push_str(agent);
@@ -2984,13 +2970,12 @@ pub(crate) fn prepare_dispatch_wire(
                 // dispatch-cell-id-flag D1, D2, D3: a cell dispatch carries
                 // `--cell-id "<id>"` so `herding run`'s postflight_cap_check can
                 // identify the cell and refuse when it was not capped.
-                if kind == "cell" {
-                    if let Some(id) = cell_id {
+                if kind == "cell"
+                    && let Some(id) = cell_id {
                         command.push_str(" --cell-id \"");
                         command.push_str(id);
                         command.push('"');
                     }
-                }
                 if let Some(feature) = resolved_feature.as_deref() {
                     command.push_str(" --feature \"");
                     command.push_str(feature);
@@ -3106,8 +3091,8 @@ pub(crate) fn prepare_dispatch_wire(
                 // not — resolveAdvisor "NEVER a tier fallback" still holds); no
                 // resolvable default leaves the payload byte-identical to a
                 // slot with no `fallback` field.
-                if fallback.is_some() {
-                    if let Some(model) = CONFIGURABLE_SLOTS
+                if fallback.is_some()
+                    && let Some(model) = CONFIGURABLE_SLOTS
                         .contains(&marker_role)
                         .then(|| default_models(runtime).get(marker_role).cloned())
                         .flatten()
@@ -3124,7 +3109,6 @@ pub(crate) fn prepare_dispatch_wire(
                         );
                         payload.insert("fallback".into(), Value::Object(fb));
                     }
-                }
                 channel = "herding-exec".into();
             }
             _ if runtime == "codex" && purpose_is_gather(kind) && !is_deployment => {
@@ -3134,12 +3118,11 @@ pub(crate) fn prepare_dispatch_wire(
                 // codex exec --sandbox read-only --ephemeral ... -
                 tool = "Bash".into();
                 let mut command = "codex exec --sandbox read-only --ephemeral".to_string();
-                if let Some((worktree_root, _control_root)) = &worktree_location {
-                    if !worktree_root.is_empty() {
+                if let Some((worktree_root, _control_root)) = &worktree_location
+                    && !worktree_root.is_empty() {
                         command.push_str(" --cd ");
                         command.push_str(&shell_quote(worktree_root));
                     }
-                }
                 let (cfg_model, cfg_effort) = match &resolved {
                     Resolved::Model { model, effort } => (Some(model.as_str()), effort.as_deref()),
                     Resolved::Native { model, effort, .. } => (Some(model.as_str()), effort.as_deref()),
@@ -3279,9 +3262,9 @@ pub(crate) fn prepare_dispatch_wire(
         _ => None,
     };
 
-    if let Some(v2) = &v2_info {
-        if v2.stage.as_deref() == Some("deployment") {
-            if let Some(ver) = &v2.release_version {
+    if let Some(v2) = &v2_info
+        && v2.stage.as_deref() == Some("deployment")
+            && let Some(ver) = &v2.release_version {
                 if let Some(cmd) = payload.get("command").and_then(Value::as_str) {
                     // `bee herding run` forwards these into the worker pane
                     // (only when BEE_DISPATCH_ID is set), where release.sh
@@ -3313,15 +3296,12 @@ pub(crate) fn prepare_dispatch_wire(
                         if let Value::String(s) = p {
                             s.push_str(&env_lines);
                         }
-                    } else if let Some(m) = payload.get_mut("message") {
-                        if let Value::String(s) = m {
+                    } else if let Some(m) = payload.get_mut("message")
+                        && let Value::String(s) = m {
                             s.push_str(&env_lines);
                         }
-                    }
                 }
             }
-        }
-    }
 
     if let Some(refusal) = refusal {
         return Ok(Prepared::Value(refusal));
@@ -3349,14 +3329,13 @@ pub(crate) fn prepare_dispatch_wire(
     // `read_fallback_chains` hands back an empty map, `resolve_fallback_chain`
     // answers None, and nothing at all is inserted — every payload stays
     // byte-identical to before this block existed, the advisor included.
-    if let Some(model) = payload.get("model").and_then(Value::as_str).map(str::to_string) {
-        if !model.is_empty() {
+    if let Some(model) = payload.get("model").and_then(Value::as_str).map(str::to_string)
+        && !model.is_empty() {
             let chains = read_fallback_chains(root);
             if let Some((key, steps)) = resolve_fallback_chain(&chains, marker_role, &model) {
                 payload.insert("fallback_chain".into(), fallback_chain_payload(&key, &steps));
             }
         }
-    }
 
     let param_model = match (&channel[..], &resolved) {
         ("claude-agent", Resolved::Model { model, .. }) => Some(model.clone()),
@@ -3825,11 +3804,10 @@ pub(crate) fn native_transport_classification(root: &Path) -> D<&'static str> {
 pub(crate) fn installed_native_transport_classification(root: &Path, cmd: &str, timeout: std::time::Duration) -> D<&'static str> {
     // Exact installed-hook observation, not a version-range capability guess:
     // reports/cpc-1.md records opaque message bytes on Codex 0.154.0.
-    if let Some(out) = run_probe_command_bounded(cmd, &["--version"], timeout) {
-        if out.status.success() && String::from_utf8_lossy(&out.stdout).trim() == "codex-cli 0.154.0" {
+    if let Some(out) = run_probe_command_bounded(cmd, &["--version"], timeout)
+        && out.status.success() && String::from_utf8_lossy(&out.stdout).trim() == "codex-cli 0.154.0" {
             return Ok("native_hook_input_opaque");
         }
-    }
     native_transport_classification_with_cmd(root, cmd, timeout)
 }
 
@@ -3933,8 +3911,8 @@ pub(crate) fn claim_and_reserve_for_dispatch(
             // recorded as this branch's one accepted residual.
             let mut unwind_note = "the claim was unwound and state restored as found".to_string();
             let unwound = (|| -> R2<Result<(), String>> {
-                if !reserved.is_empty() {
-                    if let Out::Thrown(m) = release_reservations_for_agent(
+                if !reserved.is_empty()
+                    && let Out::Thrown(m) = release_reservations_for_agent(
                         topo,
                         root.to_str().ok_or(Err2::Ex)?,
                         worker,
@@ -3942,7 +3920,6 @@ pub(crate) fn claim_and_reserve_for_dispatch(
                     )? {
                         return Ok(Err(m));
                     }
-                }
                 match cells::unclaim_cell(root, &claimed_id, door.session_id.as_deref(), false) {
                     Ok(_) => Ok(Ok(())),
                     Err(cells::Fail::Delegate) => Err(Err2::Ex),
@@ -4370,12 +4347,11 @@ pub(crate) fn run_dispatch_prepare(flags: Flags, use_json: bool, t0: Instant) ->
         return finish(&ctx, Ok(Out::Emit(refusal, text, 0)));
     }
 
-    if let Prepared::Value(refusal) = &prepared {
-        if refusal["reason"].as_str().is_some_and(|r| r.starts_with("limits.")) {
+    if let Prepared::Value(refusal) = &prepared
+        && refusal["reason"].as_str().is_some_and(|r| r.starts_with("limits.")) {
             let text = jsjson::stringify_pretty(refusal);
             return finish(&ctx, Ok(Out::Emit(refusal.clone(), text, 0)));
         }
-    }
 
     // ── the claim + reserve gesture, before the payload build (Node's order).
     let mut claim_outcome: Option<Vec<Value>> = None;
@@ -4465,8 +4441,8 @@ pub(crate) fn run_dispatch_prepare(flags: Flags, use_json: bool, t0: Instant) ->
                     // nothing here either. A registration failure never
                     // turns the prepare itself into a failure — only the
                     // payload names it, same as dp-r1.
-                    if claim_outcome.is_none() && kind == "cell" {
-                        if let (Some(id), Some(w)) = (cell_id.as_deref(), worker.as_deref()) {
+                    if claim_outcome.is_none() && kind == "cell"
+                        && let (Some(id), Some(w)) = (cell_id.as_deref(), worker.as_deref()) {
                             let trimmed = js_trim(w).to_string();
                             if let Ok(Some(loaded)) = read_cell(&ctx.root, id) {
                                 let ownership = check_cell_claim_ownership(&loaded, &trimmed);
@@ -4497,7 +4473,6 @@ pub(crate) fn run_dispatch_prepare(flags: Flags, use_json: bool, t0: Instant) ->
                                 }
                             }
                         }
-                    }
 
                     if let (false, Some(leaning)) = (use_json, result.get("purpose_leaning")) {
                         eprintln!(
@@ -4960,7 +4935,7 @@ fn claim_wave_cell(
         Ok(Ok((_cell, reserved, worker_registered, registration_error))) => {
             match prepare_dispatch(
                 root,
-                &runtime,
+                runtime,
                 "cell",
                 Some(id.as_str()),
                 Some(worker.as_str()),
@@ -5104,12 +5079,11 @@ pub(crate) fn authorize_dispatch_permit(
 
     let mut matching_record: Option<Value> = None;
     for line in content.lines().rev() {
-        if let Ok(val) = serde_json::from_str::<Value>(line) {
-            if val.get("dispatch_id").and_then(Value::as_str) == Some(dispatch_id) {
+        if let Ok(val) = serde_json::from_str::<Value>(line)
+            && val.get("dispatch_id").and_then(Value::as_str) == Some(dispatch_id) {
                 matching_record = Some(val);
                 break;
             }
-        }
     }
 
     let Some(record) = matching_record else {
@@ -5367,8 +5341,8 @@ pub(crate) fn authorize_dispatch_permit(
 
     match crate::verbs::state_group::read_session(root, rec_session) {
         Ok(Some(sess)) => {
-            if let Some(lane) = sess.get("lane").and_then(Value::as_str) {
-                if !lane.is_empty() && lane != feat {
+            if let Some(lane) = sess.get("lane").and_then(Value::as_str)
+                && !lane.is_empty() && lane != feat {
                     let mut r = Map::new();
                     r.insert("ok".into(), Value::Bool(false));
                     r.insert("type".into(), Value::String("refused".into()));
@@ -5380,7 +5354,6 @@ pub(crate) fn authorize_dispatch_permit(
                     r.insert("fix".into(), Value::String("issuer session is bound to a different feature lane.".into()));
                     return Err(Value::Object(r));
                 }
-            }
         }
         Ok(None) => {
             let mut r = Map::new();
@@ -5560,7 +5533,7 @@ pub(crate) fn run_dispatch_verify(flags: Flags, use_json: bool, t0: Instant) -> 
             value["prompt"].as_str().unwrap_or_default()
         )
     };
-    finish(&ctx, Ok(Out::Emit(value, text, code.into())))
+    finish(&ctx, Ok(Out::Emit(value, text, code)))
 }
 
 pub(crate) fn run_dispatch_authorize(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {

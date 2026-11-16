@@ -91,11 +91,10 @@ fn run_list(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
     };
     let out = (|| {
         let kind = flags.truthy_str("kind");
-        if let Some(k) = kind {
-            if !audit::KINDS.contains(&k) {
+        if let Some(k) = kind
+            && !audit::KINDS.contains(&k) {
                 return Ok(Out::Thrown(audit::unknown_kind_message("audit list", k)));
             }
-        }
         let entries = audit::rows(&ctx.root, kind, flags.truthy_str("feature"));
         let text = if entries.is_empty() {
             "No audit entries.".to_string()

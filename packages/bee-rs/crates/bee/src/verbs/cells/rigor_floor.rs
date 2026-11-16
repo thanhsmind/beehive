@@ -234,11 +234,10 @@ pub(crate) fn rigor_floor_refusal(root: &Path, cell: &Map<String, Value>, verb: 
         return None;
     }
     let id = cell.get("id").and_then(Value::as_str).filter(|s| !s.is_empty()).unwrap_or("(unknown id)");
-    if let Some(route) = feature_route_record(root, feature) {
-        if let Some(refusal) = below_floor_refusal(verb, id, feature, &hits, &route) {
+    if let Some(route) = feature_route_record(root, feature)
+        && let Some(refusal) = below_floor_refusal(verb, id, feature, &hits, &route) {
             return Some(refusal);
         }
-    }
     let owner = hits.iter().find(|h| h.owner_first)?;
     if !execution_gate_auto(root, feature) {
         return None;

@@ -98,11 +98,10 @@ pub(crate) fn best_scribing_stamp_ms(
 ) -> Ex<Option<f64>> {
     let mut best: Option<f64> = None;
     let mut consider = |ms: Option<f64>| {
-        if let Some(v) = ms {
-            if best.map(|b| v > b).unwrap_or(true) {
+        if let Some(v) = ms
+            && best.map(|b| v > b).unwrap_or(true) {
                 best = Some(v);
             }
-        }
     };
     for entry in read_scribing_ledger(root)? {
         if !truthy(&entry) {
@@ -117,13 +116,12 @@ pub(crate) fn best_scribing_stamp_ms(
     if let Some(lane) = &lane {
         consider(scribing_run_stamp_ms(lane.get("last_scribing_run"))?);
     }
-    if let Some(run) = state.get("last_scribing_run") {
-        if truthy(run)
+    if let Some(run) = state.get("last_scribing_run")
+        && truthy(run)
             && opt_strict_eq(jget(run, "feature"), Some(&Value::String(feature.to_string())))
         {
             consider(scribing_run_stamp_ms(Some(run))?);
         }
-    }
     Ok(best)
 }
 
@@ -255,11 +253,10 @@ pub(crate) fn resolve_mutation_lock_scope_in(
     if let Some(bound) = bound {
         return Ok(Scope { feature: Some(bound), lane: true });
     }
-    if let Some(wt_feature) = worktree_feature() {
-        if read_lane_strict(root, &wt_feature)?.is_some() {
+    if let Some(wt_feature) = worktree_feature()
+        && read_lane_strict(root, &wt_feature)?.is_some() {
             return Ok(Scope { feature: Some(wt_feature), lane: true });
         }
-    }
     // Fail-open peek; readStateStrict's throw still happens in the target.
     let state = read_state_peek(root)?;
     let feature = match state.get("feature") {
@@ -381,11 +378,10 @@ pub(crate) fn resolve_mutation_target_in(
             return Ok(Target::Lane { record, lane: wt_feature });
         }
         let target = default_target(root)?;
-        if let Target::Default { target_feature: Some(f), .. } = &target {
-            if f != &wt_feature {
+        if let Target::Default { target_feature: Some(f), .. } = &target
+            && f != &wt_feature {
                 return Err(Err2::Msg(worktree_feature_lane_refusal(verb, &wt_feature, f)));
             }
-        }
         return Ok(target);
     };
     let Some(record) = read_lane_strict(root, &bound)? else {

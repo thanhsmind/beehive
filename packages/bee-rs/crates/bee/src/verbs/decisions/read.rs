@@ -159,13 +159,11 @@ pub(crate) fn active_decisions(root: &Path, all: bool) -> Ex<Vec<Value>> {
             for s in supersedes_target_ids(e) {
                 superseded.add(&s);
             }
-            if matches!(jget(e, "type"), Some(t) if v_is_str(t, "redact")) {
-                if let Some(r) = jget(e, "redacts") {
-                    if truthy(r) {
+            if matches!(jget(e, "type"), Some(t) if v_is_str(t, "redact"))
+                && let Some(r) = jget(e, "redacts")
+                    && truthy(r) {
                         redacted.add(r);
                     }
-                }
-            }
         }
         let mut active: Vec<&Value> = events
             .iter()
@@ -193,11 +191,10 @@ pub(crate) fn active_decisions(root: &Path, all: bool) -> Ex<Vec<Value>> {
         }
     }
     for e in &archived {
-        if let Some(Value::String(id)) = jget(e, "id") {
-            if !by_id.iter().any(|(k, _)| k == id) {
+        if let Some(Value::String(id)) = jget(e, "id")
+            && !by_id.iter().any(|(k, _)| k == id) {
                 by_id.push((id.clone(), e.clone()));
             }
-        }
     }
     let evs: Vec<Value> = by_id.into_iter().map(|(_, v)| v).collect();
     let mut superseded = VSet::new();
@@ -208,13 +205,11 @@ pub(crate) fn active_decisions(root: &Path, all: bool) -> Ex<Vec<Value>> {
         for s in supersedes_target_ids(e) {
             superseded.add(&s);
         }
-        if matches!(jget(e, "type"), Some(t) if v_is_str(t, "redact")) {
-            if let Some(r) = jget(e, "redacts") {
-                if truthy(r) {
+        if matches!(jget(e, "type"), Some(t) if v_is_str(t, "redact"))
+            && let Some(r) = jget(e, "redacts")
+                && truthy(r) {
                     redacted.add(r);
                 }
-            }
-        }
     }
     let mut filtered: Vec<(usize, &Value, Option<f64>)> = Vec::new();
     for (idx, e) in evs.iter().enumerate() {
@@ -519,13 +514,12 @@ pub(crate) fn text_haystacks(event: &Value, include_tags: bool) -> Vec<String> {
         jget(event, "rationale"),
         jget(event, "alternatives"),
     ];
-    if include_tags {
-        if let Some(Value::Array(tags)) = jget(event, "tags") {
+    if include_tags
+        && let Some(Value::Array(tags)) = jget(event, "tags") {
             for t in tags {
                 fields.push(Some(t));
             }
         }
-    }
     fields
         .into_iter()
         .flatten()
@@ -625,11 +619,10 @@ pub(crate) fn conflict_candidates(
 
     let mut scored: Vec<(Value, usize)> = Vec::new();
     for e in active {
-        if let (Some(exclude), Some(Value::String(id))) = (exclude_id, jget(e, "id")) {
-            if id == exclude {
+        if let (Some(exclude), Some(Value::String(id))) = (exclude_id, jget(e, "id"))
+            && id == exclude {
                 continue;
             }
-        }
         let haystacks: Vec<String> = text_haystacks(e, true)
             .into_iter()
             .map(|h| h.to_lowercase())

@@ -211,11 +211,10 @@ fn rewrite_front_door(args: &[OsString]) -> Option<Vec<OsString>> {
 }
 
 pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
-    if args.first().and_then(|a| a.to_str()) == Some(INTERNAL) {
-        if let Some(code) = internal_namespace(args, t0) {
+    if args.first().and_then(|a| a.to_str()) == Some(INTERNAL)
+        && let Some(code) = internal_namespace(args, t0) {
             return Some(code);
         }
-    }
     // Help probes the argv AS TYPED, before any rewrite. Help renders from
     // the registry, and a flow verb has its own registry entry — so
     // `bee route --help` must describe `bee route`. Rewriting first would
@@ -243,7 +242,7 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
 /// its help surface, and the refusal that keeps a flow verb out of it.
 fn internal_namespace(args: &[OsString], t0: Instant) -> Option<ExitCode> {
     let rest: Vec<&str> = args[1..].iter().filter_map(|a| a.to_str()).collect();
-    let wants_help = rest.is_empty() || rest.iter().any(|t| *t == "--help");
+    let wants_help = rest.is_empty() || rest.contains(&"--help");
     if wants_help && rest.iter().all(|t| *t == "--help" || *t == "--json") {
         return crate::verbs::help::internal_surface(rest.contains(&"--json"), t0);
     }
@@ -394,12 +393,11 @@ fn classify(shown: &[String]) -> (&'static str, serde_json::Value, String) {
     // set`, naming a command the caller never typed. The expansion is only a
     // fallback for a spelling the registry has not caught up with.
     let expanded: Vec<&str>;
-    if crate::catalog::resolve(&leading).is_none() {
-        if let Some(to) = leading.first().and_then(|h| flow_expansion(h)) {
+    if crate::catalog::resolve(&leading).is_none()
+        && let Some(to) = leading.first().and_then(|h| flow_expansion(h)) {
             expanded = to.iter().copied().chain(leading[1..].iter().copied()).collect();
             leading = expanded;
         }
-    }
 
     let Some((entry, extra)) = crate::catalog::resolve(&leading) else {
         return ("unknown_command", serde_json::Value::Null, unknown_message(&leading, &attempted));

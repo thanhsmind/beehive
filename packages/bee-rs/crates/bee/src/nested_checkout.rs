@@ -187,8 +187,8 @@ fn scan_for_nested_checkout(root_real: &str, dir: &str, depth: usize) -> D<bool>
             // `&&` short-circuits in the .mjs, so the submodule check (which
             // can itself fail detection) is only ever reached for a child that
             // already passed the identity/containment tests.
-            if let Some(child_real) = child_real {
-                if child_real != root_real
+            if let Some(child_real) = child_real
+                && child_real != root_real
                     && guard::is_under_root(root_real, &child_real)
                         .map_err(|_| realpath_err(&child_real))?
                     && !guard::is_registered_submodule(root_real, &child_real).map_err(|_| {
@@ -199,7 +199,6 @@ fn scan_for_nested_checkout(root_real: &str, dir: &str, depth: usize) -> D<bool>
                 {
                     return Ok(true);
                 }
-            }
             continue; // a `.git`-bearing dir — never descend into a nested repo
         }
         if scan_for_nested_checkout(root_real, &child, depth + 1)? {

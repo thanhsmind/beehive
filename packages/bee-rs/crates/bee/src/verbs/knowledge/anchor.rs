@@ -281,11 +281,10 @@ fn read_ledger_anchor(root: &Path, work: &str) -> Option<(Vec<String>, String, S
     meta_parts.extend(other_files.iter().cloned());
 
     let mut body_parts: Vec<String> = Vec::new();
-    if let Some(areas) = &areas {
-        if !areas.is_empty() {
+    if let Some(areas) = &areas
+        && !areas.is_empty() {
             body_parts.push(areas.join(" "));
         }
-    }
     if let Some(next) = &next_action {
         body_parts.push(next.clone());
     }

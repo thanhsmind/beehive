@@ -705,33 +705,26 @@ pub(crate) fn read_set_refusal(
 /// Helper to get the approved cell packet for a feature from its lane or state record.
 pub(crate) fn get_approved_preview_packet(root: &Path, feature: &str) -> Option<Map<String, Value>> {
     let lane_file = root.join(".bee").join("lanes").join(format!("{feature}.json"));
-    if let Ok(text) = std::fs::read_to_string(&lane_file) {
-        if let Ok(Value::Object(m)) = serde_json::from_str(&text) {
-            if let Some(Value::Object(p)) = m.get("approved_cell_packet").or_else(|| m.get("gate_preview")) {
-                if let Some(v) = p.get("feature").filter(|v| truthy(v)) {
-                    if js_disp(v) != feature {
+    if let Ok(text) = std::fs::read_to_string(&lane_file)
+        && let Ok(Value::Object(m)) = serde_json::from_str(&text)
+            && let Some(Value::Object(p)) = m.get("approved_cell_packet").or_else(|| m.get("gate_preview")) {
+                if let Some(v) = p.get("feature").filter(|v| truthy(v))
+                    && js_disp(v) != feature {
                         return None;
                     }
-                }
                 return Some(p.clone());
             }
-        }
-    }
     let state_file = root.join(".bee").join("state.json");
-    if let Ok(text) = std::fs::read_to_string(&state_file) {
-        if let Ok(Value::Object(m)) = serde_json::from_str(&text) {
-            if m.get("feature").map(js_disp).as_deref() == Some(feature) {
-                if let Some(Value::Object(p)) = m.get("approved_cell_packet").or_else(|| m.get("gate_preview")) {
-                    if let Some(v) = p.get("feature").filter(|v| truthy(v)) {
-                        if js_disp(v) != feature {
+    if let Ok(text) = std::fs::read_to_string(&state_file)
+        && let Ok(Value::Object(m)) = serde_json::from_str(&text)
+            && m.get("feature").map(js_disp).as_deref() == Some(feature)
+                && let Some(Value::Object(p)) = m.get("approved_cell_packet").or_else(|| m.get("gate_preview")) {
+                    if let Some(v) = p.get("feature").filter(|v| truthy(v))
+                        && js_disp(v) != feature {
                             return None;
                         }
-                    }
                     return Some(p.clone());
                 }
-            }
-        }
-    }
     None
 }
 
@@ -774,13 +767,12 @@ pub(crate) fn check_cell_matches_approved_preview(
             }
         };
         let current_sha256 = compute_plan_sha256(&bytes);
-        if let Some(approved_sha256) = approved_packet.get("plan_sha256").and_then(Value::as_str) {
-            if !approved_sha256.is_empty() && approved_sha256 != current_sha256 {
+        if let Some(approved_sha256) = approved_packet.get("plan_sha256").and_then(Value::as_str)
+            && !approved_sha256.is_empty() && approved_sha256 != current_sha256 {
                 return Err(format!(
                     "addCells: approved gate preview is stale for feature \"{feature}\" (plan.md changed since preview was approved). FIX: run `bee gate --preview` and re-approve the shape gate before adding cells."
                 ));
             }
-        }
     }
 
     let Some(id) = cell.get("id").and_then(|v| v.as_str()) else {

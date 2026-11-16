@@ -351,13 +351,12 @@ pub(crate) fn linked_worktree_exit_core(
     passed_id: Option<&str>,
     caller: Option<&CallerSession>,
 ) -> Result<(Value, String), String> {
-    if let Some(pid) = passed_id {
-        if pid != current_id {
+    if let Some(pid) = passed_id
+        && pid != current_id {
             return Err(format!(
                 "cannot exit worktree \"{pid}\" from inside worktree \"{current_id}\" — omit --id to exit the active worktree, or run from the main checkout"
             ));
         }
-    }
     let grants = read_grants_strict(&main_root.join(".bee"))
         .ok_or_else(|| "cannot read worktree grants".to_string())?;
     if grants.get(current_id) != Some(&Value::Bool(true)) {
@@ -601,13 +600,12 @@ pub(crate) fn linked_worktree_merge_core(
     queue_wait_ms: Option<f64>,
     caller: Option<&CallerSession>,
 ) -> Result<(Value, String), String> {
-    if let Some(pid) = passed_id {
-        if pid != current_id {
+    if let Some(pid) = passed_id
+        && pid != current_id {
             return Err(format!(
                 "cannot merge worktree \"{pid}\" from inside worktree \"{current_id}\" — omit --id to merge the active worktree, or run from the main checkout"
             ));
         }
-    }
     let grants = read_grants_strict(&main_root.join(".bee"))
         .ok_or_else(|| "cannot read worktree grants".to_string())?;
     if grants.get(current_id) != Some(&Value::Bool(true)) {
@@ -840,11 +838,9 @@ pub(crate) fn run_new(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitC
     ) {
         Ok(c) => c,
         Err(CErr::Refuse(message)) => return Some(ctx.fail(&message)),
-        Err(CErr::Ex) => match lock_busy {
-            // LockBusyError is reached AFTER a lock attempt, so it is native
-            // (campaign rule 2 — delegating would double the telemetry).
-            Some(message) => return Some(ctx.fail(&message)),
-            None => return None,
+        Err(CErr::Ex) => {
+            let message = lock_busy?;
+            return Some(ctx.fail(&message))
         },
     };
 
@@ -1627,7 +1623,7 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
         .iter()
         .map(|a| a.to_str())
         .collect::<Option<Vec<_>>>()?;
-    if toks.iter().any(|t| *t == "--help") {
+    if toks.contains(&"--help") {
         return None; // Node renders command-scoped help
     }
     let (flags, use_json) = if verb == "merge" {
