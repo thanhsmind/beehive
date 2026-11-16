@@ -13,6 +13,8 @@ bee-hive skill gains a short procedure an agent follows when the user asks to
 set up lint, type check or tests. An agent then sets the check up instead of
 saying it has no permission.
 
+Playbook: `skills/bee-planning/playbooks/bugfix.md` (situation bug-fix).
+
 Mode: `standard` — 2 risk flags: public contract (notice text every host
 reads), multi-domain (Rust code, skills, knowledge).
 
