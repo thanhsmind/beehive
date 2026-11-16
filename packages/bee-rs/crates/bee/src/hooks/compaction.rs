@@ -597,11 +597,10 @@ fn context_lines(anchor: &Map<String, Value>) -> Vec<String> {
     }
     let mut wheres = Vec::new();
     for name in ["feature", "lane", "cell"] {
-        if let Some(s) = field_str(anchor, name) {
-            if !s.is_empty() {
+        if let Some(s) = field_str(anchor, name)
+            && !s.is_empty() {
                 wheres.push(format!("{name}={s}"));
             }
-        }
     }
     if !wheres.is_empty() {
         lines.push(format!("CONTEXT: {}", wheres.join(" ")));
@@ -820,13 +819,11 @@ fn frontmatter_type(text: &str) -> Option<String> {
         } else {
             parse_scalar_token(raw)?
         };
-        if key == "type" {
-            if let Value::String(s) = &parsed {
-                if !s.is_empty() {
+        if key == "type"
+            && let Value::String(s) = &parsed
+                && !s.is_empty() {
                     found = Some(s.clone());
                 }
-            }
-        }
     }
     found
 }
@@ -870,11 +867,10 @@ fn claim_store_cell_ids(root: &Path, session: Option<&str>) -> Vec<String> {
     let mut ids = Vec::new();
     for name in names {
         let id = name[..name.len() - ".json".len()].to_string();
-        if let Some(claim) = safe_read_claim(root, &id) {
-            if norm(vget(&claim, "session")).as_deref() == Some(session) {
+        if let Some(claim) = safe_read_claim(root, &id)
+            && norm(vget(&claim, "session")).as_deref() == Some(session) {
                 ids.push(id);
             }
-        }
     }
     ids
 }
@@ -998,11 +994,10 @@ fn read_compaction_counts(root: &Path, session: Option<&str>, cell: Option<&str>
             continue;
         }
         compact_index += 1;
-        if let Some(unit) = cell {
-            if norm(vget(&record, "cell")).as_deref() == Some(unit) {
+        if let Some(unit) = cell
+            && norm(vget(&record, "cell")).as_deref() == Some(unit) {
                 cell_compact_count += 1;
             }
-        }
     }
     (compact_index, cell_compact_count)
 }
@@ -1173,18 +1168,16 @@ fn compact_check(root: &Path, session: Option<&str>) -> Vec<Check> {
             continue;
         }
         let trace_session = vget(cell, "trace").and_then(|t| norm(vget(t, "claim_session")));
-        if let (Some(session), Some(trace)) = (session, trace_session.as_deref()) {
-            if trace != session {
+        if let (Some(session), Some(trace)) = (session, trace_session.as_deref())
+            && trace != session {
                 ownership_problems.push(format!("{id}: cell trace names session \"{trace}\""));
             }
-        }
         let claim_session = safe_read_claim(root, &id).and_then(|c| norm(vget(&c, "session")));
-        if let (Some(session), Some(owner)) = (session, claim_session.as_deref()) {
-            if owner != session {
+        if let (Some(session), Some(owner)) = (session, claim_session.as_deref())
+            && owner != session {
                 ownership_problems
                     .push(format!("{id}: claim record is owned by session \"{owner}\""));
             }
-        }
     }
     let claimed: Vec<&Value> = owned
         .iter()

@@ -237,7 +237,7 @@ fn judge_stale_takeover_eligibility(lock_path: &Path, now: u128) -> Option<Value
             return None; // live holder — legitimately long-running, never stolen
         }
     }
-    Some(holder_before.map_or(Value::Null, |h| h))
+    Some(holder_before.unwrap_or(Value::Null))
 }
 
 /// The takeover CLAIM path — named from the lock ACQUISITION being displaced
@@ -278,8 +278,8 @@ fn claim_takeover(claim_path: &Path, now: u128) -> bool {
     if try_acquire(claim_path, &body).unwrap_or(false) {
         return true;
     }
-    if let Some(mtime) = mtime_ms(claim_path) {
-        if now.saturating_sub(mtime) > STALE_MS {
+    if let Some(mtime) = mtime_ms(claim_path)
+        && now.saturating_sub(mtime) > STALE_MS {
             let pid = read_holder(claim_path).and_then(|h| h.get("pid").and_then(Value::as_f64));
             if !is_pid_alive(pid) {
                 let _ = with_transient_fs_retry(|| match std::fs::remove_file(claim_path) {
@@ -288,7 +288,6 @@ fn claim_takeover(claim_path: &Path, now: u128) -> bool {
                 });
             }
         }
-    }
     false
 }
 

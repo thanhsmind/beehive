@@ -606,7 +606,7 @@ pub(crate) fn resolve_iteration(main_root: &Path, role: Role, turn_ceiling: u64)
                             .and_then(|c| crate::herding::paseo::PaseoSpec::from_config(c, agent_name))
                             .and_then(Result::ok);
                         match spec {
-                            Some(s) if s.provider == "pi" && s.model.as_ref().map_or(false, |m| !m.trim().is_empty()) => {
+                            Some(s) if s.provider == "pi" && s.model.as_ref().is_some_and(|m| !m.trim().is_empty()) => {
                                 (s.model.unwrap(), s.thinking)
                             }
                             _ => {

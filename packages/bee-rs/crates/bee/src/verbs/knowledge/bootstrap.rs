@@ -321,8 +321,8 @@ pub(crate) fn bootstrap_bundle(root: &Path, dir: &Path, today: &str) -> Bootstra
     // machinery `bee knowledge index` uses, never a second renderer. Only
     // when at least one area landed: an all-gaps run leaves docs/knowledge/
     // untouched rather than standing up an index over nothing.
-    if !created.is_empty() {
-        if let Some(files) = compute_index_files(dir) {
+    if !created.is_empty()
+        && let Some(files) = compute_index_files(dir) {
             for (rel, index_content) in &files {
                 let abs = join_rel(dir, rel);
                 if let Some(parent) = abs.parent() {
@@ -331,7 +331,6 @@ pub(crate) fn bootstrap_bundle(root: &Path, dir: &Path, today: &str) -> Bootstra
                 let _ = std::fs::write(&abs, index_content);
             }
         }
-    }
 
     BootstrapOutcome::Ok { created, gaps }
 }

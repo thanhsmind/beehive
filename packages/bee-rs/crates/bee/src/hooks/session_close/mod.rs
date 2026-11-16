@@ -174,12 +174,10 @@ fn run_inner(argv: &[String], stdin: &str) -> Result<(), ()> {
     let mut stdout = String::new();
     let mut stderr = String::new();
     let mut parts: Vec<String> = Vec::new();
-    let claims_warning: Vec<String> = (ctx.event == "Stop")
-        .then(|| {
+    let claims_warning: Vec<String> = if ctx.event == "Stop" { {
             let events = perf_events.as_deref().unwrap_or(&[]);
             unverified_agreement_warning(events).into_iter().chain(routed_reply_warnings(events)).collect()
-        })
-        .unwrap_or_default();
+        } } else { Default::default() };
 
     // The .mjs's advisory try/catch: a Crash logs and falls through to the
     // emit of whatever parts were already collected.
@@ -424,21 +422,18 @@ fn is_tool_result_record(event: &Value) -> bool {
     let check_blocks = |blocks: &[Value]| {
         blocks.iter().any(|b| b.get("type").and_then(Value::as_str) == Some("tool_result"))
     };
-    if let Some(content) = event.get("message").and_then(|m| m.get("content")).and_then(Value::as_array) {
-        if check_blocks(content) {
+    if let Some(content) = event.get("message").and_then(|m| m.get("content")).and_then(Value::as_array)
+        && check_blocks(content) {
             return true;
         }
-    }
-    if let Some(content) = event.get("content").and_then(Value::as_array) {
-        if check_blocks(content) {
+    if let Some(content) = event.get("content").and_then(Value::as_array)
+        && check_blocks(content) {
             return true;
         }
-    }
-    if let Some(content) = event.get("payload").and_then(|p| p.get("content")).and_then(Value::as_array) {
-        if check_blocks(content) {
+    if let Some(content) = event.get("payload").and_then(|p| p.get("content")).and_then(Value::as_array)
+        && check_blocks(content) {
             return true;
         }
-    }
     if event.get("type").and_then(Value::as_str) == Some("tool_result") {
         return true;
     }
@@ -497,8 +492,8 @@ pub(crate) fn final_assistant_text_line(events: &[Value]) -> Option<String> {
         }
 
         // Codex response_item assistant message:
-        if ev_type == "response_item" {
-            if let Some(payload) = event.get("payload") {
+        if ev_type == "response_item"
+            && let Some(payload) = event.get("payload") {
                 let p_type = payload.get("type").and_then(Value::as_str);
                 let p_role = payload.get("role").and_then(Value::as_str);
 
@@ -516,11 +511,7 @@ pub(crate) fn final_assistant_text_line(events: &[Value]) -> Option<String> {
                             .and_then(|b| b.get("text").and_then(Value::as_str))
                     } else if let Some(text_str) = payload.get("content").and_then(Value::as_str) {
                         Some(text_str)
-                    } else if let Some(text_str) = payload.get("text").and_then(Value::as_str) {
-                        Some(text_str)
-                    } else {
-                        None
-                    };
+                    } else { payload.get("text").and_then(Value::as_str) };
 
                     let line = text_opt.and_then(last_non_empty_line).unwrap_or_default();
 
@@ -543,21 +534,17 @@ pub(crate) fn final_assistant_text_line(events: &[Value]) -> Option<String> {
                     }
                 }
             }
-        }
 
         // Codex event_msg task_complete with last_agent_message:
-        if ev_type == "event_msg" {
-            if let Some(payload) = event.get("payload") {
-                if payload.get("type").and_then(Value::as_str) == Some("task_complete") {
-                    if let Some(msg) = payload.get("last_agent_message").and_then(Value::as_str) {
+        if ev_type == "event_msg"
+            && let Some(payload) = event.get("payload")
+                && payload.get("type").and_then(Value::as_str) == Some("task_complete")
+                    && let Some(msg) = payload.get("last_agent_message").and_then(Value::as_str) {
                         let line = last_non_empty_line(msg).unwrap_or_default();
                         if codex_final_answer.is_none() {
                             codex_final_answer = Some(line);
                         }
                     }
-                }
-            }
-        }
     }
 
     if let Some(ans) = codex_final_answer {

@@ -99,11 +99,10 @@ pub(crate) fn js_date_parse(s: &str) -> Ex<Option<f64>> {
         && b[7] == b'-'
         && b[8..10].iter().all(|c| c.is_ascii_digit());
     if strict_date_only {
-        if let Ok(d) = chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d") {
-            if let Some(n) = d.and_hms_opt(0, 0, 0) {
+        if let Ok(d) = chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d")
+            && let Some(n) = d.and_hms_opt(0, 0, 0) {
                 return Ok(Some(n.and_utc().timestamp_millis() as f64));
             }
-        }
         return Ok(None); // shape-valid but impossible date (2026-13-40) → NaN in JS too
     }
     Err(Exotic)

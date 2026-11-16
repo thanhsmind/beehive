@@ -238,7 +238,7 @@ fn read_gitdir_file(file: &Path, base: &Path) -> Option<PathBuf> {
         return None;
     }
     let raw = raw.strip_prefix("gitdir:").map(|r| r.trim().to_string()).unwrap_or(raw);
-    let raw = raw.replace('\\', &std::path::MAIN_SEPARATOR.to_string());
+    let raw = raw.replace('\\', std::path::MAIN_SEPARATOR_STR);
     Some(path_resolve_from(base, &raw))
 }
 

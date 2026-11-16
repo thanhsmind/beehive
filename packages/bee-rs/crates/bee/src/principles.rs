@@ -65,15 +65,14 @@ pub(crate) fn parse_principles(body: &str) -> Vec<Principle> {
     // indented, which is what keeps an applied_at bullet from reading as a new
     // row.
     let mut flush = |slug: &mut Option<String>, spoken: &mut String, classes: &mut Vec<String>| {
-        if let Some(s) = slug.take() {
-            if !spoken.is_empty() && !classes.is_empty() {
+        if let Some(s) = slug.take()
+            && !spoken.is_empty() && !classes.is_empty() {
                 out.push(Principle {
                     slug: s,
                     spoken: std::mem::take(spoken),
                     classes: std::mem::take(classes),
                 });
             }
-        }
         spoken.clear();
         classes.clear();
     };

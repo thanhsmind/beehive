@@ -276,8 +276,8 @@ pub(crate) fn frontmatter_has_type(text: &str) -> bool {
         }
         in_bee_map = false;
         // /^([^:\s]+):$/ — a bee: map header.
-        if let Some(key) = line.strip_suffix(':') {
-            if !key.is_empty() && !key.contains(':') && !key.chars().any(is_js_ws) {
+        if let Some(key) = line.strip_suffix(':')
+            && !key.is_empty() && !key.contains(':') && !key.chars().any(is_js_ws) {
                 if !fm_key_ok(key) || key != "bee" || root_keys.contains("bee") {
                     return false;
                 }
@@ -286,7 +286,6 @@ pub(crate) fn frontmatter_has_type(text: &str) -> bool {
                 in_bee_map = true;
                 continue;
             }
-        }
         let mut type_slot = Some(&mut type_is_concept);
         if !parse_kv_line(line, &mut root_keys, &mut type_slot) {
             return false;
@@ -339,11 +338,10 @@ pub(crate) fn parse_kv_line(line: &str, keys: &mut HashSet<String>, type_slot: &
             ScalarParse::Str(s) => Some(s),
         }
     };
-    if key == "type" {
-        if let Some(flag) = type_slot.as_deref_mut() {
+    if key == "type"
+        && let Some(flag) = type_slot.as_deref_mut() {
             *flag = value.map(|s| !s.is_empty()).unwrap_or(false);
         }
-    }
     true
 }
 

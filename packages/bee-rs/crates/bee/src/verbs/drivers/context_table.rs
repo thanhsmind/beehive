@@ -245,7 +245,7 @@ fn d_sequence_covers(nums: &[u32], seps: &[char], d_num: u32) -> bool {
     if nums.len() == 1 {
         return nums[0] == d_num;
     }
-    if seps.iter().any(|&s| s == '-') {
+    if seps.contains(&'-') {
         let lo = *nums.iter().min().unwrap();
         let hi = *nums.iter().max().unwrap();
         return d_num >= lo && d_num <= hi;

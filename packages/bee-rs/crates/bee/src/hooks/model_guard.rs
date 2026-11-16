@@ -171,11 +171,10 @@ fn js_truthy(v: &Value) -> bool {
 /// `payload.a || payload.b || ""` — first truthy value, else "".
 fn pick_truthy(payload: &Map<String, Value>, keys: &[&str]) -> Value {
     for key in keys {
-        if let Some(v) = payload.get(*key) {
-            if js_truthy(v) {
+        if let Some(v) = payload.get(*key)
+            && js_truthy(v) {
                 return v.clone();
             }
-        }
     }
     Value::String(String::new())
 }
@@ -400,6 +399,7 @@ fn resolved_model_name(resolved: &Resolved) -> Option<&str> {
 /// before it clips. The door block is injected into EVERY session, so a
 /// description is a one-line hint, never a paragraph; past this the line
 /// says `...` and `.bee/config.json` carries the rest.
+#[cfg(test)]
 const ROLE_DESCRIPTION_MAX: usize = 60;
 
 /// The operator's own one-line purpose for a role, as the door prints it.
@@ -416,6 +416,7 @@ const ROLE_DESCRIPTION_MAX: usize = 60;
 /// has nowhere to put a description and renders exactly as it always did;
 /// so does an object slot without the key, an empty one, and a whitespace
 /// one — the door never prints an empty pair of quotes.
+#[cfg(test)]
 fn role_slot_description(models_raw: Option<&Value>, runtime: &str, role: &str) -> Option<String> {
     let text = models_raw?
         .as_object()?
@@ -511,11 +512,10 @@ pub(crate) fn role_slot_display(
     let table = map.get(runtime).and_then(Value::as_object);
     let mut order: Vec<String> = Vec::new();
     for kind in DISPATCH_KINDS {
-        if let Some(slot) = slot_for_kind(kind) {
-            if table.is_some_and(|t| t.contains_key(slot)) && !order.iter().any(|n| n == slot) {
+        if let Some(slot) = slot_for_kind(kind)
+            && table.is_some_and(|t| t.contains_key(slot)) && !order.iter().any(|n| n == slot) {
                 order.push(slot.to_string());
             }
-        }
     }
     if let Some(t) = table {
         for name in t.keys() {
@@ -601,11 +601,9 @@ fn configured_model_set(models: &Map<String, Value>) -> BTreeSet<String> {
         // reason the port is a match on one variant rather than a model_name()
         // call.
         if let Resolved::Model { model, .. } = resolve_tier(models, role, "claude", GUARD_PURPOSE)
-        {
-            if !model.trim().is_empty() {
+            && !model.trim().is_empty() {
                 set.insert(model.trim().to_string());
             }
-        }
     }
     // hgf-1: the herding-fallback contribution covers exactly the slots a
     // PREPARED dispatch can publish a fallback for — `slot_for_kind` over
@@ -656,15 +654,12 @@ fn configured_model_set(models: &Map<String, Value>) -> BTreeSet<String> {
         // `an_explicitly_null_review_slot_inherits_the_generation_herding_fallback`
         // pins that prepare publishes opus there).
         let published = if kind == "gather" { winner.unwrap_or(slot) } else { slot };
-        if matches!(resolved, Resolved::Herding { fallback: Some(ref f), .. } if f == "default") {
-            if let Some(Value::String(m)) =
+        if matches!(resolved, Resolved::Herding { fallback: Some(ref f), .. } if f == "default")
+            && let Some(Value::String(m)) =
                 crate::verbs::drivers::default_models("claude").get(published)
-            {
-                if !m.trim().is_empty() {
+                && !m.trim().is_empty() {
                     set.insert(m.trim().to_string());
                 }
-            }
-        }
     }
     set
 }
@@ -849,11 +844,10 @@ fn evaluate_semantic_role_routing(
 
     if feature.is_none() && markers.stage.is_some() {
         let state_file = main_root.join(".bee").join("state.json");
-        if let crate::fsutil::ReadJson::Parsed(Value::Object(m)) = crate::fsutil::read_json(&state_file) {
-            if let Some(f) = m.get("feature").and_then(Value::as_str) {
+        if let crate::fsutil::ReadJson::Parsed(Value::Object(m)) = crate::fsutil::read_json(&state_file)
+            && let Some(f) = m.get("feature").and_then(Value::as_str) {
                 feature = Some(f.to_string());
             }
-        }
     }
 
     let Some(feature) = feature else {
@@ -1039,12 +1033,10 @@ or return the refusal to the leader for an escalated cell. Do not retry the same
 
     // Full-history fork inherits parent model/effort and cannot carry overrides
     if is_full_fork && (model_param.is_some() || effort_param.is_some()) {
-        let reason = format!(
-            "bee-model-guard: a full-history fork (\"fork_turns\": \"all\" or omitted) inherits the parent \
+        let reason = "bee-model-guard: a full-history fork (\"fork_turns\": \"all\" or omitted) inherits the parent \
 session's model and reasoning effort, so it cannot carry model or reasoning_effort overrides.\n\
 FIX: remove the overrides to inherit the parent session settings, or set \"fork_turns\" to \"none\" \
-or a numeric turn count to apply explicit settings."
-        );
+or a numeric turn count to apply explicit settings.".to_string();
         return deny(reason, "codex-spawn-full-fork-override-denied", Some(role), model_param, None);
     }
 
@@ -1284,9 +1276,9 @@ fn evaluate_claude_model(root: Option<&Path>, tool_input: &Value, models: &Map<S
         return deny(reason, transport, tier, model_param, subagent_type);
     }
 
-    if tier.is_some() {
-        if let Some(old) = subagent_type.as_deref() {
-            if let Some(new_name) = retired_agent_replacement(old) {
+    if tier.is_some()
+        && let Some(old) = subagent_type.as_deref()
+            && let Some(new_name) = retired_agent_replacement(old) {
                 let reason = format!("subagent_type \"{old}\" was renamed to \"{new_name}\"");
                 return deny(
                     reason,
@@ -1296,8 +1288,6 @@ fn evaluate_claude_model(root: Option<&Path>, tool_input: &Value, models: &Map<S
                     subagent_type,
                 );
             }
-        }
-    }
 
     // (0) Pinned-type rule (W3, AO5/AO10/AO11) — REPAIRED, not refused. The
     // tier is already stated; which agent file carries it is a lookup the
@@ -1359,7 +1349,7 @@ FIX: name the one you mean. {choices}.",
         // the model param or stands alone as the budget declaration.
         let is_advisor_seat = markers.kind.as_deref() == Some("advisor")
             && crate::verbs::drivers::SEAT_ROLES.contains(&t.as_str());
-        let pinned = pinned_type_for(t).or_else(|| if is_advisor_seat { Some("bee-elder") } else { None });
+        let pinned = pinned_type_for(t).or(if is_advisor_seat { Some("bee-elder") } else { None });
         if let (false, Some("general-purpose"), Some(pinned)) =
             (t == "ceiling", subagent_type.as_deref(), pinned)
         {

@@ -187,21 +187,18 @@ pub(crate) fn list_cells(ctx: &Ctx, feature: Option<&Value>, status: Option<&str
             if !matches!(cell, Value::Object(_) | Value::Array(_)) {
                 continue; // `typeof cell !== 'object'` (null already skipped)
             }
-            if let Some(scope) = island_feature.as_deref() {
-                if !str_eq(vget(&cell, "feature"), scope) {
+            if let Some(scope) = island_feature.as_deref()
+                && !str_eq(vget(&cell, "feature"), scope) {
                     continue; // foreign-feature residue in a granted island — never surfaced
                 }
-            }
-            if let Some(f) = feature {
-                if truthy(f) && !strict_eq(vget(&cell, "feature"), Some(f)) {
+            if let Some(f) = feature
+                && truthy(f) && !strict_eq(vget(&cell, "feature"), Some(f)) {
                     continue;
                 }
-            }
-            if let Some(s) = status {
-                if !str_eq(vget(&cell, "status"), s) {
+            if let Some(s) = status
+                && !str_eq(vget(&cell, "status"), s) {
                     continue;
                 }
-            }
             cells.push(cell);
         }
     }
@@ -261,21 +258,18 @@ pub(crate) fn list_cells_including_archive(
             if !matches!(cell, Value::Object(_) | Value::Array(_)) {
                 continue; // `typeof cell !== 'object'` (null already skipped)
             }
-            if let Some(scope) = island_feature.as_deref() {
-                if !str_eq(vget(&cell, "feature"), scope) {
+            if let Some(scope) = island_feature.as_deref()
+                && !str_eq(vget(&cell, "feature"), scope) {
                     continue; // foreign-feature residue in a granted island — never surfaced
                 }
-            }
-            if let Some(f) = feature {
-                if truthy(f) && !strict_eq(vget(&cell, "feature"), Some(f)) {
+            if let Some(f) = feature
+                && truthy(f) && !strict_eq(vget(&cell, "feature"), Some(f)) {
                     continue;
                 }
-            }
-            if let Some(s) = status {
-                if !str_eq(vget(&cell, "status"), s) {
+            if let Some(s) = status
+                && !str_eq(vget(&cell, "status"), s) {
                     continue;
                 }
-            }
             let id = tpl(vget(&cell, "id"));
             if !seen_ids.insert(id) {
                 continue; // the live copy above already claimed this id
@@ -323,16 +317,14 @@ pub(crate) fn archived_totals(ctx: &Ctx) -> R<JMap> {
     let (mut capped, mut dropped) = (0f64, 0f64);
     for entry in summary.values() {
         let Value::Object(e) = entry else { continue };
-        if let Some(n) = e.get("capped").and_then(|v| v.as_f64()) {
-            if n.is_finite() {
+        if let Some(n) = e.get("capped").and_then(|v| v.as_f64())
+            && n.is_finite() {
                 capped += n;
             }
-        }
-        if let Some(n) = e.get("dropped").and_then(|v| v.as_f64()) {
-            if n.is_finite() {
+        if let Some(n) = e.get("dropped").and_then(|v| v.as_f64())
+            && n.is_finite() {
                 dropped += n;
             }
-        }
     }
     let mut out = JMap::new();
     out.insert("capped".into(), json_num(capped));
@@ -419,22 +411,17 @@ pub(crate) fn best_scribing_stamp_ms(
     }
     let feature_str = jsjson::js_to_string(feature);
     let lane = read_lane(ctx, &feature_str)?;
-    if let Some(lane) = lane {
-        if let Some(stamp) = scribing_run_stamp_ms(lane.get("last_scribing_run")) {
-            if best.map(|b| stamp > b).unwrap_or(true) {
+    if let Some(lane) = lane
+        && let Some(stamp) = scribing_run_stamp_ms(lane.get("last_scribing_run"))
+            && best.map(|b| stamp > b).unwrap_or(true) {
                 best = Some(stamp);
             }
-        }
-    }
-    if let Some(lsr) = state.get("last_scribing_run") {
-        if truthy(lsr) && strict_eq(vget(lsr, "feature"), Some(feature)) {
-            if let Some(stamp) = scribing_run_stamp_ms(Some(lsr)) {
-                if best.map(|b| stamp > b).unwrap_or(true) {
+    if let Some(lsr) = state.get("last_scribing_run")
+        && truthy(lsr) && strict_eq(vget(lsr, "feature"), Some(feature))
+            && let Some(stamp) = scribing_run_stamp_ms(Some(lsr))
+                && best.map(|b| stamp > b).unwrap_or(true) {
                     best = Some(stamp);
                 }
-            }
-        }
-    }
     Ok(best)
 }
 
@@ -815,11 +802,8 @@ pub(crate) fn active_workers(ctx: &Ctx, root: &Path, exclude_session_id: Option<
             "cell".into(),
             claim_cell_by_session.get(sid).cloned().unwrap_or(Value::Null),
         );
-        match session.get("last_heartbeat") {
-            Some(v) => {
-                row.insert("last_heartbeat".into(), v.clone());
-            }
-            None => {} // undefined -> key dropped by JSON.stringify
+        if let Some(v) = session.get("last_heartbeat") {
+            row.insert("last_heartbeat".into(), v.clone());
         }
         // D2/D4: the row carries the activity object the hook wrote, verbatim,
         // plus the signal DERIVED from that same object — one shape, read the
@@ -935,11 +919,10 @@ pub(crate) fn lease_to_reservation(record: &Value) -> JMap {
         out.insert("reserved_at".into(), v.clone());
     }
     out.insert("released_at".into(), Value::Null);
-    if let Some(session) = vget(record, "session_id") {
-        if truthy(session) && !str_eq(Some(session), SESSIONLESS_SESSION_ID) {
+    if let Some(session) = vget(record, "session_id")
+        && truthy(session) && !str_eq(Some(session), SESSIONLESS_SESSION_ID) {
             out.insert("session".into(), session.clone());
         }
-    }
     let kind = vget(record, "kind").filter(|v| truthy(v)).cloned().unwrap_or(json!("lease"));
     out.insert("kind".into(), kind);
     out

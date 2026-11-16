@@ -446,7 +446,9 @@ pub(crate) fn unregister_workspace(root: &Path, id: &str) -> W<Value> {
 /// different `skipped` list. Those reasons are worded natively now, so every
 /// entry is skippable and the call never bails: the skip list is complete
 /// again, with our wording in the two formerly-unmodelable reasons.
-pub(crate) fn list_workspaces(root: &Path) -> W<(Vec<Map<String, Value>>, Vec<Value>)> {
+pub(crate) type WorkspaceListing = (Vec<Map<String, Value>>, Vec<Value>);
+
+pub(crate) fn list_workspaces(root: &Path) -> W<WorkspaceListing> {
     let entries = match std::fs::read_dir(workspaces_dir(root)) {
         Ok(e) => e,
         Err(_) => return Ok((vec![], vec![])),
@@ -515,13 +517,15 @@ enum Outcome {
     Blocked(String),
 }
 
+type OwnerLiveFn<'a> = &'a dyn Fn(&str, f64) -> bool;
+
 /// decideOwnership — the PURE decision core shared by claimWriteOwnership and
 /// attachWorkspace, run under the SAME lock hold both acquire.
 fn decide_ownership(
     record: &Map<String, Value>,
     session_id: &str,
     now: f64,
-    is_owner_live: Option<&dyn Fn(&str, f64) -> bool>,
+    is_owner_live: Option<OwnerLiveFn<'_>>,
 ) -> Outcome {
     let owner = record.get("write_owner_session");
     let owner_str = match owner {
@@ -542,7 +546,7 @@ fn decide_ownership(
         return Outcome::AlreadyOwner;
     }
     // No predicate => the SAFE default: "the owner is live".
-    let live = is_owner_live.map_or(true, |f| f(&owner, now));
+    let live = is_owner_live.is_none_or(|f| f(&owner, now));
     if !live {
         return Outcome::Reclaim;
     }
@@ -591,7 +595,7 @@ fn js_num(f: f64) -> Value {
 pub(crate) struct OwnershipOpts<'a> {
     pub now: f64,
     pub now_iso: &'a str,
-    pub is_owner_live: Option<&'a dyn Fn(&str, f64) -> bool>,
+    pub is_owner_live: Option<OwnerLiveFn<'a>>,
 }
 
 fn require_session(verb: &str, session_id: Option<&str>) -> W<String> {

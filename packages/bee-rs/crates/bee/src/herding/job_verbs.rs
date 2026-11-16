@@ -130,8 +130,8 @@ pub(crate) fn interrupt_with_backends(
     let bee_dir = main_root.join(".bee");
     let job_raw = read_job_json(&bee_dir, job_id, "interrupt")?;
 
-    if let Some((mark, _)) = mailbox::read_mark(&bee_dir, job_id) {
-        if matches!(mark, Mark::Cancelled | Mark::CancelPending) {
+    if let Some((mark, _)) = mailbox::read_mark(&bee_dir, job_id)
+        && matches!(mark, Mark::Cancelled | Mark::CancelPending) {
             return Err(JobVerbError {
                 code: "already_cancelled",
                 message: format!(
@@ -140,7 +140,6 @@ pub(crate) fn interrupt_with_backends(
                 ),
             });
         }
-    }
 
     let is_paseo = job_raw.get("transport").and_then(Value::as_str) == Some("paseo");
     if is_paseo {
@@ -379,7 +378,6 @@ pub(crate) fn kill_tree(tree: &dyn ProcessTree, root: u32, grace: Duration) {
     }
 }
 
-#[allow(clippy::too_many_arguments)]
 pub(crate) fn cancel_with_backends_and_timeout(
     main_root: &Path,
     job_id: &str,
@@ -730,37 +728,31 @@ pub(super) fn cancel(args: &[&str]) -> ExitCode {
 }
 
 fn find_job_cell_id(job_dir: &Path, job_raw: &Value) -> Option<String> {
-    if let Some(id) = job_raw.get("cell_id").and_then(Value::as_str) {
-        if !id.trim().is_empty() {
+    if let Some(id) = job_raw.get("cell_id").and_then(Value::as_str)
+        && !id.trim().is_empty() {
             return Some(id.to_string());
         }
-    }
-    if let Some(id) = job_raw.get("cell").and_then(Value::as_str) {
-        if !id.trim().is_empty() {
+    if let Some(id) = job_raw.get("cell").and_then(Value::as_str)
+        && !id.trim().is_empty() {
             return Some(id.to_string());
         }
-    }
     if let Ok(rd) = std::fs::read_dir(job_dir) {
         for entry in rd.flatten() {
             let name = entry.file_name().to_string_lossy().into_owned();
-            if name.starts_with("ack-") && name.ends_with(".json") {
-                if let Ok(raw) = std::fs::read_to_string(entry.path()) {
-                    if let Ok(val) = serde_json::from_str::<Value>(&raw) {
-                        if let Some(id) = val.get("cell_id").and_then(Value::as_str) {
-                            if !id.trim().is_empty() {
+            if name.starts_with("ack-") && name.ends_with(".json")
+                && let Ok(raw) = std::fs::read_to_string(entry.path())
+                    && let Ok(val) = serde_json::from_str::<Value>(&raw)
+                        && let Some(id) = val.get("cell_id").and_then(Value::as_str)
+                            && !id.trim().is_empty() {
                                 return Some(id.to_string());
                             }
-                        }
-                    }
-                }
-            }
         }
     }
     if let Ok(rd) = std::fs::read_dir(job_dir) {
         for entry in rd.flatten() {
             let name = entry.file_name().to_string_lossy().into_owned();
-            if name.starts_with("brief-") && name.ends_with(".txt") {
-                if let Ok(content) = std::fs::read_to_string(entry.path()) {
+            if name.starts_with("brief-") && name.ends_with(".txt")
+                && let Ok(content) = std::fs::read_to_string(entry.path()) {
                     for line in content.lines() {
                         let trimmed = line.trim();
                         if trimmed.starts_with("\"cell_id\":") {
@@ -777,7 +769,6 @@ fn find_job_cell_id(job_dir: &Path, job_raw: &Value) -> Option<String> {
                         }
                     }
                 }
-            }
         }
     }
     None
@@ -823,9 +814,9 @@ pub(crate) fn steer_job_with(
 
     if let Some(cell_id) = find_job_cell_id(&mbox, &job_raw) {
         let cell_path = bee_dir.join("cells").join(format!("{cell_id}.json"));
-        if cell_path.is_file() {
-            if let Ok(raw) = std::fs::read_to_string(&cell_path) {
-                if let Ok(cell_json) = serde_json::from_str::<Value>(&raw) {
+        if cell_path.is_file()
+            && let Ok(raw) = std::fs::read_to_string(&cell_path)
+                && let Ok(cell_json) = serde_json::from_str::<Value>(&raw) {
                     let is_capped = cell_json.get("status").and_then(Value::as_str) == Some("capped")
                         || cell_json
                             .get("trace")
@@ -841,8 +832,6 @@ pub(crate) fn steer_job_with(
                         });
                     }
                 }
-            }
-        }
     }
 
     let entries: Vec<String> = match std::fs::read_dir(&mbox) {
@@ -870,11 +859,10 @@ pub(crate) fn steer_job_with(
     let current_round = base_round.max(max_brief_round);
 
     let has_result = entries.iter().any(|name| {
-        if let Some(digits) = name.strip_prefix("result-").and_then(|s| s.strip_suffix(".json")) {
-            if let Ok(r) = digits.parse::<u32>() {
+        if let Some(digits) = name.strip_prefix("result-").and_then(|s| s.strip_suffix(".json"))
+            && let Ok(r) = digits.parse::<u32>() {
                 return r >= current_round;
             }
-        }
         false
     });
     if has_result {

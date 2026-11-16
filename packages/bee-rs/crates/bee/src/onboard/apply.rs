@@ -455,8 +455,8 @@ pub fn apply_computed_plan(
     }
 
     // 2. codex-hybrid write preflight (fail-closed).
-    if codex_hybrid && !hw::repo_owns_hook_catalog(repo_root) {
-        if let Some((status, reason)) = hw::codex_hook_write_blocker(repo_root) {
+    if codex_hybrid && !hw::repo_owns_hook_catalog(repo_root)
+        && let Some((status, reason)) = hw::codex_hook_write_blocker(repo_root) {
             return ApplyOutcome::Blocked(Box::new(ApplyBlocked {
                 status,
                 reason,
@@ -467,7 +467,6 @@ pub fn apply_computed_plan(
                 bee_version,
             }));
         }
-    }
 
     // 2b. hooks-merge validity preflight: a settings/hooks file that exists
     // but fails the merge shape check (malformed JSON, a non-object "hooks"
@@ -576,7 +575,7 @@ pub fn apply_computed_plan(
         .map(|item| join_rel(repo_root, item["path"].as_str().unwrap_or("")))
         .filter(|path| !exists(path))
         .collect();
-    let mut backup_once = |path: &Path, taken: &mut std::collections::HashSet<PathBuf>| {
+    let backup_once = |path: &Path, taken: &mut std::collections::HashSet<PathBuf>| {
         if !exists(path) || !taken.insert(path.to_path_buf()) {
             return;
         }
@@ -594,8 +593,8 @@ pub fn apply_computed_plan(
         let action = item["action"].as_str().unwrap_or("");
         let rel = item["path"].as_str().unwrap_or("");
         let target = join_rel(repo_root, rel);
-        if item["after_publish"] == true {
-            if let Some(id) = &failed_principle {
+        if item["after_publish"] == true
+            && let Some(id) = &failed_principle {
                 if !switch_skip_reported {
                     switch_skip_reported = true;
                     skipped_skills.push(json!({
@@ -605,7 +604,6 @@ pub fn apply_computed_plan(
                 }
                 continue;
             }
-        }
         match action {
             "create_agents_block" | "append_agents_block" | "update_agents_block" => {
                 let merged = merge_agents_content(
@@ -817,11 +815,10 @@ pub fn apply_computed_plan(
                     eprintln!("refusing to remove {rel}: outside Pi extension scope");
                     continue;
                 }
-                if let Err(err) = std::fs::remove_file(&target) {
-                    if err.kind() != std::io::ErrorKind::NotFound {
+                if let Err(err) = std::fs::remove_file(&target)
+                    && err.kind() != std::io::ErrorKind::NotFound {
                         eprintln!("failed to remove {}: {err}", target.display());
                     }
-                }
             }
             "copy_statusline" => {
                 let name = posix_basename(rel);
@@ -926,13 +923,12 @@ pub fn apply_computed_plan(
             }
             "sync_opencode_agent_file" => {
                 let agent = item["agent"].as_str().unwrap_or("");
-                if let Some(model) = resolve_opencode_agent_model(repo_root, agent) {
-                    if let Some(rendered) =
+                if let Some(model) = resolve_opencode_agent_model(repo_root, agent)
+                    && let Some(rendered) =
                         super::agents::render_opencode_agent_template(engine, agent, &model)
                     {
                         let _ = write_file_atomic(&target, rendered.as_bytes());
                     }
-                }
             }
             "remove_opencode_agent_file" => {
                 let _ = std::fs::remove_file(&target);
@@ -1144,13 +1140,11 @@ pub fn apply_computed_plan(
     }
     // Advisor R6 / point 6: a --plugin-source apply lets a prior
     // --repo-hooks record LAPSE rather than silently carrying it forward.
-    if !opts.repo_hooks && !opts.plugin_source {
-        if let Some(prev) = previous.get("managed").and_then(|m| m.get("repo_hooks")) {
-            if is_truthy(prev) {
+    if !opts.repo_hooks && !opts.plugin_source
+        && let Some(prev) = previous.get("managed").and_then(|m| m.get("repo_hooks"))
+            && is_truthy(prev) {
                 managed.insert("repo_hooks".into(), prev.clone());
             }
-        }
-    }
     let mut payload = Map::new();
     payload.insert("schema_version".into(), json!(T::ONBOARDING_SCHEMA_VERSION));
     payload.insert(
@@ -1218,11 +1212,10 @@ fn add_pi_team(target: &Path, table: &str) {
             return;
         };
         roster.entry("pi").or_insert_with(|| defaults["team"]["pi"].clone());
-        if let Some(herding) = config.entry("herding").or_insert_with(|| json!({})).as_object_mut() {
-            if let Some(agents) = herding.entry("agents").or_insert_with(|| json!({})).as_object_mut() {
+        if let Some(herding) = config.entry("herding").or_insert_with(|| json!({})).as_object_mut()
+            && let Some(agents) = herding.entry("agents").or_insert_with(|| json!({})).as_object_mut() {
                 agents.entry("pi").or_insert_with(|| defaults["herding"]["agents"]["pi"].clone());
             }
-        }
     });
 }
 

@@ -71,7 +71,7 @@ fn grades_for(dir: &Path, listed: &[PackLine]) -> BTreeMap<String, &'static str>
         .filter(|c| listed.iter().any(|l| l.path == format!("docs/knowledge/{}", c.path)))
         .filter(|c| !string_anchors(&bee_of(&c.data)).is_empty())
         .collect();
-    let Some(checkout) = checkout_of(&dir) else { return out };
+    let Some(checkout) = checkout_of(dir) else { return out };
     for (rel, grade) in grade_area_concepts(checkout, &shown) {
         out.insert(format!("docs/knowledge/{rel}"), grade.grade);
     }
@@ -202,9 +202,7 @@ pub(crate) fn run_pack(flags: Flags, json: bool, pre_json: bool, t0: Instant) ->
         Some(FlagV::S(s)) if !js_trim(s).is_empty() => js_trim(s).to_string(),
         _ => return None,
     };
-    if lane_budget(&lane).is_none() {
-        return None;
-    }
+    lane_budget(&lane)?;
 
     let ctx = match g_prelude("knowledge pack", json, pre_json, t0)? {
         GPre::Go(c) => c,

@@ -555,7 +555,7 @@ pub(crate) fn record_into(
         kind: kind.to_string(),
         signal: signal.to_string(),
         note,
-        target_session: target_session.map(|s| one_line(s)).filter(|s| !s.is_empty()),
+        target_session: target_session.map(one_line).filter(|s| !s.is_empty()),
         tick,
         events,
     };
@@ -1384,6 +1384,7 @@ pub(crate) fn mark_delivered_for_session(root: &Path, id: &str) -> Result<(), St
 /// Where the mailbox of a WORK root lives. The delivery caller needs this only
 /// to assert about the store it never otherwise touches — one owner for the
 /// path, here.
+#[cfg(test)]
 pub(crate) fn interventions_store_path(root: &Path) -> PathBuf {
     interventions_path(&control_root_path(root))
 }
@@ -1481,11 +1482,10 @@ pub(crate) fn read_presence(control: &Path) -> PresenceStore {
                     .map(str::to_string);
                 match (id, at) {
                     (Some(id), Some(at)) => {
-                        if let Some(w) = windows.iter_mut().find(|w| w.id == id) {
-                            if w.back_at.is_none() {
+                        if let Some(w) = windows.iter_mut().find(|w| w.id == id)
+                            && w.back_at.is_none() {
                                 w.back_at = Some(at);
                             }
-                        }
                     }
                     _ => folded = false,
                 }
@@ -1530,15 +1530,14 @@ pub(crate) fn away_into(
         ));
     }
     let note = note.map(one_line).filter(|s| !s.is_empty());
-    if let Some(text) = &note {
-        if text.chars().count() > MAX_NOTE_CHARS {
+    if let Some(text) = &note
+        && text.chars().count() > MAX_NOTE_CHARS {
             return Err(format!(
                 "bee {cmd}: --note is {} characters; it is one line on a report \
                  ({MAX_NOTE_CHARS} max).",
                 text.chars().count()
             ));
         }
-    }
     let win = PresenceWindow { id: new_row_id(), away_at: now_iso(), note, back_at: None };
     if append_jsonl(&presence_path(control), &win.away_event()).is_err() {
         return Err(format!("bee {cmd}: could not append to the presence store."));
@@ -2368,7 +2367,7 @@ fn render_report_markdown(
             candidates.push((item.needs_human, item.rank, si, ii));
         }
     }
-    candidates.sort_by(|a, b| (b.0, b.1).cmp(&(a.0, a.1)));
+    candidates.sort_by_key(|a| std::cmp::Reverse((a.0, a.1)));
     let kept: Vec<(usize, usize)> =
         candidates.iter().take(allowance).map(|(_, _, si, ii)| (*si, *ii)).collect();
 
@@ -2764,7 +2763,6 @@ pub(crate) struct Counter {
 /// value and forget its verdict. Zero samples is `not-measurable` even when a
 /// ratio could be spelled: 0/0 is not 0, and a band verdict over nothing is
 /// the exact lie this whole surface is built to refuse.
-#[allow(clippy::too_many_arguments)]
 fn counter(
     name: &'static str,
     label: &'static str,
@@ -2913,11 +2911,10 @@ fn read_cells(control: &Path) -> Vec<Value> {
             continue;
         }
         let Ok(text) = std::fs::read_to_string(entry.path()) else { continue };
-        if let Ok(v) = serde_json::from_str::<Value>(&text) {
-            if v.is_object() {
+        if let Ok(v) = serde_json::from_str::<Value>(&text)
+            && v.is_object() {
                 out.push(v);
             }
-        }
     }
     out
 }

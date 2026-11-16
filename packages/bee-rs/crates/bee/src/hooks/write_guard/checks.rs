@@ -380,7 +380,6 @@ pub(crate) enum WV {
     Deny(String),
 }
 
-#[allow(clippy::too_many_arguments)]
 pub(crate) fn check_write(
     root: &str,
     state: &Map<String, Value>,
@@ -429,8 +428,8 @@ FIX: write it to .bee/tmp/ instead (or .bee/spikes/ for a feasibility proof), an
     // shape gate is approved — resolved from the path segment, never from
     // the calling session's bound feature, and phase-independent like the
     // other path-scoped denies above.
-    if let Some(feature) = plan_freeze_feature(&normalized) {
-        if plan_freeze_shape_approved(&control_root, state, &feature)? {
+    if let Some(feature) = plan_freeze_feature(&normalized)
+        && plan_freeze_shape_approved(&control_root, state, &feature)? {
             return Ok(WV::Deny(format!(
                 "bee plan-freeze guard: \"{}\" is {}'s plan.md and its shape gate is approved — \
 plan.md freezes once shape is locked and no longer accepts direct edits. \
@@ -439,7 +438,6 @@ unapprove the shape gate first to redraft the plan.",
                 normalized, feature, feature
             )));
         }
-    }
 
     let (record, source, session_unbound) =
         match resolve_write_record(&control_root, state, session_id, emit)? {
@@ -473,7 +471,7 @@ FIX: inspect/restore the reservation store, then retry.",
         // ONE lease file carrying an unreadable `expires_at` switched the whole
         // guard off. An unreadable expiry is NOT expired — the lease still
         // conflicts, and this deny still fires.
-        let hold_conflicts = find_session_conflicts(root, sid, &[normalized.clone()]);
+        let hold_conflicts = find_session_conflicts(root, sid, std::slice::from_ref(&normalized));
         if !hold_conflicts.is_empty() {
             let acting_workspace = ctx.workspace_id.clone().unwrap_or_else(|| "main".to_string());
             let mut same_workspace: Vec<&Resv> = Vec::new();
@@ -509,7 +507,7 @@ treating it as empty. FIX: inspect/restore the ledger in the main checkout, then
         }
         // sfg-5: infallible now, same class as the lease readers above — an
         // unreadable `mirrored_at` is not evidence the hold lapsed.
-        let foreign = find_foreign_holds(&main_root, &holder_id, &[normalized.clone()]);
+        let foreign = find_foreign_holds(&main_root, &holder_id, std::slice::from_ref(&normalized));
         if let Some(hold) = foreign.first() {
             let feature_disp = match hold.get("feature") {
                 Some(v) if truthy(v) => js_disp(v),
@@ -646,7 +644,7 @@ Get execution approval (bee-hive) before touching source files.",
             .map(|s| s.to_string())
             .or(env_agent);
         if let Some(agent) = agent {
-            let conflicts = find_conflicts(root, &agent, &[normalized.clone()]);
+            let conflicts = find_conflicts(root, &agent, std::slice::from_ref(&normalized));
             if !conflicts.is_empty() {
                 let hard: Vec<&Resv> =
                     conflicts.iter().filter(|c| is_hard_conflict(c, &normalized)).collect();
@@ -706,7 +704,6 @@ is a legitimate new phase, add explicit dispatch for it in checkWrite.",
 
 // ─── checkGitBashCommand (provenance: guards.mjs, full port) ───────────────
 
-#[allow(clippy::too_many_arguments)]
 pub(crate) fn check_git_bash_command(
     root: &str,
     state: &Map<String, Value>,
@@ -788,7 +785,6 @@ pub(crate) fn check_git_bash_command(
 /// per git invocation `check_git_bash_command` finds in the token list.
 /// `Ok(None)` means this ONE invocation does not deny — the caller moves on
 /// to the next invocation, if any.
-#[allow(clippy::too_many_arguments)]
 fn evaluate_git_invocation(
     root: &str,
     topo: &Topo,
@@ -887,8 +883,8 @@ A genuinely path-scoped `git commit -- <your paths>` is allowed too.",
         "clean", "apply", "cherry-pick", "revert", "rebase",
     ];
     const PATH_RESOLVABLE: [&str; 6] = ["commit", "add", "rm", "mv", "checkout", "restore"];
-    if let Some(sub) = subcommand {
-        if MUTATING.contains(&sub) {
+    if let Some(sub) = subcommand
+        && MUTATING.contains(&sub) {
             let resolved = if PATH_RESOLVABLE.contains(&sub) {
                 resolve_git_mutation_paths(cwd, sub, rest)
             } else {
@@ -922,7 +918,6 @@ A genuinely path-scoped `git commit -- <your paths>` is allowed too.",
             }
             return Ok(None); // { allow: true, kind: 'git-bookkeeping' }
         }
-    }
 
     let named = match subcommand {
         Some(s) => s.to_string(),
@@ -986,7 +981,6 @@ const GH_READ_ONLY_LIST: &str = "pr view|list|status|checks|diff, run list|view|
 issue view|list, release view|list|download, repo view, workflow list|view, search <any>, \
 cache list, label list, status, auth status, api with an explicit GET, and api graphql with no mutation";
 
-#[allow(clippy::too_many_arguments)]
 fn outward_arm(
     root: &str,
     cwd: &str,
@@ -1246,11 +1240,10 @@ fn gh_api_method(rest: &[String]) -> Option<&str> {
         if token == "-X" || token == "--method" {
             return rest.get(i + 1).map(String::as_str);
         }
-        if let Some(glued) = token.strip_prefix("-X") {
-            if !glued.is_empty() {
+        if let Some(glued) = token.strip_prefix("-X")
+            && !glued.is_empty() {
                 return Some(glued);
             }
-        }
         if let Some(joined) = token.strip_prefix("--method=") {
             return Some(joined);
         }

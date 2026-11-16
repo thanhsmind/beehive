@@ -328,7 +328,7 @@ fn read_gitdir_file(file: &str, base: &str) -> Option<String> {
         Some(rest) => js_trim(rest),
         None => raw,
     };
-    let sep_fixed = raw.replace('\\', &std::path::MAIN_SEPARATOR.to_string());
+    let sep_fixed = raw.replace('\\', std::path::MAIN_SEPARATOR_STR);
     Some(path_resolve(base, &sep_fixed))
 }
 

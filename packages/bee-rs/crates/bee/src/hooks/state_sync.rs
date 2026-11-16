@@ -60,11 +60,10 @@ fn run_gated(ctx: &HookContext, root: &Path) -> Result<(), Delegate> {
 
     // D5 — throttled heartbeat + claim/hold lease renewal, own try/catch so a
     // throw here never blocks the state counts/last_activity refresh below.
-    if let Some(sid) = &plan.sid {
-        if let Err(msg) = heartbeat_block(ctx, root, sid) {
+    if let Some(sid) = &plan.sid
+        && let Err(msg) = heartbeat_block(ctx, root, sid) {
             log_crash(Some(root), HOOK_NAME, &msg, ctx.source);
         }
-    }
 
     let counts = count_cells(root);
 
@@ -569,13 +568,12 @@ fn renew_claim_ttl(ctrl: &Path, sid: &str, now: &DateTime<Utc>) -> Result<(), St
         }
         let result = (|| -> Result<(), String> {
             // Re-verify ownership under the gate.
-            if let Some(mut claim) = read_claim(&claim_file) {
-                if claim.get("session") == Some(&sid_value) {
+            if let Some(mut claim) = read_claim(&claim_file)
+                && claim.get("session") == Some(&sid_value) {
                     // `{ ...claim, claimed_at }` — only the expiry clock advances.
                     claim.insert("claimed_at".to_string(), Value::String(iso_ms(now)));
                     write_json_atomic_retry(&claim_file, &Value::Object(claim))?;
                 }
-            }
             Ok(())
         })();
         let released = remove_file_retry(&gate); // finally: releaseGate

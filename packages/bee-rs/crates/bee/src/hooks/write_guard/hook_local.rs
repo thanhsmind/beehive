@@ -111,14 +111,13 @@ pub(crate) fn has_brace_expansion(raw: &str) -> bool {
     let chars: Vec<char> = raw.chars().collect();
     let mut i = 0usize;
     while i < chars.len() {
-        if chars[i] == '{' {
-            if let Some(close_offset) = chars[i + 1..].iter().position(|&c| c == '}') {
+        if chars[i] == '{'
+            && let Some(close_offset) = chars[i + 1..].iter().position(|&c| c == '}') {
                 let inner: String = chars[i + 1..i + 1 + close_offset].iter().collect();
                 if inner.contains(',') || inner.contains("..") {
                     return true;
                 }
             }
-        }
         i += 1;
     }
     false
@@ -566,19 +565,17 @@ this path belongs to the main checkout, not this worktree. FIX: write {in_worktr
         )));
     }
     for id in read_granted_worktree_ids(&main_root) {
-        if let Some((_, cur_id)) = &current {
-            if &id == cur_id {
+        if let Some((_, cur_id)) = &current
+            && &id == cur_id {
                 continue;
             }
-        }
-        if let Some(worktree_root) = resolve_granted_worktree_root(&main_root, &id)? {
-            if is_under_root(&worktree_root, &target_real)? {
+        if let Some(worktree_root) = resolve_granted_worktree_root(&main_root, &id)?
+            && is_under_root(&worktree_root, &target_real)? {
                 return Ok(Some(format!(
                     "bee write guard denied this target: it could not be canonically contained inside the physical worktree — \
 it resolves inside worktree \"{id}\". FIX: the file belongs to worktree {id}; leave it, and write only inside your own worktree ({canonical_root})."
                 )));
             }
-        }
     }
     Ok(None)
 }
@@ -593,25 +590,19 @@ pub(crate) fn read_worktree_recorded_feature(worktree_root: &str) -> Option<Stri
         .join(".bee")
         .join("runtime")
         .join("worktree-identity.json");
-    if let Ok(text) = std::fs::read_to_string(&identity_file) {
-        if let Ok(Value::Object(m)) = serde_json::from_str::<Value>(&text) {
-            if let Some(Value::String(f)) = m.get("feature") {
-                if !f.is_empty() {
+    if let Ok(text) = std::fs::read_to_string(&identity_file)
+        && let Ok(Value::Object(m)) = serde_json::from_str::<Value>(&text)
+            && let Some(Value::String(f)) = m.get("feature")
+                && !f.is_empty() {
                     return Some(f.clone());
                 }
-            }
-        }
-    }
     let state_file = Path::new(worktree_root).join(".bee").join("state.json");
-    if let Ok(text) = std::fs::read_to_string(&state_file) {
-        if let Ok(Value::Object(m)) = serde_json::from_str::<Value>(&text) {
-            if let Some(Value::String(f)) = m.get("feature") {
-                if !f.is_empty() {
+    if let Ok(text) = std::fs::read_to_string(&state_file)
+        && let Ok(Value::Object(m)) = serde_json::from_str::<Value>(&text)
+            && let Some(Value::String(f)) = m.get("feature")
+                && !f.is_empty() {
                     return Some(f.clone());
                 }
-            }
-        }
-    }
     None
 }
 
@@ -1250,11 +1241,10 @@ pub(crate) fn is_registered_submodule(root_real: &str, nested_real: &str) -> R<b
             }
         };
         let entry = np_resolve2(root_real, &cap)?;
-        if let Some(entry_real) = realpath_f2(&entry)? {
-            if entry_real == nested_real {
+        if let Some(entry_real) = realpath_f2(&entry)?
+            && entry_real == nested_real {
                 return Ok(true);
             }
-        }
     }
     Ok(false)
 }
@@ -1325,11 +1315,10 @@ pub(crate) fn is_shared_nested_checkout_target(
         }
         CompanionContainment::Outside => {}
     }
-    if let Some(nested) = find_nested_checkout_dir(&root_real, abs_target)? {
-        if !is_registered_submodule(&root_real, &nested)? {
+    if let Some(nested) = find_nested_checkout_dir(&root_real, abs_target)?
+        && !is_registered_submodule(&root_real, &nested)? {
             return Ok(SharedNested::Yes);
         }
-    }
     Ok(SharedNested::No)
 }
 

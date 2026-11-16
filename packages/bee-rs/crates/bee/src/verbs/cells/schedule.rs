@@ -47,11 +47,10 @@ fn obligated_roots_of(files: &[String], guards: &[ActiveGuard]) -> Vec<String> {
     for file in files {
         let normalized = normalize_cell_path(file);
         for guard in guards {
-            if let Some(root) = guard.roots.iter().find(|r| path_under_root(&normalized, r)) {
-                if !roots.contains(root) {
+            if let Some(root) = guard.roots.iter().find(|r| path_under_root(&normalized, r))
+                && !roots.contains(root) {
                     roots.push(root.clone());
                 }
-            }
         }
     }
     js_default_sort(&mut roots);

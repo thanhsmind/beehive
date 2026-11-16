@@ -153,11 +153,10 @@ fn can_render_prompt(name: &str, template: &str) -> bool {
             }
         } else {
             let var = raw.strip_prefix("#if ").unwrap_or(raw);
-            if !var.is_empty() && var.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
-                if !supported.contains(&var) {
+            if !var.is_empty() && var.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
+                && !supported.contains(&var) {
                     return false;
                 }
-            }
         }
         rest = &after[close + 2..];
     }
@@ -217,7 +216,6 @@ pub(crate) fn load_prompt(name: &str) -> Option<String> {
 
 #[derive(Debug)]
 pub(crate) enum PromptSkew {
-    NoEmbedded,
     Disk(std::path::PathBuf),
 }
 
@@ -269,12 +267,6 @@ pub(crate) fn prompt_skew(root: &Path, name: &str) -> Option<PromptSkew> {
 /// delegate TO: name the file, the cause, and the remedy.
 pub(crate) fn prompt_skew_message(cmd: &str, name: &str, skew: &PromptSkew) -> String {
     match skew {
-        PromptSkew::NoEmbedded => format!(
-            "bee {cmd}: no prompt template named `{name}` is compiled into this binary \
-             (bee {}), so no worker prompt can be rendered. FIX: rebuild from a source tree \
-             that carries packages/bee/prompts/{name}.md.",
-            crate::version::BEE_VERSION
-        ),
         PromptSkew::Disk(path) => format!(
             "bee {cmd}: prompt skew — {} does not match the `{name}` template compiled into \
              this binary (bee {}), so a worker would be handed a prompt that is not the one on \
@@ -299,7 +291,7 @@ pub(crate) fn prompt_skew_message(cmd: &str, name: &str, skew: &PromptSkew) -> S
 ///     surviving `{{#if `/`{{/if}}` after the block pass.
 ///   * `{{NAME}}` placeholders substitute String(vars[NAME]); an
 ///     undefined/null value is a loud refusal.
-/// Names are `[A-Za-z0-9_]+` in both markers.
+///     Names are `[A-Za-z0-9_]+` in both markers.
 pub(crate) fn render(template: &str, vars: &[(&str, &str)]) -> Result<String, String> {
     let lookup = |name: &str| -> Option<&str> {
         vars.iter().find(|(k, _)| *k == name).map(|(_, v)| *v)
@@ -368,8 +360,8 @@ pub(crate) fn render(template: &str, vars: &[(&str, &str)]) -> Result<String, St
     let mut i = 0usize;
     while i < out.len() {
         let rest = &out[i..];
-        if let Some(after) = rest.strip_prefix("{{") {
-            if let Some(close) = after.find("}}") {
+        if let Some(after) = rest.strip_prefix("{{")
+            && let Some(close) = after.find("}}") {
                 let name = &after[..close];
                 if !name.is_empty() && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
                     match lookup(name) {
@@ -384,7 +376,6 @@ pub(crate) fn render(template: &str, vars: &[(&str, &str)]) -> Result<String, St
                     continue;
                 }
             }
-        }
         let ch = rest.chars().next().unwrap();
         result.push(ch);
         i += ch.len_utf8();

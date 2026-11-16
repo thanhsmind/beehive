@@ -61,10 +61,9 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
             let v = args.get(i + 1)?.to_str()?;
             limit = parse_limit(v)?;
             i += 1;
-        } else if let Some(v) = tok.strip_prefix("--limit=") {
-            limit = parse_limit(v)?;
         } else {
-            return None; // unknown flag/positional — refuse out loud below
+            let v = tok.strip_prefix("--limit=")?;
+            limit = parse_limit(v)?;
         }
         i += 1;
     }
@@ -152,7 +151,7 @@ fn extract_entry(row: &Value) -> Option<(String, u64)> {
 /// with that one sample for both stats rather than leaving a gap.
 fn percentile(sorted: &[u64], p: f64) -> f64 {
     let n = sorted.len();
-    if p == 0.5 && n % 2 == 0 {
+    if p == 0.5 && n.is_multiple_of(2) {
         let lo = sorted[n / 2 - 1] as f64;
         let hi = sorted[n / 2] as f64;
         return (lo + hi) / 2.0;

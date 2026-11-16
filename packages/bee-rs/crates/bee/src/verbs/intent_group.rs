@@ -123,11 +123,10 @@ fn intent_key_candidates(
     if let Some(r) = resolved {
         push(sanitize_intent_key(&r));
     }
-    if let Some(s) = session {
-        if !js_trim(s).is_empty() {
+    if let Some(s) = session
+        && !js_trim(s).is_empty() {
             push(sanitize_intent_key(s));
         }
-    }
     push(DEFAULT_INTENT_KEY.to_string());
     Ok(candidates)
 }
@@ -267,16 +266,14 @@ fn has_other_live_lane(root: &Path, active: &str) -> bool {
         is_live_lane_record(rec)
             && !matches!(rec.get("feature"), Some(Value::String(f)) if js_trim(f) == active)
     };
-    if let Ok(lanes) = crate::verbs::workflow_store::list_lanes(root) {
-        if lanes.iter().any(|r| other(r)) {
+    if let Ok(lanes) = crate::verbs::workflow_store::list_lanes(root)
+        && lanes.iter().any(&other) {
             return true;
         }
-    }
-    if let Ok(workflows) = crate::verbs::workflow_store::list_workflows(root) {
-        if workflows.iter().any(|r| other(r)) {
+    if let Ok(workflows) = crate::verbs::workflow_store::list_workflows(root)
+        && workflows.iter().any(other) {
             return true;
         }
-    }
     false
 }
 
@@ -329,11 +326,10 @@ pub(crate) fn dispatch_original_request(root: &Path, feature: Option<&str>) -> O
         // VERBATIM — never trimmed, never truncated, never re-wrapped. The
         // trim here only decides present-vs-absent; the returned bytes are
         // the stored bytes.
-        if let Some(request) = field_str(&anchor, "request") {
-            if !js_trim(request).is_empty() {
+        if let Some(request) = field_str(&anchor, "request")
+            && !js_trim(request).is_empty() {
                 return Some(request.to_string());
             }
-        }
     }
     None
 }
@@ -375,11 +371,10 @@ fn context_lines(anchor: &Map<String, Value>) -> Vec<String> {
     }
     let mut wheres = Vec::new();
     for (label, name) in [("feature", "feature"), ("lane", "lane"), ("cell", "cell")] {
-        if let Some(s) = field_str(anchor, name) {
-            if !s.is_empty() {
+        if let Some(s) = field_str(anchor, name)
+            && !s.is_empty() {
                 wheres.push(format!("{label}={s}"));
             }
-        }
     }
     if !wheres.is_empty() {
         lines.push(format!("CONTEXT: {}", wheres.join(" ")));
@@ -447,7 +442,7 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
     }
     let verb = args.get(1)?.to_str()?;
     let toks: Vec<&str> = args[2..].iter().map(|a| a.to_str()).collect::<Option<Vec<_>>>()?;
-    if toks.iter().any(|t| *t == "--help") {
+    if toks.contains(&"--help") {
         return None; // Node renders command-scoped help
     }
     let pre_json = pre_json_scan(&toks);
@@ -519,8 +514,8 @@ fn run_set(flags: Flags, json: bool, pre_json: bool, t0: Instant) -> Option<Exit
     let candidates = intent_key_candidates(&ctx.root, feature_flag, session_flag).ok()?;
     let key = candidates[0].clone();
     let existing = read_anchor_at(&ctx.root, &key).ok()?;
-    if let Some(existing) = existing {
-        if !force {
+    if let Some(existing) = existing
+        && !force {
             if field_str(&existing, "request") != Some(request.as_str()) {
                 return Some(ctx.fail(&format!(
                     "writeIntent: an anchor already exists at \"{key}\" with a different request — request is immutable once set (D1). Advance it (`bee intent advance`), clear it (`bee intent clear`), or pass --force to replace the objective deliberately."
@@ -532,7 +527,6 @@ fn run_set(flags: Flags, json: bool, pre_json: bool, t0: Instant) -> Option<Exit
                 )));
             }
         }
-    }
 
     let feature_value = {
         let explicit = optional_string(feature_flag);

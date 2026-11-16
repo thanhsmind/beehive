@@ -29,11 +29,10 @@ pub(crate) fn reset_turn(store_root: &Path, payload: &Map<String, Value>) {
 }
 
 fn write_turn_state(path: &Path, state: &str) -> bool {
-    if let Some(dir) = path.parent() {
-        if std::fs::create_dir_all(dir).is_err() {
+    if let Some(dir) = path.parent()
+        && std::fs::create_dir_all(dir).is_err() {
             return false;
         }
-    }
     std::fs::write(path, format!("{{\"state\":\"{state}\"}}\n")).is_ok()
 }
 

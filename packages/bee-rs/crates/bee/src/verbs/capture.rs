@@ -311,11 +311,10 @@ fn run_add(parsed: ParsedArgs, t0: Instant) -> Option<ExitCode> {
         return None; // assertSafeContent('outcome') — Node's refusal text
     }
     let area = opt("area").map(js_trim).filter(|a| !a.is_empty());
-    if let Some(area) = area {
-        if has_secret(area) || has_injection(area) {
+    if let Some(area) = area
+        && (has_secret(area) || has_injection(area)) {
             return None; // assertSafeContent('area')
         }
-    }
     let dids = normalize_list(opt("did"));
     let files = normalize_list(opt("files"));
     let lane = lane_raw.map(js_trim).filter(|l| !l.is_empty());

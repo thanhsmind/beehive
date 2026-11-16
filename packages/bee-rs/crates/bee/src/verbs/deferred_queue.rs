@@ -581,7 +581,7 @@ enum ClaimDecision {
     /// The item is unclaimed (or its claim is reclaimable) as of this fold —
     /// a claim MAY be appended. Never a write itself: read-only, so it is
     /// safe to call outside any lock.
-    Claimable(Item),
+    Claimable(Box<Item>),
     NotFound,
     Completed,
     Claimed(Claim),
@@ -597,12 +597,11 @@ fn decide_claim(root: &Path, id: &str, now_ms: f64) -> ClaimDecision {
     if item.completed {
         return ClaimDecision::Completed;
     }
-    if let Some(claim) = &item.claim {
-        if !claim_reclaimable(root, claim, now_ms) {
+    if let Some(claim) = &item.claim
+        && !claim_reclaimable(root, claim, now_ms) {
             return ClaimDecision::Claimed(claim.clone());
         }
-    }
-    ClaimDecision::Claimable(item.clone())
+    ClaimDecision::Claimable(Box::new(item.clone()))
 }
 
 /// The write half: appends the `claim` event. Callers MUST hold the store

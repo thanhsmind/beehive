@@ -169,7 +169,7 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
 
 fn run_reroute_cli(rest: &[OsString], t0: Instant) -> Option<ExitCode> {
     let toks: Vec<&str> = rest.iter().map(|a| a.to_str()).collect::<Option<Vec<_>>>()?;
-    if toks.iter().any(|t| *t == "--help") {
+    if toks.contains(&"--help") {
         return None;
     }
     let (flags, use_json) = rsv::parse_flags(&toks)?;
@@ -304,13 +304,11 @@ fn handle_list(root: &Path, feature: Option<&str>, status: Option<&str>) -> Resu
     let mut cells = list_cells(root, feature, status)?;
     let now = rsv::now_ms();
     for cell in &mut cells {
-        if let Value::Object(map) = cell {
-            if let Some(Value::String(id)) = map.get("id") {
-                if let Some(ann) = claim_annotation(root, id, now).map_err(|_| Delegate)? {
+        if let Value::Object(map) = cell
+            && let Some(Value::String(id)) = map.get("id")
+                && let Some(ann) = claim_annotation(root, id, now).map_err(|_| Delegate)? {
                     map.insert("claim".into(), ann);
                 }
-            }
-        }
     }
     let text = if cells.is_empty() {
         "No cells.".to_string()

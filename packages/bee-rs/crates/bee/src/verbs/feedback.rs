@@ -572,20 +572,17 @@ fn injection_ignore(s: &str) -> bool {
         if let Some(after_space) = skip_js_space_plus(s, p + 6) {
             // Try both (?:all\s+)? branches explicitly, like backtracking.
             let mut candidates = vec![after_space];
-            if ci_starts(t, after_space, b"all") {
-                if let Some(a2) = skip_js_space_plus(s, after_space + 3) {
+            if ci_starts(t, after_space, b"all")
+                && let Some(a2) = skip_js_space_plus(s, after_space + 3) {
                     candidates.push(a2);
                 }
-            }
             for cand in candidates {
                 for target in INJ_TARGETS {
-                    if ci_starts(t, cand, target) {
-                        if let Some(after_target) = skip_js_space_plus(s, cand + target.len()) {
-                            if TAILS.iter().any(|tail| ci_starts(t, after_target, tail)) {
+                    if ci_starts(t, cand, target)
+                        && let Some(after_target) = skip_js_space_plus(s, cand + target.len())
+                            && TAILS.iter().any(|tail| ci_starts(t, after_target, tail)) {
                                 return true;
                             }
-                        }
-                    }
                 }
             }
         }
@@ -601,11 +598,10 @@ fn injection_disregard(s: &str) -> bool {
     while let Some(p) = find_ci(t, b"disregard", i) {
         if let Some(after_space) = skip_js_space_plus(s, p + 9) {
             let mut candidates = vec![after_space];
-            if ci_starts(t, after_space, b"all") {
-                if let Some(a2) = skip_js_space_plus(s, after_space + 3) {
+            if ci_starts(t, after_space, b"all")
+                && let Some(a2) = skip_js_space_plus(s, after_space + 3) {
                     candidates.push(a2);
                 }
-            }
             for cand in candidates {
                 if INJ_TARGETS.iter().any(|target| ci_starts(t, cand, target)) {
                     return true;
@@ -705,12 +701,7 @@ pub(crate) fn normalize_kind(raw: &Value) -> Option<&'static str> {
             return Some(v);
         }
     }
-    for (_, v) in KIND_ALIASES {
-        if v == s {
-            return Some(v);
-        }
-    }
-    None
+    KIND_ALIASES.into_iter().map(|(_, v)| v).find(|&v| v == s).map(|v| v as _)
 }
 
 /// backlogAllowedTypes() (bee.mjs): sorted unique KIND_ALIASES keys + values.
@@ -2051,9 +2042,7 @@ pub(crate) fn normalize_title(title: &Value) -> String {
         if js_is_space(c) {
             in_ws = true;
         } else {
-            if in_ws && !out.is_empty() {
-                out.push(' ');
-            } else if in_ws {
+            if in_ws {
                 out.push(' ');
             }
             in_ws = false;
@@ -2257,15 +2246,14 @@ fn build_ranked_map(key: &str, entries: Vec<Value>, repos_len: usize) -> (Value,
     let rank = pain * frequency * corroboration;
     let mut earliest: Option<String> = None;
     for e in &entries {
-        if let Some(Value::String(fs)) = e.get("first_seen") {
-            if !fs.is_empty()
+        if let Some(Value::String(fs)) = e.get("first_seen")
+            && !fs.is_empty()
                 && (earliest.is_none()
                     || code_unit_cmp(fs, earliest.as_ref().unwrap())
                         == std::cmp::Ordering::Less)
             {
                 earliest = Some(fs.clone());
             }
-        }
     }
     let mut m = Map::new();
     m.insert("key".into(), Value::String(key.to_string()));

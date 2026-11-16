@@ -67,19 +67,17 @@ pub fn run(_argv: &[String], stdin: &str) -> Outcome {
         return Outcome::Done(ExitCode::SUCCESS);
     }
 
-    if mode_a {
-        if let Some(reason) = evaluate_mode_a(command) {
+    if mode_a
+        && let Some(reason) = evaluate_mode_a(command) {
             eprintln!("{reason}");
             return Outcome::Done(ExitCode::from(2));
         }
-    }
 
-    if mode_b {
-        if let Some(reason) = evaluate_mode_b(command, &supervisor_allowed) {
+    if mode_b
+        && let Some(reason) = evaluate_mode_b(command, &supervisor_allowed) {
             eprintln!("{reason}");
             return Outcome::Done(ExitCode::from(2));
         }
-    }
 
     Outcome::Done(ExitCode::SUCCESS)
 }
@@ -198,8 +196,8 @@ fn mode_b_blocked(command: &str, supervisor_allowed: &str) -> Option<String> {
     let mut allowed_prefixes = Vec::new();
     for entry in supervisor_allowed.split(',') {
         let entry = entry.trim();
-        if let Some(rest) = entry.strip_prefix("Bash(") {
-            if let Some(inner) = rest.strip_suffix(')') {
+        if let Some(rest) = entry.strip_prefix("Bash(")
+            && let Some(inner) = rest.strip_suffix(')') {
                 let prefix = if let Some(p) = inner.strip_suffix(":*") {
                     p
                 } else if let Some(p) = inner.strip_suffix('*') {
@@ -209,7 +207,6 @@ fn mode_b_blocked(command: &str, supervisor_allowed: &str) -> Option<String> {
                 };
                 allowed_prefixes.push(prefix.trim().to_string());
             }
-        }
     }
 
     let fenced = fence_heredocs(command);

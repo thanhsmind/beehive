@@ -453,11 +453,10 @@ pub(crate) fn feature_leader_check_debt(
             .and_then(|e| e.get("verdict"))
             .and_then(Value::as_str)
             == Some("ok");
-        if !is_ok {
-            if let Some(id) = cell.get("id") {
+        if !is_ok
+            && let Some(id) = cell.get("id") {
                 ids.push(id.clone());
             }
-        }
     }
     Ok(crate::verbs::drivers::DebtSummary { count: ids.len(), ids })
 }

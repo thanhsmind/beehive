@@ -112,14 +112,13 @@ fn release_and_never_run(root: &Path, last: &Option<LastRun>, reasons: &mut Vec<
         None => reasons.push(("never_run", "no audit row of this kind has been logged".to_string())),
         Some(run) => {
             let Some((tag, tag_at)) = newest_release_tag(root) else { return };
-            if let (Some(tag_epoch), Some(run_epoch)) = (epoch(&tag_at), epoch(&run.at)) {
-                if tag_epoch > run_epoch {
+            if let (Some(tag_epoch), Some(run_epoch)) = (epoch(&tag_at), epoch(&run.at))
+                && tag_epoch > run_epoch {
                     reasons.push((
                         "release_since_last_run",
                         format!("tag {tag} ({tag_at}) is newer than the last run ({})", run.at),
                     ));
                 }
-            }
         }
     }
 }
@@ -273,7 +272,7 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
         return None;
     }
     let toks: Vec<&str> = args[2..].iter().map(|a| a.to_str()).collect::<Option<Vec<_>>>()?;
-    if toks.iter().any(|t| *t == "--help") {
+    if toks.contains(&"--help") {
         return None;
     }
     let pre_json = pre_json_scan(&toks);

@@ -338,11 +338,10 @@ pub(crate) fn run_session_unbind(flags: Flags, use_json: bool, t0: Instant) -> O
 /// adoption fallback: a release names its own session, never guesses one
 /// from the sessions directory.
 fn resolve_release_session_id(flag: Option<&str>) -> Option<String> {
-    if let Some(f) = flag {
-        if !js_trim(f).is_empty() {
+    if let Some(f) = flag
+        && !js_trim(f).is_empty() {
             return Some(js_trim(f).to_string());
         }
-    }
     crate::session_identity::env_session_id()
 }
 
@@ -458,8 +457,8 @@ pub(crate) fn resolve_handoff_workflow_id(
         };
     }
     let default_record = read_state_strict(root)?;
-    if let Some(v) = default_record.get("feature") {
-        if truthy(v) {
+    if let Some(v) = default_record.get("feature")
+        && truthy(v) {
             let feat = js_disp(v);
             if let Some(wf) = find_live_workflow(&workflows, &feat) {
                 return Ok(Some(wf_id(wf)));
@@ -470,7 +469,6 @@ pub(crate) fn resolve_handoff_workflow_id(
                 return Ok(Some(wf_id(wf)));
             }
         }
-    }
     Ok(None) // nothing resolves — the legacy single-file path handles this call
 }
 
@@ -788,7 +786,7 @@ pub(crate) fn run_handoff_dismiss(flags: Flags, use_json: bool, t0: Instant) -> 
             Ok(HandoffDismiss::Fail { reason }) => {
                 Ok(Out::Thrown(format!("state handoff dismiss: {reason}")))
             }
-            Ok(HandoffDismiss::Ok { record: _ }) => {
+            Ok(HandoffDismiss::Ok { .. }) => {
                 let mut result = Map::new();
                 result.insert("ok".into(), json!(true));
                 let text = "Dismissed \"pause\" handoff; handoff cleared.".to_string();

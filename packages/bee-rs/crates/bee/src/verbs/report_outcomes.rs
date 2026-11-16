@@ -346,33 +346,28 @@ fn find_cell_files(root: &Path) -> Vec<PathBuf> {
     if let Ok(entries) = std::fs::read_dir(&cells_dir) {
         for entry in entries.flatten() {
             let path = entry.path();
-            if path.is_file() {
-                if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
-                    if name.ends_with(".json") && !name.starts_with('.') {
+            if path.is_file()
+                && let Some(name) = path.file_name().and_then(|n| n.to_str())
+                    && name.ends_with(".json") && !name.starts_with('.') {
                         files.push(path);
                     }
-                }
-            }
         }
     }
     let archive_dir = cells_dir.join("archive");
     if let Ok(feat_entries) = std::fs::read_dir(&archive_dir) {
         for feat_entry in feat_entries.flatten() {
             let feat_path = feat_entry.path();
-            if feat_path.is_dir() {
-                if let Ok(cell_entries) = std::fs::read_dir(&feat_path) {
+            if feat_path.is_dir()
+                && let Ok(cell_entries) = std::fs::read_dir(&feat_path) {
                     for cell_entry in cell_entries.flatten() {
                         let path = cell_entry.path();
-                        if path.is_file() {
-                            if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
-                                if name.ends_with(".json") && !name.starts_with('.') {
+                        if path.is_file()
+                            && let Some(name) = path.file_name().and_then(|n| n.to_str())
+                                && name.ends_with(".json") && !name.starts_with('.') {
                                     files.push(path);
                                 }
-                            }
-                        }
                     }
                 }
-            }
         }
     }
     files.sort();
@@ -383,7 +378,7 @@ fn is_truthy(v: &Value) -> bool {
     match v {
         Value::Null => false,
         Value::Bool(b) => *b,
-        Value::Number(n) => n.as_f64().map_or(false, |f| f != 0.0),
+        Value::Number(n) => n.as_f64().is_some_and(|f| f != 0.0),
         Value::String(s) => !s.is_empty(),
         Value::Array(_) => true,
         Value::Object(_) => true,
@@ -448,8 +443,8 @@ fn collect_outcomes(root: &Path, feature_filter: Option<&str>) -> OutcomesReport
             Some(_) => report.reaction.null += 1,
         }
 
-        if let Some(dissent_arr) = trace_obj.and_then(|t| t.get("dissent")).and_then(Value::as_array) {
-            if !dissent_arr.is_empty() {
+        if let Some(dissent_arr) = trace_obj.and_then(|t| t.get("dissent")).and_then(Value::as_array)
+            && !dissent_arr.is_empty() {
                 report.dissent.cells_with_record += 1;
                 for entry in dissent_arr {
                     let verdict = entry.as_object().and_then(|e| e.get("verdict")).and_then(Value::as_str);
@@ -461,10 +456,9 @@ fn collect_outcomes(root: &Path, feature_filter: Option<&str>) -> OutcomesReport
                     }
                 }
             }
-        }
 
-        if let Some(judge_arr) = trace_obj.and_then(|t| t.get("semantic_judge")).and_then(Value::as_array) {
-            if !judge_arr.is_empty() {
+        if let Some(judge_arr) = trace_obj.and_then(|t| t.get("semantic_judge")).and_then(Value::as_array)
+            && !judge_arr.is_empty() {
                 report.judge.cells_with_record += 1;
                 for entry in judge_arr {
                     let verdict = entry.as_object().and_then(|e| e.get("verdict")).and_then(Value::as_str);
@@ -475,17 +469,15 @@ fn collect_outcomes(root: &Path, feature_filter: Option<&str>) -> OutcomesReport
                     }
                 }
             }
-        }
 
-        if let Some(leader_arr) = trace_obj.and_then(|t| t.get("leader_check")).and_then(Value::as_array) {
-            if !leader_arr.is_empty() {
+        if let Some(leader_arr) = trace_obj.and_then(|t| t.get("leader_check")).and_then(Value::as_array)
+            && !leader_arr.is_empty() {
                 report.leader_check.cells_with_record += 1;
                 for entry in leader_arr {
                     let verdict = entry.as_object().and_then(|e| e.get("verdict")).and_then(Value::as_str).unwrap_or("unknown");
                     *report.leader_check.verdicts.entry(verdict.to_string()).or_insert(0) += 1;
                 }
             }
-        }
 
         let reworked = ["reopened_for_rework", "reopened_at"]
             .iter()
@@ -494,12 +486,11 @@ fn collect_outcomes(root: &Path, feature_filter: Option<&str>) -> OutcomesReport
             report.rework.cells_with_record += 1;
         }
 
-        if let Some(reroute_arr) = obj.get("role_reroutes").and_then(Value::as_array) {
-            if !reroute_arr.is_empty() {
+        if let Some(reroute_arr) = obj.get("role_reroutes").and_then(Value::as_array)
+            && !reroute_arr.is_empty() {
                 report.role_reroute.cells_with_record += 1;
                 report.role_reroute.entries += reroute_arr.len();
             }
-        }
 
         if let Some(dev_arr) = trace_obj.and_then(|t| t.get("deviations")).and_then(Value::as_array) {
             let mut cell_has_departure = false;

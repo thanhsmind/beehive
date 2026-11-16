@@ -137,9 +137,9 @@ fn run_start(tokens: &[OsString], t0: Instant) -> Option<ExitCode> {
     ) {
         Ok(c) => c,
         Err(CErr::Refuse(msg)) => return Some(ctx.fail(&msg)),
-        Err(CErr::Ex) => match lock_busy {
-            Some(msg) => return Some(ctx.fail(&msg)),
-            None => return None,
+        Err(CErr::Ex) => {
+            let msg = lock_busy?;
+            return Some(ctx.fail(&msg))
         },
     };
 
@@ -216,13 +216,12 @@ fn run_start(tokens: &[OsString], t0: Instant) -> Option<ExitCode> {
         return None;
     }
 
-    if let Ok(live) = list_workflows(&main_root) {
-        if let Some(wf) = find_live_workflow(&live, &feature) {
+    if let Ok(live) = list_workflows(&main_root)
+        && let Some(wf) = find_live_workflow(&live, &feature) {
             let mut patch = Map::new();
             patch.insert("route".into(), Value::Object(route_object.clone()));
             let _ = update_workflow_assuming_lock(&main_root, &wf_id(wf), patch);
         }
-    }
 
     if use_json {
         println!(
@@ -315,11 +314,11 @@ fn run_finish(tokens: &[OsString], t0: Instant) -> Option<ExitCode> {
     }
 
     let lane_path = main_root.join(".bee").join("lanes").join(format!("{feature}.json"));
-    if lane_path.exists() {
-        if let Ok(content) = std::fs::read_to_string(&lane_path) {
-            if let Ok(val) = serde_json::from_str::<Value>(&content) {
-                if let Some(old_phase) = val.get("phase").and_then(|p| p.as_str()) {
-                    if old_phase == "exploring" || old_phase == "planning" {
+    if lane_path.exists()
+        && let Ok(content) = std::fs::read_to_string(&lane_path)
+            && let Ok(val) = serde_json::from_str::<Value>(&content)
+                && let Some(old_phase) = val.get("phase").and_then(|p| p.as_str())
+                    && (old_phase == "exploring" || old_phase == "planning") {
                         let mut set_argv = vec![
                             OsString::from("state"),
                             OsString::from("set"),
@@ -343,10 +342,6 @@ fn run_finish(tokens: &[OsString], t0: Instant) -> Option<ExitCode> {
                         }
                         println!("feature finish: lane {feature} phase {old_phase} -> swarming (merge proved the cells)");
                     }
-                }
-            }
-        }
-    }
 
     let mut scribing_argv = vec![
         OsString::from("state"),

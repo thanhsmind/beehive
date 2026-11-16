@@ -284,8 +284,8 @@ pub(crate) fn check_no_same_feature_claimed_cells(
     let claimed: Vec<String> = cells
         .iter()
         .filter(|c| {
-            &cell_field(c, "feature") == &json!(feature)
-                && &cell_field(c, "status") == &json!("claimed")
+            cell_field(c, "feature") == json!(feature)
+                && cell_field(c, "status") == json!("claimed")
         })
         .map(cell_id_disp)
         .collect();
@@ -304,8 +304,8 @@ pub(crate) fn check_no_live_workflow_for_feature(
     feature: &str,
 ) -> Option<String> {
     let conflict = workflows.iter().find(|wf| {
-        &cell_field(wf, "feature") == &json!(feature)
-            && &cell_field(wf, "status") != &json!("closed")
+        cell_field(wf, "feature") == json!(feature)
+            && cell_field(wf, "status") != json!("closed")
     })?;
     Some(format!(
         "startFeature: refused — a live workflow already exists for feature \"{feature}\" (workflow {}, phase \"{}\", status \"{}\"). FIX: bee state session attach --lane {feature} --session-id <session id>.",
@@ -364,8 +364,8 @@ pub(crate) fn ensure_workflow_record_for_feature(
     // Idempotent by FEATURE: a live record is returned untouched, never a
     // second record for one feature and never a silent overwrite.
     let live = list_workflows(control_root)?.into_iter().find(|wf| {
-        &cell_field(wf, "feature") == &json!(feature_trimmed)
-            && &cell_field(wf, "status") != &json!("closed")
+        cell_field(wf, "feature") == json!(feature_trimmed)
+            && cell_field(wf, "status") != json!("closed")
     });
     if live.is_some() {
         return Ok(());
@@ -402,14 +402,13 @@ pub(crate) fn ensure_workflow_record_for_feature(
 pub(crate) fn close_workflows_for_feature(control_root: &Path, keep: Option<&str>) -> Result<(), Err2> {
     let keep = keep.map(js_trim).filter(|s| !s.is_empty());
     for wf in list_workflows(control_root)? {
-        if &cell_field(&wf, "status") == &json!("closed") {
+        if cell_field(&wf, "status") == json!("closed") {
             continue;
         }
-        if let Some(keep) = keep {
-            if &cell_field(&wf, "feature") == &json!(keep) {
+        if let Some(keep) = keep
+            && cell_field(&wf, "feature") == json!(keep) {
                 continue;
             }
-        }
         let mut patch = Map::new();
         patch.insert("status".into(), json!("closed"));
         update_workflow(control_root, &wf_id(&wf), patch)?;
@@ -436,8 +435,8 @@ pub(crate) fn seed_legacy_workflows(root: &Path, control_root: &Path) -> Result<
         _ => false,
     };
     let phase_live = truthy(&phase)
-        && &phase != &json!("idle")
-        && &phase != &json!("compounding-complete");
+        && phase != json!("idle")
+        && phase != json!("compounding-complete");
     let legacy_live = truthy(&feature) || phase_live || gates_live;
     if legacy_live && truthy(&feature) {
         ensure_workflow_record_for_feature(
@@ -459,8 +458,8 @@ pub(crate) fn seed_legacy_workflows(root: &Path, control_root: &Path) -> Result<
         }
         let lane_phase = cell_field(&lane, "phase");
         let lane_live = truthy(&lane_phase)
-            && &lane_phase != &json!("idle")
-            && &lane_phase != &json!("compounding-complete");
+            && lane_phase != json!("idle")
+            && lane_phase != json!("compounding-complete");
         if !lane_live {
             continue;
         }
@@ -582,15 +581,14 @@ pub(crate) fn list_claim_holds_for_start(
             continue;
         }
         let claim_session = jget(&claim, "session").cloned().unwrap_or(Value::Null);
-        if let Some(sid) = session_id {
-            if &claim_session == &json!(sid) {
+        if let Some(sid) = session_id
+            && claim_session == json!(sid) {
                 continue; // own holds never block
             }
-        }
         let claim_cell = jget(&claim, "cell").cloned().unwrap_or(Value::Null);
         let cell = cells
             .iter()
-            .find(|c| &cell_field(c, "id") == &claim_cell);
+            .find(|c| cell_field(c, "id") == claim_cell);
         let files: Vec<String> = match cell.map(|c| cell_field(c, "files")) {
             Some(Value::Array(a)) => a.iter().map(|f| js_disp_opt(Some(f))).collect(),
             _ => Vec::new(),

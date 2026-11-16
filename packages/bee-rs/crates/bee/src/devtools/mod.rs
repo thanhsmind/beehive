@@ -359,7 +359,7 @@ pub(crate) fn rel_platform(root: &Path, abs: &Path) -> String {
     rel.components()
         .map(|c| c.as_os_str().to_string_lossy().into_owned())
         .collect::<Vec<_>>()
-        .join(&std::path::MAIN_SEPARATOR.to_string())
+        .join(std::path::MAIN_SEPARATOR_STR)
 }
 
 /// `path.relative(root, abs).split(path.sep).join("/")` — the repo-relative

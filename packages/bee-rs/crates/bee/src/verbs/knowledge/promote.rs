@@ -96,11 +96,10 @@ pub(crate) fn verify_summary(trace: &Value) -> Option<String> {
     match serde_json::from_str::<Value>(raw) {
         Ok(parsed @ (Value::Object(_) | Value::Array(_))) => {
             for key in ["verify_tail", "verify_output", "evidence", "summary"] {
-                if let Some(Value::String(s)) = parsed.get(key) {
-                    if !s.trim_matches(js_is_space).is_empty() {
+                if let Some(Value::String(s)) = parsed.get(key)
+                    && !s.trim_matches(js_is_space).is_empty() {
                         return Some(one_line(s, 200));
                     }
-                }
             }
             Some(one_line(raw, 200))
         }
@@ -295,11 +294,10 @@ fn capped_cell_from_file(
     for key in ["attempts", "semantic_judge"] {
         if let Some(Value::Array(a)) = trace.get(key) {
             for item in a {
-                if let Some(Value::String(s)) = item.get("failure_signature") {
-                    if !s.trim_matches(js_is_space).is_empty() {
+                if let Some(Value::String(s)) = item.get("failure_signature")
+                    && !s.trim_matches(js_is_space).is_empty() {
                         failure_signatures.push(s.clone());
                     }
-                }
             }
         }
     }
@@ -374,11 +372,9 @@ pub(crate) fn read_capped_cell_traces(root: &Path, feature: &str) -> Option<Vec<
     for name in json_file_names(&archive_dir)? {
         if let Some(cell) =
             capped_cell_from_file(&archive_dir.join(&name), &name, feature, &archive_trace_dir)?
-        {
-            if seen_ids.insert(cell.id.clone()) {
+            && seen_ids.insert(cell.id.clone()) {
                 cells.push(cell); // live copy already claimed this id above
             }
-        }
     }
     // Stable sort == JS Array.prototype.sort (spec-guaranteed since ES2019).
     cells.sort_by(|a, b| compare_cell_ids(&a.id, &b.id));

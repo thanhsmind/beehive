@@ -254,7 +254,7 @@ fn trigger_path_new(dir: &Path, slug: &str, short8: &str) -> PathBuf {
 // ─── read + evaluate-on-read ────────────────────────────────────────────
 
 pub(crate) enum TriggerEntry {
-    Ok(TriggerRecord),
+    Ok(Box<TriggerRecord>),
     Unreadable(PathBuf),
 }
 
@@ -297,16 +297,14 @@ fn read_entries(control: &Path, evaluate: bool) -> Vec<TriggerEntry> {
             ReadJson::Parsed(v) => match TriggerRecord::from_value(&v) {
                 None => out.push(TriggerEntry::Unreadable(path)),
                 Some(mut rec) => {
-                    if evaluate && rec.tier == "predicate" && rec.status == "waiting" {
-                        if let Some(spec) = rec.predicate.clone() {
-                            if predicate_true(control, &spec, rec.anchored_at.as_deref()) {
+                    if evaluate && rec.tier == "predicate" && rec.status == "waiting"
+                        && let Some(spec) = rec.predicate.clone()
+                            && predicate_true(control, &spec, rec.anchored_at.as_deref()) {
                                 rec.status = "due".to_string();
                                 rec.updated_at = now_iso();
                                 let _ = write_json_atomic(&path, &rec.to_value());
                             }
-                        }
-                    }
-                    out.push(TriggerEntry::Ok(rec));
+                    out.push(TriggerEntry::Ok(Box::new(rec)));
                 }
             },
         }
@@ -501,15 +499,14 @@ fn add_record(
              decisions search --text <words>."
         ));
     };
-    if let Some(p) = predicate {
-        if !is_valid_predicate(p) {
+    if let Some(p) = predicate
+        && !is_valid_predicate(p) {
             return Err(format!(
                 "bee {cmd}: --predicate must be path-exists:<path>, path-missing:<path>, or \
                  path-changed:<path>[,<path>...] with repo-relative paths (a path containing a \
                  comma cannot be watched), got {p:?}."
             ));
         }
-    }
     let anchored_at = match predicate {
         Some(p) if p.starts_with("path-changed:") => match head_sha(root) {
             Some(sha) => Some(sha),

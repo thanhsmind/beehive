@@ -362,8 +362,8 @@ pub(crate) fn validate(entry: &Entry, args: &ParsedArgs) -> Option<Vec<Problem>>
             continue;
         }
         // DB3 guard: enum is enforced on REQUIRED fields only.
-        if required.contains(&field.as_str()) {
-            if let Some(Value::Array(choices)) = prop_schema.get("enum") {
+        if required.contains(&field.as_str())
+            && let Some(Value::Array(choices)) = prop_schema.get("enum") {
                 let hit = choices.iter().any(|c| match (c, value) {
                     (Value::String(c), ArgVal::Str(v)) => c == v,
                     (Value::Bool(true), ArgVal::True) => true,
@@ -381,7 +381,6 @@ pub(crate) fn validate(entry: &Entry, args: &ParsedArgs) -> Option<Vec<Problem>>
                     });
                 }
             }
-        }
     }
 
     (!problems.is_empty()).then_some(problems)

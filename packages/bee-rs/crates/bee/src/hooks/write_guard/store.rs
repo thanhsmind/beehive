@@ -826,14 +826,13 @@ pub(crate) fn list_path_lease_records(root: &str) -> Vec<Map<String, Value>> {
             if !is_file {
                 continue;
             }
-            if let Ok(text) = std::fs::read_to_string(dir.join(&name)) {
-                if let Ok(Value::Object(m)) = serde_json::from_str::<Value>(&text) {
+            if let Ok(text) = std::fs::read_to_string(dir.join(&name))
+                && let Ok(Value::Object(m)) = serde_json::from_str::<Value>(&text) {
                     let is_path = matches!(m.get("resource"), Some(Value::String(s)) if s.starts_with("path:"));
                     if is_path {
                         out.push(m);
                     }
                 }
-            }
         }
     }
     out
@@ -967,10 +966,7 @@ pub(crate) fn find_session_conflicts(root: &str, session_id: &str, paths: &[Stri
     let acting = js_trim(session_id);
     let mut out = Vec::new();
     for resv in list_active_reservations(root) {
-        let sess_ok = match &resv.session {
-            Some(Value::String(s)) if !js_trim(s).is_empty() && s != acting => true,
-            _ => false,
-        };
+        let sess_ok = matches!(&resv.session, Some(Value::String(s)) if !js_trim(s).is_empty() && s != acting);
         if sess_ok && paths.iter().any(|p| paths_overlap(&resv.path, p)) {
             out.push(resv);
         }

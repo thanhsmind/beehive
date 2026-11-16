@@ -36,16 +36,14 @@ pub(crate) fn list_cells(root: &Path, feature: Option<&Value>, status: Option<&s
         }
         let Some(cell) = read_json_object(&entry.path()) else { continue };
         // JS `if (feature && cell.feature !== feature) continue`.
-        if let Some(f) = feature.filter(|f| truthy(f)) {
-            if !strict_eq(cell.get("feature"), Some(f)) {
+        if let Some(f) = feature.filter(|f| truthy(f))
+            && !strict_eq(cell.get("feature"), Some(f)) {
                 continue;
             }
-        }
-        if let Some(s) = status {
-            if !str_eq(cell.get("status"), s) {
+        if let Some(s) = status
+            && !str_eq(cell.get("status"), s) {
                 continue;
             }
-        }
         cells.push(cell);
     }
     cells.sort_by(|a, b| {
@@ -97,16 +95,14 @@ pub(crate) fn list_cells_including_archive(
                 continue;
             }
             let Some(cell) = read_json_object(&entry.path()) else { continue };
-            if let Some(f) = feature.filter(|f| truthy(f)) {
-                if !strict_eq(cell.get("feature"), Some(f)) {
+            if let Some(f) = feature.filter(|f| truthy(f))
+                && !strict_eq(cell.get("feature"), Some(f)) {
                     continue;
                 }
-            }
-            if let Some(s) = status {
-                if !str_eq(cell.get("status"), s) {
+            if let Some(s) = status
+                && !str_eq(cell.get("status"), s) {
                     continue;
                 }
-            }
             let id = tpl(cell.get("id"));
             if !seen_ids.insert(id) {
                 continue; // the live copy above already claimed this id
@@ -143,11 +139,10 @@ pub(crate) fn best_scribing_stamp_ms(
 ) -> Option<f64> {
     let mut best: Option<f64> = None;
     let mut consider = |ms: Option<f64>| {
-        if let Some(v) = ms {
-            if best.is_none() || v > best.unwrap() {
+        if let Some(v) = ms
+            && (best.is_none() || v > best.unwrap()) {
                 best = Some(v);
             }
-        }
     };
     for entry in ledger {
         if !truthy(entry) || !strict_eq(vget(entry, "feature"), Some(feature)) {
@@ -159,11 +154,10 @@ pub(crate) fn best_scribing_stamp_ms(
     if let Some(lane) = read_lane(root, Some(feature)) {
         consider(scribing_run_stamp_ms(lane.get("last_scribing_run")));
     }
-    if let Some(run) = state.get("last_scribing_run") {
-        if truthy(run) && strict_eq(vget(run, "feature"), Some(feature)) {
+    if let Some(run) = state.get("last_scribing_run")
+        && truthy(run) && strict_eq(vget(run, "feature"), Some(feature)) {
             consider(scribing_run_stamp_ms(Some(run)));
         }
-    }
     best
 }
 
@@ -401,11 +395,13 @@ pub(crate) fn decisions_path(root: &Path) -> PathBuf {
     root.join(".bee").join("decisions.jsonl")
 }
 
+pub(crate) type TagOverlayEntry = (Value, (Option<Value>, Option<Value>));
+
 /// decisions.mjs buildTagOverlay — latest tag event wins (date, then file
 /// order). A mixed finite/NaN date set delegated in the verb port; here the
 /// NaN rows simply keep file order, which is what V8's sort does for them in
 /// practice and is the fail-open direction for an orientation block.
-pub(crate) fn build_tag_overlay(events: &[Value]) -> Vec<(Value, (Option<Value>, Option<Value>))> {
+pub(crate) fn build_tag_overlay(events: &[Value]) -> Vec<TagOverlayEntry> {
     let mut tag_events: Vec<(usize, &Value, f64)> = Vec::new();
     for (idx, e) in events.iter().enumerate() {
         if truthy(e)
@@ -423,7 +419,7 @@ pub(crate) fn build_tag_overlay(events: &[Value]) -> Vec<(Value, (Option<Value>,
         };
         ord.then(a.0.cmp(&b.0))
     });
-    let mut overlay: Vec<(Value, (Option<Value>, Option<Value>))> = Vec::new();
+    let mut overlay: Vec<TagOverlayEntry> = Vec::new();
     for (_, e, _) in tag_events {
         let target = vget(e, "target").cloned().unwrap_or(Value::Null);
         let patch = (
@@ -447,7 +443,7 @@ pub(crate) fn build_tag_overlay(events: &[Value]) -> Vec<(Value, (Option<Value>,
 
 pub(crate) fn apply_tag_overlay(
     event: &Value,
-    overlay: &[(Value, (Option<Value>, Option<Value>))],
+    overlay: &[TagOverlayEntry],
 ) -> Value {
     let Some(id) = vget(event, "id") else { return event.clone() };
     let Some((_, (tags, scope))) = overlay.iter().find(|(k, _)| strict_eq(Some(k), Some(id))) else {
@@ -514,9 +510,7 @@ pub(crate) fn datamark(text: Option<&Value>) -> String {
                 j += 1;
             }
             if j - i < 3 {
-                for k in i..j {
-                    no_ticks.push(chars[k]);
-                }
+                no_ticks.extend(&chars[i..j]);
             }
             i = j;
             continue;
@@ -635,13 +629,11 @@ pub(crate) fn read_backlog_counts(root: &Path) -> Option<JMap> {
                     items.insert(id, status);
                 }
                 "status" => {
-                    if let Some(item) = items.get_mut(&id) {
-                        if let Some(s) = vget(&row, "status").and_then(|v| v.as_str()) {
-                            if PBI_STATUSES.contains(&s) {
+                    if let Some(item) = items.get_mut(&id)
+                        && let Some(s) = vget(&row, "status").and_then(|v| v.as_str())
+                            && PBI_STATUSES.contains(&s) {
                                 *item = s.to_string();
                             }
-                        }
-                    }
                 }
                 _ => {}
             }

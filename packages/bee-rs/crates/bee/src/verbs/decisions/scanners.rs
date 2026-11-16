@@ -309,11 +309,10 @@ pub(crate) fn role_tag_match(chars: &[char], i: usize) -> Option<usize> {
         }
     }
     let j2 = kw_end?;
-    if let Some(c) = chars.get(j2) {
-        if is_word(*c) {
+    if let Some(c) = chars.get(j2)
+        && is_word(*c) {
             return None; // \b after the keyword
         }
-    }
     let mut k = j2;
     while k < chars.len() {
         if chars[k] == '>' {
@@ -418,9 +417,7 @@ pub(crate) fn datamark(v: Option<&Value>) -> String {
                 n += 1;
             }
             if n < 3 {
-                for _ in 0..n {
-                    pass1.push('`');
-                }
+                pass1.extend(std::iter::repeat_n('`', n));
             }
             i += n;
         } else {
@@ -461,11 +458,10 @@ pub(crate) fn format_decision(event: &Value) -> String {
     );
     let why = format!("  why: {}", datamark(jget(event, "rationale")));
     let mut lines = vec![head, why];
-    if let Some(alt) = jget(event, "alternatives") {
-        if truthy(alt) {
+    if let Some(alt) = jget(event, "alternatives")
+        && truthy(alt) {
             lines.push(format!("  alternatives: {}", datamark(Some(alt))));
         }
-    }
     lines.join("\n")
 }
 
@@ -590,11 +586,10 @@ pub(crate) fn taxonomy_known_names(t: &Taxonomy) -> Vec<String> {
     for tag in &t.tags {
         // fresh.tags.map((t) => t && t.name) — only string names can ever
         // equal a validated slug, so non-strings are droppable here.
-        if truthy(tag) {
-            if let Some(Value::String(name)) = jget(tag, "name") {
+        if truthy(tag)
+            && let Some(Value::String(name)) = jget(tag, "name") {
                 known.push(name.clone());
             }
-        }
     }
     known.extend(t.candidates.iter().cloned());
     known

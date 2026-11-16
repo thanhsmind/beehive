@@ -314,13 +314,11 @@ pub(crate) fn write_heartbeat(main_root: &Path) -> Result<(), String> {
 
 pub(crate) fn read_max_question_rounds(main_root: &Path) -> u64 {
     let config_path = main_root.join(".bee").join("config.json");
-    if let Ok(raw) = std::fs::read_to_string(&config_path) {
-        if let Ok(v) = serde_json::from_str::<Value>(&raw) {
-            if let Some(n) = v.get("broker").and_then(|b| b.get("max_question_rounds")).and_then(Value::as_u64) {
+    if let Ok(raw) = std::fs::read_to_string(&config_path)
+        && let Ok(v) = serde_json::from_str::<Value>(&raw)
+            && let Some(n) = v.get("broker").and_then(|b| b.get("max_question_rounds")).and_then(Value::as_u64) {
                 return n;
             }
-        }
-    }
     2
 }
 
@@ -329,13 +327,11 @@ pub(crate) fn find_highest_result(job_dir: &Path) -> Option<(u32, MailboxResult)
     let mut highest: Option<(u32, PathBuf)> = None;
     for entry in rd.flatten() {
         let name = entry.file_name().to_string_lossy().into_owned();
-        if let Some(digits) = name.strip_prefix("result-").and_then(|s| s.strip_suffix(".json")) {
-            if let Ok(r) = digits.parse::<u32>() {
-                if highest.as_ref().map_or(true, |(prev, _)| r > *prev) {
+        if let Some(digits) = name.strip_prefix("result-").and_then(|s| s.strip_suffix(".json"))
+            && let Ok(r) = digits.parse::<u32>()
+                && highest.as_ref().is_none_or(|(prev, _)| r > *prev) {
                     highest = Some((r, entry.path()));
                 }
-            }
-        }
     }
     let (round, path) = highest?;
     let raw = std::fs::read_to_string(path).ok()?;
@@ -447,11 +443,11 @@ pub(crate) fn start_child_job_for_answered_question(
         .and_then(Value::as_str)
         .filter(|s| !s.trim().is_empty());
 
-    if is_paseo {
-        if let Some(agent_id) = paseo_agent_id {
+    if is_paseo
+        && let Some(agent_id) = paseo_agent_id {
             let inspect_argv = crate::herding::paseo::inspect_argv(agent_id);
-            if let Ok(inspect_out) = paseo.call(&inspect_argv) {
-                if crate::herding::paseo::parse_inspect(&inspect_out) == Some(crate::herding::paseo::PaseoState::Idle) {
+            if let Ok(inspect_out) = paseo.call(&inspect_argv)
+                && crate::herding::paseo::parse_inspect(&inspect_out) == Some(crate::herding::paseo::PaseoState::Idle) {
                     let spawn_args = SpawnArgs {
                         job_id: String::new(),
                         task: child_task,
@@ -485,9 +481,7 @@ pub(crate) fn start_child_job_for_answered_question(
 
                     return Ok(parent_job_id.to_string());
                 }
-            }
         }
-    }
 
     let root_job_id = parent_question_of.as_deref().unwrap_or(parent_job_id);
     let child_job_id = format!("{root_job_id}-q{next_question_round}");
@@ -561,9 +555,9 @@ pub(crate) fn tick_with(
             let inbox_session = job_spec.get("inbox_session").and_then(Value::as_str).filter(|s| !s.trim().is_empty());
             let notice_marker = job_dir.join("broker-notice-sent.json");
 
-            if question_of.is_some() && inbox_session.is_none() && !notice_marker.exists() {
-                if let Some((_round, result)) = find_highest_result(&job_dir) {
-                    if result.status != MailboxStatus::Question {
+            if question_of.is_some() && inbox_session.is_none() && !notice_marker.exists()
+                && let Some((_round, result)) = find_highest_result(&job_dir)
+                    && result.status != MailboxStatus::Question {
                         let leader_session = job_spec
                             .get("leader_session")
                             .and_then(Value::as_str)
@@ -585,23 +579,21 @@ pub(crate) fn tick_with(
                         let _ = crate::fsutil::write_json_atomic(&notice_marker, &json!({"sent_at": chrono::Utc::now().to_rfc3339()}));
                         notices_sent += 1;
                     }
-                }
-            }
 
             let is_paseo = job_spec
                 .get("transport")
                 .and_then(Value::as_str)
                 .map(|s| s == "paseo")
                 .unwrap_or(false);
-            if is_paseo {
-                if let Some(agent_id) = job_spec
+            if is_paseo
+                && let Some(agent_id) = job_spec
                     .get("paseo_agent_id")
                     .and_then(Value::as_str)
                     .filter(|s| !s.trim().is_empty())
                 {
                     let inspect_argv = crate::herding::paseo::inspect_argv(agent_id);
-                    if let Ok(inspect_out) = paseo.call(&inspect_argv) {
-                        if crate::herding::paseo::parse_inspect(&inspect_out)
+                    if let Ok(inspect_out) = paseo.call(&inspect_argv)
+                        && crate::herding::paseo::parse_inspect(&inspect_out)
                             == Some(crate::herding::paseo::PaseoState::Blocked)
                         {
                             let pending = crate::herding::paseo::parse_pending_permissions(&inspect_out);
@@ -646,9 +638,7 @@ pub(crate) fn tick_with(
                                 }
                             }
                         }
-                    }
                 }
-            }
         }
     }
 
@@ -681,8 +671,8 @@ pub(crate) fn tick_with(
                     i.point_key == point_key && i.consented_at.is_some()
                 });
 
-                if consented_intervention.is_some() {
-                    if let Some(leaning) = &result.leaning {
+                if consented_intervention.is_some()
+                    && let Some(leaning) = &result.leaning {
                         let answer_obj = json!({
                             "job_id": job_id,
                             "round": round,
@@ -695,7 +685,6 @@ pub(crate) fn tick_with(
                         let _ = std::fs::rename(&tmp_ans, &answer_path);
                         let _ = start_child_job_for_answered_question(main_root, &job_id, round, leaning, spawner, paseo);
                     }
-                }
             }
         }
     }

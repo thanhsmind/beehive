@@ -146,13 +146,12 @@ pub(crate) fn require_flags(
     for (name, allowed) in spec {
         match flags.get(name) {
             Some(FlagV::S(s)) if !s.is_empty() => {
-                if let Some(a) = allowed {
-                    if !a.contains(&s.as_str()) {
+                if let Some(a) = allowed
+                    && !a.contains(&s.as_str()) {
                         invalid.push(format!("--{name} \"{s}\" (must be one of {})", a.join(", ")));
                         values.push(String::new());
                         continue;
                     }
-                }
                 values.push(s.clone());
             }
             _ => {

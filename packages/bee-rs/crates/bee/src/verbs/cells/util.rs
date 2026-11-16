@@ -61,7 +61,7 @@ pub(crate) fn to_r2(out: MR<Out>) -> R2<Out> {
 /// returns None before any output.
 pub(crate) fn try_mutating(verb: &str, rest: &[OsString], t0: Instant) -> Option<ExitCode> {
     let toks: Vec<&str> = rest.iter().map(|a| a.to_str()).collect::<Option<Vec<_>>>()?;
-    if toks.iter().any(|t| *t == "--help") {
+    if toks.contains(&"--help") {
         return None; // Node renders command-scoped help
     }
     let (flags, use_json) = rsv::parse_flags(&toks)?;
@@ -198,11 +198,10 @@ pub(crate) enum JsParse {
 
 pub(crate) fn parse_json_js(text: &str, strip_bom: bool) -> JsParse {
     let mut t = text;
-    if strip_bom {
-        if let Some(stripped) = t.strip_prefix('\u{feff}') {
+    if strip_bom
+        && let Some(stripped) = t.strip_prefix('\u{feff}') {
             t = stripped;
         }
-    }
     match serde_json::from_str::<Value>(t) {
         Ok(v) => match rsv::js_numberify(&v) {
             // Unreachable from JSON text (no NaN/Infinity literals), but a

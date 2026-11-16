@@ -797,11 +797,10 @@ fn write_activity_herded(
         .and_then(Value::as_u64)
         .unwrap_or_else(|| current_round(ctrl, job_id));
     let result_file = mailbox_dir(ctrl, job_id).join(format!("result-{round}.json"));
-    if result_file.is_file() {
-        if let Some(Value::Object(work)) = record.get_mut("work") {
+    if result_file.is_file()
+        && let Some(Value::Object(work)) = record.get_mut("work") {
             work.insert("status".into(), Value::String("done".into()));
         }
-    }
     write_json_atomic_retry(&mailbox_activity_file(ctrl, job_id), &Value::Object(record))
 }
 
@@ -873,8 +872,8 @@ fn resolve_herded_feature(ctrl: &Path, job_id: &str) -> Option<String> {
 
     // 1. The granted worktree record in .bee/runtime/worktree-grants.json
     let grants_file = ctrl.join(".bee").join("runtime").join("worktree-grants.json");
-    if let ReadJson::Parsed(Value::Object(grants)) = read_json(&grants_file) {
-        if let Some(grant) = grants.get(dir_name).or_else(|| grants.get(cwd_str)) {
+    if let ReadJson::Parsed(Value::Object(grants)) = read_json(&grants_file)
+        && let Some(grant) = grants.get(dir_name).or_else(|| grants.get(cwd_str)) {
             match grant {
                 Value::Object(obj) => {
                     if let Some(f) = obj.get("feature").and_then(Value::as_str) {
@@ -896,7 +895,6 @@ fn resolve_herded_feature(ctrl: &Path, job_id: &str) -> Option<String> {
                 return Some(f);
             }
         }
-    }
 
     // 2. <repo>--wt--<slug> directory name as fallback
     feature_from_worktree_name(dir_name)
@@ -909,11 +907,10 @@ fn resolve_herded_feature(ctrl: &Path, job_id: &str) -> Option<String> {
 /// `state.json` reads as "unknown", the same fail-open collapse every other
 /// display read here makes.
 fn resolve_feature(ctrl: &Path, lane: Option<&str>, herded: Option<&str>) -> Option<String> {
-    if let Some(job) = herded {
-        if let Some(f) = resolve_herded_feature(ctrl, job) {
+    if let Some(job) = herded
+        && let Some(f) = resolve_herded_feature(ctrl, job) {
             return Some(f);
         }
-    }
     if let Some(lane) = lane.map(str::trim).filter(|s| !s.is_empty()) {
         return Some(lane.to_string());
     }
@@ -1009,7 +1006,6 @@ fn err2_text(e: Err2) -> String {
 
 /// Returns the marker's new value when it changed, `None` when nothing about
 /// the mark moved.
-#[allow(clippy::too_many_arguments)]
 fn sync_waiting_on(
     root: &Path,
     session_id: &str,

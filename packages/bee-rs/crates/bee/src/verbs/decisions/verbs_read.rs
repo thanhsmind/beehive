@@ -33,7 +33,7 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
         .iter()
         .map(|a| a.to_str())
         .collect::<Option<Vec<_>>>()?;
-    if toks.iter().any(|t| *t == "--help") {
+    if toks.contains(&"--help") {
         return None; // Node renders command-scoped help
     }
     let (flags, use_json) = parse_flags(&toks)?;
@@ -104,11 +104,10 @@ pub(crate) fn run_active_or_search(
     let cell_raw = str_flag(&flags, "cell")?;
     let feature_raw = str_flag(&flags, "feature")?;
     // --recent outside the modeled decimal grammar → Node's validate() error.
-    if let Some(raw) = &recent_raw {
-        if js_number_flag(raw).is_err() {
+    if let Some(raw) = &recent_raw
+        && js_number_flag(raw).is_err() {
             return None;
         }
-    }
 
     let cmd: &'static str = if is_search { "decisions search" } else { "decisions active" };
     let ctx = match decisions_prelude(cmd, use_json, t0)? {
@@ -239,11 +238,10 @@ pub(crate) fn run_log(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitC
         .map(str::to_string)
         .unwrap_or_else(|| "user".to_string());
     let confidence_raw = str_flag(&flags, "confidence")?;
-    if let Some(raw) = &confidence_raw {
-        if js_number_flag(raw).is_err() {
+    if let Some(raw) = &confidence_raw
+        && js_number_flag(raw).is_err() {
             return None; // Node's validate() owns the message
         }
-    }
     let tags_flag: Option<Vec<String>> = match flags.get("tags") {
         None => None,
         Some(FlagV::S(s)) => Some(split_list(s)),
@@ -490,11 +488,10 @@ pub(crate) fn touches_sweep_excluded(root_relative_file: &str, bound_feature: Op
     if normalized == "docs/decisions/index.md" {
         return true;
     }
-    if let Some(feat) = bound_feature {
-        if !feat.is_empty() && normalized.starts_with(&format!("docs/history/{feat}/")) {
+    if let Some(feat) = bound_feature
+        && !feat.is_empty() && normalized.starts_with(&format!("docs/history/{feat}/")) {
             return true;
         }
-    }
     false
 }
 

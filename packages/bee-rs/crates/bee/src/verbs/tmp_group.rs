@@ -168,7 +168,7 @@ fn read_lane_phase(root: &Path, feature: &str) -> Result<Option<Value>, ()> {
 }
 
 fn is_live_feature(root: &Path, state: &StateLite, name: &str) -> Result<bool, ()> {
-    if &state.feature == &Value::String(name.to_string()) && !is_terminal_phase(&state.phase) {
+    if state.feature == Value::String(name.to_string()) && !is_terminal_phase(&state.phase) {
         return Ok(true);
     }
     match read_lane_phase(root, name)? {
@@ -178,7 +178,7 @@ fn is_live_feature(root: &Path, state: &StateLite, name: &str) -> Result<bool, (
 }
 
 fn has_record(root: &Path, state: &StateLite, name: &str) -> Result<bool, ()> {
-    if &state.feature == &Value::String(name.to_string()) {
+    if state.feature == Value::String(name.to_string()) {
         return Ok(true);
     }
     Ok(read_lane_phase(root, name)?.is_some())
@@ -459,7 +459,7 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
         return None; // unknown verbs → group-usage fallback stays Node's
     }
     let toks: Vec<&str> = args[2..].iter().map(|a| a.to_str()).collect::<Option<Vec<_>>>()?;
-    if toks.iter().any(|t| *t == "--help") {
+    if toks.contains(&"--help") {
         return None;
     }
     let pre_json = pre_json_scan(&toks);
@@ -512,13 +512,12 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
             refused_escapes.push((candidate.scratch_root.to_string(), candidate.name.clone(), candidate.path.clone()));
             continue;
         }
-        if !dry_run {
-            if let Err(e) = rm_recursive_force(&candidate.path) {
+        if !dry_run
+            && let Err(e) = rm_recursive_force(&candidate.path) {
                 // DIVERGENCE (header note): removals already performed forbid
                 // delegation — the Rust io message stands in for V8's.
                 return Some(ctx.fail(&e.to_string()));
             }
-        }
         let mut m = Map::new();
         m.insert("scratchRoot".into(), Value::String(candidate.scratch_root.to_string()));
         m.insert("name".into(), Value::String(candidate.name.clone()));

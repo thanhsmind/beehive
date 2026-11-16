@@ -358,15 +358,13 @@ fn compute_line(input: &Value, tmpdir: &str) -> Option<String> {
         "claude-usage-{}.json",
         path_basename(transcript, ".jsonl")
     ));
-    if let Ok(text) = std::fs::read_to_string(&cache_file) {
-        if let Ok(cached) = serde_json::from_str::<Value>(&text) {
-            if cached.get("sig").and_then(Value::as_str) == Some(sig.as_str()) {
+    if let Ok(text) = std::fs::read_to_string(&cache_file)
+        && let Ok(cached) = serde_json::from_str::<Value>(&text)
+            && cached.get("sig").and_then(Value::as_str) == Some(sig.as_str()) {
                 // A non-string `line` makes process.stdout.write throw, which
                 // the .mjs's catch turns into a silent exit 0.
                 return cached.get("line").and_then(Value::as_str).map(str::to_string);
             }
-        }
-    }
 
     let by_id = usage_rows(&files);
     if by_id.is_empty() {

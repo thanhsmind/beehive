@@ -109,11 +109,10 @@ pub(crate) const CLOSE_UAT_PREFIX: &str = "Uat gate pending for";
 /// `None` == JS `null` (undeclared).
 pub(crate) fn declared_test_commands(root: &Path) -> D<Option<Vec<String>>> {
     let config = read_config_raw(root);
-    if let Some(Value::Array(items)) = config.get("dogfood_repos") {
-        if !items.is_empty() {
+    if let Some(Value::Array(items)) = config.get("dogfood_repos")
+        && !items.is_empty() {
             return Err(Delegate); // normalizeDogfoodRepos may warn to stderr
         }
-    }
     let raw_test = config
         .get("commands")
         .and_then(Value::as_object)
@@ -150,6 +149,7 @@ pub(crate) fn declared_test_commands(root: &Path) -> D<Option<Vec<String>>> {
 // module's own test fixtures still probe it before building a `commands.test`
 // fixture that threads a (now-ignored) shell through `close_handler`'s
 // still-compatible signature.
+#[cfg(test)]
 pub(crate) fn posix_shell() -> Option<&'static str> {
     crate::shell::posix_shell()
 }
@@ -204,22 +204,17 @@ pub(crate) fn best_scribing_stamp_ms(root: &Path, feature: &str, state: &Map<Str
     // and a corrupt/mismatched record warns (naming the path) and reads as
     // None too — it never throws, so a bad lane record never stops close.
     let lane = crate::verbs::workflow_store::read_lane_display(root, feature).map_err(|_| Delegate)?;
-    if let Some(lane) = lane {
-        if let Some(stamp) = scribing_run_stamp_ms(lane.get("last_scribing_run")) {
-            if best.map(|b| stamp > b).unwrap_or(true) {
+    if let Some(lane) = lane
+        && let Some(stamp) = scribing_run_stamp_ms(lane.get("last_scribing_run"))
+            && best.map(|b| stamp > b).unwrap_or(true) {
                 best = Some(stamp);
             }
-        }
-    }
-    if let Some(lsr) = state.get("last_scribing_run") {
-        if truthy(lsr) && strict_eq(vget(lsr, "feature"), Some(&feature_value)) {
-            if let Some(stamp) = scribing_run_stamp_ms(Some(lsr)) {
-                if best.map(|b| stamp > b).unwrap_or(true) {
+    if let Some(lsr) = state.get("last_scribing_run")
+        && truthy(lsr) && strict_eq(vget(lsr, "feature"), Some(&feature_value))
+            && let Some(stamp) = scribing_run_stamp_ms(Some(lsr))
+                && best.map(|b| stamp > b).unwrap_or(true) {
                     best = Some(stamp);
                 }
-            }
-        }
-    }
     Ok(best)
 }
 
@@ -606,11 +601,10 @@ pub(crate) fn feature_route(root: &Path, feature: &str) -> D<Option<String>> {
     let state = read_state(root)?;
     if let Some(Value::Object(route)) = state.get("route") {
         let feature_value = Value::String(feature.to_string());
-        if crate::verbs::state_group::route_belongs_to_feature(route, &feature_value) {
-            if let Some(from_state) = route_lane(&Value::Object(route.clone())) {
+        if crate::verbs::state_group::route_belongs_to_feature(route, &feature_value)
+            && let Some(from_state) = route_lane(&Value::Object(route.clone())) {
                 return Ok(Some(from_state));
             }
-        }
     }
     let mode_is_lane_class = lane
         .as_ref()
@@ -769,9 +763,9 @@ pub(crate) fn has_knowledge_freshness_deferral_decision(root: &Path, feature: &s
 // machine detector here, that is S2-c distill work, recorded, not silently
 // dropped.
 pub(crate) fn docs_root_for_feature(root: &Path, feature: &str) -> PathBuf {
-    if let Ok(cwd) = std::env::current_dir() {
-        if let (Roots::Ordinary(main_root), Some(here)) = crate::verbs::drivers::resolve_root_serving_granted(&cwd) {
-            if crate::roots::same_path(&main_root.to_string_lossy(), &root.to_string_lossy()) {
+    if let Ok(cwd) = std::env::current_dir()
+        && let (Roots::Ordinary(main_root), Some(here)) = crate::verbs::drivers::resolve_root_serving_granted(&cwd)
+            && crate::roots::same_path(&main_root.to_string_lossy(), &root.to_string_lossy()) {
                 if feature.is_empty() {
                     return here;
                 }
@@ -779,8 +773,6 @@ pub(crate) fn docs_root_for_feature(root: &Path, feature: &str) -> PathBuf {
                     .is_some_and(|(_, worktree_root)| crate::roots::same_path(&here.to_string_lossy(), &worktree_root));
                 return if owns_feature { here } else { root.to_path_buf() };
             }
-        }
-    }
     root.to_path_buf()
 }
 
@@ -1111,11 +1103,11 @@ pub(crate) fn build_routing_door(root: &Path, feature: &str) -> D<Door> {
         let mut citing: Vec<String> = Vec::new();
         for (abs, rel) in &bundle_files {
             let text = crate::verbs::knowledge::read_file_lossy(abs).unwrap_or_default();
-            let plain_hit = crate::verbs::decisions::matches_whole_token(&[text.clone()], &plain_token);
+            let plain_hit = crate::verbs::decisions::matches_whole_token(std::slice::from_ref(&text), &plain_token);
             let range_hit = context_table_covers_d_id(&text, feature, d_num);
             let short8_hit = short8
                 .as_deref()
-                .map(|s8| crate::verbs::decisions::matches_whole_token(&[text.clone()], s8))
+                .map(|s8| crate::verbs::decisions::matches_whole_token(std::slice::from_ref(&text), s8))
                 .unwrap_or(false);
             if plain_hit || range_hit || short8_hit {
                 citing.push(rel.clone());
@@ -1985,11 +1977,10 @@ pub(crate) fn feature_touched_files(root: &Path, feature: &str) -> D<Vec<String>
         let trace = vget(&cell, "trace").cloned().unwrap_or(Value::Object(Map::new()));
         if let Some(Value::Array(items)) = vget(&trace, "files_changed") {
             for item in items {
-                if let Value::String(s) = item {
-                    if !files.contains(s) {
+                if let Value::String(s) = item
+                    && !files.contains(s) {
                         files.push(s.clone());
                     }
-                }
             }
         }
     }
@@ -2775,14 +2766,12 @@ fn close_handler_core(
         result.insert("doors".into(), Value::Array(doors.iter().map(Door::value).collect()));
         result.insert("ran_tests".into(), Value::Bool(false));
         result.insert("tests".into(), Value::Null);
-        let lines = vec![
-            format!(
+        let lines = [format!(
                 "{CLOSE_PROOF_DEBT_PREFIX} \"{feature}\" — close stops at the tests door: {}.",
                 proof.debt_summary()
             ),
             "remedy: re-cap each cell above with a real proof line: \"<command> — <result> — <scope reason>\" (bee cells finish --id <id> --report '{...}').".to_string(),
-            format!("next: settle the proof debt above, then re-run bee close --feature {feature}"),
-        ];
+            format!("next: settle the proof debt above, then re-run bee close --feature {feature}")];
         return Ok(Out::Emit(Value::Object(result), lines.join("\n"), 1));
     }
 
@@ -2828,15 +2817,13 @@ fn close_handler_core(
         result.insert("doors".into(), Value::Array(doors.iter().map(Door::value).collect()));
         result.insert("ran_tests".into(), Value::Bool(false));
         result.insert("tests".into(), Value::Null);
-        let lines = vec![
-            format!(
+        let lines = [format!(
                 "{CLOSE_CAPTURE_DEBT_PREFIX} \"{feature}\" — close stops at the scribing-debt door: {} behavior_change cell(s) uncaptured ({}).",
                 debt.count,
                 js_join(&debt.ids, ", ")
             ),
             format!("remedy: run bee-capturing to record the capture, or run bee audit log --kind capture-deferral --feature {feature} --note \"<why>\" to defer it."),
-            format!("next: settle the capture debt above, then re-run bee close --feature {feature}"),
-        ];
+            format!("next: settle the capture debt above, then re-run bee close --feature {feature}")];
         return Ok(Out::Emit(Value::Object(result), lines.join("\n"), 1));
     }
 
@@ -2870,15 +2857,13 @@ fn close_handler_core(
         } else {
             "remedy: run bee cells judge to check, then bee cells judge-record to record a verdict for each cell above.".to_string()
         };
-        let lines = vec![
-            format!(
+        let lines = [format!(
                 "{CLOSE_JUDGE_DEBT_PREFIX} \"{feature}\" — close stops at the judge-debt door: {} behavior_change cell(s) capped with no judge record ({}).",
                 debt.count,
                 js_join(&debt.ids, ", ")
             ),
             remedy,
-            format!("next: settle the judge debt above, then re-run bee close --feature {feature}"),
-        ];
+            format!("next: settle the judge debt above, then re-run bee close --feature {feature}")];
         return Ok(Out::Emit(Value::Object(result), lines.join("\n"), 1));
     }
 
@@ -2908,15 +2893,13 @@ fn close_handler_core(
         } else {
             format!("remedy: run bee cells dissent-verdict to record a verdict for each dissent on the cells above, or run bee audit log --kind dissent-deferral --feature {feature} --note \"<why>\" to defer it.")
         };
-        let lines = vec![
-            format!(
+        let lines = [format!(
                 "{CLOSE_DISSENT_DEBT_PREFIX} \"{feature}\" — close stops at the dissent-debt door: {} cell(s) carry a dissent with no verdict ({}).",
                 debt.count,
                 js_join(&debt.ids, ", ")
             ),
             remedy,
-            format!("next: settle the dissent debt above, then re-run bee close --feature {feature}"),
-        ];
+            format!("next: settle the dissent debt above, then re-run bee close --feature {feature}")];
         return Ok(Out::Emit(Value::Object(result), lines.join("\n"), 1));
     }
 
@@ -2927,14 +2910,12 @@ fn close_handler_core(
         result.insert("doors".into(), Value::Array(doors.iter().map(Door::value).collect()));
         result.insert("ran_tests".into(), Value::Bool(false));
         result.insert("tests".into(), Value::Null);
-        let lines = vec![
-            format!(
+        let lines = [format!(
                 "{CLOSE_PARKED_CELL_PREFIX} \"{feature}\" — close stops at the parked-cell door: {} cell(s) wait on a human answer.",
                 parked.len()
             ),
             format!("remedy: {}", parked_cells_line(&parked)),
-            format!("next: answer each parked question above, then re-run bee close --feature {feature}"),
-        ];
+            format!("next: answer each parked question above, then re-run bee close --feature {feature}")];
         return Ok(Out::Emit(Value::Object(result), lines.join("\n"), 1));
     }
 
@@ -2952,15 +2933,13 @@ fn close_handler_core(
         result.insert("doors".into(), Value::Array(doors.iter().map(Door::value).collect()));
         result.insert("ran_tests".into(), Value::Bool(false));
         result.insert("tests".into(), Value::Null);
-        let lines = vec![
-            format!(
+        let lines = [format!(
                 "{CLOSE_ADVISOR_NUDGE_DEBT_PREFIX} \"{feature}\" — close stops at the advisor-nudge door: {} advisor nudge(s) with no consult and no recorded decline ({}).",
                 debt.count,
                 js_join(&debt.ids, ", ")
             ),
             "remedy: run the advisor consult for each row above, then record what came of it with bee decisions log --tags advisor-nudge — or record a reasoned decline the same way. The decision text must NAME the row id; one decision answers one row, and a decision naming no row clears nothing.".to_string(),
-            format!("next: settle the advisor-nudge debt above, then re-run bee close --feature {feature}"),
-        ];
+            format!("next: settle the advisor-nudge debt above, then re-run bee close --feature {feature}")];
         return Ok(Out::Emit(Value::Object(result), lines.join("\n"), 1));
     }
 
@@ -2979,16 +2958,14 @@ fn close_handler_core(
         result.insert("doors".into(), Value::Array(doors.iter().map(Door::value).collect()));
         result.insert("ran_tests".into(), Value::Bool(false));
         result.insert("tests".into(), Value::Null);
-        let lines = vec![
-            format!(
+        let lines = [format!(
                 "{CLOSE_MISTAKES_PREFIX} \"{feature}\" — close stops at the mistakes door: this run's letter cannot say whether anything went wrong, because cell(s) {} recorded no reflection and no clean-run statement.",
                 js_join(&debt.ids, ", ")
             ),
             format!(
                 "remedy: record each mistake with `bee mailbox reflect --wrong \"<what went wrong>\" --better \"<what would have been better>\"` — or, if those cells truly hit none, say so: {MISTAKES_CLEAN_RUN_COMMAND}."
             ),
-            format!("next: answer, then re-run bee close --feature {feature}"),
-        ];
+            format!("next: answer, then re-run bee close --feature {feature}")];
         return Ok(Out::Emit(Value::Object(result), lines.join("\n"), 1));
     }
 
@@ -3014,15 +2991,13 @@ fn close_handler_core(
         } else {
             format!("remedy: run bee cells leader-check to record a check for each cell above, or run bee audit log --kind leader-check-deferral --feature {feature} --note \"<why>\" to defer it (or bee cells reopen if a recorded gap needs rework).")
         };
-        let lines = vec![
-            format!(
+        let lines = [format!(
                 "{CLOSE_LEADER_CHECK_DEBT_PREFIX} \"{feature}\" — close stops at the leader-check door: {} cell(s) capped with no leader check ({}).",
                 debt.count,
                 js_join(&debt.ids, ", ")
             ),
             remedy,
-            format!("next: settle the leader check debt above, then re-run bee close --feature {feature}"),
-        ];
+            format!("next: settle the leader check debt above, then re-run bee close --feature {feature}")];
         return Ok(Out::Emit(Value::Object(result), lines.join("\n"), 1));
     }
 
@@ -3042,11 +3017,9 @@ fn close_handler_core(
         result.insert("doors".into(), Value::Array(doors.iter().map(Door::value).collect()));
         result.insert("ran_tests".into(), Value::Bool(false));
         result.insert("tests".into(), Value::Null);
-        let lines = vec![
-            format!("{CLOSE_UAT_PREFIX} \"{feature}\" — close stops at the uat door: the uat gate is not yet approved."),
+        let lines = [format!("{CLOSE_UAT_PREFIX} \"{feature}\" — close stops at the uat door: the uat gate is not yet approved."),
             "remedy: the product is on main now — reload it, test it, then bee gate --name uat --approved true, or fix in the worktree and merge again.".to_string(),
-            format!("next: settle the uat gate above, then re-run bee close --feature {feature}"),
-        ];
+            format!("next: settle the uat gate above, then re-run bee close --feature {feature}")];
         return Ok(Out::Emit(Value::Object(result), lines.join("\n"), 1));
     }
 
@@ -3066,13 +3039,11 @@ fn close_handler_core(
             .find(|d| d.door == "pattern-check")
             .map(|d| d.detail.clone())
             .unwrap_or_default();
-        let lines = vec![
-            format!(
+        let lines = [format!(
                 "{CLOSE_PATTERN_VIOLATED_PREFIX} \"{feature}\" — close stops at the pattern-check door: {pattern_detail}"
             ),
             "remedy: fix the violated pattern's finding, or re-run with a corrected --pattern-verdicts if it is a false positive.".to_string(),
-            format!("next: settle the violated pattern(s) above, then re-run bee close --feature {feature}"),
-        ];
+            format!("next: settle the violated pattern(s) above, then re-run bee close --feature {feature}")];
         return Ok(Out::Emit(Value::Object(result), lines.join("\n"), 1));
     }
 
@@ -3092,13 +3063,11 @@ fn close_handler_core(
             .find(|d| d.door == "knowledge-freshness")
             .map(|d| d.detail.clone())
             .unwrap_or_default();
-        let lines = vec![
-            format!(
+        let lines = [format!(
                 "{CLOSE_KNOWLEDGE_FRESHNESS_PREFIX} \"{feature}\" — close stops at the knowledge-freshness door: {freshness_detail}"
             ),
             format!("remedy: fix each pointer above (bee knowledge check names the same findings), or run bee audit log --kind knowledge-freshness-deferral --feature {feature} --note \"<why>\"."),
-            format!("next: settle the stale pointer(s) above, then re-run bee close --feature {feature}"),
-        ];
+            format!("next: settle the stale pointer(s) above, then re-run bee close --feature {feature}")];
         return Ok(Out::Emit(Value::Object(result), lines.join("\n"), 1));
     }
 
@@ -3120,11 +3089,9 @@ fn close_handler_core(
             .find(|d| d.door == "impact")
             .map(|d| d.detail.clone())
             .unwrap_or_default();
-        let lines = vec![
-            format!("{CLOSE_IMPACT_PREFIX} \"{feature}\" — close stops at the impact door: {impact_detail}"),
+        let lines = [format!("{CLOSE_IMPACT_PREFIX} \"{feature}\" — close stops at the impact door: {impact_detail}"),
             format!("remedy: fix or annotate each citing doc above, or run bee audit log --kind impact-deferral --feature {feature} --note \"<why>\"."),
-            format!("next: settle the citation(s) above, then re-run bee close --feature {feature}"),
-        ];
+            format!("next: settle the citation(s) above, then re-run bee close --feature {feature}")];
         return Ok(Out::Emit(Value::Object(result), lines.join("\n"), 1));
     }
 
@@ -3146,11 +3113,9 @@ fn close_handler_core(
             .find(|d| d.door == "routing")
             .map(|d| d.detail.clone())
             .unwrap_or_default();
-        let lines = vec![
-            format!("{CLOSE_ROUTING_PREFIX} \"{feature}\" — close stops at the routing door: {routing_detail}"),
+        let lines = [format!("{CLOSE_ROUTING_PREFIX} \"{feature}\" — close stops at the routing door: {routing_detail}"),
             format!("remedy: cite the unrouted D-ID(s) in a docs/knowledge/ bundle file, or run bee audit log --kind routing-deferral --feature {feature} --note \"<why>\"."),
-            format!("next: settle the unrouted D-ID(s) above, then re-run bee close --feature {feature}"),
-        ];
+            format!("next: settle the unrouted D-ID(s) above, then re-run bee close --feature {feature}")];
         return Ok(Out::Emit(Value::Object(result), lines.join("\n"), 1));
     }
 
@@ -3170,13 +3135,11 @@ fn close_handler_core(
             .find(|d| d.door == "doc-deferral")
             .map(|d| d.detail.clone())
             .unwrap_or_default();
-        let lines = vec![
-            format!(
+        let lines = [format!(
                 "{CLOSE_DOC_DEFERRAL_PREFIX} \"{feature}\" — close stops at the doc-deferral door: {doc_deferral_detail}"
             ),
             format!("remedy: register the condition with `bee triggers add --decision <id> --condition \"...\"` and cite it inline, or run bee audit log --kind doc-deferral --feature {feature} --note \"<why>\"."),
-            format!("next: settle the deferral line(s) above, then re-run bee close --feature {feature}"),
-        ];
+            format!("next: settle the deferral line(s) above, then re-run bee close --feature {feature}")];
         return Ok(Out::Emit(Value::Object(result), lines.join("\n"), 1));
     }
 
@@ -3334,8 +3297,8 @@ fn close_handler_core(
     // succeeded, and a store that could not be tidied is not a failed close.
     let bookkeeping = commit_close_bookkeeping(root, feature);
     result.insert("bookkeeping_commit".into(), bookkeeping.value());
-    if let BookkeepingCommit::Skipped { reason, index_restored } = &bookkeeping {
-        if let Some(detail) = reason.strip_prefix("git_failed:") {
+    if let BookkeepingCommit::Skipped { reason, index_restored } = &bookkeeping
+        && let Some(detail) = reason.strip_prefix("git_failed:") {
             // P2-1: name what happened to the stage, not just the git
             // failure — a reader deciding whether to go look at `.bee`
             // themselves needs to know whether it is still sitting staged.
@@ -3348,7 +3311,6 @@ fn close_handler_core(
                 "Warning: bee-store bookkeeping commit failed for \"{feature}\": {detail}{stage_note}"
             ));
         }
-    }
 
     // ── mcl-3 (merge-closes-the-lane R2): green, non-dry-run close sets
     // the feature's lane to the terminal phase ─────────────────────────────
@@ -3972,7 +3934,7 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
         "close" => {
             let toks: Vec<&str> =
                 args[1..].iter().map(|a| a.to_str()).collect::<Option<Vec<_>>>()?;
-            if toks.iter().any(|t| *t == "--help") {
+            if toks.contains(&"--help") {
                 return None; // Node renders command-scoped help
             }
             let (flags, use_json) = parse_flags(&toks)?;
@@ -3982,7 +3944,7 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
             let sub = args.get(1)?.to_str()?;
             let toks: Vec<&str> =
                 args[2..].iter().map(|a| a.to_str()).collect::<Option<Vec<_>>>()?;
-            if toks.iter().any(|t| *t == "--help") {
+            if toks.contains(&"--help") {
                 return None;
             }
             let (flags, use_json) = parse_flags(&toks)?;
@@ -3998,7 +3960,7 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
             let sub = args.get(1)?.to_str()?;
             let toks: Vec<&str> =
                 args[2..].iter().map(|a| a.to_str()).collect::<Option<Vec<_>>>()?;
-            if toks.iter().any(|t| *t == "--help") {
+            if toks.contains(&"--help") {
                 return None;
             }
             let (flags, use_json) = parse_flags(&toks)?;

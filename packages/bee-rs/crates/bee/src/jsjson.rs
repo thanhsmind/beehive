@@ -65,7 +65,7 @@ pub fn js_f64_to_string(v: f64) -> String {
         return format!("0.{}{}", "0".repeat((-n) as usize), digits);
     }
     // Exponential form. JS always signs the exponent.
-    let sign = if n - 1 >= 0 { "+" } else { "-" };
+    let sign = if n > 0 { "+" } else { "-" };
     let mag = (n - 1).abs();
     if k == 1 {
         format!("{digits}e{sign}{mag}")

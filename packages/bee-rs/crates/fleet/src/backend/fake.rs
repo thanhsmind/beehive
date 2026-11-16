@@ -304,11 +304,10 @@ impl WorkerBackend for FakeBackend {
             Some(Err(message)) => Err(anyhow::anyhow!(message)),
             Some(Ok(())) | None => Ok(()),
         };
-        if result.is_ok() {
-            if let Some(pending) = state.output_on_send.take() {
+        if result.is_ok()
+            && let Some(pending) = state.output_on_send.take() {
                 state.output = pending;
             }
-        }
         result
     }
 

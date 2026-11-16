@@ -185,7 +185,9 @@ pub(super) fn observed_mode(meta: &std::fs::Metadata) -> Option<String> {
 fn index_modes(root: &Path) -> std::sync::Arc<std::collections::HashMap<String, String>> {
     use std::collections::HashMap;
     use std::sync::{Arc, Mutex, OnceLock};
-    static CACHE: OnceLock<Mutex<HashMap<PathBuf, Arc<HashMap<String, String>>>>> =
+    type ManifestCache = Mutex<HashMap<PathBuf, Arc<HashMap<String, String>>>>;
+
+    static CACHE: OnceLock<ManifestCache> =
         OnceLock::new();
     let cache = CACHE.get_or_init(|| Mutex::new(HashMap::new()));
     if let Some(hit) = cache.lock().unwrap().get(root) {
@@ -197,8 +199,7 @@ fn index_modes(root: &Path) -> std::sync::Arc<std::collections::HashMap<String, 
         .arg(root)
         .args(["ls-files", "-s", "-z"])
         .output()
-    {
-        if out.status.success() {
+        && out.status.success() {
             // Each entry is "<mode> <sha> <stage>\t<path>\0".
             for entry in String::from_utf8_lossy(&out.stdout).split('\0') {
                 let Some((meta, path)) = entry.split_once('\t') else { continue };
@@ -207,7 +208,6 @@ fn index_modes(root: &Path) -> std::sync::Arc<std::collections::HashMap<String, 
                 map.insert(path.to_string(), recorded.to_string());
             }
         }
-    }
     let shared = Arc::new(map);
     cache.lock().unwrap().insert(root.to_path_buf(), Arc::clone(&shared));
     shared
@@ -576,12 +576,14 @@ fn compare_manifests(stored: &[Value], current: &[Value]) -> Option<Diff> {
     let stored_by = index(stored);
     let current_by = index(current);
 
-    let mut diff = Diff::default();
-    diff.missing = stored_by
-        .iter()
-        .map(|(k, _)| k.clone())
-        .filter(|k| !current_by.iter().any(|(c, _)| c == k))
-        .collect();
+    let mut diff = Diff {
+        missing: stored_by
+            .iter()
+            .map(|(k, _)| k.clone())
+            .filter(|k| !current_by.iter().any(|(c, _)| c == k))
+            .collect(),
+        ..Diff::default()
+    };
     super::js_default_sort(&mut diff.missing);
     diff.added = current_by
         .iter()
@@ -637,15 +639,14 @@ fn run_write(root: &Path) -> Result<ExitCode, Option<ExitCode>> {
     let file = manifest_path(root);
     // CUTOVER: both write failures used to delegate (Node printed a libuv
     // message). They refuse natively now, same channel and exit code.
-    if let Some(dir) = file.parent() {
-        if let Err(e) = std::fs::create_dir_all(dir) {
+    if let Some(dir) = file.parent()
+        && let Err(e) = std::fs::create_dir_all(dir) {
             return Err(Some(fail(&format!(
                 "release_manifest: cannot create {} ({})",
                 dir.display(),
                 e.kind()
             ))));
         }
-    }
     if let Err(e) = std::fs::write(&file, manifest_bytes(&records)) {
         return Err(Some(fail(&format!(
             "release_manifest: cannot write {} ({})",

@@ -294,11 +294,10 @@ pub(crate) fn bundle_mode(root: &Path) -> bool {
             continue;
         }
         let Some(text) = read_file_lossy(&join_rel(&dir, &rel)) else { continue };
-        if let Some(data) = parse_frontmatter(&text) {
-            if matches!(data.get("type"), Some(Value::String(t)) if !t.is_empty()) {
+        if let Some(data) = parse_frontmatter(&text)
+            && matches!(data.get("type"), Some(Value::String(t)) if !t.is_empty()) {
                 return true;
             }
-        }
     }
     false
 }

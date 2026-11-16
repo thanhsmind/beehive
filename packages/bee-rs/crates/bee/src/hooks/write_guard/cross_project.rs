@@ -79,7 +79,7 @@ fn git_common_dir(dir: &Path) -> Option<PathBuf> {
     }
     let gitdir = std::fs::canonicalize(&gitdir).ok()?;
     match (gitdir.parent(), gitdir.parent().and_then(Path::parent)) {
-        (Some(p), Some(common)) if p.file_name().map_or(false, |n| n == "worktrees") => {
+        (Some(p), Some(common)) if p.file_name().is_some_and(|n| n == "worktrees") => {
             Some(common.to_path_buf())
         }
         _ => Some(gitdir),
@@ -193,7 +193,7 @@ impl Scope {
 }
 
 fn glob_prefix(pattern: &str) -> &str {
-    let cut = pattern.find(|c| matches!(c, '*' | '?' | '[' | '{')).unwrap_or(pattern.len());
+    let cut = pattern.find(['*', '?', '[', '{']).unwrap_or(pattern.len());
     &pattern[..cut]
 }
 
@@ -346,7 +346,7 @@ fn is_managed(other: &Path, roots: &[PathBuf]) -> bool {
 }
 
 fn named_secret(path: &Path) -> bool {
-    path.file_name().map_or(false, |n| n == "config.local.json")
+    path.file_name().is_some_and(|n| n == "config.local.json")
         || is_secret_path(&path.to_string_lossy())
 }
 
@@ -364,7 +364,7 @@ fn holds_secret_below(dir: &Path) -> bool {
             if named_secret(&path) {
                 return true;
             }
-            if entry.file_type().map_or(false, |t| t.is_dir()) {
+            if entry.file_type().is_ok_and(|t| t.is_dir()) {
                 stack.push(path);
             }
         }
@@ -437,13 +437,11 @@ impl Grant<'_> {
         tool_input: &Map<String, Value>,
         candidates: &[String],
     ) -> Result<(), (Why, Option<PathBuf>)> {
-        if tool_name == "Glob" {
-            if let Some(Value::String(p)) = tool_input.get("pattern") {
-                if p.contains("..") {
+        if tool_name == "Glob"
+            && let Some(Value::String(p)) = tool_input.get("pattern")
+                && p.contains("..") {
                     return Err((rule("glob parent segment"), None));
                 }
-            }
-        }
         for raw in candidates {
             self.judge(raw, false, tool_name == "Grep")?;
         }
@@ -547,7 +545,7 @@ fn lex_shell(command: &str) -> Option<Vec<Vec<String>>> {
         let start = i;
         for exact in ["2>/dev/null", "2>&1"] {
             let len = exact.chars().count();
-            let ends = chars.get(start + len).map_or(true, |&n| n == ' ' || n == '\t' || n == '|');
+            let ends = chars.get(start + len).is_none_or(|&n| n == ' ' || n == '\t' || n == '|');
             if chars[start..].iter().take(len).copied().eq(exact.chars()) && ends {
                 word.push_str(exact);
                 i += len;
@@ -629,14 +627,13 @@ pub(crate) fn cross_project_denial_with_registry(
             if let Some(Value::String(s)) = tool_input.get(key).filter(|v| truthy(v)) {
                 candidates.push(s.clone());
             }
-            if tool_name == "Glob" {
-                if let Some(Value::String(p)) = tool_input.get("pattern") {
+            if tool_name == "Glob"
+                && let Some(Value::String(p)) = tool_input.get("pattern") {
                     let prefix = glob_prefix(p);
                     if prefix.starts_with('/') || prefix.starts_with('~') {
                         candidates.push(prefix.to_string());
                     }
                 }
-            }
         }
         "Bash" | "exec" => {
             let command = match first_truthy(tool_input, &["command", "cmd"]) {

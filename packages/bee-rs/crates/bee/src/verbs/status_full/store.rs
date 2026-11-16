@@ -628,9 +628,9 @@ pub(crate) fn validate_models_config(config: Option<&Value>) -> Vec<Problem> {
                     });
                     continue;
                 }
-                if let Some(Value::Object(p)) = primary {
-                    if let Some(ft) = p.get("fork_turns") {
-                        if !str_eq(Some(ft), "none") {
+                if let Some(Value::Object(p)) = primary
+                    && let Some(ft) = p.get("fork_turns")
+                        && !str_eq(Some(ft), "none") {
                             problems.push(Problem {
                                 code: "native-fork-turns-unknown",
                                 runtime: Some(rt),
@@ -642,8 +642,6 @@ pub(crate) fn validate_models_config(config: Option<&Value>) -> Vec<Problem> {
                                 agent: None,
                             });
                         }
-                    }
-                }
                 if !str_eq(vobj.get("fallback_policy"), "explicit-only") {
                     problems.push(Problem {
                         code: "composite-fallback-policy-missing",
@@ -680,8 +678,8 @@ pub(crate) fn validate_models_config(config: Option<&Value>) -> Vec<Problem> {
                     });
                     continue;
                 }
-                if let Some(ft) = vobj.get("fork_turns") {
-                    if !str_eq(Some(ft), "none") {
+                if let Some(ft) = vobj.get("fork_turns")
+                    && !str_eq(Some(ft), "none") {
                         problems.push(Problem {
                             code: "native-fork-turns-unknown",
                             runtime: Some(rt),
@@ -693,7 +691,6 @@ pub(crate) fn validate_models_config(config: Option<&Value>) -> Vec<Problem> {
                             agent: None,
                         });
                     }
-                }
                 continue;
             }
             // herding-tier D1: { kind: 'herding' } is a valid router value —
@@ -820,11 +817,10 @@ pub(crate) fn read_agent_file_model(file: &Path) -> (bool, Option<String>) {
     // /^model:\s*(.+)$/m over the frontmatter.
     for line in frontmatter.split('\n') {
         let line = line.strip_suffix('\r').unwrap_or(line);
-        if let Some(after) = line.strip_prefix("model:") {
-            if !after.is_empty() {
+        if let Some(after) = line.strip_prefix("model:")
+            && !after.is_empty() {
                 return (true, Some(js_trim(after).to_string()));
             }
-        }
     }
     (true, None)
 }
@@ -1008,15 +1004,15 @@ pub(crate) fn read_grants(main_store_root: &Path) -> JMap {
 /// resolved storeRoot), NOT cwd. That distinction is what makes this a
 /// two-line function rather than a second walk:
 ///   * ordinary checkout        -> resolveRootsCore(root) is ordinary,
-///                                 controlRoot === workspaceRoot === root.
+///     controlRoot === workspaceRoot === root.
 ///   * UNGRANTED linked worktree-> `root` already fell back to mainRoot, and
-///                                 resolveRootsCore(mainRoot) is ordinary,
-///                                 so controlRoot === root again.
+///     resolveRootsCore(mainRoot) is ordinary,
+///     so controlRoot === root again.
 ///   * GRANTED linked worktree  -> `root` IS the worktree checkout, so
-///                                 resolveRootsCore(root) is linked-valid and
-///                                 controlRoot === its mainRoot.
-/// So the only case that moves is the granted one, and `ctx.linked` (resolved
-/// from the same cwd `root` was) already carries its mainRoot.
+///     resolveRootsCore(root) is linked-valid and
+///     controlRoot === its mainRoot.
+///     So the only case that moves is the granted one, and `ctx.linked` (resolved
+///     from the same cwd `root` was) already carries its mainRoot.
 ///
 /// The resolveContext side effects Node performs anyway are replicated for
 /// warning parity: readGrants over the MAIN store's `.bee` (silent), and
@@ -1067,7 +1063,7 @@ pub(crate) fn reservations_control_root(ctx: &Ctx) -> PathBuf {
                 Some(rest) => js_trim(rest),
                 None => raw,
             };
-            let fixed = raw.replace('\\', &std::path::MAIN_SEPARATOR.to_string());
+            let fixed = raw.replace('\\', std::path::MAIN_SEPARATOR_STR);
             Some(path_resolve(base, &fixed))
         };
         let gitdir = read_ptr(&marker, &work_root)?;

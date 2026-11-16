@@ -246,12 +246,7 @@ pub(crate) fn session_has_active_claim(ctx: &Ctx, control_root: &Path, session_i
     for entry in entries.filter_map(|e| e.ok()) {
         let name = entry.file_name().to_string_lossy().into_owned();
         let Some(stem) = name.strip_suffix(".json") else { continue };
-        let claim = match read_claim(ctx, control_root, stem) {
-            Ok(c) => c,
-            // readClaim's requireId throw propagates in Node (no local catch
-            // here) — buildRecoveryBlock's own catch absorbs it.
-            Err(e) => return Err(e),
-        };
+        let claim = read_claim(ctx, control_root, stem)?;
         let Some(claim) = claim else { continue };
         if strict_eq(claim.get("session"), Some(session_id)) && is_claim_active(&claim, now) {
             return Ok(true);
@@ -279,11 +274,10 @@ pub(crate) fn detect_crash_candidates(ctx: &mut Ctx, projects_root: &str) -> R<V
         if !session.contains_key("id") || !opt_truthy(session.get("id")) {
             continue;
         }
-        if let Some(current) = &resolved_current {
-            if str_eq(session.get("id"), current) {
+        if let Some(current) = &resolved_current
+            && str_eq(session.get("id"), current) {
                 continue;
             }
-        }
         if !heartbeat_stale(session, now) {
             continue;
         }
@@ -294,8 +288,8 @@ pub(crate) fn detect_crash_candidates(ctx: &mut Ctx, projects_root: &str) -> R<V
             .and_then(|v| v.as_str())
             .map(js_trim)
             .filter(|s| !s.is_empty());
-        if let Some(stored) = stored_path {
-            if let Some(found) = resolve_transcript(None, None, None, Some(stored)) {
+        if let Some(stored) = stored_path
+            && let Some(found) = resolve_transcript(None, None, None, Some(stored)) {
                 let matched = roots.iter().find(|r| {
                     if !r.scanned {
                         return false;
@@ -311,7 +305,6 @@ pub(crate) fn detect_crash_candidates(ctx: &mut Ctx, projects_root: &str) -> R<V
                 transcript_runtime = matched.map(|r| r.runtime.clone());
                 transcript = Some(found);
             }
-        }
         if transcript.is_none() {
             let sid = session.get("id").and_then(|v| v.as_str()).unwrap_or("");
             for r in &roots {
@@ -376,11 +369,10 @@ pub(crate) fn detect_crash_candidates(ctx: &mut Ctx, projects_root: &str) -> R<V
                     last_activity = Some(t);
                 }
             }
-            if let Some(last) = last_activity {
-                if since_ms.is_finite() && last > since_ms {
+            if let Some(last) = last_activity
+                && since_ms.is_finite() && last > since_ms {
                     work_signal = Some("transcript_activity");
                 }
-            }
         }
         let Some(work_signal) = work_signal else { continue };
 
@@ -494,8 +486,8 @@ pub(crate) fn compute_runtime_drift(ctx: &Ctx, onboarding_raw: &Value) -> (bool,
     check_group(vget(managed, "lib"), "lib");
     check_group(vget(managed, "helpers"), "");
     check_group(vget(managed, "prompts"), "prompts");
-    if let Some(Value::Object(lib)) = vget(managed, "lib") {
-        if let Ok(entries) = std::fs::read_dir(ctx.root.join(".bee").join("bin").join("lib")) {
+    if let Some(Value::Object(lib)) = vget(managed, "lib")
+        && let Ok(entries) = std::fs::read_dir(ctx.root.join(".bee").join("bin").join("lib")) {
             for entry in entries.filter_map(|e| e.ok()) {
                 let f = entry.file_name().to_string_lossy().into_owned();
                 if f.ends_with(".mjs") && !lib.contains_key(&f) {
@@ -503,7 +495,6 @@ pub(crate) fn compute_runtime_drift(ctx: &Ctx, onboarding_raw: &Value) -> (bool,
                 }
             }
         }
-    }
     (version_drift || !detail.is_empty(), detail)
 }
 
@@ -539,11 +530,10 @@ pub(crate) fn classify_source(hive_dir: &Path, home: &str) -> (String, Option<St
         )));
         let rp = dunce::canonicalize(&source_root).ok();
         let rp_global = dunce::canonicalize(&global_root).ok();
-        if let (Some(a), Some(b)) = (rp, rp_global) {
-            if a == b {
+        if let (Some(a), Some(b)) = (rp, rp_global)
+            && a == b {
                 return ("legacy_global".into(), Some(plugin_root_str));
             }
-        }
     }
     let projection_parent = path_basename(&plugin_root_str);
     if projection_parent == ".agents" || projection_parent == ".claude" {

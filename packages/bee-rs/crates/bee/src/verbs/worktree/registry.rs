@@ -635,11 +635,9 @@ pub(crate) fn parse_git_ls_files_cells_output(stdout: &[u8]) -> Option<HashSet<S
             continue;
         }
         let rel = String::from_utf8_lossy(raw);
-        match rel.strip_prefix(".bee/cells/") {
-            Some(stripped) => {
-                set.insert(stripped.to_string());
-            }
-            None => return None,
+        {
+            let stripped = rel.strip_prefix(".bee/cells/")?;
+            set.insert(stripped.to_string());
         }
     }
     Some(set)
@@ -659,12 +657,12 @@ pub(crate) fn parse_git_ls_files_cells_output(stdout: &[u8]) -> Option<HashSet<S
 ///   2. FILL — copy in the main store's matching-feature cells that are not
 ///      already present (a from-scratch `worktree register` adopting a bare
 ///      checkout, or a main-store cell not yet committed to git).
-/// Feature-neutral content under `.bee` (config, expertise, prompts,
-/// decisions/backlog, `cells/archive/summary.json`, …) is untouched — this
-/// function only ever looks inside `cells/`.
-/// review B-P1-1 / D23: whether the whole cell sync ran, or was refused
-/// because one of the fixed store paths it is about to prune or fill
-/// through is a SYMLINK.
+///      Feature-neutral content under `.bee` (config, expertise, prompts,
+///      decisions/backlog, `cells/archive/summary.json`, …) is untouched — this
+///      function only ever looks inside `cells/`.
+///      review B-P1-1 / D23: whether the whole cell sync ran, or was refused
+///      because one of the fixed store paths it is about to prune or fill
+///      through is a SYMLINK.
 enum CellsSync {
     /// review D-P3-2: `pruned` names every file the prune arm actually
     /// removed, `.bee/cells/`-relative (a bare `name.json` for a top-level
@@ -734,8 +732,8 @@ fn sync_worktree_cells(worktree_store_root: &Path, main_store_root: &Path, featu
 
     // (1) prune top-level cell files that are not the granted feature's,
     // and are not tracked — a tracked foreign-feature file is left alone.
-    if let Some(tracked) = &tracked {
-        if let Ok(entries) = std::fs::read_dir(&dest_cells) {
+    if let Some(tracked) = &tracked
+        && let Ok(entries) = std::fs::read_dir(&dest_cells) {
             for entry in entries.filter_map(|e| e.ok()) {
                 if entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
                     continue; // archive/ handled in pass (3) below
@@ -755,7 +753,6 @@ fn sync_worktree_cells(worktree_store_root: &Path, main_store_root: &Path, featu
                 pruned.push(name);
             }
         }
-    }
 
     // (2) fill in the main store's matching cells not already present.
     if let Ok(entries) = std::fs::read_dir(&src_cells) {
@@ -783,8 +780,8 @@ fn sync_worktree_cells(worktree_store_root: &Path, main_store_root: &Path, featu
     // every OTHER feature's subdir down to its tracked files, then fill in
     // the granted feature's. A tracked file inside a foreign dir stays; only
     // when nothing tracked is left does the now-empty dir itself go.
-    if let Some(tracked) = &tracked {
-        if let Ok(entries) = std::fs::read_dir(&dest_archive) {
+    if let Some(tracked) = &tracked
+        && let Ok(entries) = std::fs::read_dir(&dest_archive) {
             for entry in entries.filter_map(|e| e.ok()) {
                 if !entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
                     continue; // e.g. archive/summary.json is feature-neutral
@@ -816,7 +813,6 @@ fn sync_worktree_cells(worktree_store_root: &Path, main_store_root: &Path, featu
                 }
             }
         }
-    }
     if src_feature_archive.exists() {
         std::fs::create_dir_all(&dest_feature_archive).ok()?;
         if let Ok(entries) = std::fs::read_dir(&src_feature_archive) {

@@ -96,7 +96,6 @@ impl SupervisorSummarizer for RealSupervisor {
 }
 
 pub(crate) struct ProgressNote {
-    pub(crate) ts: Option<String>,
     pub(crate) step: Option<String>,
     pub(crate) note: String,
 }
@@ -122,19 +121,17 @@ fn read_progress_notes(progress_path: &Path) -> Vec<ProgressNote> {
             Some(n) if !n.trim().is_empty() => n.trim().to_string(),
             _ => continue,
         };
-        let ts = val.get("ts").or_else(|| val.get("at")).and_then(Value::as_str).map(str::to_string);
         let step = val.get("step").and_then(Value::as_str).map(str::trim).filter(|s| !s.is_empty()).map(str::to_string);
-        notes.push(ProgressNote { ts, step, note });
+        notes.push(ProgressNote { step, note });
     }
     notes
 }
 
 fn format_verbatim_note(note: &ProgressNote) -> String {
-    if let Some(step) = &note.step {
-        if !step.trim().is_empty() {
+    if let Some(step) = &note.step
+        && !step.trim().is_empty() {
             return format!("{}: {}", step.trim(), note.note);
         }
-    }
     note.note.clone()
 }
 
@@ -160,8 +157,8 @@ pub(crate) fn status_digest_with_summarizer(
 
     if let Some(round) = mailbox::latest_result_round(&entry_names) {
         let res_path = mailbox::result_path(&bee_dir, job_id, round);
-        if let Ok(text) = std::fs::read_to_string(&res_path) {
-            if let Ok(res) = mailbox::parse_result_text(round, &text) {
+        if let Ok(text) = std::fs::read_to_string(&res_path)
+            && let Ok(res) = mailbox::parse_result_text(round, &text) {
                 let status_str = match res.status {
                     mailbox::MailboxStatus::Done => "done",
                     mailbox::MailboxStatus::Blocked => "blocked",
@@ -176,7 +173,6 @@ pub(crate) fn status_digest_with_summarizer(
                 });
                 return (ExitCode::SUCCESS, val, line);
             }
-        }
     }
 
     if notes.is_empty() {
@@ -203,10 +199,10 @@ pub(crate) fn status_digest_with_summarizer(
     }
 
     let digest_path = job_dir.join("status-digest.json");
-    if let Ok(raw) = std::fs::read_to_string(&digest_path) {
-        if let Ok(cached) = serde_json::from_str::<Value>(&raw) {
-            if cached.get("notes").and_then(Value::as_u64) == Some(notes.len() as u64) {
-                if let Some(cached_line) = cached.get("line").and_then(Value::as_str) {
+    if let Ok(raw) = std::fs::read_to_string(&digest_path)
+        && let Ok(cached) = serde_json::from_str::<Value>(&raw)
+            && cached.get("notes").and_then(Value::as_u64) == Some(notes.len() as u64)
+                && let Some(cached_line) = cached.get("line").and_then(Value::as_str) {
                     let line = cached_line.to_string();
                     let val = json!({
                         "job": job_id,
@@ -216,9 +212,6 @@ pub(crate) fn status_digest_with_summarizer(
                     });
                     return (ExitCode::SUCCESS, val, line);
                 }
-            }
-        }
-    }
 
     match summarizer.summarize(main_root, &notes) {
         Ok(line) => {

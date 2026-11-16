@@ -134,7 +134,7 @@ fn top_level(json: bool, all: bool, names: bool, t0: Instant) -> Option<ExitCode
                 "commands".into(),
                 Value::Array(rows.iter().map(|e| Value::Object(names_entry(e))).collect()),
             );
-            print!("{}\n", jsjson::stringify_pretty(&Value::Object(manifest)));
+            println!("{}", jsjson::stringify_pretty(&Value::Object(manifest)));
         } else {
             for entry in &rows {
                 let invoke = entry.get("invoke").and_then(Value::as_str).unwrap_or("");
@@ -163,7 +163,7 @@ fn top_level(json: bool, all: bool, names: bool, t0: Instant) -> Option<ExitCode
             manifest.insert("surface".into(), Value::from("all"));
             manifest.insert("total_commands".into(), Value::from(total as u64));
             manifest.insert("commands".into(), Value::Array(commands));
-            print!("{}\n", jsjson::stringify_pretty(&Value::Object(manifest)));
+            println!("{}", jsjson::stringify_pretty(&Value::Object(manifest)));
         } else {
             print!("{}", render_help_text(&commands, &[], &reg.schema_version));
         }
@@ -187,7 +187,7 @@ fn top_level(json: bool, all: bool, names: bool, t0: Instant) -> Option<ExitCode
             manifest.insert("surface".into(), Value::from("porcelain"));
             manifest.insert("total_commands".into(), Value::from(total as u64));
             manifest.insert("commands".into(), Value::Array(commands));
-            print!("{}\n", jsjson::stringify_pretty(&Value::Object(manifest)));
+            println!("{}", jsjson::stringify_pretty(&Value::Object(manifest)));
         } else {
             let unavailable = reg.commands.iter().filter(|e| is_unavailable(e)).count();
             let footer = help_footer_lines(total, porcelain.len(), unavailable);
@@ -237,7 +237,7 @@ pub fn internal_surface(json: bool, t0: Instant) -> Option<ExitCode> {
         manifest.insert("surface".into(), Value::from("internal"));
         manifest.insert("total_commands".into(), Value::from(reg.commands.len() as u64));
         manifest.insert("commands".into(), Value::Array(entries));
-        print!("{}\n", jsjson::stringify_pretty(&Value::Object(manifest)));
+        println!("{}", jsjson::stringify_pretty(&Value::Object(manifest)));
     } else {
         let footer = vec![format!(
             "{} plumbing command(s). Each also answers to its bare top-level spelling (`bee state gate` == `bee internal state gate`); `bee internal` is the one that says which surface it belongs to. Run \"bee --help\" for the flow surface.",
@@ -295,14 +295,14 @@ fn group_scoped(argv: &[&str], t0: Instant) -> Option<ExitCode> {
         Roots::None => cwd.clone(),
         Roots::Unsupported(why) => {
             let cmd = command_name.replace('.', " ");
-            let j = rest.iter().any(|t| *t == "--json");
+            let j = rest.contains(&"--json");
             return Some(emit_unsupported_root(&cwd, &cmd, j, t0, &why));
         }
     };
 
     // jsonRequested: rest.some(t === '--json' || t.startsWith('--json=')) —
     // the '=' forms never reach here (proven-shape gate above delegates them).
-    let json_requested = rest.iter().any(|t| *t == "--json");
+    let json_requested = rest.contains(&"--json");
     let entries: Vec<Value> = filtered
         .iter()
         .map(|e| Value::Object(manifest_entry(e)))
@@ -311,7 +311,7 @@ fn group_scoped(argv: &[&str], t0: Instant) -> Option<ExitCode> {
         let mut manifest = Map::new();
         manifest.insert("schema_version".into(), reg.schema_version.clone());
         manifest.insert("commands".into(), Value::Array(entries));
-        print!("{}\n", jsjson::stringify_pretty(&Value::Object(manifest)));
+        println!("{}", jsjson::stringify_pretty(&Value::Object(manifest)));
     } else {
         print!("{}", render_help_text(&entries, &[], &reg.schema_version));
     }
@@ -630,31 +630,28 @@ fn render_help_text(entries: &[Value], footer_lines: &[String], schema_version: 
         } else if let Some(flags) = flags_line(entry) {
             lines.push(format!("    flags: {flags}"));
         }
-        if let Some(surface) = get("surface") {
-            if js_truthy(surface) {
+        if let Some(surface) = get("surface")
+            && js_truthy(surface) {
                 lines.push(format!("    surface: {}", jsjson::js_to_string(surface)));
             }
-        }
-        if let Some(dep) = get("deprecated") {
-            if js_truthy(dep) {
+        if let Some(dep) = get("deprecated")
+            && js_truthy(dep) {
                 lines.push(format!(
                     "    DEPRECATED since {} — use \"{}\" instead.",
                     js_display(dep.get("since")),
                     js_display(dep.get("use_instead"))
                 ));
             }
-        }
         // Same shape as the DEPRECATED line, and deliberately louder: a
         // deprecated command still runs, an unavailable one does not.
-        if let Some(gap) = get("unavailable") {
-            if js_truthy(gap) {
+        if let Some(gap) = get("unavailable")
+            && js_truthy(gap) {
                 lines.push(format!(
                     "    NOT BUILT INTO THIS BINARY — {}.",
                     js_display(gap.get("reason"))
                 ));
                 lines.push(format!("    instead: {}", js_display(gap.get("fix"))));
             }
-        }
         lines.push(String::new());
     }
     let joined = lines.join("\n");

@@ -114,11 +114,10 @@ fn parse_log(stdout: &str) -> Vec<LoggedCommit> {
             let mut ids = head.split_whitespace().map(str::to_string);
             let Some(hash) = ids.next() else { continue };
             commits.push(LoggedCommit { hash, parents: ids.collect(), files: HashSet::new() });
-        } else if !line.trim().is_empty() {
-            if let Some(last) = commits.last_mut() {
+        } else if !line.trim().is_empty()
+            && let Some(last) = commits.last_mut() {
                 last.files.insert(line.trim_end().to_string());
             }
-        }
     }
     commits
 }
@@ -272,12 +271,11 @@ pub(crate) fn grade_bundle_with(
         reached[start] = true;
         while let Some(i) = stack.pop() {
             for parent in &commits[i].parents {
-                if let Some(&p) = index.get(parent.as_str()) {
-                    if !reached[p] {
+                if let Some(&p) = index.get(parent.as_str())
+                    && !reached[p] {
                         reached[p] = true;
                         stack.push(p);
                     }
-                }
             }
         }
         windows.insert(vc.clone(), (0..commits.len()).filter(|i| !reached[*i]).collect());
@@ -499,11 +497,10 @@ pub(crate) fn run_seed_anchors(flags: Flags, json: bool, pre_json: bool, t0: Ins
                 bee.insert("verified_commit".into(), Value::String(sha.clone()));
             }
         }
-        if !dry_run {
-            if let Err(message) = write_concept(concept) {
+        if !dry_run
+            && let Err(message) = write_concept(concept) {
                 return Some(ctx.fail(&message));
             }
-        }
         lines.push(match &baseline {
             Some((sha, date)) => format!("{}: {count} anchor(s), baseline {} {date}", concept.rel, short(sha)),
             None => format!("{}: {count} anchor(s), no baseline commit", concept.rel),

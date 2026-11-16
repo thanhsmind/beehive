@@ -323,6 +323,8 @@ fn agent_registry(cfg: &Value) -> BTreeMap<String, RegistryEntry> {
     out
 }
 
+type ResolvedAgentCommand = (String, Vec<String>, BTreeMap<String, String>, Option<WorkspaceTrust>);
+
 /// The one place a name resolves against `herding.agents` (herd-registry
 /// D2): token 0 becomes the kind, the rest the args, each substituted the
 /// same way a plain `herding.agent_command` array is; the entry's `env`
@@ -332,7 +334,7 @@ fn agent_registry(cfg: &Value) -> BTreeMap<String, RegistryEntry> {
 fn resolve_from_registry(
     registry: &BTreeMap<String, RegistryEntry>,
     name: &str,
-) -> Result<(String, Vec<String>, BTreeMap<String, String>, Option<WorkspaceTrust>), AgentCommandError> {
+) -> Result<ResolvedAgentCommand, AgentCommandError> {
     let Some(entry) = registry.get(name) else {
         return Err(AgentCommandError::UnknownAgent {
             name: name.to_string(),
@@ -395,7 +397,7 @@ fn current_runtime() -> String {
 pub(crate) fn resolve_agent_command(
     cfg: &Value,
     agent: Option<&str>,
-) -> Result<(String, Vec<String>, BTreeMap<String, String>, Option<WorkspaceTrust>), AgentCommandError> {
+) -> Result<ResolvedAgentCommand, AgentCommandError> {
     resolve_agent_command_for_runtime(cfg, agent, &current_runtime())
 }
 
@@ -404,7 +406,7 @@ pub(crate) fn resolve_agent_command_for_runtime(
     cfg: &Value,
     agent: Option<&str>,
     runtime: &str,
-) -> Result<(String, Vec<String>, BTreeMap<String, String>, Option<WorkspaceTrust>), AgentCommandError> {
+) -> Result<ResolvedAgentCommand, AgentCommandError> {
     let registry = agent_registry(cfg);
     if let Some(name) = agent {
         return resolve_from_registry(&registry, name);
@@ -1031,11 +1033,10 @@ pub(super) fn occupancy_with_panes_and_paseo(
         None => live_pane_ids(&main_root),
     };
 
-    if let (Some(cli), Some(set)) = (p_ref, live_panes.as_mut()) {
-        if let Some(ids) = paseo_live_ids(cli) {
+    if let (Some(cli), Some(set)) = (p_ref, live_panes.as_mut())
+        && let Some(ids) = paseo_live_ids(cli) {
             set.extend(ids);
         }
-    }
 
     let mut sweep_lines = Vec::new();
     if let Some(ref panes) = live_panes {

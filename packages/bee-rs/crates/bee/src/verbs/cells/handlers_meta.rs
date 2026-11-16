@@ -674,8 +674,8 @@ fn archive_one_feature(root: &Path, feature: &str) -> MR<(Vec<Value>, f64, f64)>
                     "archiveFeature: feature \"{feature}\" has non-terminal cell(s) — {named} — only a feature whose cells are ALL capped/dropped can be archived."
                 )));
             }
-            let archive_dir = cells_archive_dir(&root, &feature);
-            assert_archive_dir_contained("archiveFeature", &root, &archive_dir)?;
+            let archive_dir = cells_archive_dir(root, feature);
+            assert_archive_dir_contained("archiveFeature", root, &archive_dir)?;
             std::fs::create_dir_all(&archive_dir).map_err(|e| Fail::Thrown(format!("{e}")))?;
             // Every cell.id must be a plain string for path.join — anything
             // else takes a V8 TypeError in Node.
@@ -686,7 +686,7 @@ fn archive_one_feature(root: &Path, feature: &str) -> MR<(Vec<Value>, f64, f64)>
                 planned.push((
                     cell.get("id").cloned().unwrap_or(Value::Null),
                     status,
-                    cell_file(&root, cid),
+                    cell_file(root, cid),
                     archive_dir.join(format!("{cid}.json")),
                 ));
             }
@@ -714,7 +714,7 @@ fn archive_one_feature(root: &Path, feature: &str) -> MR<(Vec<Value>, f64, f64)>
                     .collect(),
             );
             write_json_atomic(
-                &archive_journal_path(&root, &feature),
+                &archive_journal_path(root, feature),
                 &json!({"op": "archive", "feature": feature, "planned": planned_value, "started_at": utc_now()}),
             )
             .map_err(|e| Fail::Thrown(format!("{e}")))?;
@@ -726,7 +726,7 @@ fn archive_one_feature(root: &Path, feature: &str) -> MR<(Vec<Value>, f64, f64)>
                     for (from_r, to_r, _) in moved.iter().rev() {
                         let _ = std::fs::rename(to_r, from_r); // best-effort rollback
                     }
-                    crate::fsutil::remove_file_if_exists(&archive_journal_path(&root, &feature));
+                    crate::fsutil::remove_file_if_exists(&archive_journal_path(root, feature));
                     return Err(Fail::Thrown(format!("{e}"))); // residual: libuv message in Node
                 }
                 moved.push((from.clone(), to.clone(), id.clone()));
@@ -736,13 +736,13 @@ fn archive_one_feature(root: &Path, feature: &str) -> MR<(Vec<Value>, f64, f64)>
                     dropped += 1.0;
                 }
             }
-            let mut summary = archived_summary(&root)?;
+            let mut summary = archived_summary(root)?;
             let mut entry = Map::new();
             entry.insert("capped".into(), Value::Number(Number::from_f64(capped).unwrap()));
             entry.insert("dropped".into(), Value::Number(Number::from_f64(dropped).unwrap()));
             entry.insert("archived_at".into(), Value::String(utc_now()));
             summary.insert(feature.clone(), Value::Object(entry));
-            write_json_atomic(&archive_summary_file(&root), &Value::Object(summary))
+            write_json_atomic(&archive_summary_file(root), &Value::Object(summary))
                 .map_err(|e| Fail::Thrown(format!("{e}")))?;
             crate::fsutil::remove_file_if_exists(&archive_journal_path(root, feature));
             Ok((moved.into_iter().map(|(_, _, id)| id).collect(), capped, dropped))
@@ -750,11 +750,13 @@ fn archive_one_feature(root: &Path, feature: &str) -> MR<(Vec<Value>, f64, f64)>
     }
 }
 
+type TerminalFeatures = (Vec<String>, Vec<(String, String)>);
+
 /// Features whose ACTIVE cells are all terminal, excluding the active feature.
 /// Returns (eligible, skipped-with-reason) — nothing is dropped silently: a
 /// sweep that quietly passed over a feature would look identical to one that
 /// had nothing to do.
-fn terminal_features(root: &Path, active: Option<&str>) -> MR<(Vec<String>, Vec<(String, String)>)> {
+fn terminal_features(root: &Path, active: Option<&str>) -> MR<TerminalFeatures> {
     let cells = list_cells(root, None, None).map_err(|_| Fail::Delegate)?;
     let mut order: Vec<String> = Vec::new();
     let mut by_feature: std::collections::HashMap<String, Vec<&Value>> =
@@ -836,7 +838,9 @@ pub(crate) fn run_archive(flags: rsv::Flags, use_json: bool, t0: Instant) -> Opt
             };
             let (eligible, skipped) = terminal_features(&root, Some(active_feature))?;
             let mut guard = acquire_named_lock(&root, "cells-archive")?;
-            let outcome = (|| -> MR<(Vec<Value>, f64, f64, Vec<(String, String)>)> {
+            type ListOutcome = (Vec<Value>, f64, f64, Vec<(String, String)>);
+
+            let outcome = (|| -> MR<ListOutcome> {
                 let (mut rows, mut capped_total, mut dropped_total) = (Vec::new(), 0f64, 0f64);
                 let mut failed: Vec<(String, String)> = Vec::new();
                 for feature in &eligible {

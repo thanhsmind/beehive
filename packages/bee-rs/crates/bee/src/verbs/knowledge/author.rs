@@ -236,8 +236,8 @@ pub(crate) fn show_concept(dir: &Path, id: &str) -> Result<ShowResult, ShowError
     let mut grade_out: Option<&'static str> = None;
     let mut verified_at: Option<String> = None;
     let mut verified_commit: Option<String> = None;
-    if is_area_concept(&target.data) {
-        if let Some(checkout) = checkout_of(dir) {
+    if is_area_concept(&target.data)
+        && let Some(checkout) = checkout_of(dir) {
             let grade = grade_concept(checkout, &target.path, &bee);
             let mut line = format!("freshness: {} @ {}", grade.grade, grade.verified_at.as_deref().unwrap_or("never"));
             let id = bee.get("id").and_then(Value::as_str).unwrap_or("");
@@ -256,7 +256,6 @@ pub(crate) fn show_concept(dir: &Path, id: &str) -> Result<ShowResult, ShowError
             verified_at = grade.verified_at;
             verified_commit = grade.verified_commit;
         }
-    }
 
     if links_out.is_empty() {
         lines.push("links_out: (none)".to_string());

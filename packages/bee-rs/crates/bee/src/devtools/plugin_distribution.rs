@@ -721,11 +721,10 @@ fn read_ownership_ledger(
                 .and_then(Value::as_str)
                 .and_then(|p| std::path::absolute(p).ok())
                 .is_some_and(|p| requested.contains(&p));
-            if is_requested {
-                if let Some(obj) = entry.as_object_mut() {
+            if is_requested
+                && let Some(obj) = entry.as_object_mut() {
                     obj.insert("skills".into(), Value::Array(Vec::new()));
                 }
-            }
         }
     }
     let mut after = serde_json::to_vec_pretty(&ledger)

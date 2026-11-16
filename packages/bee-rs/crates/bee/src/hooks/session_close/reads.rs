@@ -83,11 +83,10 @@ pub(crate) fn preflight(root: &Path) -> Result<Map<String, Value>, ()> {
     for cache in [bee.join("cache").join("inject-cache.json"), bee.join(".inject-cache.json")] {
         // Deliberately plain read_json: a corrupt cache is NOT screened here
         // (read_inject_cache warns for it), so this probe never double-warns.
-        if let ReadJson::Parsed(v) = read_json(&cache) {
-            if !matches!(v, Value::Object(_) | Value::Null | Value::Bool(false)) {
+        if let ReadJson::Parsed(v) = read_json(&cache)
+            && !matches!(v, Value::Object(_) | Value::Null | Value::Bool(false)) {
                 return Err(());
             }
-        }
     }
     Ok(config)
 }
@@ -298,7 +297,7 @@ pub(crate) fn lane_record_from(feature: &str, parsed: &Value) -> Result<Option<R
 }
 
 pub(crate) enum Pipeline {
-    Ok { record: Record },
+    Ok { record: Box<Record> },
     /// LANE_INVALID / LANE_MISSING / LANE_CORRUPT — callers on the Stop path
     /// only ever branch on ok-ness and fall back to readState.
     Refused,
@@ -339,11 +338,10 @@ pub(crate) fn read_session_record(root: &Path, sid: &str) -> Option<Map<String, 
         _ => {
             if ctl != root {
                 let direct_file = root.join(".bee").join("sessions").join(format!("{sid}.json"));
-                if let ReadJson::Parsed(Value::Object(m)) = read_json_failopen(&direct_file) {
-                    if m.get("id").and_then(Value::as_str) == Some(sid) {
+                if let ReadJson::Parsed(Value::Object(m)) = read_json_failopen(&direct_file)
+                    && m.get("id").and_then(Value::as_str) == Some(sid) {
                         return Some(m);
                     }
-                }
             }
             None
         }
@@ -357,7 +355,7 @@ pub(crate) fn resolve_pipeline(
     stderr: &mut String,
 ) -> Result<Pipeline, Flow> {
     let Some(sid) = session_id else {
-        return Ok(Pipeline::Ok { record: read_state_record(root)? });
+        return Ok(Pipeline::Ok { record: Box::new(read_state_record(root)?) });
     };
     if ctx.worktree_resolution == "linked-invalid" {
         // state.mjs resolveRootsCore throws WorktreeLinkInvalidError here.
@@ -369,7 +367,7 @@ pub(crate) fn resolve_pipeline(
     let ctl = control_root(root, ctx);
     // readSession (fail-open id validation).
     if !is_plain_id(sid) {
-        return Ok(Pipeline::Ok { record: read_state_record(root)? });
+        return Ok(Pipeline::Ok { record: Box::new(read_state_record(root)?) });
     }
     let session_file = ctl.join(".bee").join("sessions").join(format!("{sid}.json"));
     // Corrupt → warned, then reads as "no session" (readJson's null fallback
@@ -387,7 +385,7 @@ pub(crate) fn resolve_pipeline(
         ReadJson::Parsed(_) => None,
     };
     let Some(session) = session else {
-        return Ok(Pipeline::Ok { record: read_state_record(root)? });
+        return Ok(Pipeline::Ok { record: Box::new(read_state_record(root)?) });
     };
     let bound = session
         .get("lane")
@@ -396,7 +394,7 @@ pub(crate) fn resolve_pipeline(
         .filter(|s| !s.is_empty())
         .map(String::from);
     let Some(bound) = bound else {
-        return Ok(Pipeline::Ok { record: read_state_record(root)? });
+        return Ok(Pipeline::Ok { record: Box::new(read_state_record(root)?) });
     };
     if !is_plain_id(&bound) {
         return Ok(Pipeline::Refused); // LANE_INVALID
@@ -423,7 +421,7 @@ through readLaneStrict will refuse loudly. FIX: inspect/restore the file (e.g. \
             Ok(Pipeline::Refused)
         }
         ReadJson::Parsed(parsed) => match lane_record_from(&bound, &parsed)? {
-            Some(record) => Ok(Pipeline::Ok { record }),
+            Some(record) => Ok(Pipeline::Ok { record: Box::new(record) }),
             None => {
                 // readLane's deterministic console.warn (corrupt lane shape).
                 let rel = format!(".bee{s}lanes{s}{bound}.json", s = std::path::MAIN_SEPARATOR);
@@ -522,20 +520,16 @@ pub(crate) fn newest_active_decision(root: &Path) -> Option<(Value, Value)> {
     let mut superseded: HashSet<String> = HashSet::new();
     let mut redacted: HashSet<String> = HashSet::new();
     for event in &events {
-        if event.get("type").and_then(Value::as_str) == Some("supersede") {
-            if let Some(target) = event.get("supersedes").filter(|v| js_truthy(v)) {
-                if let Some(k) = primitive_key(target) {
+        if event.get("type").and_then(Value::as_str) == Some("supersede")
+            && let Some(target) = event.get("supersedes").filter(|v| js_truthy(v))
+                && let Some(k) = primitive_key(target) {
                     superseded.insert(k);
                 }
-            }
-        }
-        if event.get("type").and_then(Value::as_str) == Some("redact") {
-            if let Some(target) = event.get("redacts").filter(|v| js_truthy(v)) {
-                if let Some(k) = primitive_key(target) {
+        if event.get("type").and_then(Value::as_str) == Some("redact")
+            && let Some(target) = event.get("redacts").filter(|v| js_truthy(v))
+                && let Some(k) = primitive_key(target) {
                     redacted.insert(k);
                 }
-            }
-        }
     }
     let mut newest: Option<&Value> = None;
     for event in &events {
@@ -544,11 +538,10 @@ pub(crate) fn newest_active_decision(root: &Path) -> Option<(Value, Value)> {
             continue;
         }
         let id_key = event.get("id").and_then(primitive_key);
-        if let Some(k) = &id_key {
-            if superseded.contains(k) || redacted.contains(k) {
+        if let Some(k) = &id_key
+            && (superseded.contains(k) || redacted.contains(k)) {
                 continue;
             }
-        }
         newest = Some(event);
     }
     newest.map(|e| {

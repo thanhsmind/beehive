@@ -10,10 +10,6 @@ use super::{mailbox, resolve_main_root};
 
 pub(crate) const KINDS: [&str; 5] = ["question", "blocked", "dependency", "progress", "reopen"];
 
-pub(crate) fn progress_path(job_dir: &Path) -> PathBuf {
-    job_dir.join("progress.jsonl")
-}
-
 pub(crate) fn messages_path(job_dir: &Path) -> PathBuf {
     job_dir.join("messages.jsonl")
 }

@@ -198,11 +198,10 @@ fn normalize_term(raw: &str) -> Option<String> {
 pub(crate) fn plan_terms(cells: &[Value]) -> Vec<String> {
     let mut out: Vec<String> = Vec::new();
     let push = |raw: &str, out: &mut Vec<String>| {
-        if let Some(t) = normalize_term(raw) {
-            if !out.contains(&t) {
+        if let Some(t) = normalize_term(raw)
+            && !out.contains(&t) {
                 out.push(t);
             }
-        }
     };
     for cell in cells {
         if let Some(Value::String(title)) = jget(cell, "title") {
@@ -306,6 +305,7 @@ fn rule_intersects(rule: &RuleHome, plan_paths: &[String]) -> bool {
 /// D5's candidate list for one feature: active decisions the plan's terms
 /// select, then rule homes the plan's paths touch. Ids are unique — the first
 /// occurrence wins — so a rule declared in two homes contributes one row.
+#[cfg(test)]
 pub(crate) fn derive_candidates(root: &Path, feature: &str) -> Result<Vec<Value>, Err2> {
     Ok(derive_candidates_reported(root, feature)?.0)
 }
@@ -381,7 +381,7 @@ pub(crate) fn derive_candidates_reported(
             // under D3's floor identical to today row for row. The sort is
             // stable, so equal hit counts hold that same order.
             if scored.len() > MAX_DECISION_CANDIDATES {
-                scored.sort_by(|a, b| b.1.cmp(&a.1));
+                scored.sort_by_key(|a| std::cmp::Reverse(a.1));
                 capped_away = scored.len() - MAX_DECISION_CANDIDATES;
                 scored.truncate(MAX_DECISION_CANDIDATES);
             }
@@ -551,8 +551,7 @@ pub(crate) fn run_plan_conflicts_derive(flags: Flags, use_json: bool, t0: Instan
         Ok(c) => c,
         Err(code) => return Some(code),
     };
-    let out = (|| -> R2<Out> {
-        with_lane_workflow(&ctx, &flags, "state plan-conflicts derive", |current, lane| {
+    let out = with_lane_workflow(&ctx, &flags, "state plan-conflicts derive", |current, lane| {
             let plan_rev = current.get("plan_rev").cloned().unwrap_or(json!(0));
             let (candidates, capped_away) = derive_candidates_reported(&ctx.root, lane)?;
             let count = candidates.len();
@@ -576,8 +575,7 @@ pub(crate) fn run_plan_conflicts_derive(flags: Flags, use_json: bool, t0: Instan
                 ));
             }
             Ok(Ok((patch, review, text)))
-        })
-    })();
+        });
     finish(&ctx, out)
 }
 

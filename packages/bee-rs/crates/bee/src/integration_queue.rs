@@ -498,7 +498,6 @@ pub(crate) enum Drain<T> {
 /// `result && result.ok === false ? 'failed' : 'done'`. A `run_merge` that
 /// fails outright (Err) marks the record 'failed' with the thrown message in
 /// `error`, exactly as processAsOwner's catch does, and re-raises.
-#[allow(clippy::too_many_arguments)]
 pub(crate) fn run_through_queue<T>(
     control_root: &Path,
     worktree_id: &str,

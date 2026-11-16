@@ -510,11 +510,10 @@ pub(crate) fn run_scribing_run(flags: Flags, use_json: bool, t0: Instant) -> Opt
                         if !truthy(&entry) {
                             continue;
                         }
-                        if let Some(ms) = date_parse_val(jget(&entry, "ts"))? {
-                            if best.map(|b| ms > b).unwrap_or(true) {
+                        if let Some(ms) = date_parse_val(jget(&entry, "ts"))?
+                            && best.map(|b| ms > b).unwrap_or(true) {
                                 best = Some(ms);
                             }
-                        }
                     }
                     best
                 }

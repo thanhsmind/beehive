@@ -146,6 +146,10 @@ pub(crate) use self::checks::*;
 pub(crate) use self::hook_local::*;
 pub(crate) use self::detectors::*;
 pub(crate) use self::main::*;
-pub(crate) use self::cross_project::{cross_project_denial, cross_project_denial_with_registry};
-pub(crate) use self::worker_tree::{emit_for, run_herded};
+pub(crate) use self::cross_project::cross_project_denial;
+#[cfg(test)]
+pub(crate) use self::cross_project::cross_project_denial_with_registry;
+pub(crate) use self::worker_tree::run_herded;
+#[cfg(test)]
+pub(crate) use self::worker_tree::emit_for;
 pub(crate) use self::knowledge_first::reset_turn as reset_knowledge_turn;

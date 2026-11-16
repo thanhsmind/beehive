@@ -56,7 +56,7 @@ pub(crate) fn build_contention_summary(ctx: &Ctx) -> R<Option<JMap>> {
         .map(|n| (n.clone(), lock_counts[n]))
         .collect();
     // sort((a,b) => b[1]-a[1]) — stable, insertion order on ties.
-    ranked.sort_by(|a, b| b.1.cmp(&a.1));
+    ranked.sort_by_key(|a| std::cmp::Reverse(a.1));
     let top_locks: Vec<Value> = ranked
         .into_iter()
         .take(CONTENTION_TOP_LOCKS_LIMIT)
@@ -76,15 +76,14 @@ pub(crate) fn build_contention_summary(ctx: &Ctx) -> R<Option<JMap>> {
         let wait = vget(e, "lock_wait_ms")
             .and_then(|v| if v.is_number() { v.as_f64() } else { None })
             .filter(|f| f.is_finite());
-        if let Some(w) = wait {
-            if worst_wait_ms.map(|m| w > m).unwrap_or(true) {
+        if let Some(w) = wait
+            && worst_wait_ms.map(|m| w > m).unwrap_or(true) {
                 worst_wait_ms = Some(w);
                 worst_wait_lock = match vget(e, "lock_name") {
                     Some(Value::String(s)) if !s.is_empty() => json!(s),
                     _ => Value::Null,
                 };
             }
-        }
     }
     let recent_busy: Vec<Value> = busy
         .iter()
@@ -358,14 +357,13 @@ pub(crate) fn build_lane_rows(ctx: &mut Ctx) -> R<Vec<JMap>> {
     let sessions = list_session_records(ctx, &ctrl_root)?;
     let mut bound_by: HashMap<String, Vec<Value>> = HashMap::new();
     for session in &sessions {
-        if let Some(Value::String(lane)) = session.get("lane") {
-            if !lane.is_empty() {
+        if let Some(Value::String(lane)) = session.get("lane")
+            && !lane.is_empty() {
                 bound_by
                     .entry(lane.clone())
                     .or_default()
                     .push(session.get("id").cloned().unwrap_or(Value::Null));
             }
-        }
     }
     let mut rows: Vec<JMap> = lanes
         .into_iter()
@@ -419,18 +417,15 @@ pub(crate) fn build_lane_summary(ctx: &mut Ctx) -> R<JMap> {
     let ctrl_root = control_root_for(ctx)?;
     let session_id = resolve_session_id(ctx, Some(&ctrl_root))?;
     let mut active: Option<JMap> = None;
-    if let Some(session_id) = session_id {
-        if let Some(session) = read_session(ctx, &ctrl_root, &session_id)? {
-            if let Some(Value::String(lane)) = session.get("lane") {
-                if !lane.is_empty() {
+    if let Some(session_id) = session_id
+        && let Some(session) = read_session(ctx, &ctrl_root, &session_id)?
+            && let Some(Value::String(lane)) = session.get("lane")
+                && !lane.is_empty() {
                     active = lanes
                         .iter()
                         .find(|l| str_eq(l.get("feature"), lane))
                         .cloned();
                 }
-            }
-        }
-    }
     let active_feature = active
         .as_ref()
         .and_then(|a| a.get("feature"))

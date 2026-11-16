@@ -94,10 +94,10 @@ impl Engine {
     ///      (review B-P2-3). Outside any repo (no `.git` anywhere above cwd)
     ///      the walk still reaches `/`, so a bare host directory whose
     ///      PARENT holds a bee checkout still onboards.
-    /// `Err` ⇒ every candidate declined the command, naming both the
-    /// `--repo-root` candidate (when the caller passed one) and the walk's
-    /// invocation root: without a source tree there is nothing authoritative
-    /// to vendor FROM.
+    ///      `Err` ⇒ every candidate declined the command, naming both the
+    ///      `--repo-root` candidate (when the caller passed one) and the walk's
+    ///      invocation root: without a source tree there is nothing authoritative
+    ///      to vendor FROM.
     ///
     /// The marker is the AGENTS block template, chosen on three properties:
     /// it lives in `packages/bee` (so finding it proves `templates_dir`
@@ -134,17 +134,15 @@ impl Engine {
         const MARKER: &str = "packages/bee/AGENTS.block.md";
         if let Some(entry) = std::env::var_os("BEE_JS_ENTRY") {
             let entry = PathBuf::from(entry);
-            if let Some(root) = entry.parent().and_then(Path::parent).and_then(Path::parent) {
-                if super::util::join_rel(root, MARKER).is_file() {
+            if let Some(root) = entry.parent().and_then(Path::parent).and_then(Path::parent)
+                && super::util::join_rel(root, MARKER).is_file() {
                     return Ok(Self::from_plugin_root(root.to_path_buf()));
                 }
-            }
         }
-        if let Some(root) = repo_root {
-            if super::util::join_rel(root, MARKER).is_file() {
+        if let Some(root) = repo_root
+            && super::util::join_rel(root, MARKER).is_file() {
                 return Ok(Self::from_plugin_root(root.to_path_buf()));
             }
-        }
         let mut dir = Some(invocation_root);
         while let Some(d) = dir {
             if super::util::join_rel(d, MARKER).is_file() {
@@ -208,7 +206,7 @@ pub fn repo_target_segments_joined(kind: &str) -> String {
     REPO_SKILL_TARGETS
         .iter()
         .find(|(k, _)| *k == kind)
-        .map(|(_, segs)| segs.join(&std::path::MAIN_SEPARATOR.to_string()))
+        .map(|(_, segs)| segs.join(std::path::MAIN_SEPARATOR_STR))
         .unwrap_or_default()
 }
 
@@ -435,11 +433,10 @@ pub fn classify_source_kind(hive_dir: &Path, home: &Path) -> &'static str {
     // (1) legacy_global — realpath match against <home>/.claude/skills.
     if !home.as_os_str().is_empty() {
         let global_root = home.join(".claude").join("skills");
-        if let (Some(rp), Some(rpg)) = (realpath(source_root), realpath(&global_root)) {
-            if rp == rpg {
+        if let (Some(rp), Some(rpg)) = (realpath(source_root), realpath(&global_root))
+            && rp == rpg {
                 return "legacy_global";
             }
-        }
     }
     // (2) project_projection — launcher under a host's .agents/.claude.
     let parent_name = plugin_root

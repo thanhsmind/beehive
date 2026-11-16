@@ -812,15 +812,14 @@ fn trouble_lines(letter: &Letter) -> Vec<TroubleLine> {
         }
     }
     for item in &letter.items {
-        if let Some(what) = reflection_what(item) {
-            if let Some(key) = reflection_key(item.fix_at.as_deref(), what) {
+        if let Some(what) = reflection_what(item)
+            && let Some(key) = reflection_key(item.fix_at.as_deref(), what) {
                 out.push(TroubleLine {
                     key,
                     verbatim: what.to_string(),
                     fix_at: Some(fix_at_or_none(item.fix_at.as_deref()).to_string()),
                 });
             }
-        }
         let Some(departure) = &item.departure else { continue };
         if !MINED_DEPARTURE_KINDS.iter().any(|k| *k == departure.kind.trim()) {
             continue;

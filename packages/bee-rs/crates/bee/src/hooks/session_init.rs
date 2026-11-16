@@ -232,32 +232,6 @@ pub(crate) fn intent_lead_block(
     }
 }
 
-/// The body under the anchor: the compact capsule on `source=compact`, the
-/// full session preamble on every other source (D6/D8).
-///
-/// THIN CALLER, BY DECISION (D3). Nothing here decides what a capsule
-/// contains or how the counts work — that lives in hooks/compaction.rs. This
-/// function knows exactly two things: which source trims, and that
-/// `handoff_outcome` must be carried into the capsule too (D27), because a
-/// compacted session holding a planned-next handoff otherwise silently loses
-/// the `- Adoption not applied:` line that says WHY it is being told to wait.
-fn session_body_with_runtime(
-    root: &Path,
-    event_source: &str,
-    session_id: Option<&str>,
-    handoff_outcome: Option<&HandoffOutcome>,
-    runtime: &str,
-) -> String {
-    session_body_within(
-        root,
-        event_source,
-        session_id,
-        handoff_outcome,
-        runtime,
-        PREAMBLE_BUDGET_BYTES,
-    )
-}
-
 fn session_body_within(
     root: &Path,
     event_source: &str,

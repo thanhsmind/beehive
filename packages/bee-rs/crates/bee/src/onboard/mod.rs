@@ -176,12 +176,9 @@ fn claude_settings_config_preference(repo_root: &Path) -> bool {
 
 fn config_bool_preference(repo_root: &Path, key: &str) -> bool {
     let text = util::read_text_if_exists(&repo_root.join(".bee").join("config.json"));
-    match serde_json::from_str::<Value>(&text).ok().and_then(|v| {
+    serde_json::from_str::<Value>(&text).ok().and_then(|v| {
         v.get(key).and_then(Value::as_bool)
-    }) {
-        Some(v) => v,
-        None => true,
-    }
+    }).unwrap_or(true)
 }
 
 fn parse_design_packs(value: &str) -> Result<Vec<String>, String> {
@@ -300,12 +297,12 @@ which belong to the full onboard. FIX: drop {} or drop --verify-only.",
 /// emit (l. 4086).
 fn emit(payload: &Value, as_json: bool) {
     if as_json {
-        print!("{}\n", jsjson::stringify_pretty(payload));
+        println!("{}", jsjson::stringify_pretty(payload));
         return;
     }
     let s = |k: &str| payload.get(k).and_then(Value::as_str).unwrap_or("");
-    print!("bee onboarding - repo: {}\n", s("repo_root"));
-    print!("status: {}\n", s("status"));
+    println!("bee onboarding - repo: {}", s("repo_root"));
+    println!("status: {}", s("status"));
     let empty: Vec<Value> = Vec::new();
     let items = payload
         .get("plan")
@@ -313,21 +310,21 @@ fn emit(payload: &Value, as_json: bool) {
         .or_else(|| payload.get("applied").and_then(Value::as_array))
         .unwrap_or(&empty);
     for item in items {
-        print!(
-            "  {}  {}\n",
+        println!(
+            "  {}  {}",
             item.get("action").and_then(Value::as_str).unwrap_or(""),
             item.get("path").and_then(Value::as_str).unwrap_or("")
         );
     }
     if items.is_empty() {
-        print!("  (nothing to do)\n");
+        println!("  (nothing to do)");
     }
     if let Some(reason) = payload.get("reason").and_then(Value::as_str) {
-        print!("reason: {reason}\n");
+        println!("reason: {reason}");
     }
     if let Some(v) = payload.get("versions").filter(|v| !v.is_null()) {
-        print!(
-            "versions: source={} host_helpers={} installed_skills={}\n",
+        println!(
+            "versions: source={} host_helpers={} installed_skills={}",
             v.get("source").and_then(Value::as_str).unwrap_or(""),
             v.get("host_helpers").and_then(Value::as_str).unwrap_or(""),
             v.get("installed_skills").and_then(Value::as_str).unwrap_or("")
@@ -342,8 +339,8 @@ fn emit(payload: &Value, as_json: bool) {
                 Some(t) if !t.is_empty() => format!(" [{t}]"),
                 _ => String::new(),
             };
-            print!(
-                "skipped skill: {}{suffix} - {}\n",
+            println!(
+                "skipped skill: {}{suffix} - {}",
                 sk.get("skill").and_then(Value::as_str).unwrap_or(""),
                 sk.get("reason").and_then(Value::as_str).unwrap_or("")
             );
@@ -351,7 +348,7 @@ fn emit(payload: &Value, as_json: bool) {
     }
     if let Some(notices) = payload.get("notices").and_then(Value::as_array) {
         for n in notices {
-            print!("notice: {}\n", n.as_str().unwrap_or(""));
+            println!("notice: {}", n.as_str().unwrap_or(""));
         }
     }
 }
@@ -362,7 +359,7 @@ fn source_kind_for_report(engine: &Engine) -> &'static str {
 }
 
 fn error_exit(message: &str) -> ExitCode {
-    print!("{}\n", jsjson::stringify(&json!({ "error": message })));
+    println!("{}", jsjson::stringify(&json!({ "error": message })));
     ExitCode::from(1)
 }
 
@@ -419,8 +416,8 @@ fn holds_verify_skill(repo_root: &Path) -> bool {
 fn no_engine_refusal(err: &source::LocateError, as_json: bool) -> ExitCode {
     let message = no_engine_message(err);
     if as_json {
-        print!(
-            "{}\n",
+        println!(
+            "{}",
             jsjson::stringify_pretty(&json!({
                 "status": "blocked_no_engine",
                 "kind": NO_ENGINE_KIND,

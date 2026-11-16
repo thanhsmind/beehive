@@ -97,12 +97,10 @@ pub(crate) fn parse_flags(tokens: &[&str]) -> Option<(Flags, bool)> {
                 if FLAG_ALONE_BOOLEANS.contains(&name) {
                     (name, FlagV::Present)
                 } else {
-                    match tokens.get(i + 1) {
-                        None => return None, // "flag --x requires a value"
-                        Some(v) => {
-                            i += 1;
-                            (name, FlagV::S((*v).to_string()))
-                        }
+                    {
+                        let v = tokens.get(i + 1)?;
+                        i += 1;
+                        (name, FlagV::S((*v).to_string()))
                     }
                 }
             }
@@ -211,11 +209,10 @@ pub(crate) fn np_check_modelable(p: &str) -> Ex<()> {
             return Err(Exotic); // drive-relative "C:foo"
         }
         let mut ch = p.chars();
-        if let (Some(a), Some(b)) = (ch.next(), ch.next()) {
-            if is_sep(a) && is_sep(b) {
+        if let (Some(a), Some(b)) = (ch.next(), ch.next())
+            && is_sep(a) && is_sep(b) {
                 return Err(Exotic); // UNC-ish
             }
-        }
     }
     Ok(())
 }

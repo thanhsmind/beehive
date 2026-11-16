@@ -97,12 +97,11 @@ fn resolve_sink(root: &Path, explicit: Option<&str>) -> Result<Sink, String> {
         let file = session_file(&ctrl, &id);
         return Ok(Sink::Session { file, ctrl, id });
     }
-    if crate::hooks::herding_worker_marker_set() {
-        if let Some(job) = env_id("BEE_HERDING_JOB_ID") {
+    if crate::hooks::herding_worker_marker_set()
+        && let Some(job) = env_id("BEE_HERDING_JOB_ID") {
             let file = mailbox_file(&ctrl, &job);
             return Ok(Sink::Mailbox { file, job });
         }
-    }
     match crate::session_identity::env_session_id().filter(|id| well_formed_id(id)) {
         Some(id) => {
             let file = session_file(&ctrl, &id);
@@ -155,7 +154,7 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
         return None;
     }
     let toks: Vec<&str> = args[2..].iter().map(|a| a.to_str()).collect::<Option<Vec<_>>>()?;
-    if toks.iter().any(|t| *t == "--help") {
+    if toks.contains(&"--help") {
         return None;
     }
     let pre_json = pre_json_scan(&toks);
@@ -230,14 +229,13 @@ fn run_set(
             );
         }
     }
-    if let Some(status) = &status {
-        if !WORK_STATUSES.contains(&&**status) {
+    if let Some(status) = &status
+        && !WORK_STATUSES.contains(&&**status) {
             return ctx.fail(&format!(
                 "bee work set: --status {status:?} is not a work status. Legal: {}.",
                 WORK_STATUSES.join(", ")
             ));
         }
-    }
 
     let apply = |record: &mut Map<String, Value>| -> Result<Map<String, Value>, String> {
         let Some(mut work) = work_of(record) else {

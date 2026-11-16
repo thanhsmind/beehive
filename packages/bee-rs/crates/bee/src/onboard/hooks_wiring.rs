@@ -328,7 +328,7 @@ pub(crate) fn codex_hook_command(file_name: &str) -> String {
         ),
         // `$r` is --show-toplevel, which in a linked worktree is the WORKTREE,
         // not the checkout carrying the binary. Reach the main one.
-        main_checkout_arm(&name, "\"$r\"", " --source=repo"),
+        main_checkout_arm(name, "\"$r\"", " --source=repo"),
         format!("echo \"{CODEX_BINARY_MISSING_DIAGNOSTIC}\" >&2; exit 0"),
     ]
     .join("\n")
@@ -403,7 +403,7 @@ pub fn render_codex_hook_entries() -> Vec<(&'static str, Value)> {
     let Some(Value::Object(mut hooks)) = top.get("hooks").cloned() else {
         return Vec::new();
     };
-    const ORDER: &[&'static str] = &[
+    const ORDER: &[&str] = &[
         "SessionStart",
         "UserPromptSubmit",
         "PreToolUse",
@@ -479,8 +479,8 @@ pub fn codex_hook_write_blocker(repo_root: &Path) -> Option<(String, String)> {
         (repo_root.join(".codex"), ".codex"),
     ];
     for (target, label) in checks {
-        if let Some(stat) = lstat_if_exists(&target) {
-            if !stat.is_dir {
+        if let Some(stat) = lstat_if_exists(&target)
+            && !stat.is_dir {
                 return Some((
                     "blocked".to_string(),
                     format!(
@@ -488,7 +488,6 @@ pub fn codex_hook_write_blocker(repo_root: &Path) -> Option<(String, String)> {
                     ),
                 ));
             }
-        }
     }
     None
 }
@@ -706,18 +705,16 @@ pub fn claude_settings_kept(settings_path: &Path) -> ClaudeSettingsKept {
     };
     let mut kept_keys: Vec<String> = Vec::new();
     for (name, value) in CLAUDE_SETTINGS_BASELINE.switches {
-        if let Some(current) = obj.get(*name) {
-            if current != &json!(value) {
+        if let Some(current) = obj.get(*name)
+            && current != &json!(value) {
                 kept_keys.push(format!("{name}={}", jsjson::stringify(current)));
             }
-        }
     }
     let permissions = obj.get("permissions").and_then(Value::as_object);
-    if let Some(mode) = permissions.and_then(|p| p.get("defaultMode")) {
-        if mode.as_str() != Some(CLAUDE_SETTINGS_BASELINE.default_mode) {
+    if let Some(mode) = permissions.and_then(|p| p.get("defaultMode"))
+        && mode.as_str() != Some(CLAUDE_SETTINGS_BASELINE.default_mode) {
             kept_keys.push(format!("permissions.defaultMode={}", jsjson::stringify(mode)));
         }
-    }
     let empty: Vec<Value> = Vec::new();
     let allow = permissions
         .and_then(|p| p.get("allow"))

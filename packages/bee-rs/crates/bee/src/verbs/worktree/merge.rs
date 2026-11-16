@@ -703,7 +703,7 @@ pub(crate) fn resolve_worktree_by_id(main_root: &Path, id: &str) -> Option<PathB
     }
     let resolved_git_file = js_path_resolve(
         &git_worktree_dir,
-        &forward_raw.replace('\\', &MAIN_SEPARATOR.to_string()),
+        &forward_raw.replace('\\', std::path::MAIN_SEPARATOR_STR),
     );
     let worktree_root = resolved_git_file.parent()?.to_path_buf();
 
@@ -711,7 +711,7 @@ pub(crate) fn resolve_worktree_by_id(main_root: &Path, id: &str) -> Option<PathB
     let captured = parse_gitdir_pointer(js_trim(&reverse_raw))?;
     let reverse_resolved = js_path_resolve(
         &worktree_root,
-        &js_trim(captured).replace('\\', &MAIN_SEPARATOR.to_string()),
+        &js_trim(captured).replace('\\', std::path::MAIN_SEPARATOR_STR),
     );
     if !crate::path_identity::canonical_paths_equal(&reverse_resolved, &git_worktree_dir) {
         return None;
@@ -824,13 +824,12 @@ pub(crate) fn teardown_worktree(
     // its own `try/catch` there, so every failure — including the ones this
     // port would otherwise call Exotic — is swallowed, not delegated.
     let main_store_root = main_root.join(".bee");
-    if let Some(existing) = read_grants_strict(&main_store_root) {
-        if existing.contains_key(id) {
+    if let Some(existing) = read_grants_strict(&main_store_root)
+        && existing.contains_key(id) {
             let mut next = existing;
             next.remove(id);
             let _ = write_grants_file_atomic(&main_store_root, &next);
         }
-    }
     super::paseo_ws::archive(main_root, id);
     let _ = ws::unregister_workspace(main_root, id);
     release_all_for_holder(main_root, id);

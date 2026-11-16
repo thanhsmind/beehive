@@ -45,8 +45,8 @@ fn slug_ends(line: &str, slug: &str) -> Vec<usize> {
     let mut ends = Vec::new();
     for (start, _) in line.match_indices(slug) {
         let end = start + slug.len();
-        let before_ok = line[..start].chars().next_back().map_or(true, |c| !is_word_char(c));
-        let after_ok = line[end..].chars().next().map_or(true, |c| !is_word_char(c));
+        let before_ok = line[..start].chars().next_back().is_none_or(|c| !is_word_char(c));
+        let after_ok = line[end..].chars().next().is_none_or(|c| !is_word_char(c));
         if before_ok && after_ok {
             ends.push(end);
         }

@@ -685,6 +685,7 @@ pub(crate) fn select_latest_round(entries: &[String]) -> Result<u32, MailboxErro
 /// about at a time (the round currently in flight), so this checks the
 /// exact filename rather than hunting for a maximum — `ack-1.json.tmp` or
 /// any other partial-write name never counts.
+#[cfg(test)]
 pub(crate) fn ack_present(entries: &[String], round: u32) -> bool {
     let name = ack_filename(round);
     entries.iter().any(|e| e == &name)
@@ -1001,6 +1002,7 @@ pub(crate) fn clear_mark(bee_dir: &Path, job_id: &str) -> Result<(), String> {
 /// and records its `job_id`. Returns the marked job ids so the caller can print
 /// progress notifications. Jobs with no recorded `pane_id` are skipped. Nothing is
 /// relaunched (D7).
+#[cfg(test)]
 pub(crate) fn mark_orphans(bee_dir: &Path, live_panes: &HashSet<String>) -> Vec<String> {
     mark_orphans_with_paseo(bee_dir, live_panes, None)
 }
@@ -1080,11 +1082,10 @@ pub(crate) fn mark_orphans_with_paseo(
                     }
                 };
 
-                if is_missing || is_dead {
-                    if write_mark(bee_dir, &job_id, Mark::Interrupted, "process_restarted").is_ok() {
+                if (is_missing || is_dead)
+                    && write_mark(bee_dir, &job_id, Mark::Interrupted, "process_restarted").is_ok() {
                         marked.push(job_id);
                     }
-                }
             }
             continue;
         }

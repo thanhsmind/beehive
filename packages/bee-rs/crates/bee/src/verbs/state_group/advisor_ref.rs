@@ -76,8 +76,8 @@ pub(crate) const ADVISOR_PLAN_ABSENT_SENTINEL: &str = "absent";
 
 /// `path.join(root, 'docs', 'history', String(feature ?? ''), 'plan.md')`.
 pub(crate) fn advisor_plan_path(root: &Path, feature: &str) -> PathBuf {
-    if !feature.is_empty() {
-        if let Some((_, worktree_root)) =
+    if !feature.is_empty()
+        && let Some((_, worktree_root)) =
             crate::verbs::status_full::find_granted_worktree_for_feature(root, feature)
         {
             return PathBuf::from(&worktree_root)
@@ -86,7 +86,6 @@ pub(crate) fn advisor_plan_path(root: &Path, feature: &str) -> PathBuf {
                 .join(feature)
                 .join("plan.md");
         }
-    }
     root.join("docs").join("history").join(feature).join("plan.md")
 }
 
@@ -197,8 +196,8 @@ pub(crate) fn advisor_ref_stale(
         Some(v) if truthy(v) => jget(v, "execution"),
         _ => None,
     };
-    if let Some(revoked_at_v) = revoked_at {
-        if truthy(revoked_at_v) {
+    if let Some(revoked_at_v) = revoked_at
+        && truthy(revoked_at_v) {
             let consulted_at = ref_obj.get("consulted_at");
             let consulted_falsy = !consulted_at.map(truthy).unwrap_or(false);
             let predates = consulted_falsy || js_disp_opt(consulted_at) < js_disp(revoked_at_v);
@@ -215,7 +214,6 @@ pub(crate) fn advisor_ref_stale(
                 ));
             }
         }
-    }
 
     Staleness { stale: !reasons.is_empty(), reasons }
 }

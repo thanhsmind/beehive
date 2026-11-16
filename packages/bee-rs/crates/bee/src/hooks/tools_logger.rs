@@ -23,16 +23,14 @@ fn log_tool_call(root: &Path, payload: &Map<String, Value>) -> std::io::Result<(
     entry.insert("tool_name".into(), Value::String(str_or("tool_name").unwrap_or("").to_string()));
     entry.insert("agent_id".into(), str_or("agent_id").map_or(Value::Null, |s| Value::String(s.to_string())));
     entry.insert("agent_type".into(), str_or("agent_type").map_or(Value::Null, |s| Value::String(s.to_string())));
-    if let Some(n) = payload.get("duration_ms").and_then(Value::as_f64) {
-        if n.is_finite() {
+    if let Some(n) = payload.get("duration_ms").and_then(Value::as_f64)
+        && n.is_finite() {
             entry.insert("duration_ms".into(), payload["duration_ms"].clone());
         }
-    }
-    if let Some(s) = str_or("tool_status") {
-        if !s.is_empty() {
+    if let Some(s) = str_or("tool_status")
+        && !s.is_empty() {
             entry.insert("status".into(), Value::String(s.to_string()));
         }
-    }
     use std::io::Write;
     let mut f = std::fs::OpenOptions::new()
         .create(true)

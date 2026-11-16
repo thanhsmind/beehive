@@ -71,8 +71,8 @@ fn read_gitdir_file(file: &Path, base: &Path) -> Option<PathBuf> {
     if raw.is_empty() {
         return None;
     }
-    let sep_fixed = if cfg!(windows) { raw.replace('\\', "\\") } else { raw.replace('\\', "/") };
-    Some(std::path::absolute(base.join(sep_fixed)).ok()?)
+    let sep_fixed = if cfg!(windows) { raw.to_string() } else { raw.replace('\\', "/") };
+    std::path::absolute(base.join(sep_fixed)).ok()
 }
 
 fn locate_up(start: &Path, probe: impl Fn(&Path) -> bool) -> Option<PathBuf> {
@@ -81,9 +81,9 @@ fn locate_up(start: &Path, probe: impl Fn(&Path) -> bool) -> Option<PathBuf> {
         if probe(&dir) {
             return Some(dir);
         }
-        match dir.parent() {
-            Some(p) => dir = p.to_path_buf(),
-            None => return None,
+        {
+            let p = dir.parent()?;
+            dir = p.to_path_buf()
         }
     }
 }
@@ -106,8 +106,8 @@ pub fn resolve_roots(start: &Path) -> HookRoots {
     };
 
     let onboarded = locate_up(start, |d| d.join(".bee").join("onboarding.json").exists());
-    if let Some(ob) = &onboarded {
-        if !ob.join(".git").exists() {
+    if let Some(ob) = &onboarded
+        && !ob.join(".git").exists() {
             let root = realpath_or_none(ob);
             return HookRoots {
                 store_root: root.clone(),
@@ -116,7 +116,6 @@ pub fn resolve_roots(start: &Path) -> HookRoots {
                 main_root: None,
             };
         }
-    }
     let located = locate_up(start, |d| d.join(".git").exists());
     let Some(work_dir) = located else {
         let root = onboarded.as_deref().and_then(realpath_or_none);
@@ -177,13 +176,11 @@ pub fn resolve_roots(start: &Path) -> HookRoots {
     // store; anything else (missing/invalid registry) => main default.
     let id = gitdir.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
     let mut store_root = main_root.clone();
-    if let Ok(text) = std::fs::read_to_string(main_root.join(".bee").join("runtime").join("worktree-grants.json")) {
-        if let Ok(Value::Object(grants)) = serde_json::from_str::<Value>(&text) {
-            if grants.get(&id) == Some(&Value::Bool(true)) {
+    if let Ok(text) = std::fs::read_to_string(main_root.join(".bee").join("runtime").join("worktree-grants.json"))
+        && let Ok(Value::Object(grants)) = serde_json::from_str::<Value>(&text)
+            && grants.get(&id) == Some(&Value::Bool(true)) {
                 store_root = work_root.clone();
             }
-        }
-    }
     HookRoots {
         store_root: Some(store_root),
         work_root: Some(work_root),
@@ -281,7 +278,7 @@ pub fn read_hook_context(hook_name: &str, argv: &[String], raw: &str) -> HookCon
     let mut gaps: Vec<Gap> = Vec::new();
     let mut payload: Map<String, Value> = Map::new();
     if !raw.trim().is_empty() {
-        match serde_json::from_str::<Value>(&raw) {
+        match serde_json::from_str::<Value>(raw) {
             Ok(Value::Object(m)) => payload = m,
             Ok(parsed) => {
                 let kind = match parsed {

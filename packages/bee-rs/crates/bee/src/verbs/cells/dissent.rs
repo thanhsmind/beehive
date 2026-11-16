@@ -131,6 +131,7 @@ fn dissent_text(cell: &Value, severity: &str) -> String {
     }
 }
 
+#[cfg(test)]
 pub(crate) fn record_dissent(
     root: &Path,
     id: &str,

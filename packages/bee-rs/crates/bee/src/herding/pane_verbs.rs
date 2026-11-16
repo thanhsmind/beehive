@@ -752,26 +752,23 @@ fn find_paseo_agent(main_root: &Path, id: &str) -> Option<String> {
     let bee_dir = main_root.join(".bee");
     let mbox_root = bee_dir.join("mailbox");
     let direct_job = mbox_root.join(id).join("job.json");
-    if direct_job.is_file() {
-        if let crate::fsutil::ReadJson::Parsed(Value::Object(map)) = crate::fsutil::read_json(&direct_job) {
-            if map.get("transport").and_then(Value::as_str) == Some("paseo") {
-                if let Some(agent_id) = map.get("paseo_agent_id").and_then(Value::as_str) {
-                    if !agent_id.trim().is_empty() {
+    if direct_job.is_file()
+        && let crate::fsutil::ReadJson::Parsed(Value::Object(map)) = crate::fsutil::read_json(&direct_job)
+            && map.get("transport").and_then(Value::as_str) == Some("paseo") {
+                if let Some(agent_id) = map.get("paseo_agent_id").and_then(Value::as_str)
+                    && !agent_id.trim().is_empty() {
                         return Some(agent_id.to_string());
                     }
-                }
                 return Some(id.to_string());
             }
-        }
-    }
     let entries = std::fs::read_dir(&mbox_root).ok()?;
     for entry in entries.flatten() {
         let job_file = entry.path().join("job.json");
         if !job_file.is_file() {
             continue;
         }
-        if let crate::fsutil::ReadJson::Parsed(Value::Object(map)) = crate::fsutil::read_json(&job_file) {
-            if map.get("transport").and_then(Value::as_str) == Some("paseo") {
+        if let crate::fsutil::ReadJson::Parsed(Value::Object(map)) = crate::fsutil::read_json(&job_file)
+            && map.get("transport").and_then(Value::as_str) == Some("paseo") {
                 let job_id = map.get("job_id").and_then(Value::as_str).unwrap_or("");
                 let agent_id = map.get("paseo_agent_id").and_then(Value::as_str).unwrap_or("");
                 let dir_name = entry.file_name().to_string_lossy().to_string();
@@ -784,11 +781,11 @@ fn find_paseo_agent(main_root: &Path, id: &str) -> Option<String> {
                     return Some(res_id);
                 }
             }
-        }
     }
     None
 }
 
+#[cfg(test)]
 pub(crate) fn dispatch_pane(
     sub: &str,
     args: &[&str],
@@ -863,8 +860,8 @@ pub(crate) fn dispatch_pane_with(
                 .map(PathBuf::from)
                 .or_else(|| main_root.map(PathBuf::from))
                 .or_else(|| resolve_main_root(None));
-            if let Some(ref root) = resolved_root {
-                if let Some(agent_id) = find_paseo_agent(root, pane) {
+            if let Some(ref root) = resolved_root
+                && let Some(agent_id) = find_paseo_agent(root, pane) {
                     let n = lines.unwrap_or(40);
                     let argv = crate::herding::paseo::logs_tail_argv(&agent_id, n, None);
                     let text = if let Some(cli) = paseo_cli {
@@ -889,7 +886,6 @@ pub(crate) fn dispatch_pane_with(
                     m.insert("text".into(), Value::String(text));
                     return Ok(m);
                 }
-            }
             let text = t.pane_read(pane).map_err(transport_err)?;
             let text = match lines {
                 Some(n) => tail_of(&text, n),

@@ -119,8 +119,8 @@ enum MarkerClass {
 /// /^<!-- bee:only (\S+) -->[ \t]*$/ and MARKER_END_RE = /^<!-- bee:end -->[ \t]*$/.
 fn classify_marker_line(line: &str) -> MarkerClass {
     let body = line.trim_end_matches([' ', '\t']);
-    if let Some(inner) = body.strip_prefix("<!-- bee:only ") {
-        if let Some(label) = inner.strip_suffix(" -->") {
+    if let Some(inner) = body.strip_prefix("<!-- bee:only ")
+        && let Some(label) = inner.strip_suffix(" -->") {
             // `\S+`: at least one char, none of them whitespace.
             if !label.is_empty() && !label.chars().any(char::is_whitespace) {
                 if !MARKER_RUNTIMES.contains(&label) {
@@ -132,7 +132,6 @@ fn classify_marker_line(line: &str) -> MarkerClass {
                 return MarkerClass::Only(label.to_string());
             }
         }
-    }
     if body == "<!-- bee:end -->" {
         return MarkerClass::End;
     }
@@ -151,12 +150,7 @@ fn is_frontmatter_delim(line: &str) -> bool {
 /// Matches a code-fence opener: /^[ \t]*(`{3,}|~{3,})/, returns its first char.
 fn fence_char(line: &str) -> Option<char> {
     let rest = line.trim_start_matches([' ', '\t']);
-    for c in ['`', '~'] {
-        if rest.chars().take(3).filter(|x| *x == c).count() == 3 {
-            return Some(c);
-        }
-    }
-    None
+    ['`', '~'].into_iter().find(|&c| rest.chars().take(3).filter(|x| *x == c).count() == 3)
 }
 
 /// JS `String#trim` (whitespace + BOM).

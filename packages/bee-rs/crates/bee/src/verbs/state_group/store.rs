@@ -443,11 +443,10 @@ pub(crate) fn resolve_session_id_no_flag(root: &Path) -> R2<Option<String>> {
             fresh.push(r);
         }
     }
-    if fresh.len() == 1 {
-        if let Some(Value::String(id)) = fresh[0].get("id") {
+    if fresh.len() == 1
+        && let Some(Value::String(id)) = fresh[0].get("id") {
             return Ok(Some(id.clone()));
         }
-    }
     Ok(None)
 }
 
@@ -761,7 +760,10 @@ pub(crate) fn adopt_handoff(root: &Path, session_id: &str) -> Result<HandoffAdop
 
 pub(crate) enum HandoffDismiss {
     Fail { reason: String },
-    Ok { record: Map<String, Value> },
+    Ok {
+        #[cfg(test)]
+        record: Map<String, Value>,
+    },
 }
 
 /// dismissHandoff (state.mjs) — C1 legacy single-file path: removes .bee/HANDOFF.json
@@ -787,7 +789,10 @@ pub(crate) fn dismiss_handoff(root: &Path) -> Result<HandoffDismiss, Err2> {
         });
     }
     let _ = std::fs::remove_file(handoff_path(root)); // rmSync force:true
-    Ok(HandoffDismiss::Ok { record: handoff })
+    Ok(HandoffDismiss::Ok {
+        #[cfg(test)]
+        record: handoff,
+    })
 }
 
 #[cfg(test)]

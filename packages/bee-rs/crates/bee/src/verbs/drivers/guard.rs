@@ -396,8 +396,8 @@ pub(crate) fn derive_economics(
         "unverified"
     };
 
-    let requested_model = if (channel == "cli-exec" || channel == "herding-exec") && declared.is_some() {
-        Value::String(declared.unwrap().to_string())
+    let requested_model = if let Some(d) = declared.filter(|_| channel == "cli-exec" || channel == "herding-exec") {
+        Value::String(d.to_string())
     } else if channel == "cli-exec" || channel == "herding-exec" || channel == "session-model" {
         Value::Null
     } else {
@@ -520,11 +520,10 @@ pub(crate) fn list_cells(root: &Path, feature: &str, status: Option<&str>) -> D<
         if !matches!(vget(&cell, "feature"), Some(Value::String(f)) if f == feature) {
             continue;
         }
-        if let Some(status) = status {
-            if !matches!(vget(&cell, "status"), Some(Value::String(s)) if s == status) {
+        if let Some(status) = status
+            && !matches!(vget(&cell, "status"), Some(Value::String(s)) if s == status) {
                 continue;
             }
-        }
         cells.push(cell);
     }
     cells.sort_by(|a, b| locale_cmp(&tpl(vget(a, "id")), &tpl(vget(b, "id")), true));
@@ -567,11 +566,10 @@ pub(crate) fn list_cells_including_archive(root: &Path, feature: &str, status: O
         if !matches!(vget(&cell, "feature"), Some(Value::String(f)) if f == feature) {
             continue;
         }
-        if let Some(status) = status {
-            if !matches!(vget(&cell, "status"), Some(Value::String(s)) if s == status) {
+        if let Some(status) = status
+            && !matches!(vget(&cell, "status"), Some(Value::String(s)) if s == status) {
                 continue;
             }
-        }
         let id = tpl(vget(&cell, "id"));
         if !seen_ids.insert(id) {
             continue; // the live copy above already claimed this id

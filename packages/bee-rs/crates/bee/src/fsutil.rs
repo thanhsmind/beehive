@@ -81,7 +81,7 @@ pub fn read_json(file: &Path) -> ReadJson {
         Err(_) => return ReadJson::Missing,
     };
     // Node reads utf8 (lossy for invalid sequences) then strips one BOM.
-    let mut text: &str = &String::from_utf8_lossy(&bytes).into_owned();
+    let mut text: &str = &String::from_utf8_lossy(&bytes);
     let owned;
     if let Some(stripped) = text.strip_prefix('\u{feff}') {
         owned = stripped.to_string();

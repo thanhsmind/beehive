@@ -170,11 +170,10 @@ pub(crate) fn check_claim_ownership(root: &Path, id: &str, session_flag: Option<
     let caller = resolve_session_flag_env(session_flag);
     // `caller === owner` — strict; a non-string owner can never equal a
     // string caller, and a null caller (undefined session) never equals it.
-    if let (Some(caller), Value::String(owner_s)) = (&caller, &owner) {
-        if caller == owner_s {
+    if let (Some(caller), Value::String(owner_s)) = (&caller, &owner)
+        && caller == owner_s {
             return Ok(Ownership { ok: true, reason: String::new(), holder: None });
         }
-    }
     let owner_disp = jsjson::js_to_string(&owner);
     Ok(Ownership {
         ok: false,

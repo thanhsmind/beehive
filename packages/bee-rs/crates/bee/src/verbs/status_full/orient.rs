@@ -218,7 +218,7 @@ fn capture_queue_oldest_pending_at_ms(ctx: &Ctx, cq: &Value) -> f64 {
 
 /// D2's escalation test over `status.capture_queue` (already the
 /// stub-minus-flush pending count/ids from `capture_queue_summary`):
-/// >= CAPTURE_QUEUE_BLOCKER_MIN_PENDING pending stubs, or the oldest
+/// \>= CAPTURE_QUEUE_BLOCKER_MIN_PENDING pending stubs, or the oldest
 /// pending stub older than CAPTURE_QUEUE_BLOCKER_MAX_AGE_DAYS days.
 /// Returns the blocker line, or None when the queue stays an offer.
 fn capture_queue_blocker_line(ctx: &Ctx, cq: &Value) -> Option<String> {
@@ -506,20 +506,18 @@ pub(crate) fn build_orient(ctx: &mut Ctx) -> R<JMap> {
             tpl(vget(sd.unwrap(), "count"))
         )));
     }
-    if let Some(cq) = status.get("capture_queue") {
-        if let Some(line) = capture_queue_blocker_line(ctx, cq) {
+    if let Some(cq) = status.get("capture_queue")
+        && let Some(line) = capture_queue_blocker_line(ctx, cq) {
             blockers.push(json!(line));
         }
-    }
     // D2 (knowledge-distill-trigger C2): same control-root resolution
     // sweep_on_orient already performed above — a deferred condition's
     // registry entry surfaces here the moment it is due or awaiting a
     // human's confirmation.
-    if let Ok(control) = sweep_cells::control_root(&ctx.root) {
-        if let Some(line) = trigger_queue_blocker_line(&control) {
+    if let Ok(control) = sweep_cells::control_root(&ctx.root)
+        && let Some(line) = trigger_queue_blocker_line(&control) {
             blockers.push(json!(line));
         }
-    }
     // kf-2 (D3): report-only, same voice as scribing debt / capture queue
     // just above — never gates a phase or changes an exit code.
     let proposals = unapplied_promote_proposals(&ctx.root);
@@ -559,18 +557,16 @@ pub(crate) fn build_orient(ctx: &mut Ctx) -> R<JMap> {
     // D5: mid-feature, an open discovery map with frontier tickets stays a
     // report-only line — `next` is untouched (the idle-only override sits
     // below) so a live feature's routing is never interrupted.
-    if !wayfinding_idle {
-        if let Some((name, frontier)) = &wayfinding_frontier {
+    if !wayfinding_idle
+        && let Some((name, frontier)) = &wayfinding_frontier {
             blockers.push(json!(format!("open discovery map {name} — {frontier} frontier")));
         }
-    }
     if let Some(Value::Array(warnings)) = status.get("staleness_warnings") {
         for warning in warnings {
-            if let Value::String(w) = warning {
-                if w.contains("reservation(s) expired") {
+            if let Value::String(w) = warning
+                && w.contains("reservation(s) expired") {
                     blockers.push(warning.clone());
                 }
-            }
         }
     }
     let worktree = if !pipeline.ok {
@@ -858,11 +854,10 @@ pub(crate) fn render_orient_text(packet: &JMap) -> String {
         tpl(vget(&cells, "claimed")),
         tpl(vget(&cells, "capped"))
     ));
-    if let Some(Value::Array(blockers)) = vget(&work, "blockers") {
-        if !blockers.is_empty() {
+    if let Some(Value::Array(blockers)) = vget(&work, "blockers")
+        && !blockers.is_empty() {
             lines.push(format!("blockers: {}", js_join(blockers, "; ")));
         }
-    }
     if let Some(line) = worktree_line {
         lines.push(line);
     }

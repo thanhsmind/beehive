@@ -84,8 +84,8 @@ pub(crate) enum StageOut {
 /// is worse than no warning: no merge base, a git call that did not run, or
 /// a recorded sha this repo does not have (`--is-ancestor` exits 128, not
 /// 1) all say nothing. Only a definite "not a descendant" — exit 1 — is
-/// reported stale. Caps with no recorded commit never reach here at all;
-/// `feature_proof_check` drops the `"none"` sentinel at the read.
+///    reported stale. Caps with no recorded commit never reach here at all;
+///    `feature_proof_check` drops the `"none"` sentinel at the read.
 ///
 /// The merge base is computed HERE rather than taken from
 /// `branch_changed_files` (merge.rs): that helper's own base is a local,
@@ -211,7 +211,6 @@ fn split_carried_proof(
     (stale, carried)
 }
 
-#[allow(clippy::too_many_arguments)]
 pub(crate) fn merge_stage(
     main_root: &Path,
     id: &str,
@@ -309,8 +308,8 @@ pub(crate) fn merge_stage(
         ),
         None => None,
     };
-    if let Some(proof) = &proof {
-        if proof.blocking {
+    if let Some(proof) = &proof
+        && proof.blocking {
             let feature_disp = identity.feature.as_deref().unwrap_or("(unresolved)");
             return Err(refuse_merge(
                 "WORKTREE_MERGE_PROOF_DEBT",
@@ -320,7 +319,6 @@ pub(crate) fn merge_stage(
                 ),
             ));
         }
-    }
 
     // slp-dissent-stop-and-ask sd-5 (a2affcba, 4b7aa303): the merge door's
     // OWN dissent precondition. a2affcba names BOTH doors — the branch must
@@ -496,7 +494,7 @@ pub(crate) fn merge_stage(
         // untracked path blocks, exactly as before the narrowing.
         let branch_changed = current_branch(&worktree_root)
             .and_then(|b| branch_changed_files(main_root, &b));
-        let collides = |path: &String| branch_changed.as_ref().map_or(true, |c| c.contains(path));
+        let collides = |path: &String| branch_changed.as_ref().is_none_or(|c| c.contains(path));
         let unsweepable: Vec<String> = main_untracked_under(main_root, &roots)
             .map_err(MErr::Thrown)?
             .into_iter()
@@ -1209,13 +1207,12 @@ pub(crate) fn merge_finish(
                         &format!("Commit {feature}'s lane rewrite after merging worktree {id}"),
                         &[lane_pathspec],
                     );
-                    if let MainBookkeepingCommit::Skipped { reason, .. } = &lane_commit {
-                        if reason != "clean" {
+                    if let MainBookkeepingCommit::Skipped { reason, .. } = &lane_commit
+                        && reason != "clean" {
                             eprintln!(
                                 "bee worktree merge: could not commit {feature}'s lane rewrite after this green merge ({reason}) — the lane file will show as modified in \"git status\" until committed by hand."
                             );
                         }
-                    }
                     result.insert("lane_bookkeeping_commit".into(), lane_commit.value());
                 }
                 Ok(_) => {} // no lane file for this feature: nothing to rewrite; `uat_wait_set` above already carries the precheck's own fail-closed answer regardless
@@ -1352,7 +1349,6 @@ fn uat_merge_precheck(main_root: &Path, feature: Option<&str>) -> UatPrecheck {
 /// and finishing. `Err(MErr::Ex)` is only ever produced by P1, before any
 /// mutation; the caller has already taken the queue lock by then, so it is
 /// the documented late-delegation residual, never an ordinary shape.
-#[allow(clippy::too_many_arguments)]
 pub(crate) fn merge_feature_worktree(
     main_root: &Path,
     id: &str,

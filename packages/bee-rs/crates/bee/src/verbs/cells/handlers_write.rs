@@ -233,29 +233,24 @@ pub(crate) fn build_add_cells_report(root: &Path, cells: &[Value]) -> MR<(bool, 
                 problems.push(reason);
             }
         }
-        if let Some(Value::String(cid)) = cell.get("id") {
-            if !cid.is_empty() {
+        if let Some(Value::String(cid)) = cell.get("id")
+            && !cid.is_empty() {
                 if seen.contains(cid) {
                     problems.push(format!("addCells: duplicate id \"{cid}\" within the batch."));
                 } else {
                     seen.push(cid.clone());
                 }
             }
-        }
         rows.push(AddReportRow { id, ok: problems.is_empty(), problems });
     }
-    if cells.len() > 1 {
-        if let Some(first) = cells.first() {
-            if let Some(Value::String(feature)) = first.get("feature") {
-                if let Err(reason) = crate::verbs::state_group::check_batch_matches_approved_preview(root, feature, cells) {
-                    if let Some(first_row) = rows.first_mut() {
+    if cells.len() > 1
+        && let Some(first) = cells.first()
+            && let Some(Value::String(feature)) = first.get("feature")
+                && let Err(reason) = crate::verbs::state_group::check_batch_matches_approved_preview(root, feature, cells)
+                    && let Some(first_row) = rows.first_mut() {
                         first_row.problems.push(reason);
                         first_row.ok = false;
                     }
-                }
-            }
-        }
-    }
     let mut normalized: Option<Vec<Value>> = None;
     if rows.iter().all(|r| r.ok) {
         let mut list = Vec::new();
@@ -681,11 +676,10 @@ pub(crate) fn run_update(flags: rsv::Flags, use_json: bool, t0: Instant) -> Opti
             if patch_map.contains_key("deps") {
                 assert_no_cycle(&root, "updateCell", std::slice::from_ref(&merged_value))?;
             }
-            if patch_map.contains_key("verify") || patch_map.contains_key("full_suite_reason") {
-                if let Some(message) = full_suite_verify_problem(&root, "updateCell", &merged)? {
+            if (patch_map.contains_key("verify") || patch_map.contains_key("full_suite_reason"))
+                && let Some(message) = full_suite_verify_problem(&root, "updateCell", &merged)? {
                     return Err(Fail::Thrown(format!("{message} The cell is untouched.")));
                 }
-            }
             assert_regen_obligation(&merged, "updateCell")?;
             if let Some(refusal) = rigor_floor_refusal(&root, &merged, "updateCell") {
                 return Err(Fail::Thrown(refusal));
@@ -940,14 +934,13 @@ pub(crate) fn reserve_claimed_files(
         // Unwind, in reverse: the reservations this call took, then the claim.
         let mut note = "the claim was rolled back and the store restored as found".to_string();
         let unwound = (|| -> MR<Result<(), String>> {
-            if !created.is_empty() {
-                if let Out::Thrown(m) =
+            if !created.is_empty()
+                && let Out::Thrown(m) =
                     rsv::release_reservations_for_agent(topo, root_s, worker, Some(&claimed_id))
                         .map_err(err2_to_fail)?
                 {
                     return Ok(Err(m));
                 }
-            }
             match unclaim_cell(root, &claimed_id, session_flag, false) {
                 Ok(_) => Ok(Ok(())),
                 Err(Fail::Delegate) => Err(Fail::Delegate),
@@ -1704,11 +1697,10 @@ pub(crate) fn claim_cell_from_flags_ex(
     let root = root.to_path_buf();
     let id = id.to_string();
     {
-        if let Some(t) = ttl {
-            if !t.is_finite() || t <= 0.0 {
+        if let Some(t) = ttl
+            && (!t.is_finite() || t <= 0.0) {
                 return Err(Fail::Thrown("--ttl must be a positive integer (seconds).".into()));
             }
-        }
         // Pre-scan: everything after claimCellFile's O_EXCL write must never
         // delegate (the file would already exist for a retry).
         prescan_claim(&root, &id)?;
@@ -1735,15 +1727,14 @@ pub(crate) fn claim_cell_from_flags_ex(
         }
 
         let session_id = resolve_session_flag_env(session_flag);
-        if let Some(sid) = session_id.as_deref() {
-            if let Err(e) = crate::verbs::state_group::check_not_borrowed_closed_session(sid, &control) {
+        if let Some(sid) = session_id.as_deref()
+            && let Err(e) = crate::verbs::state_group::check_not_borrowed_closed_session(sid, &control) {
                 let msg = match e {
                     Err2::Msg(m) => m,
                     Err2::Ex => format!("refused \u{2014} session \"{sid}\" is closed and belongs to another session."),
                 };
                 return Err(Fail::Thrown(msg));
             }
-        }
 
         // applyWritePolicy (state.mjs) with enforceIsolation:false — only the
         // observe/shared-disjoint arms can act; 'isolated' passes through.
@@ -1832,8 +1823,8 @@ pub(crate) fn claim_cell_from_flags_ex(
             if let Some(Value::String(feature_name)) = claimed.get("feature") {
                 bump_no_route_claim_count(&control, feature_name, session.as_deref())?;
             }
-            eprint!(
-                "WARNING: cell \"{}\" claimed for feature \"{}\" with no route record — run \"bee state route --set --class <c> --lane <l> --flags <f> --files <n>\" to record the triage (D3, soft enforcement; this session's next no-route claim for this feature will be refused — D4).\n",
+            eprintln!(
+                "WARNING: cell \"{}\" claimed for feature \"{}\" with no route record — run \"bee state route --set --class <c> --lane <l> --flags <f> --files <n>\" to record the triage (D3, soft enforcement; this session's next no-route claim for this feature will be refused — D4).",
                 js_string_or_undefined(claimed.get("id")),
                 js_string_or_undefined(claimed.get("feature"))
             );
@@ -1888,7 +1879,6 @@ pub(crate) enum CrossClaim {
 /// Thin wrapper over [`claim_cell_cross_session_ex`] for `cells claim-next`
 /// (handlers_select.rs), which carries no `--fix-first` escape — same as
 /// passing `None`: a red base always refuses that door.
-#[allow(clippy::too_many_arguments)]
 pub(crate) fn claim_cell_cross_session(
     root: &Path,
     control: &Path,
@@ -1903,7 +1893,6 @@ pub(crate) fn claim_cell_cross_session(
 
 /// `claim_cell_cross_session` + D2's `--fix-first <reason>` escape (docs/
 /// history/hook-teeth CONTEXT.md D2: "no claim on a red base").
-#[allow(clippy::too_many_arguments)]
 pub(crate) fn claim_cell_cross_session_ex(
     root: &Path,
     control: &Path,
@@ -1965,8 +1954,8 @@ pub(crate) fn claim_cell_cross_session_ex(
                 return Err(fail);
             }
         };
-        if !has_route {
-            if let Some(Value::String(feature_name)) = &feature_val {
+        if !has_route
+            && let Some(Value::String(feature_name)) = &feature_val {
                 let seen = match no_route_claim_count(control, feature_name, session) {
                     Ok(v) => v,
                     Err(fail) => {
@@ -1984,7 +1973,6 @@ pub(crate) fn claim_cell_cross_session_ex(
                     });
                 }
             }
-        }
     }
     // D2 (no claim on a red base, docs/history/hook-teeth CONTEXT.md) —
     // checked AFTER the already-claimed refusal (claim_cell_file above) and
@@ -2028,18 +2016,16 @@ pub(crate) fn claim_cell_cross_session_ex(
     let claim_result = (|| -> MR<Value> {
         let mut guard = acquire_named_lock(root, &format!("cells:{cell_id}"))?;
         let outcome = (|| -> MR<Value> {
-            let root = root;
-            let worker = worker;
             {
                 assert_not_archived(root, "claimCell", &cell_id)?;
                 let cell = read_cell_norm(root, &cell_id)?;
                 let lane_gates = match &cell {
-                    Some(c) if js_truthy(c) => lane_record_gates(&root, c.get("feature"))?,
+                    Some(c) if js_truthy(c) => lane_record_gates(root, c.get("feature"))?,
                     _ => None,
                 };
                 let approved = match &lane_gates {
                     Some(gates) => matches!(gates.get("execution"), Some(Value::Bool(true))),
-                    None => default_gate_approved(&root, "execution")?,
+                    None => default_gate_approved(root, "execution")?,
                 };
                 if !approved {
                     let message = match (&lane_gates, &cell) {
@@ -2070,27 +2056,25 @@ pub(crate) fn claim_cell_cross_session_ex(
                 // judge sent it back, not stuck for the ordinary reason.
                 let mut uncapped: Vec<Value> = Vec::new();
                 let mut revision_reopened: Vec<(String, String)> = Vec::new();
-                if let Some(deps) = cell.get("deps") {
-                    if js_truthy(deps) {
+                if let Some(deps) = cell.get("deps")
+                    && js_truthy(deps) {
                         let Value::Array(deps) = deps else { return Err(Fail::Delegate) };
                         for dep in deps {
                             let dep_id = jsjson::js_to_string(dep);
-                            let dep_cell = read_cell_norm(&root, &dep_id)?;
+                            let dep_cell = read_cell_norm(root, &dep_id)?;
                             let capped = match &dep_cell {
                                 Some(dc) => matches!(dc.get("status"), Some(Value::String(s)) if s == "capped"),
                                 None => false,
                             };
                             if !capped {
                                 uncapped.push(dep.clone());
-                                if let Some(dc) = &dep_cell {
-                                    if let Some(verdict) = revision_reopened_verdict(dc) {
+                                if let Some(dc) = &dep_cell
+                                    && let Some(verdict) = revision_reopened_verdict(dc) {
                                         revision_reopened.push((dep_id.clone(), verdict));
                                     }
-                                }
                             }
                         }
                     }
-                }
                 if !uncapped.is_empty() {
                     if revision_reopened.is_empty() {
                         return Err(Fail::Thrown(format!(
@@ -2425,12 +2409,11 @@ fn apply_role_migration(cell: &mut Map<String, Value>, plan: &RoleMigration) {
     if plan.escalate {
         cell.insert(ESCALATE_FIELD.into(), Value::Bool(true));
     }
-    if let Some(reason) = plan.reason.clone() {
-        if let Some(trace) = cell.get_mut("trace").and_then(Value::as_object_mut) {
+    if let Some(reason) = plan.reason.clone()
+        && let Some(trace) = cell.get_mut("trace").and_then(Value::as_object_mut) {
             trace.remove(LEGACY_ESCALATION_REASON_KEY);
             trace.insert(ESCALATION_REASON_KEY.into(), reason);
         }
-    }
 }
 
 /// The counters for one migration. In an applied run this is fed from what

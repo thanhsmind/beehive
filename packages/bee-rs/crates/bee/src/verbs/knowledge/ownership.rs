@@ -269,16 +269,14 @@ fn matches_single_pattern(pat: &str, path: &str) -> bool {
     if pat == path {
         return true;
     }
-    if let Some(prefix) = pat.strip_suffix("/**") {
-        if path == prefix || path.starts_with(&format!("{prefix}/")) {
+    if let Some(prefix) = pat.strip_suffix("/**")
+        && (path == prefix || path.starts_with(&format!("{prefix}/"))) {
             return true;
         }
-    }
-    if let Some(prefix) = pat.strip_suffix("/*") {
-        if path == prefix || path.starts_with(&format!("{prefix}/")) {
+    if let Some(prefix) = pat.strip_suffix("/*")
+        && (path == prefix || path.starts_with(&format!("{prefix}/"))) {
             return true;
         }
-    }
     let pat_segs: Vec<&str> = pat.split('/').filter(|s| !s.is_empty()).collect();
     let path_segs: Vec<&str> = path.split('/').filter(|s| !s.is_empty()).collect();
     glob_match_segs(&pat_segs, &path_segs)

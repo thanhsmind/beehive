@@ -29,11 +29,10 @@ pub fn run(argv: &[String], stdin: &str) -> Outcome {
 
 pub(crate) fn first_truthy<'a>(map: &'a Map<String, Value>, keys: &[&str]) -> Option<&'a Value> {
     for key in keys {
-        if let Some(v) = map.get(*key) {
-            if truthy(v) {
+        if let Some(v) = map.get(*key)
+            && truthy(v) {
                 return Some(v);
             }
-        }
     }
     None
 }
@@ -555,12 +554,11 @@ lines naming plain in-repo relative paths (no path traversal, no unresolvable es
             };
             if let Some(rel) = rel {
                 rel_paths = vec![rel];
-                if let Some(canonical) = canonical {
-                    if let Value::String(raw_s) = &raw_v {
+                if let Some(canonical) = canonical
+                    && let Value::String(raw_s) = &raw_v {
                         shared_candidates
                             .push((canonical, lexical_abs_target(&root, &cwd, raw_s)?));
                     }
-                }
             } else if delegate {
                 return Err(Nd);
             } else if mem_hit {
@@ -707,14 +705,13 @@ lines naming plain in-repo relative paths (no path traversal, no unresolvable es
                                 break;
                             }
                         };
-                    if let Some(new_merged) = merged_with(&proposed) {
-                        if let Some(reason) =
+                    if let Some(new_merged) = merged_with(&proposed)
+                        && let Some(reason) =
                             config_governed_change_deny(rel, old_merged.as_deref(), &new_merged)
                         {
                             denial = Some(reason);
                             break;
                         }
-                    }
                 }
             }
         }
@@ -861,8 +858,8 @@ lines naming plain in-repo relative paths (no path traversal, no unresolvable es
                 Some(Value::String(s)) => s.clone(),
                 _ => String::new(),
             };
-            if !command.is_empty() {
-                if let Some(WV::Deny(reason)) = check_git_bash_command(
+            if !command.is_empty()
+                && let Some(WV::Deny(reason)) = check_git_bash_command(
                     &store_root,
                     &state,
                     &command,
@@ -874,7 +871,6 @@ lines naming plain in-repo relative paths (no path traversal, no unresolvable es
                 )? {
                     denial = Some(reason);
                 }
-            }
         }
 
         if denial.is_none() && is_shell {
@@ -898,11 +894,10 @@ lines naming plain in-repo relative paths (no path traversal, no unresolvable es
             Some(Value::String(s)) => s.clone(),
             _ => String::new(),
         };
-        if !command.is_empty() && denial.is_none() {
-            if let Some(reason) = crate::hooks::cli_shape::check_cli_shape(&command) {
+        if !command.is_empty() && denial.is_none()
+            && let Some(reason) = crate::hooks::cli_shape::check_cli_shape(&command) {
                 denial = Some(reason);
             }
-        }
     }
 
     if let Some((fixed, notes)) = fixed_ask {
@@ -933,13 +928,12 @@ lines naming plain in-repo relative paths (no path traversal, no unresolvable es
         return Ok(emit);
     }
 
-    if denial.is_none() {
-        if let Some(note) =
+    if denial.is_none()
+        && let Some(note) =
             knowledge_first::observe(ctx, &root, &store_root_pb, &tool_name, &tool_input)
         {
             reservation_warnings.push(note);
         }
-    }
 
     if denial.is_none() && !reservation_warnings.is_empty() {
         let joined = reservation_warnings.join("\n");

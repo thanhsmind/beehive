@@ -275,7 +275,7 @@ pub(crate) fn js_path_resolve_from_cwd(raw: &str) -> String {
         raw.to_string()
     } else if rooted {
         // Node keeps the cwd's DRIVE for a rooted-but-driveless path.
-        let drive = if cwd_s.as_bytes().len() >= 2 && cwd_s.as_bytes()[1] == b':' {
+        let drive = if cwd_s.len() >= 2 && cwd_s.as_bytes()[1] == b':' {
             cwd_s[..2].to_string()
         } else {
             String::new()
@@ -286,7 +286,7 @@ pub(crate) fn js_path_resolve_from_cwd(raw: &str) -> String {
     };
     // Lexical normalization over the unified separator.
     let unified = joined.replace('/', "\\");
-    let (prefix, rest) = if unified.as_bytes().len() >= 2 && unified.as_bytes()[1] == b':' {
+    let (prefix, rest) = if unified.len() >= 2 && unified.as_bytes()[1] == b':' {
         (unified[..2].to_string(), &unified[2..])
     } else {
         (String::new(), unified.as_str())
@@ -373,7 +373,7 @@ pub(crate) fn read_worktree_git_verified_id(worktree_root: &Path) -> Result<Stri
             p(&git_file)
         ));
     };
-    let normalized = js_trim(captured).replace('\\', &MAIN_SEPARATOR.to_string());
+    let normalized = js_trim(captured).replace('\\', std::path::MAIN_SEPARATOR_STR);
     let gitdir = js_path_resolve(worktree_root, &normalized);
     Ok(gitdir
         .file_name()

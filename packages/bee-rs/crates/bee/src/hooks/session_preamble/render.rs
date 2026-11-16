@@ -188,11 +188,10 @@ pub fn handoff_block_lines(handoff: &Value, outcome: Option<&HandoffOutcome>) ->
         tpl_or(vget(handoff, "feature"), "unknown"),
         tpl_or(vget(handoff, "mode"), "unknown"),
     ));
-    if let Some(Value::Array(cells)) = vget(handoff, "cells_in_flight") {
-        if !cells.is_empty() {
+    if let Some(Value::Array(cells)) = vget(handoff, "cells_in_flight")
+        && !cells.is_empty() {
             lines.push(format!("- Cells in flight: {}", js_join(cells, ", ")));
         }
-    }
     if opt_truthy(vget(handoff, "next_action")) {
         // Clamped: a saved next action is free text and has run to 900+ bytes
         // in practice. The head carries the instruction; `.bee/HANDOFF.json`
@@ -203,8 +202,8 @@ pub fn handoff_block_lines(handoff: &Value, outcome: Option<&HandoffOutcome>) ->
             clamp_chars(&tpl(vget(handoff, "next_action")), HANDOFF_ACTION_CHARS)
         ));
     }
-    if str_eq(vget(handoff, "kind"), "planned-next") {
-        if let Some(outcome) = outcome.filter(|o| !o.ok) {
+    if str_eq(vget(handoff, "kind"), "planned-next")
+        && let Some(outcome) = outcome.filter(|o| !o.ok) {
             let reason = outcome
                 .reason
                 .clone()
@@ -212,7 +211,6 @@ pub fn handoff_block_lines(handoff: &Value, outcome: Option<&HandoffOutcome>) ->
                 .unwrap_or_else(|| "unknown reason".to_string());
             lines.push(format!("- Adoption not applied: {reason}"));
         }
-    }
     lines
 }
 
@@ -420,14 +418,13 @@ pub(crate) fn bundle_project_map_lines(root: &Path) -> Vec<String> {
     let concepts = collect_concepts(root);
     let mut areas: Vec<String> = Vec::new();
     for concept in &concepts {
-        if let Some(rest) = concept.path.strip_prefix("areas/") {
-            if let Some(idx) = rest.find('/') {
+        if let Some(rest) = concept.path.strip_prefix("areas/")
+            && let Some(idx) = rest.find('/') {
                 let slug = &rest[..idx];
                 if !slug.is_empty() && !areas.iter().any(|a| a == slug) {
                     areas.push(slug.to_string());
                 }
             }
-        }
     }
     lines.push(format!(
         "- Bundle holds: {} area(s), {} concept(s) (docs/specs/ is the read-only compatibility surface)",

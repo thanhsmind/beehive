@@ -286,22 +286,20 @@ pub(crate) fn cap_cell_from_flags(root: &Path, f: &CapFlags, finish: bool) -> MR
     // and before any write — an empty or whitespace-only value is refused by
     // name; nothing is written on refusal, matching `--files a.js,b.js`-style
     // required-value checks elsewhere in this function.
-    if let Some(raw) = &f.deviation {
-        if js_trim(raw).is_empty() {
+    if let Some(raw) = &f.deviation
+        && js_trim(raw).is_empty() {
             return Err(Fail::Thrown(format!(
                 "capCell: cell \"{id}\" refused — --deviation requires a non-empty value (a blank or whitespace-only line records nothing to trace.deviations)."
             )));
         }
-    }
 
     // D3/D4: `--sync-ack` shape check
-    if let Some(raw) = &f.sync_ack {
-        if js_trim(raw).is_empty() {
+    if let Some(raw) = &f.sync_ack
+        && js_trim(raw).is_empty() {
             return Err(Fail::Thrown(format!(
                 "capCell: cell \"{id}\" refused — --sync-ack requires a non-empty value (a blank or whitespace-only reason cannot escape the sync door)."
             )));
         }
-    }
 
     // D8 (docs/history/test-doctrine/CONTEXT.md): `--report` is now
     // REQUIRED on every cap path — `cells cap` and `cells finish` share
@@ -458,13 +456,12 @@ pub(crate) fn cap_cell_from_flags(root: &Path, f: &CapFlags, finish: bool) -> MR
         }
         let cell_feature = cell_map.get("feature").and_then(Value::as_str).unwrap_or("");
         let class = crate::verbs::plan_group::route_class(root, cell_feature);
-        if let Some(floor) = cell_proof_floor(&Value::Object(cell_map.clone()), class.as_deref()) {
-            if !proof_meets_floor(floor, &proof_result) {
+        if let Some(floor) = cell_proof_floor(&Value::Object(cell_map.clone()), class.as_deref())
+            && !proof_meets_floor(floor, &proof_result) {
                 return Err(Fail::Thrown(format!(
                     "capCell: cell \"{id}\" refused — its proof result \"{proof_result}\" is weaker than this cell's floor {floor}. Re-run the proof so it shows {floor}, or say why in a deviation and ask the leader."
                 )));
             }
-        }
         if principles_used_answer == PrinciplesUsedAnswer::Silent && prepare_put_in_principles_arm(root, id) {
             return Err(Fail::Thrown(format!(
                 "capCell: cell \"{id}\" refused — its prepare record put it in the principles arm, so the cap must answer which principle changed a decision: pass --principle-used \"<slug> — <the decision it changed>\", or --no-principle-used (a report may carry a principles_used array, [] for none)."
@@ -505,11 +502,8 @@ pub(crate) fn cap_cell_from_flags(root: &Path, f: &CapFlags, finish: bool) -> MR
                 None => {
                     entry.insert("last_verdict".into(), Value::Null);
                 }
-                Some(l) => match l.get("verdict") {
-                    Some(v) => {
-                        entry.insert("last_verdict".into(), v.clone());
-                    }
-                    None => {} // {last_verdict: undefined} — JSON.stringify drops the key
+                Some(l) => if let Some(v) = l.get("verdict") {
+                    entry.insert("last_verdict".into(), v.clone());
                 },
             }
             let worker_disp = match trace.get("worker") {
@@ -788,13 +782,11 @@ pub(crate) fn cap_cell_from_flags(root: &Path, f: &CapFlags, finish: bool) -> MR
         let mut stored_report = report_value.clone();
         if let Some(Value::String(commit)) = report_value.get("commit") {
             let commit = commit.trim();
-            if !commit.is_empty() && commit != "none" {
-                if let Some(pid) = crate::verbs::worktree::commit_patch_id(root, commit) {
-                    if let Value::Object(map) = &mut stored_report {
+            if !commit.is_empty() && commit != "none"
+                && let Some(pid) = crate::verbs::worktree::commit_patch_id(root, commit)
+                    && let Value::Object(map) = &mut stored_report {
                         map.insert("patch_id".into(), Value::String(pid));
                     }
-                }
-            }
         }
         trace.insert("report".into(), stored_report);
         let outcome_value = match &f.outcome {
@@ -898,14 +890,12 @@ pub(crate) fn cap_cell_from_flags(root: &Path, f: &CapFlags, finish: bool) -> MR
             // nothing to make visible).
             if cell_map.get("affects_skills").is_none()
                 && touched_set.iter().any(|p| path_under_root(p, "skills"))
-            {
-                if let Some(Value::Array(devs)) = trace.get_mut("deviations") {
+                && let Some(Value::Array(devs)) = trace.get_mut("deviations") {
                     let legacy_line = "sync: no prediction on legacy cell";
                     if !devs.iter().any(|d| matches!(d, Value::String(s) if s == legacy_line)) {
                         devs.push(Value::String(legacy_line.to_string()));
                     }
                 }
-            }
         }
 
         match cell_usage(root, id) {
@@ -1235,7 +1225,7 @@ pub(crate) fn read_principles_used_answer(f: &CapFlags, report: &Value) -> Princ
     let mut lines: Vec<String> = f.principle_used.iter().cloned().collect();
     if let Some(Value::Array(reported)) = report.get("principles_used") {
         asked = true;
-        lines.extend(reported.iter().map(|v| jsjson::js_to_string(v)));
+        lines.extend(reported.iter().map(jsjson::js_to_string));
     }
     let mut recorded: Vec<(String, String)> = Vec::new();
     for line in &lines {
@@ -1268,7 +1258,7 @@ pub(crate) fn prepare_put_in_principles_arm(root: &Path, id: &str) -> bool {
         .filter_map(|l| serde_json::from_str::<Value>(l).ok())
         .filter(|v| v.get("cell").and_then(Value::as_str) == Some(id))
         .filter_map(|v| v.get("principles_arm").and_then(Value::as_str).map(str::to_string))
-        .last()
+        .next_back()
         .is_some_and(|arm| arm == "principles")
 }
 
@@ -1633,12 +1623,11 @@ pub(crate) fn run_cap(finish: bool, flags: rsv::Flags, use_json: bool, t0: Insta
         let mut cap_flags =
             cap_flags_with_report_file(cap_flags_owned, report_file.as_deref(), false)?;
         let root = ctx.root.clone();
-        if let Some(file) = &deviations_file {
-            if !file.is_empty() {
+        if let Some(file) = &deviations_file
+            && !file.is_empty() {
                 // `flags['deviations-file'] ? parse : []` — truthy only.
                 cap_flags.deviations = parse_deviations_file(file)?;
             }
-        }
         let cell = cap_cell_from_flags(&root, &cap_flags, false)?;
         let text = cap_text(&cell);
         Ok(Out::Emit(cell, text, 0))
@@ -1659,13 +1648,13 @@ pub(crate) fn run_cap(finish: bool, flags: rsv::Flags, use_json: bool, t0: Insta
 ///     `release_reservations_for_agent` used to hardcode (holder `"main"`,
 ///     ledger at whatever `root` happened to be) — the un-ported piece
 ///     roots.rs:91-100 names as the reason cells stayed narrow.
-/// From the MAIN checkout `roots.linked` is `None`, so `finish_topology`
-/// answers `(root, Some((root, "main")))` — byte-identical to what the
-/// narrow door produced before this cell. decision 13ce1858
-/// (test-cadence-boundary D1): `finish_topology` used to also answer the
-/// calling worktree's own root, the declared test command's cwd — dropped
-/// with the per-cap test run itself; the cap no longer spawns that command
-/// from either root.
+///     From the MAIN checkout `roots.linked` is `None`, so `finish_topology`
+///     answers `(root, Some((root, "main")))` — byte-identical to what the
+///     narrow door produced before this cell. decision 13ce1858
+///     (test-cadence-boundary D1): `finish_topology` used to also answer the
+///     calling worktree's own root, the declared test command's cwd — dropped
+///     with the per-cap test run itself; the cap no longer spawns that command
+///     from either root.
 fn run_finish(
     cmd: &'static str,
     use_json: bool,
@@ -1712,12 +1701,11 @@ pub(crate) fn finish_cap_and_release(
     deviations_file: Option<&str>,
 ) -> MR<Out> {
     let mut cap_flags = cap_flags_owned;
-    if let Some(file) = deviations_file {
-        if !file.is_empty() {
+    if let Some(file) = deviations_file
+        && !file.is_empty() {
             // `flags['deviations-file'] ? parse : []` — truthy only.
             cap_flags.deviations = parse_deviations_file(file)?;
         }
-    }
     let mut files_source: Option<&'static str> = None;
     if let Some(job_id) = &cap_flags.from_job {
         if cap_flags.report.is_some() {
@@ -1762,14 +1750,13 @@ pub(crate) fn finish_cap_and_release(
             ))
         })?;
 
-        if let Some(job_cell) = job_val.get("cell_id").and_then(Value::as_str) {
-            if job_cell != cap_flags.id {
+        if let Some(job_cell) = job_val.get("cell_id").and_then(Value::as_str)
+            && job_cell != cap_flags.id {
                 return Err(Fail::Thrown(format!(
                     "cells finish: job \"{job_id}\" is for cell \"{job_cell}\", but --id is \"{}\" (FIX: verify the job id or cell id)",
                     cap_flags.id
                 )));
             }
-        }
 
         let job_cwd_str = job_val.get("cwd").and_then(Value::as_str).unwrap_or("");
         let job_cwd = Path::new(job_cwd_str);
@@ -1844,7 +1831,7 @@ pub(crate) fn finish_cap_and_release(
             &mailbox_result,
             git_facts,
             cell_verify,
-            &proof_result,
+            proof_result,
             cap_flags.proof_reason.as_deref(),
         )
         .map_err(Fail::Thrown)?;
@@ -1858,11 +1845,10 @@ pub(crate) fn finish_cap_and_release(
         if let Some(files_arr) = parsed_report.get("files").and_then(Value::as_array) {
             cap_flags.files_changed = files_arr.clone();
         }
-        if cap_flags.outcome.is_none() {
-            if let Some(o) = parsed_report.get("outcome").and_then(Value::as_str) {
+        if cap_flags.outcome.is_none()
+            && let Some(o) = parsed_report.get("outcome").and_then(Value::as_str) {
                 cap_flags.outcome = Some(o.to_string());
             }
-        }
         cap_flags.report = Some(report_json);
     }
     let cell = cap_cell_from_flags(root, &cap_flags, true)?;
@@ -2208,13 +2194,11 @@ pub(crate) fn release_reservations_for_unclaimed_cell(root: &Path, cell_id: &str
         if !matches!(rec.get("workflow_id"), Some(Value::String(c)) if c == cell_id) {
             continue;
         }
-        if let Some(Value::String(ws)) = rec.get("workspace_id") {
-            if let Some(agent) = ws.strip_prefix("agent:") {
-                if !agents.iter().any(|a| a == agent) {
+        if let Some(Value::String(ws)) = rec.get("workspace_id")
+            && let Some(agent) = ws.strip_prefix("agent:")
+                && !agents.iter().any(|a| a == agent) {
                     agents.push(agent.to_string());
                 }
-            }
-        }
     }
     let topology = match resolve_store_root_worktree(root) {
         RootsWt::Go(roots) => roots.hold_topology(),

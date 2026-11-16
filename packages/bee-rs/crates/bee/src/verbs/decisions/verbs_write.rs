@@ -154,7 +154,7 @@ pub(crate) fn read_stdin_text() -> Result<String, Err2> {
 
 pub(crate) fn tag_event_summary(event: &Value) -> String {
     let scope_suffix = match jget(event, "scope") {
-        Some(v) if truthy(&v) => format!(" scope={}", js_disp(&v)),
+        Some(v) if truthy(v) => format!(" scope={}", js_disp(v)),
         _ => String::new(),
     };
     let tags = match jget(event, "tags") {
@@ -183,11 +183,10 @@ pub(crate) fn decision_target_candidates(root: &Path) -> Vec<(String, Value)> {
         }
     }
     for e in &archived_events {
-        if let Some(Value::String(id)) = jget(e, "id") {
-            if !by_id.iter().any(|(k, _)| k.as_str() == id.as_str()) {
+        if let Some(Value::String(id)) = jget(e, "id")
+            && !by_id.iter().any(|(k, _)| k.as_str() == id.as_str()) {
                 by_id.push((id.clone(), e.clone()));
             }
-        }
     }
     by_id.into_iter().filter(|(_, e)| is_decide_or_supersede(e)).collect()
 }
@@ -547,15 +546,14 @@ pub(crate) fn do_reattribute_named(
         let text_claim = jget(&event, "decision")
             .and_then(Value::as_str)
             .and_then(feature_from_decision_text);
-        if let Some(claimed) = text_claim {
-            if claimed != to {
+        if let Some(claimed) = text_claim
+            && claimed != to {
                 refusal = Some(format!(
                     "decisions reattribute: {id} opens with \"{claimed} D<n>\" — its own text claims a feature, and this door never contradicts a record's text. The automatic pass (`bee decisions reattribute` with no flags) owns text-claimed corrections; pass --to \"{claimed}\" if that is what you meant."
                 ));
                 out_lines.push(line.to_string());
                 continue;
             }
-        }
         let from = stamped.unwrap_or("").to_string();
         if let Some(obj) = event.as_object_mut() {
             obj.insert("feature".into(), Value::String(to.to_string()));
@@ -724,20 +722,16 @@ pub(crate) fn partition_archive(events: &[Value], before_ms: f64) -> Ex<(Vec<Val
     let mut superseded = VSet::new();
     let mut redacted = VSet::new();
     for e in events {
-        if matches!(jget(e, "type"), Some(t) if v_is_str(t, "supersede")) {
-            if let Some(s) = jget(e, "supersedes") {
-                if truthy(s) {
+        if matches!(jget(e, "type"), Some(t) if v_is_str(t, "supersede"))
+            && let Some(s) = jget(e, "supersedes")
+                && truthy(s) {
                     superseded.add(s);
                 }
-            }
-        }
-        if matches!(jget(e, "type"), Some(t) if v_is_str(t, "redact")) {
-            if let Some(r) = jget(e, "redacts") {
-                if truthy(r) {
+        if matches!(jget(e, "type"), Some(t) if v_is_str(t, "redact"))
+            && let Some(r) = jget(e, "redacts")
+                && truthy(r) {
                     redacted.add(r);
                 }
-            }
-        }
     }
     let mut to_archive = Vec::new();
     let mut to_keep = Vec::new();
@@ -755,14 +749,12 @@ pub(crate) fn partition_archive(events: &[Value], before_ms: f64) -> Ex<(Vec<Val
             to_archive.push(e.clone());
             continue;
         }
-        if matches!(jget(e, "type"), Some(t) if v_is_str(t, "decide")) {
-            if let Some(ms) = date_parse_val(jget(e, "date"))? {
-                if ms < before_ms {
+        if matches!(jget(e, "type"), Some(t) if v_is_str(t, "decide"))
+            && let Some(ms) = date_parse_val(jget(e, "date"))?
+                && ms < before_ms {
                     to_archive.push(e.clone());
                     continue;
                 }
-            }
-        }
         to_keep.push(e.clone());
     }
     Ok((to_archive, to_keep))

@@ -302,7 +302,7 @@ pub(crate) fn parse_dossier(text: &str) -> Result<Dossier, Value> {
         let found = heads.first().map(|h| h.text.clone());
         refuse(
             "dossier_title_missing",
-            &[("found".into(), found.clone().map_or(Value::Null, Value::String))],
+            &[("found", found.clone().map_or(Value::Null, Value::String))],
             match found {
                 Some(f) => format!(
                     "the dossier's first heading is \"{f}\"; it must be \"# {DOSSIER_TITLE_PREFIX} <run-id>\". Add that title line at the top — the run id is what every later check reports against."
@@ -322,7 +322,7 @@ pub(crate) fn parse_dossier(text: &str) -> Result<Dossier, Value> {
         .ok_or_else(|| {
             refuse(
                 "dossier_title_missing",
-                &[("found".into(), s(&title.text))],
+                &[("found", s(&title.text))],
                 format!(
                     "the dossier's title reads \"# {}\"; it must read \"# {DOSSIER_TITLE_PREFIX} <run-id>\", naming the run. Rewrite the title with the run id.",
                     title.text
@@ -337,7 +337,7 @@ pub(crate) fn parse_dossier(text: &str) -> Result<Dossier, Value> {
     if let Some(h) = heads.iter().skip(1).find(|h| h.level == 1) {
         return Err(refuse(
             "dossier_section_unexpected",
-            &[("section".into(), s(&h.text))],
+            &[("section", s(&h.text))],
             format!(
                 "\"# {}\" is a second level-1 heading; a dossier records ONE run and carries exactly one title. Demote it to one of the seven sections, in this order: {expected}.",
                 h.text
@@ -358,7 +358,7 @@ pub(crate) fn parse_dossier(text: &str) -> Result<Dossier, Value> {
         };
         return Err(refuse(
             "dossier_section_unexpected",
-            &[("section".into(), s(&h.text))],
+            &[("section", s(&h.text))],
             format!(
                 "a dossier carries exactly seven level-2 sections, in this order: {expected}. Here {why}. Remove that heading, or fold its content into the section it belongs to."
             ),
@@ -368,7 +368,7 @@ pub(crate) fn parse_dossier(text: &str) -> Result<Dossier, Value> {
         if !sections.iter().any(|h| h.text.eq_ignore_ascii_case(want)) {
             return Err(refuse(
                 "dossier_section_missing",
-                &[("section".into(), s(want))],
+                &[("section", s(want))],
                 format!(
                     "the dossier has no \"## {want}\" section, so nothing can be checked against it. The seven sections read in this order: {expected}. Add \"## {want}\" in that position."
                 ),
@@ -380,7 +380,7 @@ pub(crate) fn parse_dossier(text: &str) -> Result<Dossier, Value> {
         if !found.eq_ignore_ascii_case(want) {
             return Err(refuse(
                 "dossier_section_out_of_order",
-                &[("section".into(), s(found))],
+                &[("section", s(found))],
                 format!(
                     "the dossier's sections are out of order: \"{found}\" stands where \"{want}\" is due. They must read in this order: {expected}. Move \"{found}\" back below \"{want}\"."
                 ),
@@ -415,7 +415,7 @@ pub(crate) fn parse_dossier(text: &str) -> Result<Dossier, Value> {
             .map_or("(before any section)".to_string(), |sh| sh.text.clone());
         return Err(refuse(
             "dossier_subsection_unexpected",
-            &[("section".into(), s(&owner)), ("heading".into(), s(&h.text))],
+            &[("section", s(&owner)), ("heading", s(&h.text))],
             format!(
                 "\"### {}\" sits under \"## {owner}\"; a level-3 heading in a dossier is a LANE and belongs under \"## Lanes\". Move it there, or write it as prose.",
                 h.text
@@ -431,7 +431,7 @@ pub(crate) fn parse_dossier(text: &str) -> Result<Dossier, Value> {
     if lane_heads.is_empty() {
         return Err(refuse(
             "dossier_lanes_missing",
-            &[("section".into(), s("Lanes"))],
+            &[("section", s("Lanes"))],
             "the \"## Lanes\" section carries no \"### <lane-id>\" subsection, so the dossier records no proposal to check. A blind run opens 2-3 lanes; write one subsection per lane, each with its dispatch_id, brief_sha256, role, paths_read and its proposal in a fenced block."
                 .to_string(),
         ));
@@ -441,7 +441,7 @@ pub(crate) fn parse_dossier(text: &str) -> Result<Dossier, Value> {
         if lane_heads[..i].iter().any(|p| p.text.eq_ignore_ascii_case(&h.text)) {
             return Err(refuse(
                 "dossier_lane_repeated",
-                &[("lane".into(), s(&h.text))],
+                &[("lane", s(&h.text))],
                 format!(
                     "the lane \"{}\" has more than one \"### \" subsection. Each lane appears exactly once — two sections under one id make every later per-lane check ambiguous about which bytes it read. Give the second lane its own id.",
                     h.text
@@ -455,7 +455,7 @@ pub(crate) fn parse_dossier(text: &str) -> Result<Dossier, Value> {
             let Some(v) = field_value(&lines, &mask, from, to, field) else {
                 return Err(refuse(
                     "dossier_lane_field_missing",
-                    &[("lane".into(), s(&h.text)), ("field".into(), s(field))],
+                    &[("lane", s(&h.text)), ("field", s(field))],
                     format!(
                         "the lane \"{}\" records no \"{field}\". Every lane section carries {} on its own line, as \"{field}: <value>\". Without {field} this dossier cannot be checked against the run that produced it.",
                         h.text,
@@ -468,7 +468,7 @@ pub(crate) fn parse_dossier(text: &str) -> Result<Dossier, Value> {
         let Some(proposal) = first_fenced_block(&lines, &mask, from, to) else {
             return Err(refuse(
                 "dossier_lane_proposal_missing",
-                &[("lane".into(), s(&h.text))],
+                &[("lane", s(&h.text))],
                 format!(
                     "the lane \"{}\" records no proposal. The proposal is carried VERBATIM in a fenced block inside the lane's section — it is the only copy of the lane's own bytes, and every citation is later resolved against it. Paste it between fence lines.",
                     h.text
@@ -503,7 +503,7 @@ pub(crate) fn parse_dossier(text: &str) -> Result<Dossier, Value> {
     let Some(brief) = first_fenced_block(&lines, &mask, q_from, q_to) else {
         return Err(refuse(
             "dossier_brief_missing",
-            &[("section".into(), s("Question"))],
+            &[("section", s("Question"))],
             "the \"## Question\" section carries no fenced block, so the LaneBrief the lanes answered was not recorded. Paste the brief VERBATIM between fence lines under \"## Question\" — it is what the leaning guard re-reads and what every lane's brief_sha256 is checked against."
                 .to_string(),
         ));
@@ -823,7 +823,7 @@ fn check_citations(d: &Dossier) -> Result<usize, Value> {
             _ => {
                 return Err(refuse(
                     "dossier_citation_malformed",
-                    &[("line".into(), s(line))],
+                    &[("line", s(line))],
                     format!(
                         "the citation line \"{line}\" is not \"<lane-id> {CITATION_SEP} <quote>\". Every line under \"## Citations\" names the lane it came from and then quotes it, so the quote can be resolved against that lane's own proposal. Rewrite it in that form, or delete the line."
                     ),
@@ -835,7 +835,7 @@ fn check_citations(d: &Dossier) -> Result<usize, Value> {
         if quote.chars().count() < MIN_CITATION_CHARS || words < MIN_CITATION_WORDS {
             return Err(refuse(
                 "dossier_citation_too_short",
-                &[("lane".into(), s(lane_id)), ("quote".into(), s(quote_raw))],
+                &[("lane", s(lane_id)), ("quote", s(quote_raw))],
                 format!(
                     "the citation \"{quote_raw}\" is too short to be evidence: a fragment that brief sits inside almost any proposal, so resolving it proves nothing about what {lane_id} actually said. Quote at least {MIN_CITATION_CHARS} characters and {MIN_CITATION_WORDS} words — a whole sentence of the lane's own text."
                 ),
@@ -845,7 +845,7 @@ fn check_citations(d: &Dossier) -> Result<usize, Value> {
         else {
             return Err(refuse(
                 "dossier_citation_lane_unknown",
-                &[("lane".into(), s(lane_id)), ("quote".into(), s(quote_raw))],
+                &[("lane", s(lane_id)), ("quote", s(quote_raw))],
                 format!(
                     "the citation names the lane \"{lane_id}\", and this dossier has no \"### {lane_id}\" section. The lanes it records are: {known}. Fix the lane id, or add the missing lane section with its proposal verbatim."
                 ),
@@ -865,9 +865,9 @@ fn check_citations(d: &Dossier) -> Result<usize, Value> {
             return Err(refuse(
                 "dossier_citation_misattributed",
                 &[
-                    ("lane".into(), s(lane_id)),
-                    ("found_in".into(), s(other)),
-                    ("quote".into(), s(quote_raw)),
+                    ("lane", s(lane_id)),
+                    ("found_in", s(other)),
+                    ("quote", s(quote_raw)),
                 ],
                 format!(
                     "the citation credits \"{lane_id}\" with a sentence only \"{other}\" wrote. Blind lanes are worth their cost because they answered independently; moving one lane's words onto another manufactures an agreement that never happened. Attribute the quote to {other}, or cite what {lane_id} actually said."
@@ -876,7 +876,7 @@ fn check_citations(d: &Dossier) -> Result<usize, Value> {
         }
         return Err(refuse(
             "dossier_citation_unresolved",
-            &[("lane".into(), s(lane_id)), ("quote".into(), s(quote_raw))],
+            &[("lane", s(lane_id)), ("quote", s(quote_raw))],
             format!(
                 "the citation \"{quote_raw}\" does not resolve against the proposal \"{lane_id}\" recorded here. A quote must stand as a WHOLE SENTENCE of that lane's text: a span that starts mid-sentence can drop the very words that reverse the meaning — \"we should not cache the token\" cited as \"cache the token\" reads as the opposite of the lane's answer. Copy the sentence from the lane's proposal block, or drop the citation."
             ),
@@ -886,7 +886,7 @@ fn check_citations(d: &Dossier) -> Result<usize, Value> {
     if checked == 0 {
         return Err(refuse(
             "dossier_citations_empty",
-            &[("section".into(), s("Citations"))],
+            &[("section", s("Citations"))],
             "the dossier records no citation, so the chosen answer rests on nothing this door can resolve against the lanes. A convergence cites the lanes it synthesized: write one \"<lane-id> :: <quote>\" line per claim the answer leans on. Zero citations is refused rather than reported as checked."
                 .to_string(),
         ));
@@ -905,9 +905,9 @@ fn check_digests(d: &Dossier, log: &DispatchLog) -> Result<(), Value> {
             return Err(refuse(
                 "dossier_dispatch_unlogged",
                 &[
-                    ("lane".into(), s(&lane.id)),
-                    ("dispatch_id".into(), s(&lane.dispatch_id)),
-                    ("log".into(), s(where_)),
+                    ("lane", s(&lane.id)),
+                    ("dispatch_id", s(&lane.dispatch_id)),
+                    ("log", s(where_)),
                 ],
                 format!(
                     "the lane \"{}\" names dispatch_id {} and no line in {where_} carries it, so there is no record that this dispatch ever happened. That log is written fail-open — a log failure never blocks a payload — which is exactly why a missing line is refused here instead of passed: an unlogged dispatch_id is either a dispatch that did not run or a log this check cannot see. Re-run the lane through `bee dispatch prepare`, or point the check at the root whose .bee/logs holds the run.",
@@ -919,9 +919,9 @@ fn check_digests(d: &Dossier, log: &DispatchLog) -> Result<(), Value> {
             return Err(refuse(
                 "dossier_brief_digest_unlogged",
                 &[
-                    ("lane".into(), s(&lane.id)),
-                    ("dispatch_id".into(), s(&lane.dispatch_id)),
-                    ("log".into(), s(where_)),
+                    ("lane", s(&lane.id)),
+                    ("dispatch_id", s(&lane.dispatch_id)),
+                    ("log", s(where_)),
                 ],
                 format!(
                     "the lane \"{}\" names dispatch_id {}, and that line in {where_} records no brief_sha256 — so it carried no brief, and nothing pins the bytes this lane answered. A blind lane is dispatched with `--brief-file`; a dispatch without one is not a lane. Re-run it with the brief.",
@@ -933,11 +933,11 @@ fn check_digests(d: &Dossier, log: &DispatchLog) -> Result<(), Value> {
             return Err(refuse(
                 "dossier_brief_digest_mismatch",
                 &[
-                    ("lane".into(), s(&lane.id)),
-                    ("dispatch_id".into(), s(&lane.dispatch_id)),
-                    ("recorded".into(), s(&lane.brief_sha256)),
-                    ("logged".into(), s(digest)),
-                    ("log".into(), s(where_)),
+                    ("lane", s(&lane.id)),
+                    ("dispatch_id", s(&lane.dispatch_id)),
+                    ("recorded", s(&lane.brief_sha256)),
+                    ("logged", s(digest)),
+                    ("log", s(where_)),
                 ],
                 format!(
                     "the lane \"{}\" records brief_sha256 {}, and {where_} logged {} for its dispatch_id. The log is the record the dispatch door wrote; the dossier line was transcribed by hand. Correct the dossier to the logged digest — and if the logged one is the surprise, the lane did not answer the brief this dossier says it answered.",
@@ -954,11 +954,11 @@ fn check_digests(d: &Dossier, log: &DispatchLog) -> Result<(), Value> {
             return Err(refuse(
                 "dossier_brief_digest_divergent",
                 &[
-                    ("lane".into(), s(lane)),
-                    ("other_lane".into(), s(first_lane)),
-                    ("digest".into(), s(digest)),
-                    ("other_digest".into(), s(first)),
-                    ("log".into(), s(where_)),
+                    ("lane", s(lane)),
+                    ("other_lane", s(first_lane)),
+                    ("digest", s(digest)),
+                    ("other_digest", s(first)),
+                    ("log", s(where_)),
                 ],
                 format!(
                     "the lanes did not answer one brief: {where_} logged {digest} for \"{lane}\" and {first} for \"{first_lane}\". Blind lanes are comparable only because the brief is byte-identical across them, so a divergence means the brief changed between one dispatch and the next — this run compared answers to two different questions. Re-run every lane on ONE brief, then rebuild the dossier."
@@ -1036,7 +1036,7 @@ fn check_read_diet(d: &Dossier) -> Result<usize, Value> {
     if diet.is_empty() {
         return Err(refuse(
             "dossier_read_diet_undeclared",
-            &[("section".into(), s("Read diet")), ("trust".into(), s("self_reported"))],
+            &[("section", s("Read diet")), ("trust", s("self_reported"))],
             format!(
                 "the recorded brief's \"## Read diet\" section lists no path, so there is no diet to check the lanes against and this check would report success over nothing. A blind lane is dispatched with an explicit read-only path diet (D2(b)); list one path per line under that heading. {DIET_TRUST}"
             ),
@@ -1048,7 +1048,7 @@ fn check_read_diet(d: &Dossier) -> Result<usize, Value> {
         if lane.paths_read.is_empty() {
             return Err(refuse(
                 "dossier_read_diet_empty",
-                &[("lane".into(), s(&lane.id)), ("trust".into(), s("self_reported"))],
+                &[("lane", s(&lane.id)), ("trust", s("self_reported"))],
                 format!(
                     "the lane \"{}\" reports no path in its paths_read line, so its proposal came from nothing this dossier records reading. An empty report is refused rather than counted as a clean one — zero paths checked is not a diet kept. List the paths the lane read. {DIET_TRUST}",
                     lane.id
@@ -1061,9 +1061,9 @@ fn check_read_diet(d: &Dossier) -> Result<usize, Value> {
                 return Err(refuse(
                     "dossier_read_diet_bee_path",
                     &[
-                        ("lane".into(), s(&lane.id)),
-                        ("path".into(), s(raw)),
-                        ("trust".into(), s("self_reported")),
+                        ("lane", s(&lane.id)),
+                        ("path", s(raw)),
+                        ("trust", s("self_reported")),
                     ],
                     format!(
                         "the lane \"{}\" reports reading \"{raw}\", inside the bee store. That is where the orchestrator's own leaning lives — D1 forces an open reason, and it lands in .bee/decisions.jsonl on the same disk the lane can read — so a lane that reads .bee/ is no longer blind, whatever the brief allowed. No diet can license a .bee/ path. Re-run the lane without it. {DIET_TRUST}",
@@ -1075,10 +1075,10 @@ fn check_read_diet(d: &Dossier) -> Result<usize, Value> {
                 return Err(refuse(
                     "dossier_read_diet_breach",
                     &[
-                        ("lane".into(), s(&lane.id)),
-                        ("path".into(), s(raw)),
-                        ("trust".into(), s("self_reported")),
-                        ("diet".into(), json!(diet)),
+                        ("lane", s(&lane.id)),
+                        ("path", s(raw)),
+                        ("trust", s("self_reported")),
+                        ("diet", json!(diet)),
                     ],
                     format!(
                         "the lane \"{}\" reports reading \"{raw}\", which the brief's read diet does not declare. The diet is what makes two lanes comparable: a lane that read more answered a different question. The declared diet is: {}. Add the path to the brief and re-run the lanes, or drop the lane from this dossier. {DIET_TRUST}",
@@ -1101,7 +1101,7 @@ pub(crate) fn check_evidence(d: &Dossier, log: &DispatchLog) -> Result<Counts, V
     if d.lanes.is_empty() {
         return Err(refuse(
             "dossier_lanes_missing",
-            &[("section".into(), s("Lanes"))],
+            &[("section", s("Lanes"))],
             "the dossier records no lane, so there is no proposal to resolve a citation against, no dispatch_id to check the brief digest with, and no reported path to hold to a diet. A run with no lane is refused rather than reported as three checks passed. Record every lane under \"## Lanes\"."
                 .to_string(),
         ));
@@ -1175,7 +1175,7 @@ fn run_check(parsed: ParsedArgs, t0: Instant) -> Option<ExitCode> {
     let refusal: Value = match std::fs::read(path) {
         Err(_) => refuse(
             "dossier_unreadable",
-            &[("path".into(), s(path))],
+            &[("path", s(path))],
             format!(
                 "--dossier \"{path}\" could not be read. The path is resolved from the current working directory — check the spelling, or pass an absolute path."
             ),
@@ -1183,7 +1183,7 @@ fn run_check(parsed: ParsedArgs, t0: Instant) -> Option<ExitCode> {
         Ok(bytes) => match String::from_utf8(bytes) {
             Err(_) => refuse(
                 "dossier_not_utf8",
-                &[("path".into(), s(path))],
+                &[("path", s(path))],
                 format!(
                     "--dossier \"{path}\" is not valid UTF-8. It is refused rather than decoded lossily: a lossy decode would change the very proposal bytes the citation check exists to resolve against. Save the dossier as UTF-8."
                 ),

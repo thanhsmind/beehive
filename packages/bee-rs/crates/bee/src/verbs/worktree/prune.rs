@@ -308,17 +308,14 @@ pub(crate) fn live_session_holds(
                 "session {session_name} names this workspace with a heartbeat inside the {liveness_seconds}s liveness window; keeping."
             ));
         }
-        if let Some(Value::String(ws_id)) = record.get("workspace_id") {
-            if let Ok(ws_record) = ws::read_workspace(main_root, ws_id) {
-                if let Some(Value::String(root_s)) = ws_record.get("root") {
-                    if Path::new(root_s).starts_with(worktree_root) {
+        if let Some(Value::String(ws_id)) = record.get("workspace_id")
+            && let Ok(ws_record) = ws::read_workspace(main_root, ws_id)
+                && let Some(Value::String(root_s)) = ws_record.get("root")
+                    && Path::new(root_s).starts_with(worktree_root) {
                         return Some(format!(
                             "session {session_name}'s resolved root sits under this worktree; keeping."
                         ));
                     }
-                }
-            }
-        }
     }
     None
 }

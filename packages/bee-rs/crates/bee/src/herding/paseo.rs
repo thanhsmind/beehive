@@ -446,15 +446,14 @@ pub fn version_at_least(output: &str, required: (u64, u64, u64)) -> bool {
             .unwrap_or(clean);
         let core = clean.split(['-', '+']).next().unwrap_or(clean);
         let parts: Vec<&str> = core.split('.').collect();
-        if parts.len() == 3 {
-            if let (Ok(maj), Ok(min), Ok(pat)) = (
+        if parts.len() == 3
+            && let (Ok(maj), Ok(min), Ok(pat)) = (
                 parts[0].parse::<u64>(),
                 parts[1].parse::<u64>(),
                 parts[2].parse::<u64>(),
             ) {
                 last_semver = Some((maj, min, pat));
             }
-        }
     }
 
     match last_semver {
@@ -490,6 +489,7 @@ pub fn archive_argv(id: &str) -> Vec<String> {
     ]
 }
 
+#[cfg(test)]
 pub fn logs_argv(id: &str) -> Vec<String> {
     vec![
         "logs".to_string(),
@@ -723,27 +723,25 @@ pub fn parse_ls_agents(stdout: &str) -> Vec<(String, String, bool)> {
                                             .or_else(|| em.get("name"))
                                             .and_then(Value::as_str);
                                         let v = em.get("value").and_then(Value::as_str);
-                                        if k == Some("bee_job") {
-                                            if let Some(v_str) = v {
+                                        if k == Some("bee_job")
+                                            && let Some(v_str) = v {
                                                 bee_job = v_str.to_string();
                                                 break;
                                             }
-                                        }
                                     }
                                 }
                             }
                             _ => {}
                         }
                     }
-                    if bee_job.is_empty() {
-                        if let Some(j) = map
+                    if bee_job.is_empty()
+                        && let Some(j) = map
                             .get("bee_job")
                             .or_else(|| map.get("Bee_job"))
                             .and_then(Value::as_str)
                         {
                             bee_job = j.to_string();
                         }
-                    }
                     let archived = map
                         .get("archived")
                         .or_else(|| map.get("Archived"))

@@ -488,11 +488,10 @@ const LEDGER_GROUPS: &[(&str, Option<&str>)] = &[
 pub(crate) fn ledger_covered_roots() -> Vec<&'static str> {
     let mut out: Vec<&'static str> = Vec::new();
     for (_, dir) in LEDGER_GROUPS {
-        if let Some(d) = dir {
-            if !out.contains(d) {
+        if let Some(d) = dir
+            && !out.contains(d) {
                 out.push(d);
             }
-        }
     }
     out
 }
@@ -992,36 +991,29 @@ fn hooks_expect_binary(repo_root: &Path, opts: &Options, codex_hybrid: bool) -> 
         return true;
     }
     let claude_settings = repo_root.join(".claude").join("settings.json");
-    if let Ok(text) = std::fs::read_to_string(&claude_settings) {
-        if text.contains(".bee/bin/bee") {
+    if let Ok(text) = std::fs::read_to_string(&claude_settings)
+        && text.contains(".bee/bin/bee") {
             return true;
         }
-    }
     let codex_hooks = repo_root.join(".codex").join("hooks.json");
-    if let Ok(text) = std::fs::read_to_string(&codex_hooks) {
-        if text.contains(".bee/bin/bee") {
+    if let Ok(text) = std::fs::read_to_string(&codex_hooks)
+        && text.contains(".bee/bin/bee") {
             return true;
         }
-    }
     let hooks_dir = repo_root.join(".bee").join("bin").join("hooks");
-    if hooks_dir.is_dir() {
-        if let Ok(entries) = std::fs::read_dir(&hooks_dir) {
-            if entries.filter_map(|e| e.ok()).any(|e| e.path().is_file()) {
+    if hooks_dir.is_dir()
+        && let Ok(entries) = std::fs::read_dir(&hooks_dir)
+            && entries.filter_map(|e| e.ok()).any(|e| e.path().is_file()) {
                 return true;
             }
-        }
-    }
-    if let Ok(text) = std::fs::read_to_string(repo_root.join(".bee").join("onboarding.json")) {
-        if let Ok(v) = serde_json::from_str::<Value>(&text) {
-            if let Some(m) = v.get("managed") {
-                if m.get("repo_hooks").and_then(Value::as_object).is_some_and(|o| !o.is_empty())
-                    || m.get("codex_hooks").and_then(Value::as_object).is_some_and(|o| !o.is_empty())
+    if let Ok(text) = std::fs::read_to_string(repo_root.join(".bee").join("onboarding.json"))
+        && let Ok(v) = serde_json::from_str::<Value>(&text)
+            && let Some(m) = v.get("managed")
+                && (m.get("repo_hooks").and_then(Value::as_object).is_some_and(|o| !o.is_empty())
+                    || m.get("codex_hooks").and_then(Value::as_object).is_some_and(|o| !o.is_empty()))
                 {
                     return true;
                 }
-            }
-        }
-    }
     false
 }
 

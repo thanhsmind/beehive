@@ -71,8 +71,8 @@ pub(crate) fn append(
 pub(crate) fn rows(root: &Path, kind: Option<&str>, feature: Option<&str>) -> Vec<Value> {
     read_jsonl(&audit_path(root))
         .into_iter()
-        .filter(|r| kind.map_or(true, |k| r.get("kind").and_then(Value::as_str) == Some(k)))
-        .filter(|r| feature.map_or(true, |f| r.get("feature").and_then(Value::as_str) == Some(f)))
+        .filter(|r| kind.is_none_or(|k| r.get("kind").and_then(Value::as_str) == Some(k)))
+        .filter(|r| feature.is_none_or(|f| r.get("feature").and_then(Value::as_str) == Some(f)))
         .collect()
 }
 

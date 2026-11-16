@@ -253,7 +253,6 @@ pub(crate) fn create_feature_worktree_locked(
 
 /// Steps 10.1-10.7, in Node's exact order. `Err(String)` carries the message
 /// the ladder interpolates as `postAddMessage`.
-#[allow(clippy::too_many_arguments)]
 pub(crate) fn post_add(
     main_root: &Path,
     main_store_root: &Path,
@@ -372,13 +371,12 @@ pub(crate) fn rollback(
     if let Some(id) = id {
         // R1 — removeGrantCore: a no-op (no write at all) when the id is
         // absent. Best-effort; the typed refusal below fires either way.
-        if let Some(existing) = read_grants_strict(main_store_root) {
-            if existing.contains_key(id) {
+        if let Some(existing) = read_grants_strict(main_store_root)
+            && existing.contains_key(id) {
                 let mut next = existing;
                 next.remove(id);
                 let _ = write_grants_file_atomic(main_store_root, &next);
             }
-        }
         // R2 — best-effort workspace unregister, always after R1.
         let _ = ws::unregister_workspace(main_root, id);
     }
