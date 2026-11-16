@@ -48,7 +48,7 @@ govern the working residue of a cell rather than its content.
   no procedure read: nothing branched on the value, so `bugfix` and `refactor`
   scaled ceremony identically. Four classes now carry a named step list, one
   file per class under `bee-planning/playbooks/<class>.md` (moved out of a
-  shared `bee-planning/references/planning-reference.md` section per
+  shared `bee-planning/references/cells.md` section per
   `playbook-file-split` D1, decision `bed1853c`, 2026-09-25 — the file's own
   "Playbooks" section stays the citation home and index) —
   `perf` (baseline, change, re-measure; "it feels faster" is not a result),
@@ -81,7 +81,7 @@ govern the working residue of a cell rather than its content.
   whose steps and proof-line rule assume no source code, no git worktree, and
   no test suite — proof that the class-playbook shape generalizes past
   software work. `content`'s playbook names no specific skill (host-agnostic
-  per D6), since `planning-reference.md` is vendored into every bee host repo.
+  per D6), since `cells.md` is vendored into every bee host repo.
 - **R20** — The worker brief carries four code-shape rules, and they refuse
   nothing (code-shape-doctrine D1-D5, cell csdoc-1, 2026-09-01). Every other
   bee rule governs PROCESS; none governed what a change leaves behind, so a

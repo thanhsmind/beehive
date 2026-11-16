@@ -41,7 +41,7 @@ Read cheap to expensive: outline, symbol list and signatures first; then a line 
 
 - `class` ∈ `feature`, `bugfix`, `docs`, `refactor`, `research`, `release`, `spike`, `perf`, `content`
   — each class has a playbook the plan cites by name and anchor, never copies:
-  `bee-planning/references/planning-reference.md` ("Playbooks")
+  `bee-planning/references/cells.md` ("Playbooks")
 - `lane` ∈ `docs`, `tiny`, `small`, `spike`, `standard`, `high-risk`
 - `flags[]` — every entry from the canonical mode-gate list (auth, authorization, data-model, audit-security, external-systems, public-contracts, cross-platform, covered-contract-change, proof-weakening, multi-domain)
 - `product_files` — a non-negative integer

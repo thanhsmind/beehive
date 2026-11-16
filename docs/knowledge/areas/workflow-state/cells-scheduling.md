@@ -11,7 +11,7 @@ bee:
   decisions: ["parallel-scheduler D1-D4 (docs/history/parallel-scheduler/CONTEXT.md; logged a648ea2a/b4740f68/ecc8862d/eec223d9, D2 clarified 0746db88)"]
   sources: ["parallel-scheduler cells parallel-scheduler-1..5 (traces in .bee/cells/, reports docs/history/parallel-scheduler/reports/, 2026-07-15/16; -5: review fix scoping refusal to introduced/participating cycles)", "docs/specs/workflow-state.md#B17", "docs/specs/workflow-state.md#B18", "docs/specs/workflow-state.md#R26", "docs/specs/workflow-state.md#R27", "docs/specs/workflow-state.md#P19"]
   authoritative_for: "workflow-state: the computed dispatch schedule and dependency-cycle refusal"
-  anchors: [packages/bee-rs/crates/bee/src/verbs/cells/schedule.rs, skills/bee-swarming/SKILL.md, skills/bee-planning/references/planning-reference.md]
+  anchors: [packages/bee-rs/crates/bee/src/verbs/cells/schedule.rs, skills/bee-swarming/SKILL.md, skills/bee-planning/references/cells.md]
   verified_at: 2026-11-15
   verified_commit: a963c71a41249647b5aa15a64118f007f39c4c67
 ---
@@ -115,7 +115,7 @@ impossible to record; pre-existing records are never mutated by the check
   CLI verb `bee cells schedule` (`command-registry.mjs` `cells.schedule`,
   `handleCellsSchedule` in both dispatcher copies); consumer prose in
   `skills/bee-swarming/SKILL.md` (wave analysis),
-  `skills/bee-planning/references/planning-reference.md`
+  `skills/bee-planning/references/cells.md`
   (files-authoring note; the standalone validating skill is deleted — validation-diet
   D1 — its feasibility matrix retired with no replacement, D6). Tests: schedule + cycle-refusal rows in
   `templates/tests/test_lib.mjs` (321 passing), verb example in

@@ -1,0 +1,339 @@
+# Plan Artifact
+
+Use when `bee-planning` writes `plan.md`, `approach.md`, the consolidation
+cell, or runs the hat wave on `standard` or `high-risk` work.
+
+## Artifact fan-out — separate files are earned, not default
+
+`plan.md` is the truth artifact for **standard/high-risk** (and small only on
+request). Tiny drops it entirely; small's default is the logged scoping
+synthesis + cells. Where `plan.md` exists, discovery and approach content
+default to **sections inside it**; they graduate to their own files only when
+real complexity makes a standalone file worth reading on its own.
+
+| Artifact | Separate file when | Otherwise |
+|---|---|---|
+| `plan.md` | standard/high-risk (frozen at the shape gate), or small when a durable multi-slice/product-decision doc is genuinely needed | tiny: none; small: opt-in |
+| `discovery.md` | a real multi-candidate comparison worth preserving alone | a `## Discovery` note inside `plan.md`, findings cited |
+| `approach.md` | high-risk, or rejected alternatives + a risk map substantial enough to stand alone | an `## Approach` section inside `plan.md` |
+
+A separate file that would repeat what `plan.md` already says is a section.
+Fold, don't fan out.
+
+## Artifact: plan.md
+
+Frozen once the shape gate is approved: the only permitted post-approval
+write is the approval stamp in the frontmatter. No in-place enrichment.
+
+```markdown
+---
+artifact_contract: bee-plan/v2
+mode: standard | high-risk | spike | small (opt-in)
+# approved_gate2: <unset until approval; then a date stamp — the only permitted post-approval write>
+---
+
+# Plan: <Feature>
+
+## Summary
+<a few plain lines for the user: what changes, and for whom. No cell ids,
+no bee terms.>
+
+Mode: `<mode>` — <k> risk flags: <list, or "none">
+Why this is the least workflow that protects the work: <one sentence>
+
+## Requirements (from CONTEXT.md)
+- D1: <locked decision restated> ...
+
+## Load-bearing claims
+<one line naming the labels and the match rule, then the table — spec
+below. Every row is load-bearing; no `guessed` row survives the gate.>
+
+| # | Claim | Label | Anchor | Verbatim evidence |
+|---|-------|-------|--------|-------------------|
+| 1 | <what the shape depends on being true> | read/ran/guessed | <path:line, or the command that was run> | <the bytes, verbatim> |
+
+## Discovery
+<2–4 lines: what was inspected, the finding, the evidence command — or a
+one-line pointer to discovery.md when one exists. Extends CONTEXT.md's
+`## Read set` with the concepts and paths planning read.>
+
+## Approach
+<Recommended path (cites decision ids) · rejected alternatives (one line
+each) · compact risk map (component / LOW-MEDIUM-HIGH / Lands in: the cell
+id that carries the risk / proof needed; a MEDIUM or HIGH row states the one
+fact and its run output, per "Risk map" below). When approach.md exists, drop this
+section and point to it.>
+
+Waves: <the groups that run in parallel, and the reason for each serial edge>
+
+## Role assignments
+<Required for bee-plan/v2. Classifies each workflow stage and assigns each to a
+configured team role from `bee team show`. Dispatches must follow these approved
+assignments; any change requires a logged decision with tag `role-reroute`.
+The fenced JSON block must declare schema_version "1.0", runtime, roster_sha256
+(SHA-256 of sorted canonical {role,description} rows from bee team show --runtime <runtime> --json),
+and stages covering every configured role in the roster. Plans without the v2
+discriminator and without this section follow the legacy path.>
+
+```json
+{
+  "schema_version": "1.0",
+  "runtime": "<runtime>",
+  "roster_sha256": "<roster_sha256>",
+  "stages": [
+    {"stage": "<stage-name>", "classification": "required|conditional|not-applicable", "role": "<role>", "condition": "<required when conditional>", "reason": "<rationale>"}
+  ]
+}
+```
+
+## Shape
+<one of the bodies below, by mode>
+
+## Cells — current slice (preview)
+<A preview: the persisted cells stay the authority, added only after the
+execution gate.>
+
+| id | title | files | deps | you see | proof |
+|---|---|---|---|---|---|
+| <feat-1> | <imperative title> | <paths; mark new and deleted> | <ids, or —> | <the effect the user or the product shows> | <the proof the cap will carry> |
+
+## Test matrix
+<standard and below: the triad — happy path, edge cases, error paths — at
+its smallest demonstrating size. high-risk/hard-gate: the 12 dimensions of
+edge-dimensions.md, probes written per applicable dimension. Either way the
+tester cell judges existing coverage first and authors only what is not
+already pinned (`.bee/expertise/tests.md`). Every row ends with
+`Pass when <literal output or state>`. A cell that changes existing
+behavior adds one row that runs the same scenario on main and on head.>
+
+## Open Questions
+<what is still unknown, one line each — or "(none)". This is where a claim
+lands when it cannot be upgraded past `guessed`.>
+
+## Out of scope
+<explicitly not solved; deferred ideas stay deferred>
+```
+
+`## Summary` and the cells preview are for standard and high-risk plans.
+Tiny and small keep their gate-message shape (`references/cells.md` ("Tiny/small merged gate")).
+
+**"You see" is an effect, never a file name.** Write what the user or the
+product shows when the cell lands: "`bee close` names the uncapped cell",
+not "edits close.rs". A cell with no visible effect says what it unblocks.
+
+**The preview is not the cells.** No section is added post-approval: the
+plan stays frozen, and after the execution gate the current slice lives
+only in the persisted cells. Where a persisted cell and its preview row
+differ, the cell wins.
+
+### The load-bearing claims table
+
+**Mandatory, and the gate enforces it.** A `## Load-bearing claims` table
+is required in every plan.md. A claim is load-bearing when the shape
+changes if the claim turns out to be false — that is the whole membership
+test. Five columns, in this order:
+
+| Column | Carries |
+|---|---|
+| `#` | the row number, so a refusal and an audit can name the row |
+| `Claim` | the one thing the shape depends on being true |
+| `Label` | `read`, `ran`, or `guessed` — nothing else |
+| `Anchor` | `path:line` or `path:line-line` for `read`; the exact command for `ran` |
+| `Verbatim evidence` | the bytes found there, copied, never retyped |
+
+**Label vocabulary.** `read` = the author opened that file at that line and
+saw those bytes. `ran` = the author executed that command and holds its
+output. `guessed` = inferred, not observed — legal while drafting, never at
+the gate.
+
+**Match rule (the audit's one rule).** The evidence column is a verbatim
+byte substring of the anchored line(s); multi-line evidence joins the lines
+with `" / "`. Reflowed, trimmed, prettified, or paraphrased text is a
+MISMATCH, not a near miss — a quote that drops a prefix is the exact defect
+this table exists to catch.
+
+**Membership converse.** Every load-bearing claim must be a row. A
+load-bearing claim living only in the plan's prose is a plan defect, caught
+by the leader's pre-flight check and by the audit
+(`.bee/expertise/review.md` ("Claims-table audit")) — the binary cannot
+judge prose.
+
+**The mechanical refusal.** `bee gate --name shape` and `bee gate --merge`
+refuse an approval while the table is missing or malformed, while any row
+lacks a label, anchor, or evidence, while a label sits outside the three
+words, or while any row is still `guessed`. There is no waiver flag. Two
+remedies, both self-serve: upgrade the label by doing the real read or the
+real run, or move the claim to `## Open Questions` and reshape so nothing
+load-bearing rests on it. The refusal fires at `shape` and at `--merge` —
+where plan.md is still editable — and never at a plain
+`--name execution`, which lands after the freeze where no edit could
+answer it.
+
+**Shape bodies by mode:**
+
+- `spike` — the one yes/no question, what proves YES, what NO implies,
+  `.bee/spikes/<feature>/` location.
+- `standard` (milestone-shaped) — **phase plan**: `Phase | What Changes |
+  Why Now | Demo | Unlocks` table.
+- `standard`/`high-risk` (capability/risk-shaped) — **epic map**: feature
+  outcome, repo-reality basis, `Epic | Capability/Risk Area | Why It
+  Exists | Slices | Proof Needed` table, slice queue with deps, current
+  slice to prepare.
+
+## Artifact: approach.md (only when the fan-out table calls for it)
+
+```markdown
+# Approach: <Feature>
+
+## Recommended path
+<2–5 sentences: what we build and in what order. Cites decision ids.>
+
+## Rejected alternatives
+- <alternative> — <why rejected, one line>
+
+## Risk map
+| Component | Risk | Reason | Lands in | Proof needed |
+|---|---|---|---|---|
+| <area> | LOW/MEDIUM/HIGH | <why; MEDIUM/HIGH: the one fact: …> | <cell id> | <command, inspection, or spike question> |
+
+Every MEDIUM or HIGH row names the one fact the change is safe because of
+(for example: this call only drops entries already dead), written as `the
+one fact: …` in the Reason cell, and the command or small script that proves
+that fact by running the real code. The planner runs it before the gate and
+pastes the output as the row's evidence. A reason that only sounds safe moves
+the row to Open Questions: a writeup reads the same whether it is true or not.
+
+## Files and order
+<bounded list, likely touch order>
+
+## Questions still open
+- <assumption that could invalidate the path>
+```
+
+## Phase plan vs epic map
+
+Use **phases** only when the work has observable milestones a user could
+demo in order — first phase obvious, later phases building on it, never
+technical buckets ("backend" is not a phase). Use an **epic map** when
+capability or risk areas explain the work more honestly than a timeline —
+the high-risk default, with feasibility proof named per epic. Never force
+2–4 phases onto work that is really one slice.
+
+## Consolidation cell shape (role: writer)
+
+```json
+{
+  "id": "<feature-abbrev>-<final-n>",
+  "feature": "<feature-slug>",
+  "title": "Consolidate this feature's knowledge and write its delivery",
+  "lane": "<standard|high-risk>",
+  "role": "writer",
+  "status": "open",
+  "deps": ["<every-other-cell-id>", "..."],
+  "decisions": ["<feature-d-ids>"],
+  "files": [
+    "docs/knowledge/**",
+    "docs/history/<feature-slug>/delivery.md"
+  ],
+  "read_first": [
+    "docs/history/<feature-slug>/CONTEXT.md",
+    "docs/history/<feature-slug>/plan.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Run the writer consolidation step on this feature: run `bee knowledge consolidate --feature <feature-slug>`. Dedupe and trim the deltas the cells wrote, anchor each concept to the code it describes, never restate code, and write docs/history/<feature-slug>/delivery.md listing the concepts changed and why, one line each. Run `.bee/bin/bee knowledge check` green. One commit.",
+  "verify": ".bee/bin/bee knowledge check",
+  "must_haves": {
+    "truths": [
+      "area and pattern concepts describe the feature's changes, anchored to code",
+      "docs/history/<feature-slug>/delivery.md lists every concept the feature changed"
+    ],
+    "artifacts": [
+      {"path": "docs/history/<feature-slug>/delivery.md", "substantive": "the feature's delivery record"}
+    ],
+    "key_links": [
+      "the delivery lands in the same merge as the code"
+    ],
+    "prohibitions": [
+      "No restating of code in area concepts",
+      "No code comments"
+    ],
+    "open_choices": []
+  },
+  "trace": {
+    "worker": null, "outcome": null, "files_changed": [],
+    "deviations": [], "friction": null, "capped_at": null,
+    "behavior_change": false
+  }
+}
+```
+
+## Plan check — the hat wave
+
+Planning's plan check for standard/high-risk IS the hat wave. **The
+procedure lives in one home** —
+`bee-hive/references/gates-and-delegation.md` ("Hat wave"): firing point,
+seats and instruments, budget, quorum, idempotence, headless, bypass, and
+communication. This section is what planning consumes, by pointer; it never
+restates that procedure.
+
+**Scaling.** `standard` with ≤5 product files and zero hard-gate flags: no
+dispatch — the session model runs both mandates inline, same vocabularies,
+same caps. A hard-gate flag, a 6th product file, or doubt about self-review
+independence opens the wave at its three default seats. `high-risk` always
+opens it, at all five seats. Dedupe findings, then split into auto-fix
+(apply, record) and present-for-decision.
+
+**One shot, then at most one blocker pass.** Before the gate, no cell
+exists yet: WARNINGs and mechanically fixable findings are applied to the
+plan's cells preview table. Only unresolved BLOCKERs earn a second, final,
+blocker-scoped pass; a BLOCKER still open after it escalates to the user
+with both positions. All CRITICAL cell flags are fixed before the gate;
+MINOR ships with a recorded note. On slice 2+ the plan is frozen and was
+checked on slice 1: the scope is the new or changed persisted cells only.
+
+**MANDATE 1 — Structure.** The leader folds these criteria into the
+`hat-facts-gaps` seat's prompt body, over `docs/history/<feature>/CONTEXT.md`,
+approach.md, and plan.md with its cells preview table — on slice 2+, the
+persisted new cells (`.bee/bin/bee cells list --feature <feature>`). Assume
+the work is flawed until proven so. Verify exactly 5 dimensions:
+
+1. Requirement/decision coverage — every locked decision lands in at least one cell.
+2. Cell completeness — each cell has files, read_first, directive action, must_haves
+   (per lane tier), and a testable exit the declared suite can prove.
+3. Dependency correctness — deps form a DAG; no cell depends on a future slice.
+4. Key links — integration points named in plan.md are owned by a specific cell.
+5. Scope sanity — no cell is doing hidden architecture work or exceeds its lane.
+
+Every structural finding reports as BLOCKER (structurally unsound) or
+WARNING (survivable, note it).
+
+**MANDATE 2 — Cells, cold pickup.** The leader's own self-check at cell
+drafting, never a seat's job. Read each cell with NO session history: could
+a worker who has read only CONTEXT.md, plan.md, and this cell implement and
+verify it without guessing?
+
+- CRITICAL: assumed context, vague acceptance, scope overload, unproven
+  feasibility, an exit the declared suite cannot prove.
+- MINOR: missing rationale, implicit file assumption, fuzzy boundary, known
+  tradeoff not recorded.
+
+Findings quote file/cell evidence, are never softened, and never propose a
+redesign. The synthesis carries both sections and never merges the two
+vocabularies:
+
+```text
+PLAN CHECK
+Work: <current slice / direct task>
+
+STRUCTURE
+BLOCKERS: <dimension> problem / evidence / fix
+WARNINGS: <dimension> problem / evidence / note
+
+CELLS  (reviewed: <N>)
+CRITICAL FLAGS: <cell-id> problem / evidence / fix
+MINOR FLAGS: <cell-id> problem / evidence / suggestion
+CLEAN CELLS: <cell-id>, <cell-id>
+
+SUMMARY: <2-3 sentences>
+```

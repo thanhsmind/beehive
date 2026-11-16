@@ -756,7 +756,7 @@ fn acknowledged_conflicts(root: &Path, lane: Option<&str>) -> Result<Vec<String>
 // The third precondition beside the two above, and the ONLY one that does not
 // ride `exec_component`. It has its own guard — `approved && (merge || name ==
 // "shape")` — because plan.md FREEZES at shape approval
-// (`skills/bee-planning/references/planning-reference.md`: "the only permitted
+// (`skills/bee-planning/references/plan-artifact.md`: "the only permitted
 // post-approval write is the approval stamp"). A refusal fired on a plain
 // `--name execution` would name a remedy the author is forbidden to take, so
 // the door stands where the plan is still editable: at shape, and at the

@@ -8,7 +8,7 @@ bee:
   id: pattern-20260728-a-derivation-the-tooling-computes-but-doctrine-forbids-where-it-is-needed
   lifecycle: active
   areas: [verify-pipeline]
-  sources: ["validation-diet cell vd-2 (verify omitted test_misc.mjs while editing lib/state.mjs, trace .bee/cells/vd-2.json, commit a7fab75d, 2026-07-28)", "validation-diet cell vd-1 (same file, verify INCLUDED test_misc.mjs, trace .bee/cells/vd-1.json, commit 4a03006e)", "validation-diet cell vd-5 (the repair, commit db11b709)", "removed 2026-08-16: skills/bee-planning/references/planning-reference.md no longer states the cited rule at any line — the impact-registry-derived per-cell verify doctrine it named is superseded; planning-reference.md's Test scoping section now states commands.verify is retired and cells run commands.test, the project's one declared test command, instead", "skills/bee-swarming/references/worker-details.md (formerly the executing skill's copy, cited at its then line 166)", docs/history/learnings/20260728-validation-diet.md L1]
+  sources: ["validation-diet cell vd-2 (verify omitted test_misc.mjs while editing lib/state.mjs, trace .bee/cells/vd-2.json, commit a7fab75d, 2026-07-28)", "validation-diet cell vd-1 (same file, verify INCLUDED test_misc.mjs, trace .bee/cells/vd-1.json, commit 4a03006e)", "validation-diet cell vd-5 (the repair, commit db11b709)", "removed 2026-08-16: skills/bee-planning/references/cells.md (formerly planning-reference.md) no longer states the cited rule at any line — the impact-registry-derived per-cell verify doctrine it named is superseded; cells.md's Test scoping section now states commands.test is the project's one declared test command", "skills/bee-swarming/references/worker-details.md (formerly the executing skill's copy, cited at its then line 166)", docs/history/learnings/20260728-validation-diet.md L1]
   polarity: pitfall
   critical: false
 ---
@@ -27,7 +27,7 @@ against that same registry. The derivation was computed, committed, and
 sitting on disk the entire time.
 
 It was unreachable from the one place it mattered.
-`skills/bee-planning/references/planning-reference.md:162` rules the impacted
+`skills/bee-planning/references/cells.md` (formerly `planning-reference.md:162`) rules the impacted
 run *"still never authored as a per-cell `verify`"*, and the wave-level
 fallback that used to cover the gap was retired the same day by
 `main-verifies` (`worker-details.md:166`). So the only unscoped check in the
