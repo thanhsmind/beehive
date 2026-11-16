@@ -4890,7 +4890,7 @@
     },
     {
       "path": "packages/bee/LEADER.md",
-      "sha256": "330bca7dcbeec2425273161b0d459805e91b4a979ce2888888a05a04fca67252",
+      "sha256": "eaa5340a6508b154ec1427d416b6f04c58034b16c068ab0d8806bc181a1d9dee",
       "mode": "644",
       "role": "package_payload",
       "packagePath": "packages/bee/LEADER.md"
