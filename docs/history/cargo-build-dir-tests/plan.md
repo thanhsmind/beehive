@@ -1,0 +1,116 @@
+---
+artifact_contract: bee-plan/v2
+mode: small
+---
+
+# Plan: Tests find the bee binary on any Cargo layout
+
+## Summary
+
+On Cargo 1.100, test executables moved from `target/<profile>/deps/` to
+`target/<profile>/build/<pkg>/<hash>/out/`, so every test that finds the
+built `bee` by popping directories from its own path looks in the wrong
+place: 104 tests fail locally on 1.100.0 and the same set fails on CI.
+Integration tests switch to Cargo's own `CARGO_BIN_EXE_bee`; unit tests share
+one helper that walks up to the real binary.
+
+Mode: `small` — test-harness only; no product code path changes.
+
+## Requirements (from CONTEXT.md)
+
+- D1: `env!("CARGO_BIN_EXE_bee")` in integration tests; one shared `cfg(test)` ancestor-walk helper for unit tests; no per-file lookup and no `cargo_bin("bee")` left.
+- C1: contract cargo-build-dir-tests.
+
+## Load-bearing claims
+
+| # | Claim | Label | Anchor | Verbatim evidence |
+|---|-------|-------|--------|-------------------|
+| 1 | A per-file lookup pops directories from current_exe | read | packages/bee-rs/crates/bee/tests/workflow_verbs.rs:26 | `let mut dir = std::env::current_exe().expect("test binary path");` |
+| 2 | 1.100 test executables live under build/bee/<hash>/out | ran | fd -t x workflow_verbs build (in the 1.100 target dir) | `build/bee/67a2ac3c91c67313/out/workflow_verbs-67a2ac3c91c67313` |
+| 3 | The failure reproduces locally on 1.100.0 | ran | cargo +1.100.0 test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml | `built bee binary not found at` |
+| 4 | Integration tests already use CARGO_BIN_EXE_bee elsewhere | read | packages/bee-rs/crates/bee/tests/installer_contracts.rs:599 | `env!("CARGO_BIN_EXE_bee")` |
+
+## Approach
+
+Situation: `skills/bee-planning/playbooks/bugfix/bug-fix.md`.
+
+Red first: the local 1.100.0 run fails 104 tests for the reported reason;
+the default 1.98.0 run is green and must stay green. One code cell builds
+the helper and moves every caller (build the lever: one helper, every site
+migrated, the per-file copies deleted); one tester cell checks the contract
+on both toolchains and pins the helper on both layouts.
+
+Rejected: pin rustc 1.98 (hides the break), move unit tests to integration
+tests (large move, no gain), upgrade assert_cmd (does not fix the
+hand-rolled lookups).
+
+## Role assignments
+
+```json
+{
+  "schema_version": "1.0",
+  "runtime": "claude",
+  "roster_sha256": "d4e696dbde7989d6388dacce3fd7057cb3a6935b46024b79698596a46f6f41d3",
+  "stages": [
+    {"stage": "implementation", "classification": "required", "role": "code", "reason": "cbd-1 adds the helper and migrates every lookup."},
+    {"stage": "test-and-live-proof", "classification": "required", "role": "test", "reason": "cbd-2 checks both toolchains and pins the helper."},
+    {"stage": "docs", "classification": "not-applicable", "role": "docs", "reason": "The concept line rides cbd-1."},
+    {"stage": "slice-judge", "classification": "not-applicable", "role": "review", "reason": "Small lane; review stays user-invoked."},
+    {"stage": "hat-facts-gaps", "classification": "not-applicable", "role": "hat-facts-gaps", "reason": "Small lane; every claim ran or was read this session."},
+    {"stage": "hat-alternatives", "classification": "not-applicable", "role": "hat-alternatives", "reason": "Small lane; rejected paths named."},
+    {"stage": "hat-user-impact", "classification": "not-applicable", "role": "hat-user-impact", "reason": "Test harness only."},
+    {"stage": "hat-risks", "classification": "not-applicable", "role": "hat-risks", "reason": "Both toolchains run the whole suite."},
+    {"stage": "hat-value", "classification": "not-applicable", "role": "hat-value", "reason": "Red CI on main is fix-first."},
+    {"stage": "deployment", "classification": "not-applicable", "role": "deploy", "reason": "No release in this feature."},
+    {"stage": "planning", "classification": "not-applicable", "role": "plan", "reason": "The leader wrote the plan."},
+    {"stage": "read-only-gather", "classification": "not-applicable", "role": "read", "reason": "The failing run is the map."},
+    {"stage": "fact-extraction", "classification": "not-applicable", "role": "extraction", "reason": "No extraction stage."},
+    {"stage": "generation-fallback", "classification": "not-applicable", "role": "generation", "reason": "Both cells have a configured role."},
+    {"stage": "writing", "classification": "not-applicable", "role": "writer", "reason": "No prose deliverable."},
+    {"stage": "generic-advisor", "classification": "not-applicable", "role": "advisor", "reason": "Small lane."},
+    {"stage": "supervision", "classification": "not-applicable", "role": "supervisor", "reason": "Attended session."},
+    {"stage": "blind-lane-1", "classification": "not-applicable", "role": "lane-1", "reason": "No blind lanes."},
+    {"stage": "blind-lane-2", "classification": "not-applicable", "role": "lane-2", "reason": "No blind lanes."},
+    {"stage": "blind-lane-3", "classification": "not-applicable", "role": "lane-3", "reason": "No blind lanes."},
+    {"stage": "design-ui", "classification": "not-applicable", "role": "design", "reason": "No rendered UI."}
+  ]
+}
+```
+
+## Risk map
+
+| Risk | Guard |
+|---|---|
+| The walk finds a directory named bee (build/bee) | The helper accepts only a file |
+| A unit test runs before the bin is built | cargo test builds the bin for the integration targets, as today |
+| The fix works on 1.100 but breaks 1.98 | The verify runs the full suite on both toolchains |
+
+## Cells — current slice (preview)
+
+| id | title | files | deps | you see | proof |
+|---|---|---|---|---|---|
+| cbd-1 | Find the built bee binary independent of Cargo's test layout | helper, 9 integration tests, 6 unit-test sites, concept | — | full suite green on 1.100.0 and 1.98 | full suite on both toolchains |
+| cbd-2 | Test the binary lookup on both Cargo layouts | helper | cbd-1 | helper pinned on both layouts | full suite on both toolchains |
+
+```json
+[
+{"id":"cbd-1","feature":"cargo-build-dir-tests","title":"Find the built bee binary independent of Cargo's test layout","lane":"small","role":"code","deps":[],
+"verify":"PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo +1.100.0 test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml",
+"full_suite_reason":"The bug is in how every test target finds the binary; the whole suite on both toolchains is the related test.",
+"must_haves":{"truths":["the full suite exits 0 on rustc 1.100.0","the full suite exits 0 on the default 1.98 toolchain","no current_exe-based bee lookup is left in crates/bee/tests and no cargo_bin(\"bee\") is left in crates/bee/src","unit tests that run the binary call one shared cfg(test) helper"]},
+"decisions":["dd93aeaf-4459-4878-88aa-4a47767305e9"],
+"files":["packages/bee-rs/crates/bee/src/test_support.rs","packages/bee-rs/crates/bee/src/main.rs","packages/bee-rs/crates/bee/tests/merge_full_suite.rs","packages/bee-rs/crates/bee/tests/full_suite_verify.rs","packages/bee-rs/crates/bee/tests/discovery_verbs.rs","packages/bee-rs/crates/bee/tests/cells_archive_sweep.rs","packages/bee-rs/crates/bee/tests/route_lane_targeting.rs","packages/bee-rs/crates/bee/tests/audit_doors.rs","packages/bee-rs/crates/bee/tests/workflow_verbs.rs","packages/bee-rs/crates/bee/tests/revision_deadlock_visibility.rs","packages/bee-rs/crates/bee/tests/registry_dispatch.rs","packages/bee-rs/crates/bee/src/verbs/plan_group.rs","packages/bee-rs/crates/bee/src/verbs/upkeep_group.rs","packages/bee-rs/crates/bee/src/verbs/report.rs","packages/bee-rs/crates/bee/src/verbs/design_group.rs","packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs","packages/bee-rs/crates/bee/src/onboard/tests.rs","docs/knowledge/areas/verify-pipeline/suite-topology-and-discovery.md"],
+"read_first":["docs/history/cargo-build-dir-tests/CONTEXT.md","packages/bee-rs/crates/bee/tests/workflow_verbs.rs"],
+"affects_skills":[],"affects_specs":["docs/knowledge/areas/verify-pipeline/suite-topology-and-discovery.md"],
+"action":"Implement CONTEXT.md D1. (1) New packages/bee-rs/crates/bee/src/test_support.rs, declared in main.rs as #[cfg(test)] mod test_support;, with pub(crate) fn built_bee() -> PathBuf that walks std::env::current_exe() ancestors and returns the first ancestor.join(format!(\"bee{}\", std::env::consts::EXE_SUFFIX)) that is_file(); panic naming the start path when none. Put the walk in a pure fn taking the start path so a test can drive it. (2) In each of the 9 integration test files under crates/bee/tests that compute the binary from current_exe, replace that lookup with PathBuf::from(env!(\"CARGO_BIN_EXE_bee\")) (keep the local fn name if callers use it, or inline). (3) In crates/bee/src unit tests: replace assert_cmd Command::cargo_bin(\"bee\") in verbs/plan_group.rs and verbs/upkeep_group.rs with assert_cmd::Command::new(crate::test_support::built_bee()); replace the hand-rolled lookups in verbs/report.rs (near 1073), verbs/design_group.rs (near 804), verbs/status_full/tests.rs (near 483) and onboard/tests.rs (near 723) with crate::test_support::built_bee(). rg the crate for any other current_exe- or cargo_bin-based bee lookup in test code and migrate it too. (4) docs/knowledge/areas/verify-pipeline/suite-topology-and-discovery.md: one sentence that tests find the binary through CARGO_BIN_EXE_bee (integration) or test_support::built_bee (unit), because Cargo 1.100 moved test executables to build/<pkg>/<hash>/out; cite cargo-build-dir-tests D1 (never raw ids). Use CARGO_TARGET_DIR=/home/thanhsmind/.cache/cargo-target-r100 for the +1.100.0 run and /home/thanhsmind/.cache/cargo-target-mmd for the default run. Discard the tracked packages/bee-rs/crates/bee/.bee/logs/timings.jsonl change before committing. No code comments; delete the old lookup comments only where they described the removed code. Commit once (cell trailer). Proof: the verify command; quote both suites' pass and fail counts."},
+{"id":"cbd-2","feature":"cargo-build-dir-tests","title":"Test the binary lookup on both Cargo layouts","lane":"small","role":"test","deps":["cbd-1"],
+"verify":"PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo +1.100.0 test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml",
+"full_suite_reason":"The contract is that the whole suite passes on both toolchains.",
+"must_haves":{"truths":["the walk returns <target>/<profile>/bee from a <target>/<profile>/deps/<test> start","the walk returns <target>/<profile>/bee from a <target>/<profile>/build/bee/<hash>/out/<test> start while build/bee is a directory","the walk panics naming the start path when no bee file exists","the full suite exits 0 on rustc 1.100.0 and on the default toolchain","clippy -D warnings stays clean on both toolchains"]},
+"decisions":["1e9b2c01-e114-40c4-88da-1f887d424014","dd93aeaf-4459-4878-88aa-4a47767305e9"],
+"files":["packages/bee-rs/crates/bee/src/test_support.rs"],
+"read_first":["docs/history/cargo-build-dir-tests/CONTEXT.md","packages/bee-rs/crates/bee/src/test_support.rs"],
+"affects_skills":[],"affects_specs":[],
+"action":"Check contract cargo-build-dir-tests (decision 1e9b2c01) on the cbd-1 commit. Add tests in a tests module of packages/bee-rs/crates/bee/src/test_support.rs that drive the pure walk on temp-dir layouts: old (target/release/deps/x with target/release/bee a file), new (target/release/build/bee/<hash>/out/x with build/bee a directory and target/release/bee a file), and none (panics naming the start). Run the verify (CARGO_TARGET_DIR=/home/thanhsmind/.cache/cargo-target-r100 for +1.100.0, /home/thanhsmind/.cache/cargo-target-mmd for default), and cargo +1.100.0 clippy and cargo clippy with -- -D warnings. rg crates/bee/tests for current_exe and crates/bee/src for cargo_bin(\"bee\"). If cbd-1 breaks the contract, return BLOCKED with the evidence instead of changing production test helpers beyond the new tests. Discard the timings.jsonl change before committing. No code comments. Commit once (cell trailer); quote counts."}
+]
+```
