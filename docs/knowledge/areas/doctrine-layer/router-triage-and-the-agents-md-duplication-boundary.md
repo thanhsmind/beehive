@@ -243,11 +243,11 @@ Discipline rules are homed in `packages/bee/LEADER.md` or a file under `packages
   - applied_at:
     - `CLAUDE.md`
     - `skills/bee-capturing/SKILL.md`
-- `agents-other-project-to-its-leader` (packages/bee/LEADER.md § Work in parallel, coordinate through the store):
+- `agents-other-project-to-its-leader` (packages/bee/playbooks/cross-project.md § Cross-project work):
   spoken: work for another project goes to that project's leader through the waggledance CLI first — `waggledance state <project-id>`, then `waggledance dispatch --project <project-id> --leader --request-id <id>` — and the MCP tools `waggledance_ask_state` and `waggledance_dispatch` (same `request_id`) are the fallback when the CLI is missing, unknown, refused or fails; never read or explore its code here; the write-guard refuses it, and a research read needs the user to add the path to guards.cross_project_allow (cross-project-guard D5; waggledance-cli-first D1, D2, D7, D8); bee never calls a `wg` command (waggledance-cli-first D3). No bee code or doc reads the `waggledance_runs` task field or the `sessions` / `recent_decisions` keys of a project-less state read (waggledance-cli-first D6)
   - applied_at:
     - `docs/config-reference.md`
-- `agents-cli-before-mcp` (packages/bee/LEADER.md § Work in parallel, coordinate through the store):
+- `agents-cli-before-mcp` (packages/bee/playbooks/cli-before-mcp.md § CLI before MCP):
   spoken: reach mcp-gateway (`tools`, `describe`, `call`) and skillstation (`skillstation skill show <id> --json`) through the CLI first, with the MCP tools as fallback when the binary is missing, unknown, refused or fails, never repeat an `outcome_unknown` call through `call_tool`, and use `skill_get` for relative files, non-active status, remote hubs, or subagents with no shell (`skill_resolve` and `skill_feedback` stay on MCP) — the CLI runs the same handler with far less text in context (cli-before-mcp D1, D2, D3)
   - applied_at:
     - `docs/knowledge/areas/onboarding/skillstation-hub-skills-and-aliases.md`
