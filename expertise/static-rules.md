@@ -72,6 +72,12 @@ Prove the rule in this order:
 
 Record both runs, with the command and what each showed.
 
+3. Close the fix-at row the rule guards. Once the rule is green, file one
+   row with the exact finding title:
+   `bee backlog add --type backlog-closed --title "<exact finding title>" --layer <same fix-at layer> --severity P3 --detail "guard: <rule> (<commit>)"`.
+   The row retires the finding in `bee feedback rank`. A newer finding with
+   the same title reopens it there.
+
 ## Stage the red proof
 
 The past mistake is usually already fixed, so the red run needs a
