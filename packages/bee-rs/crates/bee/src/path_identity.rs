@@ -287,6 +287,49 @@ mod tests {
     }
 
     #[test]
+    fn relative_to_plain_match_returns_tail_from_both_helpers() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let path = root.join("a").join("b.txt");
+        assert_eq!(strip_root_lexical(&path, root), Some(Path::new("a/b.txt")));
+        assert_eq!(relative_to(&path, root), Some(PathBuf::from("a/b.txt")));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn relative_to_matches_through_symlinked_root_where_lexical_does_not() {
+        let tmp = tempfile::tempdir().unwrap();
+        let real = tmp.path().join("real");
+        std::fs::create_dir_all(real.join("sub")).unwrap();
+        std::fs::write(real.join("sub").join("f.txt"), "").unwrap();
+        let link = tmp.path().join("link");
+        std::os::unix::fs::symlink(&real, &link).unwrap();
+        let path = real.join("sub").join("f.txt");
+        assert_eq!(strip_root_lexical(&path, &link), None);
+        assert_eq!(relative_to(&path, &link), Some(PathBuf::from("sub/f.txt")));
+    }
+
+    #[test]
+    fn relative_to_unrelated_path_is_none_from_both_helpers() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path().join("root");
+        let other = tmp.path().join("other").join("f.txt");
+        std::fs::create_dir_all(&root).unwrap();
+        std::fs::create_dir_all(other.parent().unwrap()).unwrap();
+        std::fs::write(&other, "").unwrap();
+        assert_eq!(strip_root_lexical(&other, &root), None);
+        assert_eq!(relative_to(&other, &root), None);
+    }
+
+    #[test]
+    fn relative_to_path_equal_to_root_gives_empty_tail() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        assert_eq!(strip_root_lexical(root, root), Some(Path::new("")));
+        assert_eq!(relative_to(root, root), Some(PathBuf::new()));
+    }
+
+    #[test]
     fn flip_ascii_case_reports_no_op() {
         assert_eq!(flip_ascii_case("abC"), Some("ABc".to_string()));
         assert_eq!(flip_ascii_case("123-_"), None);
