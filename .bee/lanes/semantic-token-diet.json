@@ -11,10 +11,15 @@
     "uat": false
   },
   "summary": "Feature \"semantic-token-diet\" started at phase \"exploring\" (lane).",
-  "next_action": "Continue bee-exploring for \"semantic-token-diet\" (lane).",
+  "next_action": "Merged into main at d22fb0a; reload the product and test \"semantic-token-diet\", then either approve uat (\"bee gate --name uat --approved true --lane semantic-token-diet\") or fix it in the worktree and merge again.",
   "created_at": "2026-11-16T15:17:54.146Z",
   "run_state": "awaiting-approval",
-  "waiting_on": null,
+  "waiting_on": {
+    "kind": "gate",
+    "subject": "uat: semantic-token-diet",
+    "asked_at": "2026-11-16T16:26:30.760Z",
+    "session": "bee-worktree-merge-sessionless"
+  },
   "route": {
     "class": "refactor",
     "lane": "standard",
@@ -1822,12 +1827,5 @@
   },
   "gate_revoked_at": {
     "execution": "2026-11-16T16:23:03.776Z"
-  },
-  "merge_ready": {
-    "since": "2026-11-16T16:20:25.552Z",
-    "branch": "wt/semantic-token-diet",
-    "worktree_id": "beehive--wt--semantic-token-diet",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
