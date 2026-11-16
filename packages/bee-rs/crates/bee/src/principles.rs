@@ -136,7 +136,7 @@ fn render_lines(body: &str, class: &str, hub: bool) -> Vec<String> {
     let mut header =
         format!("- Principles (class={class}) — name each one you apply and the decision it changed:");
     if hub {
-        header.push_str(" Load each one with the skillstation MCP tool skill_get, the slug as skill_id.");
+        header.push_str(" Load each one with skillstation skill show <slug> --json (its content field); the skillstation MCP tool skill_get, the slug as skill_id, is the fallback.");
     }
     let mut lines = vec![header];
     lines.extend(
@@ -202,7 +202,7 @@ mod tests {
         let hub = render_lines(INDEX, "bugfix", true);
         assert_eq!(
             hub[0],
-            format!("{} Load each one with the skillstation MCP tool skill_get, the slug as skill_id.", plain[0])
+            format!("{} Load each one with skillstation skill show <slug> --json (its content field); the skillstation MCP tool skill_get, the slug as skill_id, is the fallback.", plain[0])
         );
         assert_eq!(hub[1..], plain[1..]);
     }

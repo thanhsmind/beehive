@@ -143,9 +143,9 @@ pub(crate) fn render_alias(id: &str, description: &str, disable_model: bool) -> 
     format!(
         "---\nname: {id}\ndescription: {quoted}\n{disable}metadata:\n  skillstation_alias: {id}\n---\n\
 This skill lives in the Skillstation hub.\n\
-Call the skillstation MCP tool `skill_get` with skill_id `{id}`.\n\
-Follow the returned content as this skill.\n\
-If the tool is missing, tell the user to run `skillstation connect -g`.\n"
+Load it with the CLI first: run `skillstation skill show {id} --json` and follow its content field as this skill when manifest.status is active.\n\
+Call the skillstation MCP tool `skill_get` with skill_id `{id}` instead when that content sends you to a relative file of the skill, when the status is not active, or when the CLI is missing or fails.\n\
+If neither works, tell the user to run `skillstation connect -g`.\n"
     )
 }
 
@@ -334,7 +334,7 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
             Ok(file) => {
                 let rel = file.strip_prefix(&ctx.root).unwrap_or(&file).display().to_string();
                 let result = json!({ "id": id, "alias": rel });
-                let text = format!("Wrote {rel}. Use /{id}; the agent loads the skill through skill_get.");
+                let text = format!("Wrote {rel}. Use /{id}; the agent loads the skill with skillstation skill show, skill_get as the fallback.");
                 ctx.emit(&result, &text, 0)
             }
             Err(why) => ctx.fail(&why),
