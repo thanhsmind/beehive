@@ -15,6 +15,7 @@ use super::templates::{
 };
 use super::util::{exists, join_rel, read_dir_sorted, read_json_if_exists, read_text_if_exists, split_lines};
 use crate::verbs::protocol::{gather_facts, protocol_state, render_protocol, ProtocolState, PROTOCOL_FILE};
+use crate::config_layers::{build_layers, global_config_dir, CorruptPolicy, Layer};
 use serde_json::{json, Value};
 use std::path::Path;
 
@@ -307,6 +308,35 @@ Onboarding adds them once; delete them to opt out and they stay deleted."
             )
         })
         .collect()
+}
+
+pub fn split_team_notices(repo_root: &Path) -> Vec<String> {
+    let Some(Value::Object(tracked)) = read_json_if_exists(&repo_root.join(".bee").join("config.json")) else {
+        return Vec::new();
+    };
+    let holds = tracked.contains_key("team")
+        || tracked.get("herding").and_then(Value::as_object).is_some_and(|h| {
+            h.contains_key("agents") || h.contains_key("agent_command")
+        });
+    if !holds {
+        return Vec::new();
+    }
+    let global_team = build_layers(repo_root, global_config_dir().as_deref(), CorruptPolicy::FailOpen)
+        .into_iter()
+        .any(|(layer, parsed)| layer == Layer::Global && parsed.is_some_and(|g| g.contains_key("team")));
+    let mut line = String::from(
+        "Team table: .bee/config.json still holds team, herding.agents or herding.agent_command. \
+They can move to .bee/team.json with `bee config split-team`; the move keeps every value and the \
+merged config is unchanged. Ask the project owner first, and commit .bee/config.json and \
+.bee/team.json together. Onboarding never moves them.",
+    );
+    if global_team {
+        line.push_str(
+            " The global config also sets team: `bee config split-team --drop-global` moves the table \
+and drops each value equal to the global one, so the project keeps only its differences.",
+        );
+    }
+    vec![line]
 }
 
 pub fn claude_settings_notices(

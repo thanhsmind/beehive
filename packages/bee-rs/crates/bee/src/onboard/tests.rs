@@ -230,7 +230,7 @@ fn runtime_pi_parses_plans_and_applies() {
 fn a_fresh_apply_writes_the_pi_table_and_records_the_offer() {
     let fx = fixture();
     apply(&fx, &[]);
-    let config = read_json(&config_path(&fx));
+    let config = read_json(&team_json_path(&fx));
     let pi = config["team"]["pi"].as_object().unwrap();
     assert_eq!(pi.len(), 19);
     assert_eq!(
@@ -249,10 +249,10 @@ fn a_fresh_apply_writes_the_pi_table_and_records_the_offer() {
     let mut trimmed = config.clone();
     trimmed["team"].as_object_mut().unwrap().remove("pi");
     let body = format!("{}\n", crate::jsjson::stringify_pretty(&trimmed));
-    write(&config_path(&fx), &body);
+    write(&team_json_path(&fx), &body);
     assert!(pi_items(&plan(&fx, &[]), "plan").is_empty());
     apply(&fx, &[]);
-    assert_eq!(std::fs::read_to_string(config_path(&fx)).unwrap(), body);
+    assert_eq!(std::fs::read_to_string(team_json_path(&fx)).unwrap(), body);
 }
 
 #[test]
@@ -265,7 +265,7 @@ fn a_fresh_apply_seeds_the_design_role_and_renders_the_bee_comb_agent() {
         &std::fs::read_to_string(&template).unwrap(),
     );
     apply(&fx, &[]);
-    let config = read_json(&config_path(&fx));
+    let config = read_json(&team_json_path(&fx));
     assert_eq!(config["team"]["claude"]["design"]["model"], "sonnet");
     assert_eq!(config["team"]["pi"]["design"]["kind"], "herding");
     let rendered =
@@ -796,6 +796,7 @@ fn plan_on_an_empty_repo_lists_the_whole_install() {
         "create_agents_block",
         "propose_agents_header",
         "create_runtime_file", // .bee/state.json
+        "create_runtime_file",
         "create_runtime_file",
         "create_runtime_file",
         "create_runtime_file",
@@ -4526,4 +4527,123 @@ mod principles_on_the_hub {
         assert!(principle_removals(&p).is_empty());
         assert!(principle_skips(&p).is_empty());
     }
+}
+
+fn team_json_path(fx: &Fixture) -> PathBuf {
+    fx.repo.join(".bee").join("team.json")
+}
+
+fn split_team_notices_in(payload: &Value) -> Vec<String> {
+    payload["notices"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|n| n.as_str())
+        .filter(|n| n.contains("bee config split-team"))
+        .map(str::to_string)
+        .collect()
+}
+
+#[test]
+fn team_json_first_onboard_seeds_the_team_table_apart_from_config() {
+    let fx = fixture();
+    apply(&fx, &[]);
+    let team = read_json(&team_json_path(&fx));
+    let config = read_json(&config_path(&fx));
+    assert_eq!(team.as_object().unwrap().keys().collect::<Vec<_>>(), vec!["team", "herding"]);
+    assert!(team["herding"].get("agent_command").is_some());
+    assert!(team["herding"].get("agents").is_some());
+    assert!(config.get("team").is_none());
+    assert!(config["herding"].get("agents").is_none());
+    assert!(config["herding"].get("agent_command").is_none());
+    assert!(config["herding"].get("control_command").is_some());
+    let merged = crate::state::read_config_raw(&fx.repo);
+    assert_eq!(Value::Object(merged), super::templates::default_config());
+}
+
+#[test]
+fn team_json_is_not_in_the_gitignore_block() {
+    let fx = fixture();
+    apply(&fx, &[]);
+    let ignore = std::fs::read_to_string(fx.repo.join(".gitignore")).unwrap();
+    assert!(!ignore.contains("team.json"));
+}
+
+#[test]
+fn team_json_notice_offers_split_team_when_config_holds_the_table() {
+    let fx = fixture();
+    write(&config_path(&fx), "{\"team\": {\"claude\": {}}}\n");
+    let before = std::fs::read_to_string(config_path(&fx)).unwrap();
+    let notices = split_team_notices_in(&plan(&fx, &[]));
+    assert_eq!(notices.len(), 1);
+    assert!(notices[0].contains("commit .bee/config.json and .bee/team.json together"));
+    assert!(!notices[0].contains("--drop-global"));
+    apply(&fx, &[]);
+    assert!(!team_json_path(&fx).exists());
+    let after = read_json(&config_path(&fx));
+    assert!(after["team"]["claude"].get("design").is_some());
+    assert!(before.contains("\"team\""));
+}
+
+#[test]
+fn team_json_notice_is_absent_when_only_team_json_holds_the_table() {
+    let fx = fixture();
+    write(&config_path(&fx), "{}\n");
+    write(&team_json_path(&fx), "{\"team\": {\"claude\": {}}}\n");
+    assert!(split_team_notices_in(&plan(&fx, &[])).is_empty());
+}
+
+#[test]
+fn team_json_pi_offer_edits_team_json_when_the_team_table_lives_there() {
+    let fx = fixture();
+    write(&config_path(&fx), "{}\n");
+    write(&team_json_path(&fx), "{\"team\": {\"claude\": {}}}\n");
+    let items = pi_items(&plan(&fx, &[]), "plan");
+    assert_eq!(items[0]["path"], ".bee/team.json");
+    apply(&fx, &[]);
+    let team = read_json(&team_json_path(&fx));
+    assert_eq!(team["team"]["pi"], super::templates::default_config()["team"]["pi"]);
+    assert_eq!(team["herding"]["agents"]["pi"], json!(["pi"]));
+    assert_eq!(read_json(&config_path(&fx)), json!({}));
+}
+
+#[test]
+fn team_json_global_team_keeps_a_first_onboard_from_seeding_a_team_table() {
+    let fx = fixture();
+    let global = tempfile::tempdir().unwrap();
+    write(&global.path().join("config.json"), "{\"team\": {\"claude\": {}}}\n");
+    let _guard = crate::config_layers::TestGlobalDir::set(global.path());
+    apply(&fx, &[]);
+    let team = read_json(&team_json_path(&fx));
+    assert!(team.get("team").is_none());
+    assert!(team["herding"].get("agents").is_some());
+    assert!(read_json(&config_path(&fx)).get("team").is_none());
+}
+
+#[test]
+fn team_json_global_team_and_agents_leave_no_team_file() {
+    let fx = fixture();
+    let global = tempfile::tempdir().unwrap();
+    write(
+        &global.path().join("config.json"),
+        "{\"team\": {\"claude\": {}}, \"herding\": {\"agents\": {\"a\": [\"a\"]}, \"agent_command\": \"a\"}}\n",
+    );
+    let _guard = crate::config_layers::TestGlobalDir::set(global.path());
+    apply(&fx, &[]);
+    assert!(!team_json_path(&fx).exists());
+    let config = read_json(&config_path(&fx));
+    assert!(config.get("team").is_none());
+    assert!(config["herding"].get("agents").is_none());
+}
+
+#[test]
+fn team_json_notice_names_drop_global_when_the_global_config_sets_team() {
+    let fx = fixture();
+    let global = tempfile::tempdir().unwrap();
+    write(&global.path().join("config.json"), "{\"team\": {\"claude\": {}}}\n");
+    let _guard = crate::config_layers::TestGlobalDir::set(global.path());
+    write(&config_path(&fx), "{\"team\": {\"claude\": {}}}\n");
+    let notices = split_team_notices_in(&plan(&fx, &[]));
+    assert_eq!(notices.len(), 1);
+    assert!(notices[0].contains("bee config split-team --drop-global"));
 }

@@ -11,7 +11,9 @@
 // ledger, so a single byte of drift here is a C2 break. The unit tests at the
 // bottom pin the shapes the Node script asserts on.
 
+use crate::config_layers::{build_layers, global_config_dir, CorruptPolicy, Layer, TEAM_FILE_KEYS};
 use serde_json::{json, Map, Value};
+use std::path::Path;
 
 pub const ONBOARDING_SCHEMA_VERSION: &str = "1.0";
 /// host-packaging-gaps D2: the `.bee/onboarding.json` flag recording that the
@@ -289,6 +291,48 @@ pub fn default_config() -> Value {
         .expect("team is an object literal")
         .insert("pi".into(), Value::Object(pi));
     config
+}
+
+fn path_set(map: &Map<String, Value>, path: &str) -> bool {
+    match path.split_once('.') {
+        Some((head, tail)) => map.get(head).and_then(Value::as_object).is_some_and(|child| path_set(child, tail)),
+        None => map.contains_key(path),
+    }
+}
+
+fn remove_path(map: &mut Map<String, Value>, path: &str) {
+    match path.split_once('.') {
+        Some((head, tail)) => {
+            if let Some(Value::Object(child)) = map.get_mut(head) {
+                remove_path(child, tail);
+                if child.is_empty() {
+                    map.shift_remove(head);
+                }
+            }
+        }
+        None => {
+            map.shift_remove(path);
+        }
+    }
+}
+
+pub fn seed_files(repo_root: &Path) -> (Value, Option<Value>) {
+    let global = build_layers(repo_root, global_config_dir().as_deref(), CorruptPolicy::FailOpen)
+        .into_iter()
+        .find_map(|(layer, parsed)| (layer == Layer::Global).then_some(parsed).flatten())
+        .unwrap_or_default();
+    let Value::Object(full) = default_config() else {
+        unreachable!("default_config is an object literal")
+    };
+    let mut team = Layer::Team.restrict(full.clone());
+    let mut project = full;
+    for path in TEAM_FILE_KEYS {
+        remove_path(&mut project, path);
+        if path_set(&global, path) {
+            remove_path(&mut team, path);
+        }
+    }
+    (Value::Object(project), (!team.is_empty()).then_some(Value::Object(team)))
 }
 
 /// onboard_bee.mjs runtimeFiles (computePlan step 2, l. 3079–3085): the

@@ -641,10 +641,15 @@ pub fn apply_computed_plan(
             }
             "create_runtime_file" => {
                 if !exists(&target) {
-                    let content = if rel.ends_with("state.json") {
+                    let content = if rel.ends_with("team.json") {
+                        T::seed_files(repo_root)
+                            .1
+                            .map(|team| format!("{}\n", jsjson::stringify_pretty(&team)))
+                            .unwrap_or_default()
+                    } else if rel.ends_with("state.json") {
                         format!("{}\n", jsjson::stringify_pretty(&T::default_state()))
                     } else if rel.ends_with("config.json") {
-                        format!("{}\n", jsjson::stringify_pretty(&T::default_config()))
+                        format!("{}\n", jsjson::stringify_pretty(&T::seed_files(repo_root).0))
                     } else if rel.ends_with("reservations.json") {
                         format!("{}\n", jsjson::stringify_pretty(&T::default_reservations()))
                     } else if rel.ends_with("config-sample.json") {
@@ -652,7 +657,9 @@ pub fn apply_computed_plan(
                     } else {
                         String::new()
                     };
-                    let _ = write_file_atomic(&target, content.as_bytes());
+                    if !content.is_empty() || !rel.ends_with("team.json") {
+                        let _ = write_file_atomic(&target, content.as_bytes());
+                    }
                 }
             }
             "add_pi_team" => {
