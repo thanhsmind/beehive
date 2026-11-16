@@ -11,10 +11,15 @@
     "uat": false
   },
   "summary": "Feature \"team-global-config\" started at phase \"exploring\" (lane).",
-  "next_action": "Continue bee-exploring for \"team-global-config\" (lane).",
+  "next_action": "Merged into main at 63b02c5; reload the product and test \"team-global-config\", then either approve uat (\"bee gate --name uat --approved true --lane team-global-config\") or fix it in the worktree and merge again.",
   "created_at": "2026-11-16T09:48:16.827Z",
   "run_state": "awaiting-approval",
-  "waiting_on": null,
+  "waiting_on": {
+    "kind": "gate",
+    "subject": "uat: team-global-config",
+    "asked_at": "2026-11-16T11:56:11.528Z",
+    "session": "bee-worktree-merge-sessionless"
+  },
   "route": {
     "class": "feature",
     "lane": "high-risk",
@@ -1784,12 +1789,5 @@
   },
   "gate_revoked_at": {
     "execution": "2026-11-16T11:38:50.676Z"
-  },
-  "merge_ready": {
-    "since": "2026-11-16T11:11:47.283Z",
-    "branch": "wt/team-global-config",
-    "worktree_id": "beehive--wt--team-global-config",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
