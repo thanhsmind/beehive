@@ -165,15 +165,17 @@ bought a smaller help output at the price of a blind guard.
   (only waggledance writes it), and `--global` with `--local` is refused.
   `--global` and `--drop-global` are stripped from argv before the shared
   flag parser because that parser would otherwise take the next token as
-  their value. `validate` checks all four files and reports a team.json key
-  outside the team table, a key set in both config.json and team.json, and a
-  forbidden global key, each with file and key. `split-team` writes
-  team.json before config.json so a crash between them leaves equal values
-  that a rerun finishes; it refuses when the merged view would change or
-  team.json holds a different value for a moved key. `--drop-global`
+  their value; adding those two flags bumped the pinned distinct-flag count
+  in `catalog.rs` from `250` to `252`. `validate` checks all four files and
+  reports a team.json key outside the team table, a key set in both
+  config.json and team.json, and a forbidden global key, each with file and
+  key. `split-team` writes team.json before config.json so a crash between
+  them leaves equal values that a rerun finishes, and tells the user to
+  commit both files together; it refuses when the merged view would change
+  or team.json holds a different value for a moved key. `--drop-global`
   compares against the global layer and nothing else does. Where the moved
   keys live and the layer order: `config_layers.rs`
-  (team-global-config D7, D8, D11, D12, tgc-4, 2026-11-16).
+  (team-global-config D7, D8, D11, D12, D13, tgc-4, 2026-11-16).
 
 ## Edge Cases Settled
 

@@ -2,31 +2,48 @@
 
 Every onboarded repo has a `.bee/config.json`. Any key you leave out uses a built-in default, so the file can be short — but the values below are the ones worth setting per repo. **`.bee/config.json` is strict JSON: no comments, no trailing commas.** The annotated block here is for reading; copy the clean block at the bottom into the real file.
 
+## Config layers and precedence
+
+`bee` reads configuration from four files on top of the built-in default. Precedence, lowest to highest:
+
+1. Built-in default
+2. User-global config: `$BEEHIVE_CONFIG_DIR/config.json` when `BEEHIVE_CONFIG_DIR` is set and non-empty, else `$XDG_CONFIG_HOME/beehive/config.json`, else `~/.config/beehive/config.json`
+3. `.bee/config.json` (tracked per-project config)
+4. `.bee/team.json` (tracked per-project team table)
+5. `.bee/config.local.json` (gitignored per-machine overlay)
+
+The highest layer that sets a key wins. An absent file reads as an empty layer.
+
+- **User-global config (read-only in `bee`):** Sets defaults shared across every project. Only `waggledance` writes this file (D12). `bee` reads it and never writes it, and the write guard refuses any agent write to it or any shell command that assigns `BEEHIVE_CONFIG_DIR` or `XDG_CONFIG_HOME`. The global file may set any key except `guards`, `gate_bypass`, and `hooks`, because one global setting would open guards, auto-approve gates, or turn off hooks in every project. `bee` drops those three keys at read time, and `bee config validate` reports each one present as a problem.
+- **`.bee/team.json`:** Holds only `team`, `herding.agents`, and `herding.agent_command`, at the same key paths they have in `.bee/config.json`. Any other key in `.bee/team.json` is ignored at read time and reported by `bee config validate`. A key set in both `.bee/config.json` and `.bee/team.json` is a `validate` duplicate problem, and `.bee/team.json` wins.
+
 ## Setting values — `bee config`
 
 Change a value through the CLI, not by hand. Every verb takes `--json`.
 
 | Verb | What it does |
 |---|---|
-| `bee config get --key <k> [--local]` | Prints `k = <json>`, or `config get: "k" is not set.` (exit 0 both ways). Reads `.bee/config.json`; `--local` reads `.bee/config.local.json`. |
-| `bee config set --key <k> --value <v> [--string] [--local]` | Writes the value. Missing parent objects are created. |
-| `bee config unset --key <k> [--local]` | Removes the key and prunes the parent objects it leaves empty. An absent key is a no-op. |
-| `bee config explain --key <k>` | Shows the effective value and where it comes from: `local`, `tracked`, or `unset` (no file sets it, so the built-in default in [Other keys](#other-keys) applies). The tracked and local values show side by side. |
-| `bee config validate` | Checks that both files parse and that the team config has no problems. Exits non-zero on any problem. |
+| `bee config get --key <k> [--local \| --global]` | Prints `k = <json>`, or `config get: "k" is not set.` (exit 0 both ways). Reads `.bee/config.json` by default; `--local` reads `.bee/config.local.json`; `--global` reads only the user-global config file (`--global` with `--local` is refused). |
+| `bee config set --key <k> --value <v> [--string] [--local]` | Writes the value. Missing parent objects are created. Has no `--global` flag. |
+| `bee config unset --key <k> [--local]` | Removes the key and prunes the parent objects it leaves empty. An absent key is a no-op. Has no `--global` flag. |
+| `bee config explain --key <k>` | Shows the effective value and where it comes from: `local`, `team`, `tracked`, `global`, or `unset` (no file sets it, so the built-in default in [Other keys](#other-keys) applies). Prints each layer's value. |
+| `bee config validate` | Checks all four files: JSON object syntax, foreign keys in `.bee/team.json`, duplicates between `.bee/config.json` and `.bee/team.json`, forbidden keys in the global file, and team-config problems on the merged view. Lists the keys the global layer supplies. Exits non-zero on any problem. |
+| `bee config split-team [--drop-global]` | Moves `team`, `herding.agents`, and `herding.agent_command` from `.bee/config.json` into `.bee/team.json` verbatim, writing `.bee/team.json` first and `.bee/config.json` second. Refuses with zero change if `.bee/team.json` holds a different value for a moved key or if the merged view changes. Idempotent (a second run exits 0 with no change). With `--drop-global`, also removes each team-table leaf equal to the global layer's value from both files, keeping the effective merged view equal. Commit `.bee/config.json` and `.bee/team.json` together after running it. |
 
 - **Keys use dot-notation:** `--key herding.enabled` reaches `{"herding": {"enabled": …}}`.
 - **Values are parsed as JSON** when they parse: `false` is a boolean, `12` a number, `{"a":1}` an
   object. Anything else is kept as a string. `--string` forces a string (`--value false --string`
   stores `"false"`).
 - **`--local` targets `.bee/config.local.json`** — the gitignored, per-machine overlay. It wins
-  over the tracked file at read time. `get`, `set` and `unset` with `--local` warn when the tracked
-  file also sets the key. Put machine-local toggles (`guards.*`) there.
+  over the tracked files at read time. `get`, `set` and `unset` with `--local` warn when a lower
+  project layer also sets the key. Put machine-local toggles (`guards.*`) there.
 - **A broken file is never overwritten.** If the target file is not valid JSON or not a JSON
   object, `set` and `unset` refuse and change nothing. Repair the file, then run the verb again.
 - **`set` refuses a write that adds a team-config problem** — the same problems `validate` reports.
 - **Governed keys are the user's.** `set` and `unset` refuse, and change nothing, for any key that
   is, sits inside, or holds a key the config write guard protects: `team`, `herding.agents`,
-  `herding.agent_command`, and `hooks`. The user edits those mappings directly in the file; re-read
+  `herding.agent_command`, and `hooks`. The user edits those mappings directly in `.bee/team.json`,
+  `.bee/config.json`, or `.bee/config.local.json`; re-read
   [Which model each role uses](#which-model-each-role-uses) after changing `team`.
 
 ## Which model each role uses
@@ -375,7 +392,7 @@ The **top-level** `advisor` key (old "advisor mode") was removed in v0.1.23 (dec
 
 | Key | What it does | Default |
 |---|---|---|
-| `team` | runtime-keyed role→model map — the job a piece of work is picks the model that runs it; full section above | `code` · `read` · `extraction` · `generation` seeded per runtime at onboarding |
+| `team` | runtime-keyed role→model map — the job a piece of work is picks the model that runs it; full section above | `code` · `read` · `extraction` · `generation` seeded into `.bee/team.json` per runtime at onboarding when the global config does not set `team` |
 | `retry.fallbackChains` | the ordered model chain bee **publishes** on a dispatch for its executor to follow after a *transient* provider failure — explicit-only, no built-in chain, never a retry loop bee runs; full section above | unset — no chain, every payload unchanged |
 | `commands` | the host project's `setup` / `start` / `test` commands — full section above | none — captured at onboarding |
 | `gate_bypass` | opt-in autopilot with levels `false` · `"normal"` · `"full"` · `"total"` (legacy `true` = normal); set via `bee-hive`'s "Gates" section (gate-bypass levels) | `false` |
@@ -398,7 +415,7 @@ The **top-level** `advisor` key (old "advisor mode") was removed in v0.1.23 (dec
 | `herding.budget.tokens_per_job` | token budget per herded job for the Detector's `budget-80` rule (slp-detector D3). A positive whole number. Read by `bee detector tick`. | unset ⇒ the token rule is off |
 | `herding.limits.concurrency` / `herding.limits.depth` | non-negative integers (piggery-borrow D3). `concurrency` caps live herding workers: a fresh `bee herding run`, and a `bee dispatch prepare` whose role resolves to a herding agent, counts live workers (wave ledger rows crossed against the live pane list, Paseo agents counted even with no pane list) and refuses at the limit with `{ok:false, reason:"limits.concurrency", live, limit, retryable:true, fix}`, or with `limits.unverifiable` when no live list can be read. `depth` caps nested runs: a run whose `BEE_HERDING_DEPTH` (absent = 0) reaches the limit refuses with `limits.depth`, and with a depth limit set the worker gets `BEE_HERDING_DEPTH` one above its caller. `bee dispatch prepare --explain` prints each check (role, claim, limits) as pass, refuse or skip and writes nothing. The cockpit spawn path (`herdr agent start` + `record-worker`) is not checked. | absent ⇒ no limit; payloads and pane exports byte-identical |
 | `herding.agents.<name>.paseo.isolated_config` | boolean flag for a Pi Paseo agent (herding-leader-toil D5). When true, creates an isolated Pi folder at `.bee/runtime/pi-agent/<name>/` and sets `PI_CODING_AGENT_DIR`. | `false` |
-| `dispatch.thin_peer_boot` | boolean (thin-worker-boot D6). On unless it is exactly `false` (owner choice 2026-11-07, thin-boot-default). `bee herding run` and the hook read it from one view: the main checkout's tracked `.bee/config.json` merged with its `.bee/config.local.json`, and `config.local.json` wins over `config.json`, so an explicit `false` in that merged view turns both layers off, also for a worker in a linked worktree. When on AND the session env carries `BEE_HERDING_WORKER=1`, only `bee hook session-init` runs among the boot hooks (every other hook except `activity`, `worker-guard` and `write-guard` still exits 0 silently for a herded worker; the guard hooks stay on) and prints ONLY the embedded `packages/bee/prompts/peer-boot.md` — no handoff, phase, gates, counts, principles or project map, and no handoff adoption or reminder-cache write. No session is registered and `bee hook prompt-context` stays silent, so there is no heartbeat. Only an explicit `false` keeps the full boot: session-init behaves as before, and herded Claude panes and sub-sessions launch without the trimming env. | absent ⇒ on |
+| `dispatch.thin_peer_boot` | boolean (thin-worker-boot D6). On unless it is exactly `false` (owner choice 2026-11-07, thin-boot-default). `bee herding run` and the hook read it from the main checkout's merged layered config view (global, `.bee/config.json`, `.bee/team.json`, `.bee/config.local.json`), so an explicit `false` in that merged view turns both layers off, also for a worker in a linked worktree. When on AND the session env carries `BEE_HERDING_WORKER=1`, only `bee hook session-init` runs among the boot hooks (every other hook except `activity`, `worker-guard` and `write-guard` still exits 0 silently for a herded worker; the guard hooks stay on) and prints ONLY the embedded `packages/bee/prompts/peer-boot.md` — no handoff, phase, gates, counts, principles or project map, and no handoff adoption or reminder-cache write. No session is registered and `bee hook prompt-context` stays silent, so there is no heartbeat. Only an explicit `false` keeps the full boot: session-init behaves as before, and herded Claude panes and sub-sessions launch without the trimming env. | absent ⇒ on |
 
 ### `guards.worker_outward` — the three commands a worktree never runs
 

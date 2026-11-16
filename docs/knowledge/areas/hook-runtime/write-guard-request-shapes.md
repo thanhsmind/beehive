@@ -241,8 +241,9 @@ it, as the marked rule `agents-no-code-comments` (002a935d).
 
 **The switch.** One config key, `no_code_comments` (boolean, default false),
 turns the arm on (e3bf4a57). The arm reads it through the guard's own merged
-config read (`read_config`, `write_guard/store.rs`), so `.bee/config.local.json`
-overlays `.bee/config.json` exactly as every other key. A host that onboards bee
+config read (`read_config`, `write_guard/store.rs`), which uses the ordered
+layered config (global, `.bee/config.json`, `.bee/team.json`, `.bee/config.local.json`)
+so higher layers win as for every other key. A host that onboards bee
 gets the hook code and the doctrine line and refuses nothing until it sets the
 key — `scripts/` exists in most hosts, and an always-on arm would refuse a host's
 own code the moment it installed bee. The store the key is read FROM follows the
@@ -503,10 +504,10 @@ that carries the grant, because source that ships without the reinstalled binary
 
 ## The merged config the guard reads is one ordered list of layers
 
-Read when: the write guard, `hook_enabled` or any config reader disagrees about which file wins, or you add a config file.
+Read when: the write guard, `hook_enabled` or any config reader disagrees about which file wins, or you add a config file (`team-global-config D1-D5, D13`).
 
-- `config_layers.rs` is the only place that names the layers and their order: global, tracked `config.json`, `team.json`, `config.local.json`, the highest winning. The strict reader, the compaction fail-open reader and the preamble fail-open reader call it and differ only in what they do after the merge (advisor strip) and in the corrupt-file warning, never in the layer list.
-- The global layer drops `guards`, `gate_bypass` and `hooks` before the merge (team-global-config D4), so one file in the user's home cannot switch the write guard off or auto-approve gates in every project. `team.json` keeps only the team table; any other key in it never reaches the merge.
-- The `models`-to-`team` fold runs once on the merged object. Folding per layer would let a `models` key in a lower layer shadow a `team` key in a higher one.
+- `config_layers.rs` is the only place that names the layers and their order: global (`$BEEHIVE_CONFIG_DIR/config.json`, else `$XDG_CONFIG_HOME/beehive/config.json`, else `~/.config/beehive/config.json`), tracked `.bee/config.json`, `.bee/team.json`, `.bee/config.local.json`, with the highest winning. The strict reader, the compaction fail-open reader and the preamble fail-open reader call it and differ only in what they do after the merge (advisor strip) and in the corrupt-file warning, never in the layer list (`team-global-config D2, D3, D5`).
+- The global layer drops `guards`, `gate_bypass` and `hooks` before the merge (`team-global-config D4`), so one file in the user's home cannot switch the write guard off or auto-approve gates in every project. `.bee/team.json` keeps only the team table (`team`, `herding.agents`, `herding.agent_command`); any other key in it never reaches the merge (`team-global-config D1`).
+- The `models`-to-`team` fold runs once on the merged object (`team-global-config D13`). Folding per layer would let a `models` key in a lower layer shadow a `team` key in a higher one.
 - The corrupt-file policy was recorded as silent for the preamble reader; its code warns like the other two, so the three readers keep one warning and only the strict reader adds the global-file hint.
 - The default global dir resolves to none under `cfg(test)`; tests pass a temp dir to the builder so none reads the developer's home. Find the key lists by searching `GLOBAL_FORBIDDEN_KEYS` and `TEAM_FILE_KEYS`.
