@@ -394,18 +394,6 @@ fn mechanizable_mistakes(root: &Path, feature: &str) -> Vec<Mechanizable> {
     out
 }
 
-/// File one backlog row per mechanizable mistake (mistake-fix-at D2).
-///
-/// ONE occurrence is enough — a mistake a check could catch is worth a row
-/// the first time it is seen, which is why this needs none of the lesson
-/// miner's two-run brake. The row is built by `backlog::backlog_finding_row`
-/// and appended by `fsutil::append_jsonl`, the two homes `bee backlog add`
-/// itself uses, so there is no second row shape.
-///
-/// Dedupe is `current_epoch_finding_feature` on (layer, title) — re-read
-/// per row, which is also what keeps two identical mistakes in ONE close
-/// from filing twice: the first append is on disk before the second is asked
-/// about.
 fn file_fix_at_rows(root: &Path, feature: &str) -> FixAtRows {
     use crate::verbs::backlog;
     let mut rows = FixAtRows { filed: 0, skipped: 0, owner: None, warning: None };

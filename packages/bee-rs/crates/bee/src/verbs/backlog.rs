@@ -424,14 +424,6 @@ pub(crate) fn backlog_finding_row(
     line
 }
 
-/// Is a finding row with exactly this feature, layer and title already on
-/// disk?
-///
-/// mistake-fix-at D2's "the same entry is never filed twice", and the reason
-/// a second `bee close` of the same feature files nothing. A finding row
-/// carries no id, so the three fields ARE its identity; equality is exact on
-/// all three, never fuzzy — a near-match is a different mistake, and the
-/// digest reads `title` verbatim.
 #[cfg(test)]
 pub(crate) fn backlog_finding_exists(root: &Path, feature: &str, layer: &str, title: &str) -> bool {
     read_jsonl(&backlog_jsonl_path(root)).rows.iter().any(|row| {
