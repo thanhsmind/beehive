@@ -6,14 +6,7 @@ const SUITE: &str = "cargo test --release --manifest-path Cargo.toml";
 const PREFIXED_SUITE: &str = "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path Cargo.toml";
 
 fn binary() -> PathBuf {
-    let mut dir = std::env::current_exe().expect("test binary path");
-    dir.pop();
-    if dir.ends_with("deps") {
-        dir.pop();
-    }
-    let bin = dir.join(format!("bee{}", std::env::consts::EXE_SUFFIX));
-    assert!(bin.is_file(), "built bee binary not found at {}", bin.display());
-    bin
+    PathBuf::from(env!("CARGO_BIN_EXE_bee"))
 }
 
 fn repo(base: &Path, config: &str) -> PathBuf {

@@ -726,17 +726,7 @@ mod tests {
 
     #[test]
     fn models_show_alias_matches_team_show_and_warns_on_stderr() {
-        let bin = {
-            let mut dir = std::env::current_exe().expect("test binary path");
-            dir.pop();
-            if dir.ends_with("deps") {
-                dir.pop();
-            }
-            dir.join(format!("bee{}", std::env::consts::EXE_SUFFIX))
-        };
-        if !bin.is_file() {
-            return;
-        }
+        let bin = crate::test_support::built_bee();
         let tmp = tempfile::tempdir().unwrap();
         let repo = tmp.path();
         std::fs::create_dir_all(repo.join(".bee")).unwrap();

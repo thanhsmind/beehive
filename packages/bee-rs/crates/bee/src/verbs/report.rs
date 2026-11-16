@@ -1064,13 +1064,7 @@ mod tests {
 
     #[test]
     fn report_verb_reads_bee_gh_bin_end_to_end() {
-        let mut exe = std::env::current_exe().unwrap();
-        exe.pop();
-        if exe.ends_with("deps") {
-            exe.pop();
-        }
-        let bin = exe.join("bee");
-        assert!(bin.is_file(), "built bee binary not found at {}", bin.display());
+        let bin = crate::test_support::built_bee();
         let f = fake(Some("[]"), false, false);
         std::fs::write(f.root.join(".bee").join("onboarding.json"), "{}").unwrap();
         let run = |dry: bool| {

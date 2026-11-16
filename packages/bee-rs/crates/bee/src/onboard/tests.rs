@@ -714,13 +714,7 @@ fn design_offer_flag_is_listed_in_onboard_help() {
         assert!(described.contains(pack), "the description names {pack}: {described}");
     }
 
-    let mut exe = std::env::current_exe().unwrap();
-    exe.pop();
-    if exe.ends_with("deps") {
-        exe.pop();
-    }
-    let bin = exe.join(format!("bee{}", std::env::consts::EXE_SUFFIX));
-    assert!(bin.is_file(), "built bee binary not found at {}", bin.display());
+    let bin = crate::test_support::built_bee();
     let out = std::process::Command::new(&bin).args(["onboard", "--help"]).output().unwrap();
     let said = format!(
         "{}{}",

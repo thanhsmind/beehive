@@ -795,13 +795,7 @@ mod tests {
 
     #[test]
     fn bee_design_gate_routes_and_reads_its_env_overrides_end_to_end() {
-        let mut exe = std::env::current_exe().unwrap();
-        exe.pop();
-        if exe.ends_with("deps") {
-            exe.pop();
-        }
-        let bin = exe.join("bee");
-        assert!(bin.is_file(), "built bee binary not found at {}", bin.display());
+        let bin = crate::test_support::built_bee();
         let f = fx("v20.1.0");
         put(&f.root.join(".bee/onboarding.json"), "{}");
         f.scored("index.html", 0, 0.9);

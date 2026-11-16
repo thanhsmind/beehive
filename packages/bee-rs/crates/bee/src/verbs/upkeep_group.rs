@@ -354,7 +354,7 @@ mod tests {
     fn due(root: &Path, args: &[&str]) -> (Option<i32>, Value, String) {
         let mut full = vec!["upkeep", "due"];
         full.extend_from_slice(args);
-        let out = Command::cargo_bin("bee").unwrap().args(&full).env_remove("BEE_HERDING_WORKER").current_dir(root).output().unwrap();
+        let out = Command::new(crate::test_support::built_bee()).args(&full).env_remove("BEE_HERDING_WORKER").current_dir(root).output().unwrap();
         let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
         let parsed = serde_json::from_str(stdout.trim()).unwrap_or(Value::Null);
         (out.status.code(), parsed, stdout + &String::from_utf8_lossy(&out.stderr))

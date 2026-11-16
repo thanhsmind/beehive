@@ -35,6 +35,8 @@ mod session_identity;
 mod shell;
 mod state;
 mod textutil;
+#[cfg(test)]
+mod test_support;
 mod uat;
 mod verbs;
 mod version;
