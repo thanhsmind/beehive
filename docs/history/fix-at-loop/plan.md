@@ -175,6 +175,7 @@ SMALLER PATH: doctrine only (tell agents to dedupe and close by hand) is cheaper
 | fal-4c | Check the doctrine edit | — | fal-4 | — | `pointer_integrity`, `instruction_laws`, `rule_index_parity` |
 | fal-4t | Pin the fix-at closing step in the doctrine | tests/instruction_laws.rs | fal-4 | — | `cargo test … --test instruction_laws -- fix_at_close_doctrine` |
 | fal-5 | Consolidate knowledge and write delivery | docs/knowledge/**, delivery.md (new) | fal-4c | the mailbox and feedback concepts describe the new behavior | `.bee/bin/bee knowledge check` |
+| fal-5t | Pin that the digest concept names every prose_load key | verbs/feedback.rs tests | fal-5 | — | `cargo test … --bin bee -- prose_load_doc_parity` |
 
 ```json
 [
@@ -777,11 +778,65 @@ SMALLER PATH: doctrine only (tell agents to dedupe and close by hand) is cheaper
       "capped_at": null,
       "behavior_change": false
     }
+  },
+  {
+    "id": "fal-5t",
+    "feature": "fix-at-loop",
+    "title": "Pin that the digest concept names every prose_load key",
+    "lane": "standard",
+    "role": "test",
+    "status": "open",
+    "deps": [
+      "fal-5"
+    ],
+    "decisions": [
+      "6f4070cf-faa5-4e9c-94b6-3e38e1cd4939",
+      "1ca9eddb-fe0c-44d4-a4ee-652474867b11"
+    ],
+    "files": [
+      "packages/bee-rs/crates/bee/src/verbs/feedback.rs"
+    ],
+    "read_first": [
+      "docs/history/fix-at-loop/CONTEXT.md",
+      "docs/knowledge/areas/feedback-digest/ranking-and-self-improvement.md",
+      "packages/bee-rs/crates/bee/src/verbs/feedback.rs"
+    ],
+    "affects_skills": [],
+    "affects_specs": [],
+    "action": "Contract C6 (decision 1ca9eddb). In the test module of packages/bee-rs/crates/bee/src/verbs/feedback.rs add one test whose name contains prose_load_doc_parity. It builds the prose_load object with prose_load_value on a fixture root (reuse the existing prose_load_fixture helper), collects every top-level key of that object, reads docs/knowledge/areas/feedback-digest/ranking-and-self-improvement.md from the repo root (find it the way other tests in the crate find repo files, for example env!(\"CARGO_MANIFEST_DIR\") joined up to the repo root), and asserts each key appears in the concept text. Show it red once by removing one key name from an in-memory copy of the text, then green. Quote the matched count. No code comments.",
+    "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- prose_load_doc_parity",
+    "must_haves": {
+      "truths": [
+        "a prose_load_doc_parity test exists and passes with a matched count above zero"
+      ],
+      "artifacts": [
+        {
+          "path": "packages/bee-rs/crates/bee/src/verbs/feedback.rs",
+          "substantive": "prose_load_doc_parity test"
+        }
+      ],
+      "key_links": [],
+      "prohibitions": [
+        "No change to product code or the concept",
+        "No code comments"
+      ]
+    },
+    "trace": {
+      "worker": null,
+      "outcome": null,
+      "files_changed": [],
+      "deviations": [],
+      "friction": null,
+      "capped_at": null,
+      "behavior_change": false
+    }
   }
 ]
 ```
 
 Revision (execution): fal-4c ended as a drop because a standard cap refuses an empty files_changed, which leaves the docs cell fal-4 without a capped test-role dependent; fal-4t adds that tester (contract C5) and fal-5 now depends on it in place of fal-4c.
+
+Revision 2 (execution): the tests door stamps fal-5 (rerouted to role code) and needs a capped test-role dependent; fal-5t adds a doc-code parity test for the prose_load keys (contract C6). The door and concept disagree about docs-only cells; filed as a P2 finding.
 
 ## Test matrix
 
