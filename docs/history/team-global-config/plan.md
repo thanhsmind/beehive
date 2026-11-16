@@ -112,7 +112,7 @@ Waves: serial, tgc-1 → tgc-2 → tgc-3 → tgc-4 → tgc-5 → tgc-6 → tgc-7
   "runtime": "claude",
   "roster_sha256": "d4e696dbde7989d6388dacce3fd7057cb3a6935b46024b79698596a46f6f41d3",
   "stages": [
-    {"stage":"implementation","classification":"required","role":"code","reason":"tgc-1 to tgc-5 write Rust and their red-first tests."},
+    {"stage":"implementation","classification":"required","role":"code","reason":"tgc-1 to tgc-5 and tgc-8 write Rust and their red-first tests."},
     {"stage":"test-and-live-proof","classification":"required","role":"test","reason":"tgc-6: a tester that shares no context with the implementers drives the built binary and adds tests."},
     {"stage":"docs","classification":"required","role":"docs","reason":"tgc-7 syncs config-reference, knowledge and delivery."},
     {"stage":"hat-facts-gaps","classification":"required","role":"hat-facts-gaps","reason":"High-risk: all five seats run the plan check."},
@@ -174,7 +174,8 @@ PLAN CHECK (five seats, one round): `reports/hat-wave.md`. BLOCKERS, all closed 
 | tgc-4 | Add the read-only global layer, layer-aware explain and validate, and split-team to bee config | verbs/config.rs, verbs/mod.rs, generated/registry_payload.json, tests/config_verbs.rs | tgc-3 | `bee config explain` names the layer; `bee config split-team [--drop-global]` moves the table and says to commit both files | `cargo test … -- config_global split_team` + `--test config_verbs` |
 | tgc-5 | Seed team.json at first onboard and offer split-team | onboard/templates.rs, plan.rs, notices.rs, apply.rs, mod.rs, tests.rs | tgc-4 | a new project gets team.json, or no team table when the global file has one; an old one gets a split-team notice | `cargo test … --bin bee -- team_json onboard` |
 | tgc-6 | Drive the global layer and split-team end to end | tests/config_verbs.rs, .bee/verify/verify-app/features/ | tgc-5 | sandbox evidence for every path above | verify-app drive + added tests |
-| tgc-7 | Document the config layers and write the delivery | docs/config-reference.md, docs/knowledge/**, delivery.md (new) | tgc-6 | config-reference and five concepts describe the layers | `bee knowledge check` |
+| tgc-8 | Refuse global-config writes and governed team.json changes in a herded pane | hooks/write_guard/worker_tree.rs, hooks/write_guard/tests.rs | tgc-6 | a herded worker's write to the global file, or a governed team.json change, is refused | `cargo test … --bin bee -- herded_team_guard` |
+| tgc-7 | Document the config layers and write the delivery | docs/config-reference.md, docs/knowledge/**, delivery.md (new) | tgc-8 | config-reference and five concepts describe the layers | `bee knowledge check` |
 
 ```json
 [
@@ -603,6 +604,67 @@ PLAN CHECK (five seats, one round): `reports/hat-wave.md`. BLOCKERS, all closed 
     }
   },
   {
+    "id": "tgc-8",
+    "feature": "team-global-config",
+    "title": "Refuse global-config writes and governed team.json changes in a herded pane",
+    "lane": "high-risk",
+    "role": "code",
+    "status": "open",
+    "deps": [
+      "tgc-6"
+    ],
+    "decisions": [
+      "a0f6985d-2d1f-46de-b93b-25fa649f5434",
+      "d628826a-cedd-4bac-b5c3-1ef87b66d1ba",
+      "09763647-9caf-4532-bfa6-4ddb380901ad"
+    ],
+    "files": [
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/worker_tree.rs",
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs"
+    ],
+    "read_first": [
+      "docs/history/team-global-config/CONTEXT.md",
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/worker_tree.rs",
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/main.rs",
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/guards.rs",
+      "packages/bee-rs/crates/bee/src/hooks/mod.rs"
+    ],
+    "affects_skills": [],
+    "affects_specs": [],
+    "action": "Implement docs/history/team-global-config/CONTEXT.md D14. A herded pane (BEE_HERDING_WORKER=1) routes write-guard to `write_guard::run_herded` in worker_tree.rs, whose `emit_for` runs only `whole_tree_denial`. Make `emit_for` also refuse, before the tree check: (1) any write to the global config file, through the same `global_config_write_denial(tool_name, tool_input, root, cwd)` that main.rs calls (Edit, Write, MultiEdit, apply_patch, a Bash naming the path, a Bash assigning BEEHIVE_CONFIG_DIR or XDG_CONFIG_HOME); (2) a governed change in .bee/config.json or .bee/team.json, through the same governed-key check main.rs uses for those paths (find it next to the `global_config_write_denial` call in main.rs; reuse it, never copy it). Keep the onboarding.json and hook_enabled preconditions that whole_tree_denial already applies. Every other guard stays open in the herded pane (herding-worker-standalone D3). Red first: tests whose names contain herded_team_guard in hooks/write_guard/tests.rs, calling `run_herded` or `emit_for` with a hook payload: a Write to the global file is refused (set BEEHIVE_CONFIG_DIR to a temp dir), a Bash that assigns BEEHIVE_CONFIG_DIR is refused, an Edit that changes a team slot in .bee/team.json is refused, a plain source-file Write passes. Watch them fail before the change. No code comments. Quote the matched test count, above zero.",
+    "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- herded_team_guard team_guard",
+    "must_haves": {
+      "truths": [
+        "A herded pane write to the global config file is refused",
+        "A herded pane governed change in .bee/team.json is refused",
+        "A herded pane plain source write still passes"
+      ],
+      "artifacts": [
+        {
+          "path": "packages/bee-rs/crates/bee/src/hooks/write_guard/worker_tree.rs",
+          "substantive": "emit_for applies the global and governed checks"
+        }
+      ],
+      "key_links": [
+        "worker_tree.rs calls the same global_config_write_denial and governed check as main.rs"
+      ],
+      "prohibitions": [
+        "No code comments",
+        "No second copy of the guard logic"
+      ],
+      "open_choices": []
+    },
+    "trace": {
+      "worker": null,
+      "outcome": null,
+      "files_changed": [],
+      "deviations": [],
+      "friction": null,
+      "capped_at": null,
+      "behavior_change": true
+    }
+  },
+  {
     "id": "tgc-7",
     "feature": "team-global-config",
     "title": "Document the config layers and write the delivery",
@@ -610,7 +672,7 @@ PLAN CHECK (five seats, one round): `reports/hat-wave.md`. BLOCKERS, all closed 
     "role": "docs",
     "status": "open",
     "deps": [
-      "tgc-6"
+      "tgc-8"
     ],
     "decisions": [
       "465ea1e4-92ea-4529-9c96-e7435559897f",
@@ -681,7 +743,7 @@ PLAN CHECK (five seats, one round): `reports/hat-wave.md`. BLOCKERS, all closed 
 | Contract | Cell | Test marker |
 |---|---|---|
 | C1 config-layers | tgc-1, tgc-2 | `config_layers`, `config_layers_reader` |
-| C2 team-guard | tgc-3 | `team_guard` |
+| C2 team-guard | tgc-3, tgc-8 | `team_guard`, `herded_team_guard` |
 | C3 config-verbs | tgc-4, tgc-6 | `config_global`, `split_team` |
 | D9, D11 onboarding | tgc-5 | `team_json` |
 | D10 dogfood | leader, after reinstall | `bee team show` diff |
