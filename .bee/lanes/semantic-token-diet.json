@@ -1,0 +1,1833 @@
+{
+  "schema_version": "1.0",
+  "feature": "semantic-token-diet",
+  "mode": null,
+  "phase": "exploring",
+  "approved_gates": {
+    "context": true,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"semantic-token-diet\" started at phase \"exploring\" (lane).",
+  "next_action": "Continue bee-exploring for \"semantic-token-diet\" (lane).",
+  "created_at": "2026-11-16T15:17:54.146Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null,
+  "route": {
+    "class": "refactor",
+    "lane": "standard",
+    "flags": [],
+    "product_files": 60,
+    "rationale": null,
+    "updated_at": "2026-11-16T15:17:50.980Z",
+    "feature": "semantic-token-diet"
+  },
+  "gate_preview": {
+    "feature": "semantic-token-diet",
+    "plan_sha256": "8dfff91b17b087c88fca76f946633cfe59b10be4a33d4ca3924afbefa4764d1a",
+    "previewed_at": "2026-11-16T16:23:48.225Z",
+    "cells": [
+      {
+        "id": "stdi-1",
+        "feature": "semantic-token-diet",
+        "title": "Point the preamble trailer at bee orient",
+        "lane": "standard",
+        "role": "code",
+        "deps": [],
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- session_preamble",
+        "must_haves": {
+          "truths": [
+            "the preamble trailer tells the agent to run .bee/bin/bee orient when it routes work and .bee/bin/bee status --json only for detail the block does not carry",
+            "the trailer no longer carries the sentences Never hand bee commands to the user and Route via bee-hive",
+            "the Proof-per-change-type preamble line is gone and every preamble test pin is updated to the new text"
+          ]
+        },
+        "decisions": [
+          "f21a5bf3-9de6-4e05-a836-711a70f99c53"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs",
+          "packages/bee-rs/crates/bee/src/hooks/session_preamble/tests.rs"
+        ],
+        "read_first": [
+          "docs/history/semantic-token-diet/CONTEXT.md",
+          "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs",
+          "docs/history/semantic-token-diet/reports/A-doctrine.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Implement CONTEXT.md D7 (audit A-doctrine.md findings F5 and F21). In budget.rs set TRAILER_LINE to: Everything above is already read — do not re-fetch it. Run `.bee/bin/bee orient` when you route work (claim, plan, change phase); run `.bee/bin/bee status --json` only for detail this block does not carry. Remove the Proof-per-change-type line the preamble prints (near budget.rs:767) and anything that only builds it. Update every existing test in session_preamble/tests.rs that pins the old trailer or that line. No new tests (stdi-2 owns them). Proof: the cell verify; quote the counts. Rules for every cell: keep every rule and its why-clause (agents-block-diet D6); keep test-pinned wording unless this action names the pin; never add a size limit (D1). Write no code comments. Plain English, short sentences. Allowed bee commands: the cell verify, .bee/bin/bee knowledge check, .bee/bin/bee knowledge search. Do not run any bee dispatch or herding verb, not even its help. Run only the cell verify, never the full suite. Commit only the files of this cell, one commit, trailer cell: <id>."
+      },
+      {
+        "id": "stdi-2",
+        "feature": "semantic-token-diet",
+        "title": "Pin the orient trailer",
+        "lane": "standard",
+        "role": "test",
+        "deps": [
+          "stdi-1"
+        ],
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- session_preamble",
+        "must_haves": {
+          "truths": [
+            "a test asserts the rendered preamble ends with a trailer that names .bee/bin/bee orient for routing and .bee/bin/bee status --json for missing detail",
+            "a test asserts no rendered preamble contains the Proof-per-change-type line"
+          ]
+        },
+        "decisions": [
+          "f21a5bf3-9de6-4e05-a836-711a70f99c53"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/hooks/session_preamble/tests.rs"
+        ],
+        "read_first": [
+          "docs/history/semantic-token-diet/CONTEXT.md",
+          "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs",
+          "packages/bee-rs/crates/bee/src/hooks/session_preamble/tests.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Independently check stdi-1 and pin CONTEXT.md D7 (contract:preamble-trailer-orient) with behavior tests on the rendered preamble, in session_preamble/tests.rs. Cite existing tests that already cover a truth instead of adding a duplicate; add only the gap. State how each new test fails against the pre-stdi-1 text. Report a defect in stdi-1 instead of rewriting it. Proof: the cell verify; quote the counts and the new test names. Rules for every cell: keep every rule and its why-clause (agents-block-diet D6); keep test-pinned wording unless this action names the pin; never add a size limit (D1). Write no code comments. Plain English, short sentences. Allowed bee commands: the cell verify, .bee/bin/bee knowledge check, .bee/bin/bee knowledge search. Do not run any bee dispatch or herding verb, not even its help. Run only the cell verify, never the full suite. Commit only the files of this cell, one commit, trailer cell: <id>."
+      },
+      {
+        "id": "stdi-3",
+        "feature": "semantic-token-diet",
+        "title": "Render the proof command only for cell jobs",
+        "lane": "standard",
+        "role": "code",
+        "deps": [],
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- herding::mailbox",
+        "must_haves": {
+          "truths": [
+            "render_brief writes the # Proof command section only when the spec carries a cell id",
+            "a brief for a job with no cell id renders no # Proof command section even when commands.test is set",
+            "existing mailbox tests that pin the proof section pass a cell id"
+          ]
+        },
+        "decisions": [
+          "bf647234-d51b-4e7b-b2d4-7432ac4db531"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/herding/mailbox.rs"
+        ],
+        "read_first": [
+          "docs/history/semantic-token-diet/CONTEXT.md",
+          "packages/bee-rs/crates/bee/src/herding/mailbox.rs",
+          "docs/knowledge/areas/bee-herding/the-run-verb-and-worker-outcomes.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Implement CONTEXT.md D8. In herding/mailbox.rs render_brief, build proof_command_block only when spec.cell_id is Some. Update existing tests in the same file that expect the proof section so they pass a cell id. No new tests (stdi-4 owns them). Proof: the cell verify; quote the counts. Rules for every cell: keep every rule and its why-clause (agents-block-diet D6); keep test-pinned wording unless this action names the pin; never add a size limit (D1). Write no code comments. Plain English, short sentences. Allowed bee commands: the cell verify, .bee/bin/bee knowledge check, .bee/bin/bee knowledge search. Do not run any bee dispatch or herding verb, not even its help. Run only the cell verify, never the full suite. Commit only the files of this cell, one commit, trailer cell: <id>."
+      },
+      {
+        "id": "stdi-4",
+        "feature": "semantic-token-diet",
+        "title": "Pin the cell-only proof command",
+        "lane": "standard",
+        "role": "test",
+        "deps": [
+          "stdi-3"
+        ],
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- herding::mailbox",
+        "must_haves": {
+          "truths": [
+            "a test asserts a brief with commands.test set and no cell id has no # Proof command section",
+            "a test asserts a brief with commands.test set and a cell id has the # Proof command section before # Files you may touch"
+          ]
+        },
+        "decisions": [
+          "bf647234-d51b-4e7b-b2d4-7432ac4db531"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/herding/mailbox.rs"
+        ],
+        "read_first": [
+          "docs/history/semantic-token-diet/CONTEXT.md",
+          "packages/bee-rs/crates/bee/src/herding/mailbox.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Independently check stdi-3 and pin CONTEXT.md D8 (contract:brief-proof-only-for-cells) with behavior tests in the test module of herding/mailbox.rs. Cite an existing test that already covers a truth instead of duplicating it. State how each new test fails against the pre-stdi-3 code. Report a defect instead of rewriting stdi-3. Proof: the cell verify; quote the counts and test names. Rules for every cell: keep every rule and its why-clause (agents-block-diet D6); keep test-pinned wording unless this action names the pin; never add a size limit (D1). Write no code comments. Plain English, short sentences. Allowed bee commands: the cell verify, .bee/bin/bee knowledge check, .bee/bin/bee knowledge search. Do not run any bee dispatch or herding verb, not even its help. Run only the cell verify, never the full suite. Commit only the files of this cell, one commit, trailer cell: <id>."
+      },
+      {
+        "id": "stdi-5",
+        "feature": "semantic-token-diet",
+        "title": "Print flags before details in command help",
+        "lane": "standard",
+        "role": "code",
+        "deps": [],
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- help registry && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test registry_contracts --test output_spill",
+        "must_haves": {
+          "truths": [
+            "single-command help prints the invoke line, the first sentence of the description, the flags block, then the rest of the description under a line that reads details:",
+            "multi-command help (--all) keeps its current shape",
+            "the descriptions of dispatch prepare, cells cap, cells finish, worktree merge, herding run, close and state set in registry_payload.json carry no decision ids and no history narration, and every behavior they state is still stated",
+            "the herding control-loop help names the roles dispatch, merge, route, supervisor and broker and no longer mentions control-loop.sh"
+          ]
+        },
+        "decisions": [
+          "cf38764c-457e-4a47-b075-1f7546bf994a"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/verbs/help.rs",
+          "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+        ],
+        "read_first": [
+          "docs/history/semantic-token-diet/CONTEXT.md",
+          "packages/bee-rs/crates/bee/src/verbs/help.rs",
+          "docs/history/semantic-token-diet/reports/H-herding-help.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Implement CONTEXT.md D9 (audit H-herding-help.md, CLI help verdict and finding 6). (1) help.rs render_help_text: for a single entry, print the description's first sentence (reuse first_sentence), then the flags block, then, when text remains, a line '    details:' and the remaining description indented. Multi-entry output stays the same. (2) registry_payload.json: in the seven named descriptions remove decision ids (D12, uat-gate-before-merge D1 and the like), issue numbers, and history phrases (legacy, now a no-op, replaced its old meaning, byte-identically to before, pre-contract), rewriting each sentence so the current behavior it states survives. Keep the JSON byte style (same separators, ensure_ascii false). (3) Fix the control-loop description: list all five roles, drop the control-loop.sh sentence and the pre-D4 narration. Update existing tests that pin old help text. No new tests (stdi-6 owns them). Proof: the cell verify; also paste the first 25 lines of .bee/bin/bee dispatch prepare --help from a fresh release build if one exists, else say it was not built. Rules for every cell: keep every rule and its why-clause (agents-block-diet D6); keep test-pinned wording unless this action names the pin; never add a size limit (D1). Write no code comments. Plain English, short sentences. Allowed bee commands: the cell verify, .bee/bin/bee knowledge check, .bee/bin/bee knowledge search. Do not run any bee dispatch or herding verb, not even its help. Run only the cell verify, never the full suite. Commit only the files of this cell, one commit, trailer cell: <id>."
+      },
+      {
+        "id": "stdi-6",
+        "feature": "semantic-token-diet",
+        "title": "Pin flags-before-details help",
+        "lane": "standard",
+        "role": "test",
+        "deps": [
+          "stdi-5"
+        ],
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- help registry",
+        "must_haves": {
+          "truths": [
+            "a test asserts single-command help places the flags: line before the details: line and after the first sentence",
+            "a test asserts multi-command help output has no details: line"
+          ]
+        },
+        "decisions": [
+          "cf38764c-457e-4a47-b075-1f7546bf994a"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/verbs/help.rs"
+        ],
+        "read_first": [
+          "docs/history/semantic-token-diet/CONTEXT.md",
+          "packages/bee-rs/crates/bee/src/verbs/help.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Independently check stdi-5 and pin CONTEXT.md D9 (contract:help-flags-before-details) with behavior tests in help.rs tests. Cite existing tests instead of duplicating. State how each new test fails against the pre-stdi-5 code. Report a defect instead of rewriting stdi-5. Proof: the cell verify; quote counts and test names. Rules for every cell: keep every rule and its why-clause (agents-block-diet D6); keep test-pinned wording unless this action names the pin; never add a size limit (D1). Write no code comments. Plain English, short sentences. Allowed bee commands: the cell verify, .bee/bin/bee knowledge check, .bee/bin/bee knowledge search. Do not run any bee dispatch or herding verb, not even its help. Run only the cell verify, never the full suite. Commit only the files of this cell, one commit, trailer cell: <id>."
+      },
+      {
+        "id": "stdi-7",
+        "feature": "semantic-token-diet",
+        "title": "Move rare doctrine mechanics to read-when playbooks",
+        "lane": "standard",
+        "role": "docs",
+        "deps": [],
+        "verify": ".bee/bin/bee knowledge check && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test rule_index_parity --test pointer_integrity",
+        "must_haves": {
+          "truths": [
+            "packages/bee/LEADER.md keeps the rule agents-other-project-to-its-leader and agents-cli-before-mcp as short governing statements with their why, and the full mechanics of each live in a new packages/bee/playbooks/ file that LEADER.md lists under Playbooks with a read-when line",
+            "the Trigger index and the Deep contracts sections of packages/bee/LEADER.md each fold to one routing line",
+            "packages/bee/LEADER.md no longer repeats the bullets the AGENTS block or the preamble already state (audit A findings F6, F7, F8, F9, F13), and every rule marker still parses",
+            "the project LEADER.md moves the waggledance completion-report template and number rules to docs/handbook/waggledance-completion-report.md behind a two-line trigger, and states ASD-STE100 in one place",
+            "the rule index in router-triage-and-the-agents-md-duplication-boundary.md names the new home of each moved rule"
+          ]
+        },
+        "decisions": [
+          "35d402aa-5c04-4878-aa2b-c6848c1d7e75"
+        ],
+        "files": [
+          "packages/bee/LEADER.md",
+          "packages/bee/playbooks/cross-project.md",
+          "packages/bee/playbooks/cli-before-mcp.md",
+          "LEADER.md",
+          "docs/handbook/waggledance-completion-report.md",
+          "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md"
+        ],
+        "read_first": [
+          "docs/history/semantic-token-diet/CONTEXT.md",
+          "packages/bee/LEADER.md",
+          "LEADER.md",
+          "docs/history/semantic-token-diet/reports/A-doctrine.md",
+          "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md",
+          "packages/bee-rs/crates/bee/tests/rule_index_parity.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [
+          "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md"
+        ],
+        "action": "Implement CONTEXT.md D6 using audit A-doctrine.md findings F2, F3, F4, F6, F7, F8, F9, F10 (keep the re-verify exception line), F11, F12, F13, F14, F15, F17, F18, F20. Skip F1, F16, F19, F21 to F23. Move rule marker blocks with their text into the playbook files when the fence allows it (rule_index_parity.rs accepts markers in packages/bee/playbooks/); otherwise keep the marker in LEADER.md around the short statement. Each new playbook opens with a read-when line in the style of the existing ones. Keep everything on the A-doctrine.md do-not-touch list. Edit sources only; do not run regen. Rules for every cell: keep every rule and its why-clause (agents-block-diet D6); keep test-pinned wording unless this action names the pin; never add a size limit (D1). Write no code comments. Plain English, short sentences. Allowed bee commands: the cell verify, .bee/bin/bee knowledge check, .bee/bin/bee knowledge search. Do not run any bee dispatch or herding verb, not even its help. Run only the cell verify, never the full suite. Commit only the files of this cell, one commit, trailer cell: <id>.",
+        "regen_obligation_ack": "source edits only; stdi-19 runs the regen chain once for every writer"
+      },
+      {
+        "id": "stdi-8",
+        "feature": "semantic-token-diet",
+        "title": "Check the doctrine moves",
+        "lane": "standard",
+        "role": "test",
+        "deps": [
+          "stdi-7"
+        ],
+        "verify": ".bee/bin/bee knowledge check && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test rule_index_parity --test pointer_integrity",
+        "must_haves": {
+          "truths": [
+            "every rule id that packages/bee/LEADER.md held before stdi-7 still has a home with its why-clause",
+            "every new playbook has a read-when line and LEADER.md lists it",
+            "no do-not-touch line from reports/A-doctrine.md was removed"
+          ]
+        },
+        "decisions": [
+          "35d402aa-5c04-4878-aa2b-c6848c1d7e75",
+          "2a2604e3-1996-4ab2-a311-7c72cd0aede4"
+        ],
+        "files": [
+          "docs/history/semantic-token-diet/stdi-8-check.md"
+        ],
+        "read_first": [
+          "docs/history/semantic-token-diet/CONTEXT.md",
+          "packages/bee/LEADER.md",
+          "docs/history/semantic-token-diet/reports/A-doctrine.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Independently check cell stdi-7 against CONTEXT.md. Read its diff (the commit with trailer cell: stdi-7). For each must_have truth write pass or fail with a file:line anchor. Also confirm that every rule the diff moved or cut still has a home, by naming that home with file:line, and that no line from the matching audit report's do-not-touch list was removed. Run the cell verify. Write the result to docs/history/semantic-token-diet/stdi-8-check.md (one line per truth, one line per moved rule, then the verify counts) and commit only that file. Report a defect; do not edit the checked files. Rules for every cell: keep every rule and its why-clause (agents-block-diet D6); keep test-pinned wording unless this action names the pin; never add a size limit (D1). Write no code comments. Plain English, short sentences. Allowed bee commands: the cell verify, .bee/bin/bee knowledge check, .bee/bin/bee knowledge search. Do not run any bee dispatch or herding verb, not even its help. Run only the cell verify, never the full suite. Commit only the files of this cell, one commit, trailer cell: <id>."
+      },
+      {
+        "id": "stdi-9",
+        "feature": "semantic-token-diet",
+        "title": "Give bee-hive references real load triggers",
+        "lane": "standard",
+        "role": "docs",
+        "deps": [],
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pointer_integrity --test route_class_parity",
+        "must_haves": {
+          "truths": [
+            "the References row for routing-and-contracts.md names its load triggers and no row says The default",
+            "the bee-hive body sections Hard rules, the gate and bypass prose and Headless shrink to pointer lines with no rule lost",
+            "routing-and-contracts.md, gates-and-delegation.md and scout-and-ticks.md drop the copies listed in the B-router audit and their pointers to sections that no longer exist are fixed"
+          ]
+        },
+        "decisions": [
+          "66dfeff7-b683-4fcd-93c4-6928d76f8bb1",
+          "74fb4b50-9dab-498d-8d29-9f90f52c8541"
+        ],
+        "files": [
+          "skills/bee-hive/SKILL.md",
+          "skills/bee-hive/references/routing-and-contracts.md",
+          "skills/bee-hive/references/gates-and-delegation.md",
+          "skills/bee-hive/references/scout-and-ticks.md",
+          "skills/bee-hive/references/go-mode.md",
+          "skills/bee-hive/references/provenance.md"
+        ],
+        "read_first": [
+          "docs/history/semantic-token-diet/CONTEXT.md",
+          "skills/bee-hive/SKILL.md",
+          "docs/history/semantic-token-diet/reports/B-router.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Implement CONTEXT.md D4 and the bee-hive part of D2 using audit B-router.md findings F1 to F22. Decision ids and history removed from live text go to skills/bee-hive/references/provenance.md (create it). Keep every quoted heading that Rust or tests cite (rg the heading in packages/bee-rs before you rename or remove one) and everything on the B-router.md do-not-touch list. Edit sources only; do not run regen. Rules for every cell: keep every rule and its why-clause (agents-block-diet D6); keep test-pinned wording unless this action names the pin; never add a size limit (D1). Write no code comments. Plain English, short sentences. Allowed bee commands: the cell verify, .bee/bin/bee knowledge check, .bee/bin/bee knowledge search. Do not run any bee dispatch or herding verb, not even its help. Run only the cell verify, never the full suite. Commit only the files of this cell, one commit, trailer cell: <id>.",
+        "regen_obligation_ack": "source edits only; stdi-19 runs the regen chain once for every writer"
+      },
+      {
+        "id": "stdi-10",
+        "feature": "semantic-token-diet",
+        "title": "Check the bee-hive moves",
+        "lane": "standard",
+        "role": "test",
+        "deps": [
+          "stdi-9"
+        ],
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pointer_integrity --test route_class_parity",
+        "must_haves": {
+          "truths": [
+            "every rule removed from the bee-hive body still has a home, named with file:line",
+            "no do-not-touch line from reports/B-router.md was removed",
+            "every heading cited from packages/bee-rs still resolves"
+          ]
+        },
+        "decisions": [
+          "66dfeff7-b683-4fcd-93c4-6928d76f8bb1",
+          "2a2604e3-1996-4ab2-a311-7c72cd0aede4"
+        ],
+        "files": [
+          "docs/history/semantic-token-diet/stdi-10-check.md"
+        ],
+        "read_first": [
+          "docs/history/semantic-token-diet/CONTEXT.md",
+          "skills/bee-hive/SKILL.md",
+          "docs/history/semantic-token-diet/reports/B-router.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Independently check cell stdi-9 against CONTEXT.md. Read its diff (the commit with trailer cell: stdi-9). For each must_have truth write pass or fail with a file:line anchor. Also confirm that every rule the diff moved or cut still has a home, by naming that home with file:line, and that no line from the matching audit report's do-not-touch list was removed. Run the cell verify. Write the result to docs/history/semantic-token-diet/stdi-10-check.md (one line per truth, one line per moved rule, then the verify counts) and commit only that file. Report a defect; do not edit the checked files. Rules for every cell: keep every rule and its why-clause (agents-block-diet D6); keep test-pinned wording unless this action names the pin; never add a size limit (D1). Write no code comments. Plain English, short sentences. Allowed bee commands: the cell verify, .bee/bin/bee knowledge check, .bee/bin/bee knowledge search. Do not run any bee dispatch or herding verb, not even its help. Run only the cell verify, never the full suite. Commit only the files of this cell, one commit, trailer cell: <id>."
+      },
+      {
+        "id": "stdi-11",
+        "feature": "semantic-token-diet",
+        "title": "Split planning-reference.md by branch",
+        "lane": "standard",
+        "role": "docs",
+        "deps": [
+          "stdi-7",
+          "stdi-9"
+        ],
+        "verify": ".bee/bin/bee knowledge check && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pointer_integrity",
+        "must_haves": {
+          "truths": [
+            "skills/bee-planning/references/planning-reference.md is replaced by references/cells.md (cell rules, example JSON, pre-flight, test scoping, tiny and small merged gate, playbooks) and references/plan-artifact.md (plan.md template, claims table, approach, phases, consolidation cell JSON, hat-wave consumption)",
+            "every pointer to planning-reference.md outside docs/history and docs/decisions names the new file and section",
+            "the no-trailing-test-cell section and the writer-owns-its-tests lines are gone and edge-dimensions.md names the tester cell; design-sketch.md names the shape gate",
+            "hat-wave consumption keeps only the planning-only parts listed in audit D finding F3"
+          ]
+        },
+        "decisions": [
+          "90df38fd-d267-4da4-a513-7d5bc530dda1",
+          "74fb4b50-9dab-498d-8d29-9f90f52c8541"
+        ],
+        "files": [
+          "skills/bee-planning/SKILL.md",
+          "skills/bee-planning/references/planning-reference.md",
+          "skills/bee-planning/references/cells.md",
+          "skills/bee-planning/references/plan-artifact.md",
+          "skills/bee-planning/references/design-sketch.md",
+          "skills/bee-planning/references/edge-dimensions.md",
+          "skills/bee-planning/references/provenance.md",
+          "skills/bee-hive/references/scout-and-ticks.md",
+          "skills/bee-hive/references/routing-and-contracts.md",
+          "packages/bee/LEADER.md",
+          "skills/bee-planning/playbooks/spike/prototype.md",
+          "skills/bee-planning/playbooks/feature/multi-phase-plan.md",
+          "docs/02-architecture.md",
+          "docs/04-skills-spec.md",
+          "docs/handbook/stages/planning.md",
+          "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs",
+          "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md",
+          "docs/knowledge/areas/doctrine-layer/lane-and-working-discipline.md",
+          "docs/knowledge/areas/verify-pipeline/skill-reference-pointer-integrity.md",
+          "docs/knowledge/areas/workflow-state/cells-authoring-and-revision.md",
+          "docs/knowledge/areas/workflow-state/dissent-and-the-verdict-duty.md",
+          "docs/knowledge/areas/workflow-state/cells-scheduling.md",
+          "docs/knowledge/patterns/20260728-a-derivation-the-tooling-computes-but-doctrine-forbids-where-it-is-needed.md"
+        ],
+        "read_first": [
+          "docs/history/semantic-token-diet/CONTEXT.md",
+          "skills/bee-planning/SKILL.md",
+          "skills/bee-planning/references/planning-reference.md",
+          "docs/history/semantic-token-diet/reports/D-planning.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Implement CONTEXT.md D5 and the planning part of D2 using audit D-planning.md findings F1 to F11. Delete planning-reference.md after the split (git mv the larger half to keep history). Decision ids and history go to skills/bee-planning/references/provenance.md. Repoint every pointer listed in files (rg planning-reference again first; skip docs/history, docs/decisions, docs/discovery and skills/*/CREATION-LOG.md, which are records). Keep the phrase load-bearing claims table (set_gate.rs asserts it) and the D-planning.md do-not-touch list. In set_gate.rs change only the path text. Edit sources only; do not run regen. Rules for every cell: keep every rule and its why-clause (agents-block-diet D6); keep test-pinned wording unless this action names the pin; never add a size limit (D1). Write no code comments. Plain English, short sentences. Allowed bee commands: the cell verify, .bee/bin/bee knowledge check, .bee/bin/bee knowledge search. Do not run any bee dispatch or herding verb, not even its help. Run only the cell verify, never the full suite. Commit only the files of this cell, one commit, trailer cell: <id>.",
+        "regen_obligation_ack": "source edits only; stdi-19 runs the regen chain once for every writer"
+      },
+      {
+        "id": "stdi-12",
+        "feature": "semantic-token-diet",
+        "title": "Check the planning split",
+        "lane": "standard",
+        "role": "test",
+        "deps": [
+          "stdi-11"
+        ],
+        "verify": ".bee/bin/bee knowledge check && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pointer_integrity",
+        "must_haves": {
+          "truths": [
+            "rg planning-reference outside docs/history, docs/decisions, docs/discovery and CREATION-LOG files returns nothing",
+            "every section of the old file has exactly one new home",
+            "no do-not-touch line from reports/D-planning.md was removed"
+          ]
+        },
+        "decisions": [
+          "90df38fd-d267-4da4-a513-7d5bc530dda1",
+          "2a2604e3-1996-4ab2-a311-7c72cd0aede4"
+        ],
+        "files": [
+          "docs/history/semantic-token-diet/stdi-12-check.md"
+        ],
+        "read_first": [
+          "docs/history/semantic-token-diet/CONTEXT.md",
+          "skills/bee-planning/SKILL.md",
+          "docs/history/semantic-token-diet/reports/D-planning.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Independently check cell stdi-11 against CONTEXT.md. Read its diff (the commit with trailer cell: stdi-11). For each must_have truth write pass or fail with a file:line anchor. Also confirm that every rule the diff moved or cut still has a home, by naming that home with file:line, and that no line from the matching audit report's do-not-touch list was removed. Run the cell verify. Write the result to docs/history/semantic-token-diet/stdi-12-check.md (one line per truth, one line per moved rule, then the verify counts) and commit only that file. Report a defect; do not edit the checked files. Rules for every cell: keep every rule and its why-clause (agents-block-diet D6); keep test-pinned wording unless this action names the pin; never add a size limit (D1). Write no code comments. Plain English, short sentences. Allowed bee commands: the cell verify, .bee/bin/bee knowledge check, .bee/bin/bee knowledge search. Do not run any bee dispatch or herding verb, not even its help. Run only the cell verify, never the full suite. Commit only the files of this cell, one commit, trailer cell: <id>."
+      },
+      {
+        "id": "stdi-13",
+        "feature": "semantic-token-diet",
+        "title": "Fix dead pointers in playbooks and knowledge-upkeep",
+        "lane": "standard",
+        "role": "docs",
+        "deps": [
+          "stdi-11"
+        ],
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test class_playbook_parity --test route_class_parity --test pointer_integrity",
+        "must_haves": {
+          "truths": [
+            "no playbook file says the proof floor table is in bee cells finish --help; each class index states that the cap names the floor when it refuses",
+            "no playbook passes --cleanup to bee worktree merge",
+            "bug-fix.md step 2 names bee-principle-red-before-green instead of a stale line anchor",
+            "bee-knowledge-upkeep SKILL.md tells the agent to read the due reasons from bee upkeep due and says the thresholds live in the binary, and drops the read-and-write table"
+          ]
+        },
+        "decisions": [
+          "74fb4b50-9dab-498d-8d29-9f90f52c8541"
+        ],
+        "files": [
+          "skills/bee-planning/playbooks",
+          "skills/bee-knowledge-upkeep/SKILL.md"
+        ],
+        "read_first": [
+          "docs/history/semantic-token-diet/CONTEXT.md",
+          "docs/history/semantic-token-diet/reports/C-playbooks.md",
+          "docs/history/semantic-token-diet/reports/G-close-review.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Implement the playbook and knowledge-upkeep part of CONTEXT.md D2: audit C-playbooks.md findings 2, 4, 5 and G-close-review.md findings 16, 17. The files entry skills/bee-planning/playbooks means only the files those findings name (rg 'Proof floor' and rg -- '--cleanup' under it). Keep the Situations row grammar exactly. Edit sources only; do not run regen. Rules for every cell: keep every rule and its why-clause (agents-block-diet D6); keep test-pinned wording unless this action names the pin; never add a size limit (D1). Write no code comments. Plain English, short sentences. Allowed bee commands: the cell verify, .bee/bin/bee knowledge check, .bee/bin/bee knowledge search. Do not run any bee dispatch or herding verb, not even its help. Run only the cell verify, never the full suite. Commit only the files of this cell, one commit, trailer cell: <id>.",
+        "regen_obligation_ack": "source edits only; stdi-19 runs the regen chain once for every writer"
+      },
+      {
+        "id": "stdi-14",
+        "feature": "semantic-token-diet",
+        "title": "Check the playbook fixes",
+        "lane": "standard",
+        "role": "test",
+        "deps": [
+          "stdi-13"
+        ],
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test class_playbook_parity --test route_class_parity --test pointer_integrity",
+        "must_haves": {
+          "truths": [
+            "rg 'cells finish --help' and rg -- '--cleanup' under skills/bee-planning/playbooks return nothing",
+            "every Situations row still parses",
+            "the knowledge-upkeep change keeps the step-2 rank order"
+          ]
+        },
+        "decisions": [
+          "74fb4b50-9dab-498d-8d29-9f90f52c8541",
+          "2a2604e3-1996-4ab2-a311-7c72cd0aede4"
+        ],
+        "files": [
+          "docs/history/semantic-token-diet/stdi-14-check.md"
+        ],
+        "read_first": [
+          "docs/history/semantic-token-diet/CONTEXT.md",
+          "docs/history/semantic-token-diet/reports/C-playbooks.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Independently check cell stdi-13 against CONTEXT.md. Read its diff (the commit with trailer cell: stdi-13). For each must_have truth write pass or fail with a file:line anchor. Also confirm that every rule the diff moved or cut still has a home, by naming that home with file:line, and that no line from the matching audit report's do-not-touch list was removed. Run the cell verify. Write the result to docs/history/semantic-token-diet/stdi-14-check.md (one line per truth, one line per moved rule, then the verify counts) and commit only that file. Report a defect; do not edit the checked files. Rules for every cell: keep every rule and its why-clause (agents-block-diet D6); keep test-pinned wording unless this action names the pin; never add a size limit (D1). Write no code comments. Plain English, short sentences. Allowed bee commands: the cell verify, .bee/bin/bee knowledge check, .bee/bin/bee knowledge search. Do not run any bee dispatch or herding verb, not even its help. Run only the cell verify, never the full suite. Commit only the files of this cell, one commit, trailer cell: <id>."
+      },
+      {
+        "id": "stdi-15",
+        "feature": "semantic-token-diet",
+        "title": "Load only the Execute contract into workers",
+        "lane": "standard",
+        "role": "code",
+        "deps": [],
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- drivers && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pointer_integrity",
+        "must_haves": {
+          "truths": [
+            "skills/bee-swarming/references/execute.md holds the Execute (worker) section and the Tester contract, and skills/bee-swarming/SKILL.md keeps one pointer line to it",
+            "packages/bee/prompts/worker-cell.md tells the native worker to read skills/bee-swarming/references/execute.md instead of loading the whole bee-swarming skill, and the golden native prompt test is updated to the new line",
+            "worker-cell.md is named as the one home of the Result form; swarming-reference.md replaces its Worker Prompt Template and Result form copies with pointers",
+            "the bee-worker and bee-comb agent templates no longer repeat rules the rendered prompt carries, and bee-forager, bee-scout and bee-elder drop the registry and reservation line"
+          ]
+        },
+        "decisions": [
+          "6d9d5f99-0e99-4f9b-9b15-add53a40f90b"
+        ],
+        "files": [
+          "skills/bee-swarming/SKILL.md",
+          "skills/bee-swarming/references/execute.md",
+          "skills/bee-swarming/references/swarming-reference.md",
+          "skills/bee-swarming/references/provenance.md",
+          "packages/bee/prompts/worker-cell.md",
+          "packages/bee/agents/bee-worker.md.tmpl",
+          "packages/bee/agents/bee-comb.md.tmpl",
+          "packages/bee/agents/bee-forager.md.tmpl",
+          "packages/bee/agents/bee-scout.md.tmpl",
+          "packages/bee/agents/bee-elder.md.tmpl",
+          "packages/bee/agents/bee-guard.md.tmpl",
+          "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+        ],
+        "read_first": [
+          "docs/history/semantic-token-diet/CONTEXT.md",
+          "skills/bee-swarming/SKILL.md",
+          "packages/bee/prompts/worker-cell.md",
+          "docs/history/semantic-token-diet/reports/F-execution.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Implement CONTEXT.md D3 using audit F-execution.md findings F1 to F15. Keep the bee-swarming description clause about the worker for one cell id (skill trigger fixture). Keep the herding test that asserts the herding prompt has no skill-load line passing. Before naming worker-cell.md the Result form home, check its form against the cells finish report validation and say which form the code accepts. Decision ids go to skills/bee-swarming/references/provenance.md. Keep the F-execution.md do-not-touch list. Update the golden prompt constant and any test forced by the change; no other new tests (stdi-16 owns them). Edit sources only; do not run regen. Rules for every cell: keep every rule and its why-clause (agents-block-diet D6); keep test-pinned wording unless this action names the pin; never add a size limit (D1). Write no code comments. Plain English, short sentences. Allowed bee commands: the cell verify, .bee/bin/bee knowledge check, .bee/bin/bee knowledge search. Do not run any bee dispatch or herding verb, not even its help. Run only the cell verify, never the full suite. Commit only the files of this cell, one commit, trailer cell: <id>.",
+        "regen_obligation_ack": "source edits only; stdi-19 runs the regen chain once for every writer"
+      },
+      {
+        "id": "stdi-16",
+        "feature": "semantic-token-diet",
+        "title": "Pin the execute pointer in the worker prompt",
+        "lane": "standard",
+        "role": "test",
+        "deps": [
+          "stdi-15"
+        ],
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- drivers",
+        "must_haves": {
+          "truths": [
+            "a test asserts the rendered native worker prompt names skills/bee-swarming/references/execute.md and does not tell the worker to load the bee-swarming skill",
+            "a test asserts skills/bee-swarming/references/execute.md exists and holds the status tokens DONE, BLOCKED, HANDOFF, PARKED and NOOP"
+          ]
+        },
+        "decisions": [
+          "6d9d5f99-0e99-4f9b-9b15-add53a40f90b"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+        ],
+        "read_first": [
+          "docs/history/semantic-token-diet/CONTEXT.md",
+          "packages/bee/prompts/worker-cell.md",
+          "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Independently check stdi-15 and pin CONTEXT.md D3 (contract:worker-prompt-execute-pointer) with behavior tests in drivers/tests.rs. Cite the golden test where it already covers a truth. State how each new test fails against the pre-stdi-15 prompt. Report a defect instead of rewriting stdi-15. Proof: the cell verify; quote counts and test names. Rules for every cell: keep every rule and its why-clause (agents-block-diet D6); keep test-pinned wording unless this action names the pin; never add a size limit (D1). Write no code comments. Plain English, short sentences. Allowed bee commands: the cell verify, .bee/bin/bee knowledge check, .bee/bin/bee knowledge search. Do not run any bee dispatch or herding verb, not even its help. Run only the cell verify, never the full suite. Commit only the files of this cell, one commit, trailer cell: <id>."
+      },
+      {
+        "id": "stdi-17",
+        "feature": "semantic-token-diet",
+        "title": "Split role-dispatch.md at the interlock",
+        "lane": "standard",
+        "role": "docs",
+        "deps": [],
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- control_loop && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pointer_integrity",
+        "must_haves": {
+          "truths": [
+            "skills/bee-herding/references/role-dispatch.md ends after the interlock check with a hand-off line to references/role-dispatch-spawn.md, which holds the set build through section 8 with the section numbers unchanged",
+            "the quick-reference table is gone and the incident measurements moved to spawn-proof.md with each rule kept as one sentence",
+            "operational-invariants.md points at bee herding status --job <id>; role-dispatch.md and README.md say only enable and disable are unbuilt; agents/openai.yaml names every role",
+            "skills/bee-herding/SKILL.md says read your role reference in full, following its own hand-off"
+          ]
+        },
+        "decisions": [
+          "e5f3d375-90c7-4293-8281-f0939c9961d6",
+          "74fb4b50-9dab-498d-8d29-9f90f52c8541"
+        ],
+        "files": [
+          "skills/bee-herding/SKILL.md",
+          "skills/bee-herding/README.md",
+          "skills/bee-herding/agents/openai.yaml",
+          "skills/bee-herding/references/role-dispatch.md",
+          "skills/bee-herding/references/role-dispatch-spawn.md",
+          "skills/bee-herding/references/spawn-proof.md",
+          "skills/bee-herding/references/operational-invariants.md",
+          "skills/bee-herding/references/route-prompt.md"
+        ],
+        "read_first": [
+          "docs/history/semantic-token-diet/CONTEXT.md",
+          "skills/bee-herding/SKILL.md",
+          "skills/bee-herding/references/role-dispatch.md",
+          "docs/history/semantic-token-diet/reports/H-herding-help.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Implement CONTEXT.md D10 and the herding part of D2 using audit H-herding-help.md findings 1 to 5, 7, 8, 11, 12. Keep section numbers (Rust comments cite them), the needles control_loop.rs pins in route-prompt.md and supervisor-prompt.md, and the H-herding-help.md do-not-touch list. Edit sources only; do not run regen. Rules for every cell: keep every rule and its why-clause (agents-block-diet D6); keep test-pinned wording unless this action names the pin; never add a size limit (D1). Write no code comments. Plain English, short sentences. Allowed bee commands: the cell verify, .bee/bin/bee knowledge check, .bee/bin/bee knowledge search. Do not run any bee dispatch or herding verb, not even its help. Run only the cell verify, never the full suite. Commit only the files of this cell, one commit, trailer cell: <id>.",
+        "regen_obligation_ack": "source edits only; stdi-19 runs the regen chain once for every writer"
+      },
+      {
+        "id": "stdi-18",
+        "feature": "semantic-token-diet",
+        "title": "Check the herding split",
+        "lane": "standard",
+        "role": "test",
+        "deps": [
+          "stdi-17"
+        ],
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- control_loop && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pointer_integrity",
+        "must_haves": {
+          "truths": [
+            "an idle dispatch tick that stops at sections 2, 4 or 5 never needs role-dispatch-spawn.md",
+            "every rule from the old sections 5 to 8 has one home",
+            "no do-not-touch line from reports/H-herding-help.md was removed"
+          ]
+        },
+        "decisions": [
+          "e5f3d375-90c7-4293-8281-f0939c9961d6",
+          "2a2604e3-1996-4ab2-a311-7c72cd0aede4"
+        ],
+        "files": [
+          "docs/history/semantic-token-diet/stdi-18-check.md"
+        ],
+        "read_first": [
+          "docs/history/semantic-token-diet/CONTEXT.md",
+          "skills/bee-herding/references/role-dispatch.md",
+          "docs/history/semantic-token-diet/reports/H-herding-help.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Independently check cell stdi-17 against CONTEXT.md. Read its diff (the commit with trailer cell: stdi-17). For each must_have truth write pass or fail with a file:line anchor. Also confirm that every rule the diff moved or cut still has a home, by naming that home with file:line, and that no line from the matching audit report's do-not-touch list was removed. Run the cell verify. Write the result to docs/history/semantic-token-diet/stdi-18-check.md (one line per truth, one line per moved rule, then the verify counts) and commit only that file. Report a defect; do not edit the checked files. Rules for every cell: keep every rule and its why-clause (agents-block-diet D6); keep test-pinned wording unless this action names the pin; never add a size limit (D1). Write no code comments. Plain English, short sentences. Allowed bee commands: the cell verify, .bee/bin/bee knowledge check, .bee/bin/bee knowledge search. Do not run any bee dispatch or herding verb, not even its help. Run only the cell verify, never the full suite. Commit only the files of this cell, one commit, trailer cell: <id>."
+      },
+      {
+        "id": "stdi-19",
+        "feature": "semantic-token-diet",
+        "title": "Re-render the generated copies",
+        "lane": "standard",
+        "role": "docs",
+        "deps": [
+          "stdi-2",
+          "stdi-4",
+          "stdi-6",
+          "stdi-8",
+          "stdi-10",
+          "stdi-12",
+          "stdi-14",
+          "stdi-16",
+          "stdi-18"
+        ],
+        "verify": ".bee/bin/bee onboard --repo-root . --json && .bee/bin/bee dev release-manifest --check && .bee/bin/bee knowledge check",
+        "must_haves": {
+          "truths": [
+            "bee dev regen ran once after every writer cell and the rendered copies match their sources",
+            "hub-served skills under .claude/skills that regen re-rendered are restored before the commit"
+          ]
+        },
+        "decisions": [
+          "2a2604e3-1996-4ab2-a311-7c72cd0aede4"
+        ],
+        "files": [
+          ".bee/LEADER.md",
+          ".bee/playbooks",
+          ".claude/skills",
+          ".claude/agents",
+          ".agents/skills",
+          ".bee/onboarding.json",
+          "skills-lock.json",
+          "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+          "docs/history/codex-harness-hardening/release-manifest.json"
+        ],
+        "read_first": [
+          "docs/history/semantic-token-diet/CONTEXT.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Run .bee/bin/bee dev regen in the worktree. Then restore every path under .claude/skills that is a Skillstation hub alias (git restore and git clean -fd on those paths only; keep bee-* skills that are rendered from skills/). Run the cell verify and commit the rendered outputs. If regen changes a file outside files, list it in the report and commit it too. Allowed bee commands here also include .bee/bin/bee dev regen and .bee/bin/bee dev release-manifest --check. Rules for every cell: keep every rule and its why-clause (agents-block-diet D6); keep test-pinned wording unless this action names the pin; never add a size limit (D1). Write no code comments. Plain English, short sentences. Allowed bee commands: the cell verify, .bee/bin/bee knowledge check, .bee/bin/bee knowledge search. Do not run any bee dispatch or herding verb, not even its help. Run only the cell verify, never the full suite. Commit only the files of this cell, one commit, trailer cell: <id>."
+      },
+      {
+        "id": "stdi-20",
+        "feature": "semantic-token-diet",
+        "title": "Consolidate knowledge for the diet",
+        "lane": "standard",
+        "role": "writer",
+        "deps": [
+          "stdi-19"
+        ],
+        "verify": ".bee/bin/bee knowledge check",
+        "must_haves": {
+          "truths": [
+            "docs/knowledge/areas/hook-runtime/token-economy-of-injected-context.md states the new trailer, the cell-only proof command and the flags-before-details help, citing semantic-token-diet D7 to D9",
+            "docs/history/semantic-token-diet/delivery.md lists each D-number with the cell that delivered it and the bytes each branch stops loading",
+            "bee knowledge consolidate --feature semantic-token-diet ran and its output was applied"
+          ]
+        },
+        "decisions": [
+          "f21a5bf3-9de6-4e05-a836-711a70f99c53",
+          "bf647234-d51b-4e7b-b2d4-7432ac4db531",
+          "cf38764c-457e-4a47-b075-1f7546bf994a",
+          "2a2604e3-1996-4ab2-a311-7c72cd0aede4"
+        ],
+        "files": [
+          "docs/knowledge/areas/hook-runtime/token-economy-of-injected-context.md",
+          "docs/knowledge/areas/bee-herding/the-run-verb-and-worker-outcomes.md",
+          "docs/history/semantic-token-diet/delivery.md"
+        ],
+        "read_first": [
+          "docs/history/semantic-token-diet/CONTEXT.md",
+          "docs/knowledge/areas/hook-runtime/token-economy-of-injected-context.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [
+          "docs/knowledge/areas/hook-runtime/token-economy-of-injected-context.md"
+        ],
+        "action": "Run .bee/bin/bee knowledge consolidate --feature semantic-token-diet and apply what it reports. Update the token-economy concept (trailer text, proof command only for cell jobs, help order) and the run-verb concept (proof command rule), citing semantic-token-diet D-numbers, never raw decision ids. Write delivery.md. Allowed bee commands here also include .bee/bin/bee knowledge consolidate. Rules for every cell: keep every rule and its why-clause (agents-block-diet D6); keep test-pinned wording unless this action names the pin; never add a size limit (D1). Write no code comments. Plain English, short sentences. Allowed bee commands: the cell verify, .bee/bin/bee knowledge check, .bee/bin/bee knowledge search. Do not run any bee dispatch or herding verb, not even its help. Run only the cell verify, never the full suite. Commit only the files of this cell, one commit, trailer cell: <id>."
+      },
+      {
+        "id": "stdi-21",
+        "feature": "semantic-token-diet",
+        "title": "Check the rendered copies and the consolidated knowledge",
+        "lane": "standard",
+        "role": "test",
+        "deps": [
+          "stdi-19",
+          "stdi-20"
+        ],
+        "verify": ".bee/bin/bee onboard --repo-root . --json && .bee/bin/bee dev release-manifest --check && .bee/bin/bee knowledge check",
+        "must_haves": {
+          "truths": [
+            "every rendered copy matches its source: release-manifest --check is clean and onboard reports no changes needed",
+            "no Skillstation hub alias under .claude/skills changed in the stdi-19 commit",
+            "the token-economy and run-verb concepts state D7 to D9 as the code now behaves, citing semantic-token-diet D-numbers and no raw decision ids",
+            "delivery.md names a delivering cell for each of D1 to D10"
+          ]
+        },
+        "decisions": [
+          "2a2604e3-1996-4ab2-a311-7c72cd0aede4",
+          "f21a5bf3-9de6-4e05-a836-711a70f99c53",
+          "bf647234-d51b-4e7b-b2d4-7432ac4db531",
+          "cf38764c-457e-4a47-b075-1f7546bf994a"
+        ],
+        "files": [
+          "docs/history/semantic-token-diet/stdi-21-check.md"
+        ],
+        "read_first": [
+          "docs/history/semantic-token-diet/CONTEXT.md",
+          "docs/history/semantic-token-diet/delivery.md",
+          "docs/knowledge/areas/hook-runtime/token-economy-of-injected-context.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Independently check cells stdi-19 and stdi-20 against CONTEXT.md. For each must_have truth write pass or fail with a file:line anchor or the command output. Run the cell verify. Write the result to docs/history/semantic-token-diet/stdi-21-check.md and commit only that file. Report a defect; do not edit the checked files. Allowed bee commands here also include .bee/bin/bee onboard --repo-root . --json and .bee/bin/bee dev release-manifest --check. Rules for every cell: keep every rule and its why-clause (agents-block-diet D6); keep test-pinned wording unless this action names the pin; never add a size limit (D1). Write no code comments. Plain English, short sentences. Allowed bee commands: the cell verify, .bee/bin/bee knowledge check, .bee/bin/bee knowledge search. Do not run any bee dispatch or herding verb, not even its help. Run only the cell verify, never the full suite. Commit only the files of this cell, one commit, trailer cell: <id>."
+      }
+    ],
+    "role_plan": {
+      "schema_version": "1.0",
+      "runtime": "claude",
+      "roster_sha256": "d4e696dbde7989d6388dacce3fd7057cb3a6935b46024b79698596a46f6f41d3",
+      "stages": [
+        {
+          "stage": "implementation",
+          "classification": "required",
+          "role": "code",
+          "reason": "stdi-1, stdi-3, stdi-5 and stdi-15 change Rust or the rendered worker prompt."
+        },
+        {
+          "stage": "test-and-live-proof",
+          "classification": "required",
+          "role": "test",
+          "reason": "Each code cell and each docs cell has a separate tester or checker."
+        },
+        {
+          "stage": "docs",
+          "classification": "required",
+          "role": "docs",
+          "reason": "stdi-7, 9, 11, 13, 17 and 19 move instruction text and run regen."
+        },
+        {
+          "stage": "writing",
+          "classification": "required",
+          "role": "writer",
+          "reason": "stdi-20 consolidates knowledge and writes delivery.md."
+        },
+        {
+          "stage": "slice-judge",
+          "classification": "not-applicable",
+          "role": "review",
+          "reason": "Text layout change; the tester and checker cells are the independent check. Review stays user-invoked."
+        },
+        {
+          "stage": "hat-facts-gaps",
+          "classification": "not-applicable",
+          "role": "hat-facts-gaps",
+          "reason": "Eight read-only audits in reports/ opened every anchor this plan uses."
+        },
+        {
+          "stage": "hat-alternatives",
+          "classification": "not-applicable",
+          "role": "hat-alternatives",
+          "reason": "The Approach names the rejected paths; each audit weighed move against cut."
+        },
+        {
+          "stage": "hat-user-impact",
+          "classification": "not-applicable",
+          "role": "hat-user-impact",
+          "reason": "Every rule keeps a home; only where it loads changes."
+        },
+        {
+          "stage": "hat-risks",
+          "classification": "not-applicable",
+          "role": "hat-risks",
+          "reason": "No gate, guard or state write changes; pinned strings change only under D3 and D7."
+        },
+        {
+          "stage": "hat-value",
+          "classification": "not-applicable",
+          "role": "hat-value",
+          "reason": "The owner asked for this directly."
+        },
+        {
+          "stage": "deployment",
+          "classification": "not-applicable",
+          "role": "deploy",
+          "reason": "No release in this feature."
+        },
+        {
+          "stage": "planning",
+          "classification": "not-applicable",
+          "role": "plan",
+          "reason": "The leader wrote the plan."
+        },
+        {
+          "stage": "read-only-gather",
+          "classification": "not-applicable",
+          "role": "read",
+          "reason": "The audits were the gather."
+        },
+        {
+          "stage": "fact-extraction",
+          "classification": "not-applicable",
+          "role": "extraction",
+          "reason": "No extraction stage."
+        },
+        {
+          "stage": "generation-fallback",
+          "classification": "not-applicable",
+          "role": "generation",
+          "reason": "Every cell has a configured role."
+        },
+        {
+          "stage": "generic-advisor",
+          "classification": "not-applicable",
+          "role": "advisor",
+          "reason": "Standard lane; no high-risk advisor consult."
+        },
+        {
+          "stage": "supervision",
+          "classification": "not-applicable",
+          "role": "supervisor",
+          "reason": "Attended session."
+        },
+        {
+          "stage": "blind-lane-1",
+          "classification": "not-applicable",
+          "role": "lane-1",
+          "reason": "No blind lanes."
+        },
+        {
+          "stage": "blind-lane-2",
+          "classification": "not-applicable",
+          "role": "lane-2",
+          "reason": "No blind lanes."
+        },
+        {
+          "stage": "blind-lane-3",
+          "classification": "not-applicable",
+          "role": "lane-3",
+          "reason": "No blind lanes."
+        },
+        {
+          "stage": "design-ui",
+          "classification": "not-applicable",
+          "role": "design",
+          "reason": "No rendered UI."
+        }
+      ]
+    }
+  },
+  "approved_cell_packet": {
+    "feature": "semantic-token-diet",
+    "plan_sha256": "8dfff91b17b087c88fca76f946633cfe59b10be4a33d4ca3924afbefa4764d1a",
+    "previewed_at": "2026-11-16T16:23:48.225Z",
+    "cells": [
+      {
+        "id": "stdi-1",
+        "feature": "semantic-token-diet",
+        "title": "Point the preamble trailer at bee orient",
+        "lane": "standard",
+        "role": "code",
+        "deps": [],
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- session_preamble",
+        "must_haves": {
+          "truths": [
+            "the preamble trailer tells the agent to run .bee/bin/bee orient when it routes work and .bee/bin/bee status --json only for detail the block does not carry",
+            "the trailer no longer carries the sentences Never hand bee commands to the user and Route via bee-hive",
+            "the Proof-per-change-type preamble line is gone and every preamble test pin is updated to the new text"
+          ]
+        },
+        "decisions": [
+          "f21a5bf3-9de6-4e05-a836-711a70f99c53"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs",
+          "packages/bee-rs/crates/bee/src/hooks/session_preamble/tests.rs"
+        ],
+        "read_first": [
+          "docs/history/semantic-token-diet/CONTEXT.md",
+          "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs",
+          "docs/history/semantic-token-diet/reports/A-doctrine.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Implement CONTEXT.md D7 (audit A-doctrine.md findings F5 and F21). In budget.rs set TRAILER_LINE to: Everything above is already read — do not re-fetch it. Run `.bee/bin/bee orient` when you route work (claim, plan, change phase); run `.bee/bin/bee status --json` only for detail this block does not carry. Remove the Proof-per-change-type line the preamble prints (near budget.rs:767) and anything that only builds it. Update every existing test in session_preamble/tests.rs that pins the old trailer or that line. No new tests (stdi-2 owns them). Proof: the cell verify; quote the counts. Rules for every cell: keep every rule and its why-clause (agents-block-diet D6); keep test-pinned wording unless this action names the pin; never add a size limit (D1). Write no code comments. Plain English, short sentences. Allowed bee commands: the cell verify, .bee/bin/bee knowledge check, .bee/bin/bee knowledge search. Do not run any bee dispatch or herding verb, not even its help. Run only the cell verify, never the full suite. Commit only the files of this cell, one commit, trailer cell: <id>."
+      },
+      {
+        "id": "stdi-2",
+        "feature": "semantic-token-diet",
+        "title": "Pin the orient trailer",
+        "lane": "standard",
+        "role": "test",
+        "deps": [
+          "stdi-1"
+        ],
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- session_preamble",
+        "must_haves": {
+          "truths": [
+            "a test asserts the rendered preamble ends with a trailer that names .bee/bin/bee orient for routing and .bee/bin/bee status --json for missing detail",
+            "a test asserts no rendered preamble contains the Proof-per-change-type line"
+          ]
+        },
+        "decisions": [
+          "f21a5bf3-9de6-4e05-a836-711a70f99c53"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/hooks/session_preamble/tests.rs"
+        ],
+        "read_first": [
+          "docs/history/semantic-token-diet/CONTEXT.md",
+          "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs",
+          "packages/bee-rs/crates/bee/src/hooks/session_preamble/tests.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Independently check stdi-1 and pin CONTEXT.md D7 (contract:preamble-trailer-orient) with behavior tests on the rendered preamble, in session_preamble/tests.rs. Cite existing tests that already cover a truth instead of adding a duplicate; add only the gap. State how each new test fails against the pre-stdi-1 text. Report a defect in stdi-1 instead of rewriting it. Proof: the cell verify; quote the counts and the new test names. Rules for every cell: keep every rule and its why-clause (agents-block-diet D6); keep test-pinned wording unless this action names the pin; never add a size limit (D1). Write no code comments. Plain English, short sentences. Allowed bee commands: the cell verify, .bee/bin/bee knowledge check, .bee/bin/bee knowledge search. Do not run any bee dispatch or herding verb, not even its help. Run only the cell verify, never the full suite. Commit only the files of this cell, one commit, trailer cell: <id>."
+      },
+      {
+        "id": "stdi-3",
+        "feature": "semantic-token-diet",
+        "title": "Render the proof command only for cell jobs",
+        "lane": "standard",
+        "role": "code",
+        "deps": [],
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- herding::mailbox",
+        "must_haves": {
+          "truths": [
+            "render_brief writes the # Proof command section only when the spec carries a cell id",
+            "a brief for a job with no cell id renders no # Proof command section even when commands.test is set",
+            "existing mailbox tests that pin the proof section pass a cell id"
+          ]
+        },
+        "decisions": [
+          "bf647234-d51b-4e7b-b2d4-7432ac4db531"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/herding/mailbox.rs"
+        ],
+        "read_first": [
+          "docs/history/semantic-token-diet/CONTEXT.md",
+          "packages/bee-rs/crates/bee/src/herding/mailbox.rs",
+          "docs/knowledge/areas/bee-herding/the-run-verb-and-worker-outcomes.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Implement CONTEXT.md D8. In herding/mailbox.rs render_brief, build proof_command_block only when spec.cell_id is Some. Update existing tests in the same file that expect the proof section so they pass a cell id. No new tests (stdi-4 owns them). Proof: the cell verify; quote the counts. Rules for every cell: keep every rule and its why-clause (agents-block-diet D6); keep test-pinned wording unless this action names the pin; never add a size limit (D1). Write no code comments. Plain English, short sentences. Allowed bee commands: the cell verify, .bee/bin/bee knowledge check, .bee/bin/bee knowledge search. Do not run any bee dispatch or herding verb, not even its help. Run only the cell verify, never the full suite. Commit only the files of this cell, one commit, trailer cell: <id>."
+      },
+      {
+        "id": "stdi-4",
+        "feature": "semantic-token-diet",
+        "title": "Pin the cell-only proof command",
+        "lane": "standard",
+        "role": "test",
+        "deps": [
+          "stdi-3"
+        ],
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- herding::mailbox",
+        "must_haves": {
+          "truths": [
+            "a test asserts a brief with commands.test set and no cell id has no # Proof command section",
+            "a test asserts a brief with commands.test set and a cell id has the # Proof command section before # Files you may touch"
+          ]
+        },
+        "decisions": [
+          "bf647234-d51b-4e7b-b2d4-7432ac4db531"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/herding/mailbox.rs"
+        ],
+        "read_first": [
+          "docs/history/semantic-token-diet/CONTEXT.md",
+          "packages/bee-rs/crates/bee/src/herding/mailbox.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Independently check stdi-3 and pin CONTEXT.md D8 (contract:brief-proof-only-for-cells) with behavior tests in the test module of herding/mailbox.rs. Cite an existing test that already covers a truth instead of duplicating it. State how each new test fails against the pre-stdi-3 code. Report a defect instead of rewriting stdi-3. Proof: the cell verify; quote the counts and test names. Rules for every cell: keep every rule and its why-clause (agents-block-diet D6); keep test-pinned wording unless this action names the pin; never add a size limit (D1). Write no code comments. Plain English, short sentences. Allowed bee commands: the cell verify, .bee/bin/bee knowledge check, .bee/bin/bee knowledge search. Do not run any bee dispatch or herding verb, not even its help. Run only the cell verify, never the full suite. Commit only the files of this cell, one commit, trailer cell: <id>."
+      },
+      {
+        "id": "stdi-5",
+        "feature": "semantic-token-diet",
+        "title": "Print flags before details in command help",
+        "lane": "standard",
+        "role": "code",
+        "deps": [],
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- help registry && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test registry_contracts --test output_spill",
+        "must_haves": {
+          "truths": [
+            "single-command help prints the invoke line, the first sentence of the description, the flags block, then the rest of the description under a line that reads details:",
+            "multi-command help (--all) keeps its current shape",
+            "the descriptions of dispatch prepare, cells cap, cells finish, worktree merge, herding run, close and state set in registry_payload.json carry no decision ids and no history narration, and every behavior they state is still stated",
+            "the herding control-loop help names the roles dispatch, merge, route, supervisor and broker and no longer mentions control-loop.sh"
+          ]
+        },
+        "decisions": [
+          "cf38764c-457e-4a47-b075-1f7546bf994a"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/verbs/help.rs",
+          "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+        ],
+        "read_first": [
+          "docs/history/semantic-token-diet/CONTEXT.md",
+          "packages/bee-rs/crates/bee/src/verbs/help.rs",
+          "docs/history/semantic-token-diet/reports/H-herding-help.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Implement CONTEXT.md D9 (audit H-herding-help.md, CLI help verdict and finding 6). (1) help.rs render_help_text: for a single entry, print the description's first sentence (reuse first_sentence), then the flags block, then, when text remains, a line '    details:' and the remaining description indented. Multi-entry output stays the same. (2) registry_payload.json: in the seven named descriptions remove decision ids (D12, uat-gate-before-merge D1 and the like), issue numbers, and history phrases (legacy, now a no-op, replaced its old meaning, byte-identically to before, pre-contract), rewriting each sentence so the current behavior it states survives. Keep the JSON byte style (same separators, ensure_ascii false). (3) Fix the control-loop description: list all five roles, drop the control-loop.sh sentence and the pre-D4 narration. Update existing tests that pin old help text. No new tests (stdi-6 owns them). Proof: the cell verify; also paste the first 25 lines of .bee/bin/bee dispatch prepare --help from a fresh release build if one exists, else say it was not built. Rules for every cell: keep every rule and its why-clause (agents-block-diet D6); keep test-pinned wording unless this action names the pin; never add a size limit (D1). Write no code comments. Plain English, short sentences. Allowed bee commands: the cell verify, .bee/bin/bee knowledge check, .bee/bin/bee knowledge search. Do not run any bee dispatch or herding verb, not even its help. Run only the cell verify, never the full suite. Commit only the files of this cell, one commit, trailer cell: <id>."
+      },
+      {
+        "id": "stdi-6",
+        "feature": "semantic-token-diet",
+        "title": "Pin flags-before-details help",
+        "lane": "standard",
+        "role": "test",
+        "deps": [
+          "stdi-5"
+        ],
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- help registry",
+        "must_haves": {
+          "truths": [
+            "a test asserts single-command help places the flags: line before the details: line and after the first sentence",
+            "a test asserts multi-command help output has no details: line"
+          ]
+        },
+        "decisions": [
+          "cf38764c-457e-4a47-b075-1f7546bf994a"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/verbs/help.rs"
+        ],
+        "read_first": [
+          "docs/history/semantic-token-diet/CONTEXT.md",
+          "packages/bee-rs/crates/bee/src/verbs/help.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Independently check stdi-5 and pin CONTEXT.md D9 (contract:help-flags-before-details) with behavior tests in help.rs tests. Cite existing tests instead of duplicating. State how each new test fails against the pre-stdi-5 code. Report a defect instead of rewriting stdi-5. Proof: the cell verify; quote counts and test names. Rules for every cell: keep every rule and its why-clause (agents-block-diet D6); keep test-pinned wording unless this action names the pin; never add a size limit (D1). Write no code comments. Plain English, short sentences. Allowed bee commands: the cell verify, .bee/bin/bee knowledge check, .bee/bin/bee knowledge search. Do not run any bee dispatch or herding verb, not even its help. Run only the cell verify, never the full suite. Commit only the files of this cell, one commit, trailer cell: <id>."
+      },
+      {
+        "id": "stdi-7",
+        "feature": "semantic-token-diet",
+        "title": "Move rare doctrine mechanics to read-when playbooks",
+        "lane": "standard",
+        "role": "docs",
+        "deps": [],
+        "verify": ".bee/bin/bee knowledge check && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test rule_index_parity --test pointer_integrity",
+        "must_haves": {
+          "truths": [
+            "packages/bee/LEADER.md keeps the rule agents-other-project-to-its-leader and agents-cli-before-mcp as short governing statements with their why, and the full mechanics of each live in a new packages/bee/playbooks/ file that LEADER.md lists under Playbooks with a read-when line",
+            "the Trigger index and the Deep contracts sections of packages/bee/LEADER.md each fold to one routing line",
+            "packages/bee/LEADER.md no longer repeats the bullets the AGENTS block or the preamble already state (audit A findings F6, F7, F8, F9, F13), and every rule marker still parses",
+            "the project LEADER.md moves the waggledance completion-report template and number rules to docs/handbook/waggledance-completion-report.md behind a two-line trigger, and states ASD-STE100 in one place",
+            "the rule index in router-triage-and-the-agents-md-duplication-boundary.md names the new home of each moved rule"
+          ]
+        },
+        "decisions": [
+          "35d402aa-5c04-4878-aa2b-c6848c1d7e75"
+        ],
+        "files": [
+          "packages/bee/LEADER.md",
+          "packages/bee/playbooks/cross-project.md",
+          "packages/bee/playbooks/cli-before-mcp.md",
+          "LEADER.md",
+          "docs/handbook/waggledance-completion-report.md",
+          "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md"
+        ],
+        "read_first": [
+          "docs/history/semantic-token-diet/CONTEXT.md",
+          "packages/bee/LEADER.md",
+          "LEADER.md",
+          "docs/history/semantic-token-diet/reports/A-doctrine.md",
+          "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md",
+          "packages/bee-rs/crates/bee/tests/rule_index_parity.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [
+          "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md"
+        ],
+        "action": "Implement CONTEXT.md D6 using audit A-doctrine.md findings F2, F3, F4, F6, F7, F8, F9, F10 (keep the re-verify exception line), F11, F12, F13, F14, F15, F17, F18, F20. Skip F1, F16, F19, F21 to F23. Move rule marker blocks with their text into the playbook files when the fence allows it (rule_index_parity.rs accepts markers in packages/bee/playbooks/); otherwise keep the marker in LEADER.md around the short statement. Each new playbook opens with a read-when line in the style of the existing ones. Keep everything on the A-doctrine.md do-not-touch list. Edit sources only; do not run regen. Rules for every cell: keep every rule and its why-clause (agents-block-diet D6); keep test-pinned wording unless this action names the pin; never add a size limit (D1). Write no code comments. Plain English, short sentences. Allowed bee commands: the cell verify, .bee/bin/bee knowledge check, .bee/bin/bee knowledge search. Do not run any bee dispatch or herding verb, not even its help. Run only the cell verify, never the full suite. Commit only the files of this cell, one commit, trailer cell: <id>.",
+        "regen_obligation_ack": "source edits only; stdi-19 runs the regen chain once for every writer"
+      },
+      {
+        "id": "stdi-8",
+        "feature": "semantic-token-diet",
+        "title": "Check the doctrine moves",
+        "lane": "standard",
+        "role": "test",
+        "deps": [
+          "stdi-7"
+        ],
+        "verify": ".bee/bin/bee knowledge check && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test rule_index_parity --test pointer_integrity",
+        "must_haves": {
+          "truths": [
+            "every rule id that packages/bee/LEADER.md held before stdi-7 still has a home with its why-clause",
+            "every new playbook has a read-when line and LEADER.md lists it",
+            "no do-not-touch line from reports/A-doctrine.md was removed"
+          ]
+        },
+        "decisions": [
+          "35d402aa-5c04-4878-aa2b-c6848c1d7e75",
+          "2a2604e3-1996-4ab2-a311-7c72cd0aede4"
+        ],
+        "files": [
+          "docs/history/semantic-token-diet/stdi-8-check.md"
+        ],
+        "read_first": [
+          "docs/history/semantic-token-diet/CONTEXT.md",
+          "packages/bee/LEADER.md",
+          "docs/history/semantic-token-diet/reports/A-doctrine.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Independently check cell stdi-7 against CONTEXT.md. Read its diff (the commit with trailer cell: stdi-7). For each must_have truth write pass or fail with a file:line anchor. Also confirm that every rule the diff moved or cut still has a home, by naming that home with file:line, and that no line from the matching audit report's do-not-touch list was removed. Run the cell verify. Write the result to docs/history/semantic-token-diet/stdi-8-check.md (one line per truth, one line per moved rule, then the verify counts) and commit only that file. Report a defect; do not edit the checked files. Rules for every cell: keep every rule and its why-clause (agents-block-diet D6); keep test-pinned wording unless this action names the pin; never add a size limit (D1). Write no code comments. Plain English, short sentences. Allowed bee commands: the cell verify, .bee/bin/bee knowledge check, .bee/bin/bee knowledge search. Do not run any bee dispatch or herding verb, not even its help. Run only the cell verify, never the full suite. Commit only the files of this cell, one commit, trailer cell: <id>."
+      },
+      {
+        "id": "stdi-9",
+        "feature": "semantic-token-diet",
+        "title": "Give bee-hive references real load triggers",
+        "lane": "standard",
+        "role": "docs",
+        "deps": [],
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pointer_integrity --test route_class_parity",
+        "must_haves": {
+          "truths": [
+            "the References row for routing-and-contracts.md names its load triggers and no row says The default",
+            "the bee-hive body sections Hard rules, the gate and bypass prose and Headless shrink to pointer lines with no rule lost",
+            "routing-and-contracts.md, gates-and-delegation.md and scout-and-ticks.md drop the copies listed in the B-router audit and their pointers to sections that no longer exist are fixed"
+          ]
+        },
+        "decisions": [
+          "66dfeff7-b683-4fcd-93c4-6928d76f8bb1",
+          "74fb4b50-9dab-498d-8d29-9f90f52c8541"
+        ],
+        "files": [
+          "skills/bee-hive/SKILL.md",
+          "skills/bee-hive/references/routing-and-contracts.md",
+          "skills/bee-hive/references/gates-and-delegation.md",
+          "skills/bee-hive/references/scout-and-ticks.md",
+          "skills/bee-hive/references/go-mode.md",
+          "skills/bee-hive/references/provenance.md"
+        ],
+        "read_first": [
+          "docs/history/semantic-token-diet/CONTEXT.md",
+          "skills/bee-hive/SKILL.md",
+          "docs/history/semantic-token-diet/reports/B-router.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Implement CONTEXT.md D4 and the bee-hive part of D2 using audit B-router.md findings F1 to F22. Decision ids and history removed from live text go to skills/bee-hive/references/provenance.md (create it). Keep every quoted heading that Rust or tests cite (rg the heading in packages/bee-rs before you rename or remove one) and everything on the B-router.md do-not-touch list. Edit sources only; do not run regen. Rules for every cell: keep every rule and its why-clause (agents-block-diet D6); keep test-pinned wording unless this action names the pin; never add a size limit (D1). Write no code comments. Plain English, short sentences. Allowed bee commands: the cell verify, .bee/bin/bee knowledge check, .bee/bin/bee knowledge search. Do not run any bee dispatch or herding verb, not even its help. Run only the cell verify, never the full suite. Commit only the files of this cell, one commit, trailer cell: <id>.",
+        "regen_obligation_ack": "source edits only; stdi-19 runs the regen chain once for every writer"
+      },
+      {
+        "id": "stdi-10",
+        "feature": "semantic-token-diet",
+        "title": "Check the bee-hive moves",
+        "lane": "standard",
+        "role": "test",
+        "deps": [
+          "stdi-9"
+        ],
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pointer_integrity --test route_class_parity",
+        "must_haves": {
+          "truths": [
+            "every rule removed from the bee-hive body still has a home, named with file:line",
+            "no do-not-touch line from reports/B-router.md was removed",
+            "every heading cited from packages/bee-rs still resolves"
+          ]
+        },
+        "decisions": [
+          "66dfeff7-b683-4fcd-93c4-6928d76f8bb1",
+          "2a2604e3-1996-4ab2-a311-7c72cd0aede4"
+        ],
+        "files": [
+          "docs/history/semantic-token-diet/stdi-10-check.md"
+        ],
+        "read_first": [
+          "docs/history/semantic-token-diet/CONTEXT.md",
+          "skills/bee-hive/SKILL.md",
+          "docs/history/semantic-token-diet/reports/B-router.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Independently check cell stdi-9 against CONTEXT.md. Read its diff (the commit with trailer cell: stdi-9). For each must_have truth write pass or fail with a file:line anchor. Also confirm that every rule the diff moved or cut still has a home, by naming that home with file:line, and that no line from the matching audit report's do-not-touch list was removed. Run the cell verify. Write the result to docs/history/semantic-token-diet/stdi-10-check.md (one line per truth, one line per moved rule, then the verify counts) and commit only that file. Report a defect; do not edit the checked files. Rules for every cell: keep every rule and its why-clause (agents-block-diet D6); keep test-pinned wording unless this action names the pin; never add a size limit (D1). Write no code comments. Plain English, short sentences. Allowed bee commands: the cell verify, .bee/bin/bee knowledge check, .bee/bin/bee knowledge search. Do not run any bee dispatch or herding verb, not even its help. Run only the cell verify, never the full suite. Commit only the files of this cell, one commit, trailer cell: <id>."
+      },
+      {
+        "id": "stdi-11",
+        "feature": "semantic-token-diet",
+        "title": "Split planning-reference.md by branch",
+        "lane": "standard",
+        "role": "docs",
+        "deps": [
+          "stdi-7",
+          "stdi-9"
+        ],
+        "verify": ".bee/bin/bee knowledge check && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pointer_integrity",
+        "must_haves": {
+          "truths": [
+            "skills/bee-planning/references/planning-reference.md is replaced by references/cells.md (cell rules, example JSON, pre-flight, test scoping, tiny and small merged gate, playbooks) and references/plan-artifact.md (plan.md template, claims table, approach, phases, consolidation cell JSON, hat-wave consumption)",
+            "every pointer to planning-reference.md outside docs/history and docs/decisions names the new file and section",
+            "the no-trailing-test-cell section and the writer-owns-its-tests lines are gone and edge-dimensions.md names the tester cell; design-sketch.md names the shape gate",
+            "hat-wave consumption keeps only the planning-only parts listed in audit D finding F3"
+          ]
+        },
+        "decisions": [
+          "90df38fd-d267-4da4-a513-7d5bc530dda1",
+          "74fb4b50-9dab-498d-8d29-9f90f52c8541"
+        ],
+        "files": [
+          "skills/bee-planning/SKILL.md",
+          "skills/bee-planning/references/planning-reference.md",
+          "skills/bee-planning/references/cells.md",
+          "skills/bee-planning/references/plan-artifact.md",
+          "skills/bee-planning/references/design-sketch.md",
+          "skills/bee-planning/references/edge-dimensions.md",
+          "skills/bee-planning/references/provenance.md",
+          "skills/bee-hive/references/scout-and-ticks.md",
+          "skills/bee-hive/references/routing-and-contracts.md",
+          "packages/bee/LEADER.md",
+          "skills/bee-planning/playbooks/spike/prototype.md",
+          "skills/bee-planning/playbooks/feature/multi-phase-plan.md",
+          "docs/02-architecture.md",
+          "docs/04-skills-spec.md",
+          "docs/handbook/stages/planning.md",
+          "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs",
+          "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md",
+          "docs/knowledge/areas/doctrine-layer/lane-and-working-discipline.md",
+          "docs/knowledge/areas/verify-pipeline/skill-reference-pointer-integrity.md",
+          "docs/knowledge/areas/workflow-state/cells-authoring-and-revision.md",
+          "docs/knowledge/areas/workflow-state/dissent-and-the-verdict-duty.md",
+          "docs/knowledge/areas/workflow-state/cells-scheduling.md",
+          "docs/knowledge/patterns/20260728-a-derivation-the-tooling-computes-but-doctrine-forbids-where-it-is-needed.md"
+        ],
+        "read_first": [
+          "docs/history/semantic-token-diet/CONTEXT.md",
+          "skills/bee-planning/SKILL.md",
+          "skills/bee-planning/references/planning-reference.md",
+          "docs/history/semantic-token-diet/reports/D-planning.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Implement CONTEXT.md D5 and the planning part of D2 using audit D-planning.md findings F1 to F11. Delete planning-reference.md after the split (git mv the larger half to keep history). Decision ids and history go to skills/bee-planning/references/provenance.md. Repoint every pointer listed in files (rg planning-reference again first; skip docs/history, docs/decisions, docs/discovery and skills/*/CREATION-LOG.md, which are records). Keep the phrase load-bearing claims table (set_gate.rs asserts it) and the D-planning.md do-not-touch list. In set_gate.rs change only the path text. Edit sources only; do not run regen. Rules for every cell: keep every rule and its why-clause (agents-block-diet D6); keep test-pinned wording unless this action names the pin; never add a size limit (D1). Write no code comments. Plain English, short sentences. Allowed bee commands: the cell verify, .bee/bin/bee knowledge check, .bee/bin/bee knowledge search. Do not run any bee dispatch or herding verb, not even its help. Run only the cell verify, never the full suite. Commit only the files of this cell, one commit, trailer cell: <id>.",
+        "regen_obligation_ack": "source edits only; stdi-19 runs the regen chain once for every writer"
+      },
+      {
+        "id": "stdi-12",
+        "feature": "semantic-token-diet",
+        "title": "Check the planning split",
+        "lane": "standard",
+        "role": "test",
+        "deps": [
+          "stdi-11"
+        ],
+        "verify": ".bee/bin/bee knowledge check && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pointer_integrity",
+        "must_haves": {
+          "truths": [
+            "rg planning-reference outside docs/history, docs/decisions, docs/discovery and CREATION-LOG files returns nothing",
+            "every section of the old file has exactly one new home",
+            "no do-not-touch line from reports/D-planning.md was removed"
+          ]
+        },
+        "decisions": [
+          "90df38fd-d267-4da4-a513-7d5bc530dda1",
+          "2a2604e3-1996-4ab2-a311-7c72cd0aede4"
+        ],
+        "files": [
+          "docs/history/semantic-token-diet/stdi-12-check.md"
+        ],
+        "read_first": [
+          "docs/history/semantic-token-diet/CONTEXT.md",
+          "skills/bee-planning/SKILL.md",
+          "docs/history/semantic-token-diet/reports/D-planning.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Independently check cell stdi-11 against CONTEXT.md. Read its diff (the commit with trailer cell: stdi-11). For each must_have truth write pass or fail with a file:line anchor. Also confirm that every rule the diff moved or cut still has a home, by naming that home with file:line, and that no line from the matching audit report's do-not-touch list was removed. Run the cell verify. Write the result to docs/history/semantic-token-diet/stdi-12-check.md (one line per truth, one line per moved rule, then the verify counts) and commit only that file. Report a defect; do not edit the checked files. Rules for every cell: keep every rule and its why-clause (agents-block-diet D6); keep test-pinned wording unless this action names the pin; never add a size limit (D1). Write no code comments. Plain English, short sentences. Allowed bee commands: the cell verify, .bee/bin/bee knowledge check, .bee/bin/bee knowledge search. Do not run any bee dispatch or herding verb, not even its help. Run only the cell verify, never the full suite. Commit only the files of this cell, one commit, trailer cell: <id>."
+      },
+      {
+        "id": "stdi-13",
+        "feature": "semantic-token-diet",
+        "title": "Fix dead pointers in playbooks and knowledge-upkeep",
+        "lane": "standard",
+        "role": "docs",
+        "deps": [
+          "stdi-11"
+        ],
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test class_playbook_parity --test route_class_parity --test pointer_integrity",
+        "must_haves": {
+          "truths": [
+            "no playbook file says the proof floor table is in bee cells finish --help; each class index states that the cap names the floor when it refuses",
+            "no playbook passes --cleanup to bee worktree merge",
+            "bug-fix.md step 2 names bee-principle-red-before-green instead of a stale line anchor",
+            "bee-knowledge-upkeep SKILL.md tells the agent to read the due reasons from bee upkeep due and says the thresholds live in the binary, and drops the read-and-write table"
+          ]
+        },
+        "decisions": [
+          "74fb4b50-9dab-498d-8d29-9f90f52c8541"
+        ],
+        "files": [
+          "skills/bee-planning/playbooks",
+          "skills/bee-knowledge-upkeep/SKILL.md"
+        ],
+        "read_first": [
+          "docs/history/semantic-token-diet/CONTEXT.md",
+          "docs/history/semantic-token-diet/reports/C-playbooks.md",
+          "docs/history/semantic-token-diet/reports/G-close-review.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Implement the playbook and knowledge-upkeep part of CONTEXT.md D2: audit C-playbooks.md findings 2, 4, 5 and G-close-review.md findings 16, 17. The files entry skills/bee-planning/playbooks means only the files those findings name (rg 'Proof floor' and rg -- '--cleanup' under it). Keep the Situations row grammar exactly. Edit sources only; do not run regen. Rules for every cell: keep every rule and its why-clause (agents-block-diet D6); keep test-pinned wording unless this action names the pin; never add a size limit (D1). Write no code comments. Plain English, short sentences. Allowed bee commands: the cell verify, .bee/bin/bee knowledge check, .bee/bin/bee knowledge search. Do not run any bee dispatch or herding verb, not even its help. Run only the cell verify, never the full suite. Commit only the files of this cell, one commit, trailer cell: <id>.",
+        "regen_obligation_ack": "source edits only; stdi-19 runs the regen chain once for every writer"
+      },
+      {
+        "id": "stdi-14",
+        "feature": "semantic-token-diet",
+        "title": "Check the playbook fixes",
+        "lane": "standard",
+        "role": "test",
+        "deps": [
+          "stdi-13"
+        ],
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test class_playbook_parity --test route_class_parity --test pointer_integrity",
+        "must_haves": {
+          "truths": [
+            "rg 'cells finish --help' and rg -- '--cleanup' under skills/bee-planning/playbooks return nothing",
+            "every Situations row still parses",
+            "the knowledge-upkeep change keeps the step-2 rank order"
+          ]
+        },
+        "decisions": [
+          "74fb4b50-9dab-498d-8d29-9f90f52c8541",
+          "2a2604e3-1996-4ab2-a311-7c72cd0aede4"
+        ],
+        "files": [
+          "docs/history/semantic-token-diet/stdi-14-check.md"
+        ],
+        "read_first": [
+          "docs/history/semantic-token-diet/CONTEXT.md",
+          "docs/history/semantic-token-diet/reports/C-playbooks.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Independently check cell stdi-13 against CONTEXT.md. Read its diff (the commit with trailer cell: stdi-13). For each must_have truth write pass or fail with a file:line anchor. Also confirm that every rule the diff moved or cut still has a home, by naming that home with file:line, and that no line from the matching audit report's do-not-touch list was removed. Run the cell verify. Write the result to docs/history/semantic-token-diet/stdi-14-check.md (one line per truth, one line per moved rule, then the verify counts) and commit only that file. Report a defect; do not edit the checked files. Rules for every cell: keep every rule and its why-clause (agents-block-diet D6); keep test-pinned wording unless this action names the pin; never add a size limit (D1). Write no code comments. Plain English, short sentences. Allowed bee commands: the cell verify, .bee/bin/bee knowledge check, .bee/bin/bee knowledge search. Do not run any bee dispatch or herding verb, not even its help. Run only the cell verify, never the full suite. Commit only the files of this cell, one commit, trailer cell: <id>."
+      },
+      {
+        "id": "stdi-15",
+        "feature": "semantic-token-diet",
+        "title": "Load only the Execute contract into workers",
+        "lane": "standard",
+        "role": "code",
+        "deps": [],
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- drivers && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pointer_integrity",
+        "must_haves": {
+          "truths": [
+            "skills/bee-swarming/references/execute.md holds the Execute (worker) section and the Tester contract, and skills/bee-swarming/SKILL.md keeps one pointer line to it",
+            "packages/bee/prompts/worker-cell.md tells the native worker to read skills/bee-swarming/references/execute.md instead of loading the whole bee-swarming skill, and the golden native prompt test is updated to the new line",
+            "worker-cell.md is named as the one home of the Result form; swarming-reference.md replaces its Worker Prompt Template and Result form copies with pointers",
+            "the bee-worker and bee-comb agent templates no longer repeat rules the rendered prompt carries, and bee-forager, bee-scout and bee-elder drop the registry and reservation line"
+          ]
+        },
+        "decisions": [
+          "6d9d5f99-0e99-4f9b-9b15-add53a40f90b"
+        ],
+        "files": [
+          "skills/bee-swarming/SKILL.md",
+          "skills/bee-swarming/references/execute.md",
+          "skills/bee-swarming/references/swarming-reference.md",
+          "skills/bee-swarming/references/provenance.md",
+          "packages/bee/prompts/worker-cell.md",
+          "packages/bee/agents/bee-worker.md.tmpl",
+          "packages/bee/agents/bee-comb.md.tmpl",
+          "packages/bee/agents/bee-forager.md.tmpl",
+          "packages/bee/agents/bee-scout.md.tmpl",
+          "packages/bee/agents/bee-elder.md.tmpl",
+          "packages/bee/agents/bee-guard.md.tmpl",
+          "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+        ],
+        "read_first": [
+          "docs/history/semantic-token-diet/CONTEXT.md",
+          "skills/bee-swarming/SKILL.md",
+          "packages/bee/prompts/worker-cell.md",
+          "docs/history/semantic-token-diet/reports/F-execution.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Implement CONTEXT.md D3 using audit F-execution.md findings F1 to F15. Keep the bee-swarming description clause about the worker for one cell id (skill trigger fixture). Keep the herding test that asserts the herding prompt has no skill-load line passing. Before naming worker-cell.md the Result form home, check its form against the cells finish report validation and say which form the code accepts. Decision ids go to skills/bee-swarming/references/provenance.md. Keep the F-execution.md do-not-touch list. Update the golden prompt constant and any test forced by the change; no other new tests (stdi-16 owns them). Edit sources only; do not run regen. Rules for every cell: keep every rule and its why-clause (agents-block-diet D6); keep test-pinned wording unless this action names the pin; never add a size limit (D1). Write no code comments. Plain English, short sentences. Allowed bee commands: the cell verify, .bee/bin/bee knowledge check, .bee/bin/bee knowledge search. Do not run any bee dispatch or herding verb, not even its help. Run only the cell verify, never the full suite. Commit only the files of this cell, one commit, trailer cell: <id>.",
+        "regen_obligation_ack": "source edits only; stdi-19 runs the regen chain once for every writer"
+      },
+      {
+        "id": "stdi-16",
+        "feature": "semantic-token-diet",
+        "title": "Pin the execute pointer in the worker prompt",
+        "lane": "standard",
+        "role": "test",
+        "deps": [
+          "stdi-15"
+        ],
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- drivers",
+        "must_haves": {
+          "truths": [
+            "a test asserts the rendered native worker prompt names skills/bee-swarming/references/execute.md and does not tell the worker to load the bee-swarming skill",
+            "a test asserts skills/bee-swarming/references/execute.md exists and holds the status tokens DONE, BLOCKED, HANDOFF, PARKED and NOOP"
+          ]
+        },
+        "decisions": [
+          "6d9d5f99-0e99-4f9b-9b15-add53a40f90b"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+        ],
+        "read_first": [
+          "docs/history/semantic-token-diet/CONTEXT.md",
+          "packages/bee/prompts/worker-cell.md",
+          "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Independently check stdi-15 and pin CONTEXT.md D3 (contract:worker-prompt-execute-pointer) with behavior tests in drivers/tests.rs. Cite the golden test where it already covers a truth. State how each new test fails against the pre-stdi-15 prompt. Report a defect instead of rewriting stdi-15. Proof: the cell verify; quote counts and test names. Rules for every cell: keep every rule and its why-clause (agents-block-diet D6); keep test-pinned wording unless this action names the pin; never add a size limit (D1). Write no code comments. Plain English, short sentences. Allowed bee commands: the cell verify, .bee/bin/bee knowledge check, .bee/bin/bee knowledge search. Do not run any bee dispatch or herding verb, not even its help. Run only the cell verify, never the full suite. Commit only the files of this cell, one commit, trailer cell: <id>."
+      },
+      {
+        "id": "stdi-17",
+        "feature": "semantic-token-diet",
+        "title": "Split role-dispatch.md at the interlock",
+        "lane": "standard",
+        "role": "docs",
+        "deps": [],
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- control_loop && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pointer_integrity",
+        "must_haves": {
+          "truths": [
+            "skills/bee-herding/references/role-dispatch.md ends after the interlock check with a hand-off line to references/role-dispatch-spawn.md, which holds the set build through section 8 with the section numbers unchanged",
+            "the quick-reference table is gone and the incident measurements moved to spawn-proof.md with each rule kept as one sentence",
+            "operational-invariants.md points at bee herding status --job <id>; role-dispatch.md and README.md say only enable and disable are unbuilt; agents/openai.yaml names every role",
+            "skills/bee-herding/SKILL.md says read your role reference in full, following its own hand-off"
+          ]
+        },
+        "decisions": [
+          "e5f3d375-90c7-4293-8281-f0939c9961d6",
+          "74fb4b50-9dab-498d-8d29-9f90f52c8541"
+        ],
+        "files": [
+          "skills/bee-herding/SKILL.md",
+          "skills/bee-herding/README.md",
+          "skills/bee-herding/agents/openai.yaml",
+          "skills/bee-herding/references/role-dispatch.md",
+          "skills/bee-herding/references/role-dispatch-spawn.md",
+          "skills/bee-herding/references/spawn-proof.md",
+          "skills/bee-herding/references/operational-invariants.md",
+          "skills/bee-herding/references/route-prompt.md"
+        ],
+        "read_first": [
+          "docs/history/semantic-token-diet/CONTEXT.md",
+          "skills/bee-herding/SKILL.md",
+          "skills/bee-herding/references/role-dispatch.md",
+          "docs/history/semantic-token-diet/reports/H-herding-help.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Implement CONTEXT.md D10 and the herding part of D2 using audit H-herding-help.md findings 1 to 5, 7, 8, 11, 12. Keep section numbers (Rust comments cite them), the needles control_loop.rs pins in route-prompt.md and supervisor-prompt.md, and the H-herding-help.md do-not-touch list. Edit sources only; do not run regen. Rules for every cell: keep every rule and its why-clause (agents-block-diet D6); keep test-pinned wording unless this action names the pin; never add a size limit (D1). Write no code comments. Plain English, short sentences. Allowed bee commands: the cell verify, .bee/bin/bee knowledge check, .bee/bin/bee knowledge search. Do not run any bee dispatch or herding verb, not even its help. Run only the cell verify, never the full suite. Commit only the files of this cell, one commit, trailer cell: <id>.",
+        "regen_obligation_ack": "source edits only; stdi-19 runs the regen chain once for every writer"
+      },
+      {
+        "id": "stdi-18",
+        "feature": "semantic-token-diet",
+        "title": "Check the herding split",
+        "lane": "standard",
+        "role": "test",
+        "deps": [
+          "stdi-17"
+        ],
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- control_loop && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pointer_integrity",
+        "must_haves": {
+          "truths": [
+            "an idle dispatch tick that stops at sections 2, 4 or 5 never needs role-dispatch-spawn.md",
+            "every rule from the old sections 5 to 8 has one home",
+            "no do-not-touch line from reports/H-herding-help.md was removed"
+          ]
+        },
+        "decisions": [
+          "e5f3d375-90c7-4293-8281-f0939c9961d6",
+          "2a2604e3-1996-4ab2-a311-7c72cd0aede4"
+        ],
+        "files": [
+          "docs/history/semantic-token-diet/stdi-18-check.md"
+        ],
+        "read_first": [
+          "docs/history/semantic-token-diet/CONTEXT.md",
+          "skills/bee-herding/references/role-dispatch.md",
+          "docs/history/semantic-token-diet/reports/H-herding-help.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Independently check cell stdi-17 against CONTEXT.md. Read its diff (the commit with trailer cell: stdi-17). For each must_have truth write pass or fail with a file:line anchor. Also confirm that every rule the diff moved or cut still has a home, by naming that home with file:line, and that no line from the matching audit report's do-not-touch list was removed. Run the cell verify. Write the result to docs/history/semantic-token-diet/stdi-18-check.md (one line per truth, one line per moved rule, then the verify counts) and commit only that file. Report a defect; do not edit the checked files. Rules for every cell: keep every rule and its why-clause (agents-block-diet D6); keep test-pinned wording unless this action names the pin; never add a size limit (D1). Write no code comments. Plain English, short sentences. Allowed bee commands: the cell verify, .bee/bin/bee knowledge check, .bee/bin/bee knowledge search. Do not run any bee dispatch or herding verb, not even its help. Run only the cell verify, never the full suite. Commit only the files of this cell, one commit, trailer cell: <id>."
+      },
+      {
+        "id": "stdi-19",
+        "feature": "semantic-token-diet",
+        "title": "Re-render the generated copies",
+        "lane": "standard",
+        "role": "docs",
+        "deps": [
+          "stdi-2",
+          "stdi-4",
+          "stdi-6",
+          "stdi-8",
+          "stdi-10",
+          "stdi-12",
+          "stdi-14",
+          "stdi-16",
+          "stdi-18"
+        ],
+        "verify": ".bee/bin/bee onboard --repo-root . --json && .bee/bin/bee dev release-manifest --check && .bee/bin/bee knowledge check",
+        "must_haves": {
+          "truths": [
+            "bee dev regen ran once after every writer cell and the rendered copies match their sources",
+            "hub-served skills under .claude/skills that regen re-rendered are restored before the commit"
+          ]
+        },
+        "decisions": [
+          "2a2604e3-1996-4ab2-a311-7c72cd0aede4"
+        ],
+        "files": [
+          ".bee/LEADER.md",
+          ".bee/playbooks",
+          ".claude/skills",
+          ".claude/agents",
+          ".agents/skills",
+          ".bee/onboarding.json",
+          "skills-lock.json",
+          "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+          "docs/history/codex-harness-hardening/release-manifest.json"
+        ],
+        "read_first": [
+          "docs/history/semantic-token-diet/CONTEXT.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Run .bee/bin/bee dev regen in the worktree. Then restore every path under .claude/skills that is a Skillstation hub alias (git restore and git clean -fd on those paths only; keep bee-* skills that are rendered from skills/). Run the cell verify and commit the rendered outputs. If regen changes a file outside files, list it in the report and commit it too. Allowed bee commands here also include .bee/bin/bee dev regen and .bee/bin/bee dev release-manifest --check. Rules for every cell: keep every rule and its why-clause (agents-block-diet D6); keep test-pinned wording unless this action names the pin; never add a size limit (D1). Write no code comments. Plain English, short sentences. Allowed bee commands: the cell verify, .bee/bin/bee knowledge check, .bee/bin/bee knowledge search. Do not run any bee dispatch or herding verb, not even its help. Run only the cell verify, never the full suite. Commit only the files of this cell, one commit, trailer cell: <id>."
+      },
+      {
+        "id": "stdi-20",
+        "feature": "semantic-token-diet",
+        "title": "Consolidate knowledge for the diet",
+        "lane": "standard",
+        "role": "writer",
+        "deps": [
+          "stdi-19"
+        ],
+        "verify": ".bee/bin/bee knowledge check",
+        "must_haves": {
+          "truths": [
+            "docs/knowledge/areas/hook-runtime/token-economy-of-injected-context.md states the new trailer, the cell-only proof command and the flags-before-details help, citing semantic-token-diet D7 to D9",
+            "docs/history/semantic-token-diet/delivery.md lists each D-number with the cell that delivered it and the bytes each branch stops loading",
+            "bee knowledge consolidate --feature semantic-token-diet ran and its output was applied"
+          ]
+        },
+        "decisions": [
+          "f21a5bf3-9de6-4e05-a836-711a70f99c53",
+          "bf647234-d51b-4e7b-b2d4-7432ac4db531",
+          "cf38764c-457e-4a47-b075-1f7546bf994a",
+          "2a2604e3-1996-4ab2-a311-7c72cd0aede4"
+        ],
+        "files": [
+          "docs/knowledge/areas/hook-runtime/token-economy-of-injected-context.md",
+          "docs/knowledge/areas/bee-herding/the-run-verb-and-worker-outcomes.md",
+          "docs/history/semantic-token-diet/delivery.md"
+        ],
+        "read_first": [
+          "docs/history/semantic-token-diet/CONTEXT.md",
+          "docs/knowledge/areas/hook-runtime/token-economy-of-injected-context.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [
+          "docs/knowledge/areas/hook-runtime/token-economy-of-injected-context.md"
+        ],
+        "action": "Run .bee/bin/bee knowledge consolidate --feature semantic-token-diet and apply what it reports. Update the token-economy concept (trailer text, proof command only for cell jobs, help order) and the run-verb concept (proof command rule), citing semantic-token-diet D-numbers, never raw decision ids. Write delivery.md. Allowed bee commands here also include .bee/bin/bee knowledge consolidate. Rules for every cell: keep every rule and its why-clause (agents-block-diet D6); keep test-pinned wording unless this action names the pin; never add a size limit (D1). Write no code comments. Plain English, short sentences. Allowed bee commands: the cell verify, .bee/bin/bee knowledge check, .bee/bin/bee knowledge search. Do not run any bee dispatch or herding verb, not even its help. Run only the cell verify, never the full suite. Commit only the files of this cell, one commit, trailer cell: <id>."
+      },
+      {
+        "id": "stdi-21",
+        "feature": "semantic-token-diet",
+        "title": "Check the rendered copies and the consolidated knowledge",
+        "lane": "standard",
+        "role": "test",
+        "deps": [
+          "stdi-19",
+          "stdi-20"
+        ],
+        "verify": ".bee/bin/bee onboard --repo-root . --json && .bee/bin/bee dev release-manifest --check && .bee/bin/bee knowledge check",
+        "must_haves": {
+          "truths": [
+            "every rendered copy matches its source: release-manifest --check is clean and onboard reports no changes needed",
+            "no Skillstation hub alias under .claude/skills changed in the stdi-19 commit",
+            "the token-economy and run-verb concepts state D7 to D9 as the code now behaves, citing semantic-token-diet D-numbers and no raw decision ids",
+            "delivery.md names a delivering cell for each of D1 to D10"
+          ]
+        },
+        "decisions": [
+          "2a2604e3-1996-4ab2-a311-7c72cd0aede4",
+          "f21a5bf3-9de6-4e05-a836-711a70f99c53",
+          "bf647234-d51b-4e7b-b2d4-7432ac4db531",
+          "cf38764c-457e-4a47-b075-1f7546bf994a"
+        ],
+        "files": [
+          "docs/history/semantic-token-diet/stdi-21-check.md"
+        ],
+        "read_first": [
+          "docs/history/semantic-token-diet/CONTEXT.md",
+          "docs/history/semantic-token-diet/delivery.md",
+          "docs/knowledge/areas/hook-runtime/token-economy-of-injected-context.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Independently check cells stdi-19 and stdi-20 against CONTEXT.md. For each must_have truth write pass or fail with a file:line anchor or the command output. Run the cell verify. Write the result to docs/history/semantic-token-diet/stdi-21-check.md and commit only that file. Report a defect; do not edit the checked files. Allowed bee commands here also include .bee/bin/bee onboard --repo-root . --json and .bee/bin/bee dev release-manifest --check. Rules for every cell: keep every rule and its why-clause (agents-block-diet D6); keep test-pinned wording unless this action names the pin; never add a size limit (D1). Write no code comments. Plain English, short sentences. Allowed bee commands: the cell verify, .bee/bin/bee knowledge check, .bee/bin/bee knowledge search. Do not run any bee dispatch or herding verb, not even its help. Run only the cell verify, never the full suite. Commit only the files of this cell, one commit, trailer cell: <id>."
+      }
+    ],
+    "role_plan": {
+      "schema_version": "1.0",
+      "runtime": "claude",
+      "roster_sha256": "d4e696dbde7989d6388dacce3fd7057cb3a6935b46024b79698596a46f6f41d3",
+      "stages": [
+        {
+          "stage": "implementation",
+          "classification": "required",
+          "role": "code",
+          "reason": "stdi-1, stdi-3, stdi-5 and stdi-15 change Rust or the rendered worker prompt."
+        },
+        {
+          "stage": "test-and-live-proof",
+          "classification": "required",
+          "role": "test",
+          "reason": "Each code cell and each docs cell has a separate tester or checker."
+        },
+        {
+          "stage": "docs",
+          "classification": "required",
+          "role": "docs",
+          "reason": "stdi-7, 9, 11, 13, 17 and 19 move instruction text and run regen."
+        },
+        {
+          "stage": "writing",
+          "classification": "required",
+          "role": "writer",
+          "reason": "stdi-20 consolidates knowledge and writes delivery.md."
+        },
+        {
+          "stage": "slice-judge",
+          "classification": "not-applicable",
+          "role": "review",
+          "reason": "Text layout change; the tester and checker cells are the independent check. Review stays user-invoked."
+        },
+        {
+          "stage": "hat-facts-gaps",
+          "classification": "not-applicable",
+          "role": "hat-facts-gaps",
+          "reason": "Eight read-only audits in reports/ opened every anchor this plan uses."
+        },
+        {
+          "stage": "hat-alternatives",
+          "classification": "not-applicable",
+          "role": "hat-alternatives",
+          "reason": "The Approach names the rejected paths; each audit weighed move against cut."
+        },
+        {
+          "stage": "hat-user-impact",
+          "classification": "not-applicable",
+          "role": "hat-user-impact",
+          "reason": "Every rule keeps a home; only where it loads changes."
+        },
+        {
+          "stage": "hat-risks",
+          "classification": "not-applicable",
+          "role": "hat-risks",
+          "reason": "No gate, guard or state write changes; pinned strings change only under D3 and D7."
+        },
+        {
+          "stage": "hat-value",
+          "classification": "not-applicable",
+          "role": "hat-value",
+          "reason": "The owner asked for this directly."
+        },
+        {
+          "stage": "deployment",
+          "classification": "not-applicable",
+          "role": "deploy",
+          "reason": "No release in this feature."
+        },
+        {
+          "stage": "planning",
+          "classification": "not-applicable",
+          "role": "plan",
+          "reason": "The leader wrote the plan."
+        },
+        {
+          "stage": "read-only-gather",
+          "classification": "not-applicable",
+          "role": "read",
+          "reason": "The audits were the gather."
+        },
+        {
+          "stage": "fact-extraction",
+          "classification": "not-applicable",
+          "role": "extraction",
+          "reason": "No extraction stage."
+        },
+        {
+          "stage": "generation-fallback",
+          "classification": "not-applicable",
+          "role": "generation",
+          "reason": "Every cell has a configured role."
+        },
+        {
+          "stage": "generic-advisor",
+          "classification": "not-applicable",
+          "role": "advisor",
+          "reason": "Standard lane; no high-risk advisor consult."
+        },
+        {
+          "stage": "supervision",
+          "classification": "not-applicable",
+          "role": "supervisor",
+          "reason": "Attended session."
+        },
+        {
+          "stage": "blind-lane-1",
+          "classification": "not-applicable",
+          "role": "lane-1",
+          "reason": "No blind lanes."
+        },
+        {
+          "stage": "blind-lane-2",
+          "classification": "not-applicable",
+          "role": "lane-2",
+          "reason": "No blind lanes."
+        },
+        {
+          "stage": "blind-lane-3",
+          "classification": "not-applicable",
+          "role": "lane-3",
+          "reason": "No blind lanes."
+        },
+        {
+          "stage": "design-ui",
+          "classification": "not-applicable",
+          "role": "design",
+          "reason": "No rendered UI."
+        }
+      ]
+    }
+  },
+  "gate_revoked_at": {
+    "execution": "2026-11-16T16:23:03.776Z"
+  },
+  "merge_ready": {
+    "since": "2026-11-16T16:20:25.552Z",
+    "branch": "wt/semantic-token-diet",
+    "worktree_id": "beehive--wt--semantic-token-diet",
+    "uat": "pending",
+    "blocked_by": []
+  }
+}
