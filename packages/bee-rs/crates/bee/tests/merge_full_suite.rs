@@ -3,14 +3,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 fn binary() -> PathBuf {
-    let mut dir = std::env::current_exe().expect("test binary path");
-    dir.pop();
-    if dir.ends_with("deps") {
-        dir.pop();
-    }
-    let bin = dir.join(format!("bee{}", std::env::consts::EXE_SUFFIX));
-    assert!(bin.is_file(), "built bee binary not found at {}", bin.display());
-    bin
+    PathBuf::from(env!("CARGO_BIN_EXE_bee"))
 }
 
 fn run(dir: &Path, args: &[&str]) -> (i32, String) {

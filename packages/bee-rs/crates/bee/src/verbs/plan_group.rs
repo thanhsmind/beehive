@@ -344,8 +344,7 @@ mod tests {
     }
 
     fn check(root: &Path) -> (Option<i32>, Value, String) {
-        let out = Command::cargo_bin("bee")
-            .unwrap()
+        let out = Command::new(crate::test_support::built_bee())
             .args(["plan", "check", "--feature", "demo", "--json"])
             .env_remove("BEE_HERDING_WORKER")
             .current_dir(root)
@@ -498,8 +497,7 @@ mod tests {
         let tmp = repo(&body, Some(CONTEXT));
         let state = r#"{"schema_version":"1.0","feature":"demo","phase":"planning","approved_gates":{}}"#;
         std::fs::write(tmp.path().join(".bee/state.json"), state).unwrap();
-        let out = Command::cargo_bin("bee")
-            .unwrap()
+        let out = Command::new(crate::test_support::built_bee())
             .args(["gate", "--preview"])
             .env_remove("BEE_HERDING_WORKER")
             .current_dir(tmp.path())

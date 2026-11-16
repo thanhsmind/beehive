@@ -117,15 +117,7 @@ fn run_example(bin: &Path, cwd: &Path, example: &str) -> Verdict {
 }
 
 fn binary() -> std::path::PathBuf {
-    // The test binary lives in target/<profile>/deps/, next to bee itself.
-    let mut dir = std::env::current_exe().expect("test binary path");
-    dir.pop();
-    if dir.ends_with("deps") {
-        dir.pop();
-    }
-    let bin = dir.join(format!("bee{}", std::env::consts::EXE_SUFFIX));
-    assert!(bin.is_file(), "built bee binary not found at {}", bin.display());
-    bin
+    std::path::PathBuf::from(env!("CARGO_BIN_EXE_bee"))
 }
 
 #[test]

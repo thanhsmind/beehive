@@ -229,6 +229,9 @@ concurrency-safe and hermetic is `concurrency-and-hermetic-runs.md`.
   selects nothing exits non-zero. The same three obligations bind suite-level
   and check-level narrowing alike, so no filtered run can present itself as
   proof it did not produce (check-filter D1).
+- **R9** — Tests find the built `bee` binary through `CARGO_BIN_EXE_bee` (integration tests) or
+  `test_support::built_bee` (unit tests), never by popping directories from `current_exe()`, because Cargo 1.100
+  moved test executables to `build/<pkg>/<hash>/out` while the binary stays at `<profile>/bee` (cargo-build-dir-tests D1).
 
 ## Edge Cases Settled
 

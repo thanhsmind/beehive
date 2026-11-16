@@ -474,14 +474,7 @@ use crate::version::BEE_VERSION;
     }
 
     fn bee_bin() -> PathBuf {
-        let mut dir = std::env::current_exe().unwrap();
-        dir.pop();
-        if dir.ends_with("deps") {
-            dir.pop();
-        }
-        let bin = dir.join(format!("bee{}", std::env::consts::EXE_SUFFIX));
-        assert!(bin.is_file(), "bee binary not built at {}", bin.display());
-        bin
+        crate::test_support::built_bee()
     }
 
     fn file_snapshot(dir: &Path) -> Vec<(PathBuf, Vec<u8>)> {
