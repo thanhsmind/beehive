@@ -51,7 +51,9 @@ Since the split, `G` gained two lines at `:108`, so every `G` anchor past that l
 
 ## Defects
 
+<!-- bee:not-a-deferral: records where a rule now lives, promises no action -->
 - D-a: FIXED by `fd64f2fe3`. The timing rule now lives at `R/references/plan-artifact.md:280-283`, the same place it held in the old file. Audit F3 had named `G` as owner; the fix keeps it on the planning side instead. That is still one home, and `G:203-266` holds no copy. Note: the paragraph sits right under "it never restates that procedure" (`:278`). A reader may want the timing moved into `G` "When hats open" (`G:197`) later. Not a defect for this cell.
+<!-- /bee:not-a-deferral -->
 - D-b (minor): truth 1 fails on its letter. Four history mentions of the old name remain outside the excluded trees. They are not pointers and pointer_integrity passes. Either reword them without the old file name, or read the truth as "no live pointer".
 - D-c (minor): `R/playbooks/spike/prototype.md:33` was repointed from "Shape bodies by mode" to "Artifact: plan.md". The bold label "Shape bodies by mode" still exists at `R/references/plan-artifact.md:172`. The new pointer resolves but is coarser than the old one.
 - D-d (minor, outside stdi-11 files): `docs/handbook/stages/planning.md:99-101` still says tests are the writer's inside each cell and "There is no trailing test cell per slice". Audit D listed it under "Found outside scope". D2 calls this text stale.

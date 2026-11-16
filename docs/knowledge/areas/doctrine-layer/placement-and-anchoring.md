@@ -8,7 +8,7 @@ bee:
   lifecycle: active
   areas: [doctrine-layer]
   required_context: [areas/doctrine-layer/overview.md]
-  decisions: [ba5a35f1-981d-4cb5-8a57-234a187f122d (placement rule), "0023 + 6cd34376 (explicit-tier transport rides critical rule 12, B3a)", "derived-check-hardening E7/E8 (the two live doctrine residuals are cleared, and the completeness criterion becomes a standing check deriving retired stage names from the phase-coercion table)", "tick-contract-inline T1/T5/T6 (a narrower always-loaded summary is a misfiled rule; every-turn rules unreachable from the sheet fail the build, derived from wording not a marker; the check proves reachability, never obedience) -- T3's pay-by-removal rule is RETIRED by budget-fence-removal", "budget-fence-removal D1/D6 + repo decision 8f63adb4 (a size ceiling on instruction text is never a standing rule; a diet is a one-off event leaving no permanent gate; body length is judged per edit by information density, and the surviving standing guards prove meaning, never size)"]
+  decisions: [ba5a35f1-981d-4cb5-8a57-234a187f122d (placement rule), "0023 + 6cd34376 (explicit-tier transport rides critical rule 12, B3a)", "derived-check-hardening E7/E8 (the two live doctrine residuals are cleared, and the completeness criterion becomes a standing check deriving retired stage names from the phase-coercion table)", "tick-contract-inline T1/T5/T6 (a narrower always-loaded summary is a misfiled rule; every-turn rules unreachable from the sheet fail the build, derived from wording not a marker; the check proves reachability, never obedience) -- T3's pay-by-removal rule is RETIRED by budget-fence-removal", "budget-fence-removal D1/D6 + repo decision 8f63adb4 (a size ceiling on instruction text is never a standing rule; a diet is a one-off event leaving no permanent gate; body length is judged per edit by information density, and the surviving standing guards prove meaning, never size)", "semantic-token-diet D1-D6, D10, D11 (text loads on the branch that uses it; R9)"]
   sources: ["tier-transport-doctrine (cell tier-transport-doctrine-1, 2026-07-13)", "docs/specs/doctrine-layer.md#B1", "docs/specs/doctrine-layer.md#B2", "docs/specs/doctrine-layer.md#B3a", "docs/specs/doctrine-layer.md#B4", "docs/specs/doctrine-layer.md#R1", "docs/specs/doctrine-layer.md#R2", "docs/specs/doctrine-layer.md#E1", "docs/specs/doctrine-layer.md#P1", "docs/specs/doctrine-layer.md#P2", "docs/specs/doctrine-layer.md#P4", "derived-check-hardening cells dch-5/dch-7 (retired-stage currency check with derived tokens; research-brief and write-guard fixture residuals cleared; traces .bee/cells/dch-{5,7}.json, reports docs/history/derived-check-hardening/reports/, 2026-07-29)", "tick-contract-inline (cells tci-1/tci-2/tci-3, decisions T1-T7, traces .bee/cells/tci-{1,2,3}.json, reports docs/history/tick-contract-inline/reports/, 2026-07-29)"]
   authoritative_for: "doctrine-layer: rule placement, propagation, and anchoring"
   anchors: [packages/bee/AGENTS.block.md, packages/bee-rs/crates/bee/src/main.rs, packages/bee-rs/crates/bee/tests/instruction_laws.rs, packages/bee-rs/crates/bee/src/state.rs, skills/bee-researching/references/research-brief-template.md, packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs, skills/, skills/bee-hive/references/routing-and-contracts.md, scripts/, packages/bee-rs/crates/bee/tests/agents_block_render_parity.rs]
@@ -146,6 +146,20 @@ rule. It says nothing whatever about whether the rule was then obeyed
   does not exist for deployment and is reverted by the next onboarding
   apply; the sync to the plugin-root masters is part of the same change,
   never a follow-up (65357b01).
+- **R9** — Text loads on the branch that uses it. A skill body or a doctrine
+  file names a reference by its load trigger, never as "the default" read; a
+  reference that serves two branches is split so each branch reads only its
+  half; a fact with an always-loaded home is not copied into a skill body; and
+  stale or contradicting text is fixed in the file that owns it. Every move
+  keeps the rule, its why-clause and test-pinned wording, and adds no size
+  gate (semantic-token-diet D1, D2). The applied cases: a worker reads
+  `skills/bee-swarming/references/execute.md`, not the whole skill (D3);
+  bee-hive names real triggers for `routing-and-contracts.md` (D4); planning
+  splits into `references/cells.md` and `references/plan-artifact.md` (D5);
+  `packages/bee/LEADER.md` sends waggledance and CLI-before-MCP mechanics to
+  read-when playbooks (D6); the herding dispatch role ends at the interlock
+  and hands off to `role-dispatch-spawn.md` (D10). Five follow-ups that need
+  an owner decision are backlog items, not doctrine (semantic-token-diet D11).
 
 ## Edge Cases Settled
 

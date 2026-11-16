@@ -14,7 +14,9 @@ Prepaid on every invoke (SKILL.md):
 - bee-researching: 5033 B
 
 Paid on branch, but in practice paid on almost every run:
+<!-- bee:not-a-deferral: describes a later wayfinding session, promises no action -->
 - `wayfinding-reference.md` 8623 B. Session 1 step 3 (SKILL.md:48-50) and later-session step 3 (SKILL.md:108-109) both send the agent there, so a normal wayfinding run reads it.
+<!-- /bee:not-a-deferral -->
 - `context-template.md` 3613 B. Every Lock reads it (SKILL.md:132).
 - `shaping-reference.md` 5959 B and `gray-area-probes.md` 3494 B. Every Explore interview reads them (SKILL.md:53-56).
 - `research-protocol.md` 4059 B. Standard depth runs all four steps and is the default (SKILL.md:38-39), so it is read on most runs.

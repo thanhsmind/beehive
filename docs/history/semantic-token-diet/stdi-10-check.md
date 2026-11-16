@@ -26,7 +26,9 @@ The first check (commit `2abff7a03`) failed truth 1 on defects D-a and D-b. Both
 - bee-swarming row: never zero execution workers, implementer plus a separate tester, inline execution refused → `LEADER.md:244-252`, `routing-and-contracts.md:129`.
 - bee-shaping row: parking → `skills/bee-shaping/SKILL.md:111-116`; Qualify on request → `SKILL.md:47`, `bee-shaping/SKILL.md:93`.
 - Gates prose: Gates 1-2 are the default chain and Gate 3 is additive → `gates-and-delegation.md:16-17`; `uat_stop` placement → `gates-and-delegation.md:25`, `LEADER.md:70`; gates belong to the user → `AGENTS.md:19`; plain-language layer with a linked report → `gates-and-delegation.md:50-52`; bypass is user-set and never headless → `SKILL.md:65`, `gates-and-delegation.md:73`.
+<!-- bee:not-a-deferral: names the headless rule that defers questions, promises no action -->
 - Headless: never ask, never self-approve, defer into Outstanding Questions → `SKILL.md:86`, `gates-and-delegation.md:104-112`.
+<!-- /bee:not-a-deferral -->
 - Onboarding: orientation entry and the workspace protocol notice, condensed in place → `SKILL.md:77-78`.
 - Skill Catalog and First-Skill Routing rows → `SKILL.md:44-60`. Research in a scoped feature → `SKILL.md:52`. Resume → `SKILL.md:56` and `routing-and-contracts.md:34-47`. Docs lane → `SKILL.md:57`, `routing-and-contracts.md:123-125`. Pure question → `SKILL.md:58`. Merge or ship with unreviewed work → `SKILL.md:51`, `skills/bee-reviewing/SKILL.md:18-21`. Brief renders nothing for tiny or spike → `skills/bee-shaping/references/implement-plan-template.md:156`. Surface-scope check → `SKILL.md:60`. Developing bee itself is maintainer work → `skills/bee-evolving/SKILL.md:40`.
 - Five rules, pre-send check and litmus → `LEADER.md:329-332`; evidence before claims → `AGENTS.md:28`.
