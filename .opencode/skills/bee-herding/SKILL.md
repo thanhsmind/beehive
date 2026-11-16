@@ -10,24 +10,24 @@ metadata:
       kind: command
       command: .bee/bin/bee
       missing_effect: unavailable
-      reason: The dispatchable-set build, lane classification, the enable interlock, and the merge role's worktree-finished checks all run through the vendored bee binary (`bee herding classify-lane`, `bee herding interlock`, `bee worktree ...`). The binary is vendored into the repo by onboarding; no Node runtime is involved.
+      reason: Runs the dispatchable-set build, lane classification, enable interlock, and merge worktree checks via the vendored bee binary.
     herdr-cli:
       kind: command
       command: herdr
       missing_effect: degraded
-      reason: "One of two transports, and only one is ever needed. Required when `herding.transport` is `herdr` — the default: the cockpit's `bee herding pane …` / `agent-start` verbs then reach their panes through the herdr binary. Unneeded when the key says `tmux`. The choice is that one config key (tmux-herding-transport D1), never an auto-detect from `$TMUX` or `$HERDR_ENV`."
+      reason: Required when `herding.transport` is `herdr` (the default); never auto-detected from environment variables.
     tmux-cli:
       kind: command
       command: tmux
       missing_effect: degraded
-      reason: "The other of the two transports. Required on PATH when `herding.transport` is `tmux` — the same `bee herding pane …` / `agent-start` verbs then act on the caller's tmux session, windows and pane titles (tmux-herding-cockpit D3). Unneeded when the key says `herdr`. No role document or bootstrap script ever calls `tmux` (or `herdr`) directly: the pane verbs are the one vocabulary (D2)."
+      reason: Required on PATH when `herding.transport` is `tmux`; no role document or bootstrap script calls `tmux` or `herdr` directly.
 ---
 
 # Herding — the unattended cockpit
 
 ## The four roles
 
-Read your role's reference in full before acting, then act once,
+Read your role's reference in full, following its own hand-off, before acting, then act once,
 report into the chat pane, and exit; the loop (or the owner's next
 gesture) starts the next invocation cold.
 
@@ -119,28 +119,14 @@ zero behavior change. Substitution is per-token, never join-then-split,
 never `eval`. Shape and examples:
 `references/operational-invariants.md` ("Runtime adapter").
 
-## Waves — briefing several workers at once
-
-`bee herding wave` is a SEPARATE shape from the four roles, and no role
-calls it. Dispatch starts one worker per iteration and never speaks to
-it again; a wave briefs N already-running panes in one act, waits on
-all of them at the same time, and records the run as one ledger row.
-It has no interlock, no classifier and no gate, so it is never the way
-to start the cockpit's ordinary backlog work — only a fan-out over
-panes that already exist. Three things surprise every first caller: it
-creates no panes and no worktrees (splitting is yours), one
-unresolvable target stops the whole run before any brief is sent, and
-its `success` is `false` even on a perfect run because no completion
-signal exists — read the ledger row and the panes instead. Protocol:
-`references/wave-runs.md`.
-
 ## References
 
 | File | When to load |
 |---|---|
 | `references/role-bootstrap.md` | You are the bootstrap role — read the full protocol before any pre-flight action |
-| `references/role-dispatch.md` | You are the dispatch role — read the full protocol (plus quick reference) before building the dispatchable set |
-| `references/role-merge.md` | You are the merge role — read the full protocol (plus quick reference) before touching any worktree |
+| `references/role-dispatch.md` | You are the dispatch role — read §0–§5 through the interlock, then follow its hand-off to `references/role-dispatch-spawn.md` |
+| `references/role-dispatch-spawn.md` | Dispatch past the interlock with a free slot — read §5's set build through §8 |
+| `references/role-merge.md` | You are the merge role — read the full protocol before touching any worktree |
 | `references/route-prompt.md` | You are the route role — read the full contract before reading or reporting worktrees |
 | `references/wave-runs.md` | Running `bee herding wave` — what it does not do, the input shape, and why `success` is not the thing to read |
 | `references/operational-invariants.md` | A safety boundary needs its full record — permission posture, runtime adapter, containment, stop/resume |

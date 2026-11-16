@@ -46,36 +46,9 @@ never hand-edit them.
 
 ## When a run is due
 
-A run is due after a release, or when any signal below shows. The numbers are
-starting defaults, not measured thresholds: change them here when they prove
-wrong.
-
-`bee upkeep due --kind knowledge --json` computes this table in one read-only
-check and exits 10 when a run is due. Each reason it returns names one row
-below; the table stays as the human statement of the same signals. A run that
-was never recorded counts as due.
-
-| Signal | Command that prints it |
-|---|---|
-| A concept reported wrong | `bee knowledge report` — the reported-wrong section, with the newest note under each concept |
-| An orphan grade | `bee knowledge check --json` — the `freshness` object |
-| A suspect concept loaded 5 or more times | the suspect list of that same `freshness` object, joined with the `loaded` list of `bee knowledge report --json` |
-| A concept loaded 5 or more times and never used | `bee knowledge report` — the loaded-never-used lines |
-
-Loaded-never-used is a weak signal while the report's silent cells outnumber its
-answered ones: a concept may only be unreported. It never makes a run due alone,
-and it is trimmed or retired only after the source reader confirms it is dead
-weight.
-
-## When knowledge is read, written and revised
-
-| Moment | What happens |
-|---|---|
-| Shaping, planning, cell brief | Read: the loaded concepts reach the work |
-| Cap | Write: the cell's own delta lands in the same commit |
-| Cap, a loaded concept proved wrong | Revise: fixed in place in the same commit |
-| Cap, a wrong concept the cell cannot fix | Report it with `--knowledge-wrong` |
-| An upkeep run | Audit: re-read against sources, dedupe, merge, retire |
+Run `bee upkeep due --kind knowledge --json`; exit 10 means a run is due, and
+each reason in the output names its signal. Thresholds live in the binary. A
+run is also due after a release, or when no run has been recorded.
 
 ## Pass
 
@@ -108,7 +81,8 @@ weight.
      never append a correction.
    - A noisy signal — an environment red, chance — revises nothing.
    - A loaded-never-used concept is trimmed, merged into its owner, or retired
-     out loud with `bee.superseded_by`.
+     out loud with `bee.superseded_by` only after its source reader confirms it
+     is dead weight, because it may only be unreported.
 
    Run `bee knowledge confirm --id <id>` on each concept that held.
 

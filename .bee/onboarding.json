@@ -41,13 +41,15 @@
       "gather.md": "6cb0ceeaac9bf833e1826469428cd1efc4308a73ebc1235a9e6aaed39f309b6d",
       "peer-boot.md": "00a70323ef9d92b71369281068a6f53b3e4ef3445f72fdd8412293dfb9a52cdd",
       "reviewer.md": "e2c56ba17e2aa951a60c89f4c335a05355122062560e8e00277bd347dca87e9a",
-      "worker-cell.md": "65c568ddecc0fb44f285be9d96b3f73d99fb9cdb710ebb7e1199596b243fd7a6"
+      "worker-cell.md": "d65ba3a150c8c2f25beb253107f271f4fe7d6c34b68d1cf8692cf13b3f48bcf1"
     },
     "leader": {
-      "LEADER.md": "eaa5340a6508b154ec1427d416b6f04c58034b16c068ab0d8806bc181a1d9dee"
+      "LEADER.md": "b3141963ea0b9747bc816c5c1f35dceb91503d60e113c24cd3363beecee614c2"
     },
     "playbooks": {
       "bee-defects.md": "128820aaccc3644492f753d10cfba5231bfd7939624aba943da7ab74340a5dc5",
+      "cli-before-mcp.md": "4fcf1fbe97f9b91306fb344121d7ffcb5fa3511c916fcd446de07a817d920492",
+      "cross-project.md": "6d9d6b23eb73ea4de7f426e1eeca0ecedaeb7d2ded592f7d998dbe9fce379836",
       "handoff.md": "fe7b029350efcdf73d9992bc66a366d956f3497362f037d3e8a8fbfa87fc5a99",
       "multi-session.md": "1e820395d0daabd521c5d3b7d3a46fcbc8d24f3ce893ca43e6636693a44b6ea8"
     },
@@ -189,5 +191,5 @@
   },
   "design_role_offered": true,
   "created_at": "2026-07-24T03:53:44.750Z",
-  "updated_at": "2026-11-16T13:34:21.405Z"
+  "updated_at": "2026-11-16T16:10:08.896Z"
 }

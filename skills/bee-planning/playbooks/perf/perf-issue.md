@@ -84,4 +84,3 @@ because source shows what the code does, never what it costs.
 Reply: baseline number, post-fix number, delta, artifact path.
 
 Proof line: the baseline, the after, the delta, the command, and the artifact path.
-Proof floor: the cap refuses a result weaker than this class's floor and names it; the table is the cap's own (`bee cells finish --help`).

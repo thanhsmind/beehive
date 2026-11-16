@@ -20,6 +20,7 @@ metadata:
 Run `bee orient` only when routing, starting, or resuming work — it names the phase,
 the blockers, and the next skill; follow it. Present a pending handoff to the user;
 never auto-resume it. A plain question is already answered by the session preamble.
+A context mark never stops work; a handoff happens only on the user's word or at feature close (rule: `agents-context-handoff-65`).
 
 ## Route
 
@@ -43,37 +44,26 @@ current stop. Out-of-band requests, by flow:
 | Skill | Flow | When |
 |---|---|---|
 | `bee-wayfinding` | Discovery | A fog-state idea, no nameable outcome yet, or an open discovery map with frontier tickets — chart or resume `docs/discovery/<effort>/MAP.md` before shaping. |
-| `bee-shaping` | Main | Gray areas or unlocked decisions — lock them (also backlog triage, parking, the implement-plan brief). |
-| `bee-planning` | Main | Decisions locked, or scope already clear ("just fix this") — route the lane, shape the work, present the gate. A code-touching route creates the feature's worktree in the same step (rule: agents-worktree-first). |
-| `bee-swarming` | Main | Merged shape+execution gate approved, cells open — orchestrate workers, or execute one assigned cell, inside the feature's worktree. Every code cell, `tiny` included, dispatches through `bee dispatch prepare` because each role runs its own configured model, as an implementer plus a separate tester (inline execution of a code cell is refused at cap). On cap, leader verifies completeness against actual artifacts and records the check; both exits check it (worker reports are navigation aids, not completion evidence). |
+| `bee-shaping` | Main | Gray areas or unlocked decisions — lock them (also backlog triage, `Qualify` on request, or `Brief` to render `implement-plan.md` / post-Gate-3 `walkthrough.md`). |
+| `bee-planning` | Main | Decisions locked, or scope already clear ("just fix this") — for any file-writing change, `bee-shaping` (Lock) writes a short `CONTEXT.md` brief first, then `bee-planning` routes the lane, shapes the work, and presents the gate. A code-touching route creates the feature's worktree in the same step (rule: `agents-worktree-first`). |
+| `bee-swarming` | Main | Merged gate approved, cells open — orchestrate or execute one cell in the feature worktree. |
 | `bee-capturing` | Main | Execution done, an area needs documenting, or something just settled — sync specs, record learnings. |
-| `bee-reviewing` | Main | Only on an explicit review request — never automatic (rule: agents-review-user-invoked). Merge/ship with unreviewed candidates: report count + risk, ask ONE question. |
+| `bee-reviewing` | Main | Only on an explicit review request — never automatic (rule: `agents-review-user-invoked`). Merge/ship with unreviewed candidates: report count + risk, ask ONE question. |
 | `bee-researching` | Both | Research a topic, library, or approach — standalone, or from planning discovery. |
 | `bee-grooming` | — | The user asks to clean up, audit, or hunt tech debt. |
 | `bee-herding` | — | The user invokes the cockpit: bootstrap, dispatch, or merge. |
-| docs-only change | — | No pipeline: announce, write through `bee-technical-writing` (document type first, one type per file, split and link where types meet), format-check, close with a capture line or "nothing settled" (rule: agents-capture-line-at-close). |
+| `bee-hive` (Gates) | — | Turn `gate_bypass` on/off, widen it, or check it. |
+| `Resume session` | — | Check `.bee/HANDOFF.json` first (`references/routing-and-contracts.md`, "Resume Logic"). |
+| docs-only change | — | File-writing docs change: no pipeline — short brief + Gate 1, announce, write through `bee-technical-writing`, format-check, close with a capture line or "nothing settled" (rule: `agents-capture-line-at-close`). |
+| pure question | — | Writes no file: answer directly — no lane, no brief, no record. |
+
+**Surface-scope-earlier check** (before routing to `bee-shaping`): concrete acceptance criteria plus references to existing patterns → offer jumping straight to planning with a one-paragraph scoping synthesis whose decisions still carry D-IDs.
 
 ## Gates
 
-Three gates, and only three: **Gate 1** (exploring — approve CONTEXT.md), **Gate 2**
-(planning — shape AND execution in one `bee gate --merge` call), **Gate 3** (reviewing —
-merge approval, only inside a review session the user invoked). Gates 1-2 are the default
-chain; Gate 3 is additive and never automatic (rule: agents-review-user-invoked). A separate stop,
-`uat`, sits later still — the user's acceptance of the finished work, required for
-standard/high-risk features, never auto-approved at any `gate_bypass` level. Config
-`uat_stop` places it: default `"close"` merges first and stops at `bee close`;
-`"merge"` blocks `bee worktree merge` ("The three gates", `gates-and-delegation.md`).
-
-Gates belong to the user (AGENTS.md), in any mode — headless included: `bee gate`
-records their answer, presented as a plain-language layer plus the fixed
-question, report linked, never pasted ("Gate Presentation Contract").
-
-The one recorded exception is gate bypass — an opt-in level in `.bee/config.json`
-(`gate_bypass`: `off` · `normal` · `full` · `total`) that the user sets and only the
-user widens. Setting a level never approves a gate, and bypass is not headless —
-headless still stops at every gate. Which gates each level auto-approves, what it
-still stops for, and how to record the change: `gates-and-delegation.md`
-("Gate bypass mode") — the level table is stated there and nowhere else.
+Three gates: **Gate 1** (exploring — approve `CONTEXT.md`), **Gate 2** (planning — `shape` + `execution` in one `bee gate --merge` call), **Gate 3** (reviewing — merge approval, user-invoked only; rule: `agents-review-user-invoked`).
+A separate stop, `uat`, is required for `standard`/`high-risk` features and never auto-approved at any `gate_bypass` level (`references/gates-and-delegation.md`, "The three gates").
+Gate bypass (`gate_bypass`: `off` · `normal` · `full` · `total` in `.bee/config.json`) is user-set only; setting a level never approves a gate, and bypass is not headless (`references/gates-and-delegation.md`, "Gate bypass mode").
 
 ## Onboarding
 
@@ -84,12 +74,8 @@ mutations, surface `versions`. Do not continue until it reports `up_to_date`.
 These three steps are the whole session-time contract; the status detail behind
 them loads from `references/onboarding.md` only when one of them actually fires.
 
-A freshly onboarded project has craft (`.bee/expertise/`) but an empty
-knowledge layer of its own. Its first debt is the orientation entry —
-written by reading the tree, never by asking the user to describe it:
-`.bee/expertise/knowledge.md` ("The orientation file") sets the bar,
-`bee-capturing` owns the write.
-After every onboard result whose `workspace_protocol.action_needed` is true (the `workspace protocol:` notice), run the "Workspace protocol" procedure of `references/onboarding.md` before any feature work. It is part of onboarding, not optional.
+A freshly onboarded project's first debt is its orientation entry — written by reading the tree, never by asking the user (`.bee/expertise/knowledge.md` "The orientation file"; `bee-capturing` owns the write).
+On a `workspace protocol:` notice (`workspace_protocol.action_needed: true`), run `references/onboarding.md` ("Workspace protocol") before any feature work.
 
 ## Go mode
 
@@ -97,23 +83,7 @@ After every onboard result whose `workspace_protocol.action_needed` is true (the
 
 ## Headless
 
-A headless run proceeds without asking: ambiguities, unanswered decisions, and gate
-questions become `Outstanding Questions` entries in the run's report, each carrying
-the evidence a later human pass would start from — deferred, never guessed, never
-self-answered. A headless run never self-approves a gate: every gate still stops and
-reports awaiting approval (rule: agents-gates-never-self-approved) — bypass is the separate,
-recorded exception ("Gate bypass mode").
-Still make recommendations where the evidence supports one, labeled with confidence.
-Full contract: `references/gates-and-delegation.md` ("Headless mode").
-
-## Hard rules
-
-- P1 review findings always block; never build on a red base (rule: agents-never-build-on-red).
-- Locked decisions (cite, never reinterpret), the pre-execution-gate edit boundary, and the handoff rule hold as written: a context mark never stops work; a handoff happens only on the user's word or at feature close (rule: agents-context-handoff-65).
-- When a worker caps a cell, the leader compares approved requirements against actual artifacts and records the check; both exits check it — worker reports are navigation aids, not completion evidence ("Leader completeness check").
-- "done/green/fixed" only beside fresh command output in the same message; every close carries a capture line or an explicit "nothing settled" (rule: agents-capture-line-at-close).
-- The agent runs every bee command ("The agent runs the machinery"); work language only, one tick line per visible step ("Progress ticks", "Communication contract"); a red line is never silenced.
-- Form rules bend out loud with a recorded reason; boundary rules never bend ("Judgment contract"). Lanes scale ceremony, never memory ("Re-lane checkpoint", "Capture discipline").
+Headless: never ask, never self-approve; defer ambiguities to `Outstanding Questions` → `references/gates-and-delegation.md` ("Headless mode").
 
 ## References
 
@@ -122,7 +92,7 @@ that names the contract is the one to open.
 
 | File | When to load |
 |---|---|
-| `references/routing-and-contracts.md` | The default: skill catalog, first-skill routing, state bootstrap, resume logic, lane ceremony, leader completeness check, chaining, communication contract, question format, file and CLI quick reference |
+| `references/routing-and-contracts.md` | Resuming a handoff (`HANDOFF.json`), checking lane ceremony or concurrency rules, running the leader completeness check, formatting a turn/question/catch-me-up/pushback, or checking chaining or file paths |
 | `references/gates-and-delegation.md` | A gate is about to be presented, a bypass level set, work fanned out, or a rule bent — gate presentation, bypass levels, headless, delegation, judgment contract, judge tier, verify scope, Codex tending |
 | `references/scout-and-ticks.md` | Deciding how much to read before acting, re-judging a lane against evidence, or writing a tick / ship-visibility / route-record line exactly |
 | `references/onboarding.md` | ONLY when onboarding is in question — `.bee/onboarding.json` missing or stale, an install/upgrade request, or a `blocked_*` result. Never on a session that is already `up_to_date`. Also when the user asks to set up lint, type check, tests or verify commands (section Set up the project's checks) |

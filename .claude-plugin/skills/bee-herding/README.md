@@ -39,7 +39,7 @@ git -C <main-root> commit -m "chore: untrack bee session logs"
 touch <main-root>/.bee/tmp/bee-herding.enable
 ```
 
-The CLI verbs that used to spell this — `bee herding enable`, `bee herding disable`, `bee herding status` — are **not built into the current binary** (they were never ported off Node and now refuse by name). The `touch`/`rm` above IS the gesture, byte for byte; it was always owner-typed and never called by bee automation.
+The CLI verbs `bee herding enable` and `bee herding disable` are **not built into the current binary** (`bee herding status` reads the marker). The `touch`/`rm` above IS the gesture, byte for byte; it was always owner-typed and never called by bee automation.
 
 Remove the file to disable dispatch again (it takes effect at the next interval). This interlock is load-bearing: this repo's **ordinary post-exploring state is already the dispatchable state** — the moment a feature finishes exploring, its row is `in-flight` with a slug, a CONTEXT.md, no worktree and no cells, which is every condition below. Without the marker, dispatch would start picking up whatever exploring last produced, unattended. The marker is your explicit "yes, run this now." Only you create it — never an agent.
 
@@ -98,7 +98,7 @@ rm    <main-root>/.bee/tmp/bee-herding.stop     # it can be started again
 
 Nothing needs killing. The dispatch loop checks that file both before and after every iteration, so a stop created mid-iteration takes effect at that boundary, not a full interval later. The path is under the **main checkout** — that is the file the loop and the bootstrap both look at.
 
-**The stop file does NOT stop working agents already running.** Each working agent is its own `claude` session in its own runtime pane and worktree; the stop file is never read by them. Stopping the loop only guarantees no *new* agents are spawned. To stop one already running, close its pane (`herdr pane close <pane_id>`) or open it and talk to the agent — its worktree survives either way (`bee worktree list` shows it). To disable *dispatch* without stopping the loop process, remove the enable marker (`rm <main-root>/.bee/tmp/bee-herding.enable`); it will then poll and do nothing. `ls <main-root>/.bee/tmp/bee-herding.enable` reports whether the marker is currently present — the `bee herding enable|disable|status` verbs are not built into the current binary.
+**The stop file does NOT stop working agents already running.** Each working agent is its own `claude` session in its own runtime pane and worktree; the stop file is never read by them. Stopping the loop only guarantees no *new* agents are spawned. To stop one already running, close its pane (`herdr pane close <pane_id>`) or open it and talk to the agent — its worktree survives either way (`bee worktree list` shows it). To disable *dispatch* without stopping the loop process, remove the enable marker (`rm <main-root>/.bee/tmp/bee-herding.enable`); it will then poll and do nothing. `ls <main-root>/.bee/tmp/bee-herding.enable` or `bee herding status` reports whether the marker is currently present — `bee herding enable` and `bee herding disable` are not built into the current binary.
 
 Removing the stop file does not restart the loop: it only lets it be started again. Re-run the bootstrap.
 

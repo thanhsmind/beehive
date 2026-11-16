@@ -4,11 +4,11 @@
 standard lane: at `standard` and below the test shape is the triad — happy
 path, edge cases, error paths — at its smallest demonstrating size. Read as a
 checklist to fill, twelve dimensions generate volume — the opposite of what a
-standard slice needs. See `planning-reference.md` ("Tests ride the cell").
+standard slice needs. See `bee-planning/SKILL.md` ("Prep").
 
 At `high-risk`/hard-gate, use this during the planning test matrix (and again in
 reviewing coverage checks): written probes per applicable dimension, each mapped
-to a cell's `must_haves.truths`. Even here, the cell's writer judges existing
+to a cell's `must_haves.truths`. Even here, the tester cell judges existing
 coverage first and authors only the dimensions not already pinned by an
 existing test.
 

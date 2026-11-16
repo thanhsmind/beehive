@@ -110,4 +110,3 @@ design alternatives, because a table lets the reader compare the options on
 the same axes.
 
 Proof line: the user-visible path driven, with its evidence (`green:live`).
-Proof floor: the cap refuses a result weaker than this class's floor and names it; the table is the cap's own (`bee cells finish --help`).

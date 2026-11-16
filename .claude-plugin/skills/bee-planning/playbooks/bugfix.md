@@ -8,4 +8,4 @@ A defect to find and remove: pick the situation below and open its file.
 
 No situation fits, or the work is large and cross-cutting: use bee-figure-it-out.
 
-Proof floor: the cap refuses a result weaker than this class's floor and names it; the table is the cap's own (`bee cells finish --help`).
+Proof floor: the cap refuses a result weaker than this class's floor and names it when it refuses.

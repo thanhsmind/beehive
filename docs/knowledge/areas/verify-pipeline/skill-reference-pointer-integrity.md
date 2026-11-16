@@ -127,7 +127,7 @@ run on every verification, not once at authoring time.
   relative to `skills/` with no leading `skills/` segment instead. Found and fixed live
   (`playbook-file-split` cell pfs-1's defect, caught by cell pfs-2's own verify, 2026-09-25) —
   the citation being moved was `skills/bee-planning/playbooks/spike.md`'s cross-reference to
-  `bee-planning/references/planning-reference.md`.
+  `bee-planning/references/cells.md` (formerly `planning-reference.md`).
 
 - **A finding that cannot fail a build is a finding that gets stepped over.** The advisory
   sibling's *reachability* check misread a two-heading citation for as long as that citation had

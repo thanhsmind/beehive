@@ -47,7 +47,7 @@ verification, countersigns and audits. A unit is one cell in its own worktree.
    Findings go back to the owner for fix-forward, and the new head gets fresh
    reviewers and a fresh verdict.
 5. **On a clean verdict the merge runs and the owner takes the next item.** The
-   merge is `bee worktree merge --id <unit> --cleanup` from the main checkout,
+   merge is `bee worktree merge --id <unit>` from the main checkout,
    run by the root, without asking, as `uat_stop = "close"` already does. Merge
    only from a head that contains current main
    (`git merge-base --is-ancestor main <head>`), because the verdict pins that

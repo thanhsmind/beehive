@@ -339,9 +339,10 @@ and expected — they do not pull you into any workflow.\n\n",
         ", and files listed under the Expertise section are yours to read"
     };
 
-    let proof_command = read_proof_command(spec.worktree_root);
     let mut proof_command_block = String::new();
-    if let Some(cmd) = proof_command {
+    if spec.cell_id.is_some()
+        && let Some(cmd) = read_proof_command(spec.worktree_root)
+    {
         proof_command_block.push_str(&format!("# Proof command\n\n{cmd}\n\n"));
     }
 
@@ -1631,12 +1632,34 @@ the report file's exact final name"),
         .expect("write config.json");
 
         let files = sample_files();
-        let spec = sample_spec(worktree_root, &bee_dir, &files, 1);
+        let mut spec = sample_spec(worktree_root, &bee_dir, &files, 1);
+        spec.cell_id = Some("prf-5");
         let text = render_brief(&spec);
 
         let proof_pos = text.find("# Proof command\n\ncargo test -p bee\n\n").expect("missing proof command section");
         let files_pos = text.find("# Files you may touch").expect("missing files section");
         assert!(proof_pos < files_pos, "# Proof command must come before # Files you may touch");
+    }
+
+    #[test]
+    fn render_brief_omits_proof_command_for_a_job_without_a_cell() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let worktree_root = tmp.path();
+        let bee_dir = worktree_root.join(".bee");
+        std::fs::create_dir_all(&bee_dir).expect("create .bee");
+        std::fs::write(
+            bee_dir.join("config.json"),
+            r#"{"commands":{"test":"cargo test -p bee"}}"#,
+        )
+        .expect("write config.json");
+
+        let files = sample_files();
+        let spec = sample_spec(worktree_root, &bee_dir, &files, 1);
+        assert_eq!(spec.cell_id, None);
+        let text = render_brief(&spec);
+
+        assert!(!text.contains("# Proof command"), "a job with no cell id must not render # Proof command:\n{text}");
+        assert!(!text.contains("cargo test -p bee"), "a job with no cell id must not carry the commands.test line:\n{text}");
     }
 
     #[test]

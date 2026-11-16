@@ -158,8 +158,8 @@ tmux" below.
   typed refusal naming both legal spellings, and `bee herding run` refuses
   on it **before** the job file, the mailbox, or any pane split, so a
   typo'd transport can never half-start a worker.
-- The transport a run picked is reported back: `bee herding status --json`
-  gains `transport.kind`, and its readiness probe reads the pane variables
+- The transport a run picked is reported back: `bee herding status --job <id>`
+  reports `transport.kind`, and its readiness probe reads the pane variables
   of the CONFIGURED transport only (`HERDR_ENV` + `HERDR_PANE_ID` for
   herdr, `TMUX` + `TMUX_PANE` for tmux).
 - **Binaries.** `herdr` on `PATH` is required for the herdr transport (the

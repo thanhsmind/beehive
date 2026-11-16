@@ -41,7 +41,7 @@ Read cheap to expensive: outline, symbol list and signatures first; then a line 
 
 - `class` ∈ `feature`, `bugfix`, `docs`, `refactor`, `research`, `release`, `spike`, `perf`, `content`
   — each class has a playbook the plan cites by name and anchor, never copies:
-  `bee-planning/references/planning-reference.md` ("Playbooks")
+  `bee-planning/references/cells.md` ("Playbooks")
 - `lane` ∈ `docs`, `tiny`, `small`, `spike`, `standard`, `high-risk`
 - `flags[]` — every entry from the canonical mode-gate list (auth, authorization, data-model, audit-security, external-systems, public-contracts, cross-platform, covered-contract-change, proof-weakening, multi-domain)
 - `product_files` — a non-negative integer
@@ -174,12 +174,10 @@ slice's demo posts as a PR comment.
 **This file is the declared home of the tick rule's substance** — the fixed format
 `<glyph> <event>: <what> — <key fact>`, the glyph table, and the only two switches that
 produce silence (`quiet`, which never silences the `✗` line, and `ship_visibility`, which
-reaches only the two PR ticks) are catalogued below. `AGENTS.md`'s "Communication" section
+reaches only the two PR ticks) are catalogued below. `LEADER.md` ("Communication")
 states the rule bare — one short chat line per perceivable pipeline step, on by default,
-four glyphs, never silenced by a switch or bypass level — and points here for the full
-form. A rule that applies every turn cannot live behind an on-demand reference: it is
-bare in AGENTS.md AND catalogued here, never only here. This section shows the shape of
-a line, not whether a tick is owed.
+four glyphs, never silenced by a bypass level — and points here for the full
+form. This section shows the shape of a line, not whether a tick is owed.
 
 Two things the catalog does not repeat, and that the rule depends on. Ticks are chat
 output the agent writes as it goes, not an emitter subsystem — nothing to build, nothing
@@ -226,8 +224,7 @@ alone the moment it happens. `standard`/`high-risk` keep one line per step.
 | draft PR opened | `✓ draft PR <url>` |
 | demo posted | `✓ slice <n> demo — <artifact>` |
 
-**Which catalog rows the two switches reach.** The switches are stated as rule in
-`AGENTS.md` ("Communication"); what belongs here is their effect on the rows above.
+**Which catalog rows the two switches reach (home of both switches).**
 `quiet: true` in `.bee/config.json` silences every row except the `✗` red/refusal ones,
 which stay visible regardless. `ship_visibility: "off"` silences exactly two rows —
 draft PR opened and demo posted — and leaves every other row firing; it governs PR
@@ -237,14 +234,9 @@ level, touches neither switch, so the catalog fires identically with bypass off,
 
 ## Session Scout in full
 
-The router's Session Scout section keeps the invariants as one line each; this section carries the
-full text behind each bullet (the router keeps the rule, this file keeps the detail).
-
 ### Preamble-first scout
 
-**The preamble is the scout's first source, and usually its only one.** The session preamble injected at session start already carries onboarding health, phase, mode, feature, gate states, cell counts, PBI counts, the recent critical-patterns digest and the recent active decisions. Read what arrived; never re-fetch what it just told you.
-
-Re-run the read-only scout (`.bee/bin/bee status --json`) when you are about to **route work** — claim a cell, plan, or change phase — or when no preamble arrived, or it went stale after a compaction. That run adds what the preamble does not carry: active reservations, staleness warnings, and `recommended_next`. Answering a question, reading code, or explaining something is not routing work — for those, the preamble has already answered, and `status --json` plus `decisions active --recent 3` are pure duplication. The decisions re-fetch (`.bee/bin/bee decisions active --recent 3`) belongs to routing work, not to answering a question.
+Re-run the read-only scout (`.bee/bin/bee status --json`) and `.bee/bin/bee decisions active --recent 3` only when you are about to **route work** — claim a cell, plan, or change phase — or when no preamble arrived, or it went stale after a compaction. That run adds active reservations, staleness warnings, and `recommended_next`. Answering a question, reading code, or explaining something is not routing work.
 
 ### Knowledge context
 

@@ -84,4 +84,3 @@ equivalence proof, the reader-load delta, what shipped and what got reverted.
 No new behavior.
 
 Proof line: the record, green before the change and green after it.
-Proof floor: the cap refuses a result weaker than this class's floor and names it; the table is the cap's own (`bee cells finish --help`).

@@ -516,7 +516,7 @@ pub fn build_session_preamble_with_runtime(
     )
 }
 
-const TRAILER_LINE: &str = "Everything above is already read — do not re-fetch it. Run `.bee/bin/bee status --json` yourself when you ROUTE WORK (claim, plan, change phase) or need detail this block does not carry. Never hand bee commands to the user. Route via bee-hive.";
+const TRAILER_LINE: &str = "Everything above is already read — do not re-fetch it. Run `.bee/bin/bee orient` when you route work (claim, plan, change phase); run `.bee/bin/bee status --json` only for detail this block does not carry.";
 
 const LEADER_DOCTRINE_LINE: &str = "Leader doctrine: read .bee/LEADER.md in full now, then LEADER.md if it exists; open a .bee/playbooks/ file only when its read-when line matches.";
 
@@ -749,23 +749,6 @@ pub fn build_session_preamble_within(
             lines.push(format!(
                 "- Test gates disabled by repo declaration (commands.test: {NO_TEST_SENTINEL}) — every cap still records a proof line (command segment `{NO_TEST_SENTINEL}`, reason naming the parity/docs proof used, e.g. `{NO_TEST_SENTINEL} — green:static — docs pointer check`); recording a real commands.test re-enables CI's full-run net."
             ));
-        } else if opt_truthy(commands.get("test")) {
-            lines.push(
-                // REWRITTEN THREE TIMES. It first read "before your first
-                // `cells claim`, check CI INSTEAD of running anything
-                // locally", wrong in both directions: CI ran nightly only,
-                // so its answer could predate the change by a day, while
-                // the declared command it stood in for finishes in
-                // seconds. It then keyed on `commands.verify`, which has
-                // since been retired — one declared test command now
-                // serves the dev loop, the cap door, feature close, and
-                // the merge gate. Decision D3 (58ec9664) then dropped the
-                // mandatory session-start full-suite red check outright:
-                // the agent owns test scope end to end (D1), so the
-                // preamble teaches proof-per-change-type (D5) instead of
-                // demanding a pre-claim full run.
-                "- Proof-per-change-type: pick the proof your change needs — related tests for code, parity/pointer checks for docs — and record it in the cap proof line. CI runs the same command on every push and PR.".to_string(),
-            );
         }
     }
 

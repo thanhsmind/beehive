@@ -397,18 +397,25 @@ fn manifest_entry(entry: &Map<String, Value>) -> Map<String, Value> {
 /// break, or 160 chars, whichever comes first.
 fn first_sentence(entry: &Map<String, Value>) -> String {
     let desc = entry.get("description").and_then(Value::as_str).unwrap_or("");
+    split_description(desc).0
+}
+
+fn split_description(desc: &str) -> (String, String) {
     let cut = desc
         .find(". ")
         .map(|i| i + 1)
         .or_else(|| desc.find(" — ").or_else(|| desc.find(" - ")))
         .unwrap_or(desc.len());
-    let mut s = desc[..cut.min(desc.len())].trim().to_string();
+    let cut = cut.min(desc.len());
+    let mut s = desc[..cut].trim().to_string();
+    let mut rest = desc[cut..].trim().trim_start_matches(['—', '-']).trim().to_string();
     if s.chars().count() > 160 {
         let end = s.char_indices().nth(157).map(|(i, _)| i).unwrap_or(s.len());
         s.truncate(end);
         s.push('…');
+        rest = desc.trim().to_string();
     }
-    s
+    (s, rest)
 }
 
 fn names_entry(entry: &Map<String, Value>) -> Map<String, Value> {
@@ -617,18 +624,29 @@ fn render_help_text(entries: &[Value], footer_lines: &[String], schema_version: 
     for entry in entries {
         let get = |k: &str| entry.as_object().and_then(|m| m.get(k));
         lines.push(js_display(get("invoke")));
-        lines.push(format!("    {}", js_display(get("description"))));
-        // Single-entry renders print a detail block with descriptions;
-        // multi-entry renders keep the compact flags_line.
+        let description = js_display(get("description"));
+        let mut rest = String::new();
         if is_single {
+            let first;
+            (first, rest) = split_description(&description);
+            lines.push(format!("    {first}"));
             if let Some(detail) = flags_detail_lines(entry) {
                 lines.push("    flags:".to_string());
                 for flag in detail {
                     lines.push(format!("      {flag}"));
                 }
             }
-        } else if let Some(flags) = flags_line(entry) {
-            lines.push(format!("    flags: {flags}"));
+        } else {
+            lines.push(format!("    {description}"));
+            if let Some(flags) = flags_line(entry) {
+                lines.push(format!("    flags: {flags}"));
+            }
+        }
+        if !rest.is_empty() {
+            lines.push("    details:".to_string());
+            for line in rest.lines() {
+                lines.push(if line.is_empty() { String::new() } else { format!("      {line}") });
+            }
         }
         if let Some(surface) = get("surface")
             && js_truthy(surface) {
@@ -896,6 +914,35 @@ mod tests {
         let multi_text = render_help_text(&[entry1, entry2], &[], &json!("1.0"));
         assert!(multi_text.contains("    flags: --task*:str --dry-run:boo --undesc:str"), "{multi_text}");
         assert!(multi_text.contains("    flags: --id*:str"), "{multi_text}");
+    }
+
+    fn two_sentence_entry(name: &str) -> Value {
+        Value::Object(obj(&format!(
+            r#"{{"name":"cmd.{name}","invoke":"bee cmd {name}","description":"Run {name}. It also writes a log.",
+                "parameters":{{"type":"object","properties":{{"id":{{"type":"string","description":"Cell id"}}}},"required":["id"]}},
+                "examples":[],"deprecated":null}}"#
+        )))
+    }
+
+    #[test]
+    fn single_command_help_prints_flags_after_the_first_sentence_and_before_details() {
+        let text = render_help_text(&[two_sentence_entry("a")], &[], &json!("1.0"));
+        assert!(
+            text.contains("bee cmd a\n    Run a.\n    flags:\n      --id* (str) — Cell id\n    details:\n      It also writes a log.\n"),
+            "{text}"
+        );
+        let first = text.find("Run a.").expect("first sentence");
+        let flags = text.find("    flags:").expect("flags line");
+        let details = text.find("    details:").expect("details line");
+        assert!(first < flags && flags < details, "{text}");
+    }
+
+    #[test]
+    fn multi_command_help_prints_no_details_line() {
+        let text = render_help_text(&[two_sentence_entry("a"), two_sentence_entry("b")], &[], &json!("1.0"));
+        assert!(!text.contains("details:"), "{text}");
+        assert!(text.contains("    Run a. It also writes a log.\n    flags: --id*:str\n"), "{text}");
+        assert!(text.contains("    Run b. It also writes a log.\n    flags: --id*:str\n"), "{text}");
     }
 
     #[test]

@@ -372,6 +372,27 @@ use std::time::Instant;
     }
 
     #[test]
+    fn native_worker_prompt_points_at_the_execute_reference_not_the_whole_skill() {
+        let native = worker_prompt_render(false, None);
+        assert!(
+            native.contains("- Read skills/bee-swarming/references/execute.md for the full worker contract"),
+            "{native}"
+        );
+        assert!(!native.contains("the bee-swarming skill"), "{native}");
+    }
+
+    #[test]
+    fn the_execute_reference_exists_and_names_every_status_token() {
+        let doc = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../../../skills/bee-swarming/references/execute.md");
+        let body = std::fs::read_to_string(&doc)
+            .unwrap_or_else(|e| panic!("execute.md reads at {}: {e}", doc.display()));
+        for token in ["[DONE]", "[BLOCKED]", "[HANDOFF]", "[PARKED]", "[NOOP]"] {
+            assert!(body.contains(token), "execute.md is missing {token}");
+        }
+    }
+
+    #[test]
     fn one_line_collapses_whitespace_and_ellipsises() {
         assert_eq!(one_line(Some(&json!("  a \n b  ")), 140), "a b");
         assert_eq!(one_line(None, 140), "");
@@ -10901,12 +10922,12 @@ Depth on demand — when a principle line or the cell's work needs more than the
 Advisor: fable
 
 Contract:
-- Load the bee-swarming skill (Execute section) for the full worker contract; the shape you were handed (native, pane, cli) is config, not a signal about the work.
+- Read skills/bee-swarming/references/execute.md for the full worker contract; the shape you were handed (native, pane, cli) is config, not a signal about the work.
 - At each meaningful step (read done, red test seen, green, committed) record one progress note with `.bee/bin/bee herding notify --kind progress --job c-golden --step <word> --text "<note, at most 120 characters>"`; a note never ends the turn.
 - Execute only the assigned cell. Do not select or accept other work.
 - Never stop to offer the leader a menu of implementation options: choose inside the cell's scope and record the choice as a departure. A decision outside the scope is one short yes/no question, returned through `[PARKED]` or `[BLOCKED]`.
 - Never reinterpret a locked CONTEXT.md decision; architectural changes and package installs return [BLOCKED] with a proposal.
-- Shape what you leave behind: prefer deletion to addition, write the smallest diff that solves it, and leave the base simpler than you found it. A signal threaded through several layers means stop and find the direct path. Nothing refuses these — craft, applied by judgment and surfaced at review, not by flags (`skills/bee-swarming/references/worker-details.md`). Write no comment in code, in any language — the why goes to a docs/knowledge concept whose Pointers name the file, or to bee decisions log, and a public item's description goes to the owning concept; where `no_code_comments` is on, the write guard refuses the rest.
+- Shape what you leave behind: prefer deletion to addition, write the smallest diff that solves it, and leave the base simpler than you found it. A signal threaded through several layers means stop and find the direct path. Nothing refuses these — craft, applied by judgment and surfaced at review, not by flags. Write no comment in code, in any language — the why goes to a docs/knowledge concept whose Pointers name the file, or to bee decisions log, and a public item's description goes to the owning concept; where `no_code_comments` is on, the write guard refuses the rest.
 - Write your knowledge delta (owning area concept update, a pitfall pattern when you hit one, bee.anchors for files you changed) in the same commit as your code, thin and anchored, no review step.
   Knowledge rules (the same list `bee knowledge consolidate` prints):
   - Anchor every entry to the code files it describes in bee.anchors — files, never directories.

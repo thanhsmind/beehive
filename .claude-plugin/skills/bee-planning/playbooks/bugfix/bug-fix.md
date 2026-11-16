@@ -20,11 +20,7 @@ discipline holds for a perf defect, where the evidence is the trace
    goes. A bug that will not reproduce directly is forced: synthesize the
    trigger, tighten the conditions, or instrument until it fires. A bug you
    cannot reproduce, you cannot prove fixed.
-2. Watch that reproduction FAIL before the fix. This step's rule already has a
-   home — `bee-swarming/references/worker-details.md:33-35`
-   ("red-before-green is craft, applied by judgment and enforced by review,
-   not by flags"). Read it there; it is deliberately not copied here, so a
-   cold execution worker never has to open a planning reference.
+2. Watch that reproduction FAIL before the fix (`bee-principle-red-before-green`).
 3. Binary-search the cause, and find the mechanism, not the symptom — trace
    the bad value back to where it was made
    (`bee-principle-crash-site-versus-fault-site`). Form the candidate
@@ -72,4 +68,3 @@ at first look.
 Reply: what was broken, the root cause, the fix, how you verified.
 
 Proof line: the reproduction's output, red and then green, verbatim.
-Proof floor: the cap refuses a result weaker than this class's floor and names it; the table is the cap's own (`bee cells finish --help`).

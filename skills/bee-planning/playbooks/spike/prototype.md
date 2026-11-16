@@ -30,8 +30,8 @@ a spike.
    costs a sentence; a wrong direction costs the whole sketch.
 4. Build the throwaway under `.bee/spikes/<feature>/`, separate from
    production source, because the ANSWER is the deliverable, the code is not
-   (the shape body is named in `bee-planning/references/planning-reference.md`,
-   under "Shape bodies by mode"). For a visual decision, vanilla
+   (the shape body is named in `bee-planning/references/plan-artifact.md`,
+   under "Artifact: plan.md"). For a visual decision, vanilla
    HTML/CSS/JS or the lightest stack that renders the idea, CDN deps, a dev
    server with hot reload. For a behavioral or timing decision, the smallest
    script that exercises the question. No production framework, no tests, no
@@ -65,4 +65,3 @@ A spike that becomes the implementation was never a spike.
 
 Proof line: the decision id the answer was logged under, and the
 observation of each variant.
-Proof floor: the cap refuses a result weaker than this class's floor and names it; the table is the cap's own (`bee cells finish --help`).

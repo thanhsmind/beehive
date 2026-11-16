@@ -41,12 +41,7 @@ File caps count product files only — never `.bee/**`, `docs/**`, or plans.
 
 Size from the whole blast radius (tests to update, docs, manifests, proof runs), never from the core edit. A second hand-authored file of any kind, a doc beside code included, is small.
 
-Record: a code-touching route opens its feature in one verb, run from the
-main checkout — `bee feature start --feature <slug> --class <c> --lane <l>
-[--flags <a,b>] --files <n>`. It runs `bee worktree new`, starts the lane
-record, and records the route (`bee route --set`), then prints the worktree
-path and the instruction line; open the session there (rule:
-agents-worktree-first). Work that stays in main (docs lane, a solo tiny fix)
+Record: a code-touching route opens its feature from main with `bee feature start --feature <slug> --class <c> --lane <l> [--flags <a,b>] --files <n>`, then opens the session in the worktree it prints (rule: agents-worktree-first). Work that stays in main (docs lane, a solo tiny fix)
 records the route alone: `bee route --set --class <c> --lane <l> [--flags
 <a,b>] --files <n>`. Re-route upward with `bee route --set` on new evidence
 any time, de-escalate only on cited evidence.
@@ -58,7 +53,7 @@ the remedy is to raise the route, never to drop the file.
 That same step cites the matched situation file
 `skills/bee-planning/playbooks/<class>/<situation>.md` into plan.md — the
 class index only for a class with no situations — by name and anchor
-(`references/planning-reference.md` ("Playbooks")), never by copying its
+(`references/cells.md` ("Playbooks")), never by copying its
 steps.
 Code truth changes only in the feature worktree, the
 user tests at staging once the slice is ready, and main receives the branch
@@ -86,7 +81,7 @@ cheaply: open the real file at the real line, or run the real path and keep
 the output. Existence is not evidence — that a file, flag, or table is named
 somewhere proves nothing about what it holds. Record the touch where the lane
 keeps its evidence: `## Discovery` and the claims table in plan.md
-(`references/planning-reference.md` ("The load-bearing claims table")), the
+(`references/plan-artifact.md` ("The load-bearing claims table")), the
 gate message itself on `tiny`/`small`. A touch that contradicts the draft is
 the cheapest finding of the whole feature.
 
@@ -100,7 +95,7 @@ work endangers (decomposition, walking skeleton, dependency thinking:
 |---|---|
 | `tiny` | one cell, plus its tester cell when it touches code — the cell is the micro-plan |
 | `small` | logged scoping synthesis + 1–3 cells; `plan.md` only on request |
-| `standard`/`high-risk` | `docs/history/<feature>/plan.md` — `references/planning-reference.md` ("Artifact: plan.md", "Phase plan vs epic map") |
+| `standard`/`high-risk` | `docs/history/<feature>/plan.md` — `references/plan-artifact.md` ("Artifact: plan.md", "Phase plan vs epic map") |
 
 Once drafted, the SMALLER PATH check — every lane, one inline question, one
 line of evidence: *is there a cheaper shape that still honors every locked
@@ -109,7 +104,7 @@ PATH question — the `hat-alternatives` seat cites it, never copies it.
 Standard/high-risk add the hat wave before the gate: the plan-step wave IS
 the plan check now (procedure home:
 `bee-hive/references/gates-and-delegation.md` ("Hat wave"); what planning
-consumes: `references/planning-reference.md` ("Plan check — the hat wave")).
+consumes: `references/plan-artifact.md` ("Plan check — the hat wave")).
 When new code has an open shape on standard or high-risk work — several
 whole shapes viable and no pattern in the repo to copy — load
 `references/design-sketch.md` before the gate; the sketch lands in the plan,
@@ -145,14 +140,14 @@ Tiny/small merge shape and execution: draft the cell(s), run `bee gate --preview
 gate message — never persist-then-preview — then ask: "Work shape + execution:
 I'm about to do [X] via [Y], verified by [Z]. Approve?" One yes records both
 (`bee gate --merge --approved true`); cells persist only after it —
-full protocol: `references/planning-reference.md` ("Tiny/small merged gate").
+full protocol: `references/cells.md` ("Tiny/small merged gate").
 
 ## Prep
 
 After approval only: current-slice cells, walked through pre-flight and a
 clean `--dry-run` before the one batched `bee cells add --stdin` call —
 later slices keep one-line headlines, not cells
-(`references/planning-reference.md` ("Pre-flight before cells add", "Cell
+(`references/cells.md` ("Pre-flight before cells add", "Cell
 quality rules")). A user-visible surface makes slice 1 a walking skeleton:
 end-to-end, real behavior, no stubs.
 
@@ -160,15 +155,12 @@ Prep adds a final `role: writer` consolidation cell to every code-touching
 standard or high-risk feature, depending on every other cell, whose action runs
 `bee knowledge consolidate --feature <feature>`, writes the deduped knowledge
 and `docs/history/<feature>/delivery.md`, and whose verify is
-`.bee/bin/bee knowledge check` (`references/planning-reference.md` carries the
-cell shape).
+`.bee/bin/bee knowledge check` (`references/plan-artifact.md` ("Consolidation cell shape (role: writer)")).
 
 A cell that writes tests against an interface cites that interface's contract
-decision by its STORE id in `cell.decisions` — the mint trap refuses a
-test-writing cell that cites none. Know its limit: the trap only sees a
-test-shaped path in `files` or `role: test`, so a `code`-role cell adding an
-inline test module to a source file it already touches is NOT caught — citing
-is on the author (`docs/knowledge/areas/workflow-state/dispatch.md`).
+decision by its STORE id in `cell.decisions` — cite the contract decision even
+where the trap cannot see it, such as a `code`-role cell adding an inline test
+module to a source file it already touches (`docs/knowledge/areas/workflow-state/dispatch.md`).
 
 Every code cell gets a tester cell: a `role: test` cell that depends on it,
 dispatched after the implementer caps, to a worker that shares no context
@@ -178,7 +170,7 @@ coverage judgment first: cite existing tests by file and case, author only
 the gap (`.bee/expertise/tests.md`). No lane skips the pair, `tiny`
 included. A docs-only cell gets a second cell for its parity and pointer
 checks instead of a tester. The agent owns test scope (rule: agents-proof-at-cap) —
-scoping detail in `references/planning-reference.md` ("Test scoping"). Then
+scoping detail in `references/cells.md` ("Test scoping"). Then
 `bee state set --owner planning --phase swarming --next-action "Invoke bee-swarming."`
 
 ## Scope integrity
@@ -206,7 +198,8 @@ at the gate — never self-approved.
 
 | File | When to load |
 |---|---|
-| `references/planning-reference.md` | plan.md/approach.md templates, cell quality rules + example JSON, merged-gate protocol, the hat wave as the plan check, verify scoping, greenfield init lane |
+| `references/cells.md` | every lane: playbooks, cell quality rules + example JSON, pre-flight, test scoping, greenfield init lane, tiny/small merged gate |
+| `references/plan-artifact.md` | standard/high-risk: plan.md/approach.md templates, claims table, phase vs epic, consolidation cell, hat-wave consumption |
 | `docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md` ("Principle homes") | The routed principles for this class, and what each one's spoken line is |
 | `references/edge-dimensions.md` | 12 edge-case dimensions — high-risk/hard-gate test matrix only; standard and below use the triad |
 | `.bee/expertise/planning.md`, `.bee/expertise/tests.md` | Decomposition, walking skeleton, smaller path, cold pickup; coverage judgment, case selection, red-first |

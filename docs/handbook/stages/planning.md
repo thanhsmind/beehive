@@ -109,5 +109,5 @@ source edits happen until `approved_gates.execution` is true.
 - Stop at Gate 2; no cells, no prep artifacts, before approval.
 
 ## Source
-`skills/bee-planning/SKILL.md` + `references/{planning-reference, edge-dimensions}.md`;
+`skills/bee-planning/SKILL.md` + `references/{cells, plan-artifact, edge-dimensions}.md`;
 craft in `.bee/expertise/planning.md` and `.bee/expertise/tests.md`

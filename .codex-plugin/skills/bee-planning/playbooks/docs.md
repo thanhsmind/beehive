@@ -9,4 +9,4 @@ Prose a reader acts on, or a skill an agent follows: pick the situation below an
 
 No situation fits, or the work is large and cross-cutting: use bee-figure-it-out.
 
-Proof floor: the cap refuses a result weaker than this class's floor and names it; the table is the cap's own (`bee cells finish --help`).
+Proof floor: the cap refuses a result weaker than this class's floor and names it when it refuses.

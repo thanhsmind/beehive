@@ -11,4 +11,4 @@ A question to answer or a cause to find, with no change to ship: pick the situat
 
 No situation fits, or the work is large and cross-cutting: use bee-figure-it-out.
 
-Proof floor: the cap refuses a result weaker than this class's floor and names it; the table is the cap's own (`bee cells finish --help`).
+Proof floor: the cap refuses a result weaker than this class's floor and names it when it refuses.
