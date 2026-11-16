@@ -47,7 +47,7 @@ use crate::version::BEE_VERSION;
         let text = render(tmp.path());
         assert!(text.starts_with(&format!("## bee v{BEE_VERSION}\n")), "{text}");
         assert!(
-            text.ends_with("Everything above is already read — do not re-fetch it. Run `.bee/bin/bee status --json` yourself when you ROUTE WORK (claim, plan, change phase) or need detail this block does not carry. Never hand bee commands to the user. Route via bee-hive."),
+            text.ends_with("Everything above is already read — do not re-fetch it. Run `.bee/bin/bee orient` when you route work (claim, plan, change phase); run `.bee/bin/bee status --json` only for detail this block does not carry."),
             "closing line drifted:\n{text}"
         );
     }
@@ -292,12 +292,7 @@ use crate::version::BEE_VERSION;
             text.contains("- test: `npm test` — full suite, once per feature: `bee test` before `bee worktree merge`; a cell verify adds a filter"),
             "{text}"
         );
-        assert!(
-            text.contains(
-                "- Proof-per-change-type: pick the proof your change needs — related tests for code, parity/pointer checks for docs — and record it in the cap proof line. CI runs the same command on every push and PR."
-            ),
-            "{text}"
-        );
+        assert!(!text.contains("Proof-per-change-type"), "{text}");
         // The mandatory pre-claim full-suite red check (dropped by D3,
         // 58ec9664) never renders again.
         assert!(!text.contains("- Never build on red:"), "{text}");
@@ -449,7 +444,7 @@ use crate::version::BEE_VERSION;
         assert!(surface_at > commands_at, "Command surface must follow Standard commands:\n{text}");
         assert!(doc_links_at > surface_at, "Doc links must follow Command surface:\n{text}");
         assert!(
-            text.ends_with("Everything above is already read — do not re-fetch it. Run `.bee/bin/bee status --json` yourself when you ROUTE WORK (claim, plan, change phase) or need detail this block does not carry. Never hand bee commands to the user. Route via bee-hive."),
+            text.ends_with("Everything above is already read — do not re-fetch it. Run `.bee/bin/bee orient` when you route work (claim, plan, change phase); run `.bee/bin/bee status --json` only for detail this block does not carry."),
             "closing line drifted:\n{text}"
         );
     }
@@ -1159,7 +1154,7 @@ use crate::version::BEE_VERSION;
         }
         assert!(text.contains("### Omitted to fit the host limit:"), "{text}");
         assert!(
-            text.ends_with("Everything above is already read — do not re-fetch it. Run `.bee/bin/bee status --json` yourself when you ROUTE WORK (claim, plan, change phase) or need detail this block does not carry. Never hand bee commands to the user. Route via bee-hive."),
+            text.ends_with("Everything above is already read — do not re-fetch it. Run `.bee/bin/bee orient` when you route work (claim, plan, change phase); run `.bee/bin/bee status --json` only for detail this block does not carry."),
             "the closing trailer is never dropped:\n{text}"
         );
         assert!(text.find("### Omitted").unwrap() < text.find("Everything above is already read").unwrap());
@@ -1587,7 +1582,7 @@ use crate::version::BEE_VERSION;
         // defaultState() shows through, and the preamble is whole.
         assert!(text.contains("- Phase: idle | Mode: none | Feature: none"), "{text}");
         assert!(text.contains("- Gates: none pending (no active work)"), "{text}");
-        assert!(text.ends_with("Route via bee-hive."), "{text}");
+        assert!(text.ends_with("only for detail this block does not carry."), "{text}");
     }
 
     #[test]
@@ -1600,7 +1595,7 @@ use crate::version::BEE_VERSION;
         let text = render(tmp.path());
         assert!(text.contains("## bee v"), "{text}");
         assert!(!text.contains("### HANDOFF present"), "a corrupt handoff reads as absent:\n{text}");
-        assert!(text.ends_with("Route via bee-hive."), "{text}");
+        assert!(text.ends_with("only for detail this block does not carry."), "{text}");
     }
 
     // ── (4) the handoff block's three arms ────────────────────────────────
