@@ -11,9 +11,9 @@
     "uat": false
   },
   "summary": "Feature \"clippy-warnings-clean\" started at phase \"exploring\" (lane).",
-  "next_action": "Continue bee-exploring for \"clippy-warnings-clean\" (lane).",
+  "next_action": "Merged into main at 7add8bc; capture what settled, then bee close --feature clippy-warnings-clean.",
   "created_at": "2026-11-16T00:39:22.260Z",
-  "run_state": "awaiting-approval",
+  "run_state": null,
   "waiting_on": null,
   "route": {
     "class": "refactor",
@@ -521,12 +521,5 @@
         }
       ]
     }
-  },
-  "merge_ready": {
-    "since": "2026-11-16T01:15:06.432Z",
-    "branch": "wt/clippy-warnings-clean",
-    "worktree_id": "beehive--wt--clippy-warnings-clean",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
