@@ -365,10 +365,7 @@ pub(crate) fn is_empty_fleet(row: &WaveRow) -> bool {
         return false;
     }
     let all_dry_run = row.workers.iter().all(|w| w.outcome.as_deref() == Some("dry_run"));
-    if all_dry_run {
-        return false;
-    }
-    true
+    !all_dry_run
 }
 
 /// Pure verdict over a single wave row, capping returned worker names at `max_names`.

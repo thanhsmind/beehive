@@ -9,7 +9,6 @@ workspace = true
 
 [dependencies]
 anyhow.workspace = true
-serde.workspace = true
 # Only the herdr backend module (src/backend/herdr.rs) parses JSON with
 # this — the generic core and the fake backend need nothing beyond
 # `anyhow`/`serde`. herdr's own CLI responses are JSON on stdout
