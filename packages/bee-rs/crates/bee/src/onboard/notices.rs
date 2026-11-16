@@ -395,13 +395,13 @@ pub fn commands_notices(repo_root: &Path, first_onboard: bool) -> Vec<String> {
             .map(|c| format!("{}: {} — {}", c.key, c.value, c.source))
             .collect();
         return vec![format!(
-            "No standard commands recorded. Detected candidates: {}. Present them to the user as one pre-filled confirmation question (skippable) and write only confirmed values to .bee/config.json `commands` — never write unconfirmed values (D3). They power the session CI status gate.{}",
+            "No standard commands recorded. Detected candidates: {}. Present them to the user as one pre-filled confirmation question (skippable) and write each confirmed value with `bee config set --key commands.<key> --value '<value>'` (commands.test takes a JSON list) — never write unconfirmed values (D3). They power the session CI status gate.{}",
             proposals.join("; "),
             static_sentence
         )];
     }
     let mut notices = vec![
-        format!("No standard commands recorded. Ask the user for the host project's setup/start/test commands and write them to .bee/config.json `commands` (skippable — never invent values). They power the session CI status gate.{static_sentence}"),
+        format!("No standard commands recorded. Ask the user for the host project's setup/start/test commands and write each confirmed value with `bee config set --key commands.<key> --value '<value>'` (commands.test takes a JSON list; skippable — never invent values). They power the session CI status gate.{static_sentence}"),
     ];
     if first_onboard {
         notices.push("Greenfield init lane (docs/09 item 6): this is the first onboard and no build was detected. Offer the init lane before any feature work — the first planning slice is one init cell whose must_haves are exactly: setup succeeds from scratch, one passing test exists, standard commands are recorded in .bee/config.json, and the repo has a clean first commit.".to_string());
@@ -701,7 +701,7 @@ mod tests {
     }
 
     const STATIC_CHECK_LINT_PKG: &str = r#"{"scripts":{"lint":"eslint .","typecheck":"tsc"}}"#;
-    const STATIC_CHECK_OLD_FIRST: &str = "No standard commands recorded. Ask the user for the host project's setup/start/test commands and write them to .bee/config.json `commands` (skippable — never invent values). They power the session CI status gate.";
+    const STATIC_CHECK_OLD_FIRST: &str = "No standard commands recorded. Ask the user for the host project's setup/start/test commands and write each confirmed value with `bee config set --key commands.<key> --value '<value>'` (commands.test takes a JSON list; skippable — never invent values). They power the session CI status gate.";
 
     #[test]
     fn static_check_one_candidate_per_kind_and_manifest_beats_convention() {
@@ -857,7 +857,7 @@ mod tests {
         let dir = static_check_repo(&[("package.json", r#"{"scripts":{"test":"vitest"}}"#)], None);
         assert_eq!(
             commands_notices(dir.path(), false),
-            vec!["No standard commands recorded. Detected candidates: test: npm test — package.json. Present them to the user as one pre-filled confirmation question (skippable) and write only confirmed values to .bee/config.json `commands` — never write unconfirmed values (D3). They power the session CI status gate.".to_string()]
+            vec!["No standard commands recorded. Detected candidates: test: npm test — package.json. Present them to the user as one pre-filled confirmation question (skippable) and write each confirmed value with `bee config set --key commands.<key> --value '<value>'` (commands.test takes a JSON list) — never write unconfirmed values (D3). They power the session CI status gate.".to_string()]
         );
     }
 
@@ -1330,6 +1330,43 @@ mod tests {
             compose_agents_header(&repo),
             "# myrepo\n\n<!-- [unknown] one-line project description - replace me -->\n\n- README.md\n\n"
         );
+    }
+
+    fn assert_names_config_set(notices: &[String]) {
+        assert!(!notices.is_empty());
+        for notice in notices {
+            assert!(notice.contains("bee config set --key commands."), "{notice}");
+            assert!(!notice.contains("to .bee/config.json"), "{notice}");
+        }
+    }
+
+    #[test]
+    fn the_ask_for_commands_names_bee_config_set() {
+        let dir = static_check_repo(&[], None);
+        assert_names_config_set(&commands_notices(dir.path(), false));
+    }
+
+    #[test]
+    fn detected_candidates_with_a_static_check_name_bee_config_set() {
+        let dir = static_check_repo(
+            &[("package.json", r#"{"scripts":{"test":"vitest","lint":"eslint ."}}"#)],
+            None,
+        );
+        let notices = commands_notices(dir.path(), false);
+        assert!(notices[0].contains("Detected candidates"), "{notices:?}");
+        assert!(notices[0].contains("npm run lint"), "{notices:?}");
+        assert_names_config_set(&notices);
+    }
+
+    #[test]
+    fn a_test_list_missing_a_static_check_names_bee_config_set() {
+        let dir = static_check_repo(
+            &[("package.json", STATIC_CHECK_LINT_PKG)],
+            Some(json!({"commands":{"test":["npm test"]}})),
+        );
+        let notices = commands_notices(dir.path(), false);
+        assert!(notices[0].contains("does not run"), "{notices:?}");
+        assert_names_config_set(&notices);
     }
 
     #[test]

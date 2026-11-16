@@ -284,6 +284,8 @@ use crate::version::BEE_VERSION;
             .map(|w| w.as_str().unwrap().to_string())
             .collect();
         assert!(warnings[0].starts_with("No standard commands recorded"));
+        assert!(warnings[0].contains("bee config set --key commands."), "{}", warnings[0]);
+        assert!(!warnings[0].contains("verify"), "{}", warnings[0]);
         assert_eq!(
             warnings[1],
             format!("Onboarding installed bee 0.9.0 but plugin is {BEE_VERSION} — re-run onboarding.")
