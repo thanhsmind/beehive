@@ -88,4 +88,3 @@ iterations run (kept vs reverted), each accepted fix on one line, the decision
 trail path, and the best idea you would try next if pushed further.
 
 Proof line: the baseline, the after, the delta, the command, and the artifact path.
-Proof floor: the cap refuses a result weaker than this class's floor and names it; the table is the cap's own (`bee cells finish --help`).
