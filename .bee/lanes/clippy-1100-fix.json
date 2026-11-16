@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "clippy-1100-fix",
   "mode": null,
-  "phase": "exploring",
+  "phase": "idle",
   "approved_gates": {
     "context": false,
     "shape": true,
@@ -11,9 +11,9 @@
     "uat": false
   },
   "summary": "Feature \"clippy-1100-fix\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at b0e1208; capture what settled, then bee close --feature clippy-1100-fix.",
+  "next_action": "bee close finished \"clippy-1100-fix\" — feature is closed.",
   "created_at": "2026-11-16T02:05:47.728Z",
-  "run_state": null,
+  "run_state": "awaiting-approval",
   "waiting_on": null,
   "route": {
     "class": "bugfix",
