@@ -22,13 +22,65 @@ pub(crate) fn run_herded(argv: &[String], stdin: &str) -> Outcome {
 
 pub(crate) fn emit_for(ctx: &HookContext) -> Emit {
     let mut emit = Emit::default();
-    let denial = whole_tree_denial(ctx);
+    let denial = team_guard_denial(ctx).or_else(|| whole_tree_denial(ctx));
     clear_corrupt_json_warnings();
     if let Some(reason) = denial {
         emit.stderr.push_str(&reason);
         emit.code = 2;
     }
     emit
+}
+
+fn team_guard_denial(ctx: &HookContext) -> Option<String> {
+    if ctx.worktree_resolution == "linked-invalid" {
+        return None;
+    }
+    let root_pb = ctx.root.clone()?;
+    let store_root_pb = ctx.store_root.clone().unwrap_or_else(|| root_pb.clone());
+    if !store_root_pb.join(".bee").join("onboarding.json").is_file() {
+        return None;
+    }
+    if !hook_enabled(&store_root_pb, HOOK_NAME) {
+        return None;
+    }
+    let tool_name = match first_truthy(&ctx.payload, &["tool_name", "toolName"]) {
+        Some(Value::String(s)) => s.clone(),
+        _ => return None,
+    };
+    if !matches!(
+        tool_name.as_str(),
+        "Edit" | "Write" | "MultiEdit" | "apply_patch" | "ApplyPatch" | "Bash" | "exec"
+    ) {
+        return None;
+    }
+    let tool_input: Map<String, Value> = match ctx.payload.get("tool_input") {
+        Some(Value::Object(m)) => m.clone(),
+        _ => Map::new(),
+    };
+    let root = root_pb.to_string_lossy().into_owned();
+    let cwd = ctx.cwd.to_string_lossy().into_owned();
+    if let Some(reason) = global_config_write_denial(&tool_name, &tool_input, &root, &cwd) {
+        return Some(reason);
+    }
+    let raw_paths: Vec<String> = match tool_name.as_str() {
+        "apply_patch" | "ApplyPatch" => apply_patch_text(&tool_input)
+            .map(|patch| extract_apply_patch_targets(&patch))
+            .unwrap_or_default(),
+        "Bash" | "exec" => match first_truthy(&tool_input, &["command", "cmd"]) {
+            Some(Value::String(command)) => extract_bash_targets(command).paths,
+            _ => Vec::new(),
+        },
+        _ => match tool_input.get("file_path") {
+            Some(Value::String(path)) => vec![path.clone()],
+            _ => Vec::new(),
+        },
+    };
+    raw_paths.into_iter().find_map(|raw| {
+        let rel = canonical_rel_path(&root, &cwd, Some(&Value::String(raw)))
+            .ok()
+            .flatten()?;
+        project_config_write_denial(&tool_name, &tool_input, &root_pb, &rel)
+    })
 }
 
 fn unresolved(classified: &TreeVerbClass, reason: &str) -> String {

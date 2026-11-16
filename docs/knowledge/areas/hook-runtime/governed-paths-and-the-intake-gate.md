@@ -549,7 +549,9 @@ permitted write is the commoner one.
   `write_guard::run_herded` (`hooks/write_guard/worker_tree.rs`) runs the same
   D12 global-config write refusal and the D6 governed-key check for
   `.bee/config.json` and `.bee/team.json` before its concurrent-tree check,
-  while every other guard stays open in that pane.
+  while every other guard stays open in that pane. Both panes call one
+  `project_config_write_denial` in `write_guard/main.rs`; a second copy of the
+  governed-key loop would drift from the hooked session's.
 
 ## Pointers (implementation)
 

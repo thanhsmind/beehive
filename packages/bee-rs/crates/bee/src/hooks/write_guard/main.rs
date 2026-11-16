@@ -120,6 +120,60 @@ pub(crate) fn reconstruct_target_text(
     }
 }
 
+pub(crate) fn project_config_write_denial(
+    tool_name: &str,
+    tool_input: &Map<String, Value>,
+    root_pb: &Path,
+    rel: &str,
+) -> Option<String> {
+    let norm = normalize_rel(rel);
+    let target_layer = project_config_layer(&norm)?;
+    if matches!(tool_name, "apply_patch" | "ApplyPatch") {
+        return Some(format!(
+            "bee config guard: \"{}\" cannot be modified via apply_patch — this target requires content-level inspection. FIX: use Edit/Write to edit config files.",
+            rel
+        ));
+    }
+    if matches!(tool_name, "Bash" | "exec") {
+        return Some(format!(
+            "bee config guard: \"{}\" cannot be modified via Bash — this target requires content-level inspection. FIX: use Edit/Write to edit config files.",
+            rel
+        ));
+    }
+    let disk: Vec<(Layer, Option<String>)> = Layer::ORDER
+        .iter()
+        .map(|layer| {
+            let text = layer
+                .path(root_pb, global_config_dir().as_deref())
+                .and_then(|file| std::fs::read_to_string(file).ok());
+            (*layer, text)
+        })
+        .collect();
+    let old_texts: Vec<(Layer, Option<&str>)> =
+        disk.iter().map(|(layer, text)| (*layer, text.as_deref())).collect();
+    let no_project_file = disk
+        .iter()
+        .all(|(layer, text)| *layer == Layer::Global || text.is_none());
+    let old_merged = if no_project_file {
+        None
+    } else {
+        config_merged_text(&old_texts)
+    };
+    let proposed = match reconstruct_target_text(tool_name, tool_input, root_pb, rel) {
+        Ok((_, new)) => new,
+        Err(fail) => return Some(config_reconstruct_denial(&fail, rel, tool_name)),
+    };
+    let new_texts: Vec<(Layer, Option<&str>)> = old_texts
+        .iter()
+        .map(|(layer, text)| match *layer == target_layer {
+            true => (*layer, Some(proposed.as_str())),
+            false => (*layer, *text),
+        })
+        .collect();
+    let new_merged = config_merged_text(&new_texts)?;
+    config_governed_change_deny(rel, old_merged.as_deref(), &new_merged)
+}
+
 fn config_reconstruct_denial(fail: &ReconstructFail, rel: &str, tool_name: &str) -> String {
     let tail = match fail {
         ReconstructFail::WriteContent => {
@@ -658,59 +712,7 @@ lines naming plain in-repo relative paths (no path traversal, no unresolvable es
 
         if denial.is_none() {
             for rel in &rel_paths {
-                let norm = normalize_rel(rel);
-                let Some(target_layer) = project_config_layer(&norm) else { continue };
-                if is_apply {
-                    denial = Some(format!(
-                        "bee config guard: \"{}\" cannot be modified via apply_patch — this target requires content-level inspection. FIX: use Edit/Write to edit config files.",
-                        rel
-                    ));
-                    break;
-                }
-                if is_shell {
-                    denial = Some(format!(
-                        "bee config guard: \"{}\" cannot be modified via Bash — this target requires content-level inspection. FIX: use Edit/Write to edit config files.",
-                        rel
-                    ));
-                    break;
-                }
-                let disk: Vec<(Layer, Option<String>)> = Layer::ORDER
-                    .iter()
-                    .map(|layer| {
-                        let text = layer
-                            .path(&root_pb, global_config_dir().as_deref())
-                            .and_then(|file| std::fs::read_to_string(file).ok());
-                        (*layer, text)
-                    })
-                    .collect();
-                let old_texts: Vec<(Layer, Option<&str>)> =
-                    disk.iter().map(|(layer, text)| (*layer, text.as_deref())).collect();
-                let no_project_file = disk
-                    .iter()
-                    .all(|(layer, text)| *layer == Layer::Global || text.is_none());
-                let old_merged = if no_project_file {
-                    None
-                } else {
-                    config_merged_text(&old_texts)
-                };
-                let proposed = match reconstruct_target_text(&tool_name, &tool_input, &root_pb, rel) {
-                    Ok((_, new)) => new,
-                    Err(fail) => {
-                        denial = Some(config_reconstruct_denial(&fail, rel, &tool_name));
-                        break;
-                    }
-                };
-                let new_texts: Vec<(Layer, Option<&str>)> = old_texts
-                    .iter()
-                    .map(|(layer, text)| match *layer == target_layer {
-                        true => (*layer, Some(proposed.as_str())),
-                        false => (*layer, *text),
-                    })
-                    .collect();
-                if let Some(new_merged) = config_merged_text(&new_texts)
-                    && let Some(reason) =
-                        config_governed_change_deny(rel, old_merged.as_deref(), &new_merged)
-                {
+                if let Some(reason) = project_config_write_denial(&tool_name, &tool_input, &root_pb, rel) {
                     denial = Some(reason);
                     break;
                 }

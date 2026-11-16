@@ -6660,6 +6660,57 @@ use std::process::ExitCode;
     }
 
     #[test]
+    fn herded_team_guard_refuses_a_write_to_the_global_config_file() {
+        let fx = build_fixture("swarming", true);
+        let global = tempfile::tempdir().unwrap();
+        let _guard = crate::config_layers::TestGlobalDir::set(global.path());
+        let path_s = global.path().join("config.json").to_string_lossy().into_owned();
+        let e = herded(write_to(&path_s, "{}"), &fx.root);
+        assert_eq!(e.code, 2, "stderr={}", e.stderr);
+        assert!(e.stderr.contains("waggledance"), "stderr={}", e.stderr);
+    }
+
+    #[test]
+    fn herded_team_guard_refuses_bash_that_assigns_the_config_dir() {
+        let fx = build_fixture("swarming", true);
+        let e = herded(bash("BEEHIVE_CONFIG_DIR=/tmp/x bee team show"), &fx.root);
+        assert_eq!(e.code, 2, "stderr={}", e.stderr);
+        assert!(e.stderr.contains("waggledance"), "stderr={}", e.stderr);
+    }
+
+    #[test]
+    fn herded_team_guard_refuses_an_edit_that_changes_a_team_slot() {
+        let fx = build_fixture("swarming", true);
+        put_project(&fx, "team.json", &team_table("pi-gpt-5.6-luna"));
+        let edit = json!({
+            "tool_name": "Edit",
+            "tool_input": {
+                "file_path": ".bee/team.json",
+                "old_string": "pi-gpt-5.6-luna",
+                "new_string": "pi-opencode-free"
+            }
+        });
+        let e = herded(edit, &fx.root);
+        assert_eq!(e.code, 2, "stderr={}", e.stderr);
+        assert!(e.stderr.contains("team.pi.review.agent"), "stderr={}", e.stderr);
+    }
+
+    #[test]
+    fn herded_team_guard_refuses_a_bash_write_to_team_json() {
+        let fx = build_fixture("swarming", true);
+        let e = herded(bash("echo '{}' > .bee/team.json"), &fx.root);
+        assert_eq!(e.code, 2, "stderr={}", e.stderr);
+    }
+
+    #[test]
+    fn herded_team_guard_passes_a_plain_source_write() {
+        let fx = build_fixture("swarming", true);
+        let e = herded(write_to("src/app.rs", "fn main() {}\n"), &fx.root);
+        assert_eq!(e.code, 0, "stderr={}", e.stderr);
+        assert!(e.stderr.is_empty(), "{}", e.stderr);
+    }
+
+    #[test]
     fn herded_worker_guard_denies_git_stash_with_two_live_workers() {
         let fx = build_git_fixture("swarming");
         seed_herded_siblings(&fx.root, 2);
