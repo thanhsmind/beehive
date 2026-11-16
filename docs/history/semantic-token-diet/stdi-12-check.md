@@ -1,7 +1,8 @@
 # stdi-12 — check of stdi-11 (planning split)
 
-Checked commit `7c19ea731` (trailer `cell: stdi-11`) against CONTEXT.md D1, D2 and D5 and audit `reports/D-planning.md`.
-Line anchors point at the tree at `7c19ea731`. "old" means `skills/bee-planning/references/planning-reference.md` at `7c19ea731^`.
+Round 2. Checked both `cell: stdi-11` commits, `7c19ea731` (the split) and `fd64f2fe3` (the timing-rule restore), against CONTEXT.md D1, D2 and D5 and audit `reports/D-planning.md`.
+Line anchors point at the tree at `2d6de1cf9`. "old" means `skills/bee-planning/references/planning-reference.md` at `7c19ea731^`.
+Since the split, `G` gained two lines at `:108`, so every `G` anchor past that line moved by two. `plan-artifact.md` gained five lines at `:280`.
 `R` means `skills/bee-planning`. `G` means `skills/bee-hive/references/gates-and-delegation.md`.
 
 ## Truths
@@ -39,26 +40,26 @@ Line anchors point at the tree at `7c19ea731`. "old" means `skills/bee-planning/
 - Incident anecdote in rule 7 (old `:301-303`) → cut (F9). The drift why stays at `R/references/cells.md:72-73`.
 - Consolidation cell when and why (old `:375-377`) → `R/SKILL.md:154-158` (F8).
 - Hat wave history: plan-reviewer absorbed, dispatch kind changed, no wave on clear/tiny ids (old `:544-546`, `:558-563`, `:576-577`) → `R/references/provenance.md:11-13` (F4).
-- Hat wave seats and advisor kind (old `:558-563`) → `G:209-210`, `G:294` (F3).
-- SMALLER PATH one home (old `:565-568`) → `R/SKILL.md:100-103`, `G:218` (F3).
-- Two mandates, never merged (old `:570-574`) → `G:237-241` (F3).
-- No wave on a clear or tiny ask, once per feature (old `:576-583`) → `G:203-206`, `G:251` (F3).
-- Wave timing: opens when the shape is drafted, concurrent with SMALLER PATH, costs `max(wave, planning)`, findings block nothing until the gate, the gate never happens while the wave is outstanding (old `:553-556`) → NO HOME. See D-a.
+- Hat wave seats and advisor kind (old `:558-563`) → `G:211-212`, `G:296` (F3).
+- SMALLER PATH one home (old `:565-568`) → `R/SKILL.md:100-103`, `G:220` (F3).
+- Two mandates, never merged (old `:570-574`) → `G:239-243` (F3).
+- No wave on a clear or tiny ask, once per feature (old `:576-583`) → `G:205-208`, `G:253` (F3).
+- Wave timing: opens when the shape is drafted, concurrent with SMALLER PATH, costs `max(wave, planning)`, findings block nothing until the gate, the gate never happens while the wave is outstanding (old `:553-556`) → `R/references/plan-artifact.md:280-283`, restored word for word by `fd64f2fe3`. Only home: `rg -i "max\(wave|concurrent with the SMALLER|block nothing|wave is outstanding"` over `skills` and `packages/bee/LEADER.md` hits these four lines and nothing else.
 - `bee feature start` internals (old `R/SKILL.md:44-49`) → `bee feature start --help` (F7).
 - Mint-trap mechanism (old `R/SKILL.md:166-171`) → `docs/knowledge/areas/workflow-state/dispatch.md:189-196`; the duty stays at `R/SKILL.md:160-163` (F10).
 - Inbound pointers repointed: `R/SKILL.md:56`, `:84`, `:98`, `:107`, `:143`, `:150`, `:158`, `:173`, `:201-202`; `skills/bee-hive/references/scout-and-ticks.md:44`; `skills/bee-hive/references/routing-and-contracts.md:129`; `packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs:759`; `R/playbooks/feature/multi-phase-plan.md:20`; `R/playbooks/spike/prototype.md:33`.
 
 ## Defects
 
-- D-a: the hat-wave timing rule has no live home. Old `planning-reference.md:553-556` said the wave opens the moment the shape is drafted, concurrent with the SMALLER PATH check, so the stage costs `max(wave, planning)` and never the sum; findings block nothing until the gate presentation; the gate never happens while the wave is outstanding. Audit F3 named `G:201-264` as owner. `G` holds none of it: `rg -i "max\(|concurrent with|block nothing|wave is outstanding"` over `skills/bee-hive`, `skills/bee-planning` and `packages/bee/LEADER.md` finds nothing. `G:243-245` covers only a missing seat. Fix route, not applied here: add the clause to `G` "The plan-step wave", beside "When hats open".
+- D-a: FIXED by `fd64f2fe3`. The timing rule now lives at `R/references/plan-artifact.md:280-283`, the same place it held in the old file. Audit F3 had named `G` as owner; the fix keeps it on the planning side instead. That is still one home, and `G:203-266` holds no copy. Note: the paragraph sits right under "it never restates that procedure" (`:278`). A reader may want the timing moved into `G` "When hats open" (`G:197`) later. Not a defect for this cell.
 - D-b (minor): truth 1 fails on its letter. Four history mentions of the old name remain outside the excluded trees. They are not pointers and pointer_integrity passes. Either reword them without the old file name, or read the truth as "no live pointer".
 - D-c (minor): `R/playbooks/spike/prototype.md:33` was repointed from "Shape bodies by mode" to "Artifact: plan.md". The bold label "Shape bodies by mode" still exists at `R/references/plan-artifact.md:172`. The new pointer resolves but is coarser than the old one.
 - D-d (minor, outside stdi-11 files): `docs/handbook/stages/planning.md:99-101` still says tests are the writer's inside each cell and "There is no trailing test cell per slice". Audit D listed it under "Found outside scope". D2 calls this text stale.
-- D-e (minor): `R/references/plan-artifact.md:280-284` keeps "A hard-gate flag, a 6th product file … opens the wave at its three default seats. `high-risk` always opens it, at all five seats." The seat counts repeat `G:209-210`. F3 listed only the ≤5-file inline rule as planning-only.
+- D-e (minor): `R/references/plan-artifact.md:285-289` keeps "A hard-gate flag, a 6th product file … opens the wave at its three default seats. `high-risk` always opens it, at all five seats." The seat counts repeat `G:211-212`. F3 listed only the ≤5-file inline rule as planning-only.
 
 ## Verify
 
-`.bee/bin/bee knowledge check && cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pointer_integrity`, with the cargo bin directory on PATH. Run in the shared worktree as found. Four files outside stdi-11 had uncommitted edits from another cell.
+`.bee/bin/bee knowledge check && cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pointer_integrity`, with the cargo bin directory on PATH. Run again at `2d6de1cf9`. One file outside stdi-11, `skills/bee-knowledge-upkeep/SKILL.md`, had an uncommitted edit from another cell.
 
 - knowledge check: 328 concepts in 349 files, 0 OKF errors, 0 profile errors, 600 profile warnings — OK.
 - pointer_integrity: 10 passed, 0 failed, 0 ignored.
