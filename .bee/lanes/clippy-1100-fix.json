@@ -11,9 +11,9 @@
     "uat": false
   },
   "summary": "Feature \"clippy-1100-fix\" started at phase \"exploring\" (lane).",
-  "next_action": "Continue bee-exploring for \"clippy-1100-fix\" (lane).",
+  "next_action": "Merged into main at b0e1208; capture what settled, then bee close --feature clippy-1100-fix.",
   "created_at": "2026-11-16T02:05:47.728Z",
-  "run_state": "awaiting-approval",
+  "run_state": null,
   "waiting_on": null,
   "route": {
     "class": "bugfix",
@@ -433,12 +433,5 @@
         }
       ]
     }
-  },
-  "merge_ready": {
-    "since": "2026-11-16T02:20:14.407Z",
-    "branch": "wt/clippy-1100-fix",
-    "worktree_id": "beehive--wt--clippy-1100-fix",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
