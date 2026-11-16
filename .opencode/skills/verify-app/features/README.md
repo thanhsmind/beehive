@@ -82,6 +82,9 @@ required state, commands, and observable proof.
 - [Comment guard and ratchet](./comment-guard.md) covers the write refusal that
   stops a comment reaching a code file, the `no_code_comments` key that switches
   it on, and the baseline verb that only ever lowers a count.
+- [Config layers and split-team](./config-layers.md) covers the user-global config
+  layer and its precedence, the keys it may not set, `.bee/team.json` at first onboard, and
+  moving an old team table with `bee config split-team` and `--drop-global`.
 - [Worktree and close](./worktree-and-close.md) covers creating a feature
   worktree, merging it back, and the close doors.
 - [Worker outward guard](./worker-outward-guard.md) covers the push, the GitHub

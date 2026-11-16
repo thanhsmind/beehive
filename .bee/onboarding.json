@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "bee_version": "2.108.0",
+  "bee_version": "2.109.0",
   "managed": {
     "agents_block": "3cf65fa743041756f7f1f972f2eec5ff349fc2acb01bf33237aeb551ba22f944",
     "gitignore_block": "f30cb5dd174055c18a3b067f5cb22b6ef6662c4c27357f3347ab26529cc4d117",
@@ -61,10 +61,11 @@
       ".claude/skills/verify-app": {
         "SKILL.md": "53390e3ab0d18f2fa998c85e1c7f0abefb60096a20c3f49e1b1f5706a8164985",
         "control-bee": "613ed4462ebdee90d80157cf829dbaa74d91261584019cfa2f610068c0230983",
-        "features/README.md": "5a406fcc1f26d35cace271d33fb0f0e69905f1fb64ba10bfbeda25622ebae8a3",
+        "features/README.md": "0c42cd74b6d37a03d537d0b4b272071ae6a3bae7918dedda9adab4e263d4d50c",
         "features/cells-and-proof.md": "28719684a09d9ac3a2e781216321fbde72ce14cffd6bde79ff1027f4fecbb676",
         "features/codex-runtime.md": "4a4017bbf15806b661c8d5e97d9852e4f67614de524267508cb5a7c8402356b5",
         "features/comment-guard.md": "c2b45213682cbdca15dddaee5d0453088475bd72109a3b6537f2c6d14af4d145",
+        "features/config-layers.md": "fa70b30a6bb7dac09acadeff6360e2e0be3e4ebf7e46b800d69f35653867ab23",
         "features/feature-gates.md": "4aeb64cdc6ac9cbea14db3a7a87ced96a96b8059962de245bb0cd7075a1764a8",
         "features/onboard.md": "0f06bba451f8417d2d73a8f61548eb8ccb367e5c857882dcc6e4b291ad891999",
         "features/orient-and-status.md": "a9d6db1d5ea65dbac52b05ba34a6b568dd3c4dc94b29f842316c18be9949dc0f",
@@ -82,10 +83,11 @@
       ".agents/skills/verify-app": {
         "SKILL.md": "53390e3ab0d18f2fa998c85e1c7f0abefb60096a20c3f49e1b1f5706a8164985",
         "control-bee": "613ed4462ebdee90d80157cf829dbaa74d91261584019cfa2f610068c0230983",
-        "features/README.md": "5a406fcc1f26d35cace271d33fb0f0e69905f1fb64ba10bfbeda25622ebae8a3",
+        "features/README.md": "0c42cd74b6d37a03d537d0b4b272071ae6a3bae7918dedda9adab4e263d4d50c",
         "features/cells-and-proof.md": "28719684a09d9ac3a2e781216321fbde72ce14cffd6bde79ff1027f4fecbb676",
         "features/codex-runtime.md": "4a4017bbf15806b661c8d5e97d9852e4f67614de524267508cb5a7c8402356b5",
         "features/comment-guard.md": "c2b45213682cbdca15dddaee5d0453088475bd72109a3b6537f2c6d14af4d145",
+        "features/config-layers.md": "fa70b30a6bb7dac09acadeff6360e2e0be3e4ebf7e46b800d69f35653867ab23",
         "features/feature-gates.md": "4aeb64cdc6ac9cbea14db3a7a87ced96a96b8059962de245bb0cd7075a1764a8",
         "features/onboard.md": "0f06bba451f8417d2d73a8f61548eb8ccb367e5c857882dcc6e4b291ad891999",
         "features/orient-and-status.md": "a9d6db1d5ea65dbac52b05ba34a6b568dd3c4dc94b29f842316c18be9949dc0f",
@@ -103,10 +105,11 @@
       ".opencode/skills/verify-app": {
         "SKILL.md": "53390e3ab0d18f2fa998c85e1c7f0abefb60096a20c3f49e1b1f5706a8164985",
         "control-bee": "613ed4462ebdee90d80157cf829dbaa74d91261584019cfa2f610068c0230983",
-        "features/README.md": "5a406fcc1f26d35cace271d33fb0f0e69905f1fb64ba10bfbeda25622ebae8a3",
+        "features/README.md": "0c42cd74b6d37a03d537d0b4b272071ae6a3bae7918dedda9adab4e263d4d50c",
         "features/cells-and-proof.md": "28719684a09d9ac3a2e781216321fbde72ce14cffd6bde79ff1027f4fecbb676",
         "features/codex-runtime.md": "4a4017bbf15806b661c8d5e97d9852e4f67614de524267508cb5a7c8402356b5",
         "features/comment-guard.md": "c2b45213682cbdca15dddaee5d0453088475bd72109a3b6537f2c6d14af4d145",
+        "features/config-layers.md": "fa70b30a6bb7dac09acadeff6360e2e0be3e4ebf7e46b800d69f35653867ab23",
         "features/feature-gates.md": "4aeb64cdc6ac9cbea14db3a7a87ced96a96b8059962de245bb0cd7075a1764a8",
         "features/onboard.md": "0f06bba451f8417d2d73a8f61548eb8ccb367e5c857882dcc6e4b291ad891999",
         "features/orient-and-status.md": "a9d6db1d5ea65dbac52b05ba34a6b568dd3c4dc94b29f842316c18be9949dc0f",
@@ -148,20 +151,20 @@
     }
   },
   "agents_sync": {
-    "bee_version": "2.108.0",
+    "bee_version": "2.109.0",
     "files": [
       ".claude/agents/bee-comb.md",
-      ".claude/agents/bee-elder.md",
       ".claude/agents/bee-forager.md",
       ".claude/agents/bee-guard.md",
-      ".claude/agents/bee-scout.md"
+      ".claude/agents/bee-scout.md",
+      ".claude/agents/bee-worker.md"
     ],
     "rendered_from": {
-      "design": "opus",
-      "advisor": "fable",
-      "read": "haiku",
+      "design": "sonnet",
+      "read": "sonnet",
       "review": "opus",
-      "extraction": "haiku"
+      "extraction": "haiku",
+      "generation": "sonnet"
     },
     "codex": {
       "agents": [],
@@ -186,5 +189,5 @@
   },
   "design_role_offered": true,
   "created_at": "2026-07-24T03:53:44.750Z",
-  "updated_at": "2026-11-16T11:12:41.581Z"
+  "updated_at": "2026-11-16T12:56:36.356Z"
 }
