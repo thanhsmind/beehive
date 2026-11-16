@@ -1,0 +1,140 @@
+{
+  "id": "cbd-2",
+  "feature": "cargo-build-dir-tests",
+  "title": "Test the binary lookup on both Cargo layouts",
+  "lane": "small",
+  "role": "test",
+  "deps": [
+    "cbd-1"
+  ],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo +1.100.0 test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml",
+  "full_suite_reason": "The contract is that the whole suite passes on both toolchains.",
+  "must_haves": {
+    "truths": [
+      "the walk returns <target>/<profile>/bee from a <target>/<profile>/deps/<test> start",
+      "the walk returns <target>/<profile>/bee from a <target>/<profile>/build/bee/<hash>/out/<test> start while build/bee is a directory",
+      "the walk panics naming the start path when no bee file exists",
+      "the full suite exits 0 on rustc 1.100.0 and on the default toolchain",
+      "clippy -D warnings stays clean on both toolchains"
+    ]
+  },
+  "decisions": [
+    "1e9b2c01-e114-40c4-88da-1f887d424014",
+    "dd93aeaf-4459-4878-88aa-4a47767305e9"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/test_support.rs"
+  ],
+  "read_first": [
+    "docs/history/cargo-build-dir-tests/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/test_support.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Check contract cargo-build-dir-tests (decision 1e9b2c01) on the cbd-1 commit. Add tests in a tests module of packages/bee-rs/crates/bee/src/test_support.rs that drive the pure walk on temp-dir layouts: old (target/release/deps/x with target/release/bee a file), new (target/release/build/bee/<hash>/out/x with build/bee a directory and target/release/bee a file), and none (panics naming the start). Run the verify (CARGO_TARGET_DIR=/home/thanhsmind/.cache/cargo-target-r100 for +1.100.0, /home/thanhsmind/.cache/cargo-target-mmd for default), and cargo +1.100.0 clippy and cargo clippy with -- -D warnings. rg crates/bee/tests for current_exe and crates/bee/src for cargo_bin(\"bee\"). If cbd-1 breaks the contract, return BLOCKED with the evidence instead of changing production test helpers beyond the new tests. Discard the timings.jsonl change before committing. No code comments. Commit once (cell trailer); quote counts.",
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "cbd-2-worker",
+    "outcome": "Pinned find_bee_above on deps, build/bee/<hash>/out and no-binary layouts; walk now panics naming start; both toolchains 5831 passed 0 failed — c66c0f23b",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/test_support.rs"
+    ],
+    "deviations": [
+      "sync-ack: Tests of the helper only; red first: 104 failures on +1.100.0 before cbd-1, and the is_file to exists mutation turned the new layout test red"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-16T02:57:32.662Z",
+    "behavior_change": false,
+    "verification_evidence": "cargo +1.100.0 test --release --no-fail-fast and cargo test --release --no-fail-fast (1.98.0) on packages/bee-rs — green:unit — whole suite on both toolchains is the contract: each exit 0, 5831 passed 0 failed 30 ignored; clippy -D warnings exit 0 on both; is_file->exists mutation turned the build-out test red",
+    "verify_output": "green:red-first",
+    "verify_passed": true,
+    "claim_session": "542c65ba-d0f1-433f-bdc0-b1f702334e00",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo +1.100.0 test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml",
+    "claimed_at": "2026-11-16T02:46:04.259Z",
+    "knowledge_delta": [],
+    "sync_ack": "Tests of the helper only; red first: 104 failures on +1.100.0 before cbd-1, and the is_file to exists mutation turned the new layout test red",
+    "no_mistakes": true,
+    "principles_used": [
+      {
+        "slug": "bee-principle-red-before-green",
+        "changed": "ran an is_file->exists mutation to watch the build-out test fail before trusting green"
+      },
+      {
+        "slug": "bee-principle-test-behavior-not-structure",
+        "changed": "tests assert returned path and panic message, not the ancestor walk mechanics"
+      },
+      {
+        "slug": "bee-principle-laziness-protocol",
+        "changed": "moved the panic into the pure walk instead of adding a separate testable wrapper"
+      }
+    ],
+    "report": {
+      "outcome": "Pinned find_bee_above on deps, build/bee/<hash>/out and no-binary layouts; walk now panics naming start; both toolchains 5831 passed 0 failed — c66c0f23b",
+      "commit": "c66c0f23b6aa52a4d704bdc324f2f8509fe4be9f",
+      "files": [
+        "packages/bee-rs/crates/bee/src/test_support.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo +1.100.0 test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml — green:red-first — cargo +1.100.0 test --release --no-fail-fast and cargo test --release --no-fail-fast (1.98.0) on packages/bee-rs — green:unit — whole suite on both toolchains is the contract: each exit 0, 5831 passed 0 failed 30 ignored; clippy -D warnings exit 0 on both; is_file->exists mutation turned the build-out test red",
+      "deviations": [],
+      "principles_used": [
+        "bee-principle-red-before-green — ran an is_file->exists mutation to watch the build-out test fail before trusting green",
+        "bee-principle-test-behavior-not-structure — tests assert returned path and panic message, not the ancestor walk mechanics",
+        "bee-principle-laziness-protocol — moved the panic into the pure walk instead of adding a separate testable wrapper"
+      ],
+      "patch_id": "257819388f90c4159a791b81c5b14382545522b4"
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "the walk returns <target>/<profile>/bee from a <target>/<profile>/deps/<test> start",
+            "artifact": "packages/bee-rs/crates/bee/src/test_support.rs"
+          },
+          {
+            "requirement": "the walk returns <target>/<profile>/bee from a <target>/<profile>/build/bee/<hash>/out/<test> start while build/bee is a directory",
+            "artifact": "packages/bee-rs/crates/bee/src/test_support.rs"
+          },
+          {
+            "requirement": "the walk panics naming the start path when no bee file exists",
+            "artifact": "packages/bee-rs/crates/bee/src/test_support.rs"
+          },
+          {
+            "requirement": "the full suite exits 0 on rustc 1.100.0 and on the default toolchain",
+            "artifact": "packages/bee-rs/crates/bee/src/test_support.rs"
+          },
+          {
+            "requirement": "clippy -D warnings stays clean on both toolchains",
+            "artifact": "packages/bee-rs/crates/bee/src/test_support.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/test_support.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/test_support.rs"
+          }
+        ],
+        "recorded_at": "2026-11-16T02:58:51.085Z",
+        "recorded_by": "542c65ba-d0f1-433f-bdc0-b1f702334e00",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": {
+    "new": 98822,
+    "cached": 1230915,
+    "total": 1329737,
+    "models": {
+      "claude-opus-5-5": {
+        "new": 98822,
+        "cached": 1230915,
+        "total": 1329737
+      }
+    },
+    "jobs": [
+      "job-1794797168905-3498887-1",
+      "job-1794797363429-3514928-1"
+    ]
+  }
+}

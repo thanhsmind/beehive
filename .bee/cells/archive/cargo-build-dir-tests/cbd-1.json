@@ -1,0 +1,256 @@
+{
+  "id": "cbd-1",
+  "feature": "cargo-build-dir-tests",
+  "title": "Find the built bee binary independent of Cargo's test layout",
+  "lane": "small",
+  "role": "code",
+  "deps": [],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo +1.100.0 test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml",
+  "full_suite_reason": "The bug is in how every test target finds the binary; the whole suite on both toolchains is the related test.",
+  "must_haves": {
+    "truths": [
+      "the full suite exits 0 on rustc 1.100.0",
+      "the full suite exits 0 on the default 1.98 toolchain",
+      "no current_exe-based bee lookup is left in crates/bee/tests and no cargo_bin(\"bee\") is left in crates/bee/src",
+      "unit tests that run the binary call one shared cfg(test) helper"
+    ]
+  },
+  "decisions": [
+    "dd93aeaf-4459-4878-88aa-4a47767305e9",
+    "1e9b2c01-e114-40c4-88da-1f887d424014"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/test_support.rs",
+    "packages/bee-rs/crates/bee/src/main.rs",
+    "packages/bee-rs/crates/bee/tests/merge_full_suite.rs",
+    "packages/bee-rs/crates/bee/tests/full_suite_verify.rs",
+    "packages/bee-rs/crates/bee/tests/discovery_verbs.rs",
+    "packages/bee-rs/crates/bee/tests/cells_archive_sweep.rs",
+    "packages/bee-rs/crates/bee/tests/route_lane_targeting.rs",
+    "packages/bee-rs/crates/bee/tests/audit_doors.rs",
+    "packages/bee-rs/crates/bee/tests/workflow_verbs.rs",
+    "packages/bee-rs/crates/bee/tests/revision_deadlock_visibility.rs",
+    "packages/bee-rs/crates/bee/tests/registry_dispatch.rs",
+    "packages/bee-rs/crates/bee/src/verbs/plan_group.rs",
+    "packages/bee-rs/crates/bee/src/verbs/upkeep_group.rs",
+    "packages/bee-rs/crates/bee/src/verbs/report.rs",
+    "packages/bee-rs/crates/bee/src/verbs/design_group.rs",
+    "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs",
+    "packages/bee-rs/crates/bee/src/onboard/tests.rs",
+    "docs/knowledge/areas/verify-pipeline/suite-topology-and-discovery.md"
+  ],
+  "read_first": [
+    "docs/history/cargo-build-dir-tests/CONTEXT.md",
+    "packages/bee-rs/crates/bee/tests/workflow_verbs.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/verify-pipeline/suite-topology-and-discovery.md"
+  ],
+  "action": "Implement CONTEXT.md D1. (1) New packages/bee-rs/crates/bee/src/test_support.rs, declared in main.rs as #[cfg(test)] mod test_support;, with pub(crate) fn built_bee() -> PathBuf that walks std::env::current_exe() ancestors and returns the first ancestor.join(format!(\"bee{}\", std::env::consts::EXE_SUFFIX)) that is_file(); panic naming the start path when none. Put the walk in a pure fn taking the start path so a test can drive it. (2) In each of the 9 integration test files under crates/bee/tests that compute the binary from current_exe, replace that lookup with PathBuf::from(env!(\"CARGO_BIN_EXE_bee\")) (keep the local fn name if callers use it, or inline). (3) In crates/bee/src unit tests: replace assert_cmd Command::cargo_bin(\"bee\") in verbs/plan_group.rs and verbs/upkeep_group.rs with assert_cmd::Command::new(crate::test_support::built_bee()); replace the hand-rolled lookups in verbs/report.rs (near 1073), verbs/design_group.rs (near 804), verbs/status_full/tests.rs (near 483) and onboard/tests.rs (near 723) with crate::test_support::built_bee(). rg the crate for any other current_exe- or cargo_bin-based bee lookup in test code and migrate it too. (4) docs/knowledge/areas/verify-pipeline/suite-topology-and-discovery.md: one sentence that tests find the binary through CARGO_BIN_EXE_bee (integration) or test_support::built_bee (unit), because Cargo 1.100 moved test executables to build/<pkg>/<hash>/out; cite cargo-build-dir-tests D1 (never raw ids). Use CARGO_TARGET_DIR=/home/thanhsmind/.cache/cargo-target-r100 for the +1.100.0 run and /home/thanhsmind/.cache/cargo-target-mmd for the default run. Discard the tracked packages/bee-rs/crates/bee/.bee/logs/timings.jsonl change before committing. No code comments; delete the old lookup comments only where they described the removed code. Commit once (cell trailer). Proof: the verify command; quote both suites' pass and fail counts.",
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "cbd-1-worker",
+    "outcome": "Tests find bee via CARGO_BIN_EXE_bee (integration) or test_support::built_bee (unit); both toolchains pass; commit 53360ee7e",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/test_support.rs",
+      "packages/bee-rs/crates/bee/src/main.rs",
+      "packages/bee-rs/crates/bee/src/router.rs",
+      "packages/bee-rs/crates/bee/src/verbs/plan_group.rs",
+      "packages/bee-rs/crates/bee/src/verbs/upkeep_group.rs",
+      "packages/bee-rs/crates/bee/src/verbs/report.rs",
+      "packages/bee-rs/crates/bee/src/verbs/design_group.rs",
+      "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs",
+      "packages/bee-rs/crates/bee/src/onboard/tests.rs",
+      "packages/bee-rs/crates/bee/tests/merge_full_suite.rs",
+      "packages/bee-rs/crates/bee/tests/full_suite_verify.rs",
+      "packages/bee-rs/crates/bee/tests/discovery_verbs.rs",
+      "packages/bee-rs/crates/bee/tests/cells_archive_sweep.rs",
+      "packages/bee-rs/crates/bee/tests/route_lane_targeting.rs",
+      "packages/bee-rs/crates/bee/tests/audit_doors.rs",
+      "packages/bee-rs/crates/bee/tests/workflow_verbs.rs",
+      "packages/bee-rs/crates/bee/tests/revision_deadlock_visibility.rs",
+      "packages/bee-rs/crates/bee/tests/registry_dispatch.rs",
+      "docs/knowledge/areas/verify-pipeline/suite-topology-and-discovery.md"
+    ],
+    "deviations": [
+      "sync-ack: Owning concept suite-topology-and-discovery.md updated in the cell commit; red first: local cargo +1.100.0 test failed 104 tests before this commit"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-16T02:46:03.661Z",
+    "behavior_change": false,
+    "verification_evidence": "cargo clippy -- -D warnings && cargo test --release --no-fail-fast (1.100.0 and default) — green:unit — 5830 passed 0 failed on each toolchain, clippy exit 0",
+    "verify_output": "green:red-first",
+    "verify_passed": true,
+    "claim_session": "542c65ba-d0f1-433f-bdc0-b1f702334e00",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo +1.100.0 test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml",
+    "claimed_at": "2026-11-16T02:37:53.681Z",
+    "knowledge_delta": [
+      "docs/knowledge/areas/verify-pipeline/suite-topology-and-discovery.md"
+    ],
+    "sync_ack": "Owning concept suite-topology-and-discovery.md updated in the cell commit; red first: local cargo +1.100.0 test failed 104 tests before this commit",
+    "no_mistakes": true,
+    "principles_used": [
+      {
+        "slug": "bee-principle-laziness-protocol",
+        "changed": "deleted ten hand-rolled lookups for one shared helper"
+      },
+      {
+        "slug": "bee-principle-prove-it-works",
+        "changed": "ran the suite on both toolchains and reran the flaky proof_gate failure"
+      }
+    ],
+    "report": {
+      "outcome": "Tests find bee via CARGO_BIN_EXE_bee (integration) or test_support::built_bee (unit); both toolchains pass; commit 53360ee7e",
+      "commit": "53360ee7e21112dc0247733701a0be48112ec39a",
+      "files": [
+        "packages/bee-rs/crates/bee/src/test_support.rs",
+        "packages/bee-rs/crates/bee/src/main.rs",
+        "packages/bee-rs/crates/bee/src/router.rs",
+        "packages/bee-rs/crates/bee/src/verbs/plan_group.rs",
+        "packages/bee-rs/crates/bee/src/verbs/upkeep_group.rs",
+        "packages/bee-rs/crates/bee/src/verbs/report.rs",
+        "packages/bee-rs/crates/bee/src/verbs/design_group.rs",
+        "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs",
+        "packages/bee-rs/crates/bee/src/onboard/tests.rs",
+        "packages/bee-rs/crates/bee/tests/merge_full_suite.rs",
+        "packages/bee-rs/crates/bee/tests/full_suite_verify.rs",
+        "packages/bee-rs/crates/bee/tests/discovery_verbs.rs",
+        "packages/bee-rs/crates/bee/tests/cells_archive_sweep.rs",
+        "packages/bee-rs/crates/bee/tests/route_lane_targeting.rs",
+        "packages/bee-rs/crates/bee/tests/audit_doors.rs",
+        "packages/bee-rs/crates/bee/tests/workflow_verbs.rs",
+        "packages/bee-rs/crates/bee/tests/revision_deadlock_visibility.rs",
+        "packages/bee-rs/crates/bee/tests/registry_dispatch.rs",
+        "docs/knowledge/areas/verify-pipeline/suite-topology-and-discovery.md"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo +1.100.0 test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml — green:red-first — cargo clippy -- -D warnings && cargo test --release --no-fail-fast (1.100.0 and default) — green:unit — 5830 passed 0 failed on each toolchain, clippy exit 0",
+      "deviations": [],
+      "principles_used": [
+        "bee-principle-laziness-protocol — deleted ten hand-rolled lookups for one shared helper",
+        "bee-principle-prove-it-works — ran the suite on both toolchains and reran the flaky proof_gate failure"
+      ],
+      "patch_id": "a30477f1b47f0368544d3ddde910995da8f74088"
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "the full suite exits 0 on rustc 1.100.0",
+            "artifact": "packages/bee-rs/crates/bee/src/test_support.rs"
+          },
+          {
+            "requirement": "the full suite exits 0 on the default 1.98 toolchain",
+            "artifact": "packages/bee-rs/crates/bee/src/test_support.rs"
+          },
+          {
+            "requirement": "no current_exe-based bee lookup is left in crates/bee/tests and no cargo_bin(\"bee\") is left in crates/bee/src",
+            "artifact": "packages/bee-rs/crates/bee/src/test_support.rs"
+          },
+          {
+            "requirement": "unit tests that run the binary call one shared cfg(test) helper",
+            "artifact": "packages/bee-rs/crates/bee/src/test_support.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/test_support.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/test_support.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/main.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/main.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/router.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/router.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/plan_group.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/plan_group.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/upkeep_group.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/upkeep_group.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/report.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/report.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/design_group.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/design_group.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/onboard/tests.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/onboard/tests.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/tests/merge_full_suite.rs",
+            "artifact": "packages/bee-rs/crates/bee/tests/merge_full_suite.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/tests/full_suite_verify.rs",
+            "artifact": "packages/bee-rs/crates/bee/tests/full_suite_verify.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/tests/discovery_verbs.rs",
+            "artifact": "packages/bee-rs/crates/bee/tests/discovery_verbs.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/tests/cells_archive_sweep.rs",
+            "artifact": "packages/bee-rs/crates/bee/tests/cells_archive_sweep.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/tests/route_lane_targeting.rs",
+            "artifact": "packages/bee-rs/crates/bee/tests/route_lane_targeting.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/tests/audit_doors.rs",
+            "artifact": "packages/bee-rs/crates/bee/tests/audit_doors.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/tests/workflow_verbs.rs",
+            "artifact": "packages/bee-rs/crates/bee/tests/workflow_verbs.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/tests/revision_deadlock_visibility.rs",
+            "artifact": "packages/bee-rs/crates/bee/tests/revision_deadlock_visibility.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/tests/registry_dispatch.rs",
+            "artifact": "packages/bee-rs/crates/bee/tests/registry_dispatch.rs"
+          },
+          {
+            "requirement": "docs/knowledge/areas/verify-pipeline/suite-topology-and-discovery.md",
+            "artifact": "docs/knowledge/areas/verify-pipeline/suite-topology-and-discovery.md"
+          }
+        ],
+        "recorded_at": "2026-11-16T02:58:51.075Z",
+        "recorded_by": "542c65ba-d0f1-433f-bdc0-b1f702334e00",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": {
+    "new": 66829,
+    "cached": 1070029,
+    "total": 1136858,
+    "models": {
+      "claude-sonnet-5-5": {
+        "new": 66829,
+        "cached": 1070029,
+        "total": 1136858
+      }
+    },
+    "jobs": [
+      "job-1794796679546-3359064-1"
+    ]
+  }
+}
