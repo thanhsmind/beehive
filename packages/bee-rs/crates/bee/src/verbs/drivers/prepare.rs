@@ -1675,7 +1675,6 @@ pub(crate) fn herding_transport_probe_for(
 /// on a malformed CALL; every legitimate cli-shaped / unconfigured-advisor /
 /// native-unavailable / claim-ownership resolution is a typed {ok:false}
 /// RETURN, not an exception.
-#[allow(clippy::too_many_arguments)]
 pub(crate) fn prepare_dispatch(
     root: &Path,
     runtime: &str,
@@ -1712,7 +1711,6 @@ pub(crate) fn prepare_dispatch(
 /// cannot drift from it. It exists because "role absent" is the overwhelming
 /// majority of call sites and threading a `None` through each of them would
 /// buy nothing but churn in files this change has no business touching.
-#[allow(clippy::too_many_arguments)]
 pub(crate) fn prepare_dispatch_with_role(
     root: &Path,
     runtime: &str,
@@ -1751,7 +1749,6 @@ pub(crate) fn prepare_dispatch_with_role(
 /// but churn in files this change has no business touching. There is exactly
 /// one implementation — this body — so the no-brief path cannot drift from
 /// the brief path.
-#[allow(clippy::too_many_arguments)]
 pub(crate) fn prepare_dispatch_with_brief(
     root: &Path,
     runtime: &str,
@@ -1853,7 +1850,6 @@ pub(crate) fn deployment_prompt(release_version: &str) -> String {
     )
 }
 
-#[allow(clippy::too_many_arguments)]
 pub(crate) fn prepare_dispatch_wire(
     root: &Path,
     runtime: &str,
@@ -4874,7 +4870,6 @@ pub(crate) fn run_dispatch_wave(flags: Flags, use_json: bool, t0: Instant) -> Op
     finish(&ctx, Ok(Out::Emit(result, text, 0)))
 }
 
-#[allow(clippy::too_many_arguments)]
 fn claim_wave_cell(
     root: &Path,
     topo: Option<(&Path, &str)>,

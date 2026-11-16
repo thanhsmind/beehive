@@ -1006,7 +1006,6 @@ fn err2_text(e: Err2) -> String {
 
 /// Returns the marker's new value when it changed, `None` when nothing about
 /// the mark moved.
-#[allow(clippy::too_many_arguments)]
 fn sync_waiting_on(
     root: &Path,
     session_id: &str,

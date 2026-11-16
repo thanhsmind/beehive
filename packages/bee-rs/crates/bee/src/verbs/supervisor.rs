@@ -2763,7 +2763,6 @@ pub(crate) struct Counter {
 /// value and forget its verdict. Zero samples is `not-measurable` even when a
 /// ratio could be spelled: 0/0 is not 0, and a band verdict over nothing is
 /// the exact lie this whole surface is built to refuse.
-#[allow(clippy::too_many_arguments)]
 fn counter(
     name: &'static str,
     label: &'static str,

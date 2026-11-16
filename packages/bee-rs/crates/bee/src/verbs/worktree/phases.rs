@@ -211,7 +211,6 @@ fn split_carried_proof(
     (stale, carried)
 }
 
-#[allow(clippy::too_many_arguments)]
 pub(crate) fn merge_stage(
     main_root: &Path,
     id: &str,
@@ -1350,7 +1349,6 @@ fn uat_merge_precheck(main_root: &Path, feature: Option<&str>) -> UatPrecheck {
 /// and finishing. `Err(MErr::Ex)` is only ever produced by P1, before any
 /// mutation; the caller has already taken the queue lock by then, so it is
 /// the documented late-delegation residual, never an ordinary shape.
-#[allow(clippy::too_many_arguments)]
 pub(crate) fn merge_feature_worktree(
     main_root: &Path,
     id: &str,

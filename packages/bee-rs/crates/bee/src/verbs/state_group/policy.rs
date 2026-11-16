@@ -70,7 +70,6 @@ pub(crate) fn isolate_notice_marker_path(control_root: &Path, session_id: &str) 
         .join(format!("{safe}.json"))
 }
 
-#[allow(clippy::too_many_arguments)]
 pub(crate) fn apply_write_policy(
     root: &Path,
     control_root: &Path,
@@ -290,7 +289,6 @@ fn parked_answer_clause(unfinished: &[String]) -> String {
 }
 
 /// state.mjs startLane — the whole lane branch, run inside the 'state' hold.
-#[allow(clippy::too_many_arguments)]
 pub(crate) fn start_lane(
     root: &Path,
     control_root: &Path,
@@ -426,7 +424,6 @@ pub(crate) fn start_lane(
 /// startFeature's DEFAULT (non-lane) legacy body, run inside the 'state' hold.
 /// Every read happens before the single write at the end, so a refusal leaves
 /// zero mutations.
-#[allow(clippy::too_many_arguments)]
 pub(crate) fn start_default(
     root: &Path,
     control_root: &Path,

@@ -218,9 +218,9 @@ fn capture_queue_oldest_pending_at_ms(ctx: &Ctx, cq: &Value) -> f64 {
 
 /// D2's escalation test over `status.capture_queue` (already the
 /// stub-minus-flush pending count/ids from `capture_queue_summary`):
-/// >= CAPTURE_QUEUE_BLOCKER_MIN_PENDING pending stubs, or the oldest
-/// > pending stub older than CAPTURE_QUEUE_BLOCKER_MAX_AGE_DAYS days.
-/// > Returns the blocker line, or None when the queue stays an offer.
+/// \>= CAPTURE_QUEUE_BLOCKER_MIN_PENDING pending stubs, or the oldest
+/// pending stub older than CAPTURE_QUEUE_BLOCKER_MAX_AGE_DAYS days.
+/// Returns the blocker line, or None when the queue stays an offer.
 fn capture_queue_blocker_line(ctx: &Ctx, cq: &Value) -> Option<String> {
     let count = vget(cq, "count").and_then(|v| v.as_u64()).unwrap_or(0);
     if count == 0 {

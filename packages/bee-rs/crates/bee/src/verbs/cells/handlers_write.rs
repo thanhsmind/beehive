@@ -1879,7 +1879,6 @@ pub(crate) enum CrossClaim {
 /// Thin wrapper over [`claim_cell_cross_session_ex`] for `cells claim-next`
 /// (handlers_select.rs), which carries no `--fix-first` escape — same as
 /// passing `None`: a red base always refuses that door.
-#[allow(clippy::too_many_arguments)]
 pub(crate) fn claim_cell_cross_session(
     root: &Path,
     control: &Path,
@@ -1894,7 +1893,6 @@ pub(crate) fn claim_cell_cross_session(
 
 /// `claim_cell_cross_session` + D2's `--fix-first <reason>` escape (docs/
 /// history/hook-teeth CONTEXT.md D2: "no claim on a red base").
-#[allow(clippy::too_many_arguments)]
 pub(crate) fn claim_cell_cross_session_ex(
     root: &Path,
     control: &Path,

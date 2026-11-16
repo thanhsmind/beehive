@@ -181,7 +181,7 @@ fn frontmatter_field<'a>(front: &'a str, key: &str) -> Option<&'a str> {
 }
 
 /// opencode-support oc-14: renders `.opencode/agent/<name>.md` from the same
-/// `.md.tmpl` source `render_agent_template` uses for Claude — same
+/// `.md.tmpl` source used for Claude — same
 /// `description:` value, same body — with OpenCode's own frontmatter shape
 /// (`description`/`mode`/`model`/`permission`, not `name`/`tools`/`model`).
 /// `None` when the agent has no known permission profile or the template

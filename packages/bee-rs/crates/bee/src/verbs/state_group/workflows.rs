@@ -491,7 +491,7 @@ pub(crate) fn validate_route_lane_transition(
 
 /// `Number(v)` for a flag STRING — the full ToNumber conversion, not
 /// reservations.rs's `js_number_flag` (which is Number.parseInt and would read
-/// "2.5" as 2). `Ok(None)` is NaN (Node then reports the invalid-flag refusal);///
+/// "2.5" as 2). `Ok(None)` is NaN (Node then reports the invalid-flag refusal);
 /// `Err` is a spelling JS converts but this port does not model (hex/binary/
 /// octal literals, Infinity). CUTOVER: `|n| >= 1e21` used to be on that list
 /// because jsjson printed such a number differently than V8; jsjson now

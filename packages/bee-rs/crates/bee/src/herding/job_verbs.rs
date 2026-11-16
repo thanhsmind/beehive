@@ -378,7 +378,6 @@ pub(crate) fn kill_tree(tree: &dyn ProcessTree, root: u32, grace: Duration) {
     }
 }
 
-#[allow(clippy::too_many_arguments)]
 pub(crate) fn cancel_with_backends_and_timeout(
     main_root: &Path,
     job_id: &str,

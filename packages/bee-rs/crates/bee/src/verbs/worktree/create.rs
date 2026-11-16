@@ -253,7 +253,6 @@ pub(crate) fn create_feature_worktree_locked(
 
 /// Steps 10.1-10.7, in Node's exact order. `Err(String)` carries the message
 /// the ladder interpolates as `postAddMessage`.
-#[allow(clippy::too_many_arguments)]
 pub(crate) fn post_add(
     main_root: &Path,
     main_store_root: &Path,

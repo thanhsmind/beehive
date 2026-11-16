@@ -380,7 +380,6 @@ pub(crate) enum WV {
     Deny(String),
 }
 
-#[allow(clippy::too_many_arguments)]
 pub(crate) fn check_write(
     root: &str,
     state: &Map<String, Value>,
@@ -705,7 +704,6 @@ is a legitimate new phase, add explicit dispatch for it in checkWrite.",
 
 // ─── checkGitBashCommand (provenance: guards.mjs, full port) ───────────────
 
-#[allow(clippy::too_many_arguments)]
 pub(crate) fn check_git_bash_command(
     root: &str,
     state: &Map<String, Value>,
@@ -787,7 +785,6 @@ pub(crate) fn check_git_bash_command(
 /// per git invocation `check_git_bash_command` finds in the token list.
 /// `Ok(None)` means this ONE invocation does not deny — the caller moves on
 /// to the next invocation, if any.
-#[allow(clippy::too_many_arguments)]
 fn evaluate_git_invocation(
     root: &str,
     topo: &Topo,
@@ -984,7 +981,6 @@ const GH_READ_ONLY_LIST: &str = "pr view|list|status|checks|diff, run list|view|
 issue view|list, release view|list|download, repo view, workflow list|view, search <any>, \
 cache list, label list, status, auth status, api with an explicit GET, and api graphql with no mutation";
 
-#[allow(clippy::too_many_arguments)]
 fn outward_arm(
     root: &str,
     cwd: &str,
