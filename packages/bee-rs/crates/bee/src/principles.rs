@@ -225,6 +225,24 @@ mod tests {
     }
 
     #[test]
+    fn hub_header_names_the_skillstation_cli_before_skill_get_and_local_names_neither() {
+        let dir = tempfile::tempdir().unwrap();
+        let idx = dir.path().join(PRINCIPLE_INDEX);
+        std::fs::create_dir_all(idx.parent().unwrap()).unwrap();
+        std::fs::write(&idx, INDEX).unwrap();
+        let local = principle_lines(dir.path(), Some("bugfix"));
+        assert!(!local[0].contains("skillstation skill show"), "{}", local[0]);
+        assert!(!local[0].contains("skill_get"), "{}", local[0]);
+        std::fs::create_dir_all(dir.path().join(".bee")).unwrap();
+        std::fs::write(dir.path().join(".bee/config.json"), r#"{"skillstation":{"principles":"hub"}}"#).unwrap();
+        let hub = principle_lines(dir.path(), Some("bugfix"));
+        let cli = hub[0].find("skillstation skill show").expect("hub header lacks the CLI load");
+        let mcp = hub[0].find("skill_get").expect("hub header lacks the skill_get fallback");
+        assert!(cli < mcp, "CLI at {cli} must precede skill_get at {mcp}: {}", hub[0]);
+        assert_eq!(hub[1..], local[1..]);
+    }
+
+    #[test]
     fn a_row_listing_several_classes_matches_every_one_of_them() {
         for class in ["feature", "bugfix", "refactor"] {
             let lines = render_lines(INDEX, class, false);

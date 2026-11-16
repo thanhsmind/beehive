@@ -431,6 +431,14 @@ mod tests {
     }
 
     #[test]
+    fn alias_render_names_the_skillstation_cli_before_skill_get() {
+        let alias = render_alias("statechart", "Check a model.", false);
+        let cli = alias.find("skillstation skill show statechart --json").expect("alias lacks the CLI load");
+        let mcp = alias.find("skill_get").expect("alias lacks the skill_get fallback");
+        assert!(cli < mcp, "CLI at {cli} must precede skill_get at {mcp}: {alias}");
+    }
+
+    #[test]
     fn frontmatter_flag_is_read_only_from_the_frontmatter() {
         assert!(frontmatter_disables_model("---\nname: a\ndisable-model-invocation: true\n---\n"));
         assert!(!frontmatter_disables_model("---\nname: a\n---\ndisable-model-invocation: true\n"));
