@@ -5465,6 +5465,10 @@ mod tests {
     /// `bee cells cap --mistake --fix-at` writes it. `fix_at: None` models a
     /// row written before D1 existed — D4 forbids backfilling those.
     fn mistake_cell(root: &Path, id: &str, wrong: &str, fix_at: Option<&str>) {
+        mistake_cell_in(root, "demo", id, wrong, fix_at);
+    }
+
+    fn mistake_cell_in(root: &Path, feature: &str, id: &str, wrong: &str, fix_at: Option<&str>) {
         let layer = match fix_at {
             Some(v) => format!(r#","fix_at":"{v}""#),
             None => String::new(),
@@ -5473,7 +5477,7 @@ mod tests {
             root,
             &format!(".bee/cells/{id}.json"),
             &format!(
-                r#"{{"id":"{id}","feature":"demo","status":"capped",
+                r#"{{"id":"{id}","feature":"{feature}","status":"capped",
                 "acceptance":"A letter is filed once per run and never twice",
                 "trace":{{"files_changed":["src/one.rs"],
                 "mistakes":[{{"wrong":"{wrong}","better":"say it at the cap"{layer}}}],
@@ -5577,6 +5581,87 @@ mod tests {
         assert!(backlog_rows(root).is_empty(), "nothing mechanizable, nothing filed");
         assert!(!text.contains("Filed for"), "no news is no line: {text}");
         assert_eq!(result["fix_at_rows"], json!({"filed": 0, "skipped": 0}));
+    }
+
+    const FIX_AT_T: &str = "Reserved a file after writing it";
+
+    fn seed_fix_at_backlog(root: &Path, rows: &[(&str, &str, &str, &str)]) {
+        let body: String = rows
+            .iter()
+            .map(|(ts, ty, title, feature)| {
+                format!(
+                    "{}\n",
+                    json!({"ts": ts, "type": ty, "title": title, "detail": "d", "severity": "P3", "layer": "fix-at:check", "feature": feature})
+                )
+            })
+            .collect();
+        w(root, ".bee/backlog.jsonl", &body);
+    }
+
+    fn fix_at_identity_close_b(root: &Path, wrong: &str) -> FixAtRows {
+        mistake_cell_in(root, "beta", "beta-1", wrong, Some("check"));
+        file_fix_at_rows(root, "beta")
+    }
+
+    #[test]
+    fn fix_at_identity_same_title_under_another_feature_files_nothing_and_counts_one_skip() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        init_bee_repo(root);
+        seed_fix_at_backlog(root, &[("2026-01-01T00:00:00.000Z", "finding", FIX_AT_T, "alpha")]);
+
+        let rows = fix_at_identity_close_b(root, FIX_AT_T);
+        assert_eq!((rows.filed, rows.skipped), (0, 1));
+        assert_eq!(backlog_rows(root).len(), 1, "{:?}", backlog_rows(root));
+    }
+
+    #[test]
+    fn fix_at_identity_a_different_title_under_another_feature_files_one_row() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        init_bee_repo(root);
+        seed_fix_at_backlog(root, &[("2026-01-01T00:00:00.000Z", "finding", FIX_AT_T, "alpha")]);
+
+        let rows = fix_at_identity_close_b(root, "Ran the whole suite for a one-line doc fix");
+        assert_eq!((rows.filed, rows.skipped), (1, 0));
+        let all = backlog_rows(root);
+        assert_eq!(all.len(), 2, "{all:?}");
+        assert_eq!(all[1]["feature"], json!("beta"));
+        assert_eq!(all[1]["title"], json!("Ran the whole suite for a one-line doc fix"));
+    }
+
+    #[test]
+    fn fix_at_identity_a_close_row_newer_than_the_finding_lets_the_mistake_file_again() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        init_bee_repo(root);
+        seed_fix_at_backlog(
+            root,
+            &[
+                ("2026-01-01T00:00:00.000Z", "finding", FIX_AT_T, "alpha"),
+                ("2026-01-02T00:00:00.000Z", "backlog-closed", FIX_AT_T, "alpha"),
+            ],
+        );
+
+        let rows = fix_at_identity_close_b(root, FIX_AT_T);
+        assert_eq!((rows.filed, rows.skipped), (1, 0));
+        let all = backlog_rows(root);
+        assert_eq!(all.len(), 3, "{all:?}");
+        assert_eq!(all[2]["type"], json!("finding"));
+        assert_eq!(all[2]["feature"], json!("beta"));
+        assert_eq!(all[2]["title"], json!(FIX_AT_T));
+    }
+
+    #[test]
+    fn fix_at_identity_a_whitespace_variant_of_the_title_is_the_same_mistake() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        init_bee_repo(root);
+        seed_fix_at_backlog(root, &[("2026-01-01T00:00:00.000Z", "finding", FIX_AT_T, "alpha")]);
+
+        let rows = fix_at_identity_close_b(root, "  Reserved  a file   after writing it ");
+        assert_eq!((rows.filed, rows.skipped), (0, 1));
+        assert_eq!(backlog_rows(root).len(), 1, "{:?}", backlog_rows(root));
     }
 
     /// TRUTH (the fail-open rule): a backlog file that cannot be written

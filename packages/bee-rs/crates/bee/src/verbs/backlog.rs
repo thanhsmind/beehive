@@ -2735,6 +2735,33 @@ mod tests {
         assert_eq!(row["layer"], "probe");
     }
 
+    #[test]
+    fn fix_at_identity_backlog_add_still_appends_the_same_title_under_a_new_feature() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        std::fs::create_dir_all(root.join(".bee")).unwrap();
+        std::fs::write(root.join(".bee/onboarding.json"), r#"{"version":1,"completed":true}"#)
+            .unwrap();
+        write_backlog(
+            root,
+            "{\"ts\":\"2026-01-01T00:00:00.000Z\",\"type\":\"finding\",\"title\":\"wrote before reserving\",\"detail\":\"d\",\"severity\":\"P3\",\"layer\":\"fix-at:check\",\"feature\":\"alpha\"}\n",
+        );
+
+        let out = backlog_add_run(
+            root,
+            &[
+                "backlog", "add", "--json", "--type", "finding", "--title", "wrote before reserving",
+                "--severity", "P3", "--layer", "fix-at:check", "--feature", "beta",
+            ],
+        );
+        assert!(!out.contains("\"error\""), "{out}");
+        let rows = read_jsonl(&backlog_jsonl_path(root)).rows;
+        assert_eq!(rows.len(), 2, "{rows:?}");
+        assert_eq!(rows[1]["feature"], "beta");
+        assert_eq!(rows[1]["title"], "wrote before reserving");
+        assert_eq!(rows[1]["layer"], "fix-at:check");
+    }
+
     const BRIEF_CHILD: &str = "verbs::backlog::tests::backlog_brief_child";
 
     #[test]
