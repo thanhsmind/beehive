@@ -138,6 +138,7 @@ already an index).
 | stdi-18 | Check the herding split | stdi-18-check.md | stdi-17 | a second worker confirms the split | same |
 | stdi-19 | Re-render the generated copies | rendered trees, manifests | all writers | rendered copies match sources | release-manifest check |
 | stdi-20 | Consolidate knowledge for the diet | knowledge concepts, delivery.md | all | concepts describe the new load paths | knowledge check |
+| stdi-21 | Check the rendered copies and the consolidated knowledge | stdi-21-check.md | stdi-19, stdi-20 | a second worker confirms regen and knowledge | onboard, release-manifest check, knowledge check |
 
 ```json
 [
@@ -861,6 +862,43 @@ already an index).
 "docs/knowledge/areas/hook-runtime/token-economy-of-injected-context.md"
 ],
 "action": "Run .bee/bin/bee knowledge consolidate --feature semantic-token-diet and apply what it reports. Update the token-economy concept (trailer text, proof command only for cell jobs, help order) and the run-verb concept (proof command rule), citing semantic-token-diet D-numbers, never raw decision ids. Write delivery.md. Allowed bee commands here also include .bee/bin/bee knowledge consolidate. Rules for every cell: keep every rule and its why-clause (agents-block-diet D6); keep test-pinned wording unless this action names the pin; never add a size limit (D1). Write no code comments. Plain English, short sentences. Allowed bee commands: the cell verify, .bee/bin/bee knowledge check, .bee/bin/bee knowledge search. Do not run any bee dispatch or herding verb, not even its help. Run only the cell verify, never the full suite. Commit only the files of this cell, one commit, trailer cell: <id>."
+},
+{
+"id": "stdi-21",
+"feature": "semantic-token-diet",
+"title": "Check the rendered copies and the consolidated knowledge",
+"lane": "standard",
+"role": "test",
+"deps": [
+"stdi-19",
+"stdi-20"
+],
+"verify": ".bee/bin/bee onboard --repo-root . --json && .bee/bin/bee dev release-manifest --check && .bee/bin/bee knowledge check",
+"must_haves": {
+"truths": [
+"every rendered copy matches its source: release-manifest --check is clean and onboard reports no changes needed",
+"no Skillstation hub alias under .claude/skills changed in the stdi-19 commit",
+"the token-economy and run-verb concepts state D7 to D9 as the code now behaves, citing semantic-token-diet D-numbers and no raw decision ids",
+"delivery.md names a delivering cell for each of D1 to D10"
+]
+},
+"decisions": [
+"2a2604e3-1996-4ab2-a311-7c72cd0aede4",
+"f21a5bf3-9de6-4e05-a836-711a70f99c53",
+"bf647234-d51b-4e7b-b2d4-7432ac4db531",
+"cf38764c-457e-4a47-b075-1f7546bf994a"
+],
+"files": [
+"docs/history/semantic-token-diet/stdi-21-check.md"
+],
+"read_first": [
+"docs/history/semantic-token-diet/CONTEXT.md",
+"docs/history/semantic-token-diet/delivery.md",
+"docs/knowledge/areas/hook-runtime/token-economy-of-injected-context.md"
+],
+"affects_skills": [],
+"affects_specs": [],
+"action": "Independently check cells stdi-19 and stdi-20 against CONTEXT.md. For each must_have truth write pass or fail with a file:line anchor or the command output. Run the cell verify. Write the result to docs/history/semantic-token-diet/stdi-21-check.md and commit only that file. Report a defect; do not edit the checked files. Allowed bee commands here also include .bee/bin/bee onboard --repo-root . --json and .bee/bin/bee dev release-manifest --check. Rules for every cell: keep every rule and its why-clause (agents-block-diet D6); keep test-pinned wording unless this action names the pin; never add a size limit (D1). Write no code comments. Plain English, short sentences. Allowed bee commands: the cell verify, .bee/bin/bee knowledge check, .bee/bin/bee knowledge search. Do not run any bee dispatch or herding verb, not even its help. Run only the cell verify, never the full suite. Commit only the files of this cell, one commit, trailer cell: <id>."
 }
 ]
 ```
