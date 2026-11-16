@@ -33,6 +33,7 @@ at least the named test red.
 | tgc-8 | D14 herded pane refuses a governed team.json change and allows the equal-view move | `herded_team_guard_refuses_an_edit_that_changes_a_team_slot`, `herded_team_guard_refuses_a_bash_write_to_team_json`, `config_tester_both_panes_allow_the_equal_view_move_and_refuse_a_team_json_slot_change` | B4 | Gap. No herded test proved the equal-view move is allowed, so a herded pane that refused every team.json write would have passed. Added one. |
 | tgc-8 | D14 every other guard stays open | `herded_team_guard_passes_a_plain_source_write` | — (read) | none |
 | tgc-7 | every path and D-number cited resolves | checked by script over `docs/config-reference.md`, `delivery.md` and the five concepts (`thin-peer-boot.md`, `governed-paths-and-the-intake-gate.md`, `write-guard-request-shapes.md`, `command-surface.md`, `host-project-artifacts.md`) | — | All paths that tgc-7 added resolve (`config_layers.rs`, `hooks/write_guard/worker_tree.rs`, `write_guard/store.rs` `read_config`, `catalog.rs`, the four `.bee/` layer files). Every team-global-config D-number cited (D1-D14) exists in CONTEXT.md. Each anchor in the five concepts exists. Three anchors are directories (`plans/`, `.pi/extensions/bee-guard/`, `scripts/`), against the files-only anchor rule; tgc-7 did not add them. |
+| tgc-10 | D12 / D14 a Bash command that names the global file through `~`, `$HOME`, `${HOME}`, `$XDG_CONFIG_HOME`, `${XDG_CONFIG_HOME}`, `$BEEHIVE_CONFIG_DIR` or `${BEEHIVE_CONFIG_DIR}` is refused in a hooked and a herded pane; an unrelated `~/.config/other/config.json` passes in a herded pane | `config_tester_spelling_tilde_and_home_name_the_global_file_in_both_panes`, `config_tester_spelling_xdg_config_home_names_the_global_file_in_both_panes`, `config_tester_spelling_beehive_config_dir_names_the_global_file_in_both_panes`, `config_tester_spelling_an_unrelated_config_under_home_passes_in_the_herded_pane` | B10: `guards.rs` reverted to before tgc-10 (`605bf904e^`); B11: the Bash arm also refuses any token holding `/.config/` | Tester tgc-11, sharing no context with tgc-10's implementer. tgc-10's unit tests resolve the global dir through the test-only thread-local. Added binary-level tests that set `HOME` and `XDG_CONFIG_HOME` to temp dirs, with `BEEHIVE_CONFIG_DIR` unset and set. Under B10 all 16 spelling cases are red. In the herded pane each one exits 0. In the hooked pane each one is refused only by the containment or unexpanded-`$VAR` guard, never by the global-config refusal, so the tests assert the `waggledance` refusal text. |
 
 ## Defect found (reported, not fixed)
 
@@ -58,6 +59,12 @@ other guards open. Owner of the fix: a follow-up cell on
 `$XDG_CONFIG_HOME` before the match. No test for this was committed,
 because a red test would fail the cell's verify.
 
+**Defect closed** by tgc-10 (`605bf904e`), checked by tester tgc-11.
+Through the built binary, every spelling above now gets the global-config
+refusal in both panes. Without the fix, the herded pane lets each one
+through (exit 0). The four `config_tester_spelling_*` tests are the
+regression proof.
+
 ## Added tests (tests/config_verbs.rs)
 
 - `config_tester_global_dir_falls_back_to_xdg_then_home`
@@ -65,6 +72,10 @@ because a red test would fail the cell's verify.
 - `config_tester_both_panes_allow_the_equal_view_move_and_refuse_a_team_json_slot_change`
 - `config_tester_hooks_off_in_team_json_or_global_never_disables_the_write_guard`
 - `config_tester_validate_judges_team_problems_on_the_merged_view`
+- `config_tester_spelling_tilde_and_home_name_the_global_file_in_both_panes` (tgc-11)
+- `config_tester_spelling_xdg_config_home_names_the_global_file_in_both_panes` (tgc-11)
+- `config_tester_spelling_beehive_config_dir_names_the_global_file_in_both_panes` (tgc-11)
+- `config_tester_spelling_an_unrelated_config_under_home_passes_in_the_herded_pane` (tgc-11)
 
 Each one runs the built `bee` binary with `BEEHIVE_CONFIG_DIR`, or
 `XDG_CONFIG_HOME` and `HOME`, set to a temp dir.
@@ -82,3 +93,5 @@ Each one runs the built `bee` binary with `BEEHIVE_CONFIG_DIR`, or
 | B7 corrupt layer merged as an object | `config_layers_corrupt_layer_reads_as_empty_for_both_policies` |
 | B8 guard comparison without the global dir | `team_guard_refuses_a_project_slot_that_shadows_a_global_slot` |
 | B9 validate judges team problems on tracked alone | `config_tester_validate_judges_team_problems_on_the_merged_view` |
+| B10 `guards.rs` reverted to before tgc-10 | `config_tester_spelling_tilde_and_home_…`, `config_tester_spelling_xdg_config_home_…`, `config_tester_spelling_beehive_config_dir_…` (16 of 16 spelling cases) |
+| B11 Bash arm refuses any token holding `/.config/` | `config_tester_spelling_an_unrelated_config_under_home_passes_in_the_herded_pane` |

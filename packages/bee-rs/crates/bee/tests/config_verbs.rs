@@ -658,14 +658,21 @@ fn guarded_repo(base: &Path, config: Value) -> PathBuf {
 }
 
 fn write_guard(repo: &Path, herded: bool, payload: Value) -> (i32, String) {
+    write_guard_env(repo, herded, payload, &[("BEEHIVE_CONFIG_DIR", &global_dir(repo))], &[])
+}
+
+fn write_guard_env(repo: &Path, herded: bool, payload: Value, env: &[(&str, &Path)], removed: &[&str]) -> (i32, String) {
     let mut body = payload;
     body["cwd"] = json!(repo.to_string_lossy());
     let mut cmd = Command::cargo_bin("bee").unwrap();
-    cmd.args(["hook", "write-guard"])
-        .current_dir(repo)
-        .env("BEE_HOOK_NO_DELEGATE", "1")
-        .env("BEEHIVE_CONFIG_DIR", global_dir(repo))
-        .env_remove("BEE_HERDING_JOB_ID")
+    cmd.args(["hook", "write-guard"]).current_dir(repo).env("BEE_HOOK_NO_DELEGATE", "1");
+    for name in removed {
+        cmd.env_remove(name);
+    }
+    for (name, value) in env {
+        cmd.env(name, value);
+    }
+    cmd.env_remove("BEE_HERDING_JOB_ID")
         .env_remove("BEE_SESSION_ID")
         .env_remove("CLAUDE_CODE_SESSION_ID")
         .env_remove("PI_SESSION_ID")
@@ -805,4 +812,83 @@ fn config_tester_validate_judges_team_problems_on_the_merged_view() {
     let (ok, v, out) = bee(&r, &["validate"]);
     assert!(ok, "team.json completes the slot in the merged view: {out}");
     assert_eq!(v["problems"], json!([]), "{out}");
+}
+
+fn bash(command: &str) -> Value {
+    json!({"tool_name":"Bash","tool_input":{"command":command}})
+}
+
+fn assert_spellings_refused(repo: &Path, env: &[(&str, &Path)], removed: &[&str], spellings: &[&str]) {
+    let mut misses = Vec::new();
+    for herded in [false, true] {
+        for spelling in spellings {
+            let command = format!("echo '{{}}' > {spelling}");
+            let (code, err) = write_guard_env(repo, herded, bash(&command), env, removed);
+            if code != 2 || !err.contains("waggledance") {
+                misses.push(format!("herded={herded} `{command}` exit={code}: {err}"));
+            }
+        }
+    }
+    assert!(misses.is_empty(), "each spelling must get the global-config refusal:\n{}", misses.join("\n"));
+}
+
+#[test]
+fn config_tester_spelling_tilde_and_home_name_the_global_file_in_both_panes() {
+    let tmp = tempfile::tempdir().unwrap();
+    let r = guarded_repo(tmp.path(), json!({"uat_stop":"close"}));
+    let home = tmp.path().join("home");
+    std::fs::create_dir_all(home.join(".config/beehive")).unwrap();
+    assert_spellings_refused(
+        &r,
+        &[("HOME", &home)],
+        &["BEEHIVE_CONFIG_DIR", "XDG_CONFIG_HOME"],
+        &["~/.config/beehive/config.json", "$HOME/.config/beehive/config.json", "${HOME}/.config/beehive/config.json"],
+    );
+}
+
+#[test]
+fn config_tester_spelling_xdg_config_home_names_the_global_file_in_both_panes() {
+    let tmp = tempfile::tempdir().unwrap();
+    let r = guarded_repo(tmp.path(), json!({"uat_stop":"close"}));
+    let home = tmp.path().join("home");
+    let xdg = tmp.path().join("xdg");
+    std::fs::create_dir_all(xdg.join("beehive")).unwrap();
+    assert_spellings_refused(
+        &r,
+        &[("HOME", &home), ("XDG_CONFIG_HOME", &xdg)],
+        &["BEEHIVE_CONFIG_DIR"],
+        &["$XDG_CONFIG_HOME/beehive/config.json", "${XDG_CONFIG_HOME}/beehive/config.json"],
+    );
+}
+
+#[test]
+fn config_tester_spelling_beehive_config_dir_names_the_global_file_in_both_panes() {
+    let tmp = tempfile::tempdir().unwrap();
+    let r = guarded_repo(tmp.path(), json!({"uat_stop":"close"}));
+    let home = tmp.path().join("home");
+    let xdg = tmp.path().join("xdg");
+    let dir = home.join("beehive-global");
+    std::fs::create_dir_all(&dir).unwrap();
+    assert_spellings_refused(
+        &r,
+        &[("HOME", &home), ("XDG_CONFIG_HOME", &xdg), ("BEEHIVE_CONFIG_DIR", &dir)],
+        &[],
+        &["$BEEHIVE_CONFIG_DIR/config.json", "${BEEHIVE_CONFIG_DIR}/config.json", "~/beehive-global/config.json"],
+    );
+}
+
+#[test]
+fn config_tester_spelling_an_unrelated_config_under_home_passes_in_the_herded_pane() {
+    let tmp = tempfile::tempdir().unwrap();
+    let r = guarded_repo(tmp.path(), json!({"uat_stop":"close"}));
+    let home = tmp.path().join("home");
+    std::fs::create_dir_all(home.join(".config/other")).unwrap();
+    for command in [
+        "echo '{}' > ~/.config/other/config.json",
+        "echo '{}' > $HOME/.config/other/config.json",
+        "echo '{}' > ${HOME}/.config/other/config.json",
+    ] {
+        let (code, err) = write_guard_env(&r, true, bash(command), &[("HOME", &home)], &["BEEHIVE_CONFIG_DIR", "XDG_CONFIG_HOME"]);
+        assert_eq!(code, 0, "`{command}`: {err}");
+    }
 }
