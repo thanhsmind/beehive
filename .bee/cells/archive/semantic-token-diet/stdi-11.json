@@ -1,0 +1,211 @@
+{
+  "id": "stdi-11",
+  "feature": "semantic-token-diet",
+  "title": "Split planning-reference.md by branch",
+  "lane": "standard",
+  "role": "docs",
+  "deps": [
+    "stdi-7",
+    "stdi-9"
+  ],
+  "verify": ".bee/bin/bee knowledge check && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pointer_integrity",
+  "must_haves": {
+    "truths": [
+      "skills/bee-planning/references/planning-reference.md is replaced by references/cells.md (cell rules, example JSON, pre-flight, test scoping, tiny and small merged gate, playbooks) and references/plan-artifact.md (plan.md template, claims table, approach, phases, consolidation cell JSON, hat-wave consumption)",
+      "every pointer to planning-reference.md outside docs/history and docs/decisions names the new file and section",
+      "the no-trailing-test-cell section and the writer-owns-its-tests lines are gone and edge-dimensions.md names the tester cell; design-sketch.md names the shape gate",
+      "hat-wave consumption keeps only the planning-only parts listed in audit D finding F3"
+    ]
+  },
+  "decisions": [
+    "90df38fd-d267-4da4-a513-7d5bc530dda1",
+    "74fb4b50-9dab-498d-8d29-9f90f52c8541"
+  ],
+  "files": [
+    "skills/bee-planning/SKILL.md",
+    "skills/bee-planning/references/planning-reference.md",
+    "skills/bee-planning/references/cells.md",
+    "skills/bee-planning/references/plan-artifact.md",
+    "skills/bee-planning/references/design-sketch.md",
+    "skills/bee-planning/references/edge-dimensions.md",
+    "skills/bee-planning/references/provenance.md",
+    "skills/bee-hive/references/scout-and-ticks.md",
+    "skills/bee-hive/references/routing-and-contracts.md",
+    "packages/bee/LEADER.md",
+    "skills/bee-planning/playbooks/spike/prototype.md",
+    "skills/bee-planning/playbooks/feature/multi-phase-plan.md",
+    "docs/02-architecture.md",
+    "docs/04-skills-spec.md",
+    "docs/handbook/stages/planning.md",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs",
+    "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md",
+    "docs/knowledge/areas/doctrine-layer/lane-and-working-discipline.md",
+    "docs/knowledge/areas/verify-pipeline/skill-reference-pointer-integrity.md",
+    "docs/knowledge/areas/workflow-state/cells-authoring-and-revision.md",
+    "docs/knowledge/areas/workflow-state/dissent-and-the-verdict-duty.md",
+    "docs/knowledge/areas/workflow-state/cells-scheduling.md",
+    "docs/knowledge/patterns/20260728-a-derivation-the-tooling-computes-but-doctrine-forbids-where-it-is-needed.md"
+  ],
+  "read_first": [
+    "docs/history/semantic-token-diet/CONTEXT.md",
+    "skills/bee-planning/SKILL.md",
+    "skills/bee-planning/references/planning-reference.md",
+    "docs/history/semantic-token-diet/reports/D-planning.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Implement CONTEXT.md D5 and the planning part of D2 using audit D-planning.md findings F1 to F11. Delete planning-reference.md after the split (git mv the larger half to keep history). Decision ids and history go to skills/bee-planning/references/provenance.md. Repoint every pointer listed in files (rg planning-reference again first; skip docs/history, docs/decisions, docs/discovery and skills/*/CREATION-LOG.md, which are records). Keep the phrase load-bearing claims table (set_gate.rs asserts it) and the D-planning.md do-not-touch list. In set_gate.rs change only the path text. Edit sources only; do not run regen. Rules for every cell: keep every rule and its why-clause (agents-block-diet D6); keep test-pinned wording unless this action names the pin; never add a size limit (D1). Write no code comments. Plain English, short sentences. Allowed bee commands: the cell verify, .bee/bin/bee knowledge check, .bee/bin/bee knowledge search. Do not run any bee dispatch or herding verb, not even its help. Run only the cell verify, never the full suite. Commit only the files of this cell, one commit, trailer cell: <id>.",
+  "regen_obligation_ack": "source edits only; stdi-19 runs the regen chain once for every writer",
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "w-stdi-11",
+    "outcome": "Restored the hat-wave timing rule in skills/bee-planning/references/plan-artifact.md and verified in commit fd64f2fe333250e5b09fab9c3f98bb8ceafd7fbf",
+    "files_changed": [
+      "skills/bee-planning/references/plan-artifact.md"
+    ],
+    "deviations": [
+      "sync-ack: planning restore; rendered copies regenerate in stdi-19"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-16T16:06:24.329Z",
+    "behavior_change": false,
+    "verification_evidence": ".bee/bin/bee knowledge check && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pointer_integrity — green:unit — knowledge check (0 OKF/profile errors) and all 10 pointer_integrity tests pass after restoring the hat-wave timing rule",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "7480ecd8-5c48-4cfa-8c10-c442446135d7",
+    "verify_command": ".bee/bin/bee knowledge check && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pointer_integrity",
+    "claimed_at": "2026-11-16T16:04:22.905Z",
+    "knowledge_delta": [],
+    "sync_ack": "planning restore; rendered copies regenerate in stdi-19",
+    "no_mistakes": true,
+    "knowledge_used": [
+      {
+        "path": "docs/knowledge/areas/verify-pipeline/skill-reference-pointer-integrity.md",
+        "changed": "formatted internal skills/ pointers without a leading skills/ segment so the Rust pointer checker resolves them"
+      }
+    ],
+    "principles_used": [
+      {
+        "slug": "bee-principle-prove-it-works",
+        "changed": "ran knowledge check and pointer_integrity tests after restoring the hat-wave timing rule"
+      }
+    ],
+    "report": {
+      "outcome": "Restored the hat-wave timing rule in skills/bee-planning/references/plan-artifact.md and verified in commit fd64f2fe333250e5b09fab9c3f98bb8ceafd7fbf",
+      "commit": "2d6de1cf9c858c712cae21c7933a10d4220621de",
+      "files": [
+        "skills/bee-planning/references/plan-artifact.md"
+      ],
+      "tests": ".bee/bin/bee knowledge check && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pointer_integrity — green:unit — .bee/bin/bee knowledge check && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pointer_integrity — green:unit — knowledge check (0 OKF/profile errors) and all 10 pointer_integrity tests pass after restoring the hat-wave timing rule",
+      "deviations": [],
+      "knowledge_used": [],
+      "principles_used": [
+        "bee-principle-prove-it-works — ran knowledge check and pointer_integrity tests after restoring the hat-wave timing rule"
+      ],
+      "patch_id": "30b75ba42038df45a9336ec532d57eb9e09582a7"
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "verified_at": null,
+    "baseline": null,
+    "reaction": null,
+    "skipped": null,
+    "unknowns": null,
+    "found": null,
+    "stopped": null,
+    "blocked_reason": null,
+    "dropped_reason": null,
+    "reopened_at": "2026-11-16T15:57:52.566Z",
+    "reopened_reason": "stdi-12 check (docs/history/semantic-token-diet/stdi-12-check.md D-a): the hat-wave timing rule from old planning-reference.md:553-556 has no live home. Restore it in skills/bee-planning/references/plan-artifact.md, in the hat-wave consumption section: the wave opens the moment the shape is drafted, concurrent with the SMALLER PATH check, so the stage costs max(wave, planning) and never the sum; its findings block nothing until the gate presentation; the gate is never presented while the wave is outstanding. The four remaining planning-reference mentions are history notes, not pointers; leave them. Commit with trailer cell: stdi-11, run the cell verify, cap.",
+    "no_knowledge_used": true,
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "skills/bee-planning/references/planning-reference.md is replaced by references/cells.md (cell rules, example JSON, pre-flight, test scoping, tiny and small merged gate, playbooks) and references/plan-artifact.md (plan.md template, claims table, approach, phases, consolidation cell JSON, hat-wave consumption)",
+            "artifact": "skills/bee-planning/references/plan-artifact.md"
+          },
+          {
+            "requirement": "every pointer to planning-reference.md outside docs/history and docs/decisions names the new file and section",
+            "artifact": "skills/bee-planning/references/plan-artifact.md"
+          },
+          {
+            "requirement": "the no-trailing-test-cell section and the writer-owns-its-tests lines are gone and edge-dimensions.md names the tester cell; design-sketch.md names the shape gate",
+            "artifact": "skills/bee-planning/references/plan-artifact.md"
+          },
+          {
+            "requirement": "hat-wave consumption keeps only the planning-only parts listed in audit D finding F3",
+            "artifact": "skills/bee-planning/references/plan-artifact.md"
+          },
+          {
+            "requirement": "skills/bee-planning/references/plan-artifact.md",
+            "artifact": "skills/bee-planning/references/plan-artifact.md"
+          }
+        ],
+        "recorded_at": "2026-11-16T16:16:32.664Z",
+        "recorded_by": "7480ecd8-5c48-4cfa-8c10-c442446135d7",
+        "commit_diff": "checked"
+      },
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "skills/bee-planning/references/planning-reference.md is replaced by references/cells.md (cell rules, example JSON, pre-flight, test scoping, tiny and small merged gate, playbooks) and references/plan-artifact.md (plan.md template, claims table, approach, phases, consolidation cell JSON, hat-wave consumption)",
+            "artifact": "skills/bee-planning/references/plan-artifact.md"
+          },
+          {
+            "requirement": "every pointer to planning-reference.md outside docs/history and docs/decisions names the new file and section",
+            "artifact": "skills/bee-planning/references/plan-artifact.md"
+          },
+          {
+            "requirement": "the no-trailing-test-cell section and the writer-owns-its-tests lines are gone and edge-dimensions.md names the tester cell; design-sketch.md names the shape gate",
+            "artifact": "skills/bee-planning/references/plan-artifact.md"
+          },
+          {
+            "requirement": "hat-wave consumption keeps only the planning-only parts listed in audit D finding F3",
+            "artifact": "skills/bee-planning/references/plan-artifact.md"
+          },
+          {
+            "requirement": "skills/bee-planning/references/plan-artifact.md",
+            "artifact": "skills/bee-planning/references/plan-artifact.md"
+          }
+        ],
+        "recorded_at": "2026-11-16T16:22:45.491Z",
+        "recorded_by": "7480ecd8-5c48-4cfa-8c10-c442446135d7",
+        "commit_diff": "checked"
+      },
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "skills/bee-planning/references/planning-reference.md is replaced by references/cells.md (cell rules, example JSON, pre-flight, test scoping, tiny and small merged gate, playbooks) and references/plan-artifact.md (plan.md template, claims table, approach, phases, consolidation cell JSON, hat-wave consumption)",
+            "artifact": "skills/bee-planning/references/plan-artifact.md"
+          },
+          {
+            "requirement": "every pointer to planning-reference.md outside docs/history and docs/decisions names the new file and section",
+            "artifact": "skills/bee-planning/references/plan-artifact.md"
+          },
+          {
+            "requirement": "the no-trailing-test-cell section and the writer-owns-its-tests lines are gone and edge-dimensions.md names the tester cell; design-sketch.md names the shape gate",
+            "artifact": "skills/bee-planning/references/plan-artifact.md"
+          },
+          {
+            "requirement": "hat-wave consumption keeps only the planning-only parts listed in audit D finding F3",
+            "artifact": "skills/bee-planning/references/plan-artifact.md"
+          },
+          {
+            "requirement": "skills/bee-planning/references/plan-artifact.md",
+            "artifact": "skills/bee-planning/references/plan-artifact.md"
+          }
+        ],
+        "recorded_at": "2026-11-16T16:26:18.295Z",
+        "recorded_by": "7480ecd8-5c48-4cfa-8c10-c442446135d7",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": null,
+  "usage_reason": "herding job(s) named this cell but no readable session transcript (2 unreadable)"
+}

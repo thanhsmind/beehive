@@ -1,0 +1,146 @@
+{
+  "id": "stdi-6",
+  "feature": "semantic-token-diet",
+  "title": "Pin flags-before-details help",
+  "lane": "standard",
+  "role": "test",
+  "deps": [
+    "stdi-5"
+  ],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- help registry",
+  "must_haves": {
+    "truths": [
+      "a test asserts single-command help places the flags: line before the details: line and after the first sentence",
+      "a test asserts multi-command help output has no details: line"
+    ]
+  },
+  "decisions": [
+    "cf38764c-457e-4a47-b075-1f7546bf994a"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/help.rs"
+  ],
+  "read_first": [
+    "docs/history/semantic-token-diet/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/verbs/help.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Independently check stdi-5 and pin CONTEXT.md D9 (contract:help-flags-before-details) with behavior tests in help.rs tests. Cite existing tests instead of duplicating. State how each new test fails against the pre-stdi-5 code. Report a defect instead of rewriting stdi-5. Proof: the cell verify; quote counts and test names. Rules for every cell: keep every rule and its why-clause (agents-block-diet D6); keep test-pinned wording unless this action names the pin; never add a size limit (D1). Write no code comments. Plain English, short sentences. Allowed bee commands: the cell verify, .bee/bin/bee knowledge check, .bee/bin/bee knowledge search. Do not run any bee dispatch or herding verb, not even its help. Run only the cell verify, never the full suite. Commit only the files of this cell, one commit, trailer cell: <id>.",
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "w-stdi-6",
+    "outcome": "Added two D9 tests in help.rs pinning flags-before-details for single-command help and no details line for multi-command help; stdi-5 checked, no defect. be207c310e75319d6d9f1eb906a1c68a20d340db",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/help.rs"
+    ],
+    "deviations": [
+      "sync-ack: help order is described in the token-economy concept in stdi-20"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-16T15:35:21.174Z",
+    "behavior_change": false,
+    "verification_evidence": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- help registry — green:unit — 68 passed 0 failed; the cell verify covers the help.rs tests",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "7480ecd8-5c48-4cfa-8c10-c442446135d7",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- help registry",
+    "claimed_at": "2026-11-16T15:31:07.660Z",
+    "knowledge_delta": [],
+    "sync_ack": "help order is described in the token-economy concept in stdi-20",
+    "no_mistakes": true,
+    "no_knowledge_used": true,
+    "no_principles_used": true,
+    "report": {
+      "outcome": "Added two D9 tests in help.rs pinning flags-before-details for single-command help and no details line for multi-command help; stdi-5 checked, no defect. be207c310e75319d6d9f1eb906a1c68a20d340db",
+      "commit": "c611721a718d053533322ff10655cafc5e2e8bce",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/help.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- help registry — green:unit — PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- help registry — green:unit — 68 passed 0 failed; the cell verify covers the help.rs tests",
+      "deviations": [],
+      "knowledge_used": [],
+      "patch_id": "a2e76abddeafad7c25fa6dc7ae29cfc9c658b134"
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "a test asserts single-command help places the flags: line before the details: line and after the first sentence",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/help.rs"
+          },
+          {
+            "requirement": "a test asserts multi-command help output has no details: line",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/help.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/help.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/help.rs"
+          }
+        ],
+        "recorded_at": "2026-11-16T16:16:32.477Z",
+        "recorded_by": "7480ecd8-5c48-4cfa-8c10-c442446135d7",
+        "commit_diff": "checked"
+      },
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "a test asserts single-command help places the flags: line before the details: line and after the first sentence",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/help.rs"
+          },
+          {
+            "requirement": "a test asserts multi-command help output has no details: line",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/help.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/help.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/help.rs"
+          }
+        ],
+        "recorded_at": "2026-11-16T16:22:45.426Z",
+        "recorded_by": "7480ecd8-5c48-4cfa-8c10-c442446135d7",
+        "commit_diff": "checked"
+      },
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "a test asserts single-command help places the flags: line before the details: line and after the first sentence",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/help.rs"
+          },
+          {
+            "requirement": "a test asserts multi-command help output has no details: line",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/help.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/help.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/help.rs"
+          }
+        ],
+        "recorded_at": "2026-11-16T16:26:18.233Z",
+        "recorded_by": "7480ecd8-5c48-4cfa-8c10-c442446135d7",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": {
+    "new": 32482,
+    "cached": 266305,
+    "total": 298787,
+    "models": {
+      "claude-opus-5-5": {
+        "new": 32482,
+        "cached": 266305,
+        "total": 298787
+      }
+    },
+    "jobs": [
+      "job-1794843071311-1839788-1"
+    ]
+  }
+}

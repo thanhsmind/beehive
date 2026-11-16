@@ -1,0 +1,215 @@
+{
+  "id": "stdi-17",
+  "feature": "semantic-token-diet",
+  "title": "Split role-dispatch.md at the interlock",
+  "lane": "standard",
+  "role": "docs",
+  "deps": [],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- control_loop && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pointer_integrity",
+  "must_haves": {
+    "truths": [
+      "skills/bee-herding/references/role-dispatch.md ends after the interlock check with a hand-off line to references/role-dispatch-spawn.md, which holds the set build through section 8 with the section numbers unchanged",
+      "the quick-reference table is gone and the incident measurements moved to spawn-proof.md with each rule kept as one sentence",
+      "operational-invariants.md points at bee herding status --job <id>; role-dispatch.md and README.md say only enable and disable are unbuilt; agents/openai.yaml names every role",
+      "skills/bee-herding/SKILL.md says read your role reference in full, following its own hand-off"
+    ]
+  },
+  "decisions": [
+    "e5f3d375-90c7-4293-8281-f0939c9961d6",
+    "74fb4b50-9dab-498d-8d29-9f90f52c8541"
+  ],
+  "files": [
+    "skills/bee-herding/SKILL.md",
+    "skills/bee-herding/README.md",
+    "skills/bee-herding/agents/openai.yaml",
+    "skills/bee-herding/references/role-dispatch.md",
+    "skills/bee-herding/references/role-dispatch-spawn.md",
+    "skills/bee-herding/references/spawn-proof.md",
+    "skills/bee-herding/references/operational-invariants.md",
+    "skills/bee-herding/references/route-prompt.md"
+  ],
+  "read_first": [
+    "docs/history/semantic-token-diet/CONTEXT.md",
+    "skills/bee-herding/SKILL.md",
+    "skills/bee-herding/references/role-dispatch.md",
+    "docs/history/semantic-token-diet/reports/H-herding-help.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Implement CONTEXT.md D10 and the herding part of D2 using audit H-herding-help.md findings 1 to 5, 7, 8, 11, 12. Keep section numbers (Rust comments cite them), the needles control_loop.rs pins in route-prompt.md and supervisor-prompt.md, and the H-herding-help.md do-not-touch list. Edit sources only; do not run regen. Rules for every cell: keep every rule and its why-clause (agents-block-diet D6); keep test-pinned wording unless this action names the pin; never add a size limit (D1). Write no code comments. Plain English, short sentences. Allowed bee commands: the cell verify, .bee/bin/bee knowledge check, .bee/bin/bee knowledge search. Do not run any bee dispatch or herding verb, not even its help. Run only the cell verify, never the full suite. Commit only the files of this cell, one commit, trailer cell: <id>.",
+  "regen_obligation_ack": "source edits only; stdi-19 runs the regen chain once for every writer",
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "w-stdi-17",
+    "outcome": "Moved --dry-run before section 1 in role-dispatch.md and restored the width-narrows-at-most-once sentence in spawn-proof.md in 40c9b80ca0420481dc827c4a5adf271c14415614",
+    "files_changed": [
+      "skills/bee-herding/references/role-dispatch.md",
+      "skills/bee-herding/references/role-dispatch-spawn.md",
+      "skills/bee-herding/references/spawn-proof.md"
+    ],
+    "deviations": [
+      "sync-ack: herding skill text move; rendered copies regenerate in stdi-19"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-16T16:00:56.772Z",
+    "behavior_change": false,
+    "verification_evidence": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- control_loop && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pointer_integrity — green:unit — control_loop (1 + 75 passed, 0 failed) and pointer_integrity (10 passed, 0 failed) after final edits",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "7480ecd8-5c48-4cfa-8c10-c442446135d7",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- control_loop && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pointer_integrity",
+    "claimed_at": "2026-11-16T15:57:55.779Z",
+    "knowledge_delta": [],
+    "sync_ack": "herding skill text move; rendered copies regenerate in stdi-19",
+    "no_mistakes": true,
+    "principles_used": [
+      {
+        "slug": "bee-principle-prove-it-works",
+        "changed": "verified control_loop and pointer_integrity after final edits and checked diff"
+      }
+    ],
+    "report": {
+      "outcome": "Moved --dry-run before section 1 in role-dispatch.md and restored the width-narrows-at-most-once sentence in spawn-proof.md in 40c9b80ca0420481dc827c4a5adf271c14415614",
+      "commit": "40c9b80ca0420481dc827c4a5adf271c14415614",
+      "files": [
+        "skills/bee-herding/references/role-dispatch.md",
+        "skills/bee-herding/references/role-dispatch-spawn.md",
+        "skills/bee-herding/references/spawn-proof.md"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- control_loop && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pointer_integrity — green:unit — PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- control_loop && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pointer_integrity — green:unit — control_loop (1 + 75 passed, 0 failed) and pointer_integrity (10 passed, 0 failed) after final edits",
+      "deviations": [],
+      "knowledge_used": [],
+      "principles_used": [
+        "bee-principle-prove-it-works — verified control_loop and pointer_integrity after final edits and checked diff"
+      ],
+      "patch_id": "350807ecc69b6a29db1eeea362a630fcb4e371a9"
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "verified_at": null,
+    "baseline": null,
+    "reaction": null,
+    "skipped": null,
+    "unknowns": null,
+    "found": null,
+    "stopped": null,
+    "blocked_reason": null,
+    "dropped_reason": null,
+    "reopened_at": "2026-11-16T15:47:44.317Z",
+    "reopened_reason": "stdi-18 check (docs/history/semantic-token-diet/stdi-18-check.md truth 1): the --dry-run rules moved to role-dispatch-spawn.md:241-254, but a dry-run tick reaches sections 1, 3 and 4 before any hand-off, so it would rename the pane and send text for real. Move the --dry-run section back into role-dispatch.md before section 1 (about 14 lines), keep SKILL.md:47 pointing at role-dispatch.md, and restore in spawn-proof.md the sentence that width narrows at most once so no worker pane drops below the width the transport needs. Commit with trailer cell: stdi-17, run the cell verify, cap.",
+    "no_knowledge_used": true,
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "skills/bee-herding/references/role-dispatch.md ends after the interlock check with a hand-off line to references/role-dispatch-spawn.md, which holds the set build through section 8 with the section numbers unchanged",
+            "artifact": "skills/bee-herding/references/role-dispatch.md"
+          },
+          {
+            "requirement": "the quick-reference table is gone and the incident measurements moved to spawn-proof.md with each rule kept as one sentence",
+            "artifact": "skills/bee-herding/references/role-dispatch.md"
+          },
+          {
+            "requirement": "operational-invariants.md points at bee herding status --job <id>; role-dispatch.md and README.md say only enable and disable are unbuilt; agents/openai.yaml names every role",
+            "artifact": "skills/bee-herding/references/role-dispatch.md"
+          },
+          {
+            "requirement": "skills/bee-herding/SKILL.md says read your role reference in full, following its own hand-off",
+            "artifact": "skills/bee-herding/references/role-dispatch.md"
+          },
+          {
+            "requirement": "skills/bee-herding/references/role-dispatch.md",
+            "artifact": "skills/bee-herding/references/role-dispatch.md"
+          },
+          {
+            "requirement": "skills/bee-herding/references/role-dispatch-spawn.md",
+            "artifact": "skills/bee-herding/references/role-dispatch-spawn.md"
+          },
+          {
+            "requirement": "skills/bee-herding/references/spawn-proof.md",
+            "artifact": "skills/bee-herding/references/spawn-proof.md"
+          }
+        ],
+        "recorded_at": "2026-11-16T16:16:32.861Z",
+        "recorded_by": "7480ecd8-5c48-4cfa-8c10-c442446135d7",
+        "commit_diff": "checked"
+      },
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "skills/bee-herding/references/role-dispatch.md ends after the interlock check with a hand-off line to references/role-dispatch-spawn.md, which holds the set build through section 8 with the section numbers unchanged",
+            "artifact": "skills/bee-herding/references/role-dispatch.md"
+          },
+          {
+            "requirement": "the quick-reference table is gone and the incident measurements moved to spawn-proof.md with each rule kept as one sentence",
+            "artifact": "skills/bee-herding/references/role-dispatch.md"
+          },
+          {
+            "requirement": "operational-invariants.md points at bee herding status --job <id>; role-dispatch.md and README.md say only enable and disable are unbuilt; agents/openai.yaml names every role",
+            "artifact": "skills/bee-herding/references/role-dispatch.md"
+          },
+          {
+            "requirement": "skills/bee-herding/SKILL.md says read your role reference in full, following its own hand-off",
+            "artifact": "skills/bee-herding/references/role-dispatch.md"
+          },
+          {
+            "requirement": "skills/bee-herding/references/role-dispatch.md",
+            "artifact": "skills/bee-herding/references/role-dispatch.md"
+          },
+          {
+            "requirement": "skills/bee-herding/references/role-dispatch-spawn.md",
+            "artifact": "skills/bee-herding/references/role-dispatch-spawn.md"
+          },
+          {
+            "requirement": "skills/bee-herding/references/spawn-proof.md",
+            "artifact": "skills/bee-herding/references/spawn-proof.md"
+          }
+        ],
+        "recorded_at": "2026-11-16T16:22:45.571Z",
+        "recorded_by": "7480ecd8-5c48-4cfa-8c10-c442446135d7",
+        "commit_diff": "checked"
+      },
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "skills/bee-herding/references/role-dispatch.md ends after the interlock check with a hand-off line to references/role-dispatch-spawn.md, which holds the set build through section 8 with the section numbers unchanged",
+            "artifact": "skills/bee-herding/references/role-dispatch.md"
+          },
+          {
+            "requirement": "the quick-reference table is gone and the incident measurements moved to spawn-proof.md with each rule kept as one sentence",
+            "artifact": "skills/bee-herding/references/role-dispatch.md"
+          },
+          {
+            "requirement": "operational-invariants.md points at bee herding status --job <id>; role-dispatch.md and README.md say only enable and disable are unbuilt; agents/openai.yaml names every role",
+            "artifact": "skills/bee-herding/references/role-dispatch.md"
+          },
+          {
+            "requirement": "skills/bee-herding/SKILL.md says read your role reference in full, following its own hand-off",
+            "artifact": "skills/bee-herding/references/role-dispatch.md"
+          },
+          {
+            "requirement": "skills/bee-herding/references/role-dispatch.md",
+            "artifact": "skills/bee-herding/references/role-dispatch.md"
+          },
+          {
+            "requirement": "skills/bee-herding/references/role-dispatch-spawn.md",
+            "artifact": "skills/bee-herding/references/role-dispatch-spawn.md"
+          },
+          {
+            "requirement": "skills/bee-herding/references/spawn-proof.md",
+            "artifact": "skills/bee-herding/references/spawn-proof.md"
+          }
+        ],
+        "recorded_at": "2026-11-16T16:26:18.374Z",
+        "recorded_by": "7480ecd8-5c48-4cfa-8c10-c442446135d7",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": null,
+  "usage_reason": "herding job(s) named this cell but no readable session transcript (2 unreadable)"
+}

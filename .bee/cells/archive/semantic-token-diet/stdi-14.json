@@ -1,0 +1,183 @@
+{
+  "id": "stdi-14",
+  "feature": "semantic-token-diet",
+  "title": "Check the playbook fixes",
+  "lane": "standard",
+  "role": "test",
+  "deps": [
+    "stdi-13"
+  ],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test class_playbook_parity --test route_class_parity --test pointer_integrity",
+  "must_haves": {
+    "truths": [
+      "rg 'cells finish --help' and rg -- '--cleanup' under skills/bee-planning/playbooks return nothing",
+      "every Situations row still parses",
+      "the knowledge-upkeep change keeps the step-2 rank order"
+    ]
+  },
+  "decisions": [
+    "74fb4b50-9dab-498d-8d29-9f90f52c8541",
+    "2a2604e3-1996-4ab2-a311-7c72cd0aede4"
+  ],
+  "files": [
+    "docs/history/semantic-token-diet/stdi-14-check.md"
+  ],
+  "read_first": [
+    "docs/history/semantic-token-diet/CONTEXT.md",
+    "docs/history/semantic-token-diet/reports/C-playbooks.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Independently check cell stdi-13 against CONTEXT.md. Read its diff (the commit with trailer cell: stdi-13). For each must_have truth write pass or fail with a file:line anchor. Also confirm that every rule the diff moved or cut still has a home, by naming that home with file:line, and that no line from the matching audit report's do-not-touch list was removed. Run the cell verify. Write the result to docs/history/semantic-token-diet/stdi-14-check.md (one line per truth, one line per moved rule, then the verify counts) and commit only that file. Report a defect; do not edit the checked files. Rules for every cell: keep every rule and its why-clause (agents-block-diet D6); keep test-pinned wording unless this action names the pin; never add a size limit (D1). Write no code comments. Plain English, short sentences. Allowed bee commands: the cell verify, .bee/bin/bee knowledge check, .bee/bin/bee knowledge search. Do not run any bee dispatch or herding verb, not even its help. Run only the cell verify, never the full suite. Commit only the files of this cell, one commit, trailer cell: <id>.",
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "w-stdi-14",
+    "outcome": "Re-checked stdi-13 with restore 637bc8988: 3/3 truths pass, the dropped loaded-never-used clause is restored at skills/bee-knowledge-upkeep/SKILL.md:83-85, no do-not-touch line removed, no defect left; check in 35bad29fa3632a0256ac71d403c3f5dcac899e21",
+    "files_changed": [
+      "docs/history/semantic-token-diet/stdi-14-check.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-11-16T16:09:08.537Z",
+    "behavior_change": false,
+    "verification_evidence": "class_playbook_parity 9/9, pointer_integrity 10/10, route_class_parity 2/2; the cell verify covers the playbook row grammar and pointers",
+    "verify_output": "green:static",
+    "verify_passed": true,
+    "claim_session": "7480ecd8-5c48-4cfa-8c10-c442446135d7",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test class_playbook_parity --test route_class_parity --test pointer_integrity",
+    "claimed_at": "2026-11-16T16:08:28.630Z",
+    "knowledge_delta": [],
+    "sync_ack": "check report only",
+    "no_mistakes": true,
+    "principles_used": [
+      {
+        "slug": "bee-principle-chestertons-fence",
+        "changed": "compared the restored bullet with the original weak-signal paragraph before I called the clause home"
+      },
+      {
+        "slug": "bee-principle-prove-it-works",
+        "changed": "re-ran the rg truths and the cell verify myself rather than trusting the stdi-13 report"
+      }
+    ],
+    "report": {
+      "outcome": "Re-checked stdi-13 with restore 637bc8988: 3/3 truths pass, the dropped loaded-never-used clause is restored at skills/bee-knowledge-upkeep/SKILL.md:83-85, no do-not-touch line removed, no defect left; check in 35bad29fa3632a0256ac71d403c3f5dcac899e21",
+      "commit": "35bad29fa3632a0256ac71d403c3f5dcac899e21",
+      "files": [
+        "docs/history/semantic-token-diet/stdi-14-check.md"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test class_playbook_parity --test route_class_parity --test pointer_integrity — green:static — class_playbook_parity 9/9, pointer_integrity 10/10, route_class_parity 2/2; the cell verify covers the playbook row grammar and pointers",
+      "deviations": [],
+      "knowledge_used": [],
+      "principles_used": [
+        "bee-principle-chestertons-fence — compared the restored bullet with the original weak-signal paragraph before I called the clause home",
+        "bee-principle-prove-it-works — re-ran the rg truths and the cell verify myself rather than trusting the stdi-13 report"
+      ],
+      "patch_id": "22f25e1fcd03ff3fe5e2ee047ee89e517401cd6e"
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "verified_at": null,
+    "baseline": null,
+    "reaction": null,
+    "skipped": null,
+    "unknowns": null,
+    "found": null,
+    "stopped": null,
+    "blocked_reason": null,
+    "dropped_reason": null,
+    "reopened_at": "2026-11-16T16:00:57.117Z",
+    "reopened_reason": "re-check stdi-13 after the restore",
+    "no_knowledge_used": true,
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "rg 'cells finish --help' and rg -- '--cleanup' under skills/bee-planning/playbooks return nothing",
+            "artifact": "docs/history/semantic-token-diet/stdi-14-check.md"
+          },
+          {
+            "requirement": "every Situations row still parses",
+            "artifact": "docs/history/semantic-token-diet/stdi-14-check.md"
+          },
+          {
+            "requirement": "the knowledge-upkeep change keeps the step-2 rank order",
+            "artifact": "docs/history/semantic-token-diet/stdi-14-check.md"
+          },
+          {
+            "requirement": "docs/history/semantic-token-diet/stdi-14-check.md",
+            "artifact": "docs/history/semantic-token-diet/stdi-14-check.md"
+          }
+        ],
+        "recorded_at": "2026-11-16T16:16:32.748Z",
+        "recorded_by": "7480ecd8-5c48-4cfa-8c10-c442446135d7",
+        "commit_diff": "checked"
+      },
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "rg 'cells finish --help' and rg -- '--cleanup' under skills/bee-planning/playbooks return nothing",
+            "artifact": "docs/history/semantic-token-diet/stdi-14-check.md"
+          },
+          {
+            "requirement": "every Situations row still parses",
+            "artifact": "docs/history/semantic-token-diet/stdi-14-check.md"
+          },
+          {
+            "requirement": "the knowledge-upkeep change keeps the step-2 rank order",
+            "artifact": "docs/history/semantic-token-diet/stdi-14-check.md"
+          },
+          {
+            "requirement": "docs/history/semantic-token-diet/stdi-14-check.md",
+            "artifact": "docs/history/semantic-token-diet/stdi-14-check.md"
+          }
+        ],
+        "recorded_at": "2026-11-16T16:22:45.533Z",
+        "recorded_by": "7480ecd8-5c48-4cfa-8c10-c442446135d7",
+        "commit_diff": "checked"
+      },
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "rg 'cells finish --help' and rg -- '--cleanup' under skills/bee-planning/playbooks return nothing",
+            "artifact": "docs/history/semantic-token-diet/stdi-14-check.md"
+          },
+          {
+            "requirement": "every Situations row still parses",
+            "artifact": "docs/history/semantic-token-diet/stdi-14-check.md"
+          },
+          {
+            "requirement": "the knowledge-upkeep change keeps the step-2 rank order",
+            "artifact": "docs/history/semantic-token-diet/stdi-14-check.md"
+          },
+          {
+            "requirement": "docs/history/semantic-token-diet/stdi-14-check.md",
+            "artifact": "docs/history/semantic-token-diet/stdi-14-check.md"
+          }
+        ],
+        "recorded_at": "2026-11-16T16:26:18.336Z",
+        "recorded_by": "7480ecd8-5c48-4cfa-8c10-c442446135d7",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": {
+    "new": 96631,
+    "cached": 1313235,
+    "total": 1409866,
+    "models": {
+      "claude-opus-5-5": {
+        "new": 96631,
+        "cached": 1313235,
+        "total": 1409866
+      }
+    },
+    "jobs": [
+      "job-1794844679478-1942345-1",
+      "job-1794845311298-1973126-1"
+    ]
+  }
+}

@@ -2353,5 +2353,10 @@
     "capped": 4,
     "dropped": 0,
     "archived_at": "2026-11-16T13:22:32.514Z"
+  },
+  "semantic-token-diet": {
+    "capped": 21,
+    "dropped": 0,
+    "archived_at": "2026-11-16T16:34:30.540Z"
   }
 }

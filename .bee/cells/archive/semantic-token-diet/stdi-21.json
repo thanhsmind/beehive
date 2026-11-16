@@ -1,0 +1,138 @@
+{
+  "id": "stdi-21",
+  "feature": "semantic-token-diet",
+  "title": "Check the rendered copies and the consolidated knowledge",
+  "lane": "standard",
+  "role": "test",
+  "deps": [
+    "stdi-19",
+    "stdi-20"
+  ],
+  "verify": ".bee/bin/bee onboard --repo-root . --json && .bee/bin/bee dev release-manifest --check && .bee/bin/bee knowledge check",
+  "must_haves": {
+    "truths": [
+      "every rendered copy matches its source: release-manifest --check is clean and onboard reports no changes needed",
+      "no Skillstation hub alias under .claude/skills changed in the stdi-19 commit",
+      "the token-economy and run-verb concepts state D7 to D9 as the code now behaves, citing semantic-token-diet D-numbers and no raw decision ids",
+      "delivery.md names a delivering cell for each of D1 to D10"
+    ]
+  },
+  "decisions": [
+    "2a2604e3-1996-4ab2-a311-7c72cd0aede4",
+    "f21a5bf3-9de6-4e05-a836-711a70f99c53",
+    "bf647234-d51b-4e7b-b2d4-7432ac4db531",
+    "cf38764c-457e-4a47-b075-1f7546bf994a"
+  ],
+  "files": [
+    "docs/history/semantic-token-diet/stdi-21-check.md"
+  ],
+  "read_first": [
+    "docs/history/semantic-token-diet/CONTEXT.md",
+    "docs/history/semantic-token-diet/delivery.md",
+    "docs/knowledge/areas/hook-runtime/token-economy-of-injected-context.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Independently check cells stdi-19 and stdi-20 against CONTEXT.md. For each must_have truth write pass or fail with a file:line anchor or the command output. Run the cell verify. Write the result to docs/history/semantic-token-diet/stdi-21-check.md and commit only that file. Report a defect; do not edit the checked files. Allowed bee commands here also include .bee/bin/bee onboard --repo-root . --json and .bee/bin/bee dev release-manifest --check. Rules for every cell: keep every rule and its why-clause (agents-block-diet D6); keep test-pinned wording unless this action names the pin; never add a size limit (D1). Write no code comments. Plain English, short sentences. Allowed bee commands: the cell verify, .bee/bin/bee knowledge check, .bee/bin/bee knowledge search. Do not run any bee dispatch or herding verb, not even its help. Run only the cell verify, never the full suite. Commit only the files of this cell, one commit, trailer cell: <id>.",
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "w-stdi-21",
+    "outcome": "Checked stdi-19 and stdi-20: all four truths pass, no defects, three notes recorded in stdi-21-check.md — 518cbe3fb",
+    "files_changed": [
+      "docs/history/semantic-token-diet/stdi-21-check.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-11-16T16:26:12.262Z",
+    "behavior_change": false,
+    "verification_evidence": "exit 0; onboard up_to_date with empty plan, 970 manifest files match, knowledge check 0 errors; a docs-only check cell, so the cargo proof command was not run",
+    "verify_output": "green:static",
+    "verify_passed": true,
+    "claim_session": "7480ecd8-5c48-4cfa-8c10-c442446135d7",
+    "verify_command": ".bee/bin/bee onboard --repo-root . --json && .bee/bin/bee dev release-manifest --check && .bee/bin/bee knowledge check",
+    "claimed_at": "2026-11-16T16:23:56.684Z",
+    "knowledge_delta": [],
+    "no_mistakes": true,
+    "knowledge_used": [
+      {
+        "path": "docs/knowledge/patterns/20260805-source-that-ships-without-reinstalling-the-binary-the-hooks-call-is-inert.md",
+        "changed": "I checked the D9 help through the installed binary as well as the source, and found the stale binary"
+      }
+    ],
+    "principles_used": [
+      {
+        "slug": "bee-principle-verify-before-reporting",
+        "changed": "I traced the bee-knowledge-upkeep render-hash change and the old control-loop help to their causes and recorded them as notes, not defects"
+      },
+      {
+        "slug": "bee-principle-prove-it-works",
+        "changed": "I checked each concept claim against the code line, not against the stdi-20 self-report"
+      }
+    ],
+    "report": {
+      "outcome": "Checked stdi-19 and stdi-20: all four truths pass, no defects, three notes recorded in stdi-21-check.md — 518cbe3fb",
+      "commit": "518cbe3fb6f7c8a491030f375a3968d722b3f152",
+      "files": [
+        "docs/history/semantic-token-diet/stdi-21-check.md"
+      ],
+      "tests": ".bee/bin/bee onboard --repo-root . --json && .bee/bin/bee dev release-manifest --check && .bee/bin/bee knowledge check — green:static — exit 0; onboard up_to_date with empty plan, 970 manifest files match, knowledge check 0 errors; a docs-only check cell, so the cargo proof command was not run",
+      "deviations": [],
+      "knowledge_used": [
+        "docs/knowledge/patterns/20260805-source-that-ships-without-reinstalling-the-binary-the-hooks-call-is-inert.md — I checked the D9 help through the installed binary as well as the source, and found the stale binary"
+      ],
+      "principles_used": [
+        "bee-principle-verify-before-reporting — I traced the bee-knowledge-upkeep render-hash change and the old control-loop help to their causes and recorded them as notes, not defects",
+        "bee-principle-prove-it-works — I checked each concept claim against the code line, not against the stdi-20 self-report"
+      ],
+      "patch_id": "b63b91f9e4a2239c39d04f33672103b4d2922c46"
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "every rendered copy matches its source: release-manifest --check is clean and onboard reports no changes needed",
+            "artifact": "docs/history/semantic-token-diet/stdi-21-check.md"
+          },
+          {
+            "requirement": "no Skillstation hub alias under .claude/skills changed in the stdi-19 commit",
+            "artifact": "docs/history/semantic-token-diet/stdi-21-check.md"
+          },
+          {
+            "requirement": "the token-economy and run-verb concepts state D7 to D9 as the code now behaves, citing semantic-token-diet D-numbers and no raw decision ids",
+            "artifact": "docs/history/semantic-token-diet/stdi-21-check.md"
+          },
+          {
+            "requirement": "delivery.md names a delivering cell for each of D1 to D10",
+            "artifact": "docs/history/semantic-token-diet/stdi-21-check.md"
+          },
+          {
+            "requirement": "docs/history/semantic-token-diet/stdi-21-check.md",
+            "artifact": "docs/history/semantic-token-diet/stdi-21-check.md"
+          }
+        ],
+        "recorded_at": "2026-11-16T16:26:21.724Z",
+        "recorded_by": "7480ecd8-5c48-4cfa-8c10-c442446135d7",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": {
+    "new": 68752,
+    "cached": 1071452,
+    "total": 1140204,
+    "models": {
+      "claude-opus-5-5": {
+        "new": 68752,
+        "cached": 1071452,
+        "total": 1140204
+      }
+    },
+    "jobs": [
+      "job-1794846237237-2080361-1"
+    ]
+  }
+}

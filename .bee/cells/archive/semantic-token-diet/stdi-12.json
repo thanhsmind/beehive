@@ -1,0 +1,183 @@
+{
+  "id": "stdi-12",
+  "feature": "semantic-token-diet",
+  "title": "Check the planning split",
+  "lane": "standard",
+  "role": "test",
+  "deps": [
+    "stdi-11"
+  ],
+  "verify": ".bee/bin/bee knowledge check && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pointer_integrity",
+  "must_haves": {
+    "truths": [
+      "rg planning-reference outside docs/history, docs/decisions, docs/discovery and CREATION-LOG files returns nothing",
+      "every section of the old file has exactly one new home",
+      "no do-not-touch line from reports/D-planning.md was removed"
+    ]
+  },
+  "decisions": [
+    "90df38fd-d267-4da4-a513-7d5bc530dda1",
+    "2a2604e3-1996-4ab2-a311-7c72cd0aede4"
+  ],
+  "files": [
+    "docs/history/semantic-token-diet/stdi-12-check.md"
+  ],
+  "read_first": [
+    "docs/history/semantic-token-diet/CONTEXT.md",
+    "skills/bee-planning/SKILL.md",
+    "docs/history/semantic-token-diet/reports/D-planning.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Independently check cell stdi-11 against CONTEXT.md. Read its diff (the commit with trailer cell: stdi-11). For each must_have truth write pass or fail with a file:line anchor. Also confirm that every rule the diff moved or cut still has a home, by naming that home with file:line, and that no line from the matching audit report's do-not-touch list was removed. Run the cell verify. Write the result to docs/history/semantic-token-diet/stdi-12-check.md (one line per truth, one line per moved rule, then the verify counts) and commit only that file. Report a defect; do not edit the checked files. Rules for every cell: keep every rule and its why-clause (agents-block-diet D6); keep test-pinned wording unless this action names the pin; never add a size limit (D1). Write no code comments. Plain English, short sentences. Allowed bee commands: the cell verify, .bee/bin/bee knowledge check, .bee/bin/bee knowledge search. Do not run any bee dispatch or herding verb, not even its help. Run only the cell verify, never the full suite. Commit only the files of this cell, one commit, trailer cell: <id>.",
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "w-stdi-12",
+    "outcome": "Re-checked stdi-11 after fd64f2fe3: D-a fixed, timing rule has one home at plan-artifact.md:280-283; truths 2-3 pass, truth 1 still fails on 4 history mentions (D-b); commit 35ef28cda3a6348872b9110c7dbbd3bc943d6880",
+    "files_changed": [
+      "docs/history/semantic-token-diet/stdi-12-check.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-11-16T16:07:45.178Z",
+    "behavior_change": false,
+    "verification_evidence": "knowledge check OK (0 errors, 600 warnings), pointer_integrity 10 passed 0 failed, exit 0; cell verify only, a docs check",
+    "verify_output": "green:static",
+    "verify_passed": true,
+    "claim_session": "7480ecd8-5c48-4cfa-8c10-c442446135d7",
+    "verify_command": ".bee/bin/bee knowledge check && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pointer_integrity",
+    "claimed_at": "2026-11-16T16:06:24.650Z",
+    "knowledge_delta": [],
+    "no_mistakes": true,
+    "no_knowledge_used": true,
+    "principles_used": [
+      {
+        "slug": "bee-principle-verify-before-reporting",
+        "changed": "rg-checked the restored timing rule across skills and LEADER.md to confirm one home before marking D-a fixed"
+      },
+      {
+        "slug": "bee-principle-single-source-of-truth",
+        "changed": "accepted the planning-side home as the one owner since G holds no copy, and kept D-e open for the repeated seat counts"
+      }
+    ],
+    "report": {
+      "outcome": "Re-checked stdi-11 after fd64f2fe3: D-a fixed, timing rule has one home at plan-artifact.md:280-283; truths 2-3 pass, truth 1 still fails on 4 history mentions (D-b); commit 35ef28cda3a6348872b9110c7dbbd3bc943d6880",
+      "commit": "35ef28cda3a6348872b9110c7dbbd3bc943d6880",
+      "files": [
+        "docs/history/semantic-token-diet/stdi-12-check.md"
+      ],
+      "tests": ".bee/bin/bee knowledge check && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pointer_integrity — green:static — knowledge check OK (0 errors, 600 warnings), pointer_integrity 10 passed 0 failed, exit 0; cell verify only, a docs check",
+      "deviations": [],
+      "knowledge_used": [],
+      "principles_used": [
+        "bee-principle-verify-before-reporting — rg-checked the restored timing rule across skills and LEADER.md to confirm one home before marking D-a fixed",
+        "bee-principle-single-source-of-truth — accepted the planning-side home as the one owner since G holds no copy, and kept D-e open for the repeated seat counts"
+      ],
+      "patch_id": "c3a0f18eb4a18612643bf0173790c72b4f298362"
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "verified_at": null,
+    "baseline": null,
+    "reaction": null,
+    "skipped": null,
+    "unknowns": null,
+    "found": null,
+    "stopped": null,
+    "blocked_reason": null,
+    "dropped_reason": null,
+    "reopened_at": "2026-11-16T15:57:52.597Z",
+    "reopened_reason": "re-check stdi-11 after the timing-rule restore",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "rg planning-reference outside docs/history, docs/decisions, docs/discovery and CREATION-LOG files returns nothing",
+            "artifact": "docs/history/semantic-token-diet/stdi-12-check.md"
+          },
+          {
+            "requirement": "every section of the old file has exactly one new home",
+            "artifact": "docs/history/semantic-token-diet/stdi-12-check.md"
+          },
+          {
+            "requirement": "no do-not-touch line from reports/D-planning.md was removed",
+            "artifact": "docs/history/semantic-token-diet/stdi-12-check.md"
+          },
+          {
+            "requirement": "docs/history/semantic-token-diet/stdi-12-check.md",
+            "artifact": "docs/history/semantic-token-diet/stdi-12-check.md"
+          }
+        ],
+        "recorded_at": "2026-11-16T16:16:32.688Z",
+        "recorded_by": "7480ecd8-5c48-4cfa-8c10-c442446135d7",
+        "commit_diff": "checked"
+      },
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "rg planning-reference outside docs/history, docs/decisions, docs/discovery and CREATION-LOG files returns nothing",
+            "artifact": "docs/history/semantic-token-diet/stdi-12-check.md"
+          },
+          {
+            "requirement": "every section of the old file has exactly one new home",
+            "artifact": "docs/history/semantic-token-diet/stdi-12-check.md"
+          },
+          {
+            "requirement": "no do-not-touch line from reports/D-planning.md was removed",
+            "artifact": "docs/history/semantic-token-diet/stdi-12-check.md"
+          },
+          {
+            "requirement": "docs/history/semantic-token-diet/stdi-12-check.md",
+            "artifact": "docs/history/semantic-token-diet/stdi-12-check.md"
+          }
+        ],
+        "recorded_at": "2026-11-16T16:22:45.504Z",
+        "recorded_by": "7480ecd8-5c48-4cfa-8c10-c442446135d7",
+        "commit_diff": "checked"
+      },
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "rg planning-reference outside docs/history, docs/decisions, docs/discovery and CREATION-LOG files returns nothing",
+            "artifact": "docs/history/semantic-token-diet/stdi-12-check.md"
+          },
+          {
+            "requirement": "every section of the old file has exactly one new home",
+            "artifact": "docs/history/semantic-token-diet/stdi-12-check.md"
+          },
+          {
+            "requirement": "no do-not-touch line from reports/D-planning.md was removed",
+            "artifact": "docs/history/semantic-token-diet/stdi-12-check.md"
+          },
+          {
+            "requirement": "docs/history/semantic-token-diet/stdi-12-check.md",
+            "artifact": "docs/history/semantic-token-diet/stdi-12-check.md"
+          }
+        ],
+        "recorded_at": "2026-11-16T16:26:18.309Z",
+        "recorded_by": "7480ecd8-5c48-4cfa-8c10-c442446135d7",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": {
+    "new": 141081,
+    "cached": 1939005,
+    "total": 2080086,
+    "models": {
+      "claude-opus-5-5": {
+        "new": 141081,
+        "cached": 1939005,
+        "total": 2080086
+      }
+    },
+    "jobs": [
+      "job-1794844435589-1931702-1",
+      "job-1794845188223-1968118-1"
+    ]
+  }
+}

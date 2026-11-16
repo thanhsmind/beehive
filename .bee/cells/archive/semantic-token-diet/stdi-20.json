@@ -1,0 +1,206 @@
+{
+  "id": "stdi-20",
+  "feature": "semantic-token-diet",
+  "title": "Consolidate knowledge for the diet",
+  "lane": "standard",
+  "role": "writer",
+  "deps": [
+    "stdi-19"
+  ],
+  "verify": ".bee/bin/bee knowledge check",
+  "must_haves": {
+    "truths": [
+      "docs/knowledge/areas/hook-runtime/token-economy-of-injected-context.md states the new trailer, the cell-only proof command and the flags-before-details help, citing semantic-token-diet D7 to D9",
+      "docs/history/semantic-token-diet/delivery.md lists each D-number with the cell that delivered it and the bytes each branch stops loading",
+      "bee knowledge consolidate --feature semantic-token-diet ran and its output was applied"
+    ]
+  },
+  "decisions": [
+    "f21a5bf3-9de6-4e05-a836-711a70f99c53",
+    "bf647234-d51b-4e7b-b2d4-7432ac4db531",
+    "cf38764c-457e-4a47-b075-1f7546bf994a",
+    "2a2604e3-1996-4ab2-a311-7c72cd0aede4"
+  ],
+  "files": [
+    "docs/knowledge/areas/hook-runtime/token-economy-of-injected-context.md",
+    "docs/knowledge/areas/bee-herding/the-run-verb-and-worker-outcomes.md",
+    "docs/history/semantic-token-diet/delivery.md"
+  ],
+  "read_first": [
+    "docs/history/semantic-token-diet/CONTEXT.md",
+    "docs/knowledge/areas/hook-runtime/token-economy-of-injected-context.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/hook-runtime/token-economy-of-injected-context.md"
+  ],
+  "action": "Run .bee/bin/bee knowledge consolidate --feature semantic-token-diet and apply what it reports. Update the token-economy concept (trailer text, proof command only for cell jobs, help order) and the run-verb concept (proof command rule), citing semantic-token-diet D-numbers, never raw decision ids. Write delivery.md. Allowed bee commands here also include .bee/bin/bee knowledge consolidate. Rules for every cell: keep every rule and its why-clause (agents-block-diet D6); keep test-pinned wording unless this action names the pin; never add a size limit (D1). Write no code comments. Plain English, short sentences. Allowed bee commands: the cell verify, .bee/bin/bee knowledge check, .bee/bin/bee knowledge search. Do not run any bee dispatch or herding verb, not even its help. Run only the cell verify, never the full suite. Commit only the files of this cell, one commit, trailer cell: <id>.",
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "w-stdi-20",
+    "outcome": "Consolidated semantic-token-diet knowledge (D7-D9 in token-economy, D8 in run-verb) and wrote delivery.md with per-branch byte savings; committed in 11b28daa9b3e661ad2859966533c44e47073ee1c",
+    "files_changed": [
+      "docs/knowledge/areas/hook-runtime/token-economy-of-injected-context.md",
+      "docs/knowledge/areas/bee-herding/the-run-verb-and-worker-outcomes.md",
+      "docs/history/semantic-token-diet/delivery.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-11-16T16:16:05.385Z",
+    "behavior_change": false,
+    "verification_evidence": "328 concept(s) in 349 file(s), 0 OKF error(s), 0 profile error(s) — OK; cell is docs/knowledge only",
+    "verify_output": "green:static",
+    "verify_passed": true,
+    "claim_session": "7480ecd8-5c48-4cfa-8c10-c442446135d7",
+    "verify_command": ".bee/bin/bee knowledge check",
+    "claimed_at": "2026-11-16T16:12:07.008Z",
+    "knowledge_delta": [
+      "docs/knowledge/areas/hook-runtime/token-economy-of-injected-context.md",
+      "docs/knowledge/areas/bee-herding/the-run-verb-and-worker-outcomes.md"
+    ],
+    "no_mistakes": true,
+    "knowledge_used": [
+      {
+        "path": "docs/knowledge/areas/hook-runtime/token-economy-of-injected-context.md",
+        "changed": "extended with semantic-token-diet D7 to D9"
+      },
+      {
+        "path": "docs/knowledge/areas/bee-herding/the-run-verb-and-worker-outcomes.md",
+        "changed": "recorded semantic-token-diet D8 in frontmatter decisions and sources"
+      }
+    ],
+    "principles_used": [
+      {
+        "slug": "bee-principle-one-fact-one-home",
+        "changed": "extended existing token-economy and run-verb concepts instead of creating new concepts"
+      },
+      {
+        "slug": "bee-principle-prove-it-works",
+        "changed": "measured exact byte deltas from git cat-file -s and ran .bee/bin/bee knowledge check after final edits"
+      }
+    ],
+    "report": {
+      "outcome": "Consolidated semantic-token-diet knowledge (D7-D9 in token-economy, D8 in run-verb) and wrote delivery.md with per-branch byte savings; committed in 11b28daa9b3e661ad2859966533c44e47073ee1c",
+      "commit": "11b28daa9b3e661ad2859966533c44e47073ee1c",
+      "files": [
+        "docs/knowledge/areas/hook-runtime/token-economy-of-injected-context.md",
+        "docs/knowledge/areas/bee-herding/the-run-verb-and-worker-outcomes.md",
+        "docs/history/semantic-token-diet/delivery.md"
+      ],
+      "tests": ".bee/bin/bee knowledge check — green:static — 328 concept(s) in 349 file(s), 0 OKF error(s), 0 profile error(s) — OK; cell is docs/knowledge only",
+      "deviations": [],
+      "knowledge_used": [
+        "docs/knowledge/areas/hook-runtime/token-economy-of-injected-context.md — extended with semantic-token-diet D7 to D9",
+        "docs/knowledge/areas/bee-herding/the-run-verb-and-worker-outcomes.md — recorded semantic-token-diet D8 in frontmatter decisions and sources"
+      ],
+      "principles_used": [
+        "bee-principle-one-fact-one-home — extended existing token-economy and run-verb concepts instead of creating new concepts",
+        "bee-principle-prove-it-works — measured exact byte deltas from git cat-file -s and ran .bee/bin/bee knowledge check after final edits"
+      ],
+      "patch_id": "5f2ff789d0bce0b5e6f0980343293653c3f3bc56"
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "docs/knowledge/areas/hook-runtime/token-economy-of-injected-context.md states the new trailer, the cell-only proof command and the flags-before-details help, citing semantic-token-diet D7 to D9",
+            "artifact": "docs/knowledge/areas/hook-runtime/token-economy-of-injected-context.md"
+          },
+          {
+            "requirement": "docs/history/semantic-token-diet/delivery.md lists each D-number with the cell that delivered it and the bytes each branch stops loading",
+            "artifact": "docs/knowledge/areas/hook-runtime/token-economy-of-injected-context.md"
+          },
+          {
+            "requirement": "bee knowledge consolidate --feature semantic-token-diet ran and its output was applied",
+            "artifact": "docs/knowledge/areas/hook-runtime/token-economy-of-injected-context.md"
+          },
+          {
+            "requirement": "docs/knowledge/areas/hook-runtime/token-economy-of-injected-context.md",
+            "artifact": "docs/knowledge/areas/hook-runtime/token-economy-of-injected-context.md"
+          },
+          {
+            "requirement": "docs/knowledge/areas/bee-herding/the-run-verb-and-worker-outcomes.md",
+            "artifact": "docs/knowledge/areas/bee-herding/the-run-verb-and-worker-outcomes.md"
+          },
+          {
+            "requirement": "docs/history/semantic-token-diet/delivery.md",
+            "artifact": "docs/history/semantic-token-diet/delivery.md"
+          }
+        ],
+        "recorded_at": "2026-11-16T16:16:32.970Z",
+        "recorded_by": "7480ecd8-5c48-4cfa-8c10-c442446135d7",
+        "commit_diff": "checked"
+      },
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "docs/knowledge/areas/hook-runtime/token-economy-of-injected-context.md states the new trailer, the cell-only proof command and the flags-before-details help, citing semantic-token-diet D7 to D9",
+            "artifact": "docs/knowledge/areas/hook-runtime/token-economy-of-injected-context.md"
+          },
+          {
+            "requirement": "docs/history/semantic-token-diet/delivery.md lists each D-number with the cell that delivered it and the bytes each branch stops loading",
+            "artifact": "docs/knowledge/areas/hook-runtime/token-economy-of-injected-context.md"
+          },
+          {
+            "requirement": "bee knowledge consolidate --feature semantic-token-diet ran and its output was applied",
+            "artifact": "docs/knowledge/areas/hook-runtime/token-economy-of-injected-context.md"
+          },
+          {
+            "requirement": "docs/knowledge/areas/hook-runtime/token-economy-of-injected-context.md",
+            "artifact": "docs/knowledge/areas/hook-runtime/token-economy-of-injected-context.md"
+          },
+          {
+            "requirement": "docs/knowledge/areas/bee-herding/the-run-verb-and-worker-outcomes.md",
+            "artifact": "docs/knowledge/areas/bee-herding/the-run-verb-and-worker-outcomes.md"
+          },
+          {
+            "requirement": "docs/history/semantic-token-diet/delivery.md",
+            "artifact": "docs/history/semantic-token-diet/delivery.md"
+          }
+        ],
+        "recorded_at": "2026-11-16T16:22:45.611Z",
+        "recorded_by": "7480ecd8-5c48-4cfa-8c10-c442446135d7",
+        "commit_diff": "checked"
+      },
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "docs/knowledge/areas/hook-runtime/token-economy-of-injected-context.md states the new trailer, the cell-only proof command and the flags-before-details help, citing semantic-token-diet D7 to D9",
+            "artifact": "docs/knowledge/areas/hook-runtime/token-economy-of-injected-context.md"
+          },
+          {
+            "requirement": "docs/history/semantic-token-diet/delivery.md lists each D-number with the cell that delivered it and the bytes each branch stops loading",
+            "artifact": "docs/knowledge/areas/hook-runtime/token-economy-of-injected-context.md"
+          },
+          {
+            "requirement": "bee knowledge consolidate --feature semantic-token-diet ran and its output was applied",
+            "artifact": "docs/knowledge/areas/hook-runtime/token-economy-of-injected-context.md"
+          },
+          {
+            "requirement": "docs/knowledge/areas/hook-runtime/token-economy-of-injected-context.md",
+            "artifact": "docs/knowledge/areas/hook-runtime/token-economy-of-injected-context.md"
+          },
+          {
+            "requirement": "docs/knowledge/areas/bee-herding/the-run-verb-and-worker-outcomes.md",
+            "artifact": "docs/knowledge/areas/bee-herding/the-run-verb-and-worker-outcomes.md"
+          },
+          {
+            "requirement": "docs/history/semantic-token-diet/delivery.md",
+            "artifact": "docs/history/semantic-token-diet/delivery.md"
+          }
+        ],
+        "recorded_at": "2026-11-16T16:26:18.416Z",
+        "recorded_by": "7480ecd8-5c48-4cfa-8c10-c442446135d7",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": null,
+  "usage_reason": "herding job(s) named this cell but no readable session transcript (1 unreadable)"
+}

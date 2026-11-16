@@ -1,0 +1,184 @@
+{
+  "id": "stdi-10",
+  "feature": "semantic-token-diet",
+  "title": "Check the bee-hive moves",
+  "lane": "standard",
+  "role": "test",
+  "deps": [
+    "stdi-9"
+  ],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pointer_integrity --test route_class_parity",
+  "must_haves": {
+    "truths": [
+      "every rule removed from the bee-hive body still has a home, named with file:line",
+      "no do-not-touch line from reports/B-router.md was removed",
+      "every heading cited from packages/bee-rs still resolves"
+    ]
+  },
+  "decisions": [
+    "66dfeff7-b683-4fcd-93c4-6928d76f8bb1",
+    "2a2604e3-1996-4ab2-a311-7c72cd0aede4"
+  ],
+  "files": [
+    "docs/history/semantic-token-diet/stdi-10-check.md"
+  ],
+  "read_first": [
+    "docs/history/semantic-token-diet/CONTEXT.md",
+    "skills/bee-hive/SKILL.md",
+    "docs/history/semantic-token-diet/reports/B-router.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Independently check cell stdi-9 against CONTEXT.md. Read its diff (the commit with trailer cell: stdi-9). For each must_have truth write pass or fail with a file:line anchor. Also confirm that every rule the diff moved or cut still has a home, by naming that home with file:line, and that no line from the matching audit report's do-not-touch list was removed. Run the cell verify. Write the result to docs/history/semantic-token-diet/stdi-10-check.md (one line per truth, one line per moved rule, then the verify counts) and commit only that file. Report a defect; do not edit the checked files. Rules for every cell: keep every rule and its why-clause (agents-block-diet D6); keep test-pinned wording unless this action names the pin; never add a size limit (D1). Write no code comments. Plain English, short sentences. Allowed bee commands: the cell verify, .bee/bin/bee knowledge check, .bee/bin/bee knowledge search. Do not run any bee dispatch or herding verb, not even its help. Run only the cell verify, never the full suite. Commit only the files of this cell, one commit, trailer cell: <id>.",
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "w-stdi-10",
+    "outcome": "Re-checked stdi-9 after restore 68f2b6abf: all three truths pass (D-a and D-b fixed); minor D-c and D-d stay open; check file in commit 2d6de1cf9c858c712cae21c7933a10d4220621de",
+    "files_changed": [
+      "docs/history/semantic-token-diet/stdi-10-check.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-11-16T16:05:36.195Z",
+    "behavior_change": false,
+    "verification_evidence": "cell verify only: pointer_integrity 10 passed 0 failed, route_class_parity 2 passed 0 failed",
+    "verify_output": "green:static",
+    "verify_passed": true,
+    "claim_session": "7480ecd8-5c48-4cfa-8c10-c442446135d7",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pointer_integrity --test route_class_parity",
+    "claimed_at": "2026-11-16T16:04:22.297Z",
+    "knowledge_delta": [],
+    "sync_ack": "check report only",
+    "no_mistakes": true,
+    "no_knowledge_used": true,
+    "principles_used": [
+      {
+        "slug": "bee-principle-verify-before-reporting",
+        "changed": "confirmed restored wording against the old text at 4e5ae32d9^ before marking D-a and D-b fixed"
+      },
+      {
+        "slug": "bee-principle-chestertons-fence",
+        "changed": "kept D-c and D-d listed as open instead of dropping them, since no departure records why they were cut"
+      }
+    ],
+    "report": {
+      "outcome": "Re-checked stdi-9 after restore 68f2b6abf: all three truths pass (D-a and D-b fixed); minor D-c and D-d stay open; check file in commit 2d6de1cf9c858c712cae21c7933a10d4220621de",
+      "commit": "2d6de1cf9c858c712cae21c7933a10d4220621de",
+      "files": [
+        "docs/history/semantic-token-diet/stdi-10-check.md"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pointer_integrity --test route_class_parity — green:static — cell verify only: pointer_integrity 10 passed 0 failed, route_class_parity 2 passed 0 failed",
+      "deviations": [],
+      "knowledge_used": [],
+      "principles_used": [
+        "bee-principle-verify-before-reporting — confirmed restored wording against the old text at 4e5ae32d9^ before marking D-a and D-b fixed",
+        "bee-principle-chestertons-fence — kept D-c and D-d listed as open instead of dropping them, since no departure records why they were cut"
+      ],
+      "patch_id": "30b75ba42038df45a9336ec532d57eb9e09582a7"
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "verified_at": null,
+    "baseline": null,
+    "reaction": null,
+    "skipped": null,
+    "unknowns": null,
+    "found": null,
+    "stopped": null,
+    "blocked_reason": null,
+    "dropped_reason": null,
+    "reopened_at": "2026-11-16T15:53:48.834Z",
+    "reopened_reason": "re-check stdi-9 after the restore",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "every rule removed from the bee-hive body still has a home, named with file:line",
+            "artifact": "docs/history/semantic-token-diet/stdi-10-check.md"
+          },
+          {
+            "requirement": "no do-not-touch line from reports/B-router.md was removed",
+            "artifact": "docs/history/semantic-token-diet/stdi-10-check.md"
+          },
+          {
+            "requirement": "every heading cited from packages/bee-rs still resolves",
+            "artifact": "docs/history/semantic-token-diet/stdi-10-check.md"
+          },
+          {
+            "requirement": "docs/history/semantic-token-diet/stdi-10-check.md",
+            "artifact": "docs/history/semantic-token-diet/stdi-10-check.md"
+          }
+        ],
+        "recorded_at": "2026-11-16T16:16:32.619Z",
+        "recorded_by": "7480ecd8-5c48-4cfa-8c10-c442446135d7",
+        "commit_diff": "checked"
+      },
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "every rule removed from the bee-hive body still has a home, named with file:line",
+            "artifact": "docs/history/semantic-token-diet/stdi-10-check.md"
+          },
+          {
+            "requirement": "no do-not-touch line from reports/B-router.md was removed",
+            "artifact": "docs/history/semantic-token-diet/stdi-10-check.md"
+          },
+          {
+            "requirement": "every heading cited from packages/bee-rs still resolves",
+            "artifact": "docs/history/semantic-token-diet/stdi-10-check.md"
+          },
+          {
+            "requirement": "docs/history/semantic-token-diet/stdi-10-check.md",
+            "artifact": "docs/history/semantic-token-diet/stdi-10-check.md"
+          }
+        ],
+        "recorded_at": "2026-11-16T16:22:45.477Z",
+        "recorded_by": "7480ecd8-5c48-4cfa-8c10-c442446135d7",
+        "commit_diff": "checked"
+      },
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "every rule removed from the bee-hive body still has a home, named with file:line",
+            "artifact": "docs/history/semantic-token-diet/stdi-10-check.md"
+          },
+          {
+            "requirement": "no do-not-touch line from reports/B-router.md was removed",
+            "artifact": "docs/history/semantic-token-diet/stdi-10-check.md"
+          },
+          {
+            "requirement": "every heading cited from packages/bee-rs still resolves",
+            "artifact": "docs/history/semantic-token-diet/stdi-10-check.md"
+          },
+          {
+            "requirement": "docs/history/semantic-token-diet/stdi-10-check.md",
+            "artifact": "docs/history/semantic-token-diet/stdi-10-check.md"
+          }
+        ],
+        "recorded_at": "2026-11-16T16:26:18.282Z",
+        "recorded_by": "7480ecd8-5c48-4cfa-8c10-c442446135d7",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": {
+    "new": 186228,
+    "cached": 3833256,
+    "total": 4019484,
+    "models": {
+      "claude-opus-5-5": {
+        "new": 186228,
+        "cached": 3833256,
+        "total": 4019484
+      }
+    },
+    "jobs": [
+      "job-1794844072496-1912384-1",
+      "job-1794845067442-1962612-1"
+    ]
+  }
+}
