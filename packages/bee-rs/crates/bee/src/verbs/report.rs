@@ -110,10 +110,9 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
 }
 
 fn configured_repo(root: &Path) -> String {
-    std::fs::read_to_string(root.join(".bee").join("config.json"))
-        .ok()
-        .and_then(|t| serde_json::from_str::<Value>(&t).ok())
-        .and_then(|c| c.get("bee_report")?.get("repo")?.as_str().map(str::to_string))
+    crate::state::read_config_value(root)
+        .get("bee_report")
+        .and_then(|c| c.get("repo")?.as_str().map(str::to_string))
         .unwrap_or_else(|| DEFAULT_REPO.to_string())
 }
 

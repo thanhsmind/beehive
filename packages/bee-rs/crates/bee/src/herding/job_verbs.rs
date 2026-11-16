@@ -887,11 +887,7 @@ pub(crate) fn steer_job_with(
 
     let is_paseo = job_raw.get("transport").and_then(Value::as_str) == Some("paseo");
     if is_paseo {
-        let config_path = main_root.join(".bee").join("config.json");
-        let cfg = match crate::fsutil::read_json(&config_path) {
-            crate::fsutil::ReadJson::Parsed(v) => v,
-            _ => Value::Null,
-        };
+        let cfg = crate::state::read_config_value(main_root);
         let agent = job_raw
             .get("agent")
             .and_then(Value::as_str)

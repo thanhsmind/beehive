@@ -656,14 +656,7 @@ pub(crate) fn transport_kind(cfg: &Value) -> Result<TransportKind, String> {
 /// `read_command_template_tokens` below takes for the same file, so a repo with
 /// no config at all keeps the pre-tmux behavior exactly.
 pub(crate) fn transport_kind_at(main_root: &Path) -> Result<TransportKind, String> {
-    let path = main_root.join(".bee").join("config.json");
-    let Ok(raw) = std::fs::read_to_string(&path) else {
-        return Ok(TransportKind::Herdr);
-    };
-    let Ok(cfg) = serde_json::from_str::<Value>(&raw) else {
-        return Ok(TransportKind::Herdr);
-    };
-    transport_kind(&cfg)
+    transport_kind(&crate::state::read_config_value(main_root))
 }
 
 /// herding-stall-ceiling D1: the optional `herding.ceiling_seconds` knob.
@@ -686,8 +679,7 @@ pub(crate) fn ceiling_seconds(cfg: &Value) -> Option<u64> {
 
 /// `ceiling_seconds` over `<main_root>/.bee/config.json`.
 pub(crate) fn ceiling_seconds_at(main_root: &Path) -> Option<u64> {
-    let raw = std::fs::read_to_string(main_root.join(".bee").join("config.json")).ok()?;
-    ceiling_seconds(&serde_json::from_str::<Value>(&raw).ok()?)
+    ceiling_seconds(&crate::state::read_config_value(main_root))
 }
 
 pub(crate) fn stall_after_secs(cfg: &Value) -> u64 {
@@ -699,10 +691,7 @@ pub(crate) fn stall_after_secs(cfg: &Value) -> u64 {
 }
 
 fn stall_after_secs_at(main_root: &Path) -> u64 {
-    std::fs::read_to_string(main_root.join(".bee").join("config.json"))
-        .ok()
-        .and_then(|raw| serde_json::from_str::<Value>(&raw).ok())
-        .map_or(stall_after_secs(&Value::Null), |cfg| stall_after_secs(&cfg))
+    stall_after_secs(&crate::state::read_config_value(main_root))
 }
 
 fn worktree_fingerprint(cwd: &str) -> Option<String> {
@@ -1458,10 +1447,7 @@ pub(crate) fn status_with_panes_and_transport_and_paseo(
 
     let paseo_box: Option<Box<dyn paseo::PaseoCli>> = if paseo_override.is_none() {
         main_root.as_ref().and_then(|root| {
-            let cfg = match crate::fsutil::read_json(&root.join(".bee").join("config.json")) {
-                crate::fsutil::ReadJson::Parsed(v) => v,
-                _ => Value::Null,
-            };
+            let cfg = crate::state::read_config_value(root);
             if !repo_uses_paseo(&cfg, &root.join(".bee")) || !paseo::daemon_reachable() {
                 return None;
             }
@@ -1540,10 +1526,7 @@ pub(crate) fn status_with_panes_and_transport_and_paseo(
                         }
             }
         }
-        let cfg = match crate::fsutil::read_json(&bee_dir.join("config.json")) {
-            crate::fsutil::ReadJson::Parsed(v) => v,
-            _ => Value::Null,
-        };
+        let cfg = crate::state::read_config_value(root);
         let listed = paseo_state::resolve_home(&paseo::paseo_command(&cfg))
             .map(|home| {
                 paseo_state::list_labeled(&home, "bee_job")
@@ -1673,9 +1656,7 @@ fn status(flags: &[&str]) -> ExitCode {
 /// same rejection is kept here even though nothing crosses a line in the
 /// in-process caller).
 pub(crate) fn read_command_template_tokens(main_root: &Path, key: &str) -> Option<Vec<String>> {
-    let path = main_root.join(".bee").join("config.json");
-    let raw = std::fs::read_to_string(&path).ok()?;
-    let cfg: Value = serde_json::from_str(&raw).ok()?;
+    let cfg = crate::state::read_config_value(main_root);
     let Value::Array(tmpl) = cfg.get("herding")?.get(key)? else { return None };
     if tmpl.is_empty() {
         return None;

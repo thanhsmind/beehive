@@ -972,6 +972,7 @@ pub(crate) fn bootstrap_worktree_store(
 
     let onboarding = copy_if_absent("onboarding.json")?;
     let config = copy_if_absent("config.json")?;
+    copy_if_absent("team.json")?;
     // srg-2: never `?` — a binary that could not be provisioned is reported,
     // not a bootstrap failure.
     let binary = provision_worktree_binary(&worktree_store_root, main_store_root);

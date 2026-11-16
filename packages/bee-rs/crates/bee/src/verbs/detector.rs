@@ -605,15 +605,12 @@ fn warn_job(job_id: &str, what: &str) {
 }
 
 fn tokens_per_job(control: &Path) -> Option<f64> {
-    match read_json(&control.join(".bee").join("config.json")) {
-        ReadJson::Parsed(cfg) => cfg
-            .get("herding")
-            .and_then(|h| h.get("budget"))
-            .and_then(|b| b.get(TOKENS_PER_JOB_KEY))
-            .and_then(Value::as_f64)
-            .filter(|v| *v > 0.0),
-        _ => None,
-    }
+    crate::state::read_config_value(control)
+        .get("herding")
+        .and_then(|h| h.get("budget"))
+        .and_then(|b| b.get(TOKENS_PER_JOB_KEY))
+        .and_then(Value::as_f64)
+        .filter(|v| *v > 0.0)
 }
 
 fn mailbox_job_ids(bee_dir: &Path) -> Vec<String> {

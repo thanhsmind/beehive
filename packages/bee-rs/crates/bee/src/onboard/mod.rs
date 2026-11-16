@@ -516,6 +516,9 @@ does run a POSIX shell."
         for n in notices::commands_notices(&repo_root, first_onboard) {
             out.push(json!(n));
         }
+        for n in notices::split_team_notices(&repo_root) {
+            out.push(json!(n));
+        }
         for n in notices::stale_advisor_notices(&repo_root) {
             out.push(json!(n));
         }

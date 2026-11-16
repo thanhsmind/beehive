@@ -156,35 +156,15 @@ pub(crate) fn merge_config_overlay(base: &Value, overlay: &Value) -> Value {
     }
 }
 
-/// Merged tracked+overlay config as a raw object (advisor key stripped like
-/// readConfig does; the normalize* steps don't touch the keys brief reads).
 pub fn read_config_raw(root: &Path) -> Map<String, Value> {
-    let read_obj = |file: PathBuf| -> Option<Map<String, Value>> {
-        match read_json(&file) {
-            ReadJson::Missing => None,
-            // readConfig's `readJson(file, {})` warned and fell back; a
-            // corrupt config therefore reads as "no config here", exactly
-            // like an absent one, and the merge continues.
-            ReadJson::Corrupt => {
-                warn_corrupt_json(&file);
-                None
-            }
-            ReadJson::Parsed(Value::Object(m)) => Some(m),
-            ReadJson::Parsed(_) => None,
-        }
-    };
-    let tracked = read_obj(root.join(".bee").join("config.json")).unwrap_or_default();
-    let overlay = read_obj(root.join(".bee").join("config.local.json"));
-    let mut merged = match overlay {
-        Some(over) => match merge_config_overlay(&Value::Object(tracked), &Value::Object(over)) {
-            Value::Object(m) => m,
-            _ => unreachable!("object-over-object merge yields an object"),
-        },
-        None => tracked,
-    };
+    let mut merged = crate::config_layers::read_merged(root, crate::config_layers::CorruptPolicy::Strict);
     merged.shift_remove("advisor");
     crate::verbs::drivers::fold_team_key(&mut merged);
     merged
+}
+
+pub fn read_config_value(root: &Path) -> Value {
+    Value::Object(read_config_raw(root))
 }
 
 /// hookEnabled: `config.hooks[name] !== false` over merged tracked+overlay

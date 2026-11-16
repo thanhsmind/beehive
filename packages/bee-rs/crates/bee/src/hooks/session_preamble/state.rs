@@ -13,50 +13,8 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use crate::version::BEE_VERSION;
 
-// ─── config (state.mjs readConfig / mergeConfigOverlay / normalizeCommands) ─
-//
-// provenance: lib/state.mjs readConfig (l. 1947) + mergeConfigOverlay
-// (l. 1919); Rust lift of crate::state::{merge_config_overlay,
-// read_config_raw} (state.rs:109-156) with the ONE change the preamble
-// needs: read_config_raw bails on a corrupt config file, and a preamble may
-// not bail — the corrupt file warns and reads as absent instead.
-
-pub(crate) fn merge_config_overlay(base: &Value, overlay: &Value) -> Value {
-    match overlay {
-        Value::Array(items) => Value::Array(items.clone()),
-        Value::Object(over) => {
-            let base_obj = match base {
-                Value::Object(m) => m.clone(),
-                _ => JMap::new(),
-            };
-            let mut out = base_obj.clone();
-            for (key, value) in over {
-                let merged = match (base_obj.get(key), value) {
-                    (Some(b @ Value::Object(_)), Value::Object(_)) => merge_config_overlay(b, value),
-                    _ => match value {
-                        Value::Array(items) => Value::Array(items.clone()),
-                        other => other.clone(),
-                    },
-                };
-                out.insert(key.clone(), merged);
-            }
-            Value::Object(out)
-        }
-        _ => base.clone(),
-    }
-}
-
-/// The merged tracked+overlay config object, advisor key stripped. Fail-open.
 pub(crate) fn read_config_raw_open(root: &Path) -> JMap {
-    let tracked = read_json_object(&root.join(".bee").join("config.json")).unwrap_or_default();
-    let overlay = read_json_object(&root.join(".bee").join("config.local.json"));
-    let mut merged = match overlay {
-        Some(over) => match merge_config_overlay(&Value::Object(tracked), &Value::Object(over)) {
-            Value::Object(m) => m,
-            _ => JMap::new(),
-        },
-        None => tracked,
-    };
+    let mut merged = crate::config_layers::read_merged(root, crate::config_layers::CorruptPolicy::FailOpen);
     merged.shift_remove("advisor");
     crate::verbs::drivers::fold_team_key(&mut merged);
     merged

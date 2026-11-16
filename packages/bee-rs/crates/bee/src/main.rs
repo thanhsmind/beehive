@@ -11,6 +11,7 @@
 
 mod audit;
 mod catalog;
+mod config_layers;
 mod comments;
 mod devtools;
 mod fsutil;

@@ -4,6 +4,7 @@
 #![allow(unused_imports)]
 
 use super::*;
+use crate::config_layers::{global_config_dir, Layer};
 use crate::hooks::adapter::{append_hook_log, now_iso, read_hook_context, HookContext};
 use crate::hooks::Outcome;
 use crate::jsjson;
@@ -119,6 +120,60 @@ pub(crate) fn reconstruct_target_text(
     }
 }
 
+pub(crate) fn project_config_write_denial(
+    tool_name: &str,
+    tool_input: &Map<String, Value>,
+    root_pb: &Path,
+    rel: &str,
+) -> Option<String> {
+    let norm = normalize_rel(rel);
+    let target_layer = project_config_layer(&norm)?;
+    if matches!(tool_name, "apply_patch" | "ApplyPatch") {
+        return Some(format!(
+            "bee config guard: \"{}\" cannot be modified via apply_patch — this target requires content-level inspection. FIX: use Edit/Write to edit config files.",
+            rel
+        ));
+    }
+    if matches!(tool_name, "Bash" | "exec") {
+        return Some(format!(
+            "bee config guard: \"{}\" cannot be modified via Bash — this target requires content-level inspection. FIX: use Edit/Write to edit config files.",
+            rel
+        ));
+    }
+    let disk: Vec<(Layer, Option<String>)> = Layer::ORDER
+        .iter()
+        .map(|layer| {
+            let text = layer
+                .path(root_pb, global_config_dir().as_deref())
+                .and_then(|file| std::fs::read_to_string(file).ok());
+            (*layer, text)
+        })
+        .collect();
+    let old_texts: Vec<(Layer, Option<&str>)> =
+        disk.iter().map(|(layer, text)| (*layer, text.as_deref())).collect();
+    let no_project_file = disk
+        .iter()
+        .all(|(layer, text)| *layer == Layer::Global || text.is_none());
+    let old_merged = if no_project_file {
+        None
+    } else {
+        config_merged_text(&old_texts)
+    };
+    let proposed = match reconstruct_target_text(tool_name, tool_input, root_pb, rel) {
+        Ok((_, new)) => new,
+        Err(fail) => return Some(config_reconstruct_denial(&fail, rel, tool_name)),
+    };
+    let new_texts: Vec<(Layer, Option<&str>)> = old_texts
+        .iter()
+        .map(|(layer, text)| match *layer == target_layer {
+            true => (*layer, Some(proposed.as_str())),
+            false => (*layer, *text),
+        })
+        .collect();
+    let new_merged = config_merged_text(&new_texts)?;
+    config_governed_change_deny(rel, old_merged.as_deref(), &new_merged)
+}
+
 fn config_reconstruct_denial(fail: &ReconstructFail, rel: &str, tool_name: &str) -> String {
     let tail = match fail {
         ReconstructFail::WriteContent => {
@@ -232,6 +287,14 @@ FIX: repair or recreate the Git worktree before retrying; no worktree-local .bee
         _ => Map::new(),
     };
     let cwd = ctx.cwd.to_string_lossy().into_owned();
+
+    if write_capable
+        && let Some(reason) = global_config_write_denial(&tool_name, &tool_input, &root, &cwd)
+    {
+        emit.stderr.push_str(&reason);
+        emit.code = 2;
+        return Ok(emit);
+    }
 
     if matches!(tool_name.as_str(), "Read" | "Glob" | "Grep" | "Bash" | "exec") {
         let home = std::env::var_os("HOME")
@@ -647,71 +710,11 @@ lines naming plain in-repo relative paths (no path traversal, no unresolvable es
             }
         }
 
-        // crkg-1: config-role-key-guard arm over .bee/config.json and .bee/config.local.json
         if denial.is_none() {
             for rel in &rel_paths {
-                let norm = normalize_rel(rel);
-                if norm == ".bee/config.json" || norm == ".bee/config.local.json" {
-                    if is_apply {
-                        denial = Some(format!(
-                            "bee config guard: \"{}\" cannot be modified via apply_patch — this target requires content-level inspection. FIX: use Edit/Write to edit config files.",
-                            rel
-                        ));
-                        break;
-                    }
-                    if is_shell {
-                        denial = Some(format!(
-                            "bee config guard: \"{}\" cannot be modified via Bash — this target requires content-level inspection. FIX: use Edit/Write to edit config files.",
-                            rel
-                        ));
-                        break;
-                    }
-                    // The comparison is over the MERGED view, never one file
-                    // alone: .bee/config.local.json deep-merges over
-                    // .bee/config.json on every read (state.rs:176-184), so a
-                    // per-file projection cannot tell a masked change from a
-                    // removal in either direction. Both sides of the diff are
-                    // built the way read_config_raw builds what the dispatcher
-                    // resolves against.
-                    let tracked_disk =
-                        std::fs::read_to_string(root_pb.join(".bee/config.json")).ok();
-                    let overlay_disk =
-                        std::fs::read_to_string(root_pb.join(".bee/config.local.json")).ok();
-                    let is_overlay_file = norm == ".bee/config.local.json";
-                    // Two distinct "nothing to compare" cases, both None, both
-                    // allowed: NEITHER config file exists yet (a first write
-                    // has no prior table to change), and the tracked file
-                    // exists but does not parse (config_merged_text returns
-                    // None, which is how a corrupt-config repair stays possible).
-                    let old_merged = if tracked_disk.is_none() && overlay_disk.is_none() {
-                        None
-                    } else {
-                        config_merged_text(tracked_disk.as_deref(), overlay_disk.as_deref())
-                    };
-                    let merged_with = |proposed: &str| -> Option<String> {
-                        if is_overlay_file {
-                            config_merged_text(tracked_disk.as_deref(), Some(proposed))
-                        } else {
-                            config_merged_text(Some(proposed), overlay_disk.as_deref())
-                        }
-                    };
-
-                    let proposed =
-                        match reconstruct_target_text(&tool_name, &tool_input, &root_pb, rel) {
-                            Ok((_, new)) => new,
-                            Err(fail) => {
-                                denial =
-                                    Some(config_reconstruct_denial(&fail, rel, &tool_name));
-                                break;
-                            }
-                        };
-                    if let Some(new_merged) = merged_with(&proposed)
-                        && let Some(reason) =
-                            config_governed_change_deny(rel, old_merged.as_deref(), &new_merged)
-                        {
-                            denial = Some(reason);
-                            break;
-                        }
+                if let Some(reason) = project_config_write_denial(&tool_name, &tool_input, &root_pb, rel) {
+                    denial = Some(reason);
+                    break;
                 }
             }
         }

@@ -918,17 +918,36 @@ pub fn compute_verify_skill_items(repo_root: &Path) -> Vec<Value> {
 /// `models` object (named narrowing: nothing to extend); or the MERGED view
 /// (config.local.json overlay included) already has `team.pi`. `team` wins
 /// over `models`, as fold_team_key does.
-fn pi_team_target(repo_root: &Path, onboarding: Option<&Value>) -> Option<&'static str> {
+struct RosterSource {
+    path: &'static str,
+    table: &'static str,
+    object: Map<String, Value>,
+}
+
+fn roster_source(repo_root: &Path) -> Option<RosterSource> {
+    let bee = repo_root.join(".bee");
+    if let Some(Value::Object(object)) = read_json_if_exists(&bee.join("team.json"))
+        && object.get("team").is_some_and(Value::is_object)
+    {
+        return Some(RosterSource { path: ".bee/team.json", table: "team", object });
+    }
+    let Value::Object(object) = read_json_if_exists(&bee.join("config.json"))? else {
+        return None;
+    };
+    let table = roster_table(&object)?;
+    Some(RosterSource { path: ".bee/config.json", table, object })
+}
+
+fn pi_team_target(repo_root: &Path, onboarding: Option<&Value>) -> Option<RosterSource> {
     if onboarding.and_then(|o| o.get(T::PI_TEAM_OFFERED_KEY)) == Some(&Value::Bool(true)) {
         return None;
     }
-    let tracked = read_json_if_exists(&repo_root.join(".bee").join("config.json"))?;
-    let table = roster_table(tracked.as_object()?)?;
+    let source = roster_source(repo_root)?;
     let merged = crate::state::read_config_raw(repo_root);
     if merged.get("team").and_then(|t| t.get("pi")).is_some() {
         return None;
     }
-    Some(table)
+    Some(source)
 }
 
 fn roster_table(tracked: &Map<String, Value>) -> Option<&'static str> {
@@ -938,20 +957,18 @@ fn roster_table(tracked: &Map<String, Value>) -> Option<&'static str> {
     }
 }
 
-fn design_role_target(repo_root: &Path, onboarding: Option<&Value>) -> Option<(&'static str, Vec<String>)> {
+fn design_role_target(repo_root: &Path, onboarding: Option<&Value>) -> Option<(RosterSource, Vec<String>)> {
     if onboarding.and_then(|o| o.get(T::DESIGN_ROLE_OFFERED_KEY)) == Some(&Value::Bool(true)) {
         return None;
     }
-    let tracked = read_json_if_exists(&repo_root.join(".bee").join("config.json"))?;
-    let tracked = tracked.as_object()?;
-    let table = roster_table(tracked)?;
+    let source = roster_source(repo_root)?;
     let merged = crate::state::read_config_raw(repo_root);
     let runtimes: Vec<String> = T::default_config()["team"]
         .as_object()?
         .iter()
         .filter(|(runtime, roles)| {
             roles.get("design").is_some()
-                && tracked.get(table).and_then(|t| t.get(runtime.as_str())).is_some_and(Value::is_object)
+                && source.object.get(source.table).and_then(|t| t.get(runtime.as_str())).is_some_and(Value::is_object)
                 && merged
                     .get("team")
                     .and_then(|t| t.get(runtime.as_str()))
@@ -960,7 +977,7 @@ fn design_role_target(repo_root: &Path, onboarding: Option<&Value>) -> Option<(&
         })
         .map(|(runtime, _)| runtime.clone())
         .collect();
-    (!runtimes.is_empty()).then_some((table, runtimes))
+    (!runtimes.is_empty()).then_some((source, runtimes))
 }
 
 fn known_design_packs(recorded: Option<&Value>) -> Vec<String> {
@@ -1090,9 +1107,11 @@ pub fn compute_plan(engine: &Engine, repo_root: &Path, opts: &Options) -> Comput
     }
 
     // 2. runtime files (create-if-missing only)
+    let config_present = exists(&join_rel(repo_root, ".bee/config.json"));
     for rel in [
         ".bee/state.json",
         ".bee/config.json",
+        ".bee/team.json",
         ".bee/reservations.json",
         ".bee/decisions.jsonl",
         ".bee/backlog.jsonl",
@@ -1101,6 +1120,11 @@ pub fn compute_plan(engine: &Engine, repo_root: &Path, opts: &Options) -> Comput
         // gets full documentation without visiting the bee repo.
         ".bee/config-sample.json",
     ] {
+        if rel == ".bee/team.json"
+            && (config_present || T::seed_files(repo_root).1.is_none())
+        {
+            continue;
+        }
         if !exists(&join_rel(repo_root, rel)) {
             plan.push(plan_item("create_runtime_file", rel));
         }
@@ -1119,18 +1143,18 @@ pub fn compute_plan(engine: &Engine, repo_root: &Path, opts: &Options) -> Comput
 
     // 2b. host-packaging-gaps D2: offer the Pi role table ONCE to an existing
     // config that lacks it — the only step that edits a present config.json.
-    if let Some(table) = pi_team_target(repo_root, onboarding.as_ref()) {
+    if let Some(source) = pi_team_target(repo_root, onboarding.as_ref()) {
         let mut m = Map::new();
         m.insert("action".into(), json!("add_pi_team"));
-        m.insert("path".into(), json!(".bee/config.json"));
-        m.insert("table".into(), json!(table));
+        m.insert("path".into(), json!(source.path));
+        m.insert("table".into(), json!(source.table));
         plan.push(Value::Object(m));
     }
-    if let Some((table, runtimes)) = design_role_target(repo_root, onboarding.as_ref()) {
+    if let Some((source, runtimes)) = design_role_target(repo_root, onboarding.as_ref()) {
         let mut m = Map::new();
         m.insert("action".into(), json!("add_design_role"));
-        m.insert("path".into(), json!(".bee/config.json"));
-        m.insert("table".into(), json!(table));
+        m.insert("path".into(), json!(source.path));
+        m.insert("table".into(), json!(source.table));
         m.insert("runtimes".into(), json!(runtimes));
         plan.push(Value::Object(m));
     }

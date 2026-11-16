@@ -29,10 +29,7 @@ pub(crate) fn ensure_and_record(cli: &dyn PaseoCli, main_root: &Path, dir: &Path
 }
 
 pub(crate) fn real_cli(main_root: &Path) -> RealPaseoCli {
-    let cfg = std::fs::read_to_string(main_root.join(".bee").join("config.json"))
-        .ok()
-        .and_then(|raw| serde_json::from_str::<Value>(&raw).ok())
-        .unwrap_or(Value::Null);
+    let cfg = crate::state::read_config_value(main_root);
     RealPaseoCli::new(paseo::paseo_command(&cfg)).with_timeout(Duration::from_secs(8))
 }
 

@@ -305,6 +305,171 @@ use std::process::ExitCode;
         })
     }
 
+    fn team_table(agent: &str) -> Value {
+        json!({ "team": { "pi": { "review": { "kind": "herding", "agent": agent } } } })
+    }
+
+    fn put_project(fx: &Fx, name: &str, value: &Value) {
+        std::fs::write(fx.root.join(".bee").join(name), serde_json::to_string_pretty(value).unwrap())
+            .unwrap();
+    }
+
+    fn write_to(file: &str, content: &str) -> Value {
+        json!({ "tool_name": "Write", "tool_input": { "file_path": file, "content": content } })
+    }
+
+    #[test]
+    fn team_guard_refuses_edit_and_write_that_change_or_remove_a_team_slot() {
+        let fx = build_fixture("swarming", true);
+        put_project(&fx, "team.json", &team_table("pi-gpt-5.6-luna"));
+        let edit = json!({
+            "tool_name": "Edit",
+            "tool_input": {
+                "file_path": ".bee/team.json",
+                "old_string": "pi-gpt-5.6-luna",
+                "new_string": "pi-opencode-free"
+            }
+        });
+        let e = expect_done(edit, &fx.root);
+        assert_eq!(e.code, 2, "stderr={}", e.stderr);
+        assert!(e.stderr.contains("team.pi.review.agent"), "stderr={}", e.stderr);
+        let changed = serde_json::to_string(&team_table("pi-opencode-free")).unwrap();
+        let w = expect_done(write_to(".bee/team.json", &changed), &fx.root);
+        assert_eq!(w.code, 2, "stderr={}", w.stderr);
+        let removed = expect_done(write_to(".bee/team.json", "{}"), &fx.root);
+        assert_eq!(removed.code, 2, "stderr={}", removed.stderr);
+    }
+
+    #[test]
+    fn team_guard_allows_adding_a_team_slot() {
+        let fx = build_fixture("swarming", true);
+        put_project(&fx, "team.json", &team_table("pi-gpt-5.6-luna"));
+        let mut added = team_table("pi-gpt-5.6-luna");
+        added["team"]["pi"]["work"] = json!({ "kind": "herding", "agent": "pi-gpt-5.6-luna" });
+        let w = expect_done(write_to(".bee/team.json", &added.to_string()), &fx.root);
+        assert_eq!(w.code, 0, "stderr={}", w.stderr);
+    }
+
+    #[test]
+    fn team_guard_refuses_a_bash_write_to_team_json() {
+        let fx = build_fixture("swarming", true);
+        put_project(&fx, "team.json", &team_table("pi-gpt-5.6-luna"));
+        let e = expect_done(bash("echo '{}' > .bee/team.json"), &fx.root);
+        assert_eq!(e.code, 2, "stderr={}", e.stderr);
+        assert!(e.stderr.contains("team.json"), "stderr={}", e.stderr);
+    }
+
+    #[test]
+    fn team_guard_refuses_apply_patch_on_team_json() {
+        let fx = build_fixture("swarming", true);
+        put_project(&fx, "team.json", &team_table("pi-gpt-5.6-luna"));
+        let patch = "*** Begin Patch\n*** Update File: .bee/team.json\n@@\n-x\n+y\n*** End Patch";
+        let e = expect_done(
+            json!({ "tool_name": "apply_patch", "tool_input": { "input": patch } }),
+            &fx.root,
+        );
+        assert_eq!(e.code, 2, "stderr={}", e.stderr);
+    }
+
+    #[test]
+    fn team_guard_allows_moving_the_team_table_when_team_json_is_written_first() {
+        let fx = build_fixture("swarming", true);
+        let mut cfg = team_table("pi-gpt-5.6-luna");
+        cfg["uat_stop"] = json!("close");
+        put_project(&fx, "config.json", &cfg);
+        let first = expect_done(
+            write_to(".bee/team.json", &team_table("pi-gpt-5.6-luna").to_string()),
+            &fx.root,
+        );
+        assert_eq!(first.code, 0, "stderr={}", first.stderr);
+        put_project(&fx, "team.json", &team_table("pi-gpt-5.6-luna"));
+        let second = expect_done(
+            write_to(".bee/config.json", &json!({ "uat_stop": "close" }).to_string()),
+            &fx.root,
+        );
+        assert_eq!(second.code, 0, "stderr={}", second.stderr);
+    }
+
+    #[test]
+    fn team_guard_refuses_removing_the_table_from_config_json_before_team_json_holds_it() {
+        let fx = build_fixture("swarming", true);
+        let mut cfg = team_table("pi-gpt-5.6-luna");
+        cfg["uat_stop"] = json!("close");
+        put_project(&fx, "config.json", &cfg);
+        let e = expect_done(
+            write_to(".bee/config.json", &json!({ "uat_stop": "close" }).to_string()),
+            &fx.root,
+        );
+        assert_eq!(e.code, 2, "stderr={}", e.stderr);
+    }
+
+    #[test]
+    fn team_guard_refuses_invalid_json_written_to_team_json() {
+        let fx = build_fixture("swarming", true);
+        put_project(&fx, "team.json", &team_table("pi-gpt-5.6-luna"));
+        let e = expect_done(write_to(".bee/team.json", "{not json"), &fx.root);
+        assert_eq!(e.code, 2, "stderr={}", e.stderr);
+    }
+
+    #[test]
+    fn team_guard_refuses_a_project_slot_that_shadows_a_global_slot() {
+        let fx = build_fixture("swarming", true);
+        let global = tempfile::tempdir().unwrap();
+        let _guard = crate::config_layers::TestGlobalDir::set(global.path());
+        std::fs::write(
+            global.path().join("config.json"),
+            json!({ "team": { "claude": { "code": { "kind": "herding", "agent": "g" } } } })
+                .to_string(),
+        )
+        .unwrap();
+        put_project(&fx, "config.json", &json!({ "uat_stop": "close" }));
+        put_project(&fx, "team.json", &team_table("pi-gpt-5.6-luna"));
+        put_project(&fx, "config.local.json", &json!({ "doc_viewer": "x" }));
+        let shadow = json!({ "team": { "claude": { "code": { "kind": "herding", "agent": "p" } } } });
+        for file in ["config.json", "team.json", "config.local.json"] {
+            let e = expect_done(write_to(&format!(".bee/{file}"), &shadow.to_string()), &fx.root);
+            assert_eq!(e.code, 2, "{file}: stderr={}", e.stderr);
+        }
+    }
+
+    #[test]
+    fn team_guard_refuses_every_agent_write_to_the_global_config_path() {
+        let fx = build_fixture("swarming", true);
+        let global = tempfile::tempdir().unwrap();
+        let _guard = crate::config_layers::TestGlobalDir::set(global.path());
+        let path = global.path().join("config.json");
+        let path_s = path.to_string_lossy().into_owned();
+        let edit = json!({
+            "tool_name": "Edit",
+            "tool_input": { "file_path": path_s, "old_string": "a", "new_string": "b" }
+        });
+        let patch = format!("*** Begin Patch\n*** Add File: {path_s}\n+x\n*** End Patch");
+        for payload in [
+            edit,
+            write_to(&path_s, "{}"),
+            bash(&format!("echo '{{}}' > {path_s}")),
+            bash(&format!("cat {path_s}")),
+            json!({ "tool_name": "apply_patch", "tool_input": { "input": patch } }),
+        ] {
+            let e = expect_done(payload, &fx.root);
+            assert_eq!(e.code, 2, "stderr={}", e.stderr);
+            assert!(e.stderr.contains("waggledance"), "stderr={}", e.stderr);
+        }
+    }
+
+    #[test]
+    fn team_guard_refuses_bash_that_assigns_the_config_dir_variables() {
+        let fx = build_fixture("swarming", true);
+        for command in [
+            "BEEHIVE_CONFIG_DIR=/tmp/x bee team show",
+            "export XDG_CONFIG_HOME=/tmp/x && bee team show",
+        ] {
+            let e = expect_done(bash(command), &fx.root);
+            assert_eq!(e.code, 2, "{command}: stderr={}", e.stderr);
+            assert!(e.stderr.contains("waggledance"), "stderr={}", e.stderr);
+        }
+    }
+
     #[test]
     fn config_role_key_guard_refuses_write_edit_multiedit_on_team_pi_review() {
         let fx = build_fixture("swarming", true);
@@ -6492,6 +6657,133 @@ use std::process::ExitCode;
         for n in 0..count {
             add_live_session(root, &format!("sib-{n}"));
         }
+    }
+
+    #[test]
+    fn herded_team_guard_refuses_a_write_to_the_global_config_file() {
+        let fx = build_fixture("swarming", true);
+        let global = tempfile::tempdir().unwrap();
+        let _guard = crate::config_layers::TestGlobalDir::set(global.path());
+        let path_s = global.path().join("config.json").to_string_lossy().into_owned();
+        let e = herded(write_to(&path_s, "{}"), &fx.root);
+        assert_eq!(e.code, 2, "stderr={}", e.stderr);
+        assert!(e.stderr.contains("waggledance"), "stderr={}", e.stderr);
+    }
+
+    #[test]
+    fn herded_team_guard_refuses_bash_that_assigns_the_config_dir() {
+        let fx = build_fixture("swarming", true);
+        let e = herded(bash("BEEHIVE_CONFIG_DIR=/tmp/x bee team show"), &fx.root);
+        assert_eq!(e.code, 2, "stderr={}", e.stderr);
+        assert!(e.stderr.contains("waggledance"), "stderr={}", e.stderr);
+    }
+
+    #[test]
+    fn herded_team_guard_refuses_an_edit_that_changes_a_team_slot() {
+        let fx = build_fixture("swarming", true);
+        put_project(&fx, "team.json", &team_table("pi-gpt-5.6-luna"));
+        let edit = json!({
+            "tool_name": "Edit",
+            "tool_input": {
+                "file_path": ".bee/team.json",
+                "old_string": "pi-gpt-5.6-luna",
+                "new_string": "pi-opencode-free"
+            }
+        });
+        let e = herded(edit, &fx.root);
+        assert_eq!(e.code, 2, "stderr={}", e.stderr);
+        assert!(e.stderr.contains("team.pi.review.agent"), "stderr={}", e.stderr);
+    }
+
+    #[test]
+    fn herded_team_guard_refuses_a_bash_write_to_team_json() {
+        let fx = build_fixture("swarming", true);
+        let e = herded(bash("echo '{}' > .bee/team.json"), &fx.root);
+        assert_eq!(e.code, 2, "stderr={}", e.stderr);
+    }
+
+    fn spelled_global_commands() -> Vec<String> {
+        vec![
+            "echo '{}' > ~/.config/beehive/config.json".to_string(),
+            "echo '{}' > $HOME/.config/beehive/config.json".to_string(),
+            "echo '{}' > ${HOME}/.config/beehive/config.json".to_string(),
+            "echo '{}' > \"$HOME/.config/beehive/config.json\"".to_string(),
+            "echo '{}' > $XDG_CONFIG_HOME/beehive/config.json".to_string(),
+            "echo '{}' > ${XDG_CONFIG_HOME}/beehive/config.json".to_string(),
+            "echo '{}' > $BEEHIVE_CONFIG_DIR/config.json".to_string(),
+            "echo '{}' > ${BEEHIVE_CONFIG_DIR}/config.json".to_string(),
+            "cat ~/.config/beehive/config.json".to_string(),
+            "rg token $HOME/.config/beehive/config.json".to_string(),
+        ]
+    }
+
+    fn home_global_dir() -> PathBuf {
+        PathBuf::from(crate::hooks::session_close::node_homedir()).join(".config").join("beehive")
+    }
+
+    #[test]
+    fn global_path_spelling_is_refused_through_emit_for() {
+        let fx = build_fixture("swarming", true);
+        let dir = home_global_dir();
+        let _guard = crate::config_layers::TestGlobalDir::set(&dir);
+        for command in spelled_global_commands() {
+            let e = expect_done(bash(&command), &fx.root);
+            assert_eq!(e.code, 2, "{command}: stderr={}", e.stderr);
+            assert!(e.stderr.contains("waggledance"), "{command}: stderr={}", e.stderr);
+        }
+    }
+
+    #[test]
+    fn global_path_spelling_is_refused_through_the_hooked_guard() {
+        let fx = build_fixture("swarming", true);
+        let dir = home_global_dir();
+        let _guard = crate::config_layers::TestGlobalDir::set(&dir);
+        for command in spelled_global_commands() {
+            let e = herded(bash(&command), &fx.root);
+            assert_eq!(e.code, 2, "{command}: stderr={}", e.stderr);
+            assert!(e.stderr.contains("waggledance"), "{command}: stderr={}", e.stderr);
+        }
+    }
+
+    #[test]
+    fn global_path_spelling_refuses_a_config_dir_reference_whatever_the_env_holds() {
+        let fx = build_fixture("swarming", true);
+        let global = tempfile::tempdir().unwrap();
+        let _guard = crate::config_layers::TestGlobalDir::set(global.path());
+        for command in [
+            "echo '{}' > $BEEHIVE_CONFIG_DIR/config.json",
+            "echo '{}' > ${BEEHIVE_CONFIG_DIR}/config.json",
+        ] {
+            let e = expect_done(bash(command), &fx.root);
+            assert_eq!(e.code, 2, "{command}: stderr={}", e.stderr);
+            let h = herded(bash(command), &fx.root);
+            assert_eq!(h.code, 2, "{command}: stderr={}", h.stderr);
+        }
+    }
+
+    #[test]
+    fn global_path_spelling_lets_an_unrelated_config_file_through() {
+        let fx = build_fixture("swarming", true);
+        let dir = home_global_dir();
+        let _guard = crate::config_layers::TestGlobalDir::set(&dir);
+        for command in [
+            "echo '{}' > ~/.config/other/config.json",
+            "echo '{}' > $HOME/.config/other/config.json",
+            "echo '{}' > $XDG_CONFIG_HOME/other/config.json",
+        ] {
+            let e = expect_done(bash(command), &fx.root);
+            assert!(!e.stderr.contains("waggledance"), "{command}: stderr={}", e.stderr);
+            let h = herded(bash(command), &fx.root);
+            assert!(!h.stderr.contains("waggledance"), "{command}: stderr={}", h.stderr);
+        }
+    }
+
+    #[test]
+    fn herded_team_guard_passes_a_plain_source_write() {
+        let fx = build_fixture("swarming", true);
+        let e = herded(write_to("src/app.rs", "fn main() {}\n"), &fx.root);
+        assert_eq!(e.code, 0, "stderr={}", e.stderr);
+        assert!(e.stderr.is_empty(), "{}", e.stderr);
     }
 
     #[test]

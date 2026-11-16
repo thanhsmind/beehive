@@ -12,7 +12,7 @@ bee:
   sources: ["bee-footprint D2 (cell footprint-2, 2026-07-12)", "docs/specs/hook-runtime.md#B11", "docs/specs/hook-runtime.md#B12", "docs/specs/hook-runtime.md#R11", "docs/specs/hook-runtime.md#R12", "docs/specs/hook-runtime.md#P8", "validation-diet cells vd-1/vd-2 (traces in .bee/cells/, reports docs/history/validation-diet/reports/vd-1.md,vd-2.md, 2026-07-28 — the gated phase set narrowed to two, the write guard's unrecognized-phase fall-through flipped from silently allowing to refusing, and a saved value left by the retired phase translated on read)", "hook-teeth cell bh-1 (trace .bee/cells/archive/hook-teeth/bh-1.json, 2026-08-04 — plan-document freeze deny, feature resolved from the path, lane-aware gate state; write_guard slice 93 passed)", "traceable-runs cell trun-5 (trace .bee/cells/archive/traceable-runs/trun-5.json, capped 2026-08-14 — guards.rs/checks.rs/paths.rs/hook_local.rs/tests.rs, red-first retargeting two pre-existing tests that pinned the old shared-list behavior)", "slp-followup-gaps cell sfg-1 (commit 9809d34e, 2026-08-29 — write_guard/checks.rs claim-derived record plus the shared lane_record_from helper, store.rs session_claimed_features, paths.rs session_bind_remedy_line, write_guard/tests.rs)", "slp-followup-gaps cell sfg-3 (commit 113093a1, 2026-08-29 — write_guard/store.rs claim readers made infallible by signature, checks.rs claim_derived_lane_record, and the ownership guard's claim-derived phase pinned in both directions)", "slp-followup-gaps cell sfg-4 (commit b98f03ab, 2026-08-29 — store.rs heartbeat_stale and control_root_for_state made infallible, the product_root check deleted, checks.rs check_workspace_ownership)", "slp-followup-gaps cell sfg-5 (commit 77fbdfd5, 2026-08-29 — store.rs lease/hold expiry readers, hook_local.rs unreadable_session_refusal and the SharedNested answers, jspath.rs queue_guard_warning_once, the corrected docs/tiny gate comments)", "slp-followup-gaps cell sfg-6 (commits d502e845 and 85ead065, 2026-08-29 — hook_local.rs CompanionMount and unreadable_companion_marker_refusal, and mod.rs's header carrying the rule, the two answer shapes, and the completed delegate list)"]
   authoritative_for: "hook-runtime: which write targets are governed and which are always writable"
   applied_at: [skills/bee-hive/references/routing-and-contracts.md]
-  anchors: [plans/, packages/bee-rs/crates/bee/src/hooks/write_guard/guards.rs, packages/bee-rs/crates/bee/src/hooks/write_guard/checks.rs, packages/bee-rs/crates/bee/src/hooks/stage_tools.rs, .pi/extensions/bee-guard/, packages/bee-rs/crates/bee/src/hooks/write_guard/hook_local.rs, packages/bee-rs/crates/bee/src/hooks/write_guard/mod.rs, packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs]
+  anchors: [plans/, packages/bee-rs/crates/bee/src/hooks/write_guard/main.rs, packages/bee-rs/crates/bee/src/hooks/write_guard/worker_tree.rs, packages/bee-rs/crates/bee/src/config_layers.rs, packages/bee-rs/crates/bee/src/hooks/write_guard/guards.rs, packages/bee-rs/crates/bee/src/hooks/write_guard/checks.rs, packages/bee-rs/crates/bee/src/hooks/stage_tools.rs, .pi/extensions/bee-guard/, packages/bee-rs/crates/bee/src/hooks/write_guard/hook_local.rs, packages/bee-rs/crates/bee/src/hooks/write_guard/mod.rs, packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs]
   verified_at: 2026-11-07
   verified_commit: 9861c1b430dc099ce4e0ba481503579ad3a2d738
 ---
@@ -529,6 +529,29 @@ permitted write is the commoner one.
   projection** rather than a hand-picked key list, which is what picks up
   `kind: cli` slots whose model rides inside `command`, and drops
   `description` for free.
+
+- R42 — The config arm covers three project files and the user-global file
+  (team-global-config D6, D12, D13, D14). **The merged comparison is built from every
+  layer in `config_layers` order** — global, tracked, team, local — with the
+  Team-layer key filter and the global forbidden-key drop applied by that
+  module's own merge, never a second loop, so moving the team table between
+  `config.json` and `team.json` with the merged view equal passes and a move
+  that removes first is refused. **The on-disk global layer sits under both
+  sides**, so a project slot that shadows a global slot is a change to the
+  effective value and refuses. **An unparseable `team.json` reads as an absent
+  layer**, so invalid JSON diffs as a removal. **The global file is not
+  judged, it is refused**: any Edit, Write, apply_patch or Bash that names its
+  path, and any Bash that assigns `BEEHIVE_CONFIG_DIR` or `XDG_CONFIG_HOME`
+  (pointing bee at an agent-written dir would supply `herding.agent_command`,
+  an executed command), is denied before the cross-project check, naming
+  waggledance as the only writer (team-global-config D12). **Herded worker panes
+  get both checks too** (`team-global-config D14`): when `BEE_HERDING_WORKER=1`,
+  `write_guard::run_herded` (`hooks/write_guard/worker_tree.rs`) runs the same
+  D12 global-config write refusal and the D6 governed-key check for
+  `.bee/config.json` and `.bee/team.json` before its concurrent-tree check,
+  while every other guard stays open in that pane. Both panes call one
+  `project_config_write_denial` in `write_guard/main.rs`; a second copy of the
+  governed-key loop would drift from the hooked session's.
 
 ## Pointers (implementation)
 

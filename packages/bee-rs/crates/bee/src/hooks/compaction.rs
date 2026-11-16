@@ -122,27 +122,7 @@ fn vget<'a>(value: &'a Value, key: &str) -> Option<&'a Value> {
 /// corrupt file and returned the fallback (`{}`); so does this — never a
 /// delegate, never a throw. Shared with hooks/session_init.rs.
 pub(crate) fn read_config_failopen(root: &Path) -> Map<String, Value> {
-    let read_obj = |file: PathBuf| -> Map<String, Value> {
-        match read_json(&file) {
-            ReadJson::Missing => Map::new(),
-            ReadJson::Corrupt => {
-                warn_corrupt_json(&file);
-                Map::new()
-            }
-            ReadJson::Parsed(Value::Object(m)) => m,
-            ReadJson::Parsed(_) => Map::new(),
-        }
-    };
-    let tracked = read_obj(root.join(".bee").join("config.json"));
-    let overlay = read_obj(root.join(".bee").join("config.local.json"));
-    let mut out = if overlay.is_empty() {
-        tracked
-    } else {
-        match crate::state::merge_config_overlay(&Value::Object(tracked), &Value::Object(overlay)) {
-            Value::Object(m) => m,
-            _ => Map::new(),
-        }
-    };
+    let mut out = crate::config_layers::read_merged(root, crate::config_layers::CorruptPolicy::FailOpen);
     crate::verbs::drivers::fold_team_key(&mut out);
     out
 }
