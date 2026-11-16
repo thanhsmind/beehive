@@ -38,7 +38,7 @@ mutable state n/a; smallest safe decomposition: two writers, two checkers.
 | # | Claim | Label | Anchor | Verbatim evidence |
 |---|-------|-------|--------|-------------------|
 | 1 | The alias names only skill_get | read | packages/bee-rs/crates/bee/src/verbs/skillstation_group.rs:146 | `Call the skillstation MCP tool` |
-| 2 | The principle header names only skill_get | read | packages/bee-rs/crates/bee/src/principles.rs:139 | `Load each one with the skillstation MCP tool skill_get, the slug as skill_id.` |
+| 2 | The principle header names skill_get | read | packages/bee-rs/crates/bee/src/principles.rs:139 | `the skillstation MCP tool skill_get, the slug as skill_id` |
 | 3 | The playbook pointer opens a relative file | read | packages/bee-rs/crates/bee/src/verbs/status_full/orient.rs:761 | `open this file under its local.path` |
 | 4 | skill show returns content and manifest | ran | skillstation skill show bee-how --json | `schema_version status summary items suggested_actions warnings error manifest content` |
 | 5 | The cross-project guard refuses a hub folder read | ran | ls of the hub folder skills/default/bee-how | `bee cross-project guard` |
