@@ -8,12 +8,12 @@ bee:
   lifecycle: active
   areas: [hook-runtime]
   required_context: [areas/hook-runtime/overview.md]
-  decisions: ["token-thrift D1 (PREAMBLE_BUDGET_BYTES is 9500, below HOST_INLINE_LIMIT_CHARS 10,000)", token-thrift D2 (fixed drop order and one Omitted line that names each fetch path), token-thrift D3 (zero-frontier discovery maps fold into one count line), "token-thrift D4 (dispatch door prints one line per rendered target, roles in full)", "token-thrift D5 (orient promote blocker names at most 3 features, then +N more)", "691fcac4-14a8-40b1-8600-d720ebc47e6f (token-thrift D7: the preamble promote proposal line names at most 3 clear commands, then +N more)", token-thrift D6 (this concept), "8f63adb4-de70-424e-b082-1f4c5ec4b693 (budget-fence-removal D1: budgets bind generated payloads only, never authored instruction text)", lean-context D1 (prompt-context warns at handoff_context_tokens)]
-  sources: [docs/history/token-thrift/CONTEXT.md, docs/history/token-thrift/reports/hat-wave-synthesis.md, "cell tt-1 (commit 3ca8a49fe, 2026-10-21)", "cell tt-2 (commit 646c14cff, 2026-10-21)", "cell tt-3 (commit 81f81b039, 2026-10-21)", "measured 2026-10-21: the session preamble on this repo was 11,041 to 11,161 bytes before tt-1", docs/history/lean-context/CONTEXT.md, cell lnc-1]
+  decisions: ["token-thrift D1 (PREAMBLE_BUDGET_BYTES is 9500, below HOST_INLINE_LIMIT_CHARS 10,000)", token-thrift D2 (fixed drop order and one Omitted line that names each fetch path), token-thrift D3 (zero-frontier discovery maps fold into one count line), "token-thrift D4 (dispatch door prints one line per rendered target, roles in full)", "token-thrift D5 (orient promote blocker names at most 3 features, then +N more)", "691fcac4-14a8-40b1-8600-d720ebc47e6f (token-thrift D7: the preamble promote proposal line names at most 3 clear commands, then +N more)", token-thrift D6 (this concept), "8f63adb4-de70-424e-b082-1f4c5ec4b693 (budget-fence-removal D1: budgets bind generated payloads only, never authored instruction text)", lean-context D1 (prompt-context warns at handoff_context_tokens), "semantic-token-diet D7 (preamble trailer names bee orient for routing and bee status --json only for missing detail; Proof-per-change-type line removed)", "semantic-token-diet D8 (herding brief renders # Proof command only for cell jobs)", "semantic-token-diet D9 (single-command help prints first sentence, flags, then remaining text under details:; heaviest descriptions drop decision ids and history narration)"]
+  sources: [docs/history/token-thrift/CONTEXT.md, docs/history/token-thrift/reports/hat-wave-synthesis.md, "cell tt-1 (commit 3ca8a49fe, 2026-10-21)", "cell tt-2 (commit 646c14cff, 2026-10-21)", "cell tt-3 (commit 81f81b039, 2026-10-21)", "measured 2026-10-21: the session preamble on this repo was 11,041 to 11,161 bytes before tt-1", docs/history/lean-context/CONTEXT.md, cell lnc-1, docs/history/semantic-token-diet/CONTEXT.md, "semantic-token-diet cells stdi-1..stdi-6 (commits b519417c6, 66ca1f554, 73d8810d5, be207c310, c611721a7, 2026-11-16)"]
   authoritative_for: "hook-runtime: the size limits on injected session context and why they exist"
-  anchors: [packages/bee-rs/crates/bee/src/hooks/prompt_context.rs, packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs, packages/bee-rs/crates/bee/src/hooks/session_init.rs, packages/bee-rs/crates/bee/src/hooks/session_preamble/tests.rs, packages/bee-rs/crates/bee/src/hooks/model_guard.rs, packages/bee-rs/crates/bee/src/verbs/status_full/orient.rs, packages/bee-rs/crates/bee/src/hooks/session_preamble/render.rs]
-  verified_at: 2026-11-15
-  verified_commit: a963c71a41249647b5aa15a64118f007f39c4c67
+  anchors: [packages/bee-rs/crates/bee/src/hooks/prompt_context.rs, packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs, packages/bee-rs/crates/bee/src/hooks/session_init.rs, packages/bee-rs/crates/bee/src/hooks/session_preamble/tests.rs, packages/bee-rs/crates/bee/src/hooks/model_guard.rs, packages/bee-rs/crates/bee/src/verbs/status_full/orient.rs, packages/bee-rs/crates/bee/src/hooks/session_preamble/render.rs, packages/bee-rs/crates/bee/src/herding/mailbox.rs, packages/bee-rs/crates/bee/src/verbs/help.rs, packages/bee-rs/crates/bee/src/generated/registry_payload.json]
+  verified_at: 2026-11-16
+  verified_commit: d2ac1ce50e94b747d59335242b9ce380c5f1eebb
 ---
 
 # Hook Runtime — the token economy of injected context
@@ -120,6 +120,30 @@ The agent keeps working; the user decides when to switch (docs/history/context-m
 Below the mark, with no `transcript_path`, or with an unreadable or usage-free
 transcript, nothing is added and the hook never fails or slows the turn.
 
+**The preamble trailer points routing at `bee orient` (semantic-token-diet D7).**
+The closing `TRAILER_LINE` reads: `Everything above is already read — do not
+re-fetch it. Run .bee/bin/bee orient when you route work (claim, plan, change
+phase); run .bee/bin/bee status --json only for detail this block does not
+carry.` It drops the sentences `Never hand bee commands to the user.` and
+`Route via bee-hive.` because `LEADER.md` already holds them. The preamble
+also drops the `Proof-per-change-type` line because `agents-proof-at-cap`
+already owns that rule.
+
+**A herding brief renders `# Proof command` only for a cell job (semantic-token-diet D8).**
+`render_brief` in `packages/bee-rs/crates/bee/src/herding/mailbox.rs` emits
+`# Proof command` only when `spec.cell_id` is `Some`. A non-cell job such as a
+reviewer or advisor has no cell verify to prove, so printing the project test
+command added noise to its brief.
+
+**Single-command help prints flags before details (semantic-token-diet D9).**
+For a single command, `render_help_text` in
+`packages/bee-rs/crates/bee/src/verbs/help.rs` prints the invoke line, the first
+sentence of `description`, the `flags:` block, and then any remaining text
+under `details:`. Multi-command help (`--all`) keeps its existing layout. The
+heaviest descriptions in `registry_payload.json` drop decision IDs and history
+narration while keeping every current behavior; `herding control-loop` help
+names all five roles (`dispatch`, `merge`, `route`, `supervisor`, `broker`).
+
 ## Business Rules
 
 - R1 — A byte budget on an injected payload stays below the smallest host
@@ -185,5 +209,16 @@ transcript, nothing is added and the hook never fails or slows the turn.
   `transcript_below_handoff_mark_adds_no_line`,
   `handoff_context_tokens_zero_adds_no_line_at_any_size`,
   `missing_or_unreadable_transcript_adds_no_line_and_exits_zero`.
+- Preamble trailer: `TRAILER_LINE` in
+  `packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs`
+  (semantic-token-diet D7).
+- Cell-only proof command in herding briefs: `render_brief` in
+  `packages/bee-rs/crates/bee/src/herding/mailbox.rs`
+  (semantic-token-diet D8).
+- Flags-before-details single-command help: `render_help_text` in
+  `packages/bee-rs/crates/bee/src/verbs/help.rs` and command descriptions in
+  `packages/bee-rs/crates/bee/src/generated/registry_payload.json`
+  (semantic-token-diet D9).
 - Locked decisions: `docs/history/token-thrift/CONTEXT.md`,
-  `docs/history/lean-context/CONTEXT.md` (D1).
+  `docs/history/lean-context/CONTEXT.md` (D1),
+  `docs/history/semantic-token-diet/CONTEXT.md` (D7–D9).
