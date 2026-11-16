@@ -372,6 +372,27 @@ use std::time::Instant;
     }
 
     #[test]
+    fn native_worker_prompt_points_at_the_execute_reference_not_the_whole_skill() {
+        let native = worker_prompt_render(false, None);
+        assert!(
+            native.contains("- Read skills/bee-swarming/references/execute.md for the full worker contract"),
+            "{native}"
+        );
+        assert!(!native.contains("the bee-swarming skill"), "{native}");
+    }
+
+    #[test]
+    fn the_execute_reference_exists_and_names_every_status_token() {
+        let doc = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../../../skills/bee-swarming/references/execute.md");
+        let body = std::fs::read_to_string(&doc)
+            .unwrap_or_else(|e| panic!("execute.md reads at {}: {e}", doc.display()));
+        for token in ["[DONE]", "[BLOCKED]", "[HANDOFF]", "[PARKED]", "[NOOP]"] {
+            assert!(body.contains(token), "execute.md is missing {token}");
+        }
+    }
+
+    #[test]
     fn one_line_collapses_whitespace_and_ellipsises() {
         assert_eq!(one_line(Some(&json!("  a \n b  ")), 140), "a b");
         assert_eq!(one_line(None, 140), "");
