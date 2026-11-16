@@ -397,18 +397,25 @@ fn manifest_entry(entry: &Map<String, Value>) -> Map<String, Value> {
 /// break, or 160 chars, whichever comes first.
 fn first_sentence(entry: &Map<String, Value>) -> String {
     let desc = entry.get("description").and_then(Value::as_str).unwrap_or("");
+    split_description(desc).0
+}
+
+fn split_description(desc: &str) -> (String, String) {
     let cut = desc
         .find(". ")
         .map(|i| i + 1)
         .or_else(|| desc.find(" — ").or_else(|| desc.find(" - ")))
         .unwrap_or(desc.len());
-    let mut s = desc[..cut.min(desc.len())].trim().to_string();
+    let cut = cut.min(desc.len());
+    let mut s = desc[..cut].trim().to_string();
+    let mut rest = desc[cut..].trim().trim_start_matches(['—', '-']).trim().to_string();
     if s.chars().count() > 160 {
         let end = s.char_indices().nth(157).map(|(i, _)| i).unwrap_or(s.len());
         s.truncate(end);
         s.push('…');
+        rest = desc.trim().to_string();
     }
-    s
+    (s, rest)
 }
 
 fn names_entry(entry: &Map<String, Value>) -> Map<String, Value> {
@@ -617,18 +624,29 @@ fn render_help_text(entries: &[Value], footer_lines: &[String], schema_version: 
     for entry in entries {
         let get = |k: &str| entry.as_object().and_then(|m| m.get(k));
         lines.push(js_display(get("invoke")));
-        lines.push(format!("    {}", js_display(get("description"))));
-        // Single-entry renders print a detail block with descriptions;
-        // multi-entry renders keep the compact flags_line.
+        let description = js_display(get("description"));
+        let mut rest = String::new();
         if is_single {
+            let first;
+            (first, rest) = split_description(&description);
+            lines.push(format!("    {first}"));
             if let Some(detail) = flags_detail_lines(entry) {
                 lines.push("    flags:".to_string());
                 for flag in detail {
                     lines.push(format!("      {flag}"));
                 }
             }
-        } else if let Some(flags) = flags_line(entry) {
-            lines.push(format!("    flags: {flags}"));
+        } else {
+            lines.push(format!("    {description}"));
+            if let Some(flags) = flags_line(entry) {
+                lines.push(format!("    flags: {flags}"));
+            }
+        }
+        if !rest.is_empty() {
+            lines.push("    details:".to_string());
+            for line in rest.lines() {
+                lines.push(if line.is_empty() { String::new() } else { format!("      {line}") });
+            }
         }
         if let Some(surface) = get("surface")
             && js_truthy(surface) {
