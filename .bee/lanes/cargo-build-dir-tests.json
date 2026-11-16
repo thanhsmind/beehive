@@ -11,9 +11,9 @@
     "uat": false
   },
   "summary": "Feature \"cargo-build-dir-tests\" started at phase \"exploring\" (lane).",
-  "next_action": "Continue bee-exploring for \"cargo-build-dir-tests\" (lane).",
+  "next_action": "Merged into main at d3e45b7; capture what settled, then bee close --feature cargo-build-dir-tests.",
   "created_at": "2026-11-16T02:36:42.809Z",
-  "run_state": "awaiting-approval",
+  "run_state": null,
   "waiting_on": null,
   "route": {
     "class": "bugfix",
@@ -473,12 +473,5 @@
         }
       ]
     }
-  },
-  "merge_ready": {
-    "since": "2026-11-16T02:57:32.701Z",
-    "branch": "wt/cargo-build-dir-tests",
-    "worktree_id": "beehive--wt--cargo-build-dir-tests",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
