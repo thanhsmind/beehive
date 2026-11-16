@@ -11,6 +11,7 @@ bee:
   decisions: [0022, c75fed88]
   sources: ["docs/history/evolving-loop/ (cells evolving-1 … evolving-11, capped)", docs/history/evolving-loop/reports/review-slice-a.md, docs/history/evolving-loop/reports/review-slice-b.md, "docs/history/cli-mutations/ (cell cli-mutations-2, capped; walkthrough.md)", "docs/specs/feedback-digest.md#R12", "docs/specs/feedback-digest.md#R13", "docs/specs/feedback-digest.md#R14", "docs/specs/feedback-digest.md#R15", "docs/specs/feedback-digest.md#P3"]
   authoritative_for: "feedback-digest: ranking and self-improvement"
+  anchors: [packages/bee-rs/crates/bee/src/verbs/feedback.rs]
 ---
 
 # Feedback Digest — Ranking and the Self-Improvement Process
@@ -56,6 +57,20 @@ each group is scored and the groups are returned most-pressing-first.
   exactly as above; equal timestamps never count as recurrence. Motivation: a fix that merges is
   not proven — closure holds only while the friction stays absent, and a recurrence must reopen
   as a finding instead of hiding in the retired list.
+
+- **Copies of one backlog finding fold before grouping (fix-at-loop D2, D10).** The close used to file
+  one row per feature for one mistake, so rank counted copies as repeats. Backlog `finding` and
+  `friction` rows with the same type, layer, normalized title and close epoch now read as one entry
+  with the earliest `ts`; the epoch is the number of older `backlog-closed` rows with that title, so a
+  copy filed after a close stays its own entry and the group still reports `recurred`. The store is
+  never rewritten; the fold is a read-time view.
+- **`prose_load` reports how much of the fix-at loop is open (fix-at-loop D6, D8).** It counts
+  `fix_at_check_open`, `fix_at_architecture_open` and `fix_at_closed` by distinct (layer, title), a
+  title being closed when a `backlog-closed` row with the same normalized title is newer than its
+  newest finding. It also carries `preamble_bytes` and `preamble_lines`, the SessionStart preamble
+  rendered for the repository with runtime `claude` inside the hook's budget; a snapshot of the
+  session that ran it, null on a render failure, never a digest failure. Digest entries are not
+  filtered by closure: rank already retires closed groups.
 
 **What blocks it:** nothing new — it consumes only the already-validated collected view (B2) and
 reads nothing itself.
@@ -118,4 +133,4 @@ previous change never counts as approval of the next publication.
 
 - **P3** — The self-improvement process: `docs/handbook/evolving.md`; contract in
   `docs/07-contracts.md`; decision record `docs/decisions/0022-evolving-loop.md`
-- **Fix-at fold and load** — Read when: the digest shows one entry for many filed copies, or `prose_load` reports open and closed counts. Backlog finding and friction rows with the same type, layer, normalized title and close epoch (the count of older `backlog-closed` rows with that title) fold into one entry at read time, earliest `ts` kept, pain not summed; a post-close copy stays its own entry so rank still says `recurred`. `prose_load` counts distinct (layer, title) keys as open or closed and renders the SessionStart preamble size; find them in `verbs/feedback.rs` (`close_epoch`, `fix_at_load`, `preamble_load`). Decisions: `docs/history/fix-at-loop/CONTEXT.md` D2, D6, D8, D10.
+- **Fix-at fold and load** — Read when: the digest shows one entry for many filed copies, or `prose_load` reports open and closed counts. Backlog finding and friction rows with the same type, layer, normalized title and close epoch (the count of older `backlog-closed` rows with that title) fold into one entry at read time, earliest `ts` kept, pain not summed; a post-close copy stays its own entry so rank still says `recurred`. `prose_load` counts distinct (layer, title) keys as open or closed and renders the SessionStart preamble size; find them in `verbs/feedback.rs` (`close_epoch`, `fix_at_load`, `preamble_load`). Decisions: fix-at-loop D2, D6, D8, D10 (`docs/history/fix-at-loop/CONTEXT.md`).
