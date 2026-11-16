@@ -1,0 +1,172 @@
+{
+  "id": "cwc-2",
+  "feature": "clippy-warnings-clean",
+  "title": "Fix the remaining clippy findings and deny warnings",
+  "lane": "small",
+  "role": "code",
+  "deps": [
+    "cwc-1"
+  ],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo clippy --manifest-path packages/bee-rs/Cargo.toml -- -D warnings && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "cargo clippy --manifest-path packages/bee-rs/Cargo.toml -- -D warnings exits 0",
+      "packages/bee-rs/Cargo.toml allows exactly too_many_arguments and result_large_err in [workspace.lints.clippy] and both member crates opt in",
+      "no #[allow(clippy::...)] attribute and no code comment is added",
+      "the clippy entry of commands.test and the ci.yml clippy step end in -- -D warnings",
+      "cargo test --release --lib --bins and the proof_gate tests are green"
+    ]
+  },
+  "decisions": [
+    "cf6ce5e3-b8dc-4973-b61a-094234fd3b21",
+    "e88c22c7-3bac-4130-a385-6709e7267d2e",
+    "4a500653-5751-44cf-9cd9-7186c25a056e"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/**",
+    "packages/bee-rs/crates/fleet/src/**",
+    "packages/bee-rs/Cargo.toml",
+    "packages/bee-rs/crates/bee/Cargo.toml",
+    "packages/bee-rs/crates/fleet/Cargo.toml",
+    ".bee/config.json",
+    ".github/workflows/ci.yml",
+    "packages/bee-rs/crates/bee/tests/proof_gate.rs",
+    "docs/knowledge/areas/verify-pipeline/suite-topology-and-discovery.md",
+    "packages/bee-rs/crates/bee/.bee/logs/timings.jsonl"
+  ],
+  "read_first": [
+    "docs/history/clippy-warnings-clean/CONTEXT.md",
+    "packages/bee-rs/Cargo.toml"
+  ],
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/verify-pipeline/suite-topology-and-discovery.md"
+  ],
+  "action": "Implement CONTEXT.md D1 and D2 on top of cwc-1. (1) packages/bee-rs/Cargo.toml gains [workspace.lints.clippy] too_many_arguments = \"allow\" and result_large_err = \"allow\"; crates/bee/Cargo.toml and crates/fleet/Cargo.toml gain [lints] workspace = true. Nothing else is allowed. (2) Fix every remaining finding of cargo clippy --manifest-path packages/bee-rs/Cargo.toml -- -D warnings in code, behavior unchanged: type_complexity with a type alias; large_enum_variant by boxing the large variant; doc lints by fixing the doc text indentation; dead_code: delete the item only when rg shows no caller in any target (tests included), otherwise make it used where it is meant to be or gate it with cfg(test) if only tests use it; private_interfaces by aligning visibility; the rest as clippy suggests. No #[allow] attribute on any item and no new code comment. (3) .bee/config.json: the clippy entry of commands.test ends in ' -- -D warnings'; .github/workflows/ci.yml clippy step runs cargo clippy --manifest-path packages/bee-rs/Cargo.toml -- -D warnings. Keep proof_gate green (adjust its expectations only if it pins the old clippy text). (4) docs/knowledge/areas/verify-pipeline/suite-topology-and-discovery.md: the commands.test sentence says clippy runs with -D warnings and the two workspace allows, citing clippy-warnings-clean D1/D2 (never raw ids). Run bee knowledge check. Commit once (cell trailer). Proof: the verify command; quote the counts. REWORK (tester cwc-3 findings on 0e8bdee36, report docs/history/clippy-warnings-clean/reports/cwc-3.md): keep everything else. (a) fix the garbled doc line near packages/bee-rs/crates/bee/src/verbs/workflows.rs:493 that reads refusal);/// back to its pre-cwc-1 text (git show d3ee458f1 for the original); (b) undo the stray /// > blockquote continuation cwc-1 introduced in verbs/status_full/orient.rs docs so the text reads as before; (c) packages/bee-rs/crates/bee/src/onboard/agents.rs:184 doc still names the deleted render_agent_template: remove that stale reference; (d) delete the 21 pre-existing #[allow(clippy::too_many_arguments)] attributes, now redundant with the workspace allow (D2: one home); (e) revert the line cwc-2 appended to packages/bee-rs/crates/bee/.bee/logs/timings.jsonl (git checkout d3ee458f1 -- that file) and never commit it. Run the verify; commit once with the cell trailer.",
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "cwc-2-worker",
+    "outcome": "Applied tester rework (doc fixes, 21 redundant allows removed, timings reverted); clippy -D warnings exit 0, all test targets ok, lib/bin 5229 passed 0 failed; commit 3338a4f803a24031712a3e889e726b473db34d9a",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/state_group/workflows.rs",
+      "packages/bee-rs/crates/bee/src/verbs/status_full/orient.rs",
+      "packages/bee-rs/crates/bee/src/onboard/agents.rs",
+      "packages/bee-rs/crates/bee/.bee/logs/timings.jsonl",
+      "packages/bee-rs/crates/bee/src/**"
+    ],
+    "deviations": [
+      "sync-ack: Doc and attribute rework after tester findings; owning concept already synced"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-16T01:09:50.594Z",
+    "behavior_change": false,
+    "verification_evidence": "cargo clippy --manifest-path packages/bee-rs/Cargo.toml -- -D warnings && cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml — green:unit — clippy exit 0; every test target ok, lib/bin 5229 passed 0 failed 26 ignored",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "542c65ba-d0f1-433f-bdc0-b1f702334e00",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo clippy --manifest-path packages/bee-rs/Cargo.toml -- -D warnings && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml",
+    "claimed_at": "2026-11-16T01:05:22.616Z",
+    "knowledge_delta": [],
+    "sync_ack": "Doc and attribute rework after tester findings; owning concept already synced",
+    "no_mistakes": true,
+    "no_principles_used": true,
+    "report": {
+      "outcome": "Applied tester rework (doc fixes, 21 redundant allows removed, timings reverted); clippy -D warnings exit 0, all test targets ok, lib/bin 5229 passed 0 failed; commit 3338a4f803a24031712a3e889e726b473db34d9a",
+      "commit": "3338a4f803a24031712a3e889e726b473db34d9a",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/state_group/workflows.rs",
+        "packages/bee-rs/crates/bee/src/verbs/status_full/orient.rs",
+        "packages/bee-rs/crates/bee/src/onboard/agents.rs",
+        "packages/bee-rs/crates/bee/.bee/logs/timings.jsonl",
+        "packages/bee-rs/crates/bee/src/**"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo clippy --manifest-path packages/bee-rs/Cargo.toml -- -D warnings && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml — green:unit — cargo clippy --manifest-path packages/bee-rs/Cargo.toml -- -D warnings && cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml — green:unit — clippy exit 0; every test target ok, lib/bin 5229 passed 0 failed 26 ignored",
+      "deviations": [],
+      "patch_id": "77385fc5ea3d45c6f4a707bb5d0d2c20af6447ef"
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "gap",
+        "answers": [
+          {
+            "requirement": "cargo clippy --manifest-path packages/bee-rs/Cargo.toml -- -D warnings exits 0",
+            "artifact": "packages/bee-rs/Cargo.toml"
+          },
+          {
+            "requirement": "packages/bee-rs/Cargo.toml allows exactly too_many_arguments and result_large_err in [workspace.lints.clippy] and both member crates opt in",
+            "artifact": "packages/bee-rs/Cargo.toml"
+          },
+          {
+            "requirement": "no #[allow(clippy::...)] attribute and no code comment is added",
+            "artifact": "packages/bee-rs/Cargo.toml"
+          },
+          {
+            "requirement": "the clippy entry of commands.test and the ci.yml clippy step end in -- -D warnings",
+            "artifact": ".bee/config.json"
+          },
+          {
+            "requirement": "cargo test --release --lib --bins and the proof_gate tests are green",
+            "artifact": "packages/bee-rs/crates/bee/tests/proof_gate.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/Cargo.toml",
+            "artifact": "packages/bee-rs/Cargo.toml"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/Cargo.toml",
+            "artifact": "packages/bee-rs/crates/bee/Cargo.toml"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/fleet/Cargo.toml",
+            "artifact": "packages/bee-rs/crates/fleet/Cargo.toml"
+          },
+          {
+            "requirement": ".bee/config.json",
+            "artifact": ".bee/config.json"
+          },
+          {
+            "requirement": ".github/workflows/ci.yml",
+            "artifact": ".github/workflows/ci.yml"
+          },
+          {
+            "requirement": "docs/knowledge/areas/verify-pipeline/suite-topology-and-discovery.md",
+            "artifact": "docs/knowledge/areas/verify-pipeline/suite-topology-and-discovery.md"
+          }
+        ],
+        "recorded_at": "2026-11-16T01:05:11.521Z",
+        "recorded_by": "542c65ba-d0f1-433f-bdc0-b1f702334e00"
+      }
+    ],
+    "verified_at": null,
+    "baseline": null,
+    "reaction": null,
+    "skipped": null,
+    "unknowns": null,
+    "found": null,
+    "stopped": null,
+    "blocked_reason": null,
+    "dropped_reason": null,
+    "reopened_at": "2026-11-16T01:05:11.521Z",
+    "reopened_reason": "cargo clippy --manifest-path packages/bee-rs/Cargo.toml -- -D warnings exits 0: packages/bee-rs/Cargo.toml; packages/bee-rs/Cargo.toml allows exactly too_many_arguments and result_large_err in [workspace.lints.clippy] and both member crates opt in: packages/bee-rs/Cargo.toml; no #[allow(clippy::...)] attribute and no code comment is added: packages/bee-rs/Cargo.toml; the clippy entry of commands.test and the ci.yml clippy step end in -- -D warnings: .bee/config.json; cargo test --release --lib --bins and the proof_gate tests are green: packages/bee-rs/crates/bee/tests/proof_gate.rs; packages/bee-rs/Cargo.toml; packages/bee-rs/crates/bee/Cargo.toml; packages/bee-rs/crates/fleet/Cargo.toml; .bee/config.json; .github/workflows/ci.yml; docs/knowledge/areas/verify-pipeline/suite-topology-and-discovery.md"
+  },
+  "full_suite_reason": "crate-wide lint sweep over 174 files: every target is a related test; --lib --bins leaves CARGO_BIN_EXE_bee unset and reds 24 assert_cmd tests",
+  "usage": {
+    "new": 184866,
+    "cached": 4682831,
+    "total": 4867697,
+    "models": {
+      "claude-sonnet-5-5": {
+        "new": 184866,
+        "cached": 4682831,
+        "total": 4867697
+      }
+    },
+    "jobs": [
+      "job-1794790226943-2285706-1",
+      "job-1794791128908-2448696-1"
+    ]
+  }
+}

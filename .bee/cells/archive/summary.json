@@ -2328,5 +2328,10 @@
     "capped": 2,
     "dropped": 0,
     "archived_at": "2026-11-15T23:41:58.964Z"
+  },
+  "clippy-warnings-clean": {
+    "capped": 3,
+    "dropped": 0,
+    "archived_at": "2026-11-16T01:15:25.457Z"
   }
 }

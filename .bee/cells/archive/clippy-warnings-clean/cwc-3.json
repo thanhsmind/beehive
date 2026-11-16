@@ -1,0 +1,113 @@
+{
+  "id": "cwc-3",
+  "feature": "clippy-warnings-clean",
+  "title": "Verify bee-rs is clippy-clean with behavior unchanged",
+  "lane": "small",
+  "role": "test",
+  "deps": [
+    "cwc-1",
+    "cwc-2"
+  ],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo clippy --manifest-path packages/bee-rs/Cargo.toml -- -D warnings && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "clippy -D warnings exits 0 on the default targets",
+      "the lib and bin test count is not lower than the base 5229 bin tests",
+      "the only workspace clippy allows are too_many_arguments and result_large_err and no item-level clippy allow was added",
+      "no code comment was added by cwc-1 or cwc-2",
+      "every deleted dead_code item has no caller in any target",
+      "the report under docs/history/clippy-warnings-clean/reports/ lists each check with its result"
+    ]
+  },
+  "decisions": [
+    "4a500653-5751-44cf-9cd9-7186c25a056e",
+    "cf6ce5e3-b8dc-4973-b61a-094234fd3b21",
+    "e88c22c7-3bac-4130-a385-6709e7267d2e"
+  ],
+  "files": [
+    "docs/history/clippy-warnings-clean/reports/cwc-3.md"
+  ],
+  "read_first": [
+    "docs/history/clippy-warnings-clean/CONTEXT.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Check contract clippy-warnings-clean (decision 4a500653) on the cwc-1 and cwc-2 commits. Run the verify command. Diff the two commits against the feature base: rg the added lines for '#[allow(clippy' and for new comment lines (// or ///, not removals); list every deleted fn, struct, const or enum and rg the whole crate, tests included, for each name; read the non-mechanical hunks of cwc-2 for any behavior change (changed condition, changed output text, changed order). Compare the bin test count with the base 5229. Write docs/history/clippy-warnings-clean/reports/cwc-3.md with each check, the command and the result. Edit no source file. If a check fails, return BLOCKED with the evidence. Commit the report once (cell trailer).",
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "cwc-3-worker",
+    "outcome": "Contract clippy-warnings-clean re-checked at head 3338a4f80: clippy -D warnings exit 0, bin 5229 passed 0 failed (5827 total), no allow or comment added, item allows 21->0, deleted items have no callers, no behavior change, all round-1 findings resolved; report committed 14abe2a28cd96e310f9e230cf0b92d4ef231552b",
+    "files_changed": [
+      "docs/history/clippy-warnings-clean/reports/cwc-3.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-11-16T01:15:05.689Z",
+    "behavior_change": false,
+    "verification_evidence": "crate-wide lint sweep, full suite (CLIPPY_EXIT=0, TEST_EXIT=0, bin 5229 passed, 49 targets 0 failed)",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "542c65ba-d0f1-433f-bdc0-b1f702334e00",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo clippy --manifest-path packages/bee-rs/Cargo.toml -- -D warnings && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml",
+    "claimed_at": "2026-11-16T01:12:56.683Z",
+    "knowledge_delta": [],
+    "no_mistakes": true,
+    "no_knowledge_used": true,
+    "principles_used": [
+      {
+        "slug": "bee-principle-prove-it-works",
+        "changed": "counts quoted from a fresh full-suite run at 3338a4f80, not from the round-1 report or cwc-2's self-report"
+      },
+      {
+        "slug": "bee-principle-verify-before-reporting",
+        "changed": "the two extra comment tokens were traced to the rework's doc fixes and recorded as non-violations"
+      }
+    ],
+    "report": {
+      "outcome": "Contract clippy-warnings-clean re-checked at head 3338a4f80: clippy -D warnings exit 0, bin 5229 passed 0 failed (5827 total), no allow or comment added, item allows 21->0, deleted items have no callers, no behavior change, all round-1 findings resolved; report committed 14abe2a28cd96e310f9e230cf0b92d4ef231552b",
+      "commit": "14abe2a28cd96e310f9e230cf0b92d4ef231552b",
+      "files": [
+        "docs/history/clippy-warnings-clean/reports/cwc-3.md"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo clippy --manifest-path packages/bee-rs/Cargo.toml -- -D warnings && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml — green:unit — crate-wide lint sweep, full suite (CLIPPY_EXIT=0, TEST_EXIT=0, bin 5229 passed, 49 targets 0 failed)",
+      "deviations": [],
+      "knowledge_used": [],
+      "principles_used": [
+        "bee-principle-prove-it-works — counts quoted from a fresh full-suite run at 3338a4f80, not from the round-1 report or cwc-2's self-report",
+        "bee-principle-verify-before-reporting — the two extra comment tokens were traced to the rework's doc fixes and recorded as non-violations"
+      ],
+      "patch_id": "3081dc5071e5a0f0ffae5ca972240d53eec4ae4b"
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "verified_at": null,
+    "baseline": null,
+    "reaction": null,
+    "skipped": null,
+    "unknowns": null,
+    "found": null,
+    "stopped": null,
+    "blocked_reason": null,
+    "dropped_reason": null,
+    "reopened_at": "2026-11-16T01:12:56.033Z",
+    "reopened_reason": "Declare cwc-1 as a dependency (the merge door needs a tester on it) and re-verify the contract at head 3338a4f80, which includes the cwc-2 rework the first check did not see"
+  },
+  "full_suite_reason": "crate-wide lint sweep over 174 files: every target is a related test; --lib --bins leaves CARGO_BIN_EXE_bee unset and reds 24 assert_cmd tests",
+  "usage": {
+    "new": 180274,
+    "cached": 2686051,
+    "total": 2866325,
+    "models": {
+      "claude-opus-5-5": {
+        "new": 180274,
+        "cached": 2686051,
+        "total": 2866325
+      }
+    },
+    "jobs": [
+      "job-1794790892611-2395278-1",
+      "job-1794791582209-2581738-1"
+    ]
+  }
+}
