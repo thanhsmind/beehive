@@ -2791,6 +2791,131 @@ mod tests {
         );
     }
 
+    fn fix_at_open_backlog(root: &Path, rows: &[&str]) {
+        std::fs::create_dir_all(root.join(".bee")).unwrap();
+        let mut text = rows.join("\n");
+        text.push('\n');
+        std::fs::write(root.join(".bee").join("backlog.jsonl"), text).unwrap();
+    }
+
+    fn fix_at_open_entries<'a>(digest: &'a Value, kind: &str, title: &str) -> Vec<&'a Value> {
+        digest["entries"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|e| e["kind"] == kind && e["title"] == title)
+            .collect()
+    }
+
+    const FIX_AT_OPEN_FINDING: &str = r#"{"ts":"2026-01-01T00:00:00Z","type":"finding","feature":"f1","layer":"fix-at:check","title":"strip prefix on absolute paths","severity":"P2"}"#;
+
+    #[test]
+    fn fix_at_open_three_identical_check_rows_fold_to_one_entry_and_one_open() {
+        let tmp = tempfile::tempdir().unwrap();
+        let second = FIX_AT_OPEN_FINDING
+            .replace("2026-01-01T00:00:00Z", "2026-01-02T00:00:00Z")
+            .replace("\"f1\"", "\"f2\"");
+        let third = FIX_AT_OPEN_FINDING
+            .replace("2026-01-01T00:00:00Z", "2025-12-31T00:00:00Z")
+            .replace("\"f1\"", "\"f3\"");
+        fix_at_open_backlog(tmp.path(), &[FIX_AT_OPEN_FINDING, &second, &third]);
+        let digest = build_digest(tmp.path()).unwrap();
+        let found = fix_at_open_entries(&digest, "finding", "strip prefix on absolute paths");
+        assert_eq!(found.len(), 1, "{digest}");
+        assert_eq!(found[0]["first_seen"], json!("2025-12-31T00:00:00Z"));
+        let p = &digest["prose_load"];
+        assert_eq!(p["fix_at_check_rows"], json!(3));
+        assert_eq!(p["fix_at_check_open"], json!(1));
+        assert_eq!(p["fix_at_architecture_open"], json!(0));
+        assert_eq!(p["fix_at_closed"], json!(0));
+        let (ranked, _) = rank_clusters(cluster_entries(&digest));
+        assert_eq!(ranked.len(), 1);
+        assert_eq!(ranked[0]["frequency"], 1.0);
+    }
+
+    #[test]
+    fn fix_at_open_a_newer_close_moves_the_title_to_closed_and_rank_retires_it() {
+        let tmp = tempfile::tempdir().unwrap();
+        let close = r#"{"ts":"2026-02-01T00:00:00Z","type":"backlog-closed","layer":"fix-at:check","title":"Strip  Prefix on absolute paths","severity":"P3","detail":"guard: clippy.toml"}"#;
+        fix_at_open_backlog(tmp.path(), &[FIX_AT_OPEN_FINDING, FIX_AT_OPEN_FINDING, close]);
+        let digest = build_digest(tmp.path()).unwrap();
+        let p = &digest["prose_load"];
+        assert_eq!(p["fix_at_check_open"], json!(0));
+        assert_eq!(p["fix_at_closed"], json!(1));
+        assert_eq!(fix_at_open_entries(&digest, "finding", "strip prefix on absolute paths").len(), 1);
+        let (ranked, retired) = rank_clusters(cluster_entries(&digest));
+        assert!(ranked.is_empty(), "{ranked:?}");
+        assert_eq!(retired.len(), 1);
+        assert_eq!(retired[0]["count"], json!(2));
+    }
+
+    #[test]
+    fn fix_at_open_a_finding_newer_than_the_close_reopens_and_rank_reports_recurred() {
+        let tmp = tempfile::tempdir().unwrap();
+        let close = r#"{"ts":"2026-02-01T00:00:00Z","type":"backlog-closed","layer":"fix-at:check","title":"strip prefix on absolute paths","severity":"P3","detail":"guard: clippy.toml"}"#;
+        let after = FIX_AT_OPEN_FINDING.replace("2026-01-01T00:00:00Z", "2026-03-01T00:00:00Z");
+        fix_at_open_backlog(tmp.path(), &[FIX_AT_OPEN_FINDING, FIX_AT_OPEN_FINDING, close, &after]);
+        let digest = build_digest(tmp.path()).unwrap();
+        let p = &digest["prose_load"];
+        assert_eq!(p["fix_at_check_open"], json!(1));
+        assert_eq!(p["fix_at_closed"], json!(0));
+        let found = fix_at_open_entries(&digest, "finding", "strip prefix on absolute paths");
+        assert_eq!(found.len(), 2, "{digest}");
+        let mut seen: Vec<&str> = found.iter().map(|e| e["first_seen"].as_str().unwrap()).collect();
+        seen.sort_unstable();
+        assert_eq!(seen, ["2026-01-01T00:00:00Z", "2026-03-01T00:00:00Z"]);
+        let (ranked, retired) = rank_clusters(cluster_entries(&digest));
+        assert!(retired.is_empty());
+        assert_eq!(ranked.len(), 1);
+        assert_eq!(ranked[0]["recurred"], json!(true));
+        assert_eq!(ranked[0]["closed_at"], json!("2026-02-01T00:00:00Z"));
+        assert_eq!(ranked[0]["recurred_count"], json!(1));
+    }
+
+    #[test]
+    fn fix_at_open_a_friction_row_and_a_pbi_row_are_never_folded_into_the_finding() {
+        let tmp = tempfile::tempdir().unwrap();
+        let friction = FIX_AT_OPEN_FINDING.replace("\"finding\"", "\"friction\"");
+        let pbi = r#"{"ts":"2026-01-01T00:00:00Z","kind":"pbi","type":"finding","layer":"fix-at:check","title":"strip prefix on absolute paths"}"#;
+        let proposal = r#"{"ts":"2026-01-01T00:00:00Z","type":"proposal","layer":"fix-at:check","title":"strip prefix on absolute paths"}"#;
+        fix_at_open_backlog(
+            tmp.path(),
+            &[FIX_AT_OPEN_FINDING, &friction, pbi, proposal, proposal],
+        );
+        let digest = build_digest(tmp.path()).unwrap();
+        let title = "strip prefix on absolute paths";
+        assert_eq!(fix_at_open_entries(&digest, "finding", title).len(), 1);
+        assert_eq!(fix_at_open_entries(&digest, "friction", title).len(), 1);
+        assert_eq!(fix_at_open_entries(&digest, "proposal", title).len(), 2);
+        assert_eq!(digest["entries"].as_array().unwrap().len(), 4, "{digest}");
+    }
+
+    #[test]
+    fn prose_load_preamble_of_a_fixture_bee_root_is_within_the_budget() {
+        let tmp = tempfile::tempdir().unwrap();
+        prose_load_fixture(tmp.path());
+        let digest = build_digest(tmp.path()).unwrap();
+        let p = &digest["prose_load"];
+        let bytes = p["preamble_bytes"].as_u64().unwrap();
+        let lines = p["preamble_lines"].as_u64().unwrap();
+        assert!(bytes > 0, "{p}");
+        assert!(bytes <= 9500, "{p}");
+        assert!(bytes as usize <= crate::hooks::session_preamble::PREAMBLE_BUDGET_BYTES, "{p}");
+        assert!(lines > 0, "{p}");
+        assert!(digest_summary_line(&digest).contains(&format!("{lines} lines")));
+    }
+
+    #[test]
+    fn prose_load_preamble_of_an_empty_directory_is_null_and_the_digest_succeeds() {
+        let tmp = tempfile::tempdir().unwrap();
+        let digest = build_digest(tmp.path()).unwrap();
+        let p = digest["prose_load"].as_object().unwrap();
+        assert_eq!(p.get("preamble_bytes"), Some(&json!(null)));
+        assert_eq!(p.get("preamble_lines"), Some(&json!(null)));
+        assert!(!digest_summary_line(&digest).contains("preamble"));
+        assert!(digest["entries"].is_array());
+    }
+
     #[test]
     fn a_repo_with_no_mistakes_answer_yet_states_that_instead_of_a_ratio() {
         let tmp = tempfile::tempdir().unwrap();
