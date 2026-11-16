@@ -54,3 +54,5 @@
 {"ts":"2026-11-14T17:57:07.214Z","cmd":"dispatch authorize","ms":12,"ok":false,"feature":null}
 {"ts":"2026-11-15T15:15:06.154Z","cmd":"dispatch authorize","ms":13,"ok":false,"feature":null}
 {"ts":"2026-11-15T15:16:17.198Z","cmd":"dispatch authorize","ms":17,"ok":false,"feature":null}
+{"ts":"2026-11-16T17:28:51.563Z","cmd":"dispatch authorize","ms":3,"ok":false,"feature":null}
+{"ts":"2026-11-16T17:30:00.988Z","cmd":"dispatch authorize","ms":13,"ok":false,"feature":null}

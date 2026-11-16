@@ -201,9 +201,9 @@ fn acquire_workspace_lock(root: &Path, id: &str) -> W<lock::LockGuard> {
 /// emits forward or backslashes per platform (path.relative is native), which
 /// is what `strip_prefix` + the platform separator reproduces.
 fn path_relative(root: &Path, file: &Path) -> String {
-    match file.strip_prefix(root) {
-        Ok(rel) => rel.to_string_lossy().into_owned(),
-        Err(_) => file.to_string_lossy().into_owned(),
+    match crate::path_identity::strip_root_lexical(file, root) {
+        Some(rel) => rel.to_string_lossy().into_owned(),
+        None => file.to_string_lossy().into_owned(),
     }
 }
 

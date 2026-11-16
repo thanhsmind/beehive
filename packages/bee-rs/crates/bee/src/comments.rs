@@ -168,8 +168,7 @@ pub(crate) fn walk_code_files(root: &Path) -> Vec<(String, Lang)> {
     }
     let mut out: Vec<(String, Lang)> = Vec::new();
     for path in paths {
-        let rel = path
-            .strip_prefix(root)
+        let rel = crate::path_identity::strip_root_lexical(&path, root)
             .unwrap_or(&path)
             .to_string_lossy()
             .replace('\\', "/");

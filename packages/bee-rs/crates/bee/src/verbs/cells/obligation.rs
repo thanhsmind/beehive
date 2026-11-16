@@ -420,8 +420,7 @@ mod tests {
             }
             let name = entry.file_name().to_string_lossy().to_lowercase();
             if name.contains("guard") {
-                let rel = path
-                    .strip_prefix(repo_root)
+                let rel = crate::path_identity::strip_root_lexical(&path, repo_root)
                     .expect("walked path must be under repo_root")
                     .to_string_lossy()
                     .replace('\\', "/");

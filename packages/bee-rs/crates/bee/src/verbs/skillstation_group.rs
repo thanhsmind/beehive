@@ -332,7 +332,7 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
         }
         Cmd::Alias { id, force } => match alias_one(&ctx.root, &run, &id, force) {
             Ok(file) => {
-                let rel = file.strip_prefix(&ctx.root).unwrap_or(&file).display().to_string();
+                let rel = crate::path_identity::strip_root_lexical(&file, &ctx.root).unwrap_or(&file).display().to_string();
                 let result = json!({ "id": id, "alias": rel });
                 let text = format!("Wrote {rel}. Use /{id}; the agent loads the skill with skillstation skill show, skill_get as the fallback.");
                 ctx.emit(&result, &text, 0)

@@ -1,0 +1,3 @@
+disallowed-methods = [
+    { path = "std::path::Path::strip_prefix", reason = "use path_identity::strip_root_lexical when both paths come from one source or are relative; use path_identity::relative_to when both are absolute paths read from different sources (it also matches through symlinks and Windows 8.3 short names)" },
+]

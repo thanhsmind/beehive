@@ -248,7 +248,7 @@ mod tests {
                 if path.is_dir() {
                     stack.push(path);
                 } else {
-                    out.push(path.strip_prefix(root).unwrap().to_string_lossy().into_owned());
+                    out.push(crate::path_identity::strip_root_lexical(&path, root).unwrap().to_string_lossy().into_owned());
                 }
             }
         }

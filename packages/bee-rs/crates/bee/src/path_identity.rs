@@ -215,6 +215,20 @@ pub fn canonical_paths_equal(a: &Path, b: &Path) -> bool {
     }
 }
 
+#[allow(clippy::disallowed_methods)]
+pub fn strip_root_lexical<'a>(path: &'a Path, root: &Path) -> Option<&'a Path> {
+    path.strip_prefix(root).ok()
+}
+
+pub fn relative_to(path: &Path, root: &Path) -> Option<PathBuf> {
+    if let Some(rest) = strip_root_lexical(path, root) {
+        return Some(rest.to_path_buf());
+    }
+    let canonical_path = dunce::canonicalize(path).ok()?;
+    let canonical_root = dunce::canonicalize(root).ok()?;
+    strip_root_lexical(&canonical_path, &canonical_root).map(Path::to_path_buf)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -558,7 +558,7 @@ pub(crate) fn collect_files_recursive(dir: &Path, root: &Path, out: &mut Vec<(St
             if path.is_dir() {
                 collect_files_recursive(&path, root, out);
             } else if path.is_file()
-                && let Ok(rel) = path.strip_prefix(root) {
+                && let Some(rel) = crate::path_identity::strip_root_lexical(&path, root) {
                     let rel_str = rel.to_string_lossy().replace('\\', "/");
                     if !is_exempt_tree(&rel_str) {
                         out.push((rel_str, path));

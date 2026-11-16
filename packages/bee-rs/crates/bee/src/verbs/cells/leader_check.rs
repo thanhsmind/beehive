@@ -237,14 +237,9 @@ pub(crate) fn record_leader_check(
 
             let feature = cell_map.get("feature").and_then(Value::as_str);
             let history_root = commit_trailer_history_root(root, feature);
-            let canonical_history_root = std::fs::canonicalize(&history_root).ok();
             let relative_artifact = |artifact: &str| -> String {
                 let path = Path::new(artifact);
-                let stripped = path.strip_prefix(&history_root).ok().map(Path::to_path_buf).or_else(|| {
-                    let canonical_root = canonical_history_root.as_ref()?;
-                    let canonical = std::fs::canonicalize(path).ok()?;
-                    canonical.strip_prefix(canonical_root).ok().map(Path::to_path_buf)
-                });
+                let stripped = crate::path_identity::relative_to(path, &history_root);
                 stripped
                     .as_deref()
                     .and_then(Path::to_str)

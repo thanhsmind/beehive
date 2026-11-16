@@ -2316,7 +2316,7 @@ pub(crate) fn stored_cell_files(root: &Path) -> Vec<PathBuf> {
 /// A path rendered relative to the store root when it sits under one, so a
 /// report names `.bee/cells/x.json` rather than a machine-specific absolute.
 fn store_relative(root: &Path, file: &Path) -> String {
-    file.strip_prefix(root).unwrap_or(file).to_string_lossy().replace('\\', "/")
+    crate::path_identity::strip_root_lexical(file, root).unwrap_or(file).to_string_lossy().replace('\\', "/")
 }
 
 /// The three keys D9's migration owns, derived from ONE record: `role`
