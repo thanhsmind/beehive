@@ -1,0 +1,129 @@
+{
+  "id": "fal-4",
+  "feature": "fix-at-loop",
+  "title": "Say how a landed guard closes its row",
+  "lane": "standard",
+  "role": "code",
+  "status": "capped",
+  "deps": [
+    "fal-3t"
+  ],
+  "decisions": [
+    "fb1807c1-5a39-44e1-ad3e-f2d902ca8339",
+    "3bc9f528-d5d9-4c23-9d07-085ef094cf45"
+  ],
+  "files": [
+    "expertise/static-rules.md",
+    "skills/bee-capturing/references/promotion.md",
+    ".bee/backlog.jsonl",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/fix-at-loop/CONTEXT.md",
+    "expertise/static-rules.md",
+    "skills/bee-capturing/references/promotion.md",
+    "docs/knowledge/areas/feedback-digest/ranking-and-self-improvement.md"
+  ],
+  "affects_skills": [
+    "skills/bee-capturing/SKILL.md"
+  ],
+  "affects_specs": [],
+  "action": "Implement D7 with D8's verb shape. In expertise/static-rules.md, section `## Show it red, then green`, add a closing step: after the rule is green, close the fix-at row it guards with bee backlog add --type backlog-closed --title \"<exact finding title>\" --layer <same fix-at layer> --severity P3 --detail \"guard: <rule> (<commit>)\"; say that a newer finding with the same title reopens it in bee feedback rank. In skills/bee-capturing/references/promotion.md step 2 (`2. Mechanizable?`), add one line pointing to that step. Short sentences, active voice, no new section. Then run bee dev regen so the vendored copies match, and include its outputs in the commit. Last, use the documented command once for real: close the strip_prefix finding (its exact title starts with `lcwr-1 compared absolute paths with a plain strip_prefix`; read it with .bee/bin/bee backlog findings --feature leader-check-windows-paths) with layer fix-at:check and detail `guard: packages/bee-rs/clippy.toml disallowed-methods std::path::Path::strip_prefix (<fal-3 commit>)`, then quote the line of .bee/bin/bee feedback rank that lists it as retired. The knowledge concepts are fal-5's.",
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pointer_integrity --test instruction_laws && .bee/bin/bee dev release-manifest --check",
+  "must_haves": {
+    "truths": [
+      "static-rules.md tells the agent to file the backlog-closed row after the rule goes green",
+      "promotion.md step 2 points to it",
+      "vendored copies match after regen",
+      "the strip_prefix finding shows as retired in bee feedback rank"
+    ],
+    "artifacts": [
+      {
+        "path": "expertise/static-rules.md",
+        "substantive": "the closing step"
+      }
+    ],
+    "key_links": [
+      "promotion.md step 2 names static-rules.md"
+    ],
+    "prohibitions": [
+      "No new verb named",
+      "No edit to LEADER.md",
+      "Append to .bee/backlog.jsonl only through bee backlog add, one row"
+    ]
+  },
+  "trace": {
+    "worker": "w-fal-4",
+    "outcome": "Added closing step to static-rules.md, pointer in promotion.md, regen, closed strip_prefix row in store (uncommitted there); rank retired count 14 to 15; commit 5857cf59b96a1cfc3b12465fe663eb8bb521a452",
+    "files_changed": [
+      "expertise/static-rules.md",
+      "skills/bee-capturing/references/promotion.md",
+      "docs/history/codex-harness-hardening/release-manifest.json",
+      ".bee/backlog.jsonl (store checkout, uncommitted)"
+    ],
+    "deviations": [
+      "the backlog-closed row went to the control-plane store in main, because bee backlog add writes the shared store",
+      "sync-ack: planned affects_skills named SKILL.md; the edit landed in its references/promotion.md as the action asked"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-16T17:41:16.614Z",
+    "behavior_change": false,
+    "verification_evidence": "cargo clippy -D warnings && cargo test --release --no-fail-fast (49 suites, 5938 passed, 0 failed) && bee dev release-manifest --check — green:unit — docs change plus regen; whole crate suite run",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "952acdd9-7d16-4096-9905-7ed19a98f186",
+    "verify_command": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pointer_integrity --test instruction_laws && .bee/bin/bee dev release-manifest --check",
+    "claimed_at": "2026-11-16T17:36:11.099Z",
+    "verified_at": null,
+    "baseline": null,
+    "reaction": null,
+    "skipped": null,
+    "unknowns": null,
+    "found": null,
+    "stopped": null,
+    "knowledge_delta": [],
+    "sync_ack": "planned affects_skills named SKILL.md; the edit landed in its references/promotion.md as the action asked",
+    "no_mistakes": true,
+    "no_principles_used": true,
+    "report": {
+      "outcome": "Added closing step to static-rules.md, pointer in promotion.md, regen, closed strip_prefix row in store (uncommitted there); rank retired count 14 to 15; commit 5857cf59b96a1cfc3b12465fe663eb8bb521a452",
+      "commit": "5857cf59b96a1cfc3b12465fe663eb8bb521a452",
+      "files": [
+        "expertise/static-rules.md",
+        "skills/bee-capturing/references/promotion.md",
+        "docs/history/codex-harness-hardening/release-manifest.json",
+        ".bee/backlog.jsonl (store checkout, uncommitted)"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pointer_integrity --test instruction_laws && .bee/bin/bee dev release-manifest --check — green:unit — cargo clippy -D warnings && cargo test --release --no-fail-fast (49 suites, 5938 passed, 0 failed) && bee dev release-manifest --check — green:unit — docs change plus regen; whole crate suite run",
+      "deviations": [],
+      "patch_id": "b097469217c83be8d299b2303f43e8179eec5b82"
+    },
+    "warnings": [],
+    "tests": "boundary"
+  },
+  "tester_rule": true,
+  "role_reroutes": [
+    {
+      "from": "docs",
+      "to": "code",
+      "decision": "087519ac-1af0-4cb1-a762-61ad01f1e029",
+      "at": "2026-11-16T17:36:07.443Z",
+      "plan_sha256": "f6b2f59f3b793cc08ecc6475908669fbf7b81a1b64bfae56a7765c481b54a33e"
+    }
+  ],
+  "usage": {
+    "new": 38416,
+    "cached": 596149,
+    "total": 634565,
+    "models": {
+      "claude-sonnet-5-5": {
+        "new": 38416,
+        "cached": 596149,
+        "total": 634565
+      }
+    },
+    "jobs": [
+      "job-1794850575103-2624722-1"
+    ]
+  }
+}

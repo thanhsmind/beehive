@@ -1,0 +1,57 @@
+{
+  "id": "fal-4c",
+  "feature": "fix-at-loop",
+  "title": "Check the doctrine edit",
+  "lane": "standard",
+  "role": "review",
+  "status": "dropped",
+  "deps": [
+    "fal-4"
+  ],
+  "decisions": [
+    "fb1807c1-5a39-44e1-ad3e-f2d902ca8339"
+  ],
+  "files": [
+    "expertise/static-rules.md",
+    "skills/bee-capturing/references/promotion.md"
+  ],
+  "read_first": [
+    "docs/history/fix-at-loop/CONTEXT.md",
+    "expertise/static-rules.md",
+    "skills/bee-capturing/references/promotion.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Read-only check of fal-4: the bee backlog add line in static-rules.md uses only flags bee backlog add --help lists; the type backlog-closed is accepted (run bee backlog add --help and read the KIND_ALIASES note, never append a row); the vendored copies equal their sources; pointer_integrity, instruction_laws and rule_index_parity pass. Report PASS or the exact mismatch.",
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pointer_integrity --test instruction_laws --test rule_index_parity",
+  "must_haves": {
+    "truths": [
+      "the parity and pointer tests pass",
+      "the documented command uses real flags"
+    ],
+    "artifacts": [],
+    "key_links": [],
+    "prohibitions": [
+      "Never edit a file",
+      "Never append to .bee/backlog.jsonl"
+    ]
+  },
+  "trace": {
+    "worker": "w-fal-4c",
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "952acdd9-7d16-4096-9905-7ed19a98f186",
+    "verify_command": null,
+    "claimed_at": "2026-11-16T17:41:16.824Z",
+    "dropped_reason": "read-only check ran and PASSED (report .bee/mailbox/job-1794850881104-2736641-1/report-1.md: flags real, vendored copies identical, pointer_integrity+instruction_laws+rule_index_parity 24 passed); a standard cap refuses empty files_changed, so a check that edits nothing ends as drop"
+  },
+  "regen_obligation_ack": "read-only check cell; fal-4 runs the regen chain and the manifest check",
+  "tester_rule": true
+}

@@ -1,0 +1,190 @@
+{
+  "id": "fal-2",
+  "feature": "fix-at-loop",
+  "title": "Fold copies and report open, closed and preamble load",
+  "lane": "standard",
+  "role": "code",
+  "status": "capped",
+  "deps": [
+    "fal-1t"
+  ],
+  "decisions": [
+    "097acbf6-840e-4647-a782-848c39627fd6",
+    "6f4070cf-faa5-4e9c-94b6-3e38e1cd4939",
+    "3bc9f528-d5d9-4c23-9d07-085ef094cf45",
+    "cc75554e-1d15-46d6-9bb9-9f07007a0173",
+    "61540fb2-c57a-4159-8688-34adda64a1b0"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/feedback.rs"
+  ],
+  "read_first": [
+    "docs/history/fix-at-loop/CONTEXT.md",
+    "docs/knowledge/areas/feedback-digest/ranking-and-self-improvement.md",
+    "docs/knowledge/areas/hook-runtime/token-economy-of-injected-context.md",
+    "packages/bee-rs/crates/bee/src/verbs/feedback.rs",
+    "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/feedback-digest/"
+  ],
+  "action": "Implement D2, D6 and D8 of docs/history/fix-at-loop/CONTEXT.md (D3 is superseded, D4 narrowed by D8). Anchors in verbs/feedback.rs: the backlog ingestion `raw.push(RawCandidate {` under `match resolve_in_scope(&real_root, SRC_BACKLOG) {`, `fn fix_at_row_counts(root: &Path) -> (Option<u64>, Option<u64>) {`, `fn prose_load_value(root: &Path) -> Value {`, `fn prose_load_line(digest: &Value) -> String {`. (1) D2 with D10: during backlog ingestion, a finding or friction row whose (type, layer, normalize_title, close epoch) equals an earlier row's is folded into that row's candidate instead of pushed: the candidate keeps the earliest ts as first_seen and its pain is not summed. The close epoch of a row is the count of backlog-closed rows with the same normalize_title and an older ts. Other row types and other sources are untouched; backlog-closed rows are never folded. So a copy filed after a close stays its own entry and rank still reports the group as recurred. (2) D8: prose_load gains fix_at_check_open, fix_at_architecture_open and fix_at_closed. A distinct (layer, title) of a fix-at finding is closed when a backlog-closed row whose normalize_title equals the finding's normalize_title has a ts newer than the newest finding row of that key; otherwise it is open. Distinct keys are counted, never raw rows; the existing fix_at_check_rows and fix_at_architecture_rows stay raw and unchanged. The printed prose line names the open and closed counts and the preamble size, for example `fix-at: 129 open (110 check, 19 architecture), 1 closed; preamble 8,912 bytes / 151 lines`. (3) D6: prose_load gains preamble_bytes and preamble_lines from the preamble rendered for root by crate::hooks::session_preamble::budget::build_session_preamble_within with PREAMBLE_BUDGET_BYTES as the budget, runtime claude, and no session id or handoff (the number is a snapshot of the current state); when the render panics or root is not a bee project both are null (wrap with std::panic::catch_unwind or check the builder's own fail-open contract first and say which). The digest never fails because of these fields. Edit only the existing tests the change forces (the prose_load_reports_lines_patterns_and_rows_in_object_and_sentence fixture may need new keys); the tester adds the new tests. No code comments. Quote the matched test count.",
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- feedback",
+  "must_haves": {
+    "truths": [
+      "Eight identical fix-at rows produce one digest entry with the earliest first_seen",
+      "A fix-at title with a newer backlog-closed row counts as closed, not open",
+      "prose_load carries preamble_bytes and preamble_lines, null on a render failure",
+      "The existing raw row counts are unchanged"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/feedback.rs",
+        "substantive": "fold, open/closed counts, preamble load"
+      }
+    ],
+    "key_links": [
+      "prose_load_value calls build_session_preamble_within"
+    ],
+    "prohibitions": [
+      "Never rewrite .bee/backlog.jsonl",
+      "No new verb or flag",
+      "No code comments"
+    ]
+  },
+  "trace": {
+    "worker": "w-fal-2",
+    "outcome": "Folded fix-at copies in the digest and added open/closed/preamble load to prose_load; commit 97bd2eeff2987259230d16c8c5bfffab0e5fe757",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/feedback.rs",
+      "docs/knowledge/areas/feedback-digest/ranking-and-self-improvement.md"
+    ],
+    "deviations": [
+      "worker synced docs/knowledge/areas/feedback-digest/ranking-and-self-improvement.md (fal-5's file) in the same commit",
+      "sync-ack: digest fold and prose_load are internal to feedback.rs; the feedback-digest concept was synced in the same commit"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-16T17:17:42.043Z",
+    "behavior_change": true,
+    "verification_evidence": "cargo clippy -- -D warnings && cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml — green:unit — clippy clean, full suite no failures, `-- feedback` matched 38 passed",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "952acdd9-7d16-4096-9905-7ed19a98f186",
+    "verify_command": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- feedback",
+    "claimed_at": "2026-11-16T17:09:39.630Z",
+    "knowledge_delta": [
+      "docs/knowledge/areas/feedback-digest/ranking-and-self-improvement.md"
+    ],
+    "sync_ack": "digest fold and prose_load are internal to feedback.rs; the feedback-digest concept was synced in the same commit",
+    "no_mistakes": true,
+    "principles_used": [
+      {
+        "slug": "bee-principle-one-fact-one-home",
+        "changed": "open and closed counts read the existing backlog-closed tombstone instead of a new resolution row"
+      }
+    ],
+    "report": {
+      "outcome": "Folded fix-at copies in the digest and added open/closed/preamble load to prose_load; commit 97bd2eeff2987259230d16c8c5bfffab0e5fe757",
+      "commit": "97bd2eeff2987259230d16c8c5bfffab0e5fe757",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/feedback.rs",
+        "docs/knowledge/areas/feedback-digest/ranking-and-self-improvement.md"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- feedback — green:unit — cargo clippy -- -D warnings && cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml — green:unit — clippy clean, full suite no failures, `-- feedback` matched 38 passed",
+      "deviations": [],
+      "patch_id": "cb2e5cc0ad0c73b27290bafb1e25f28f7dbc15b1"
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 184 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "Eight identical fix-at rows produce one digest entry with the earliest first_seen",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/feedback.rs — feedback.rs backlog ingestion folds finding/friction rows on (type, layer, normalize_title, close_epoch), keeps the older first_seen (commit 97bd2eeff)"
+          },
+          {
+            "requirement": "A fix-at title with a newer backlog-closed row counts as closed, not open",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/feedback.rs — feedback.rs fix_at_load: closed when a close stamp with the same normalized title is newer than the newest finding ts"
+          },
+          {
+            "requirement": "prose_load carries preamble_bytes and preamble_lines, null on a render failure",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/feedback.rs — feedback.rs preamble_load: None without .bee dir or on panic via catch_unwind; builder writes nothing outside tests (rg)"
+          },
+          {
+            "requirement": "The existing raw row counts are unchanged",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/feedback.rs — fix_at_check_rows and fix_at_architecture_rows count every row by layer, as before"
+          }
+        ],
+        "recorded_at": "2026-11-16T17:43:59.661Z",
+        "recorded_by": "952acdd9-7d16-4096-9905-7ed19a98f186",
+        "commit_diff": "checked"
+      }
+    ],
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/verbs/feedback.rs:1022-1050 (fold on type, layer, normalize_title, close_epoch; older ts replaces first_seen; pain not summed); test fix_at_open_three_identical_check_rows_fold_to_one_entry_and_one_open ok (asserts first_seen 2025-12-31 of 3 copies)",
+            "id": "Eight identical fix-at rows produce one digest entry with the earliest first_seen"
+          },
+          {
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/verbs/feedback.rs:1769-1770 closed when a close ts > newest finding ts per (layer, normalized title); tests fix_at_open_a_newer_close_moves_the_title_to_closed_and_rank_retires_it and fix_at_open_a_finding_newer_than_the_close_reopens_and_rank_reports_recurred ok",
+            "id": "A fix-at title with a newer backlog-closed row counts as closed, not open"
+          },
+          {
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/verbs/feedback.rs:1780-1795 (None without .bee dir; catch_unwind on build_session_preamble_within; no panic=abort in packages/bee-rs/Cargo.toml profiles), feedback.rs:1830; tests prose_load_preamble_of_a_fixture_bee_root_is_within_the_budget and prose_load_preamble_of_an_empty_directory_is_null_and_the_digest_succeeds ok",
+            "id": "prose_load carries preamble_bytes and preamble_lines, null on a render failure"
+          },
+          {
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/verbs/feedback.rs:1745-1756 counts every row by layer before the backlog-closed skip, same as removed fix_at_row_counts; prose_load_reports_lines_patterns_and_rows_in_object_and_sentence asserts fix_at_check_rows 2 / architecture 1 unchanged",
+            "id": "The existing raw row counts are unchanged"
+          },
+          {
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/verbs/feedback.rs:1819 preamble_load -> feedback.rs:1785 build_session_preamble_within(root, None, None, \"claude\", PREAMBLE_BUDGET_BYTES)",
+            "id": "key_link: prose_load_value calls build_session_preamble_within"
+          },
+          {
+            "status": "PASS",
+            "evidence": "git show 97bd2eeff: only feedback.rs + knowledge doc; no added // lines; no new arg parsing",
+            "id": "prohibitions: no backlog rewrite, no new verb or flag, no code comments"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "sonnet",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-11-16T17:50:27.965Z"
+      }
+    ]
+  },
+  "tester_rule": true,
+  "usage": {
+    "new": 58638,
+    "cached": 718139,
+    "total": 776777,
+    "models": {
+      "claude-sonnet-5-5": {
+        "new": 58638,
+        "cached": 718139,
+        "total": 776777
+      }
+    },
+    "jobs": [
+      "job-1794848983876-2337647-1"
+    ]
+  }
+}

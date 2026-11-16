@@ -1,0 +1,234 @@
+{
+  "id": "fal-1",
+  "feature": "fix-at-loop",
+  "title": "File a fix-at mistake once across features",
+  "lane": "standard",
+  "role": "code",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "45d56b6f-68ef-4d86-a1a3-4f321a25f7b3",
+    "61540fb2-c57a-4159-8688-34adda64a1b0"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+    "packages/bee-rs/crates/bee/src/verbs/backlog.rs"
+  ],
+  "read_first": [
+    "docs/history/fix-at-loop/CONTEXT.md",
+    "docs/knowledge/areas/human-mailbox/overview.md",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+    "packages/bee-rs/crates/bee/src/verbs/backlog.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/human-mailbox/"
+  ],
+  "action": "Implement docs/history/fix-at-loop/CONTEXT.md D1. Anchors: in verbs/drivers/close.rs `fn file_fix_at_rows(root: &Path, feature: &str) -> FixAtRows {` and its call `if backlog::backlog_finding_exists(root, feature, &layer, &title) {`; in verbs/backlog.rs `pub(crate) fn backlog_finding_exists(root: &Path, feature: &str, layer: &str, title: &str) -> bool {`. Add a sibling helper in backlog.rs that, per D10, returns the feature of a finding row with this layer and the same crate::verbs::feedback::normalize_title in the CURRENT close epoch (its ts is newer than the newest backlog-closed row with the same normalized title), or None; call it from file_fix_at_rows in place of the per-feature check. After a close, the same mistake files a new row. A skip still counts in rows.skipped; when the owning feature differs from the closing one, the close line's `bee backlog findings --feature` pointer names the owning feature (anchor: the `(M already there)` line near close.rs:3217). backlog_finding_exists and bee backlog add stay unchanged. Update the doc comments the change makes false only by deleting them; write no new comment. Edit only the existing tests the change forces; the tester cell adds the new ones. Run the related tests and quote the count the filter matched. REWORK after judge NEEDS_REVISION: delete the doc comment above file_fix_at_rows in close.rs that names current_epoch_finding_feature (it was rewritten, the rule is delete only), and delete the now-false doc comment on backlog_finding_exists in backlog.rs; write no new comment; keep #[cfg(test)] on backlog_finding_exists (leader decision 4dadfe44). Re-run cargo clippy -- -D warnings and cargo test --bin bee -- fix_at_identity and quote both.",
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- fix_at",
+  "must_haves": {
+    "truths": [
+      "A run that closes two features with one mechanizable reflection files one row, and the second close counts it as already there and names the owning feature",
+      "After a backlog-closed row with the same title, the same mistake at close files a new row",
+      "Two different titles still file two rows",
+      "bee backlog add keeps its per-feature dedupe"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/backlog.rs",
+        "substantive": "the cross-feature finding check"
+      }
+    ],
+    "key_links": [
+      "file_fix_at_rows calls the cross-feature check"
+    ],
+    "prohibitions": [
+      "Never rewrite .bee/backlog.jsonl",
+      "No code comments",
+      "No change to backlog_finding_exists"
+    ]
+  },
+  "trace": {
+    "worker": "w-fal-1",
+    "outcome": "Deleted the two stale doc comments, kept cfg(test); clippy clean, fix_at_identity 5 passed. Commit 475537b66",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/backlog.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs"
+    ],
+    "deviations": [
+      "rework after judge NEEDS_REVISION deleted two stale doc comments; #[cfg(test)] on backlog_finding_exists kept by decision 4dadfe44",
+      "sync-ack: close-time fix-at dedupe is internal to backlog.rs; bee-shaping and bee-grooming describe no part of it"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-16T17:55:14.236Z",
+    "behavior_change": true,
+    "verification_evidence": "cargo clippy -- -D warnings && cargo test --release --no-fail-fast — green:unit — clippy clean, full suite no failures, fix_at_identity matched 5 tests",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "952acdd9-7d16-4096-9905-7ed19a98f186",
+    "verify_command": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- fix_at",
+    "claimed_at": "2026-11-16T17:50:45.288Z",
+    "knowledge_delta": [],
+    "sync_ack": "close-time fix-at dedupe is internal to backlog.rs; bee-shaping and bee-grooming describe no part of it",
+    "no_mistakes": true,
+    "principles_used": [
+      {
+        "slug": "bee-principle-single-source-of-truth",
+        "changed": "dedupe reads the one backlog store across features instead of a per-feature copy"
+      }
+    ],
+    "report": {
+      "outcome": "Deleted the two stale doc comments, kept cfg(test); clippy clean, fix_at_identity 5 passed. Commit 475537b66",
+      "commit": "475537b66153d8b3bdc626c75d665fd46b15fa11",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/backlog.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- fix_at — green:unit — cargo clippy -- -D warnings && cargo test --release --no-fail-fast — green:unit — clippy clean, full suite no failures, fix_at_identity matched 5 tests",
+      "deviations": [],
+      "patch_id": "526a16a6fd4139116ad7cfb52944d6d26acbf516"
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "A run that closes two features with one mechanizable reflection files one row, and the second close counts it as already there and names the owning feature",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs file_fix_at_rows uses current_epoch_finding_feature and FixAtRows.owner (commit 6e47e2033)"
+          },
+          {
+            "requirement": "After a backlog-closed row with the same title, the same mistake at close files a new row",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/backlog.rs current_epoch_finding_feature keeps only finding rows with ts newer than the newest backlog-closed ts"
+          },
+          {
+            "requirement": "Two different titles still file two rows",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/backlog.rs same_title compares normalize_title of each row to the key; a different title never matches"
+          },
+          {
+            "requirement": "bee backlog add keeps its per-feature dedupe",
+            "artifact": "backlog add path unchanged in commit 6e47e2033"
+          }
+        ],
+        "recorded_at": "2026-11-16T17:02:28.910Z",
+        "recorded_by": "952acdd9-7d16-4096-9905-7ed19a98f186",
+        "commit_diff": "checked"
+      },
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "A run that closes two features with one mechanizable reflection files one row, and the second close counts it as already there and names the owning feature",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs file_fix_at_rows uses current_epoch_finding_feature and FixAtRows.owner (commit 6e47e2033)"
+          },
+          {
+            "requirement": "After a backlog-closed row with the same title, the same mistake at close files a new row",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/backlog.rs current_epoch_finding_feature keeps only finding rows with ts newer than the newest backlog-closed ts"
+          },
+          {
+            "requirement": "Two different titles still file two rows",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/backlog.rs same_title compares normalize_title of each row to the key; a different title never matches"
+          },
+          {
+            "requirement": "bee backlog add keeps its per-feature dedupe",
+            "artifact": "backlog add path unchanged in commit 6e47e2033"
+          }
+        ],
+        "recorded_at": "2026-11-16T17:55:16.913Z",
+        "recorded_by": "952acdd9-7d16-4096-9905-7ed19a98f186",
+        "commit_diff": "checked"
+      }
+    ],
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "NEEDS_REVISION",
+        "checks": [
+          {
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs:418-422 (skip + owner), close.rs:3221-3224 (pointer uses owner); backlog.rs:446-462; test fix_at_identity_same_title_under_another_feature_files_nothing_and_counts_one_skip ok (owner pointer itself untested)",
+            "id": "A run that closes two features with one mechanizable reflection files one row, and the second close counts it as already there and names the owning feature"
+          },
+          {
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/verbs/backlog.rs:450-461 (closed_at max ts, find finding ts > closed_at); test fix_at_identity_a_close_row_newer_than_the_finding_lets_the_mistake_file_again ok",
+            "id": "After a backlog-closed row with the same title, the same mistake at close files a new row"
+          },
+          {
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/verbs/backlog.rs:450 same_title on normalize_title; test fix_at_identity_a_different_title_under_another_feature_files_one_row ok",
+            "id": "Two different titles still file two rows"
+          },
+          {
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/verbs/backlog.rs:906-907 run_add unchanged by 6e47e2033; it never called backlog_finding_exists (only caller pre-change was close.rs:417); test fix_at_identity_backlog_add_still_appends_the_same_title_under_a_new_feature ok",
+            "id": "bee backlog add keeps its per-feature dedupe"
+          },
+          {
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs:418",
+            "id": "key_link: file_fix_at_rows calls the cross-feature check"
+          },
+          {
+            "status": "FAIL",
+            "evidence": "packages/bee-rs/crates/bee/src/verbs/backlog.rs:435 #[cfg(test)] added by 6e47e2033 (body unchanged; disclosed deviation, forced by clippy dead_code once close.rs stopped calling it)",
+            "id": "prohibition: No change to backlog_finding_exists"
+          },
+          {
+            "status": "FAIL",
+            "evidence": "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs:405 doc line rewritten to name current_epoch_finding_feature instead of deleted; packages/bee-rs/crates/bee/src/verbs/backlog.rs:427-434 doc still says backlog_finding_exists is the reason a second bee close files nothing, now false and not deleted",
+            "id": "prohibition: No code comments (action: update false doc comments only by deleting them)"
+          },
+          {
+            "status": "PASS",
+            "evidence": "git show --name-only 6e47e2033: no backlog.jsonl; close.rs appends via fsutil::append_jsonl",
+            "id": "prohibition: Never rewrite .bee/backlog.jsonl"
+          }
+        ],
+        "failure_signature": "doc comment at close.rs:405 rewritten instead of deleted and stale doc at backlog.rs:427-434 left in place; backlog_finding_exists gained #[cfg(test)] at backlog.rs:435 against the no-change prohibition",
+        "fixability": "authority",
+        "confidence": "high",
+        "builder_model": "sonnet",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-11-16T17:50:27.878Z"
+      }
+    ],
+    "reopened_for_rework": {
+      "at": "2026-11-16T17:50:27.878Z",
+      "reason": "NEEDS_REVISION semantic-judge verdict recorded after cap"
+    },
+    "verified_at": null,
+    "baseline": null,
+    "reaction": null,
+    "skipped": null,
+    "unknowns": null,
+    "found": null,
+    "stopped": null,
+    "judge_overrides": [
+      {
+        "overridden_at": "2026-11-16T17:55:14.217Z",
+        "reason": "minor-fix row (gates-and-delegation.md judge table): commit 475537b66 only deletes the two stale doc comments the judge named (20 lines, no new behavior), verified by the leader in the diff; the cfg(test) finding is settled by leader decision 4dadfe44",
+        "last_verdict": "NEEDS_REVISION"
+      }
+    ]
+  },
+  "tester_rule": true,
+  "usage": {
+    "new": 83164,
+    "cached": 901768,
+    "total": 984932,
+    "models": {
+      "claude-sonnet-5-5": {
+        "new": 83164,
+        "cached": 901768,
+        "total": 984932
+      }
+    },
+    "jobs": [
+      "job-1794848134124-2213550-1",
+      "job-1794851449108-2894229-1"
+    ]
+  }
+}

@@ -8,18 +8,13 @@
     "shape": true,
     "execution": true,
     "review": false,
-    "uat": false
+    "uat": true
   },
   "summary": "Feature \"fix-at-loop\" started at phase \"exploring\" (lane).",
   "next_action": "Merged into main at 985b083; reload the product and test \"fix-at-loop\", then either approve uat (\"bee gate --name uat --approved true --lane fix-at-loop\") or fix it in the worktree and merge again.",
   "created_at": "2026-11-16T16:42:02.721Z",
-  "run_state": "awaiting-approval",
-  "waiting_on": {
-    "kind": "gate",
-    "subject": "uat: fix-at-loop",
-    "asked_at": "2026-11-16T18:07:20.236Z",
-    "session": "bee-worktree-merge-sessionless"
-  },
+  "run_state": "done",
+  "waiting_on": null,
   "route": {
     "class": "feature",
     "lane": "standard",

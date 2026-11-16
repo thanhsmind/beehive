@@ -1,0 +1,139 @@
+{
+  "id": "fal-1t",
+  "feature": "fix-at-loop",
+  "title": "Test fix-at identity at close",
+  "lane": "standard",
+  "role": "test",
+  "status": "capped",
+  "deps": [
+    "fal-1"
+  ],
+  "decisions": [
+    "45d56b6f-68ef-4d86-a1a3-4f321a25f7b3",
+    "61540fb2-c57a-4159-8688-34adda64a1b0",
+    "beea5fbb-6cc9-4ff3-9b09-5c936205ec38"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+    "packages/bee-rs/crates/bee/src/verbs/backlog.rs"
+  ],
+  "read_first": [
+    "docs/history/fix-at-loop/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+    "packages/bee-rs/crates/bee/src/verbs/backlog.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Contract C1 of docs/history/fix-at-loop/CONTEXT.md. First cite the existing tests that already cover file_fix_at_rows by name, then add only the gap, each test name containing fix_at_identity: (1) a finding with layer fix-at:check and title T under feature A exists, file_fix_at_rows for feature B with a mechanizable mistake titled T files nothing and counts one skip; (2) a different title under feature B files one row; (3) bee backlog add with the same title under a new feature still appends (its per-feature dedupe is unchanged); (4) finding T under feature A, then a backlog-closed row titled T, then file_fix_at_rows for feature B with mistake T files one new row; (5) a whitespace variant of T is treated as T. Show each new test red against the parent commit of fal-1 where the contract changed (tests 1), or state why it passes on both (tests 2, 3). Quote the count the filter matched. No code comments.",
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- fix_at_identity",
+  "must_haves": {
+    "truths": [
+      "fix_at_identity tests exist and pass, with a matched count above zero"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+        "substantive": "fix_at_identity tests"
+      }
+    ],
+    "key_links": [],
+    "prohibitions": [
+      "No change to product code",
+      "No code comments"
+    ]
+  },
+  "trace": {
+    "worker": "w-fal-1t",
+    "outcome": "Added five fix_at_identity tests (4 in close.rs, 1 in backlog.rs); tests 1 and 5 are red on 6e47e2033^, all 5 green on HEAD — fcc6f812a4d8bb5e02c419185a8f2f09bb2f0e89",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+      "packages/bee-rs/crates/bee/src/verbs/backlog.rs"
+    ],
+    "deviations": [
+      "sync-ack: tests only for close-time dedupe; no product-backlog skill text describes it"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-16T17:09:39.421Z",
+    "behavior_change": false,
+    "verification_evidence": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- fix_at_identity — green:unit — 5 passed, 5321 filtered out; full clippy -D warnings + cargo test --release --no-fail-fast exit 0",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "952acdd9-7d16-4096-9905-7ed19a98f186",
+    "verify_command": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- fix_at_identity",
+    "claimed_at": "2026-11-16T17:02:40.663Z",
+    "knowledge_delta": [],
+    "sync_ack": "tests only for close-time dedupe; no product-backlog skill text describes it",
+    "no_mistakes": true,
+    "knowledge_used": [
+      {
+        "path": "docs/knowledge/patterns/20260818-a-green-count-is-not-evidence-that-your-new-test-ran.md",
+        "changed": "quoted the filter's matched count (5) and listed each test name"
+      }
+    ],
+    "principles_used": [
+      {
+        "slug": "bee-principle-red-before-green",
+        "changed": "ran the new tests on 6e47e2033^ and recorded that 1 and 5 fail there"
+      },
+      {
+        "slug": "bee-principle-test-behavior-not-structure",
+        "changed": "asserted filed/skipped counts and backlog rows, not the helper calls"
+      },
+      {
+        "slug": "bee-principle-prove-it-works",
+        "changed": "test 3 drives the real bee backlog add door through the child-process helper instead of the row builder"
+      }
+    ],
+    "report": {
+      "outcome": "Added five fix_at_identity tests (4 in close.rs, 1 in backlog.rs); tests 1 and 5 are red on 6e47e2033^, all 5 green on HEAD — fcc6f812a4d8bb5e02c419185a8f2f09bb2f0e89",
+      "commit": "fcc6f812a4d8bb5e02c419185a8f2f09bb2f0e89",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+        "packages/bee-rs/crates/bee/src/verbs/backlog.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- fix_at_identity — green:unit — cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- fix_at_identity — green:unit — 5 passed, 5321 filtered out; full clippy -D warnings + cargo test --release --no-fail-fast exit 0",
+      "deviations": [],
+      "knowledge_used": [
+        "docs/knowledge/patterns/20260818-a-green-count-is-not-evidence-that-your-new-test-ran.md — quoted the filter's matched count (5) and listed each test name"
+      ],
+      "principles_used": [
+        "bee-principle-red-before-green — ran the new tests on 6e47e2033^ and recorded that 1 and 5 fail there",
+        "bee-principle-test-behavior-not-structure — asserted filed/skipped counts and backlog rows, not the helper calls",
+        "bee-principle-prove-it-works — test 3 drives the real bee backlog add door through the child-process helper instead of the row builder"
+      ],
+      "patch_id": "521474ba8b1be692fdc57f878cd85c9f3c1b304a"
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "fix_at_identity tests exist and pass, with a matched count above zero",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs — commit fcc6f812a: 5 fix_at_identity tests (4 in drivers/close.rs, 1 in backlog.rs), 5 passed; tests 1 and 5 red on 6e47e2033^"
+          }
+        ],
+        "recorded_at": "2026-11-16T17:43:59.671Z",
+        "recorded_by": "952acdd9-7d16-4096-9905-7ed19a98f186",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "tester_rule": true,
+  "usage": {
+    "new": 84246,
+    "cached": 1194092,
+    "total": 1278338,
+    "models": {
+      "claude-opus-5-5": {
+        "new": 84246,
+        "cached": 1194092,
+        "total": 1278338
+      }
+    },
+    "jobs": [
+      "job-1794848564214-2287454-1"
+    ]
+  }
+}

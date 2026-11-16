@@ -1,0 +1,114 @@
+{
+  "id": "fal-2t",
+  "feature": "fix-at-loop",
+  "title": "Test the fold, open counts and preamble load",
+  "lane": "standard",
+  "role": "test",
+  "status": "capped",
+  "deps": [
+    "fal-2"
+  ],
+  "decisions": [
+    "3bc9f528-d5d9-4c23-9d07-085ef094cf45",
+    "6f4070cf-faa5-4e9c-94b6-3e38e1cd4939",
+    "097acbf6-840e-4647-a782-848c39627fd6",
+    "61540fb2-c57a-4159-8688-34adda64a1b0",
+    "93e3459d-8649-4a05-b7be-ab42172d67c4",
+    "0b95cb34-affb-47b9-8939-345992f6ee61"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/feedback.rs"
+  ],
+  "read_first": [
+    "docs/history/fix-at-loop/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/verbs/feedback.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Contracts C2 and C4 of docs/history/fix-at-loop/CONTEXT.md. Cite the existing prose_load and rank tests by name, then add the gap. Names containing fix_at_open: (1) three identical fix-at:check rows give one digest entry and fix_at_check_open 1; (2) a backlog-closed row with the same title and a newer ts moves it to fix_at_closed 1 and open 0, and rank lists it as retired; (3) a finding row newer than that close moves it back to open, stays a separate digest entry, and rank reports the group as recurred; (3b) a friction row and a pbi row are never folded. Names containing prose_load: (4) a fixture bee root gives preamble_bytes above 0 and at most 9500 and preamble_lines above 0; (5) an empty directory gives null for both and the digest still succeeds. Show each red on the parent commit of fal-2 where the behavior is new. Quote the matched counts. No code comments.",
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- fix_at_open prose_load",
+  "must_haves": {
+    "truths": [
+      "fix_at_open and prose_load tests exist and pass with matched counts above zero"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/feedback.rs",
+        "substantive": "fix_at_open and prose_load tests"
+      }
+    ],
+    "key_links": [],
+    "prohibitions": [
+      "No change to product code",
+      "No code comments"
+    ]
+  },
+  "trace": {
+    "worker": "w-fal-2t",
+    "outcome": "Added 4 fix_at_open and 2 prose_load tests (fold, close/retire, recurrence, no over-fold, preamble within budget, null on empty dir); 5 new-behavior tests red on 97bd2eeff^, all green at b5bd77d06",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/feedback.rs"
+    ],
+    "deviations": [
+      "sync-ack: tests only for the digest fold and prose_load"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-16T17:26:34.432Z",
+    "behavior_change": false,
+    "verification_evidence": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- fix_at_open prose_load — green:unit — 10 passed 0 failed (4 fix_at_open, 6 prose_load); full clippy -D warnings + cargo test --release --no-fail-fast also green (49 suites, 0 failed)",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "952acdd9-7d16-4096-9905-7ed19a98f186",
+    "verify_command": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- fix_at_open prose_load",
+    "claimed_at": "2026-11-16T17:17:42.272Z",
+    "knowledge_delta": [],
+    "sync_ack": "tests only for the digest fold and prose_load",
+    "no_mistakes": true,
+    "no_knowledge_used": true,
+    "no_principles_used": true,
+    "report": {
+      "outcome": "Added 4 fix_at_open and 2 prose_load tests (fold, close/retire, recurrence, no over-fold, preamble within budget, null on empty dir); 5 new-behavior tests red on 97bd2eeff^, all green at b5bd77d06",
+      "commit": "b5bd77d0687c28737291752412deff9d92107d66",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/feedback.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- fix_at_open prose_load — green:unit — cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- fix_at_open prose_load — green:unit — 10 passed 0 failed (4 fix_at_open, 6 prose_load); full clippy -D warnings + cargo test --release --no-fail-fast also green (49 suites, 0 failed)",
+      "deviations": [],
+      "knowledge_used": [],
+      "principles_used": [],
+      "patch_id": "b94e7ce3d1940919de6f9fbc77e9b0bebe9d3cac"
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "fix_at_open and prose_load tests exist and pass with matched counts above zero",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/feedback.rs — commit b5bd77d06: 4 fix_at_open and 2 prose_load tests in verbs/feedback.rs; filter ran 10 passed; 5 red on 97bd2eeff^"
+          }
+        ],
+        "recorded_at": "2026-11-16T17:43:59.679Z",
+        "recorded_by": "952acdd9-7d16-4096-9905-7ed19a98f186",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "tester_rule": true,
+  "usage": {
+    "new": 74686,
+    "cached": 1195861,
+    "total": 1270547,
+    "models": {
+      "claude-opus-5-5": {
+        "new": 74686,
+        "cached": 1195861,
+        "total": 1270547
+      }
+    },
+    "jobs": [
+      "job-1794849466192-2438632-1"
+    ]
+  }
+}

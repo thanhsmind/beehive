@@ -1,0 +1,145 @@
+{
+  "id": "fal-5",
+  "feature": "fix-at-loop",
+  "title": "Consolidate knowledge and write delivery",
+  "lane": "standard",
+  "role": "code",
+  "status": "capped",
+  "deps": [
+    "fal-1",
+    "fal-1t",
+    "fal-2",
+    "fal-2t",
+    "fal-3",
+    "fal-3t",
+    "fal-4"
+  ],
+  "decisions": [
+    "45d56b6f-68ef-4d86-a1a3-4f321a25f7b3",
+    "097acbf6-840e-4647-a782-848c39627fd6",
+    "3bc9f528-d5d9-4c23-9d07-085ef094cf45",
+    "6f4070cf-faa5-4e9c-94b6-3e38e1cd4939",
+    "9471088f-fd3f-4dc4-8ed0-0ccd8b859967",
+    "54872359-dfb9-4090-808a-a67210a0fffc",
+    "fb1807c1-5a39-44e1-ad3e-f2d902ca8339"
+  ],
+  "files": [
+    "docs/knowledge/areas/human-mailbox/overview.md",
+    "docs/knowledge/areas/feedback-digest/ranking-and-self-improvement.md",
+    "docs/history/fix-at-loop/delivery.md"
+  ],
+  "read_first": [
+    "docs/history/fix-at-loop/CONTEXT.md",
+    "docs/history/fix-at-loop/plan.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/human-mailbox/",
+    "docs/knowledge/areas/feedback-digest/"
+  ],
+  "action": "Run bee knowledge consolidate --feature fix-at-loop. Update docs/knowledge/areas/human-mailbox/overview.md item 17 (identity is layer and normalized title across features within the current close epoch, D1 and D10) and `## A mistake seen twice` (a landed guard files the backlog-closed row, D7, D8). Update docs/knowledge/areas/feedback-digest/ranking-and-self-improvement.md with the fold of copies within a close epoch (D2, D10) and the open, closed and preamble fields of prose_load (D6, D8). Cite history D-numbers as fix-at-loop D<n>, never raw decision ids. Name packages/bee-rs/clippy.toml and path_identity.rs in the Pointers of the concept that fits, or of a new pattern if none fits. Write docs/history/fix-at-loop/delivery.md.",
+  "verify": ".bee/bin/bee knowledge check",
+  "must_haves": {
+    "truths": [
+      "the two concepts describe the new behavior",
+      "delivery.md exists"
+    ],
+    "artifacts": [
+      {
+        "path": "docs/history/fix-at-loop/delivery.md",
+        "substantive": "what shipped and the proof"
+      }
+    ],
+    "key_links": [],
+    "prohibitions": [
+      "No raw decision ids in area docs"
+    ]
+  },
+  "trace": {
+    "worker": "w-fal-5",
+    "outcome": "Updated mailbox, feedback-digest and path-identity concepts, wrote delivery.md; commit c4a61e12d",
+    "files_changed": [
+      "docs/history/fix-at-loop/delivery.md",
+      "docs/knowledge/areas/human-mailbox/overview.md",
+      "docs/knowledge/areas/feedback-digest/ranking-and-self-improvement.md",
+      "docs/knowledge/areas/worktree-parallelism/path-identity.md"
+    ],
+    "deviations": [
+      "also named clippy.toml and path_identity.rs in docs/knowledge/areas/worktree-parallelism/path-identity.md Pointers, as the action allowed"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-16T17:46:03.018Z",
+    "behavior_change": false,
+    "verification_evidence": "cargo clippy -- -D warnings && cargo test --release --no-fail-fast — green:unit — full crate suite; .bee/bin/bee knowledge check — green:static — 0 OKF/profile errors",
+    "verify_output": "green:static",
+    "verify_passed": true,
+    "claim_session": "952acdd9-7d16-4096-9905-7ed19a98f186",
+    "verify_command": ".bee/bin/bee knowledge check",
+    "claimed_at": "2026-11-16T17:43:33.556Z",
+    "knowledge_delta": [
+      "docs/knowledge/areas/human-mailbox/overview.md",
+      "docs/knowledge/areas/feedback-digest/ranking-and-self-improvement.md",
+      "docs/knowledge/areas/worktree-parallelism/path-identity.md"
+    ],
+    "no_mistakes": true,
+    "no_principles_used": true,
+    "report": {
+      "outcome": "Updated mailbox, feedback-digest and path-identity concepts, wrote delivery.md; commit c4a61e12d",
+      "commit": "c4a61e12da4b732625cf4ae4182dbb4acd3147bc",
+      "files": [
+        "docs/history/fix-at-loop/delivery.md",
+        "docs/knowledge/areas/human-mailbox/overview.md",
+        "docs/knowledge/areas/feedback-digest/ranking-and-self-improvement.md",
+        "docs/knowledge/areas/worktree-parallelism/path-identity.md"
+      ],
+      "tests": ".bee/bin/bee knowledge check — green:static — cargo clippy -- -D warnings && cargo test --release --no-fail-fast — green:unit — full crate suite; .bee/bin/bee knowledge check — green:static — 0 OKF/profile errors",
+      "deviations": [],
+      "patch_id": "8bfb97bf24343af66c90f695f95ff06ff0d86e37"
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "the two concepts describe the new behavior",
+            "artifact": "docs/knowledge/areas/human-mailbox/overview.md item 19 and A mistake seen twice; docs/knowledge/areas/feedback-digest/ranking-and-self-improvement.md fold and prose_load (commit c4a61e12d)"
+          },
+          {
+            "requirement": "delivery.md exists",
+            "artifact": "docs/history/fix-at-loop/delivery.md (25 lines, commit c4a61e12d)"
+          }
+        ],
+        "recorded_at": "2026-11-16T17:46:08.960Z",
+        "recorded_by": "952acdd9-7d16-4096-9905-7ed19a98f186",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "tester_rule": true,
+  "role_reroutes": [
+    {
+      "from": "writer",
+      "to": "code",
+      "decision": "087519ac-1af0-4cb1-a762-61ad01f1e029",
+      "at": "2026-11-16T17:36:07.581Z",
+      "plan_sha256": "f6b2f59f3b793cc08ecc6475908669fbf7b81a1b64bfae56a7765c481b54a33e"
+    }
+  ],
+  "usage": {
+    "new": 63521,
+    "cached": 610627,
+    "total": 674148,
+    "models": {
+      "claude-sonnet-5-5": {
+        "new": 63521,
+        "cached": 610627,
+        "total": 674148
+      }
+    },
+    "jobs": [
+      "job-1794851017532-2774173-1"
+    ]
+  }
+}
