@@ -800,11 +800,7 @@ pub(super) fn wave(flags: &[&str]) -> ExitCode {
         return ExitCode::FAILURE;
     }
 
-    let cfg_path = main_root.join(".bee").join("config.json");
-    let cfg: Value = std::fs::read_to_string(&cfg_path)
-        .ok()
-        .and_then(|raw| serde_json::from_str(&raw).ok())
-        .unwrap_or(Value::Null);
+    let cfg = crate::state::read_config_value(&main_root);
 
     let wave_id = wave_id.unwrap_or_else(|| format!("wave-{}", chrono::Utc::now().timestamp_millis()));
     let started_at = chrono::Utc::now().to_rfc3339();

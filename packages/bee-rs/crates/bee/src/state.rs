@@ -163,6 +163,10 @@ pub fn read_config_raw(root: &Path) -> Map<String, Value> {
     merged
 }
 
+pub fn read_config_value(root: &Path) -> Value {
+    Value::Object(read_config_raw(root))
+}
+
 /// hookEnabled: `config.hooks[name] !== false` over merged tracked+overlay
 /// config — enabled unless the file explicitly carries `false` (unknown
 /// names default enabled; DEFAULT_HOOKS are all true, so the merge with

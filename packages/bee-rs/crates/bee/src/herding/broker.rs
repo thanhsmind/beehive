@@ -313,13 +313,11 @@ pub(crate) fn write_heartbeat(main_root: &Path) -> Result<(), String> {
 }
 
 pub(crate) fn read_max_question_rounds(main_root: &Path) -> u64 {
-    let config_path = main_root.join(".bee").join("config.json");
-    if let Ok(raw) = std::fs::read_to_string(&config_path)
-        && let Ok(v) = serde_json::from_str::<Value>(&raw)
-            && let Some(n) = v.get("broker").and_then(|b| b.get("max_question_rounds")).and_then(Value::as_u64) {
-                return n;
-            }
-    2
+    crate::state::read_config_value(main_root)
+        .get("broker")
+        .and_then(|b| b.get("max_question_rounds"))
+        .and_then(Value::as_u64)
+        .unwrap_or(2)
 }
 
 pub(crate) fn find_highest_result(job_dir: &Path) -> Option<(u32, MailboxResult)> {

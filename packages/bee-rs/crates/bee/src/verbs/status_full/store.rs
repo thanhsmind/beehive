@@ -497,7 +497,11 @@ pub(crate) fn read_raw_config_for_validation(ctx: &Ctx) -> R<Option<Value>> {
     if !file.exists() {
         return Ok(None);
     }
-    Ok(Some(rj(ctx, &file)?.unwrap_or(Value::Null)))
+    let tracked = rj(ctx, &file)?.unwrap_or(Value::Null);
+    if !tracked.is_object() {
+        return Ok(Some(tracked));
+    }
+    Ok(Some(crate::state::read_config_value(&ctx.root)))
 }
 
 pub(crate) struct Problem {

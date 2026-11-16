@@ -572,9 +572,7 @@ pub(crate) fn resolve_iteration(main_root: &Path, role: Role, turn_ceiling: u64)
         ));
     }
 
-    let cfg_val: Option<Value> = std::fs::read_to_string(main_root.join(".bee").join("config.json"))
-        .ok()
-        .and_then(|raw| serde_json::from_str(&raw).ok());
+    let cfg_val: Option<Value> = Some(crate::state::read_config_value(main_root));
 
     if role == Role::Supervisor {
         let supervisor_runtime_val = cfg_val

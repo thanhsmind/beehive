@@ -85,8 +85,31 @@ pub(crate) fn global_config_dir() -> Option<PathBuf> {
 }
 
 #[cfg(test)]
+thread_local! {
+    static TEST_GLOBAL_DIR: std::cell::RefCell<Option<PathBuf>> = const { std::cell::RefCell::new(None) };
+}
+
+#[cfg(test)]
 pub(crate) fn global_config_dir() -> Option<PathBuf> {
-    None
+    TEST_GLOBAL_DIR.with(|dir| dir.borrow().clone())
+}
+
+#[cfg(test)]
+pub(crate) struct TestGlobalDir;
+
+#[cfg(test)]
+impl TestGlobalDir {
+    pub(crate) fn set(dir: &Path) -> Self {
+        TEST_GLOBAL_DIR.with(|d| *d.borrow_mut() = Some(dir.to_path_buf()));
+        TestGlobalDir
+    }
+}
+
+#[cfg(test)]
+impl Drop for TestGlobalDir {
+    fn drop(&mut self) {
+        TEST_GLOBAL_DIR.with(|d| *d.borrow_mut() = None);
+    }
 }
 
 pub(crate) fn build_layers(root: &Path, global_dir: Option<&Path>, policy: CorruptPolicy) -> LayerSet {
@@ -309,5 +332,73 @@ mod tests {
         failopen.iter().filter(|(k, _)| *k != "advisor").for_each(|(k, v)| assert_eq!(strict.get(k), Some(v)));
         assert_eq!(strict["k"], json!({"x": 1, "y": 2}));
         assert_eq!(strict["team"], json!({"c": 1}));
+    }
+
+    fn herding_team() -> Value {
+        json!({"herding": {
+            "agents": {"p": {"paseo": {"provider": "pi"}}, "plain": ["run", "--x"]},
+            "agent_command": "plain"
+        }})
+    }
+
+    fn resolved(root: &Path) -> (String, Vec<String>, bool, bool) {
+        let cfg = crate::state::read_config_value(root);
+        let (kind, args, _env, _wt) = crate::herding::wave::resolve_agent_command(&cfg, None).unwrap();
+        let uses = crate::herding::repo_uses_paseo(&cfg, &root.join(".bee"));
+        let spec = matches!(crate::herding::paseo::PaseoSpec::from_config(&cfg, "p"), Some(Ok(_)));
+        (kind, args, uses, spec)
+    }
+
+    #[test]
+    fn config_layers_reader_team_json_matches_config_json_for_herding() {
+        let tracked = tempfile::tempdir().unwrap();
+        put(tracked.path().join(".bee/config.json"), herding_team());
+        let split = tempfile::tempdir().unwrap();
+        put(split.path().join(".bee/config.json"), json!({"herding": {"transport": "tmux"}}));
+        put(split.path().join(".bee/team.json"), herding_team());
+        let expected = resolved(tracked.path());
+        assert_eq!(expected.0, "run");
+        assert!(expected.2 && expected.3);
+        assert_eq!(resolved(split.path()), expected);
+    }
+
+    #[test]
+    fn config_layers_reader_global_only_herding_value_reaches_the_readers() {
+        let global = tempfile::tempdir().unwrap();
+        put(global.path().join("config.json"), json!({"herding": {"transport": "tmux", "ceiling_seconds": 120}}));
+        let _dir = TestGlobalDir::set(global.path());
+        let root = tempfile::tempdir().unwrap();
+        put(root.path().join(".bee/config.json"), json!({}));
+        assert_eq!(
+            crate::herding::transport_kind_at(root.path()).unwrap(),
+            crate::herding::TransportKind::Tmux
+        );
+        assert_eq!(crate::herding::ceiling_seconds_at(root.path()), Some(120));
+    }
+
+    #[test]
+    fn config_layers_reader_corrupt_config_reads_as_defaults() {
+        let root = tempfile::tempdir().unwrap();
+        put(root.path().join(".bee/config.json"), json!({}));
+        std::fs::write(root.path().join(".bee/config.json"), "{not json").unwrap();
+        assert_eq!(
+            crate::herding::transport_kind_at(root.path()).unwrap(),
+            crate::herding::TransportKind::Herdr
+        );
+        assert_eq!(crate::herding::ceiling_seconds_at(root.path()), None);
+        assert_eq!(crate::herding::read_command_template_tokens(root.path(), "k"), None);
+    }
+
+    #[test]
+    fn config_layers_reader_worktree_bootstrap_copies_team_json() {
+        let main = tempfile::tempdir().unwrap();
+        let wt = tempfile::tempdir().unwrap();
+        put(main.path().join(".bee/config.json"), json!({}));
+        put(main.path().join(".bee/team.json"), herding_team());
+        crate::verbs::worktree::bootstrap_worktree_store(wt.path(), &main.path().join(".bee"), "demo").unwrap();
+        assert_eq!(
+            std::fs::read_to_string(wt.path().join(".bee/team.json")).unwrap(),
+            std::fs::read_to_string(main.path().join(".bee/team.json")).unwrap()
+        );
     }
 }

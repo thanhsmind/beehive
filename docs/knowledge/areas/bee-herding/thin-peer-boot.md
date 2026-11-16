@@ -12,7 +12,7 @@ bee:
   sources: [docs/history/thin-worker-boot/CONTEXT.md, docs/history/thin-worker-boot/plan.md, docs/history/thin-boot-default/plan.md]
   authoritative_for: "bee-herding: the thin peer boot — the env layer, the peer preamble hook, the dispatch.thin_peer_boot switch and its default"
   owns.code: [packages/bee-rs/crates/bee/src/hooks/mod.rs, packages/bee-rs/crates/bee/src/hooks/session_init.rs, packages/bee/prompts/peer-boot.md]
-  anchors: [packages/bee/prompts/peer-boot.md, packages/bee-rs/crates/bee/src/hooks/mod.rs, packages/bee-rs/crates/bee/src/herding/run.rs, packages/bee-rs/crates/bee/src/hooks/session_init.rs]
+  anchors: [packages/bee/prompts/peer-boot.md, packages/bee-rs/crates/bee/src/herding.rs, packages/bee-rs/crates/bee/src/herding/wave.rs, packages/bee-rs/crates/bee/src/hooks/mod.rs, packages/bee-rs/crates/bee/src/herding/run.rs, packages/bee-rs/crates/bee/src/hooks/session_init.rs]
   verified_at: 2026-11-14
   verified_commit: cdefa65590c37a8f7f9a716d23cd23df9a082c54
 ---
@@ -87,3 +87,9 @@ boot again.
 - `packages/bee-rs/crates/bee/src/herding/run.rs` — `thin_peer_env`, which calls the rule and adds the Claude-only requirement.
 - `packages/bee-rs/crates/bee/src/hooks/session_init.rs` — prints the preamble when `thin_peer_boot` is true, before any session is registered.
 - `packages/bee/prompts/peer-boot.md` — the preamble text.
+
+## Config reads in herding
+
+Read when: a herding value (agents, agent_command, transport, budget, paseo command) set in team.json or the global file seems ignored.
+
+Every herding reader takes its config from the merged layered view (`state::read_config_value`, the same view `read_config_raw` returns for the main checkout), never from `.bee/config.json` alone. A corrupt or absent file still reads as Null, so each reader keeps its default. The worktree bootstrap copies `team.json` beside `config.json` so a herded worker sees the same team table. `has_stale_advisor_key` stays on the tracked file because it asks about that file, not a value.
