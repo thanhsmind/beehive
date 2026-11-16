@@ -340,10 +340,10 @@ and expected — they do not pull you into any workflow.\n\n",
     };
 
     let mut proof_command_block = String::new();
-    if spec.cell_id.is_some() {
-        if let Some(cmd) = read_proof_command(spec.worktree_root) {
-            proof_command_block.push_str(&format!("# Proof command\n\n{cmd}\n\n"));
-        }
+    if spec.cell_id.is_some()
+        && let Some(cmd) = read_proof_command(spec.worktree_root)
+    {
+        proof_command_block.push_str(&format!("# Proof command\n\n{cmd}\n\n"));
     }
 
     let question_section = if spec.allow_question {
