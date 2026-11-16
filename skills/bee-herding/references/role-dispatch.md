@@ -14,6 +14,21 @@ path containing `--wt--`, that is fatal: do §1 and §3 only (learn your
 the iteration without dispatching. Do not skip to reporting — you cannot report
 before §3 has told you where to report to.
 
+### `--dry-run`: report the whole decision, change nothing
+
+There is no CLI to parse — recognize `--dry-run` from the instruction you were
+given for this iteration. It is for manual verification of the decision logic,
+never something the unbounded loop passes on its own.
+
+Run every read in §1-§7 exactly as written and produce the same decision you
+would otherwise act on. The difference is entirely in what you do with it:
+**print the decision as your own output and stop before §8.** Concretely: no
+`bee herding pane rename` in §1 (report what you would have named it), no
+`bee herding pane send-text` anywhere (print those lines instead), and never
+`bee worktree new`, `bee herding pane split`, or `bee herding agent-start`.
+Nothing on disk or in the pane workspace (a herdr workspace, or a tmux session)
+changes as a result.
+
 ### 1. Learn who you are, and self-name
 
 No transport assigns a name of its own — an unnamed pane carries a `label` of

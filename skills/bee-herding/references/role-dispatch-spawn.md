@@ -237,18 +237,3 @@ The working agent is on its own from there — it runs the ordinary bee chain
 inside its worktree until its item is finished. This role does not watch it,
 wait on it, or act on it again; the next iteration's occupancy count (§4) is
 how its progress is next observed.
-
-### `--dry-run`: report the whole decision, change nothing
-
-There is no CLI to parse — recognize `--dry-run` from the instruction you were
-given for this iteration. It is for manual verification of the decision logic,
-never something the unbounded loop passes on its own.
-
-Run every read in §1-§7 exactly as written and produce the same decision you
-would otherwise act on. The difference is entirely in what you do with it:
-**print the decision as your own output and stop before §8.** Concretely: no
-`bee herding pane rename` in §1 (report what you would have named it), no
-`bee herding pane send-text` anywhere (print those lines instead), and never
-`bee worktree new`, `bee herding pane split`, or `bee herding agent-start`.
-Nothing on disk or in the pane workspace (a herdr workspace, or a tmux session)
-changes as a result.
