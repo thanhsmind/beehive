@@ -12,7 +12,7 @@ the MCP tools as the fallback. One new doctrine rule holds the mapping. The
 alias SKILL.md and the hub-mode principle header name
 `skillstation skill show <id> --json` before `skill_get`.
 
-Playbook: `skills/bee-planning/playbooks/feature.md` (situation feature).
+Playbook: `skills/bee-planning/playbooks/feature/feature.md` (situation feature).
 
 Mode: `standard` — 2 risk flags: public contract (doctrine and alias text
 every host reads), multi-domain (Rust code, doctrine, knowledge).
@@ -31,6 +31,7 @@ mutable state n/a; smallest safe decomposition: two writers, two checkers.
 - D3: skillstation skill show --json for active skills; skill_get for relative files, other states, remote hub, CLI failure.
 - D4: alias render and principle header name the CLI first; playbook pointer and agent tools line keep skill_get.
 - D5: tests pin the order.
+- D6: the mcp-gateway skill text went to its own leader; aliases re-render from main after merge.
 
 ## Load-bearing claims
 
