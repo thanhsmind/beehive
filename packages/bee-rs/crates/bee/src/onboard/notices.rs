@@ -1332,6 +1332,43 @@ mod tests {
         );
     }
 
+    fn assert_names_config_set(notices: &[String]) {
+        assert!(!notices.is_empty());
+        for notice in notices {
+            assert!(notice.contains("bee config set --key commands."), "{notice}");
+            assert!(!notice.contains("to .bee/config.json"), "{notice}");
+        }
+    }
+
+    #[test]
+    fn the_ask_for_commands_names_bee_config_set() {
+        let dir = static_check_repo(&[], None);
+        assert_names_config_set(&commands_notices(dir.path(), false));
+    }
+
+    #[test]
+    fn detected_candidates_with_a_static_check_name_bee_config_set() {
+        let dir = static_check_repo(
+            &[("package.json", r#"{"scripts":{"test":"vitest","lint":"eslint ."}}"#)],
+            None,
+        );
+        let notices = commands_notices(dir.path(), false);
+        assert!(notices[0].contains("Detected candidates"), "{notices:?}");
+        assert!(notices[0].contains("npm run lint"), "{notices:?}");
+        assert_names_config_set(&notices);
+    }
+
+    #[test]
+    fn a_test_list_missing_a_static_check_names_bee_config_set() {
+        let dir = static_check_repo(
+            &[("package.json", STATIC_CHECK_LINT_PKG)],
+            Some(json!({"commands":{"test":["npm test"]}})),
+        );
+        let notices = commands_notices(dir.path(), false);
+        assert!(notices[0].contains("does not run"), "{notices:?}");
+        assert_names_config_set(&notices);
+    }
+
     #[test]
     fn repo_hooks_record_detection() {
         let dir = tempfile::tempdir().unwrap();
