@@ -110,3 +110,21 @@ asks. `bee onboard` never writes the file.
 - `bee onboard` reports `action_needed` false.
 
 The repo-root `WORKSPACE_PROTOCOL.md` of the bee repo is the reference result.
+
+## Set up the project's checks
+
+**When.** The user asks to set up lint, a type check, tests, or the verify or CI commands, at any time. That request is the confirmation (lint-setup-guidance D2). Do not ask again and never answer that permission is missing.
+
+**Steps.**
+
+1. Run `.bee/bin/bee onboard --repo-root . --json` and read its notices for the checks it detected and the candidates it names. Run `.bee/bin/bee config explain --key commands.test` to see what is recorded.
+2. For each check found, run it once and tell the user green or the finding count.
+3. With no linter in the project, name the stack's usual one (eslint, ruff, clippy, golangci-lint, phpcs and so on). After the user agrees, add it to the project as a dev dependency with its config, through the normal bee chain for a code change.
+4. Write the list yourself: `.bee/bin/bee config set --key commands.test --value '["<lint>","<typecheck>","<tests>"]'`. Put the checks first, then the test entries already there, and keep every entry already there.
+5. Log the answer with `.bee/bin/bee decisions log`.
+
+**Rules.**
+
+- `commands` is the agent's to write.
+- Never hand-edit `.bee/config.json`.
+- Only `team`, `herding.agents`, `herding.agent_command` and `hooks` are the user's to edit.
