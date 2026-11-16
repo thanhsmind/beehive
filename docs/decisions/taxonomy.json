@@ -898,6 +898,7 @@
     "contract:decision-concept-links",
     "contract:clippy-in-test",
     "contract:clippy-warnings-clean",
-    "contract:release-2-108-0-check"
+    "contract:release-2-108-0-check",
+    "contract:clippy-1100-fix"
   ]
 }
