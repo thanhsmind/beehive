@@ -12,7 +12,7 @@ bee:
   decisions: [pi-slp-next-ops D1-D4 (orient reads the session record; one runnable next operation; the per-turn run line; no open-your-session text), harness-refocus-P2, 412e9b3a, harness-refocus-P4]
   sources: [docs/specs/porcelain.md, docs/handbook/register.md, packages/bee-rs/crates/bee/src/router.rs, packages/bee-rs/crates/bee/src/generated/registry_payload.json]
   authoritative_for: "rust-runtime: the porcelain/plumbing command surface and the teach-at-point-of-contact contract"
-  anchors: [packages/bee-rs/crates/bee/src/router.rs]
+  anchors: [packages/bee-rs/crates/bee/src/router.rs, packages/bee-rs/crates/bee/src/verbs/config.rs]
   verified_at: 2026-11-10
   verified_commit: 471430df16c5b9bc6af2a3f891ee1180729d1916
 ---
@@ -152,13 +152,28 @@ bought a smaller help output at the price of a blind guard.
   zero mutation, any key that is, sits inside, or holds a key the config
   write guard governs (`team`, `herding.agents`, `herding.agent_command`,
   `hooks`). The refusal calls the guard's own check in both directions over
-  the merged tracked and local config, so the governed list has one home; it
+  the merged config of every layer, so the governed list has one home; it
   also refuses an add inside `team` or `herding.agents`. A field the guard's
   view ignores (for example a role description) can still be set. A
   target file that is not a JSON object is never overwritten. `explain`
-  names the layer that wins: `local`, `tracked`, or `unset` (built-in
-  default). The user guide is `docs/config-reference.md`, "Setting values"
-  (bee-config-verbs, cfg-1, 2026-11-06).
+  names the layer that wins: `local`, `team`, `tracked`, `global` or `unset`
+  (built-in default), with each layer's value beside it. The user guide is
+  `docs/config-reference.md`, "Setting values" (bee-config-verbs, cfg-1,
+  2026-11-06).
+- R11a — **`bee config` reads the user-global file and never writes it.**
+  `get --global` reads only that file; `set` and `unset` take no `--global`
+  (only waggledance writes it), and `--global` with `--local` is refused.
+  `--global` and `--drop-global` are stripped from argv before the shared
+  flag parser because that parser would otherwise take the next token as
+  their value. `validate` checks all four files and reports a team.json key
+  outside the team table, a key set in both config.json and team.json, and a
+  forbidden global key, each with file and key. `split-team` writes
+  team.json before config.json so a crash between them leaves equal values
+  that a rerun finishes; it refuses when the merged view would change or
+  team.json holds a different value for a moved key. `--drop-global`
+  compares against the global layer and nothing else does. Where the moved
+  keys live and the layer order: `config_layers.rs`
+  (team-global-config D7, D8, D11, D12, tgc-4, 2026-11-16).
 
 ## Edge Cases Settled
 
