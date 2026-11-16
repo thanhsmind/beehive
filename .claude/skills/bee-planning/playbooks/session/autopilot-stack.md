@@ -64,7 +64,7 @@ chain lands as a whole.
    a raise.
 8. **Land the chain in order, then stop at the uat door.** When every link is
    verified at its current head, land bottom first with `bee worktree merge
-   --id <unit> --cleanup` from the main checkout, without asking, as
+   --id <unit>` from the main checkout, without asking, as
    `uat_stop = "close"` already does; the landing is one pass over the chain,
    one merge at a time. A project that sets `uat_stop` to `"merge"` presents the
    chain for the owner's yes first, as `bee-swarming` describes, and this

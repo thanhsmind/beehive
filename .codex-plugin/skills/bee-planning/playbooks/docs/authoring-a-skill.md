@@ -30,4 +30,3 @@ Reply: summary of the skill, key design decisions, validation notes.
 
 Proof line: the validation that ran (frontmatter, referenced files, links) and
 its output.
-Proof floor: the cap refuses a result weaker than this class's floor and names it; the table is the cap's own (`bee cells finish --help`).

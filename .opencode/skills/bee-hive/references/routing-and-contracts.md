@@ -1,26 +1,6 @@
 # Routing And Contracts Reference
 
-Open this when the compact bootstrap in `SKILL.md` is not enough.
-
-## Skill Catalog
-
-| # | Skill | One-line description | Load when... |
-|---|-------|----------------------|--------------|
-| 1 | `bee-hive` | Routing, go mode, gates and the bypass level, red flags. | Starting any session; setting or checking gate bypass |
-| 2 | `bee-shaping` (Explore/Qualify/Lock) | Identify gray areas or triage a backlog item unattended; lock decisions into `CONTEXT.md`. | Feature request is vague or new; a backlog item needs its first triage pass |
-| 3 | `bee-planning` | Research, mode gate, approach, unified plan, current-slice cells; the SMALLER PATH reality check runs inline and the plan-step hat wave is the plan check, both before its merged Gate 2 (procedure home: `gates-and-delegation.md` ("Hat wave")). | Decisions are locked, or scope is already clear |
-| 4 | `bee-swarming` | Launch and tend bounded workers with reservations. | Gate 2 approved (merged shape+execution) |
-| 5 | `bee-swarming` ("Execute") | Bounded worker loop for one cell. | Spawned by swarming |
-| 6 | `bee-reviewing` | Parallel review gate with P1/P2/P3 findings, user-invoked over a scope the user chooses. | User explicitly requests review — never automatic after a final slice or feature close |
-| 7 | `bee-capturing` | Knowledge capture: BA-grade area specs (sync, capture, harvest) plus durable learnings and decisions. | Execution done; documenting any area (UI/API/job); a settled outcome must be kept; work abandoned with lessons |
-| 8 | `bee-grooming` | Entropy audit, debt hunt, approved kills. | Cleanup/audit requested; hive idle |
-| 9 | `bee-researching` | Evidence-labeled research scout. | Research a topic/library/approach; planning discovery L2/L3 |
-| 10 | `bee-herding` | Cockpit roles: bootstrap, dispatch, merge. | Human invokes the cockpit, or the control loop runs one iteration |
-| 11 | `bee-shaping` (Brief) | Render the one human-readable implement plan per feature, and the post-Gate-3 walkthrough (consolidator, not planner). | Planning shaped `small`+ work; a feature's implement plan needs (re)generating; a `standard`/`high-risk` feature passed Gate 3 |
-
-Gate bypass is set from `bee-hive` (Gates); developing bee itself
-(authoring skills, the self-improvement loop) is maintainer territory in
-the bee source repo's handbook, never product routing in a host repo.
+Load when resuming a handoff (`HANDOFF.json`), checking lane ceremony or concurrency rules, running the leader completeness check, formatting a turn/question/catch-me-up/pushback, or checking chaining or file paths.
 
 ## Topology
 
@@ -34,30 +14,6 @@ a feature only lands on main once its uat gate is approved. See
 D0/D0a) for the mechanics. A repo that sets `"staging_before_merge": false` skips
 staging entirely — `bee staging add`/`rebuild` refuse `STAGING_DISABLED`, and the
 feature worktree itself stands in for the mixing ground; the `uat` gate is unaffected.
-
-## First-Skill Routing
-
-| Request type | First skill | Notes |
-|---|---|---|
-| Vague/new feature | `bee-shaping` (Explore) | Always start here if gray areas exist |
-| Research a topic/library/approach (no feature underway) | `bee-researching` | Standalone brief; suggests shaping or planning as next step |
-| (Re)generate or read a feature's implement plan or walkthrough | `bee-shaping` (Brief) | Consolidates the truth artifacts into `docs/history/<feature>/implement-plan.md`, any phase; writes `walkthrough.md` post-Gate-3 for `standard`/`high-risk`; renders nothing for `tiny`/`spike` |
-| Research inside a scoped feature | `bee-planning` | Discovery L2/L3 invokes `bee-researching` in-chain |
-| "Just fix this" / small change, and it writes a file | `bee-shaping` (Lock) | Lock writes a SHORT `CONTEXT.md` first — the brief D1 requires before any source edit — then `bee-planning` routes in tiny or small mode; no added plan ceremony (D1) |
-| "Just fix this" / small change, and it writes nothing (a pure question) | `bee-planning` | Route in tiny or small mode; D6 — no file write, no brief, no record |
-| Review code | `bee-reviewing` | Load directly — only on an explicit review request (rule: agents-review-user-invoked) |
-| Document a screen/API/job/area; keep a settled outcome (rule agreed, behavior confirmed, value tuned); spec a legacy area; capture learnings | `bee-capturing` | Load directly, any phase — capture never waits for feature close |
-| Clean up / tech debt / audit | `bee-grooming` | Load directly |
-| Drive the cockpit (bootstrap/dispatch/merge) | `bee-herding` | Load directly |
-| `/go` / full pipeline | Go mode | See `go-mode.md` |
-| Turn gate-bypass on/off, widen it, or check it | `bee-hive` (Gates) | Any phase; the agent sets `.bee/config.json` `gate_bypass` on the user's instruction |
-| Resume session | Resume logic | Check `HANDOFF.json` first — kind-aware: pause waits, planned-next adopts only at a fresh-session boundary |
-| Explicit request to run the automatic backlog-triage pass on a `docs/backlog.md` row (a human or an external caller invoking the pipeline path directly — no auto-trigger exists yet) | `bee-shaping` (Qualify) | Pipeline path, explicit invocation only |
-| Docs/spec/README/sample-only change, and it writes a file | docs lane | "Docs lane" under Lane ceremony in full — short brief, Gate 1 approval, announce, write, format-check, capture or "nothing settled" (rule: agents-capture-line-at-close); no pipeline |
-| A question about docs/spec content that writes nothing | direct answer, no lane | D6 — no file write, no brief, no record |
-| Merge/ship/release request while unreviewed or stale candidates exist | Report the candidate count + risk level, then ask ONE question: "Create a review session for this scope?" | Only an explicit yes dispatches `bee-reviewing` — never spawn a reviewer silently |
-
-**Surface-scope-earlier check** (runs before routing to `bee-shaping`): the request contains concrete acceptance criteria AND references to existing patterns → offer "Found clear requirements. Jump straight to planning, or explore alternatives first?" On approval, planning receives a one-paragraph scoping synthesis whose decisions still carry D-IDs.
 
 ## Onboarding Protocol
 
@@ -170,7 +126,7 @@ Then the change is knowledge upkeep, same class as capture — announce one line
 
 ### Tiny/small fast path
 
-Before any of this (D1): Lock writes the brief first — a short `CONTEXT.md` naming what was asked, what was found, what will be done — no added plan ceremony, just the brief. Then the draft cell(s) are rendered as a **preview inside the gate message** — never persisted first, dry-run-validated first (`bee cells add --stdin --dry-run`; `bee-planning/references/planning-reference.md`, "Pre-flight before cells add") — and the 2-minute reality check runs inline against that preview, before the shape and execution approvals are presented as **one merged question** — "Work shape + execution: I'm about to do X via Y, verified by Z. Approve?" — approval records both `shape` and `execution`, covers exactly the previewed work packet, and is the same call that approves the brief (Gate 1 and Gate 2 fold into this one stop at `tiny`/`small`). `cells add` runs only **after** approval, and the cells are claimed only then — previewed before persist, never persist-then-preview. Every code cell, `tiny` included, is dispatched through `bee dispatch prepare` because each role runs its own configured model: a dispatched implementer and a separate dispatched tester that shares no context with it; the merged gate, cap discipline, and done-report are unchanged. Inline execution of a code cell is refused at cap, and a `tiny` cap with more than one counted file (paths outside `.bee/` and `docs/history/`) is refused without `--inline-reason`. `bee route` refuses `--lane tiny` with `--files` above 1. After execution (the tester's return): no separate merge gate — the orchestrator authors the done-report itself from the worker's verbatim diff plus its commit after running the leader completeness check (worker reports are navigation aids, not completion evidence; compare approved requirements against actual artifacts before accepting). `bee finish` requires the recorded proof line; a smell or hard-gate still gets a spot `bee test` re-run, and that done-report (diff + commit + capture line) closes it. `bee close` and `bee worktree merge` check that recorded proof for the feature's capped cells — neither runs `commands.test` itself (`bee-swarming/references/swarming-reference.md`, "Proof at finish and close, in full"). A real problem found during the orchestrator's own review stops and asks, always.
+Before any of this (D1): Lock writes the brief first — a short `CONTEXT.md` naming what was asked, what was found, what will be done — no added plan ceremony, just the brief. Then the draft cell(s) are rendered as a **preview inside the gate message** — never persisted first, dry-run-validated first (`bee cells add --stdin --dry-run`; `bee-planning/references/cells.md`, "Pre-flight before cells add") — and the 2-minute reality check runs inline against that preview, before the shape and execution approvals are presented as **one merged question** — "Work shape + execution: I'm about to do X via Y, verified by Z. Approve?" — approval records both `shape` and `execution`, covers exactly the previewed work packet, and is the same call that approves the brief (Gate 1 and Gate 2 fold into this one stop at `tiny`/`small`). `cells add` runs only **after** approval, and the cells are claimed only then — previewed before persist, never persist-then-preview. Every code cell, `tiny` included, is dispatched through `bee dispatch prepare` because each role runs its own configured model: a dispatched implementer and a separate dispatched tester that shares no context with it; the merged gate, cap discipline, and done-report are unchanged. Inline execution of a code cell is refused at cap, and a `tiny` cap with more than one counted file (paths outside `.bee/` and `docs/history/`) is refused without `--inline-reason`. `bee route` refuses `--lane tiny` with `--files` above 1. After execution (the tester's return): no separate merge gate — the orchestrator authors the done-report itself from the worker's verbatim diff plus its commit after running the leader completeness check (worker reports are navigation aids, not completion evidence; compare approved requirements against actual artifacts before accepting). `bee finish` requires the recorded proof line; a smell or hard-gate still gets a spot `bee test` re-run, and that done-report (diff + commit + capture line) closes it. `bee close` and `bee worktree merge` check that recorded proof for the feature's capped cells — neither runs `commands.test` itself (`bee-swarming/references/swarming-reference.md`, "Proof at finish and close, in full"). A real problem found during the orchestrator's own review stops and asks, always.
 
 ### Leader completeness check
 
@@ -235,38 +191,25 @@ chatter. They trust fresh output, not assurance.
   findings, matrices) lives in a linked file, never pasted into chat.
 - **Close** with exactly one next action (rule: agents-one-next-action). A multi-step routed task's closing turn also carries one Principles line: each applied principle slug and the decision it changed, or a plain statement that none changed anything (rule: agents-name-applied-principles).
 
-**Five rules.** These are the ones a message can actually violate:
+**Rules.**
 
-1. **Pre-send check.** Reading only the first and last line must answer (a) what
-   just happened and (b) what happens next.
-2. **Evidence before claims.** "done", "green", "fixed" appear only beside fresh
-   output in the same message.
-3. **One question at a time**, formatted apart from progress text, phrased so the
+1. **One question at a time**, formatted apart from progress text, phrased so the
    user can restate what they are deciding in their own words ("Question Format";
    the Gate Presentation Contract is the template). A question buried in a
    progress paragraph does not count as asked.
-4. **A red or a refusal is never silenced** — not by a quiet switch, not by a
+2. **A red or a refusal is never silenced** — not by a quiet switch, not by a
    bypass level, not by "I'll mention it at the end".
-5. **Work language**, with the two exemptions below.
+3. **Work language**, with the two exemptions below.
 
 One standing exception: a destructive or irreversible action gets full explicit
 clarity — safety beats brevity, always.
 
-**Everything else is craft.** Open each unit with what is being done and why;
-give concrete units for anything over a minute ("verify ~2 min", never "a
-while"); make a win runnable by naming the command or path — name a doc by
-its bare repo-relative path (`docs/...`) — a file in an unmerged feature worktree by its absolute path, since a relative path resolves against main — never a viewer URL; state a failure as
-cause, fix, and who acts, quoting the shortest decisive line; file a tangent and
-mention it once at the close; let the work be the subject of every line, with
-ids and counts trailing as handles or standing beside a claim as evidence, never
-leading and never as achievement statistics. Protocol and record surfaces —
-worker status tokens, cap traces, decision logs, CONTEXT.md — keep their ids,
-because that is where ids live. Write user-facing prose through `bee-unslop`'s
-rules, and saved documents — plan, spec, CONTEXT.md, capture, PR body, commit
-body — through `bee-technical-writing` as well. Neither ever rewrites a
-progress tick, a red or refusal line, command output, quoted evidence, an id
-or code. When the project's own instructions set tone, length, style or
-language, they win, and the reply stays in the user's language.
+**Craft.** Give concrete units for anything over a minute ("verify ~2 min", never "a while"); state a failure as cause, fix, and who acts, quoting the shortest decisive line; file a tangent and mention it once at the close. Protocol and record surfaces — worker status tokens, cap traces, decision logs, CONTEXT.md — keep their ids, because that is where ids live. Write user-facing prose through `bee-unslop`'s rules, and saved documents — plan,
+spec, CONTEXT.md, capture, PR body, commit body — through `bee-technical-writing`
+as well. Neither ever rewrites a progress tick, a red or refusal line, command
+output, quoted evidence, an id or code. When the project's own instructions set
+tone, length, style or language, they win, and the reply stays in the user's
+language.
 
 Example:
 
@@ -296,9 +239,9 @@ memory of the session.
 
 ### Claim labels and pushback
 
-Full form of rule: agents-verify-before-agreeing. Lane names are bee's own — `tiny`, `small`, `docs` are the fast lane; `standard`, `high-risk` are the deep lane — and the route flags are the canonical mode-gate list ("Route record" in `scout-and-ticks.md`).
+Full form of rule: `agents-verify-before-agreeing`. `tiny`, `small`, `docs` are the fast lane; `standard`, `high-risk` are the deep lane ("Route record" in `scout-and-ticks.md`).
 
-**Triage line.** A task opens with one line before its first tool call: `Triage: <lane> — <reason in 10 words or fewer>`. A route flag never takes a fast lane. The user may override the lane; say so and carry on in theirs. A plain question needs no triage line. The line is the guess the route record later confirms: write the record with `bee route --set` the same turn the count is known.
+Triage examples:
 
 ```text
 Triage: tiny — one-word typo in a README heading
@@ -308,9 +251,7 @@ Triage: standard — new verb across three modules
 Triage: high-risk — touches auth flag, data-model change
 ```
 
-**Claim labels.** Every technical claim about code or behavior that this session checked carries a numbered citation `[1]`, `[2]` in the text. The reply ends with a Sources block, headed `Sources:` or `Nguồn:`, one line per number: `[n] path:line` for a line this session read, or `[n]` the command run with its result. One source keeps one number on reuse. A claim from general knowledge or inference keeps the inline `[unverified]` marker and gets no number. An `[unverified]` claim is never stated as fact, and it is never the premise of an edit.
-
-**Source order.** A claim about how something works now cites the `docs/knowledge` concept that holds it, then code `file:line`. `docs/history` is cited only for why a decision was made, or for its locked wording. A decision hit from `bee decisions search` leads to the concept that cites its D-number first; open `docs/history` only when the reason itself is the claim.
+Claim-label examples:
 
 ```text
 Onboarding offers a detected lint check as a member of `commands.test` [1]. It stays propose-only because bee never writes a detected command [2].
@@ -329,8 +270,6 @@ Sources:
 [2] cargo test route_rejects_unknown_lane — 1 passed
 ```
 
-**First reaction.** Until the key assumption has a citation, the first reaction to a proposal is conditional: "Sounds right; checking X first." Agreement comes after the check, with what it showed.
-
 **Pushback.** When the user's direction conflicts with the code, never say "you are wrong". Open in plain language: "I understand the goal is X. Current code does Y because Z (file:line). To keep X, the options are..." Then four parts, in this order:
 
 1. **Current state** — what the code does, with `file:line`.
@@ -342,28 +281,12 @@ The user decides. If the check shows the user's direction is right and the code 
 
 ### Work language — a vocabulary rule, not a silence rule
 
-Bee is bookkeeping, not the deliverable, so chat speaks the user's work language:
-"fixing the login redirect", "tests pass" — never "capped cell auth-3" or "phase
-is now swarming". What this constrains is the VOCABULARY, not whether a step is
-mentioned at all. Every perceivable step still gets its progress tick ("Progress
-ticks"); the tick names what happened to the WORK rather than what happened to the
-record — `✓ capped: tick catalog rewritten`, not `✓ capped cell vt-3`.
+This constrains vocabulary, not whether a step is mentioned: every perceivable step still gets its progress tick ("Progress ticks"), naming what happened to the work rather than the record (`✓ capped: tick catalog rewritten`, not `✓ capped cell vt-3`).
 
 Bee vocabulary may lead a line in exactly two cases:
 
 1. the user asks about bee itself (state, cells, workflow) — answer plainly, in their language;
 2. a gate genuinely needs their decision — and the Gate Presentation Contract already requires that question in work terms, not bee terms.
-
-Litmus: strip every bee term out of a chat message; if nothing the user needs is
-lost, those terms should not have been there.
-
-### The agent runs the machinery, not the user
-
-Every bee command (`bee orient`, `cells`, `reservations`, `decisions`, onboarding, cell verify
-commands) is run by the agent itself the moment the workflow calls for it — never printed for the
-user to execute, never "run this and tell me the output". The only human actions in bee are gate
-approvals, decision answers, and privacy approvals. `AGENTS.md` states the same law inside its
-workflow boundaries and defers here for the full form; `SKILL.md`'s Hard rules list carries the router-side pointer.
 
 ## Gate Presentation Contract
 
@@ -386,21 +309,6 @@ RECOMMENDATION: <the option the evidence favors, and why in one line>
 ```
 
 One decision per question. Independent questions may share one `AskUserQuestion` call (up to 4 — `gates-and-delegation.md`, "AskUserQuestion"); dependent ones go one at a time. Never answer your own question.
-
-**Mark the wait before you send.** A turn that ends on a question —
-a gate or a freeform one — runs `bee state waiting-on set
---kind <gate|question|turn-end> --subject "<the question>"` before the
-message goes out (awaiting-human D1: the agent marks the wait when it
-asks). `turn-end` is the third kind (auto-wait-mark D3) — the Stop hook
-sets it on every ordinary turn end, so the agent itself only ever passes
-`gate` or `question` here. The mark flips `run_state` to
-`awaiting-approval` so an external reader — a dashboard, a sibling
-session — sees "waiting on you" instead of "idle"; it works with or
-without an active feature (D3), and it ends on its own: the user's next
-message clears it via the `UserPromptSubmit` hook, `bee state
-waiting-on clear` clears it explicitly, and a stale session's mark
-expires with its heartbeat (D2/D4). Never leave a question pending
-without its mark.
 
 ## File Quick Reference
 
@@ -436,13 +344,4 @@ docs/specs/
 
 ## Helper CLI Quick Reference
 
-`.bee/bin/bee <group> <verb>` is the sole canonical form — the vendored
-binary onboarding installs into the repo, invoked by its repo-relative path
-from the session's cwd. Prose elsewhere writes it `bee <group> <verb>` for
-readability; that always means this same binary, never a PATH lookup and
-never a Node script. `bee --help` prints the porcelain flow surface;
-`bee --help --all` prints the full registry (`bee --help --json` / `--names`
-give the same two surfaces machine-readably) — the help output is the command
-reference, not this file. Legacy `bee_*.mjs` shims do not ship;
-`LEGACY_HELPER_RE` in the write-guard stays only as a transition guard for
-hosts mid-upgrade.
+`bee` = `.bee/bin/bee` (run from the session's cwd, never via PATH or a Node script); `bee <cmd> --help` (`--all` / `--json` / `--names`) is the command reference.

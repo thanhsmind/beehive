@@ -532,42 +532,7 @@ The orchestrator's loop for one herding cell:
 
 ## Worker Prompt Template
 
-Nicknames are Minions character names — recognizable,
-consistent worker identities; the assigned cell stays authoritative for responsibilities.
-
-```text
-You are a bee worker subagent.
-
-Identity:
-- Agent nickname (reservation identity): <NICKNAME>
-- Assigned cell id: <CELL_ID> (ALREADY CLAIMED for you by the orchestrator before dispatch — do NOT run `cells claim`; validate against the inlined cell JSON below)
-- Feature: <FEATURE>
-- Role: <the cell's own role, e.g. code|read|test> (model: <MODEL_NAME>; an escalated cell says "escalated — session model")
-- State at dispatch: phase=<PHASE> feature=<FEATURE> gates.execution=<BOOL> (copied from the orchestrator's own fresh read; the worker never re-fetches the full payload for this)
-- Advisor (optional — present only when the advisor resolves and is not the worker's own model, the same-model no-op): <ADVISOR_MODEL_OR_CLI_COMMAND> — consult via <TRANSPORT>
-
-Inputs — read these; nothing else will be provided:
-- docs/history/<FEATURE>/CONTEXT.md
-- docs/history/<FEATURE>/plan.md
-- Global constraints: <GLOBAL_CONSTRAINTS — locked D-IDs, prohibitions, budgets>
-- Your cell (inlined verbatim from the orchestrator's claim-time read — authoritative):
-  <CELL_JSON — the full .bee/cells/<CELL_ID>.json content>
-- The cell's three parts, named apart: Goal (`must_haves.truths`); Hard constraints (`must_haves.prohibitions` plus locked D-IDs); Open choices (`must_haves.open_choices`, when present — the worker may question one with evidence through `bee cells dissent`)
-
-Contract:
-- Load the bee-swarming skill (Execute section) and follow its loop exactly.
-- Execute only the assigned cell — it is already claimed under your nickname; never run `cells claim` yourself, never select or accept other work.
-- Reserve every file before writing, under your nickname; never pass a session id you were handed — reservation and claim verbs auto-derive one from your own environment when needed.
-- Prefix write-heavy shell commands with BEE_AGENT_NAME="<NICKNAME>".
-- Return exactly one final status token: [DONE], [BLOCKED], [HANDOFF], or [NOOP],
-  followed by the result fields. Report file only for [BLOCKED]/[HANDOFF]/consult-carrying
-  cells — a routine [DONE] relies on the cap trace + this message.
-
-Startup (two reads, zero CLI round-trips):
-1. Read AGENTS.md.
-2. Read docs/history/<FEATURE>/CONTEXT.md. Validate ownership against the INLINED cell JSON above (status claimed, worker <NICKNAME>) — never re-run `status --brief` or `cells show` at startup; the dispatch state line and inlined cell are authoritative, and ownership is re-enforced at cap by the claim guard. A prompt missing the inlined cell JSON is malformed → [BLOCKED].
-3. Reserve, implement, commit, finish (`--report` carrying your proof line; `bee close`/`bee worktree merge` check it, never re-run it), report.
-```
+The rendered template is `packages/bee/prompts/worker-cell.md`; `bee dispatch prepare` fills it. It is the one home of the worker prompt and of the Result form.
 
 The `Advisor` line is omitted entirely — a session whose config has no advisor slot dispatches byte-identical prompts to today — whenever no advisor resolves, or the advisor's model name literally matches the worker's own resolved model (the one honest no-op). Escalated workers are not a skip condition — config is the authority and the orchestrator does not second-guess it with a strength ladder. The same-model no-op is the orchestrator's, run at dispatch, never left to the worker. When present, `<TRANSPORT>` states the proven transport verbatim, matching what the worker contract's Advisor Consult section (references/worker-details.md) tells the worker to run:
 for a **cli-shaped** advisor, `<the configured command>, evidence bundle on stdin` (External Executors output-capture discipline, above).
@@ -578,34 +543,25 @@ Default: no session history, no other cells, no orchestrator reasoning. A worker
 
 ## Result Formats (expected back from workers)
 
-This section is the one home of the Result form; `bee-swarming/SKILL.md`
-and `bee-swarming/references/worker-details.md` point here. A worker's
-final message opens with exactly one status token. Beside it — never in
-place of it — goes one fenced JSON block, the same object
-`bee cells finish --report` validates key-for-key onto the trace:
+The Result form — the fenced JSON block beside the status token, with its
+`tests` proof line and `mistakes` shape — has one home: the rendered worker
+prompt, `packages/bee/prompts/worker-cell.md`. Its keys are the ones
+`bee cells finish --report` validates onto the trace: a three-part
+`mistakes` entry (`<what went wrong> — <what would have been better> —
+<fix-at>`), `knowledge_used`, `knowledge_wrong`, `baseline`, and the five
+optional keys below. This section keeps how the orchestrator reads the form.
 
-```json
-{"outcome": "<one line>", "commit": "<sha or none>", "files": ["<path>"], "tests": "<command> — <result> — <scope reason>", "deviations": ["<line>"], "mistakes": ["<what went wrong> — <what would have been better>"]}
-```
-
-- `tests` — the proof line ("Proof at finish and close, in full"). Its
-  result segment is `green:live` (the real product was driven and its
-  result inspected), `green:unit` (automated tests passed) or
-  `green:static` (a compile, lint or parity check, nothing executed); a
-  bare `green` is refused.
+- A `mistakes` of `[]` says the cell hit none; leaving the key out records
+  no answer, and `bee close` refuses the feature naming that cell.
 - The four layers — a final report for work that ships something
   runnable states source (committed), artifact (built), installed
   (copied or onboarded) and live (the running bytes observed), each with
   its own verdict or `not checked`; when nothing runnable ships, omit
-  them. The proof-line tag set above is unchanged. Example: `source:
+  them. The proof-line tag set in `worker-cell.md` is unchanged. Example: `source:
   committed abc123 · artifact: built, cargo build green · installed: not
   checked · live: not checked`.
 - `deviations` — one departure line each, or one line reading
   `followed the plan` (the departure line, below).
-- `mistakes` — one `<what went wrong> — <what would have been better>`
-  entry each; the first part names a concrete file, command or
-  observation. `[]` says the cell hit none; leaving the key out records
-  no answer, and `bee close` refuses the feature naming that cell.
 
 Five keys are optional. Send them when they carry an answer:
 

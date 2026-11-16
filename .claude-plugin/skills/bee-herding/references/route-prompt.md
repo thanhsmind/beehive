@@ -61,7 +61,7 @@ Among that layout's `result.panes[]`, chat is the entry with the smallest `x`
 the target `<chat_pane_id>` for every announcement. Panes can be recreated, so
 resolve this fresh every tick.
 
-### 2. The carve-out and arming checks (D2, decision 8388df3e)
+### 2. The carve-out and arming checks
 
 **The carve-out, stated as a carve-out.**
 Independent review in bee is the human's own door — rule `agents-review-user-invoked`.
@@ -305,7 +305,7 @@ whose status vocabulary is the closed set `pending|blocked|approved`:
    ```
 4. Stop. You never merge.
 
-**The CHANGES hand-off (D4, decision 4a395ea7-503d-4117-b84b-96b657490f70).**
+**The CHANGES hand-off.**
 Execute two acts, in this exact order:
 1. **FIRST, write the cell in the worktree:**
    `bee cells add` takes no root flag, so run it from inside the worktree:
@@ -391,13 +391,3 @@ Do not summarize for a human; no human is watching this process.
 Do not execute a second pass.
 Do not touch main or merge any worktree.
 The tick is complete.
-
-## The interval is a guess
-
-The default tick interval for the route role is 300 seconds.
-
-This duration is an unmeasured starting guess, not an empirical measurement
-(plan.md OQ5). Dispatch and merge run at 60 seconds; supervisor runs at 900
-seconds. Nobody has measured how long an automated review takes in this
-repository. Adjust this interval once a human observes real end-to-end review
-runs in the cockpit.

@@ -17,7 +17,7 @@ phases or stacked PRs. The plan is the deliverable. Do not implement.
    test commands and entry points. No inlined dumps, because the plan's lead keeps its context for the plan
    (`bee-principle-guard-the-context-window`).
 4. Choose the program's grouping by the rule in
-   `bee-planning/references/planning-reference.md` under "Phase plan vs epic
+   `bee-planning/references/plan-artifact.md` under "Phase plan vs epic
    map". Use phases only when the work has observable milestones a user could
    demo in order, never technical buckets. Use an epic map when capability or
    risk areas explain the work more honestly than a timeline. Never force 2 to

@@ -34,7 +34,7 @@ bottom.
    drifted. Twenty-one verdicts went stale this way in one run with no signal at
    all.
 4. **Land with `bee worktree merge`, one unit at a time, without asking.** Run
-   `bee worktree merge --id <unit> --cleanup` from the main checkout, bottom
+   `bee worktree merge --id <unit>` from the main checkout, bottom
    unit first, as `uat_stop = "close"` already does. Exactly one merger runs it
    at a time, because two merges racing for main lose a commit. The verb checks
    the cap's proof line itself, so no second verify runs here. Stop at the first

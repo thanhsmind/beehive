@@ -44,7 +44,7 @@
     },
     {
       "name": "bee-herding",
-      "sha256": "e41bd70c57ad931cb1ee207377a071365f129f24c8039c46bc034aaeaa8f07ce"
+      "sha256": "3d510e41cc39a4b07791b35c2bf972bfefd25025c7f2f2a63e30be02ff11b41f"
     },
     {
       "name": "bee-herdr",
@@ -52,7 +52,7 @@
     },
     {
       "name": "bee-hive",
-      "sha256": "fd031c3fb3e48e35f9ae15c34c36852d697099c8b02feac674cf9831e96a82f5"
+      "sha256": "b49411d31b21010fd9c8c4ed75284b4769a7a6c80f9530dc49b6ca943acb2664"
     },
     {
       "name": "bee-how",
@@ -68,11 +68,11 @@
     },
     {
       "name": "bee-knowledge-upkeep",
-      "sha256": "4fcc9e6cd84d869211fc82c44bd06e642940a317a24221aacfef7ff79a40dff0"
+      "sha256": "670319a454eadabba248a77bce89307888a1389b0e1de849bbb5d312c0f17e07"
     },
     {
       "name": "bee-planning",
-      "sha256": "cfc45d563c63f54a729b5d2325216fa353cb32bdcc4c0c1aac461707bdcf927d"
+      "sha256": "3b05ce557776b856ec88d6c29f9afd1cdf79c1a25ec9591b0886332bfc670c1a"
     },
     {
       "name": "bee-principle-attack-the-premise",
@@ -248,7 +248,7 @@
     },
     {
       "name": "bee-swarming",
-      "sha256": "858f62b129a37a99aec1c6248c4f4cc0f6cb86635a0d0263257cde5ad26ec0cf"
+      "sha256": "81637eebd1af31a9ed943d39981bfa08010be23f3e1a9ef5c4642f9f2da65313"
     },
     {
       "name": "bee-tdd",

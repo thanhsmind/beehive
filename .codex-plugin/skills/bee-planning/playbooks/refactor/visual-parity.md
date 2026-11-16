@@ -36,4 +36,3 @@ Reply: components migrated, the diff result for each, the baseline harness
 location, what's left.
 
 Proof line: the image-diff result for each component against its baseline.
-Proof floor: the cap refuses a result weaker than this class's floor and names it; the table is the cap's own (`bee cells finish --help`).

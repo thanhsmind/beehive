@@ -31,7 +31,7 @@ data from input to output by the types and signatures alone.
 
 Write the sketch into the feature's plan files under `docs/history/<feature>/`
 — the `## Shape` section of `plan.md`, or a file beside it. Never write it as
-source before the merged shape+execution gate is approved: source written
+source before the shape gate is approved: source written
 first locks in a shape nobody approved.
 
 The implementation runs in `bee-swarming` cells after the gate, against the
