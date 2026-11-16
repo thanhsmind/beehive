@@ -40,7 +40,7 @@ plan check.
 
 ## Load-bearing claims
 
-Labels: `read` = opened at that line; `ran` = executed. Evidence is a verbatim substring of the anchored line.
+Labels: `read` = opened at that line; `ran` = executed. Evidence is a verbatim substring of the anchored line. Anchors are at base commit 011e0da29; the cells of this feature then changed several of these lines.
 
 | # | Claim | Label | Anchor | Verbatim evidence |
 |---|-------|-------|--------|-------------------|
@@ -173,6 +173,7 @@ SMALLER PATH: doctrine only (tell agents to dedupe and close by hand) is cheaper
 | fal-3t | Test the two path helpers | path_identity.rs tests | fal-3 | — | `cargo test … --bin bee -- relative_to` |
 | fal-4 | Say how a landed guard closes its row | expertise/static-rules.md, promotion.md, regen outputs | fal-3t | the craft page and the promotion tree end the red-then-green proof with the `backlog-closed` row | regen + pointer and parity tests |
 | fal-4c | Check the doctrine edit | — | fal-4 | — | `pointer_integrity`, `instruction_laws`, `rule_index_parity` |
+| fal-4t | Pin the fix-at closing step in the doctrine | tests/instruction_laws.rs | fal-4 | — | `cargo test … --test instruction_laws -- fix_at_close_doctrine` |
 | fal-5 | Consolidate knowledge and write delivery | docs/knowledge/**, delivery.md (new) | fal-4c | the mailbox and feedback concepts describe the new behavior | `.bee/bin/bee knowledge check` |
 
 ```json
@@ -657,6 +658,59 @@ SMALLER PATH: doctrine only (tell agents to dedupe and close by hand) is cheaper
     "regen_obligation_ack": "read-only check cell; fal-4 runs the regen chain and the manifest check"
   },
   {
+    "id": "fal-4t",
+    "feature": "fix-at-loop",
+    "title": "Pin the fix-at closing step in the doctrine",
+    "lane": "standard",
+    "role": "test",
+    "status": "open",
+    "deps": [
+      "fal-4"
+    ],
+    "decisions": [
+      "fb1807c1-5a39-44e1-ad3e-f2d902ca8339",
+      "1507dff2-852b-4a09-98e3-996d5338396c"
+    ],
+    "files": [
+      "packages/bee-rs/crates/bee/tests/instruction_laws.rs"
+    ],
+    "read_first": [
+      "docs/history/fix-at-loop/CONTEXT.md",
+      "expertise/static-rules.md",
+      "skills/bee-capturing/references/promotion.md",
+      "packages/bee-rs/crates/bee/tests/instruction_laws.rs"
+    ],
+    "affects_skills": [],
+    "affects_specs": [],
+    "action": "Contract C5 (decision 1507dff2). In packages/bee-rs/crates/bee/tests/instruction_laws.rs add one test whose name contains fix_at_close_doctrine. It reads expertise/static-rules.md and asserts the section starting at the heading \"## Show it red, then green\" (up to the next ## heading) contains the text \"--type backlog-closed\" and \"--layer\"; and it reads skills/bee-capturing/references/promotion.md and asserts the step 2 paragraph (the line starting \"2. Mechanizable?\" up to the line starting \"3.\") mentions closing the fix-at row. Follow the file-reading helpers the file already uses. Show it red once by running it against a copy of the section with the closing step removed (a scratch string in the test run, never committed), then green. Quote the matched count. No code comments.",
+    "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test instruction_laws -- fix_at_close_doctrine",
+    "must_haves": {
+      "truths": [
+        "a fix_at_close_doctrine test exists and passes with a matched count above zero"
+      ],
+      "artifacts": [
+        {
+          "path": "packages/bee-rs/crates/bee/tests/instruction_laws.rs",
+          "substantive": "fix_at_close_doctrine test"
+        }
+      ],
+      "key_links": [],
+      "prohibitions": [
+        "No change to the doctrine files",
+        "No code comments"
+      ]
+    },
+    "trace": {
+      "worker": null,
+      "outcome": null,
+      "files_changed": [],
+      "deviations": [],
+      "friction": null,
+      "capped_at": null,
+      "behavior_change": false
+    }
+  },
+  {
     "id": "fal-5",
     "feature": "fix-at-loop",
     "title": "Consolidate knowledge and write delivery",
@@ -671,7 +725,7 @@ SMALLER PATH: doctrine only (tell agents to dedupe and close by hand) is cheaper
       "fal-3",
       "fal-3t",
       "fal-4",
-      "fal-4c"
+      "fal-4t"
     ],
     "decisions": [
       "45d56b6f-68ef-4d86-a1a3-4f321a25f7b3",
@@ -726,6 +780,8 @@ SMALLER PATH: doctrine only (tell agents to dedupe and close by hand) is cheaper
   }
 ]
 ```
+
+Revision (execution): fal-4c ended as a drop because a standard cap refuses an empty files_changed, which leaves the docs cell fal-4 without a capped test-role dependent; fal-4t adds that tester (contract C5) and fal-5 now depends on it in place of fal-4c.
 
 ## Test matrix
 
