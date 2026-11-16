@@ -4,6 +4,7 @@
 #![allow(unused_imports)]
 
 use super::*;
+use crate::config_layers::{global_config_dir, merge_layers, Layer, LayerSet};
 use crate::hooks::adapter::{append_hook_log, now_iso, read_hook_context, HookContext};
 use crate::hooks::Outcome;
 use crate::jsjson;
@@ -90,7 +91,8 @@ pub(crate) fn direct_edit_verb(normalized: &str) -> Option<&'static str> {
 pub(crate) fn stage_only_target(rel: &str) -> bool {
     let normalized = normalize_rel(rel);
     direct_edit_verb(&normalized).is_some()
-        || normalized == ".bee/config.json"
+        || project_config_layer(&normalized) == Some(Layer::Tracked)
+        || project_config_layer(&normalized) == Some(Layer::Team)
         || plan_freeze_feature(&normalized).is_some()
 }
 
@@ -1146,35 +1148,72 @@ pub(crate) fn config_governed_view(text: &str) -> Option<Value> {
     Some(Value::Object(view))
 }
 
-/// The merged config text `state.rs`'s `read_config_raw` produces from a tracked
-/// `.bee/config.json` and its `.bee/config.local.json` overlay.
-///
-/// Neither file can be judged on its own. The overlay DEEP-merges
-/// (state.rs:176-184), so a `config.local.json` that names only unrelated keys
-/// does not remove the tracked team table — and a `config.json` change can be
-/// masked by an overlay that already overrides the same slot. Both directions
-/// are visible only in the merged result, which is what the dispatcher reads.
-///
-/// `None` when `tracked` is present but is not a JSON object: the caller reads
-/// that as "no comparable state", which is how a corrupt-config repair passes.
-pub(crate) fn config_merged_text(tracked: Option<&str>, overlay: Option<&str>) -> Option<String> {
-    let base = match tracked {
-        None => Value::Object(Map::new()),
-        Some(t) => {
-            let v: Value = serde_json::from_str(t).ok()?;
-            if !v.is_object() {
-                return None;
-            }
-            v
+pub(crate) fn project_config_layer(normalized: &str) -> Option<Layer> {
+    match normalized {
+        ".bee/config.json" => Some(Layer::Tracked),
+        ".bee/team.json" => Some(Layer::Team),
+        ".bee/config.local.json" => Some(Layer::Local),
+        _ => None,
+    }
+}
+
+pub(crate) fn config_merged_text(layers: &[(Layer, Option<&str>)]) -> Option<String> {
+    let mut set: LayerSet = Vec::with_capacity(layers.len());
+    for (layer, text) in layers {
+        let parsed = match text.map(serde_json::from_str::<Value>) {
+            Some(Ok(Value::Object(m))) => Some(layer.restrict(m)),
+            Some(_) if *layer == Layer::Tracked => return None,
+            _ => None,
+        };
+        set.push((*layer, parsed));
+    }
+    serde_json::to_string(&Value::Object(merge_layers(&set))).ok()
+}
+
+pub(crate) fn global_config_write_denial(
+    tool_name: &str,
+    tool_input: &Map<String, Value>,
+    root: &str,
+    cwd: &str,
+) -> Option<String> {
+    let global_s = global_config_dir()
+        .and_then(|dir| Layer::Global.path(Path::new(root), Some(&dir)))
+        .map(|file| file.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    let refuse = || {
+        Some(format!(
+            "bee config guard: the global config file {global_s} is written only by waggledance, never by an agent — it changes every project at once. FIX: ask the user to change it through waggledance."
+        ))
+    };
+    let resolves_to_global = |raw: &str| {
+        lexical_abs_target(root, cwd, raw)
+            .is_ok_and(|abs| !global_s.is_empty() && abs == global_s)
+    };
+    match tool_name {
+        "Edit" | "Write" | "MultiEdit" => {
+            let raw = tool_input.get("file_path").and_then(Value::as_str)?;
+            if resolves_to_global(raw) { refuse() } else { None }
         }
-    };
-    // An unparseable overlay is what read_config_raw already treats as absent
-    // (its ReadJson::Corrupt arm warns and merges on without it).
-    let merged = match overlay.and_then(|o| serde_json::from_str::<Value>(o).ok()) {
-        Some(o) if o.is_object() => crate::state::merge_config_overlay(&base, &o),
-        _ => base,
-    };
-    serde_json::to_string(&merged).ok()
+        "apply_patch" | "ApplyPatch" => {
+            let patch = apply_patch_text(tool_input)?;
+            if extract_apply_patch_targets(&patch).iter().any(|t| resolves_to_global(t)) {
+                refuse()
+            } else {
+                None
+            }
+        }
+        "Bash" | "exec" => {
+            let command = match first_truthy(tool_input, &["command", "cmd"]) {
+                Some(Value::String(s)) => s.as_str(),
+                _ => return None,
+            };
+            let names_global = (!global_s.is_empty() && command.contains(&global_s))
+                || command.contains("BEEHIVE_CONFIG_DIR=")
+                || command.contains("XDG_CONFIG_HOME=");
+            if names_global { refuse() } else { None }
+        }
+        _ => None,
+    }
 }
 
 fn format_diff_val(val: Option<&Value>) -> String {
@@ -1434,9 +1473,7 @@ pub(crate) fn config_governed_change_deny(
     new_text: &str,
 ) -> Option<String> {
     let normalized = normalize_rel(rel);
-    if normalized != ".bee/config.json" && normalized != ".bee/config.local.json" {
-        return None;
-    }
+    project_config_layer(&normalized)?;
 
     let Some(old_raw) = old_text else {
         // Old text absent (first write) passes

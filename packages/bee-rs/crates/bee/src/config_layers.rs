@@ -23,7 +23,7 @@ impl Layer {
         }
     }
 
-    fn restrict(self, mut object: Map<String, Value>) -> Map<String, Value> {
+    pub(crate) fn restrict(self, mut object: Map<String, Value>) -> Map<String, Value> {
         match self {
             Layer::Global => {
                 for key in GLOBAL_FORBIDDEN_KEYS {
