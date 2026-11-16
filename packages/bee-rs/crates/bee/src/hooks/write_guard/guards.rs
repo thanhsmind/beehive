@@ -1170,6 +1170,53 @@ pub(crate) fn config_merged_text(layers: &[(Layer, Option<&str>)]) -> Option<Str
     serde_json::to_string(&Value::Object(merge_layers(&set))).ok()
 }
 
+fn spelled_variants(token: &str, global_dir: &str) -> Vec<String> {
+    let home = crate::hooks::session_close::node_homedir();
+    let global_parent = Path::new(global_dir)
+        .parent()
+        .map(|p| p.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    let references: [(&str, Vec<String>); 3] = [
+        ("HOME", vec![home.clone()]),
+        (
+            "XDG_CONFIG_HOME",
+            [std::env::var("XDG_CONFIG_HOME").unwrap_or_default(), global_parent]
+                .into_iter()
+                .filter(|v| !v.is_empty())
+                .collect(),
+        ),
+        (
+            "BEEHIVE_CONFIG_DIR",
+            [std::env::var("BEEHIVE_CONFIG_DIR").unwrap_or_default(), global_dir.to_string()]
+                .into_iter()
+                .filter(|v| !v.is_empty())
+                .collect(),
+        ),
+    ];
+    let body = token.trim_start_matches(['<', '>', '&']);
+    let body = body.rsplit('=').next().unwrap_or(body);
+    let mut variants = vec![match body.strip_prefix('~') {
+        Some(rest) if rest.is_empty() || rest.starts_with('/') => format!("{home}{rest}"),
+        _ => body.to_string(),
+    }];
+    for (name, values) in &references {
+        let mut next = Vec::new();
+        for variant in &variants {
+            next.push(variant.clone());
+            for value in values {
+                let swapped = variant
+                    .replace(&format!("${{{name}}}"), value)
+                    .replace(&format!("${name}"), value);
+                if swapped != *variant {
+                    next.push(swapped);
+                }
+            }
+        }
+        variants = next;
+    }
+    variants
+}
+
 pub(crate) fn global_config_write_denial(
     tool_name: &str,
     tool_input: &Map<String, Value>,
@@ -1179,6 +1226,9 @@ pub(crate) fn global_config_write_denial(
     let global_s = global_config_dir()
         .and_then(|dir| Layer::Global.path(Path::new(root), Some(&dir)))
         .map(|file| file.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    let global_dir_s = global_config_dir()
+        .map(|dir| dir.to_string_lossy().into_owned())
         .unwrap_or_default();
     let refuse = || {
         Some(format!(
@@ -1209,7 +1259,10 @@ pub(crate) fn global_config_write_denial(
             };
             let names_global = (!global_s.is_empty() && command.contains(&global_s))
                 || command.contains("BEEHIVE_CONFIG_DIR=")
-                || command.contains("XDG_CONFIG_HOME=");
+                || command.contains("XDG_CONFIG_HOME=")
+                || tokenize(command).iter().any(|token| {
+                    spelled_variants(token, &global_dir_s).iter().any(|v| resolves_to_global(v))
+                });
             if names_global { refuse() } else { None }
         }
         _ => None,

@@ -6702,6 +6702,82 @@ use std::process::ExitCode;
         assert_eq!(e.code, 2, "stderr={}", e.stderr);
     }
 
+    fn spelled_global_commands() -> Vec<String> {
+        vec![
+            "echo '{}' > ~/.config/beehive/config.json".to_string(),
+            "echo '{}' > $HOME/.config/beehive/config.json".to_string(),
+            "echo '{}' > ${HOME}/.config/beehive/config.json".to_string(),
+            "echo '{}' > \"$HOME/.config/beehive/config.json\"".to_string(),
+            "echo '{}' > $XDG_CONFIG_HOME/beehive/config.json".to_string(),
+            "echo '{}' > ${XDG_CONFIG_HOME}/beehive/config.json".to_string(),
+            "echo '{}' > $BEEHIVE_CONFIG_DIR/config.json".to_string(),
+            "echo '{}' > ${BEEHIVE_CONFIG_DIR}/config.json".to_string(),
+            "cat ~/.config/beehive/config.json".to_string(),
+            "rg token $HOME/.config/beehive/config.json".to_string(),
+        ]
+    }
+
+    fn home_global_dir() -> PathBuf {
+        PathBuf::from(crate::hooks::session_close::node_homedir()).join(".config").join("beehive")
+    }
+
+    #[test]
+    fn global_path_spelling_is_refused_through_emit_for() {
+        let fx = build_fixture("swarming", true);
+        let dir = home_global_dir();
+        let _guard = crate::config_layers::TestGlobalDir::set(&dir);
+        for command in spelled_global_commands() {
+            let e = expect_done(bash(&command), &fx.root);
+            assert_eq!(e.code, 2, "{command}: stderr={}", e.stderr);
+            assert!(e.stderr.contains("waggledance"), "{command}: stderr={}", e.stderr);
+        }
+    }
+
+    #[test]
+    fn global_path_spelling_is_refused_through_the_hooked_guard() {
+        let fx = build_fixture("swarming", true);
+        let dir = home_global_dir();
+        let _guard = crate::config_layers::TestGlobalDir::set(&dir);
+        for command in spelled_global_commands() {
+            let e = herded(bash(&command), &fx.root);
+            assert_eq!(e.code, 2, "{command}: stderr={}", e.stderr);
+            assert!(e.stderr.contains("waggledance"), "{command}: stderr={}", e.stderr);
+        }
+    }
+
+    #[test]
+    fn global_path_spelling_refuses_a_config_dir_reference_whatever_the_env_holds() {
+        let fx = build_fixture("swarming", true);
+        let global = tempfile::tempdir().unwrap();
+        let _guard = crate::config_layers::TestGlobalDir::set(global.path());
+        for command in [
+            "echo '{}' > $BEEHIVE_CONFIG_DIR/config.json",
+            "echo '{}' > ${BEEHIVE_CONFIG_DIR}/config.json",
+        ] {
+            let e = expect_done(bash(command), &fx.root);
+            assert_eq!(e.code, 2, "{command}: stderr={}", e.stderr);
+            let h = herded(bash(command), &fx.root);
+            assert_eq!(h.code, 2, "{command}: stderr={}", h.stderr);
+        }
+    }
+
+    #[test]
+    fn global_path_spelling_lets_an_unrelated_config_file_through() {
+        let fx = build_fixture("swarming", true);
+        let dir = home_global_dir();
+        let _guard = crate::config_layers::TestGlobalDir::set(&dir);
+        for command in [
+            "echo '{}' > ~/.config/other/config.json",
+            "echo '{}' > $HOME/.config/other/config.json",
+            "echo '{}' > $XDG_CONFIG_HOME/other/config.json",
+        ] {
+            let e = expect_done(bash(command), &fx.root);
+            assert!(!e.stderr.contains("waggledance"), "{command}: stderr={}", e.stderr);
+            let h = herded(bash(command), &fx.root);
+            assert!(!h.stderr.contains("waggledance"), "{command}: stderr={}", h.stderr);
+        }
+    }
+
     #[test]
     fn herded_team_guard_passes_a_plain_source_write() {
         let fx = build_fixture("swarming", true);
