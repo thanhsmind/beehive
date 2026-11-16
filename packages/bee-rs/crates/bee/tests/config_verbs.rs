@@ -645,3 +645,164 @@ fn split_team_and_drop_global_keep_team_show_and_the_agent_command_identical() {
     assert!(ok && v["moved"] == json!([]) && v["dropped"] == json!([]), "{out}");
     assert_eq!(raw(&r, ".bee/team.json"), team_bytes);
 }
+
+fn guarded_repo(base: &Path, config: Value) -> PathBuf {
+    let r = repo(base, &config.to_string());
+    put(
+        &r,
+        ".bee/state.json",
+        json!({"phase":"swarming","mode":"standard","feature":"demo","approved_gates":{"context":true,"shape":true,"execution":true,"review":false}}),
+    );
+    std::fs::create_dir_all(global_dir(&r)).unwrap();
+    r
+}
+
+fn write_guard(repo: &Path, herded: bool, payload: Value) -> (i32, String) {
+    let mut body = payload;
+    body["cwd"] = json!(repo.to_string_lossy());
+    let mut cmd = Command::cargo_bin("bee").unwrap();
+    cmd.args(["hook", "write-guard"])
+        .current_dir(repo)
+        .env("BEE_HOOK_NO_DELEGATE", "1")
+        .env("BEEHIVE_CONFIG_DIR", global_dir(repo))
+        .env_remove("BEE_HERDING_JOB_ID")
+        .env_remove("BEE_SESSION_ID")
+        .env_remove("CLAUDE_CODE_SESSION_ID")
+        .env_remove("PI_SESSION_ID")
+        .write_stdin(body.to_string());
+    if herded {
+        cmd.env("BEE_HERDING_WORKER", "1");
+    } else {
+        cmd.env_remove("BEE_HERDING_WORKER");
+    }
+    let out = cmd.output().unwrap();
+    (out.status.code().unwrap_or(-1), String::from_utf8_lossy(&out.stderr).into_owned())
+}
+
+fn write_payload(file: &str, content: &Value) -> Value {
+    json!({"tool_name":"Write","tool_input":{"file_path":file,"content":content.to_string()}})
+}
+
+fn slot(agent: &str) -> Value {
+    json!({"team":{"pi":{"review":{"kind":"herding","agent":agent}}}})
+}
+
+fn explain_with_env(repo: &Path, key: &str, env: &[(&str, &Path)], removed: &[&str]) -> Value {
+    let mut cmd = Command::cargo_bin("bee").unwrap();
+    cmd.args(["config", "explain", "--key", key, "--json"]).current_dir(repo);
+    for name in removed {
+        cmd.env_remove(name);
+    }
+    for (name, value) in env {
+        cmd.env(name, value);
+    }
+    let out = cmd.output().unwrap();
+    serde_json::from_str(String::from_utf8_lossy(&out.stdout).trim()).unwrap_or(Value::Null)
+}
+
+#[test]
+fn config_tester_global_dir_falls_back_to_xdg_then_home() {
+    let tmp = tempfile::tempdir().unwrap();
+    let r = repo(tmp.path(), r#"{"tracked_only":1}"#);
+    let xdg = tmp.path().join("xdg");
+    let home = tmp.path().join("home");
+    for (dir, value) in [(xdg.join("beehive"), "from-xdg"), (home.join(".config/beehive"), "from-home")] {
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("config.json"), json!({"probe": value}).to_string()).unwrap();
+    }
+    let empty = tmp.path().join("unused");
+    let v = explain_with_env(&r, "probe", &[("XDG_CONFIG_HOME", &xdg), ("HOME", &home)], &["BEEHIVE_CONFIG_DIR"]);
+    assert_eq!((v["source"].clone(), v["effective"].clone()), (json!("global"), json!("from-xdg")), "{v}");
+    let mut cmd = Command::cargo_bin("bee").unwrap();
+    let out = cmd
+        .args(["config", "explain", "--key", "probe", "--json"])
+        .current_dir(&r)
+        .env("BEEHIVE_CONFIG_DIR", "")
+        .env("XDG_CONFIG_HOME", &xdg)
+        .env("HOME", &home)
+        .output()
+        .unwrap();
+    let v: Value = serde_json::from_str(String::from_utf8_lossy(&out.stdout).trim()).unwrap();
+    assert_eq!(v["effective"], json!("from-xdg"), "an empty BEEHIVE_CONFIG_DIR is unset: {v}");
+    let v = explain_with_env(&r, "probe", &[("HOME", &home)], &["BEEHIVE_CONFIG_DIR", "XDG_CONFIG_HOME"]);
+    assert_eq!((v["source"].clone(), v["effective"].clone()), (json!("global"), json!("from-home")), "{v}");
+    let v = explain_with_env(&r, "probe", &[("BEEHIVE_CONFIG_DIR", &empty), ("XDG_CONFIG_HOME", &xdg)], &[]);
+    assert_eq!(v["source"], json!("unset"), "BEEHIVE_CONFIG_DIR wins over XDG_CONFIG_HOME: {v}");
+}
+
+#[test]
+fn config_tester_both_panes_refuse_a_write_to_the_global_file_the_env_names() {
+    let tmp = tempfile::tempdir().unwrap();
+    let r = guarded_repo(tmp.path(), json!({"uat_stop":"close"}));
+    let global = global_dir(&r).join("config.json").display().to_string();
+    for herded in [false, true] {
+        for payload in [
+            write_payload(&global, &json!({"gate_bypass":"total"})),
+            json!({"tool_name":"Bash","tool_input":{"command":format!("echo '{{}}' > {global}")}}),
+            json!({"tool_name":"Bash","tool_input":{"command":"XDG_CONFIG_HOME=/tmp/elsewhere bee team show"}}),
+        ] {
+            let (code, err) = write_guard(&r, herded, payload.clone());
+            assert_eq!(code, 2, "herded={herded} {payload}: {err}");
+            assert!(err.contains("waggledance"), "herded={herded}: {err}");
+        }
+    }
+    assert!(!global_dir(&r).join("config.json").exists());
+}
+
+#[test]
+fn config_tester_both_panes_allow_the_equal_view_move_and_refuse_a_team_json_slot_change() {
+    for herded in [false, true] {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut cfg = slot("a");
+        cfg["uat_stop"] = json!("close");
+        let r = guarded_repo(tmp.path(), cfg);
+        let (code, err) = write_guard(&r, herded, write_payload(".bee/team.json", &slot("a")));
+        assert_eq!(code, 0, "herded={herded}: the move's first step keeps the merged view: {err}");
+        let (code, err) = write_guard(&r, herded, write_payload(".bee/team.json", &slot("b")));
+        assert_eq!(code, 2, "herded={herded}: {err}");
+        assert!(err.contains("team.pi.review.agent"), "herded={herded}: {err}");
+        put(&r, ".bee/team.json", slot("a"));
+        let (code, err) = write_guard(&r, herded, write_payload(".bee/config.json", &json!({"uat_stop":"close"})));
+        assert_eq!(code, 0, "herded={herded}: the move's second step keeps the merged view: {err}");
+        put(&r, ".bee/config.json", json!({"uat_stop":"close"}));
+        let (code, err) = write_guard(&r, herded, write_payload(".bee/team.json", &json!({})));
+        assert_eq!(code, 2, "herded={herded}: removing the slot from team.json is governed: {err}");
+    }
+}
+
+#[test]
+fn config_tester_hooks_off_in_team_json_or_global_never_disables_the_write_guard() {
+    for herded in [false, true] {
+        let tmp = tempfile::tempdir().unwrap();
+        let r = guarded_repo(tmp.path(), json!({"uat_stop":"close"}));
+        let mut team = slot("a");
+        team["hooks"] = json!({"write-guard": false});
+        team["ship_visibility"] = json!("draft-pr");
+        put(&r, ".bee/team.json", team);
+        put_global(&r, json!({"hooks":{"write-guard":false},"gate_bypass":"total"}));
+        assert_eq!(bee(&r, &["get", "--key", "ship_visibility"]).1["present"], json!(false));
+        assert_eq!(bee(&r, &["get", "--key", "hooks.write-guard"]).1["present"], json!(false));
+        let (code, err) = write_guard(&r, herded, write_payload(".bee/team.json", &slot("b")));
+        assert_eq!(code, 2, "herded={herded}: {err}");
+        let global = global_dir(&r).join("config.json").display().to_string();
+        let (code, err) = write_guard(&r, herded, write_payload(&global, &json!({})));
+        assert_eq!(code, 2, "herded={herded}: {err}");
+    }
+}
+
+#[test]
+fn config_tester_validate_judges_team_problems_on_the_merged_view() {
+    let tmp = tempfile::tempdir().unwrap();
+    let r = repo(tmp.path(), r#"{"uat_stop":"close"}"#);
+    put_global(&r, json!({"team":{"claude":{"code":{"kind":"cli"}}}}));
+    let (ok, v, out) = bee(&r, &["validate"]);
+    assert!(!ok, "{out}");
+    assert!(
+        v["problems"].as_array().unwrap().iter().any(|p| p["code"] == json!("cli-malformed") && p["slot"] == json!("code")),
+        "a malformed slot supplied by the global file is a problem: {out}"
+    );
+    put(&r, ".bee/team.json", json!({"team":{"claude":{"code":{"command":"claude -p","promptVia":"stdin"}}}}));
+    let (ok, v, out) = bee(&r, &["validate"]);
+    assert!(ok, "team.json completes the slot in the merged view: {out}");
+    assert_eq!(v["problems"], json!([]), "{out}");
+}
