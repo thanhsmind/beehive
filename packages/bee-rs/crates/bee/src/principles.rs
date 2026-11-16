@@ -136,7 +136,7 @@ fn render_lines(body: &str, class: &str, hub: bool) -> Vec<String> {
     let mut header =
         format!("- Principles (class={class}) — name each one you apply and the decision it changed:");
     if hub {
-        header.push_str(" Load each one with the skillstation MCP tool skill_get, the slug as skill_id.");
+        header.push_str(" Load each one with skillstation skill show <slug> --json (its content field); the skillstation MCP tool skill_get, the slug as skill_id, is the fallback.");
     }
     let mut lines = vec![header];
     lines.extend(
@@ -202,7 +202,7 @@ mod tests {
         let hub = render_lines(INDEX, "bugfix", true);
         assert_eq!(
             hub[0],
-            format!("{} Load each one with the skillstation MCP tool skill_get, the slug as skill_id.", plain[0])
+            format!("{} Load each one with skillstation skill show <slug> --json (its content field); the skillstation MCP tool skill_get, the slug as skill_id, is the fallback.", plain[0])
         );
         assert_eq!(hub[1..], plain[1..]);
     }
@@ -222,6 +222,24 @@ mod tests {
         )
         .unwrap();
         assert!(principle_lines(dir.path(), Some("bugfix"))[0].contains("skill_get"));
+    }
+
+    #[test]
+    fn hub_header_names_the_skillstation_cli_before_skill_get_and_local_names_neither() {
+        let dir = tempfile::tempdir().unwrap();
+        let idx = dir.path().join(PRINCIPLE_INDEX);
+        std::fs::create_dir_all(idx.parent().unwrap()).unwrap();
+        std::fs::write(&idx, INDEX).unwrap();
+        let local = principle_lines(dir.path(), Some("bugfix"));
+        assert!(!local[0].contains("skillstation skill show"), "{}", local[0]);
+        assert!(!local[0].contains("skill_get"), "{}", local[0]);
+        std::fs::create_dir_all(dir.path().join(".bee")).unwrap();
+        std::fs::write(dir.path().join(".bee/config.json"), r#"{"skillstation":{"principles":"hub"}}"#).unwrap();
+        let hub = principle_lines(dir.path(), Some("bugfix"));
+        let cli = hub[0].find("skillstation skill show").expect("hub header lacks the CLI load");
+        let mcp = hub[0].find("skill_get").expect("hub header lacks the skill_get fallback");
+        assert!(cli < mcp, "CLI at {cli} must precede skill_get at {mcp}: {}", hub[0]);
+        assert_eq!(hub[1..], local[1..]);
     }
 
     #[test]

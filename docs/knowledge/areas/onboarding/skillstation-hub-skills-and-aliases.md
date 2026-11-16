@@ -41,8 +41,11 @@ D3). The list is one constant in the verb module; `bee-deploying` is not on it
 because `bee onboard --skillstation` owns that one (skillstation-aliases D2).
 
 **Write an alias.** An alias is one small `.claude/skills/<id>/SKILL.md` that
-tells the agent to fetch the real skill from the hub through the MCP
-`skill_get` tool. The hub stays the only copy (skillstation-aliases D5).
+tells the agent to load the real skill from the hub with
+`skillstation skill show <id> --json` first (its `content` field when
+`manifest.status` is `active`) and to call the MCP `skill_get` tool as the
+fallback for relative files, non-active status, a remote hub, or a CLI failure
+(cli-before-mcp D3, D4). The hub stays the only copy (skillstation-aliases D5).
 `install --apply` aliases the listed skills that agents may not trigger
 themselves; `alias <id>` aliases any active hub skill (skillstation-aliases
 D4).
@@ -97,12 +100,14 @@ cannot change their result (skillstation-onboard-aliases D6).
   directory (skillstation-more-skills D4-D6).
 - `skillstation.principles` set to the string `hub` in the merged config
   (config.local.json over config.json) is read by one helper,
-  `principles_on_hub`. It makes the principle header line name the MCP tool
-  `skill_get`, and it appends `mcp__skillstation__skill_get` to the `tools:` line
-  of every rendered Claude agent file, so a dispatched subagent can fetch a
-  principle. Any other value or absence leaves both byte-identical. Plan and
-  apply render agent files through the same function, so a hub-mode re-plan
-  carries no `sync_agent_file` item (skillstation-principles D1, D4, D5).
+  `principles_on_hub`. It makes the hub principle header name
+  `skillstation skill show <id> --json` first and `skill_get` as the fallback
+  (cli-before-mcp D3, D4). Orient's playbook pointer and the `tools:` line of
+  every rendered Claude agent file (`mcp__skillstation__skill_get`) keep
+  `skill_get`: a playbook is a relative file, and reader roles have no shell
+  (cli-before-mcp D4). Any other value or absence leaves both byte-identical.
+  Plan and apply render agent files through the same function, so a hub-mode
+  re-plan carries no `sync_agent_file` item (skillstation-principles D1, D4, D5).
 - In hub mode with the Claude runtime in scope, onboard reads every
   `bee-principle-*` directory of the engine skills source on the hub. Only when
   all are active does the repo-claude target (`.claude/skills`) drop them from
