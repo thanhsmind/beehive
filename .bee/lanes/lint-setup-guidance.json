@@ -11,10 +11,15 @@
     "uat": false
   },
   "summary": "Feature \"lint-setup-guidance\" started at phase \"exploring\" (lane).",
-  "next_action": "Continue bee-exploring for \"lint-setup-guidance\" (lane).",
+  "next_action": "Merged into main at 5bad2c7; reload the product and test \"lint-setup-guidance\", then either approve uat (\"bee gate --name uat --approved true --lane lint-setup-guidance\") or fix it in the worktree and merge again.",
   "created_at": "2026-11-16T11:08:33.296Z",
   "run_state": "awaiting-approval",
-  "waiting_on": null,
+  "waiting_on": {
+    "kind": "gate",
+    "subject": "uat: lint-setup-guidance",
+    "asked_at": "2026-11-16T11:29:17.305Z",
+    "session": "bee-worktree-merge-sessionless"
+  },
   "gate_preview": {
     "feature": "lint-setup-guidance",
     "plan_sha256": "794af1ff573555283cfc568aafc136c13a94a8be8e7c74545a674dbee27b562d",
@@ -612,12 +617,5 @@
     "rationale": "notice text plus skill procedure",
     "updated_at": "2026-11-16T11:11:34.675Z",
     "feature": "lint-setup-guidance"
-  },
-  "merge_ready": {
-    "since": "2026-11-16T11:20:41.910Z",
-    "branch": "wt/lint-setup-guidance",
-    "worktree_id": "beehive--wt--lint-setup-guidance",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
