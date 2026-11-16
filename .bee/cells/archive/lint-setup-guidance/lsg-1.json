@@ -1,0 +1,92 @@
+{
+  "id": "lsg-1",
+  "feature": "lint-setup-guidance",
+  "title": "Name bee config set in every standard-commands notice",
+  "lane": "standard",
+  "role": "code",
+  "deps": [],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- notices status_full",
+  "must_haves": {
+    "truths": [
+      "STATIC_CHECK_HOW_TO_OFFER names bee config set --key commands.test and says a user request to set up the checks is the confirmation",
+      "both No standard commands recorded notices in commands_notices name bee config set --key commands. instead of telling the agent to write .bee/config.json",
+      "the status_full empty-commands warning names bee config set --key commands. and no longer names the retired verify key"
+    ]
+  },
+  "decisions": [
+    "d509d105-c499-4b39-8469-99f12ff77b5b",
+    "1bc79e0e-7688-49db-9fe0-160981b4f7cd",
+    "af69659c-64cd-40d2-8bbc-d8fec0e53d65"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/onboard/templates.rs",
+    "packages/bee-rs/crates/bee/src/onboard/notices.rs",
+    "packages/bee-rs/crates/bee/src/verbs/status_full/build.rs",
+    "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/lint-setup-guidance/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/onboard/templates.rs",
+    "packages/bee-rs/crates/bee/src/onboard/notices.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/onboarding/host-project-artifacts.md"
+  ],
+  "action": "Implement CONTEXT.md D1 and D2 in notice text only; no logic change. (1) templates.rs STATIC_CHECK_HOW_TO_OFFER: keep its current sentences and add that when the user confirms, the agent writes the list itself with `bee config set --key commands.test --value '<JSON list>'` (checks first, then the existing test entries), that a user request to set up these checks is that confirmation, and that `commands` is the agent's to write, never a missing permission. (2) notices.rs, both No standard commands recorded strings: replace 'write ... to .bee/config.json `commands`' with writing each confirmed value through `bee config set --key commands.<key> --value '<value>'` (commands.test takes a JSON list). Keep the never-write-unconfirmed rule and the D3 citation. (3) status_full/build.rs empty-commands warning: name setup/start/test (drop the retired verify key) and `bee config set --key commands.<key>`. Keep the warning's first words 'No standard commands recorded'. Update any existing test that pins an old full string. No new tests (lsg-3 owns them). No code comments. Proof: the cell verify; quote the counts.",
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "lsg-coder",
+    "outcome": "Named bee config set in all standard-commands notices and the status_full warning; commit a62bfd2ac",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/onboard/templates.rs",
+      "packages/bee-rs/crates/bee/src/onboard/notices.rs",
+      "packages/bee-rs/crates/bee/src/verbs/status_full/build.rs"
+    ],
+    "deviations": [
+      "sync-ack: notice text only; host-project-artifacts.md is synced by sibling cell lsg-2 (d8ba60b49); the other concepts do not describe the notice text"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-16T11:14:20.828Z",
+    "behavior_change": false,
+    "verification_evidence": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- notices status_full — green:unit — 180 passed, 0 failed; notice text only",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "72292b40-4818-423a-85eb-584c04392aba",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- notices status_full",
+    "claimed_at": "2026-11-16T11:11:14.316Z",
+    "knowledge_delta": [],
+    "sync_ack": "notice text only; host-project-artifacts.md is synced by sibling cell lsg-2 (d8ba60b49); the other concepts do not describe the notice text",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Named bee config set in all standard-commands notices and the status_full warning; commit a62bfd2ac",
+      "commit": "a62bfd2ac8ec583ec6cf3030af4cf92d2e59f2b9",
+      "files": [
+        "packages/bee-rs/crates/bee/src/onboard/templates.rs",
+        "packages/bee-rs/crates/bee/src/onboard/notices.rs",
+        "packages/bee-rs/crates/bee/src/verbs/status_full/build.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- notices status_full — green:unit — cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- notices status_full — green:unit — 180 passed, 0 failed; notice text only",
+      "deviations": [],
+      "patch_id": "f0a61e90e808e696cdbbb8845fc179542109fc8a"
+    },
+    "warnings": [],
+    "tests": "boundary"
+  },
+  "usage": {
+    "new": 33575,
+    "cached": 228397,
+    "total": 261972,
+    "models": {
+      "claude-sonnet-5-5": {
+        "new": 33575,
+        "cached": 228397,
+        "total": 261972
+      }
+    },
+    "jobs": [
+      "job-1794827483503-101959-1"
+    ]
+  }
+}

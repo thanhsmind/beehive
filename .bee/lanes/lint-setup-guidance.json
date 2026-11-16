@@ -8,18 +8,13 @@
     "shape": true,
     "execution": true,
     "review": false,
-    "uat": false
+    "uat": true
   },
   "summary": "Feature \"lint-setup-guidance\" started at phase \"exploring\" (lane).",
   "next_action": "Merged into main at 5bad2c7; reload the product and test \"lint-setup-guidance\", then either approve uat (\"bee gate --name uat --approved true --lane lint-setup-guidance\") or fix it in the worktree and merge again.",
   "created_at": "2026-11-16T11:08:33.296Z",
-  "run_state": "awaiting-approval",
-  "waiting_on": {
-    "kind": "gate",
-    "subject": "uat: lint-setup-guidance",
-    "asked_at": "2026-11-16T11:29:17.305Z",
-    "session": "bee-worktree-merge-sessionless"
-  },
+  "run_state": "done",
+  "waiting_on": null,
   "gate_preview": {
     "feature": "lint-setup-guidance",
     "plan_sha256": "794af1ff573555283cfc568aafc136c13a94a8be8e7c74545a674dbee27b562d",

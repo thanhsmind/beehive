@@ -2348,5 +2348,10 @@
     "capped": 2,
     "dropped": 0,
     "archived_at": "2026-11-16T13:10:06.957Z"
+  },
+  "lint-setup-guidance": {
+    "capped": 4,
+    "dropped": 0,
+    "archived_at": "2026-11-16T13:22:32.514Z"
   }
 }

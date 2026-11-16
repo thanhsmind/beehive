@@ -1,0 +1,89 @@
+{
+  "id": "lsg-3",
+  "feature": "lint-setup-guidance",
+  "title": "Pin the write verb in the standard-commands notices",
+  "lane": "standard",
+  "role": "test",
+  "deps": [
+    "lsg-1"
+  ],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- notices status_full",
+  "must_haves": {
+    "truths": [
+      "a test asserts every commands_notices notice that asks for commands or offers a static check contains bee config set --key commands.",
+      "a test asserts no such notice contains write them to .bee/config.json",
+      "a test asserts the status_full empty-commands warning contains bee config set --key commands. and not setup/start/test/verify"
+    ]
+  },
+  "decisions": [
+    "af69659c-64cd-40d2-8bbc-d8fec0e53d65",
+    "d509d105-c499-4b39-8469-99f12ff77b5b"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/onboard/notices.rs",
+    "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/lint-setup-guidance/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/onboard/notices.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Independently check lsg-1 and pin CONTEXT.md D4 with behavior tests. In the notices.rs test module, add tests over commands_notices on temp repos for three cases: no commands and no detected candidates; no commands with detected candidates and a static check (package.json with a lint script); a commands.test list missing a detected static check. Each returned notice must contain `bee config set --key commands.` and none may contain `to .bee/config.json`. In status_full/tests.rs, assert the empty-commands warning contains `bee config set --key commands.` and does not contain `verify`. Prove each new test fails against the pre-lsg-1 text (state how: e.g. git stash of lsg-1's hunks or reasoning from the old string) and passes now. No code comments. Proof: the cell verify; quote the counts and the new test names.",
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "lsg-tester",
+    "outcome": "Added 3 commands_notices tests and 2 status_full asserts pinning D4; red on pre-lsg-1 text, green now; commit 55878b43c4df0ec7da9f8e547bb73a8e062f5cd2",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/onboard/notices.rs",
+      "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs"
+    ],
+    "deviations": [
+      "sync-ack: test-only cell; host-project-artifacts.md was synced by lsg-2"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-16T11:20:41.871Z",
+    "behavior_change": false,
+    "verification_evidence": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- notices status_full — green:unit — 183 passed 0 failed; with lsg-1 reverted 179 passed 4 failed (the 4 new checks)",
+    "verify_output": "green:red-first",
+    "verify_passed": true,
+    "claim_session": "72292b40-4818-423a-85eb-584c04392aba",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- notices status_full",
+    "claimed_at": "2026-11-16T11:14:27.752Z",
+    "knowledge_delta": [],
+    "sync_ack": "test-only cell; host-project-artifacts.md was synced by lsg-2",
+    "no_mistakes": true,
+    "no_knowledge_used": true,
+    "no_principles_used": true,
+    "report": {
+      "outcome": "Added 3 commands_notices tests and 2 status_full asserts pinning D4; red on pre-lsg-1 text, green now; commit 55878b43c4df0ec7da9f8e547bb73a8e062f5cd2",
+      "commit": "55878b43c4df0ec7da9f8e547bb73a8e062f5cd2",
+      "files": [
+        "packages/bee-rs/crates/bee/src/onboard/notices.rs",
+        "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- notices status_full — green:red-first — PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- notices status_full — green:unit — 183 passed 0 failed; with lsg-1 reverted 179 passed 4 failed (the 4 new checks)",
+      "deviations": [],
+      "knowledge_used": [],
+      "patch_id": "16afe3c862319e4ff1dc18e5d5d1530b7e6e8a99"
+    },
+    "warnings": [],
+    "tests": "boundary"
+  },
+  "usage": {
+    "new": 46426,
+    "cached": 469630,
+    "total": 516056,
+    "models": {
+      "claude-opus-5-5": {
+        "new": 46426,
+        "cached": 469630,
+        "total": 516056
+      }
+    },
+    "jobs": [
+      "job-1794827671388-148151-1"
+    ]
+  }
+}

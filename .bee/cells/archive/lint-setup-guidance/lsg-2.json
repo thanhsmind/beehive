@@ -1,0 +1,141 @@
+{
+  "id": "lsg-2",
+  "feature": "lint-setup-guidance",
+  "title": "Give the agent a set-up procedure for project checks",
+  "lane": "standard",
+  "role": "code",
+  "deps": [],
+  "verify": ".bee/bin/bee knowledge check && .bee/bin/bee dev release-manifest --check && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test skill_triggers",
+  "must_haves": {
+    "truths": [
+      "skills/bee-hive/references/onboarding.md has a Set up the project's checks section that tells the agent to write commands.test with bee config set and never to reply that permission is missing",
+      "skills/bee-hive/SKILL.md loads that section when the user asks to set up lint, type check, tests or verify commands",
+      "docs/knowledge/areas/onboarding/host-project-artifacts.md says the static-check notices name bee config set and cites lint-setup-guidance D1 and D2",
+      "the rendered skill trees match skills/ (release-manifest --check clean)"
+    ]
+  },
+  "decisions": [
+    "d509d105-c499-4b39-8469-99f12ff77b5b",
+    "1bc79e0e-7688-49db-9fe0-160981b4f7cd",
+    "72a0f753-00ef-4e04-9e06-c12c98e119f2"
+  ],
+  "files": [
+    "skills/bee-hive/SKILL.md",
+    "skills/bee-hive/references/onboarding.md",
+    "docs/knowledge/areas/onboarding/host-project-artifacts.md",
+    ".claude/skills/*",
+    ".agents/skills/*",
+    ".opencode/skills/*",
+    ".claude-plugin/skills/*",
+    ".codex-plugin/skills/*",
+    ".bee/onboarding.json",
+    "skills-lock.json",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/lint-setup-guidance/CONTEXT.md",
+    "skills/bee-hive/references/onboarding.md",
+    "skills/bee-hive/SKILL.md",
+    "docs/knowledge/areas/onboarding/host-project-artifacts.md"
+  ],
+  "affects_skills": [
+    "skills/bee-hive/SKILL.md",
+    "skills/bee-hive/references/onboarding.md"
+  ],
+  "affects_specs": [
+    "docs/knowledge/areas/onboarding/host-project-artifacts.md"
+  ],
+  "action": "Implement CONTEXT.md D2 and D3 in docs. (1) skills/bee-hive/references/onboarding.md: add a section `## Set up the project's checks` after Workspace protocol. When: the user asks to set up lint, type check, tests, or the verify or CI commands, at any time. Steps: 1. Run `.bee/bin/bee onboard --repo-root . --json` and read its notices for detected checks and candidates; read `bee config explain --key commands.test` for what is recorded. 2. With a check found, run it once and tell the user green or the finding count. 3. With no linter in the project, name the stack's usual linter (eslint, ruff, clippy, golangci-lint, phpcs and so on), and after the user agrees add it to the project as a dev dependency with its config through the normal bee chain for a code change. 4. Write the list yourself: `.bee/bin/bee config set --key commands.test --value '[\"<lint>\",\"<typecheck>\",\"<tests>\"]'` — checks first, then the existing test entries, keeping every entry already there. The user's set-up request is the confirmation (lint-setup-guidance D2). 5. Log the answer with `bee decisions log`. Rules: `commands` is the agent's to write; never answer that permission is missing; never hand-edit `.bee/config.json`; only team, herding.agents, herding.agent_command and hooks are the user's to edit. (2) skills/bee-hive/SKILL.md: in the reference table row for references/onboarding.md, add that it also loads when the user asks to set up lint, type check, tests or verify commands (section Set up the project's checks); keep the line short. (3) host-project-artifacts.md section 'Static checks are offered as members of `commands.test`': add that the notices name `bee config set --key commands.test` and that a user set-up request is the confirmation, citing lint-setup-guidance D1 and D2 (history D-numbers, never raw ids), and point to the new onboarding.md section. Run `bee knowledge check` after. (4) Run `bee dev regen` so the rendered skill trees, onboarding ledger, skills lock and release manifest follow; restore any hub-served skill under .claude/skills that regen re-rendered and that this cell does not own. Plain English, no code comments. Proof: the cell verify; quote the counts.",
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "lsg-writer",
+    "outcome": "Added the Set up the project's checks procedure, SKILL.md load row and D1/D2 knowledge citation, regen'd trees; commit d8ba60b49",
+    "files_changed": [
+      "skills/bee-hive/SKILL.md",
+      "skills/bee-hive/references/onboarding.md",
+      "docs/knowledge/areas/onboarding/host-project-artifacts.md",
+      ".claude/skills/bee-hive/SKILL.md",
+      ".claude/skills/bee-hive/references/onboarding.md",
+      ".claude/skills/.bee-render.json",
+      ".agents/skills/bee-hive",
+      ".claude-plugin/skills/bee-hive",
+      ".codex-plugin/skills/bee-hive",
+      ".opencode/skills/bee-hive",
+      ".bee/onboarding.json",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [
+      "sync-ack: lsg-2 is itself the knowledge sync for this feature"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-16T11:14:23.487Z",
+    "behavior_change": false,
+    "verification_evidence": "bee knowledge check && bee dev release-manifest --check && cargo test --release --test skill_triggers — green:static — docs and rendered skill trees only (knowledge check OK; manifest 950 files match; skill_triggers 2 passed 0 failed 1 ignored)",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "72292b40-4818-423a-85eb-584c04392aba",
+    "verify_command": ".bee/bin/bee knowledge check && .bee/bin/bee dev release-manifest --check && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test skill_triggers",
+    "claimed_at": "2026-11-16T11:12:07.322Z",
+    "verified_at": null,
+    "baseline": null,
+    "reaction": null,
+    "skipped": null,
+    "unknowns": null,
+    "found": null,
+    "stopped": null,
+    "knowledge_delta": [
+      "docs/knowledge/areas/onboarding/host-project-artifacts.md"
+    ],
+    "sync_ack": "lsg-2 is itself the knowledge sync for this feature",
+    "no_mistakes": true,
+    "no_principles_used": true,
+    "report": {
+      "outcome": "Added the Set up the project's checks procedure, SKILL.md load row and D1/D2 knowledge citation, regen'd trees; commit d8ba60b49",
+      "commit": "a62bfd2ac8ec583ec6cf3030af4cf92d2e59f2b9",
+      "files": [
+        "skills/bee-hive/SKILL.md",
+        "skills/bee-hive/references/onboarding.md",
+        "docs/knowledge/areas/onboarding/host-project-artifacts.md",
+        ".claude/skills/bee-hive/SKILL.md",
+        ".claude/skills/bee-hive/references/onboarding.md",
+        ".claude/skills/.bee-render.json",
+        ".agents/skills/bee-hive",
+        ".claude-plugin/skills/bee-hive",
+        ".codex-plugin/skills/bee-hive",
+        ".opencode/skills/bee-hive",
+        ".bee/onboarding.json",
+        "docs/history/codex-harness-hardening/release-manifest.json"
+      ],
+      "tests": ".bee/bin/bee knowledge check && .bee/bin/bee dev release-manifest --check && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test skill_triggers — green:unit — bee knowledge check && bee dev release-manifest --check && cargo test --release --test skill_triggers — green:static — docs and rendered skill trees only (knowledge check OK; manifest 950 files match; skill_triggers 2 passed 0 failed 1 ignored)",
+      "deviations": [],
+      "patch_id": "f0a61e90e808e696cdbbb8845fc179542109fc8a"
+    },
+    "warnings": [],
+    "tests": "boundary"
+  },
+  "role_reroutes": [
+    {
+      "from": "docs",
+      "to": "code",
+      "decision": "d34530ee-5f57-4bf9-9755-ca1f6a4b730f",
+      "at": "2026-11-16T11:12:03.014Z",
+      "plan_sha256": "d1ab724eb9ac78a084ab0bf155e67ac32d3c2520851370864c18f487235bd086"
+    }
+  ],
+  "usage": {
+    "new": 46818,
+    "cached": 526802,
+    "total": 573620,
+    "models": {
+      "claude-sonnet-5-5": {
+        "new": 46818,
+        "cached": 526802,
+        "total": 573620
+      }
+    },
+    "jobs": [
+      "job-1794827532402-109634-1"
+    ]
+  }
+}

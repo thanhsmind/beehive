@@ -1,0 +1,99 @@
+{
+  "id": "lsg-4",
+  "feature": "lint-setup-guidance",
+  "title": "Check the set-up procedure and its rendered copies",
+  "lane": "standard",
+  "role": "test",
+  "deps": [
+    "lsg-2"
+  ],
+  "verify": ".bee/bin/bee knowledge check && .bee/bin/bee dev release-manifest --check",
+  "must_haves": {
+    "truths": [
+      "skills/bee-hive/references/onboarding.md section Set up the project's checks names bee config set --key commands.test with a --value and says the set-up request is the confirmation",
+      "the section never tells the agent to hand-edit .bee/config.json and lists team, herding.agents, herding.agent_command and hooks as the user's keys",
+      "every rendered copy of skills/bee-hive matches skills/ (release-manifest --check clean)",
+      "docs/knowledge/areas/onboarding/host-project-artifacts.md cites lint-setup-guidance D1 and D2 and points to the section"
+    ]
+  },
+  "decisions": [
+    "349430c9-eebb-42f2-8255-ba3d8ecba87e",
+    "72a0f753-00ef-4e04-9e06-c12c98e119f2"
+  ],
+  "files": [
+    "docs/history/lint-setup-guidance/lsg-4-check.md"
+  ],
+  "read_first": [
+    "docs/history/lint-setup-guidance/CONTEXT.md",
+    "skills/bee-hive/references/onboarding.md",
+    "skills/bee-hive/SKILL.md",
+    "docs/knowledge/areas/onboarding/host-project-artifacts.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Independently check cell lsg-2 (commit d8ba60b49) against CONTEXT.md D2 and D3 and the contract set-up-checks-procedure. Read the section Set up the project's checks in skills/bee-hive/references/onboarding.md, the onboarding.md row in skills/bee-hive/SKILL.md, and the Static checks section of docs/knowledge/areas/onboarding/host-project-artifacts.md. Check each must_have truth and report pass or fail with a file:line anchor. Run the cell verify. Write the result to docs/history/lint-setup-guidance/lsg-4-check.md (one line per truth, then the verify output counts) and commit only that file. Do not edit the skill or the concept; report a failure instead. No code comments.",
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "lsg-checker",
+    "outcome": "Checked lsg-2: all four truths pass, verify clean; wrote lsg-4-check.md in b9cdbc385",
+    "files_changed": [
+      "docs/history/lint-setup-guidance/lsg-4-check.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-11-16T11:26:08.795Z",
+    "behavior_change": false,
+    "verification_evidence": "docs-only check cell; 0 OKF errors, 950 files match manifest",
+    "verify_output": "green:static",
+    "verify_passed": true,
+    "claim_session": "72292b40-4818-423a-85eb-584c04392aba",
+    "verify_command": ".bee/bin/bee knowledge check && .bee/bin/bee dev release-manifest --check",
+    "claimed_at": "2026-11-16T11:25:14.920Z",
+    "knowledge_delta": [],
+    "no_mistakes": true,
+    "no_knowledge_used": true,
+    "principles_used": [
+      {
+        "slug": "bee-principle-verify-before-reporting",
+        "changed": "raw diff -r showed every rendered tree differing; traced it to bee:only harness blocks before reporting, so truth 3 passes rather than fails"
+      },
+      {
+        "slug": "bee-principle-prove-it-works",
+        "changed": "checked rendered copies byte-for-byte in addition to the manifest check"
+      }
+    ],
+    "report": {
+      "outcome": "Checked lsg-2: all four truths pass, verify clean; wrote lsg-4-check.md in b9cdbc385",
+      "commit": "b9cdbc3854bf060fdb1f710975eab089ab3767c2",
+      "files": [
+        "docs/history/lint-setup-guidance/lsg-4-check.md"
+      ],
+      "tests": ".bee/bin/bee knowledge check && .bee/bin/bee dev release-manifest --check — green:static — docs-only check cell; 0 OKF errors, 950 files match manifest",
+      "deviations": [],
+      "knowledge_used": [],
+      "principles_used": [
+        "bee-principle-verify-before-reporting — raw diff -r showed every rendered tree differing; traced it to bee:only harness blocks before reporting, so truth 3 passes rather than fails",
+        "bee-principle-prove-it-works — checked rendered copies byte-for-byte in addition to the manifest check"
+      ],
+      "patch_id": "62427a61fcdefc7d2576ca3a0ccdb7f147e1617b"
+    },
+    "warnings": [],
+    "tests": "boundary"
+  },
+  "usage": {
+    "new": 40783,
+    "cached": 289083,
+    "total": 329866,
+    "models": {
+      "claude-opus-5-5": {
+        "new": 40783,
+        "cached": 289083,
+        "total": 329866
+      }
+    },
+    "jobs": [
+      "job-1794828317935-311294-1"
+    ]
+  }
+}
