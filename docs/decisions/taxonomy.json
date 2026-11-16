@@ -899,6 +899,7 @@
     "contract:clippy-in-test",
     "contract:clippy-warnings-clean",
     "contract:release-2-108-0-check",
-    "contract:clippy-1100-fix"
+    "contract:clippy-1100-fix",
+    "contract:cargo-build-dir-tests"
   ]
 }
