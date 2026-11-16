@@ -143,9 +143,9 @@
         "effort": "medium"
       },
       "docs": {
-        "model": "sonnet",
-        "description": "doc edits and parity sweeps",
-        "effort": "high"
+        "kind": "herding",
+        "agent": "agy-flash",
+        "description": "doc edits and parity sweeps"
       },
       "deploy": {
         "model": "haiku",
@@ -161,7 +161,8 @@
         "description": "narrow fact lookups from known locations"
       },
       "generation": {
-        "model": "sonnet",
+        "kind": "herding",
+        "agent": "agy-flash",
         "description": "fall-through tail: default writer role"
       },
       "review": {
@@ -204,14 +205,14 @@
         "effort": "high"
       },
       "hat-value": {
-        "model": "opus",
-        "description": "hat: is this worth its cost — materiality test",
-        "effort": "high"
+        "kind": "herding",
+        "agent": "agy-flash",
+        "description": "hat: is this worth its cost — materiality test"
       },
       "hat-alternatives": {
-        "model": "opus",
-        "description": "hat: is there a cheaper shape — the SMALLER PATH question at spec altitude",
-        "effort": "high"
+        "kind": "herding",
+        "agent": "agy-flash",
+        "description": "hat: is there a cheaper shape — the SMALLER PATH question at spec altitude"
       },
       "hat-user-impact": {
         "model": "opus",
@@ -223,7 +224,8 @@
         "description": "build and critique rendered UI with the bee-design taste; proves with the design gate"
       },
       "writer": {
-        "model": "sonnet",
+        "kind": "herding",
+        "agent": "agy-flash",
         "description": "dedicated technical writer — any role (plan, code, review, design) hands finished work here to write its docs, specs, plans, READMEs and reports; writes through bee-technical-writing; asked for with --role writer"
       }
     },
@@ -343,7 +345,7 @@
       "paseo-pi-agy-flash": {
         "paseo": {
           "provider": "pi",
-          "model": "antigravity/gemini-3.8-flash",
+          "model": "antigravity/gemini-4-hydrogen",
           "thinking": "medium"
         }
       },
@@ -426,7 +428,7 @@
         "argv": [
           "agy",
           "--model",
-          "gemini-3.8-flash-high",
+          "gemini-4-hydrogen-medium",
           "--dangerously-skip-permissions"
         ],
         "workspace_trust": {
