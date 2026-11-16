@@ -30,8 +30,8 @@
   },
   "gate_preview": {
     "feature": "team-global-config",
-    "plan_sha256": "5654ec4323b5582b75666cbfc3aa0f3276d9babd4aaa07ed776b0376f89cfa1e",
-    "previewed_at": "2026-11-16T11:16:03.428Z",
+    "plan_sha256": "b3fce45f538fe704e524c9ee0cc430305736a832651bdb1eecb79834984027bd",
+    "previewed_at": "2026-11-16T11:39:28.572Z",
     "cells": [
       {
         "id": "tgc-1",
@@ -652,6 +652,119 @@
           "capped_at": null,
           "behavior_change": false
         }
+      },
+      {
+        "id": "tgc-10",
+        "feature": "team-global-config",
+        "title": "Refuse a Bash write that names the global config file through ~, $HOME, $XDG_CONFIG_HOME or $BEEHIVE_CONFIG_DIR",
+        "lane": "high-risk",
+        "role": "code",
+        "status": "open",
+        "deps": [
+          "tgc-9"
+        ],
+        "decisions": [
+          "d628826a-cedd-4bac-b5c3-1ef87b66d1ba",
+          "a0f6985d-2d1f-46de-b93b-25fa649f5434",
+          "09763647-9caf-4532-bfa6-4ddb380901ad"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/hooks/write_guard/guards.rs",
+          "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs"
+        ],
+        "read_first": [
+          "docs/history/team-global-config/CONTEXT.md",
+          "docs/history/team-global-config/reports/tester.md",
+          "packages/bee-rs/crates/bee/src/hooks/write_guard/guards.rs",
+          "packages/bee-rs/crates/bee/src/config_layers.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Fix the defect in docs/history/team-global-config/reports/tester.md (section 'Defect found'). CONTEXT.md D12 says the guard refuses a Bash command that names the global config path; D14 applies it in a herded pane. The Bash arm of `global_config_write_denial` in hooks/write_guard/guards.rs matches the literal absolute path only, so `echo {} > ~/.config/beehive/config.json`, `$HOME/.config/beehive/config.json`, `${HOME}/...`, `$XDG_CONFIG_HOME/beehive/config.json` and `$BEEHIVE_CONFIG_DIR/config.json` pass. Make the Bash arm also refuse a command whose text names the global file through each of those spellings: expand a leading `~` and the `$HOME`/`${HOME}`, `$XDG_CONFIG_HOME`/`${XDG_CONFIG_HOME}` and `$BEEHIVE_CONFIG_DIR`/`${BEEHIVE_CONFIG_DIR}` references in each token, using the current env values, and compare the result with the resolved global file path from config_layers. A token that resolves to the global file through ANY of these spellings is refused, even when the env var would resolve differently (the agent can set it in the same command). Take the global path from config_layers; never restate the path rules. A Bash command that only reads the file (cat, rg) is refused too, as today for the literal path. Every other write stays as it is. Red first: tests whose names contain global_path_spelling in hooks/write_guard/tests.rs, through `emit_for` in worker_tree.rs and through the hooked guard, one per spelling, plus one that a Bash write to an unrelated `~/.config/other/config.json` still passes. Watch them fail before the change. No code comments. Quote the matched test count, above zero.",
+        "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- global_path_spelling team_guard herded_team_guard",
+        "must_haves": {
+          "truths": [
+            "A herded pane Bash write to the global file through ~, $HOME, $XDG_CONFIG_HOME or $BEEHIVE_CONFIG_DIR is refused",
+            "A Bash write to an unrelated file under ~/.config still passes"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/hooks/write_guard/guards.rs",
+              "substantive": "the Bash arm resolves the path spellings"
+            }
+          ],
+          "key_links": [
+            "guards.rs takes the global path from config_layers"
+          ],
+          "prohibitions": [
+            "No code comments",
+            "No second copy of the global path rules"
+          ],
+          "open_choices": []
+        },
+        "trace": {
+          "worker": null,
+          "outcome": null,
+          "files_changed": [],
+          "deviations": [],
+          "friction": null,
+          "capped_at": null,
+          "behavior_change": true
+        }
+      },
+      {
+        "id": "tgc-11",
+        "feature": "team-global-config",
+        "title": "Tester pass over the global path spellings",
+        "lane": "high-risk",
+        "role": "test",
+        "status": "open",
+        "deps": [
+          "tgc-10"
+        ],
+        "decisions": [
+          "09763647-9caf-4532-bfa6-4ddb380901ad",
+          "a0f6985d-2d1f-46de-b93b-25fa649f5434"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/tests/config_verbs.rs",
+          "docs/history/team-global-config/reports/tester.md"
+        ],
+        "read_first": [
+          "docs/history/team-global-config/CONTEXT.md",
+          "docs/history/team-global-config/reports/tester.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "You are the tester for tgc-10; you share no context with its implementer. Through the built binary (`bee hook write-guard` with a hook payload on stdin, HOME and XDG_CONFIG_HOME pointed at temp dirs, BEEHIVE_CONFIG_DIR unset and set), prove in tests/config_verbs.rs, with names containing config_tester_spelling: each spelling (~, $HOME, ${HOME}, $XDG_CONFIG_HOME, $BEEHIVE_CONFIG_DIR) of the global file is refused in a herded pane (BEE_HERDING_WORKER=1) and in a hooked pane; an unrelated ~/.config/other/config.json write passes in the herded pane. Watch each fail under a temporary local revert of tgc-10's change, then restore it before the commit. Append a tgc-10 row and a 'Defect closed' line to docs/history/team-global-config/reports/tester.md. A production defect is reported, never fixed here. No code comments. Quote the matched test count, above zero.",
+        "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test config_verbs",
+        "must_haves": {
+          "truths": [
+            "Each global path spelling is refused through the built binary in both panes",
+            "reports/tester.md records tgc-10 and the closed defect"
+          ],
+          "artifacts": [
+            {
+              "path": "docs/history/team-global-config/reports/tester.md",
+              "substantive": "the tgc-10 row"
+            }
+          ],
+          "key_links": [],
+          "prohibitions": [
+            "No production code change",
+            "No code comments"
+          ],
+          "open_choices": []
+        },
+        "trace": {
+          "worker": null,
+          "outcome": null,
+          "files_changed": [],
+          "deviations": [],
+          "friction": null,
+          "capped_at": null,
+          "behavior_change": false
+        }
       }
     ],
     "role_plan": {
@@ -663,13 +776,13 @@
           "stage": "implementation",
           "classification": "required",
           "role": "code",
-          "reason": "tgc-1 to tgc-5 and tgc-8 write Rust and their red-first tests."
+          "reason": "tgc-1 to tgc-5, tgc-8 and tgc-10 write Rust and their red-first tests."
         },
         {
           "stage": "test-and-live-proof",
           "classification": "required",
           "role": "test",
-          "reason": "tgc-6 and tgc-9: a tester that shares no context with the implementers drives the built binary, re-proves each cell contract and adds tests."
+          "reason": "tgc-6, tgc-9 and tgc-11: a tester that shares no context with the implementers drives the built binary, re-proves each cell contract and adds tests."
         },
         {
           "stage": "docs",
@@ -798,8 +911,8 @@
   },
   "approved_cell_packet": {
     "feature": "team-global-config",
-    "plan_sha256": "5654ec4323b5582b75666cbfc3aa0f3276d9babd4aaa07ed776b0376f89cfa1e",
-    "previewed_at": "2026-11-16T11:16:03.428Z",
+    "plan_sha256": "b3fce45f538fe704e524c9ee0cc430305736a832651bdb1eecb79834984027bd",
+    "previewed_at": "2026-11-16T11:39:28.572Z",
     "cells": [
       {
         "id": "tgc-1",
@@ -1420,6 +1533,119 @@
           "capped_at": null,
           "behavior_change": false
         }
+      },
+      {
+        "id": "tgc-10",
+        "feature": "team-global-config",
+        "title": "Refuse a Bash write that names the global config file through ~, $HOME, $XDG_CONFIG_HOME or $BEEHIVE_CONFIG_DIR",
+        "lane": "high-risk",
+        "role": "code",
+        "status": "open",
+        "deps": [
+          "tgc-9"
+        ],
+        "decisions": [
+          "d628826a-cedd-4bac-b5c3-1ef87b66d1ba",
+          "a0f6985d-2d1f-46de-b93b-25fa649f5434",
+          "09763647-9caf-4532-bfa6-4ddb380901ad"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/hooks/write_guard/guards.rs",
+          "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs"
+        ],
+        "read_first": [
+          "docs/history/team-global-config/CONTEXT.md",
+          "docs/history/team-global-config/reports/tester.md",
+          "packages/bee-rs/crates/bee/src/hooks/write_guard/guards.rs",
+          "packages/bee-rs/crates/bee/src/config_layers.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Fix the defect in docs/history/team-global-config/reports/tester.md (section 'Defect found'). CONTEXT.md D12 says the guard refuses a Bash command that names the global config path; D14 applies it in a herded pane. The Bash arm of `global_config_write_denial` in hooks/write_guard/guards.rs matches the literal absolute path only, so `echo {} > ~/.config/beehive/config.json`, `$HOME/.config/beehive/config.json`, `${HOME}/...`, `$XDG_CONFIG_HOME/beehive/config.json` and `$BEEHIVE_CONFIG_DIR/config.json` pass. Make the Bash arm also refuse a command whose text names the global file through each of those spellings: expand a leading `~` and the `$HOME`/`${HOME}`, `$XDG_CONFIG_HOME`/`${XDG_CONFIG_HOME}` and `$BEEHIVE_CONFIG_DIR`/`${BEEHIVE_CONFIG_DIR}` references in each token, using the current env values, and compare the result with the resolved global file path from config_layers. A token that resolves to the global file through ANY of these spellings is refused, even when the env var would resolve differently (the agent can set it in the same command). Take the global path from config_layers; never restate the path rules. A Bash command that only reads the file (cat, rg) is refused too, as today for the literal path. Every other write stays as it is. Red first: tests whose names contain global_path_spelling in hooks/write_guard/tests.rs, through `emit_for` in worker_tree.rs and through the hooked guard, one per spelling, plus one that a Bash write to an unrelated `~/.config/other/config.json` still passes. Watch them fail before the change. No code comments. Quote the matched test count, above zero.",
+        "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- global_path_spelling team_guard herded_team_guard",
+        "must_haves": {
+          "truths": [
+            "A herded pane Bash write to the global file through ~, $HOME, $XDG_CONFIG_HOME or $BEEHIVE_CONFIG_DIR is refused",
+            "A Bash write to an unrelated file under ~/.config still passes"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/hooks/write_guard/guards.rs",
+              "substantive": "the Bash arm resolves the path spellings"
+            }
+          ],
+          "key_links": [
+            "guards.rs takes the global path from config_layers"
+          ],
+          "prohibitions": [
+            "No code comments",
+            "No second copy of the global path rules"
+          ],
+          "open_choices": []
+        },
+        "trace": {
+          "worker": null,
+          "outcome": null,
+          "files_changed": [],
+          "deviations": [],
+          "friction": null,
+          "capped_at": null,
+          "behavior_change": true
+        }
+      },
+      {
+        "id": "tgc-11",
+        "feature": "team-global-config",
+        "title": "Tester pass over the global path spellings",
+        "lane": "high-risk",
+        "role": "test",
+        "status": "open",
+        "deps": [
+          "tgc-10"
+        ],
+        "decisions": [
+          "09763647-9caf-4532-bfa6-4ddb380901ad",
+          "a0f6985d-2d1f-46de-b93b-25fa649f5434"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/tests/config_verbs.rs",
+          "docs/history/team-global-config/reports/tester.md"
+        ],
+        "read_first": [
+          "docs/history/team-global-config/CONTEXT.md",
+          "docs/history/team-global-config/reports/tester.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "You are the tester for tgc-10; you share no context with its implementer. Through the built binary (`bee hook write-guard` with a hook payload on stdin, HOME and XDG_CONFIG_HOME pointed at temp dirs, BEEHIVE_CONFIG_DIR unset and set), prove in tests/config_verbs.rs, with names containing config_tester_spelling: each spelling (~, $HOME, ${HOME}, $XDG_CONFIG_HOME, $BEEHIVE_CONFIG_DIR) of the global file is refused in a herded pane (BEE_HERDING_WORKER=1) and in a hooked pane; an unrelated ~/.config/other/config.json write passes in the herded pane. Watch each fail under a temporary local revert of tgc-10's change, then restore it before the commit. Append a tgc-10 row and a 'Defect closed' line to docs/history/team-global-config/reports/tester.md. A production defect is reported, never fixed here. No code comments. Quote the matched test count, above zero.",
+        "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test config_verbs",
+        "must_haves": {
+          "truths": [
+            "Each global path spelling is refused through the built binary in both panes",
+            "reports/tester.md records tgc-10 and the closed defect"
+          ],
+          "artifacts": [
+            {
+              "path": "docs/history/team-global-config/reports/tester.md",
+              "substantive": "the tgc-10 row"
+            }
+          ],
+          "key_links": [],
+          "prohibitions": [
+            "No production code change",
+            "No code comments"
+          ],
+          "open_choices": []
+        },
+        "trace": {
+          "worker": null,
+          "outcome": null,
+          "files_changed": [],
+          "deviations": [],
+          "friction": null,
+          "capped_at": null,
+          "behavior_change": false
+        }
       }
     ],
     "role_plan": {
@@ -1431,13 +1657,13 @@
           "stage": "implementation",
           "classification": "required",
           "role": "code",
-          "reason": "tgc-1 to tgc-5 and tgc-8 write Rust and their red-first tests."
+          "reason": "tgc-1 to tgc-5, tgc-8 and tgc-10 write Rust and their red-first tests."
         },
         {
           "stage": "test-and-live-proof",
           "classification": "required",
           "role": "test",
-          "reason": "tgc-6 and tgc-9: a tester that shares no context with the implementers drives the built binary, re-proves each cell contract and adds tests."
+          "reason": "tgc-6, tgc-9 and tgc-11: a tester that shares no context with the implementers drives the built binary, re-proves each cell contract and adds tests."
         },
         {
           "stage": "docs",
@@ -1557,7 +1783,7 @@
     }
   },
   "gate_revoked_at": {
-    "execution": "2026-11-16T11:15:25.138Z"
+    "execution": "2026-11-16T11:38:50.676Z"
   },
   "merge_ready": {
     "since": "2026-11-16T11:11:47.283Z",

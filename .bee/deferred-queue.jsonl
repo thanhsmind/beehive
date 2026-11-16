@@ -1409,3 +1409,4 @@
 {"ts":"2026-11-16T03:21:35.961Z","event":"complete","id":"aeee23bc-9cb8-4b9f-a4a5-933b253f5beb"}
 {"ts":"2026-11-16T03:21:40.797Z","event":"complete","id":"ae0c4a45-c305-46f3-912e-dced600d7e2d"}
 {"ts":"2026-11-16T03:21:45.997Z","event":"complete","id":"21b9c187-dfb0-4638-b9ff-84c0ccd4331e"}
+{"ts":"2026-11-16T11:29:17.365Z","event":"add","id":"836fde67-95df-4410-b8ba-c9e8bd92b7b1","kind":"worktree-cleanup","feature":"lint-setup-guidance","cells":[],"areas":[],"files":["/mnt/data/Projects/goglbe/beehive--wt--lint-setup-guidance"],"reason":"Worktree beehive--wt--lint-setup-guidance (branch wt/lint-setup-guidance) merged into main at 5bad2c7810fea3a231f890a1c3166b33b771e053 and kept per default (D1) — remove it with `bee worktree prune`."}
