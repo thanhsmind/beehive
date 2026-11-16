@@ -1,12 +1,12 @@
 # stdi-14 check: the stdi-13 playbook and knowledge-upkeep fixes
 
-Checked commit: dd1901a39 (trailer `cell: stdi-13`), against CONTEXT.md D1 and D2.
+Checked commits: dd1901a39 and the restore 637bc8988 (both trailer `cell: stdi-13`), against CONTEXT.md D1 and D2.
 
 ## Truths
 
 - PASS: `rg 'cells finish --help' skills/bee-planning/playbooks` exits 1 and `rg -- '--cleanup' skills/bee-planning/playbooks` exits 1, so neither finds a hit. The class indexes now read "names it when it refuses" (skills/bee-planning/playbooks/feature.md:12, skills/bee-planning/playbooks/bugfix.md:11, and the same line in the other seven class indexes).
 - PASS: every Situations row still parses. The diff changes no `` - `name` `` row (`git show dd1901a39 -U0 | rg '^[-+]- \`'` exits 1). All nine class indexes keep `## Situations`. class_playbook_parity passes 9 of 9 (its parser is at packages/bee-rs/crates/bee/tests/class_playbook_parity.rs:171).
-- PASS: the step-2 rank order is unchanged. The diff leaves step 2 alone, and it still reads "wrong count, then orphan, then suspect-and-loaded, then loaded-never-used" (skills/bee-knowledge-upkeep/SKILL.md:62-63).
+- PASS: the step-2 rank order is unchanged. The diff leaves step 2 alone, and it still reads "wrong count, then orphan, then suspect-and-loaded, then loaded-never-used" (skills/bee-knowledge-upkeep/SKILL.md:62-63). The restore 637bc8988 touches only the step-4 bullet.
 
 ## Moved or cut rules and their homes
 
@@ -17,7 +17,7 @@ Checked commit: dd1901a39 (trailer `cell: stdi-13`), against CONTEXT.md D1 and D
 - "Starting defaults, change them here" was cut as stale (D2), because the thresholds live in the binary (skills/bee-knowledge-upkeep/SKILL.md:50).
 - "A run that was never recorded counts as due." Home: skills/bee-knowledge-upkeep/SKILL.md:51.
 - "Loaded-never-used never makes a run due alone." Home: it goes to `info`, not `reasons` (upkeep_group.rs:191-197), and the `upkeep due` help says "never make the run due" (registry_payload.json).
-- DEFECT (minor): the clause "it is trimmed or retired only after the source reader confirms it is dead weight" has no explicit home now. The ordering still holds in part, because step 3 runs a source reader on each picked concept before step 4 trims (skills/bee-knowledge-upkeep/SKILL.md:69-74, 83-84). The "only after a reader confirms" condition and its why ("a concept may only be unreported") are gone. Suggested fix: add "after its reader confirms it is dead weight, because it may only be unreported" to the bullet at SKILL.md:83-84.
+- "It is trimmed or retired only after the source reader confirms it is dead weight" and its why "a concept may only be unreported". Home: skills/bee-knowledge-upkeep/SKILL.md:83-85, restored by 637bc8988. The earlier defect from this check is fixed. The qualifier "while the report's silent cells outnumber its answered ones" was not restored; the restored why-clause carries its meaning, so this is not a defect.
 - The "When knowledge is read, written and revised" table. Homes: the read row is the worker brief's Learned context block (packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs:3380), the write row is packages/bee/prompts/worker-cell.md:81 and skills/bee-swarming/references/execute.md:52, the revise and report rows are skills/bee-capturing/SKILL.md:110-113, and the audit row is the Pass at skills/bee-knowledge-upkeep/SKILL.md:69-86.
 
 ## Do-not-touch list (C-playbooks.md section 4)
@@ -26,4 +26,4 @@ Checked commit: dd1901a39 (trailer `cell: stdi-13`), against CONTEXT.md D1 and D
 
 ## Verify
 
-`cargo test --release --test class_playbook_parity --test route_class_parity --test pointer_integrity`: class_playbook_parity 9 passed, 0 failed; pointer_integrity 10 passed, 0 failed; route_class_parity 2 passed, 0 failed.
+Re-run after 637bc8988, `cargo test --release --test class_playbook_parity --test route_class_parity --test pointer_integrity`: class_playbook_parity 9 passed, 0 failed; pointer_integrity 10 passed, 0 failed; route_class_parity 2 passed, 0 failed.
