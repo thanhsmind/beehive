@@ -215,6 +215,20 @@ pub fn canonical_paths_equal(a: &Path, b: &Path) -> bool {
     }
 }
 
+#[allow(clippy::disallowed_methods)]
+pub fn strip_root_lexical<'a>(path: &'a Path, root: &Path) -> Option<&'a Path> {
+    path.strip_prefix(root).ok()
+}
+
+pub fn relative_to(path: &Path, root: &Path) -> Option<PathBuf> {
+    if let Some(rest) = strip_root_lexical(path, root) {
+        return Some(rest.to_path_buf());
+    }
+    let canonical_path = dunce::canonicalize(path).ok()?;
+    let canonical_root = dunce::canonicalize(root).ok()?;
+    strip_root_lexical(&canonical_path, &canonical_root).map(Path::to_path_buf)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -270,6 +284,49 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         // Must be conclusive without the write probe on every mainstream FS.
         assert!(read_only_case_probe(&dir).is_some());
+    }
+
+    #[test]
+    fn relative_to_plain_match_returns_tail_from_both_helpers() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let path = root.join("a").join("b.txt");
+        assert_eq!(strip_root_lexical(&path, root), Some(Path::new("a/b.txt")));
+        assert_eq!(relative_to(&path, root), Some(PathBuf::from("a/b.txt")));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn relative_to_matches_through_symlinked_root_where_lexical_does_not() {
+        let tmp = tempfile::tempdir().unwrap();
+        let real = tmp.path().join("real");
+        std::fs::create_dir_all(real.join("sub")).unwrap();
+        std::fs::write(real.join("sub").join("f.txt"), "").unwrap();
+        let link = tmp.path().join("link");
+        std::os::unix::fs::symlink(&real, &link).unwrap();
+        let path = real.join("sub").join("f.txt");
+        assert_eq!(strip_root_lexical(&path, &link), None);
+        assert_eq!(relative_to(&path, &link), Some(PathBuf::from("sub/f.txt")));
+    }
+
+    #[test]
+    fn relative_to_unrelated_path_is_none_from_both_helpers() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path().join("root");
+        let other = tmp.path().join("other").join("f.txt");
+        std::fs::create_dir_all(&root).unwrap();
+        std::fs::create_dir_all(other.parent().unwrap()).unwrap();
+        std::fs::write(&other, "").unwrap();
+        assert_eq!(strip_root_lexical(&other, &root), None);
+        assert_eq!(relative_to(&other, &root), None);
+    }
+
+    #[test]
+    fn relative_to_path_equal_to_root_gives_empty_tail() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        assert_eq!(strip_root_lexical(root, root), Some(Path::new("")));
+        assert_eq!(relative_to(root, root), Some(PathBuf::new()));
     }
 
     #[test]

@@ -355,7 +355,7 @@ pub(crate) fn sha256_hex(bytes: &[u8]) -> String {
 /// as Node prints it in the `WROTE …` lines. (`rel_posix` below is the other
 /// flavor — the one that goes INTO manifests.)
 pub(crate) fn rel_platform(root: &Path, abs: &Path) -> String {
-    let rel = abs.strip_prefix(root).unwrap_or(abs);
+    let rel = crate::path_identity::strip_root_lexical(abs, root).unwrap_or(abs);
     rel.components()
         .map(|c| c.as_os_str().to_string_lossy().into_owned())
         .collect::<Vec<_>>()
@@ -365,7 +365,7 @@ pub(crate) fn rel_platform(root: &Path, abs: &Path) -> String {
 /// `path.relative(root, abs).split(path.sep).join("/")` — the repo-relative
 /// POSIX spelling both manifests key on.
 pub(crate) fn rel_posix(root: &Path, abs: &Path) -> String {
-    let rel = abs.strip_prefix(root).unwrap_or(abs);
+    let rel = crate::path_identity::strip_root_lexical(abs, root).unwrap_or(abs);
     rel.components()
         .map(|c| c.as_os_str().to_string_lossy().into_owned())
         .collect::<Vec<_>>()

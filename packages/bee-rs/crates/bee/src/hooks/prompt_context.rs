@@ -673,13 +673,13 @@ fn read_json_pf(file: &Path) -> Pf<Option<Value>> {
 
 /// Node path.relative for the shape readLane's warn needs (file under root).
 fn path_relative(root: &Path, file: &Path) -> String {
-    match file.strip_prefix(root) {
-        Ok(rel) => rel
+    match crate::path_identity::strip_root_lexical(file, root) {
+        Some(rel) => rel
             .components()
             .map(|c| c.as_os_str().to_string_lossy().into_owned())
             .collect::<Vec<_>>()
             .join(std::path::MAIN_SEPARATOR_STR),
-        Err(_) => file.display().to_string(),
+        None => file.display().to_string(),
     }
 }
 

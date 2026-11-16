@@ -1401,3 +1401,40 @@ fn law_b_check2_derivation_and_classifier_are_proven_on_fixtures() {
     let unicode = format!("{}bee-qualifying{}", "\u{2014} ".repeat(200), " \u{2192}".repeat(200));
     let _ = find_current_behavior_mentions(&unicode, "qualifying");
 }
+
+fn block_between(text: &str, start: &str, stop: &str) -> Option<String> {
+    let mut lines = text.lines().skip_while(|l| !l.starts_with(start));
+    let first = lines.next()?;
+    let rest = lines.take_while(|l| !l.starts_with(stop));
+    Some(std::iter::once(first).chain(rest).collect::<Vec<_>>().join("\n"))
+}
+
+fn fix_at_close_missing(static_rules: &str, promotion: &str) -> (usize, Vec<String>) {
+    let checks = [
+        (static_rules, "## Show it red, then green", "## ", "--type backlog-closed"),
+        (static_rules, "## Show it red, then green", "## ", "--layer"),
+        (promotion, "2. Mechanizable?", "3.", "close the fix-at row"),
+    ];
+    let mut matched = 0;
+    let mut missing = Vec::new();
+    for (text, start, stop, needle) in checks {
+        match block_between(text, start, stop) {
+            Some(block) if block.contains(needle) => matched += 1,
+            Some(_) => missing.push(format!("{start:?} lacks {needle:?}")),
+            None => missing.push(format!("no block starting {start:?}")),
+        }
+    }
+    (matched, missing)
+}
+
+#[test]
+fn fix_at_close_doctrine_names_the_closing_row() {
+    let root = repo_root();
+    let static_rules = std::fs::read_to_string(root.join("expertise/static-rules.md")).unwrap();
+    let promotion =
+        std::fs::read_to_string(root.join("skills/bee-capturing/references/promotion.md")).unwrap();
+    let (matched, missing) = fix_at_close_missing(&static_rules, &promotion);
+    println!("fix_at_close_doctrine matched {matched}");
+    assert!(missing.is_empty(), "fix-at closing step missing from doctrine: {missing:?}");
+    assert_eq!(matched, 3);
+}

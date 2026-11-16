@@ -769,7 +769,7 @@ fn binary_freshness_row_impl(root: &Path, is_pi: bool) -> Option<Row> {
                 }
             }
             if let Some((path, mtime)) = newest {
-                let rel = path.strip_prefix(root).unwrap_or(&path);
+                let rel = crate::path_identity::strip_root_lexical(&path, root).unwrap_or(&path);
                 return Some(Row {
                     key: KEY,
                     ok: Some(false),

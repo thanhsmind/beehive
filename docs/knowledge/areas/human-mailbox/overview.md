@@ -12,7 +12,7 @@ bee:
   sources: [docs/history/human-mailbox/CONTEXT.md (the locked decisions), "docs/history/human-mailbox/plan.md (four phases, strictly ordered)", docs/discovery/human-mailbox/MAP.md (the discovery map and its 14 tickets), "cells hm-1..hm-10 (four slices, merged 2026-08-25/26)"]
   authoritative_for: "human-mailbox: the letter record, when it is filed, and the one command a consumer may call"
   owns.code: [packages/bee-rs/crates/bee/src/verbs/mailbox.rs]
-  anchors: [packages/bee-rs/crates/bee/src/verbs/mailbox.rs, packages/bee-rs/crates/bee/src/verbs/mailbox_digest.rs, packages/bee-rs/crates/bee/src/verbs/work.rs, packages/bee-rs/crates/bee/src/verbs/cells/audit.rs, packages/bee-rs/crates/bee/src/verbs/feedback.rs, packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs, packages/bee-rs/crates/bee/src/verbs/drivers/close.rs]
+  anchors: [packages/bee-rs/crates/bee/src/verbs/mailbox.rs, packages/bee-rs/crates/bee/src/verbs/mailbox_digest.rs, packages/bee-rs/crates/bee/src/verbs/work.rs, packages/bee-rs/crates/bee/src/verbs/cells/audit.rs, packages/bee-rs/crates/bee/src/verbs/feedback.rs, packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs, packages/bee-rs/crates/bee/src/verbs/drivers/close.rs, packages/bee-rs/crates/bee/src/verbs/backlog.rs]
   verified_at: 2026-10-16
   verified_commit: bce76a97d58a512b181a260c6f4a6461148ebd58
 ---
@@ -186,7 +186,12 @@ scheduler being introduced to watch for this.
     the cell or run it came from. The source set is the feature's capped
     cells' `trace.mistakes` (archive included) and the closing run's own
     entries — nothing else carries a feature. The same row is never filed
-    twice: (feature, layer, title) is re-read per row. `doctrine` and `none`
+    twice: (layer, normalized title) is re-read per row across every
+    feature, within the current close epoch (newer than the latest
+    `backlog-closed` row of that title), so one reflection seen by two
+    features files once and the later close's pointer names the owner, while
+    a mistake repeated after a close files anew (fix-at-loop D1/D10; `bee
+    backlog add` keeps its per-feature dedupe). `doctrine` and `none`
     file nothing and stay on the two-run lesson rule. The close then says
     `Filed for "<feature>": N fix-at row(s) to .bee/backlog.jsonl (M already
     there) — bee backlog findings --feature <feature> to read them.`, and
@@ -205,9 +210,11 @@ scheduler being introduced to watch for this.
     nothing, drops nothing, and scores nothing.
     The same digest carries a top-level `prose_load` witness (trust-layers D4/D7):
     line counts of the instruction files, the critical pattern count of the
-    knowledge index, and the fix-at rows filed, each null when its source is
-    absent and printed as not present, never as 0. It counts and names fixed
-    files only, never their content, and `bee feedback count` is untouched.
+    knowledge index, the fix-at rows filed, the open and closed fix-at counts
+    and the SessionStart preamble size (fix-at-loop D6, D8), each null when
+    its source is absent and printed as not present, never as 0. It counts
+    and names fixed files only, never their content, and `bee feedback count`
+    is untouched.
 20. **A feature close demands the mistakes answer, and asks the CELLS, not
     the run** (RBL D1, D5). The close refuses while any capped cell of the
     feature carries neither a reflection nor the clean-run answer, and names
@@ -234,7 +241,12 @@ twice is a fix-first candidate, taken at the highest fix-at layer that works:
 rank` count at 2 or the `lesson` decision it mints, and the close door's
 `Filed for "<feature>": N fix-at row(s)` line. What follows is one fix-first
 cell whose proof line carries the new guard, lint, or test shown FAILING on
-the past mistake, then green. When the past mistake cannot be reproduced, the
+the past mistake, then green. Landing the guard is not the end of the row: the
+same cell files a `backlog-closed` row with the finding's exact title, the same
+`fix-at:<layer>` and `guard: <what now stops it> (<commit>)` as its detail
+(fix-at-loop D7, D8). That row retires the group in `bee feedback rank`, and
+the same mistake filed again after it reopens the group as `recurred`; the
+first close of `strip_prefix` on absolute paths was filed this way. When the past mistake cannot be reproduced, the
 layer drops to `doctrine` with the reason recorded. `FIX_AT_VALUES` stays
 `architecture|check|doctrine|none`; the sub-kind of a `check` (type, lint,
 test) rides in `--better`. `expertise/static-rules.md` orders the homes (type, lint

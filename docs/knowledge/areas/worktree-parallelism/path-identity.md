@@ -12,7 +12,7 @@ bee:
   decisions: ["windows-path-tests (efa057d6): bee close compares worktree roots with roots::same_path so a Windows short path and the long path name the same worktree", "issues-sweep-1023 D4 (d8e689c8): path_identity compares dunce-canonicalized paths"]
   sources: ["windows-path-identity (cells wpi-1, wpi-2, wpi-3)", docs/history/windows-path-identity/plan.md, docs/history/windows-path-identity/reports/wpi-1.md]
   authoritative_for: "worktree-parallelism: deciding whether two path strings name the same location"
-  anchors: [packages/bee-rs/crates/bee/src/path_identity.rs, packages/bee-rs/crates/bee/src/verbs/worktree/registry.rs]
+  anchors: [packages/bee-rs/crates/bee/src/path_identity.rs, packages/bee-rs/crates/bee/src/verbs/worktree/registry.rs, packages/bee-rs/clippy.toml]
   verified_at: 2026-11-07
   verified_commit: 9861c1b430dc099ce4e0ba481503579ad3a2d738
 ---
@@ -70,3 +70,4 @@ Two strings can name the same directory without being the same string. Every pla
 - `packages/bee-rs/crates/bee/src/path_identity.rs` (formerly packages/bee/lib/path-identity.mjs) (`canonicalPathsEqual`, its `platformPath` and case-probe injection seams).
 - Consumed at `packages/bee-rs/crates/bee/src/verbs/worktree/registry.rs` (formerly packages/bee/lib/worktree-store.mjs)'s `resolveWorktreeById` bidirectional gitdir check, threaded through the merge entry points' options.
 - Tests: scripts/tests/test_path_identity.mjs (retired with the Node runtime, 2026-08-02).
+- `packages/bee-rs/clippy.toml` bans `std::path::Path::strip_prefix` through `disallowed-methods`; the reason text is the error an agent reads and names the two helpers in `path_identity.rs`. Read when: clippy reports a disallowed `strip_prefix`, or a path comparison fails only on Windows. `strip_root_lexical` is today's plain strip, for paths from one source or relative ones; `relative_to` tries the plain strip, then both sides through `dunce::canonicalize`, for absolute paths read from different sources (a Windows 8.3 short path against a long one, a symlinked root). Only `src/` is covered, because `commands.test` runs clippy without `--all-targets` and `tests/` keeps its four calls. Why a second helper and not a canonical fallback inside one: a fallback changes what a call site returns, and a rename must not hide that (fix-at-loop D5, D9). At the time of writing one site took `relative_to` (`verbs/cells/leader_check.rs`, history-root check); find the rest with `rg "relative_to\(" packages/bee-rs/crates/bee/src`.

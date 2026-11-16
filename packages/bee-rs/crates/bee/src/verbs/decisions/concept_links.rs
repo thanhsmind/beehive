@@ -15,7 +15,7 @@ pub(crate) fn read_concepts(root: &Path) -> Vec<ConceptFile> {
         .into_iter()
         .filter_map(|p| {
             let body = std::fs::read_to_string(&p).ok()?;
-            let rel = p.strip_prefix(root).ok()?.to_string_lossy().replace('\\', "/");
+            let rel = crate::path_identity::strip_root_lexical(&p, root)?.to_string_lossy().replace('\\', "/");
             Some(ConceptFile { path: rel, lines: body.lines().map(str::to_string).collect() })
         })
         .collect();

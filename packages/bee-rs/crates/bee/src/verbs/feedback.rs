@@ -994,6 +994,9 @@ fn collect_feedback(root: &Path) -> Option<CollectData> {
             // whole command; read_jsonl now skips it like any other corrupt
             // line and it lands in the same `skipped` tally Node counted.
             skipped += read.bad_lines;
+            let closes = close_stamps(&read.rows);
+            let mut folded: std::collections::HashMap<(String, String, String, usize), usize> =
+                std::collections::HashMap::new();
             for row in read.rows {
                 match &row {
                     Value::Object(m) => {
@@ -1008,14 +1011,43 @@ fn collect_feedback(root: &Path) -> Option<CollectData> {
                             Some("P3") => 1.0,
                             _ => 1.0,
                         };
-                        raw.push(RawCandidate {
+                        let candidate = RawCandidate {
                             ty: m.get("type").cloned().unwrap_or(Value::Null),
                             title: m.get("title").cloned().unwrap_or(Value::Null),
                             layer: m.get("layer").cloned().unwrap_or(Value::Null),
                             first_seen: m.get("ts").cloned().unwrap_or(Value::Null),
                             pain,
                             source: SRC_BACKLOG.to_string(),
-                        });
+                        };
+                        let foldable = matches!(candidate.ty.as_str(), Some("finding" | "friction"));
+                        if !foldable {
+                            raw.push(candidate);
+                            continue;
+                        }
+                        let title = normalize_title(&candidate.title);
+                        let epoch = close_epoch(&closes, &title, ts_str(&candidate.first_seen));
+                        let key = (
+                            candidate.ty.as_str().unwrap_or("").to_string(),
+                            candidate.layer.as_str().unwrap_or("").to_string(),
+                            title,
+                            epoch,
+                        );
+                        match folded.get(&key) {
+                            Some(&at) => {
+                                let earlier = &mut raw[at];
+                                let older = matches!(
+                                    (candidate.first_seen.as_str(), earlier.first_seen.as_str()),
+                                    (Some(new), Some(old)) if new < old
+                                );
+                                if older {
+                                    earlier.first_seen = candidate.first_seen;
+                                }
+                            }
+                            None => {
+                                folded.insert(key, raw.len());
+                                raw.push(candidate);
+                            }
+                        }
                     }
                     // JS: typeof [] === 'object' — arrays reach the candidate
                     // path with every field undefined (-> unknown_type drop).
@@ -1666,22 +1698,100 @@ fn critical_pattern_count(root: &Path) -> Option<u64> {
     found.then_some(n)
 }
 
-fn fix_at_row_counts(root: &Path) -> (Option<u64>, Option<u64>) {
-    let Ok(real_root) = dunce::canonicalize(root) else {
-        return (None, None);
-    };
+fn ts_str(ts: &Value) -> &str {
+    ts.as_str().unwrap_or("")
+}
+
+fn close_stamps(rows: &[Value]) -> Vec<(String, String)> {
+    rows.iter()
+        .filter(|r| r.get("type").and_then(Value::as_str) == Some("backlog-closed"))
+        .map(|r| {
+            (
+                normalize_title(r.get("title").unwrap_or(&Value::Null)),
+                ts_str(r.get("ts").unwrap_or(&Value::Null)).to_string(),
+            )
+        })
+        .collect()
+}
+
+fn close_epoch(closes: &[(String, String)], title: &str, ts: &str) -> usize {
+    closes.iter().filter(|(t, c)| t == title && c.as_str() < ts).count()
+}
+
+struct FixAtLoad {
+    check_rows: u64,
+    architecture_rows: u64,
+    check_open: u64,
+    architecture_open: u64,
+    closed: u64,
+}
+
+fn fix_at_load(root: &Path) -> Option<FixAtLoad> {
+    let real_root = dunce::canonicalize(root).ok()?;
     let Scope::Ok(path) = resolve_in_scope(&real_root, SRC_BACKLOG) else {
-        return (None, None);
+        return None;
     };
-    let (mut check, mut architecture) = (0u64, 0u64);
-    for row in read_jsonl(&path).rows {
-        match row.get("layer").and_then(Value::as_str) {
-            Some("fix-at:check") => check += 1,
-            Some("fix-at:architecture") => architecture += 1,
-            _ => {}
+    let rows = read_jsonl(&path).rows;
+    let closes = close_stamps(&rows);
+    let mut load = FixAtLoad {
+        check_rows: 0,
+        architecture_rows: 0,
+        check_open: 0,
+        architecture_open: 0,
+        closed: 0,
+    };
+    let mut newest: std::collections::HashMap<(&str, String), &str> =
+        std::collections::HashMap::new();
+    for row in &rows {
+        let layer = match row.get("layer").and_then(Value::as_str) {
+            Some(l @ "fix-at:check") => {
+                load.check_rows += 1;
+                l
+            }
+            Some(l @ "fix-at:architecture") => {
+                load.architecture_rows += 1;
+                l
+            }
+            _ => continue,
+        };
+        if row.get("type").and_then(Value::as_str) == Some("backlog-closed") {
+            continue;
+        }
+        let ts = ts_str(row.get("ts").unwrap_or(&Value::Null));
+        let seen = newest
+            .entry((layer, normalize_title(row.get("title").unwrap_or(&Value::Null))))
+            .or_insert(ts);
+        if ts > *seen {
+            *seen = ts;
         }
     }
-    (Some(check), Some(architecture))
+    for ((layer, title), ts) in newest {
+        if closes.iter().any(|(t, c)| *t == title && c.as_str() > ts) {
+            load.closed += 1;
+        } else if layer == "fix-at:check" {
+            load.check_open += 1;
+        } else {
+            load.architecture_open += 1;
+        }
+    }
+    Some(load)
+}
+
+fn preamble_load(root: &Path) -> Option<(u64, u64)> {
+    if !root.join(".bee").is_dir() {
+        return None;
+    }
+    let text = std::panic::catch_unwind(|| {
+        crate::hooks::session_preamble::build_session_preamble_within(
+            root,
+            None,
+            None,
+            "claude",
+            crate::hooks::session_preamble::PREAMBLE_BUDGET_BYTES,
+        )
+    })
+    .ok()?;
+    Some((text.len() as u64, text.lines().count() as u64))
 }
 
 fn prose_load_value(root: &Path) -> Value {
@@ -1705,24 +1815,52 @@ fn prose_load_value(root: &Path) -> Value {
             *project_lines.get_or_insert(0) += lines;
         }
     }
-    let (check, architecture) = fix_at_row_counts(root);
+    let load = fix_at_load(root);
+    let preamble = preamble_load(root);
     serde_json::json!({
         "project_files": project_files,
         "project_lines": project_lines,
         "bee_lines": bee_lines,
         "critical_patterns": critical_pattern_count(root),
-        "fix_at_check_rows": check,
-        "fix_at_architecture_rows": architecture,
+        "fix_at_check_rows": load.as_ref().map(|l| l.check_rows),
+        "fix_at_architecture_rows": load.as_ref().map(|l| l.architecture_rows),
+        "fix_at_check_open": load.as_ref().map(|l| l.check_open),
+        "fix_at_architecture_open": load.as_ref().map(|l| l.architecture_open),
+        "fix_at_closed": load.as_ref().map(|l| l.closed),
+        "preamble_bytes": preamble.map(|p| p.0),
+        "preamble_lines": preamble.map(|p| p.1),
     })
+}
+
+fn group_thousands(n: u64) -> String {
+    let digits = n.to_string();
+    let mut out = String::new();
+    for (i, c) in digits.chars().enumerate() {
+        if i > 0 && (digits.len() - i).is_multiple_of(3) {
+            out.push(',');
+        }
+        out.push(c);
+    }
+    out
 }
 
 fn prose_load_line(digest: &Value) -> String {
     let p = &digest["prose_load"];
     let n = |key: &str| p[key].as_u64().map_or("not present".to_string(), |v| v.to_string());
-    let rows = match (p["fix_at_check_rows"].as_u64(), p["fix_at_architecture_rows"].as_u64()) {
-        (Some(c), Some(a)) => format!("{c} check and {a} architecture rows filed"),
+    let mut rows = match (
+        p["fix_at_check_open"].as_u64(),
+        p["fix_at_architecture_open"].as_u64(),
+        p["fix_at_closed"].as_u64(),
+    ) {
+        (Some(c), Some(a), Some(closed)) => {
+            format!("fix-at: {} open ({c} check, {a} architecture), {closed} closed", c + a)
+        }
         _ => "rows filed not present".to_string(),
     };
+    if let (Some(bytes), Some(lines)) = (p["preamble_bytes"].as_u64(), p["preamble_lines"].as_u64())
+    {
+        rows.push_str(&format!("; preamble {} bytes / {lines} lines", group_thousands(bytes)));
+    }
     let lead = |key: &str, noun: &str| match p[key].as_u64() {
         Some(v) => format!("{v} {noun}"),
         None => format!("{noun} {}", n(key)),
@@ -2590,15 +2728,41 @@ mod tests {
         assert_eq!(p["critical_patterns"], json!(3));
         assert_eq!(p["fix_at_check_rows"], json!(2));
         assert_eq!(p["fix_at_architecture_rows"], json!(1));
+        assert_eq!(p["fix_at_check_open"], json!(2));
+        assert_eq!(p["fix_at_architecture_open"], json!(1));
+        assert_eq!(p["fix_at_closed"], json!(0));
+        assert!(p["preamble_bytes"].as_u64().unwrap() > 0);
+        assert!(p["preamble_lines"].as_u64().unwrap() > 0);
         assert_eq!(p["project_files"], json!([{"path": "AGENTS.md", "lines": 3}]));
         let line = digest_summary_line(&digest);
         assert!(
             line.contains(
-                "prose load: 3 project lines, 2 bee lines, 3 critical patterns, 2 check and 1 architecture rows filed"
+                "prose load: 3 project lines, 2 bee lines, 3 critical patterns, fix-at: 3 open (2 check, 1 architecture), 0 closed; preamble "
             ),
             "{line}"
         );
         assert!(line.ends_with("(67% clean)") || line.contains("mistakes:"), "{line}");
+    }
+
+    #[test]
+    fn prose_load_doc_parity_the_digest_concept_names_every_key() {
+        let tmp = tempfile::tempdir().unwrap();
+        prose_load_fixture(tmp.path());
+        let value = prose_load_value(tmp.path());
+        let keys: Vec<String> = value.as_object().unwrap().keys().cloned().collect();
+        assert!(!keys.is_empty());
+        let repo = Path::new(env!("CARGO_MANIFEST_DIR")).ancestors().nth(4).unwrap();
+        let concept = std::fs::read_to_string(
+            repo.join("docs/knowledge/areas/feedback-digest/ranking-and-self-improvement.md"),
+        )
+        .unwrap();
+        let missing_in = |text: &str| -> Vec<String> {
+            keys.iter().filter(|k| !text.contains(k.as_str())).cloned().collect()
+        };
+        let dropped = &keys[0];
+        let without_one = concept.replace(dropped.as_str(), "");
+        assert!(missing_in(&without_one).contains(dropped), "the parity check cannot see a dropped key");
+        assert_eq!(missing_in(&concept), Vec::<String>::new(), "prose_load keys the concept does not name");
     }
 
     #[cfg(unix)]
@@ -2646,6 +2810,131 @@ mod tests {
                 r#""mistakes_answer":{"clean":0,"recorded":0,"answered":0,"clean_ratio":null}}"#
             )
         );
+    }
+
+    fn fix_at_open_backlog(root: &Path, rows: &[&str]) {
+        std::fs::create_dir_all(root.join(".bee")).unwrap();
+        let mut text = rows.join("\n");
+        text.push('\n');
+        std::fs::write(root.join(".bee").join("backlog.jsonl"), text).unwrap();
+    }
+
+    fn fix_at_open_entries<'a>(digest: &'a Value, kind: &str, title: &str) -> Vec<&'a Value> {
+        digest["entries"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|e| e["kind"] == kind && e["title"] == title)
+            .collect()
+    }
+
+    const FIX_AT_OPEN_FINDING: &str = r#"{"ts":"2026-01-01T00:00:00Z","type":"finding","feature":"f1","layer":"fix-at:check","title":"strip prefix on absolute paths","severity":"P2"}"#;
+
+    #[test]
+    fn fix_at_open_three_identical_check_rows_fold_to_one_entry_and_one_open() {
+        let tmp = tempfile::tempdir().unwrap();
+        let second = FIX_AT_OPEN_FINDING
+            .replace("2026-01-01T00:00:00Z", "2026-01-02T00:00:00Z")
+            .replace("\"f1\"", "\"f2\"");
+        let third = FIX_AT_OPEN_FINDING
+            .replace("2026-01-01T00:00:00Z", "2025-12-31T00:00:00Z")
+            .replace("\"f1\"", "\"f3\"");
+        fix_at_open_backlog(tmp.path(), &[FIX_AT_OPEN_FINDING, &second, &third]);
+        let digest = build_digest(tmp.path()).unwrap();
+        let found = fix_at_open_entries(&digest, "finding", "strip prefix on absolute paths");
+        assert_eq!(found.len(), 1, "{digest}");
+        assert_eq!(found[0]["first_seen"], json!("2025-12-31T00:00:00Z"));
+        let p = &digest["prose_load"];
+        assert_eq!(p["fix_at_check_rows"], json!(3));
+        assert_eq!(p["fix_at_check_open"], json!(1));
+        assert_eq!(p["fix_at_architecture_open"], json!(0));
+        assert_eq!(p["fix_at_closed"], json!(0));
+        let (ranked, _) = rank_clusters(cluster_entries(&digest));
+        assert_eq!(ranked.len(), 1);
+        assert_eq!(ranked[0]["frequency"], 1.0);
+    }
+
+    #[test]
+    fn fix_at_open_a_newer_close_moves_the_title_to_closed_and_rank_retires_it() {
+        let tmp = tempfile::tempdir().unwrap();
+        let close = r#"{"ts":"2026-02-01T00:00:00Z","type":"backlog-closed","layer":"fix-at:check","title":"Strip  Prefix on absolute paths","severity":"P3","detail":"guard: clippy.toml"}"#;
+        fix_at_open_backlog(tmp.path(), &[FIX_AT_OPEN_FINDING, FIX_AT_OPEN_FINDING, close]);
+        let digest = build_digest(tmp.path()).unwrap();
+        let p = &digest["prose_load"];
+        assert_eq!(p["fix_at_check_open"], json!(0));
+        assert_eq!(p["fix_at_closed"], json!(1));
+        assert_eq!(fix_at_open_entries(&digest, "finding", "strip prefix on absolute paths").len(), 1);
+        let (ranked, retired) = rank_clusters(cluster_entries(&digest));
+        assert!(ranked.is_empty(), "{ranked:?}");
+        assert_eq!(retired.len(), 1);
+        assert_eq!(retired[0]["count"], json!(2));
+    }
+
+    #[test]
+    fn fix_at_open_a_finding_newer_than_the_close_reopens_and_rank_reports_recurred() {
+        let tmp = tempfile::tempdir().unwrap();
+        let close = r#"{"ts":"2026-02-01T00:00:00Z","type":"backlog-closed","layer":"fix-at:check","title":"strip prefix on absolute paths","severity":"P3","detail":"guard: clippy.toml"}"#;
+        let after = FIX_AT_OPEN_FINDING.replace("2026-01-01T00:00:00Z", "2026-03-01T00:00:00Z");
+        fix_at_open_backlog(tmp.path(), &[FIX_AT_OPEN_FINDING, FIX_AT_OPEN_FINDING, close, &after]);
+        let digest = build_digest(tmp.path()).unwrap();
+        let p = &digest["prose_load"];
+        assert_eq!(p["fix_at_check_open"], json!(1));
+        assert_eq!(p["fix_at_closed"], json!(0));
+        let found = fix_at_open_entries(&digest, "finding", "strip prefix on absolute paths");
+        assert_eq!(found.len(), 2, "{digest}");
+        let mut seen: Vec<&str> = found.iter().map(|e| e["first_seen"].as_str().unwrap()).collect();
+        seen.sort_unstable();
+        assert_eq!(seen, ["2026-01-01T00:00:00Z", "2026-03-01T00:00:00Z"]);
+        let (ranked, retired) = rank_clusters(cluster_entries(&digest));
+        assert!(retired.is_empty());
+        assert_eq!(ranked.len(), 1);
+        assert_eq!(ranked[0]["recurred"], json!(true));
+        assert_eq!(ranked[0]["closed_at"], json!("2026-02-01T00:00:00Z"));
+        assert_eq!(ranked[0]["recurred_count"], json!(1));
+    }
+
+    #[test]
+    fn fix_at_open_a_friction_row_and_a_pbi_row_are_never_folded_into_the_finding() {
+        let tmp = tempfile::tempdir().unwrap();
+        let friction = FIX_AT_OPEN_FINDING.replace("\"finding\"", "\"friction\"");
+        let pbi = r#"{"ts":"2026-01-01T00:00:00Z","kind":"pbi","type":"finding","layer":"fix-at:check","title":"strip prefix on absolute paths"}"#;
+        let proposal = r#"{"ts":"2026-01-01T00:00:00Z","type":"proposal","layer":"fix-at:check","title":"strip prefix on absolute paths"}"#;
+        fix_at_open_backlog(
+            tmp.path(),
+            &[FIX_AT_OPEN_FINDING, &friction, pbi, proposal, proposal],
+        );
+        let digest = build_digest(tmp.path()).unwrap();
+        let title = "strip prefix on absolute paths";
+        assert_eq!(fix_at_open_entries(&digest, "finding", title).len(), 1);
+        assert_eq!(fix_at_open_entries(&digest, "friction", title).len(), 1);
+        assert_eq!(fix_at_open_entries(&digest, "proposal", title).len(), 2);
+        assert_eq!(digest["entries"].as_array().unwrap().len(), 4, "{digest}");
+    }
+
+    #[test]
+    fn prose_load_preamble_of_a_fixture_bee_root_is_within_the_budget() {
+        let tmp = tempfile::tempdir().unwrap();
+        prose_load_fixture(tmp.path());
+        let digest = build_digest(tmp.path()).unwrap();
+        let p = &digest["prose_load"];
+        let bytes = p["preamble_bytes"].as_u64().unwrap();
+        let lines = p["preamble_lines"].as_u64().unwrap();
+        assert!(bytes > 0, "{p}");
+        assert!(bytes <= 9500, "{p}");
+        assert!(bytes as usize <= crate::hooks::session_preamble::PREAMBLE_BUDGET_BYTES, "{p}");
+        assert!(lines > 0, "{p}");
+        assert!(digest_summary_line(&digest).contains(&format!("{lines} lines")));
+    }
+
+    #[test]
+    fn prose_load_preamble_of_an_empty_directory_is_null_and_the_digest_succeeds() {
+        let tmp = tempfile::tempdir().unwrap();
+        let digest = build_digest(tmp.path()).unwrap();
+        let p = digest["prose_load"].as_object().unwrap();
+        assert_eq!(p.get("preamble_bytes"), Some(&json!(null)));
+        assert_eq!(p.get("preamble_lines"), Some(&json!(null)));
+        assert!(!digest_summary_line(&digest).contains("preamble"));
+        assert!(digest["entries"].is_array());
     }
 
     #[test]

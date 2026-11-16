@@ -1315,7 +1315,7 @@ mod tests {
             for file in files {
                 let text = std::fs::read_to_string(&file).unwrap();
                 for cmd in uncovered_ui_mentions(&text, &entries) {
-                    let rel = file.strip_prefix(&root).unwrap().display();
+                    let rel = crate::path_identity::strip_root_lexical(&file, &root).unwrap().display();
                     failures.push(format!("{}: {rel}: ui {cmd}", pack.name));
                 }
             }

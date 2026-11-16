@@ -124,7 +124,8 @@ the root cause, the check that would have caught it earlier).
    denial → **promote as the check**, note the check's location in the
    learnings file, done. File the check as a tiny/small cell if it
    cannot ship in-feature. `.bee/expertise/static-rules.md` says which
-   home to pick and how to prove the rule red, then green.
+   home to pick and how to prove the rule red, then green. It also says
+   how to close the fix-at row the rule guards.
 3. Not mechanizable (judgment, taste, product intent) → promote as
    prose per the format below, routed to where it will be read:
    prose lands in a skill the run ACTUALLY OPENED (judged from the

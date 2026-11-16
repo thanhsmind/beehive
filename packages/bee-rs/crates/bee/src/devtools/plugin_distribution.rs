@@ -82,9 +82,9 @@ fn read_file(path: &Path, label: &str) -> R<Vec<u8>> {
 /// `path.relative(root, candidate)` containment, without resolving symlinks —
 /// the .mjs checks the lexical relationship and so does this.
 fn is_inside(root: &Path, candidate: &Path) -> bool {
-    match candidate.strip_prefix(root) {
-        Ok(rel) => !rel.components().any(|c| matches!(c, Component::ParentDir)),
-        Err(_) => false,
+    match crate::path_identity::strip_root_lexical(candidate, root) {
+        Some(rel) => !rel.components().any(|c| matches!(c, Component::ParentDir)),
+        None => false,
     }
 }
 
