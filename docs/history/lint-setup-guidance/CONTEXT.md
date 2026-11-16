@@ -19,7 +19,7 @@ and "Never write an unconfirmed value", while AGENTS.md tells every agent to
 change bee state only through the CLI, never by editing `.bee/*.json`. No
 notice names `bee config set`, which writes `commands.test` with exit 0 and
 no guard refusal. The bee-hive onboarding reference loads only when
-onboarding itself is in question, so a later "set up lint" ask finds no
+onboarding itself is in question, so a "set up lint" ask after onboarding finds no
 procedure. The agent saw a contradiction and stopped.
 
 ## Locked Decisions
