@@ -81,7 +81,8 @@ run is also due after a release, or when no run has been recorded.
      never append a correction.
    - A noisy signal — an environment red, chance — revises nothing.
    - A loaded-never-used concept is trimmed, merged into its owner, or retired
-     out loud with `bee.superseded_by`.
+     out loud with `bee.superseded_by` only after its source reader confirms it
+     is dead weight, because it may only be unreported.
 
    Run `bee knowledge confirm --id <id>` on each concept that held.
 
