@@ -1,0 +1,532 @@
+{
+  "schema_version": "1.0",
+  "feature": "clippy-warnings-clean",
+  "mode": null,
+  "phase": "exploring",
+  "approved_gates": {
+    "context": false,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"clippy-warnings-clean\" started at phase \"exploring\" (lane).",
+  "next_action": "Continue bee-exploring for \"clippy-warnings-clean\" (lane).",
+  "created_at": "2026-11-16T00:39:22.260Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null,
+  "route": {
+    "class": "refactor",
+    "lane": "small",
+    "flags": [],
+    "product_files": 185,
+    "rationale": null,
+    "updated_at": "2026-11-16T00:39:19.045Z",
+    "feature": "clippy-warnings-clean"
+  },
+  "gate_preview": {
+    "feature": "clippy-warnings-clean",
+    "plan_sha256": "e7a02134de4397f9cdb14d94285bb310f44bf3dfc7c8638b02d8cd6f04a7125a",
+    "previewed_at": "2026-11-16T00:40:27.308Z",
+    "cells": [
+      {
+        "id": "cwc-1",
+        "feature": "clippy-warnings-clean",
+        "title": "Apply clippy's machine-applicable fixes across bee-rs",
+        "lane": "small",
+        "role": "code",
+        "deps": [],
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --lib --bins",
+        "must_haves": {
+          "truths": [
+            "cargo clippy --fix applied clippy's machine-applicable suggestions to the default targets of bee and fleet",
+            "no edit other than clippy's own suggestions is in the commit",
+            "cargo test --release --lib --bins is green with the same test count as before"
+          ]
+        },
+        "decisions": [
+          "cf6ce5e3-b8dc-4973-b61a-094234fd3b21"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/**",
+          "packages/bee-rs/crates/fleet/src/**"
+        ],
+        "read_first": [
+          "docs/history/clippy-warnings-clean/CONTEXT.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Run from the worktree root: PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo clippy --fix --allow-dirty --allow-no-vcs --manifest-path packages/bee-rs/Cargo.toml (default targets only, no --all-targets). Repeat until it applies nothing more. Do not hand-edit any file. Run cargo build to confirm it compiles; if a machine fix breaks the build or a test, revert that one file's change and name it in the report for cwc-2. Count the remaining findings with cargo clippy --manifest-path packages/bee-rs/Cargo.toml --message-format short and put the count by lint in the report. Commit once (cell trailer). Proof: the verify command; quote the test counts before (5229 bin tests at the base) and after."
+      },
+      {
+        "id": "cwc-2",
+        "feature": "clippy-warnings-clean",
+        "title": "Fix the remaining clippy findings and deny warnings",
+        "lane": "small",
+        "role": "code",
+        "deps": [
+          "cwc-1"
+        ],
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo clippy --manifest-path packages/bee-rs/Cargo.toml -- -D warnings && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --lib --bins && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test proof_gate",
+        "must_haves": {
+          "truths": [
+            "cargo clippy --manifest-path packages/bee-rs/Cargo.toml -- -D warnings exits 0",
+            "packages/bee-rs/Cargo.toml allows exactly too_many_arguments and result_large_err in [workspace.lints.clippy] and both member crates opt in",
+            "no #[allow(clippy::...)] attribute and no code comment is added",
+            "the clippy entry of commands.test and the ci.yml clippy step end in -- -D warnings",
+            "cargo test --release --lib --bins and the proof_gate tests are green"
+          ]
+        },
+        "decisions": [
+          "cf6ce5e3-b8dc-4973-b61a-094234fd3b21",
+          "e88c22c7-3bac-4130-a385-6709e7267d2e",
+          "4a500653-5751-44cf-9cd9-7186c25a056e"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/**",
+          "packages/bee-rs/crates/fleet/src/**",
+          "packages/bee-rs/Cargo.toml",
+          "packages/bee-rs/crates/bee/Cargo.toml",
+          "packages/bee-rs/crates/fleet/Cargo.toml",
+          ".bee/config.json",
+          ".github/workflows/ci.yml",
+          "packages/bee-rs/crates/bee/tests/proof_gate.rs",
+          "docs/knowledge/areas/verify-pipeline/suite-topology-and-discovery.md"
+        ],
+        "read_first": [
+          "docs/history/clippy-warnings-clean/CONTEXT.md",
+          "packages/bee-rs/Cargo.toml"
+        ],
+        "affects_skills": [],
+        "affects_specs": [
+          "docs/knowledge/areas/verify-pipeline/suite-topology-and-discovery.md"
+        ],
+        "action": "Implement CONTEXT.md D1 and D2 on top of cwc-1. (1) packages/bee-rs/Cargo.toml gains [workspace.lints.clippy] too_many_arguments = \"allow\" and result_large_err = \"allow\"; crates/bee/Cargo.toml and crates/fleet/Cargo.toml gain [lints] workspace = true. Nothing else is allowed. (2) Fix every remaining finding of cargo clippy --manifest-path packages/bee-rs/Cargo.toml -- -D warnings in code, behavior unchanged: type_complexity with a type alias; large_enum_variant by boxing the large variant; doc lints by fixing the doc text indentation; dead_code: delete the item only when rg shows no caller in any target (tests included), otherwise make it used where it is meant to be or gate it with cfg(test) if only tests use it; private_interfaces by aligning visibility; the rest as clippy suggests. No #[allow] attribute on any item and no new code comment. (3) .bee/config.json: the clippy entry of commands.test ends in ' -- -D warnings'; .github/workflows/ci.yml clippy step runs cargo clippy --manifest-path packages/bee-rs/Cargo.toml -- -D warnings. Keep proof_gate green (adjust its expectations only if it pins the old clippy text). (4) docs/knowledge/areas/verify-pipeline/suite-topology-and-discovery.md: the commands.test sentence says clippy runs with -D warnings and the two workspace allows, citing clippy-warnings-clean D1/D2 (never raw ids). Run bee knowledge check. Commit once (cell trailer). Proof: the verify command; quote the counts."
+      },
+      {
+        "id": "cwc-3",
+        "feature": "clippy-warnings-clean",
+        "title": "Verify bee-rs is clippy-clean with behavior unchanged",
+        "lane": "small",
+        "role": "test",
+        "deps": [
+          "cwc-2"
+        ],
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo clippy --manifest-path packages/bee-rs/Cargo.toml -- -D warnings && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --lib --bins && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test proof_gate",
+        "must_haves": {
+          "truths": [
+            "clippy -D warnings exits 0 on the default targets",
+            "the lib and bin test count is not lower than the base 5229 bin tests",
+            "the only workspace clippy allows are too_many_arguments and result_large_err and no item-level clippy allow was added",
+            "no code comment was added by cwc-1 or cwc-2",
+            "every deleted dead_code item has no caller in any target",
+            "the report under docs/history/clippy-warnings-clean/reports/ lists each check with its result"
+          ]
+        },
+        "decisions": [
+          "4a500653-5751-44cf-9cd9-7186c25a056e",
+          "cf6ce5e3-b8dc-4973-b61a-094234fd3b21",
+          "e88c22c7-3bac-4130-a385-6709e7267d2e"
+        ],
+        "files": [
+          "docs/history/clippy-warnings-clean/reports/cwc-3.md"
+        ],
+        "read_first": [
+          "docs/history/clippy-warnings-clean/CONTEXT.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Check contract clippy-warnings-clean (decision 4a500653) on the cwc-1 and cwc-2 commits. Run the verify command. Diff the two commits against the feature base: rg the added lines for '#[allow(clippy' and for new comment lines (// or ///, not removals); list every deleted fn, struct, const or enum and rg the whole crate, tests included, for each name; read the non-mechanical hunks of cwc-2 for any behavior change (changed condition, changed output text, changed order). Compare the bin test count with the base 5229. Write docs/history/clippy-warnings-clean/reports/cwc-3.md with each check, the command and the result. Edit no source file. If a check fails, return BLOCKED with the evidence. Commit the report once (cell trailer)."
+      }
+    ],
+    "role_plan": {
+      "schema_version": "1.0",
+      "runtime": "claude",
+      "roster_sha256": "d4e696dbde7989d6388dacce3fd7057cb3a6935b46024b79698596a46f6f41d3",
+      "stages": [
+        {
+          "stage": "implementation",
+          "classification": "required",
+          "role": "code",
+          "reason": "cwc-1 runs the machine pass; cwc-2 fixes the rest and flips -D warnings."
+        },
+        {
+          "stage": "test-and-live-proof",
+          "classification": "required",
+          "role": "test",
+          "reason": "cwc-3 verifies the contract on the result."
+        },
+        {
+          "stage": "docs",
+          "classification": "not-applicable",
+          "role": "docs",
+          "reason": "The concept line rides cwc-2."
+        },
+        {
+          "stage": "slice-judge",
+          "classification": "not-applicable",
+          "role": "review",
+          "reason": "Small lane; the tester cell is the independent check. Review stays user-invoked."
+        },
+        {
+          "stage": "hat-facts-gaps",
+          "classification": "not-applicable",
+          "role": "hat-facts-gaps",
+          "reason": "Small lane; both claims ran this session."
+        },
+        {
+          "stage": "hat-alternatives",
+          "classification": "not-applicable",
+          "role": "hat-alternatives",
+          "reason": "Small lane; rejected paths named."
+        },
+        {
+          "stage": "hat-user-impact",
+          "classification": "not-applicable",
+          "role": "hat-user-impact",
+          "reason": "No behavior change for any host."
+        },
+        {
+          "stage": "hat-risks",
+          "classification": "not-applicable",
+          "role": "hat-risks",
+          "reason": "The full suite pins behavior; CI red on a new warning is the intended effect."
+        },
+        {
+          "stage": "hat-value",
+          "classification": "not-applicable",
+          "role": "hat-value",
+          "reason": "The owner asked for this directly."
+        },
+        {
+          "stage": "deployment",
+          "classification": "not-applicable",
+          "role": "deploy",
+          "reason": "No release in this feature."
+        },
+        {
+          "stage": "planning",
+          "classification": "not-applicable",
+          "role": "plan",
+          "reason": "The leader wrote the plan."
+        },
+        {
+          "stage": "read-only-gather",
+          "classification": "not-applicable",
+          "role": "read",
+          "reason": "The clippy count is the map."
+        },
+        {
+          "stage": "fact-extraction",
+          "classification": "not-applicable",
+          "role": "extraction",
+          "reason": "No extraction stage."
+        },
+        {
+          "stage": "generation-fallback",
+          "classification": "not-applicable",
+          "role": "generation",
+          "reason": "All cells have a configured role."
+        },
+        {
+          "stage": "writing",
+          "classification": "not-applicable",
+          "role": "writer",
+          "reason": "No prose deliverable."
+        },
+        {
+          "stage": "generic-advisor",
+          "classification": "not-applicable",
+          "role": "advisor",
+          "reason": "Small lane."
+        },
+        {
+          "stage": "supervision",
+          "classification": "not-applicable",
+          "role": "supervisor",
+          "reason": "Attended session."
+        },
+        {
+          "stage": "blind-lane-1",
+          "classification": "not-applicable",
+          "role": "lane-1",
+          "reason": "No blind lanes."
+        },
+        {
+          "stage": "blind-lane-2",
+          "classification": "not-applicable",
+          "role": "lane-2",
+          "reason": "No blind lanes."
+        },
+        {
+          "stage": "blind-lane-3",
+          "classification": "not-applicable",
+          "role": "lane-3",
+          "reason": "No blind lanes."
+        },
+        {
+          "stage": "design-ui",
+          "classification": "not-applicable",
+          "role": "design",
+          "reason": "No rendered UI."
+        }
+      ]
+    }
+  },
+  "approved_cell_packet": {
+    "feature": "clippy-warnings-clean",
+    "plan_sha256": "e7a02134de4397f9cdb14d94285bb310f44bf3dfc7c8638b02d8cd6f04a7125a",
+    "previewed_at": "2026-11-16T00:40:27.308Z",
+    "cells": [
+      {
+        "id": "cwc-1",
+        "feature": "clippy-warnings-clean",
+        "title": "Apply clippy's machine-applicable fixes across bee-rs",
+        "lane": "small",
+        "role": "code",
+        "deps": [],
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --lib --bins",
+        "must_haves": {
+          "truths": [
+            "cargo clippy --fix applied clippy's machine-applicable suggestions to the default targets of bee and fleet",
+            "no edit other than clippy's own suggestions is in the commit",
+            "cargo test --release --lib --bins is green with the same test count as before"
+          ]
+        },
+        "decisions": [
+          "cf6ce5e3-b8dc-4973-b61a-094234fd3b21"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/**",
+          "packages/bee-rs/crates/fleet/src/**"
+        ],
+        "read_first": [
+          "docs/history/clippy-warnings-clean/CONTEXT.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Run from the worktree root: PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo clippy --fix --allow-dirty --allow-no-vcs --manifest-path packages/bee-rs/Cargo.toml (default targets only, no --all-targets). Repeat until it applies nothing more. Do not hand-edit any file. Run cargo build to confirm it compiles; if a machine fix breaks the build or a test, revert that one file's change and name it in the report for cwc-2. Count the remaining findings with cargo clippy --manifest-path packages/bee-rs/Cargo.toml --message-format short and put the count by lint in the report. Commit once (cell trailer). Proof: the verify command; quote the test counts before (5229 bin tests at the base) and after."
+      },
+      {
+        "id": "cwc-2",
+        "feature": "clippy-warnings-clean",
+        "title": "Fix the remaining clippy findings and deny warnings",
+        "lane": "small",
+        "role": "code",
+        "deps": [
+          "cwc-1"
+        ],
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo clippy --manifest-path packages/bee-rs/Cargo.toml -- -D warnings && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --lib --bins && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test proof_gate",
+        "must_haves": {
+          "truths": [
+            "cargo clippy --manifest-path packages/bee-rs/Cargo.toml -- -D warnings exits 0",
+            "packages/bee-rs/Cargo.toml allows exactly too_many_arguments and result_large_err in [workspace.lints.clippy] and both member crates opt in",
+            "no #[allow(clippy::...)] attribute and no code comment is added",
+            "the clippy entry of commands.test and the ci.yml clippy step end in -- -D warnings",
+            "cargo test --release --lib --bins and the proof_gate tests are green"
+          ]
+        },
+        "decisions": [
+          "cf6ce5e3-b8dc-4973-b61a-094234fd3b21",
+          "e88c22c7-3bac-4130-a385-6709e7267d2e",
+          "4a500653-5751-44cf-9cd9-7186c25a056e"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/**",
+          "packages/bee-rs/crates/fleet/src/**",
+          "packages/bee-rs/Cargo.toml",
+          "packages/bee-rs/crates/bee/Cargo.toml",
+          "packages/bee-rs/crates/fleet/Cargo.toml",
+          ".bee/config.json",
+          ".github/workflows/ci.yml",
+          "packages/bee-rs/crates/bee/tests/proof_gate.rs",
+          "docs/knowledge/areas/verify-pipeline/suite-topology-and-discovery.md"
+        ],
+        "read_first": [
+          "docs/history/clippy-warnings-clean/CONTEXT.md",
+          "packages/bee-rs/Cargo.toml"
+        ],
+        "affects_skills": [],
+        "affects_specs": [
+          "docs/knowledge/areas/verify-pipeline/suite-topology-and-discovery.md"
+        ],
+        "action": "Implement CONTEXT.md D1 and D2 on top of cwc-1. (1) packages/bee-rs/Cargo.toml gains [workspace.lints.clippy] too_many_arguments = \"allow\" and result_large_err = \"allow\"; crates/bee/Cargo.toml and crates/fleet/Cargo.toml gain [lints] workspace = true. Nothing else is allowed. (2) Fix every remaining finding of cargo clippy --manifest-path packages/bee-rs/Cargo.toml -- -D warnings in code, behavior unchanged: type_complexity with a type alias; large_enum_variant by boxing the large variant; doc lints by fixing the doc text indentation; dead_code: delete the item only when rg shows no caller in any target (tests included), otherwise make it used where it is meant to be or gate it with cfg(test) if only tests use it; private_interfaces by aligning visibility; the rest as clippy suggests. No #[allow] attribute on any item and no new code comment. (3) .bee/config.json: the clippy entry of commands.test ends in ' -- -D warnings'; .github/workflows/ci.yml clippy step runs cargo clippy --manifest-path packages/bee-rs/Cargo.toml -- -D warnings. Keep proof_gate green (adjust its expectations only if it pins the old clippy text). (4) docs/knowledge/areas/verify-pipeline/suite-topology-and-discovery.md: the commands.test sentence says clippy runs with -D warnings and the two workspace allows, citing clippy-warnings-clean D1/D2 (never raw ids). Run bee knowledge check. Commit once (cell trailer). Proof: the verify command; quote the counts."
+      },
+      {
+        "id": "cwc-3",
+        "feature": "clippy-warnings-clean",
+        "title": "Verify bee-rs is clippy-clean with behavior unchanged",
+        "lane": "small",
+        "role": "test",
+        "deps": [
+          "cwc-2"
+        ],
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo clippy --manifest-path packages/bee-rs/Cargo.toml -- -D warnings && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --lib --bins && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test proof_gate",
+        "must_haves": {
+          "truths": [
+            "clippy -D warnings exits 0 on the default targets",
+            "the lib and bin test count is not lower than the base 5229 bin tests",
+            "the only workspace clippy allows are too_many_arguments and result_large_err and no item-level clippy allow was added",
+            "no code comment was added by cwc-1 or cwc-2",
+            "every deleted dead_code item has no caller in any target",
+            "the report under docs/history/clippy-warnings-clean/reports/ lists each check with its result"
+          ]
+        },
+        "decisions": [
+          "4a500653-5751-44cf-9cd9-7186c25a056e",
+          "cf6ce5e3-b8dc-4973-b61a-094234fd3b21",
+          "e88c22c7-3bac-4130-a385-6709e7267d2e"
+        ],
+        "files": [
+          "docs/history/clippy-warnings-clean/reports/cwc-3.md"
+        ],
+        "read_first": [
+          "docs/history/clippy-warnings-clean/CONTEXT.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Check contract clippy-warnings-clean (decision 4a500653) on the cwc-1 and cwc-2 commits. Run the verify command. Diff the two commits against the feature base: rg the added lines for '#[allow(clippy' and for new comment lines (// or ///, not removals); list every deleted fn, struct, const or enum and rg the whole crate, tests included, for each name; read the non-mechanical hunks of cwc-2 for any behavior change (changed condition, changed output text, changed order). Compare the bin test count with the base 5229. Write docs/history/clippy-warnings-clean/reports/cwc-3.md with each check, the command and the result. Edit no source file. If a check fails, return BLOCKED with the evidence. Commit the report once (cell trailer)."
+      }
+    ],
+    "role_plan": {
+      "schema_version": "1.0",
+      "runtime": "claude",
+      "roster_sha256": "d4e696dbde7989d6388dacce3fd7057cb3a6935b46024b79698596a46f6f41d3",
+      "stages": [
+        {
+          "stage": "implementation",
+          "classification": "required",
+          "role": "code",
+          "reason": "cwc-1 runs the machine pass; cwc-2 fixes the rest and flips -D warnings."
+        },
+        {
+          "stage": "test-and-live-proof",
+          "classification": "required",
+          "role": "test",
+          "reason": "cwc-3 verifies the contract on the result."
+        },
+        {
+          "stage": "docs",
+          "classification": "not-applicable",
+          "role": "docs",
+          "reason": "The concept line rides cwc-2."
+        },
+        {
+          "stage": "slice-judge",
+          "classification": "not-applicable",
+          "role": "review",
+          "reason": "Small lane; the tester cell is the independent check. Review stays user-invoked."
+        },
+        {
+          "stage": "hat-facts-gaps",
+          "classification": "not-applicable",
+          "role": "hat-facts-gaps",
+          "reason": "Small lane; both claims ran this session."
+        },
+        {
+          "stage": "hat-alternatives",
+          "classification": "not-applicable",
+          "role": "hat-alternatives",
+          "reason": "Small lane; rejected paths named."
+        },
+        {
+          "stage": "hat-user-impact",
+          "classification": "not-applicable",
+          "role": "hat-user-impact",
+          "reason": "No behavior change for any host."
+        },
+        {
+          "stage": "hat-risks",
+          "classification": "not-applicable",
+          "role": "hat-risks",
+          "reason": "The full suite pins behavior; CI red on a new warning is the intended effect."
+        },
+        {
+          "stage": "hat-value",
+          "classification": "not-applicable",
+          "role": "hat-value",
+          "reason": "The owner asked for this directly."
+        },
+        {
+          "stage": "deployment",
+          "classification": "not-applicable",
+          "role": "deploy",
+          "reason": "No release in this feature."
+        },
+        {
+          "stage": "planning",
+          "classification": "not-applicable",
+          "role": "plan",
+          "reason": "The leader wrote the plan."
+        },
+        {
+          "stage": "read-only-gather",
+          "classification": "not-applicable",
+          "role": "read",
+          "reason": "The clippy count is the map."
+        },
+        {
+          "stage": "fact-extraction",
+          "classification": "not-applicable",
+          "role": "extraction",
+          "reason": "No extraction stage."
+        },
+        {
+          "stage": "generation-fallback",
+          "classification": "not-applicable",
+          "role": "generation",
+          "reason": "All cells have a configured role."
+        },
+        {
+          "stage": "writing",
+          "classification": "not-applicable",
+          "role": "writer",
+          "reason": "No prose deliverable."
+        },
+        {
+          "stage": "generic-advisor",
+          "classification": "not-applicable",
+          "role": "advisor",
+          "reason": "Small lane."
+        },
+        {
+          "stage": "supervision",
+          "classification": "not-applicable",
+          "role": "supervisor",
+          "reason": "Attended session."
+        },
+        {
+          "stage": "blind-lane-1",
+          "classification": "not-applicable",
+          "role": "lane-1",
+          "reason": "No blind lanes."
+        },
+        {
+          "stage": "blind-lane-2",
+          "classification": "not-applicable",
+          "role": "lane-2",
+          "reason": "No blind lanes."
+        },
+        {
+          "stage": "blind-lane-3",
+          "classification": "not-applicable",
+          "role": "lane-3",
+          "reason": "No blind lanes."
+        },
+        {
+          "stage": "design-ui",
+          "classification": "not-applicable",
+          "role": "design",
+          "reason": "No rendered UI."
+        }
+      ]
+    }
+  },
+  "merge_ready": {
+    "since": "2026-11-16T01:15:06.432Z",
+    "branch": "wt/clippy-warnings-clean",
+    "worktree_id": "beehive--wt--clippy-warnings-clean",
+    "uat": "pending",
+    "blocked_by": []
+  }
+}

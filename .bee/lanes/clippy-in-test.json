@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "clippy-in-test",
   "mode": null,
-  "phase": "exploring",
+  "phase": "idle",
   "approved_gates": {
     "context": false,
     "shape": true,
@@ -11,9 +11,9 @@
     "uat": false
   },
   "summary": "Feature \"clippy-in-test\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at 6f5d329; capture what settled, then bee close --feature clippy-in-test.",
+  "next_action": "bee close finished \"clippy-in-test\" — feature is closed.",
   "created_at": "2026-11-15T23:26:38.691Z",
-  "run_state": null,
+  "run_state": "awaiting-approval",
   "waiting_on": null,
   "route": {
     "class": "feature",
