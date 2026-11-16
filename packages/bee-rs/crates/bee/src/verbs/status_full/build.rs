@@ -146,7 +146,7 @@ pub(crate) fn build_status_with_state(ctx: &mut Ctx, lanes_full: bool, state: JM
     let mut staleness: Vec<Value> = Vec::new();
     if commands.is_empty() {
         staleness.push(json!(
-            "No standard commands recorded — capture the host project's setup/start/test/verify into .bee/config.json `commands` so sessions can run the CI status gate."
+            "No standard commands recorded — capture the host project's setup/start/test with `bee config set --key commands.<key> --value '<value>'` so sessions can run the CI status gate."
         ));
     }
     if truthy(&onboarding_raw) {
