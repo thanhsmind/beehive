@@ -11,10 +11,15 @@
     "uat": false
   },
   "summary": "Feature \"cli-before-mcp\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at 788c24f; reload the product and test \"cli-before-mcp\", then either approve uat (\"bee gate --name uat --approved true --lane cli-before-mcp\") or fix it in the worktree and merge again.",
+  "next_action": "Merged into main at 48a138c; reload the product and test \"cli-before-mcp\", then either approve uat (\"bee gate --name uat --approved true --lane cli-before-mcp\") or fix it in the worktree and merge again.",
   "created_at": "2026-11-16T13:28:38.112Z",
   "run_state": "awaiting-approval",
-  "waiting_on": null,
+  "waiting_on": {
+    "kind": "gate",
+    "subject": "uat: cli-before-mcp",
+    "asked_at": "2026-11-16T13:57:32.199Z",
+    "session": "bee-worktree-merge-sessionless"
+  },
   "route": {
     "class": "feature",
     "lane": "standard",
@@ -714,12 +719,5 @@
   },
   "gate_revoked_at": {
     "execution": "2026-11-16T13:46:00.883Z"
-  },
-  "merge_ready": {
-    "since": "2026-11-16T13:55:45.301Z",
-    "branch": "wt/cli-before-mcp",
-    "worktree_id": "beehive--wt--cli-before-mcp",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
