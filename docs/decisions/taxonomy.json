@@ -906,6 +906,7 @@
     "contract:team-json-seed",
     "commands",
     "contract:commands-notice-names-config-set",
-    "contract:set-up-checks-procedure"
+    "contract:set-up-checks-procedure",
+    "contract:release-2-109-0-check"
   ]
 }
