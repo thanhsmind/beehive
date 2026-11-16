@@ -339,10 +339,11 @@ and expected — they do not pull you into any workflow.\n\n",
         ", and files listed under the Expertise section are yours to read"
     };
 
-    let proof_command = read_proof_command(spec.worktree_root);
     let mut proof_command_block = String::new();
-    if let Some(cmd) = proof_command {
-        proof_command_block.push_str(&format!("# Proof command\n\n{cmd}\n\n"));
+    if spec.cell_id.is_some() {
+        if let Some(cmd) = read_proof_command(spec.worktree_root) {
+            proof_command_block.push_str(&format!("# Proof command\n\n{cmd}\n\n"));
+        }
     }
 
     let question_section = if spec.allow_question {
@@ -1631,7 +1632,8 @@ the report file's exact final name"),
         .expect("write config.json");
 
         let files = sample_files();
-        let spec = sample_spec(worktree_root, &bee_dir, &files, 1);
+        let mut spec = sample_spec(worktree_root, &bee_dir, &files, 1);
+        spec.cell_id = Some("prf-5");
         let text = render_brief(&spec);
 
         let proof_pos = text.find("# Proof command\n\ncargo test -p bee\n\n").expect("missing proof command section");

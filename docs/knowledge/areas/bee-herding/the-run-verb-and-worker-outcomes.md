@@ -209,7 +209,7 @@ session would then hold a success envelope while waiting forever for an
 injection that never comes.
 
 **The digest covers the dispatch's task and files, never the rendered brief.**
-The brief embeds the absolute worktree root and the configured proof command, so
+The brief embeds the absolute worktree root and, for a cell job, the configured proof command, so
 hashing it would refuse identical work in a moved or re-created worktree and the
 refusal would read as a bee defect. Recorded deviation: the run verb carries no
 file list today — all three brief builders pass an empty one — so the digest is
@@ -853,3 +853,5 @@ verb's own default ceiling of 21600 s is far too loose to serve as one.
   `--task-file -`; the two rows every run appends are one in
   `.bee/logs/dispatch.jsonl` and one wave-ledger row through the same append path
   as `bee herding record-worker`.
+
+**The `# Proof command` section is for cell jobs only.** `render_brief` writes it only when the spec carries a cell id (semantic-token-diet D8). A non-cell job has no cell verify to prove, and the project test command was noise in its brief.
