@@ -916,6 +916,35 @@ mod tests {
         assert!(multi_text.contains("    flags: --id*:str"), "{multi_text}");
     }
 
+    fn two_sentence_entry(name: &str) -> Value {
+        Value::Object(obj(&format!(
+            r#"{{"name":"cmd.{name}","invoke":"bee cmd {name}","description":"Run {name}. It also writes a log.",
+                "parameters":{{"type":"object","properties":{{"id":{{"type":"string","description":"Cell id"}}}},"required":["id"]}},
+                "examples":[],"deprecated":null}}"#
+        )))
+    }
+
+    #[test]
+    fn single_command_help_prints_flags_after_the_first_sentence_and_before_details() {
+        let text = render_help_text(&[two_sentence_entry("a")], &[], &json!("1.0"));
+        assert!(
+            text.contains("bee cmd a\n    Run a.\n    flags:\n      --id* (str) — Cell id\n    details:\n      It also writes a log.\n"),
+            "{text}"
+        );
+        let first = text.find("Run a.").expect("first sentence");
+        let flags = text.find("    flags:").expect("flags line");
+        let details = text.find("    details:").expect("details line");
+        assert!(first < flags && flags < details, "{text}");
+    }
+
+    #[test]
+    fn multi_command_help_prints_no_details_line() {
+        let text = render_help_text(&[two_sentence_entry("a"), two_sentence_entry("b")], &[], &json!("1.0"));
+        assert!(!text.contains("details:"), "{text}");
+        assert!(text.contains("    Run a. It also writes a log.\n    flags: --id*:str\n"), "{text}");
+        assert!(text.contains("    Run b. It also writes a log.\n    flags: --id*:str\n"), "{text}");
+    }
+
     #[test]
     fn group_filter_matches_exact_name_and_dotted_prefix() {
         let reg = registry().expect("embedded payload parses");
