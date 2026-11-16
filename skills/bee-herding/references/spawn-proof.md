@@ -239,3 +239,9 @@ Observed results:
    no pane `label`). §8's production argv still needs its own explicit
    self-naming instruction folded in, as the pre-0.8.0 recording already
    established.
+
+## Incident measurements (moved from `role-dispatch.md` §8)
+
+- **Aspect-ratio `right` splits collapsed width:** choosing by aspect ratio answered `right` repeatedly on a wide tab — measured live, a 120-column tab went `60 / 30 / 15` and both the 30- and 15-column children died mid-submission with `agent_prompt_stalled`. Fixing `down` for every subsequent spawn leaves width untouched.
+- **Unexcluded caller pane lost rows:** choosing the roomiest pane overall chewed the human's own pane — five spawns on a `173x50` tab cut it from 50 rows to 13, which is why the caller's own pane is excluded.
+- **`--ratio` is the parent's share:** measured live against `herdr 0.8.0`, `--ratio 0.25` on a 173-column pane left the parent 43 columns and gave the child 130.
