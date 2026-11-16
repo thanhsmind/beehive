@@ -29,7 +29,7 @@ procedure. The agent saw a contradiction and stopped.
 | D1 | Every notice that asks for standard commands or static checks names the write verb `bee config set --key commands.test --value '<JSON list>'` (and `commands.setup`, `commands.start`). The `commands` key is the agent's to write once the user confirms; only the governed keys (team, herding.agents, herding.agent_command, hooks) are the user's. | d509d105 |
 | D2 | A user request to set up lint, type check or test commands is the confirmation for the checks the agent proposes for it: run each check once, report green or the finding count, write the list with `bee config set`, log the answer as a decision. Never reply that permission is missing. | 1bc79e0e |
 | D3 | `skills/bee-hive/references/onboarding.md` gains a "Set up the project's checks" procedure, loaded from SKILL.md on a set-up ask. With no linter in the project, the agent proposes the stack's usual linter, adds it as a dev dependency after the user agrees, then records it in `commands.test`. | 72a0f753 |
-| D4 | contract:commands-notice-names-config-set — every `commands_notices` notice and the status_full "No standard commands recorded" warning contains `bee config set --key commands.`, and none tells the agent to write `.bee/config.json` by hand. | af69659c |
+| D4 | contract:commands-notice-names-config-set — every `commands_notices` notice and the status_full "No standard commands recorded" warning contains the text bee config set --key commands., and none tells the agent to write `.bee/config.json` by hand. | af69659c |
 
 ## Read set
 

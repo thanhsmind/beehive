@@ -20,7 +20,7 @@ reads), multi-domain (Rust code, skills, knowledge).
 
 ## Requirements (from CONTEXT.md)
 
-- D1: every commands and static-check notice names `bee config set --key commands.`.
+- D1: every commands and static-check notice names bee config set (commands key).
 - D2: a set-up ask is the confirmation; never reply that permission is missing.
 - D3: onboarding.md "Set up the project's checks" procedure, loaded from SKILL.md on a set-up ask.
 - D4: tests pin the notice text.
@@ -91,7 +91,7 @@ removes the conflict).
 
 | id | title | files | deps | you see | proof |
 |---|---|---|---|---|---|
-| lsg-1 | Name bee config set in every standard-commands notice | templates.rs, notices.rs, status_full build.rs | — | `bee onboard --json` and `bee status` notices name `bee config set --key commands.test` | notices and status_full tests |
+| lsg-1 | Name bee config set in every standard-commands notice | templates.rs, notices.rs, status_full build.rs | — | `bee onboard --json` and `bee status` notices name `bee config set --key commands.test --value` | notices and status_full tests |
 | lsg-3 | Pin the write verb in the standard-commands notices | notices.rs tests, status_full tests | lsg-1 | tests fail if a notice drops the verb | notices and status_full tests |
 | lsg-2 | Give the agent a set-up procedure for project checks | bee-hive SKILL.md, onboarding.md, host-project-artifacts concept, rendered copies | — | the skill says what to do on "set up lint" | knowledge check, release-manifest check, skill_triggers |
 
@@ -112,7 +112,7 @@ removes the conflict).
 "files":["packages/bee-rs/crates/bee/src/onboard/notices.rs","packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs"],
 "read_first":["docs/history/lint-setup-guidance/CONTEXT.md","packages/bee-rs/crates/bee/src/onboard/notices.rs"],
 "affects_skills":[],"affects_specs":[],
-"action":"Independently check lsg-1 and pin CONTEXT.md D4 with behavior tests. In the notices.rs test module, add tests over commands_notices on temp repos for three cases: no commands and no detected candidates; no commands with detected candidates and a static check (package.json with a lint script); a commands.test list missing a detected static check. Each returned notice must contain `bee config set --key commands.` and none may contain `to .bee/config.json`. In status_full/tests.rs, assert the empty-commands warning contains `bee config set --key commands.` and does not contain `verify`. Prove each new test fails against the pre-lsg-1 text (state how: e.g. git stash of lsg-1's hunks or reasoning from the old string) and passes now. No code comments. Proof: the cell verify; quote the counts and the new test names."},
+"action":"Independently check lsg-1 and pin CONTEXT.md D4 with behavior tests. In the notices.rs test module, add tests over commands_notices on temp repos for three cases: no commands and no detected candidates; no commands with detected candidates and a static check (package.json with a lint script); a commands.test list missing a detected static check. Each returned notice must contain bee config set (commands key) and none may contain `to .bee/config.json`. In status_full/tests.rs, assert the empty-commands warning contains bee config set (commands key) and does not contain `verify`. Prove each new test fails against the pre-lsg-1 text (state how: e.g. git stash of lsg-1's hunks or reasoning from the old string) and passes now. No code comments. Proof: the cell verify; quote the counts and the new test names."},
 {"id":"lsg-2","feature":"lint-setup-guidance","title":"Give the agent a set-up procedure for project checks","lane":"standard","role":"docs","deps":[],
 "verify":".bee/bin/bee knowledge check && .bee/bin/bee dev release-manifest --check && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test skill_triggers",
 "must_haves":{"truths":["skills/bee-hive/references/onboarding.md has a Set up the project's checks section that tells the agent to write commands.test with bee config set and never to reply that permission is missing","skills/bee-hive/SKILL.md loads that section when the user asks to set up lint, type check, tests or verify commands","docs/knowledge/areas/onboarding/host-project-artifacts.md says the static-check notices name bee config set and cites lint-setup-guidance D1 and D2","the rendered skill trees match skills/ (release-manifest --check clean)"]},
