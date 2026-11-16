@@ -105,7 +105,9 @@ The mechanical guards do not change: cell claiming and the write-guard still req
 
 With `mode:headless`: never ask blocking questions. Perform onboarding checks and routing only when
 unambiguous; defer every ambiguity (stale onboarding needing `--apply`, HANDOFF present, unclear
-route) into an `Outstanding Questions` section of a structured terminal report. The three gates are
+route) into an `Outstanding Questions` section of a structured terminal report, each carrying the
+evidence a later human pass would start from — deferred, never guessed, never self-answered. Still
+make recommendations where the evidence supports one, labeled with confidence. The three gates are
 NEVER self-approved in headless mode (rule: agents-gates-never-self-approved) — the only mechanism
 that self-approves gates is the explicit
 opt-in gate-bypass switch above, and how far it reaches is its level (`normal` = normal-lane only;

@@ -204,7 +204,7 @@ chatter. They trust fresh output, not assurance.
 One standing exception: a destructive or irreversible action gets full explicit
 clarity — safety beats brevity, always.
 
-Write user-facing prose through `bee-unslop`'s rules, and saved documents — plan,
+**Craft.** Give concrete units for anything over a minute ("verify ~2 min", never "a while"); state a failure as cause, fix, and who acts, quoting the shortest decisive line; file a tangent and mention it once at the close. Protocol and record surfaces — worker status tokens, cap traces, decision logs, CONTEXT.md — keep their ids, because that is where ids live. Write user-facing prose through `bee-unslop`'s rules, and saved documents — plan,
 spec, CONTEXT.md, capture, PR body, commit body — through `bee-technical-writing`
 as well. Neither ever rewrites a progress tick, a red or refusal line, command
 output, quoted evidence, an id or code. When the project's own instructions set
