@@ -8128,6 +8128,8 @@ Parity test plan.
     "verify": "test -f src/parity.rs",
     "must_haves": {
       "truths": ["parity logic holds"],
+      "why": "test fixture",
+      "out_of_scope": [],
       "artifacts": [{"path": "src/parity.rs", "substantive": "defines parity"}],
       "key_links": [],
       "prohibitions": []
@@ -8197,6 +8199,8 @@ Parity test plan.
         "verify": "test -f src/parity.rs",
         "must_haves": {
             "truths": ["parity logic holds"],
+            "why": "test fixture",
+            "out_of_scope": [],
             "artifacts": [{"path": "src/parity.rs", "substantive": "defines parity"}],
             "key_links": [],
             "prohibitions": []
@@ -8233,6 +8237,8 @@ Parity test plan.
         "verify": "test -f src/parity.rs",
         "must_haves": {
             "truths": ["parity logic holds"],
+            "why": "test fixture",
+            "out_of_scope": [],
             "artifacts": [{"path": "src/parity.rs", "substantive": "defines parity"}],
             "key_links": [],
             "prohibitions": []

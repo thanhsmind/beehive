@@ -85,7 +85,7 @@ fn fixture_with_gates(
     let plan_dir = dir.join("docs").join("history").join(feature);
     std::fs::create_dir_all(&plan_dir).unwrap();
     let plan_content = format!(
-        "# Plan: {feature}\n\n## Cells\n\n```json\n[\n  {{\n    \"id\": \"c-1\",\n    \"title\": \"Implement parser fix\",\n    \"action\": \"Add preview to alone booleans\",\n    \"verify\": \"cargo test -p bee gate_preview\",\n    \"files\": [\"src/flags.rs\"],\n    \"read_first\": [],\n    \"lane\": \"high-risk\",\n    \"role\": \"code\",\n    \"must_haves\": {{\n      \"truths\": [\"Preview accepts following lane\"]\n    }}\n  }}\n]\n```\n"
+        "# Plan: {feature}\n\n## Cells\n\n```json\n[\n  {{\n    \"id\": \"c-1\",\n    \"title\": \"Implement parser fix\",\n    \"action\": \"Add preview to alone booleans\",\n    \"verify\": \"cargo test -p bee gate_preview\",\n    \"files\": [\"src/flags.rs\"],\n    \"read_first\": [],\n    \"lane\": \"high-risk\",\n    \"role\": \"code\",\n    \"must_haves\": {{\n      \"truths\": [\"Preview accepts following lane\"],\n      \"why\": \"test fixture\",\n      \"out_of_scope\": []\n    }}\n  }}\n]\n```\n"
     );
     std::fs::write(plan_dir.join("plan.md"), plan_content).unwrap();
 

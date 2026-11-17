@@ -41,7 +41,7 @@
       "gather.md": "6cb0ceeaac9bf833e1826469428cd1efc4308a73ebc1235a9e6aaed39f309b6d",
       "peer-boot.md": "00a70323ef9d92b71369281068a6f53b3e4ef3445f72fdd8412293dfb9a52cdd",
       "reviewer.md": "e2c56ba17e2aa951a60c89f4c335a05355122062560e8e00277bd347dca87e9a",
-      "worker-cell.md": "d65ba3a150c8c2f25beb253107f271f4fe7d6c34b68d1cf8692cf13b3f48bcf1"
+      "worker-cell.md": "76689598df4a49d9fedb0273fddabcb8474c4f6722fab38499d5050f9cc08b5f"
     },
     "leader": {
       "LEADER.md": "b3141963ea0b9747bc816c5c1f35dceb91503d60e113c24cd3363beecee614c2"
@@ -191,5 +191,5 @@
   },
   "design_role_offered": true,
   "created_at": "2026-07-24T03:53:44.750Z",
-  "updated_at": "2026-11-16T22:19:29.605Z"
+  "updated_at": "2026-11-17T03:25:55.504Z"
 }

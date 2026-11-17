@@ -5044,7 +5044,7 @@
     },
     {
       "path": "packages/bee/prompts/worker-cell.md",
-      "sha256": "d65ba3a150c8c2f25beb253107f271f4fe7d6c34b68d1cf8692cf13b3f48bcf1",
+      "sha256": "76689598df4a49d9fedb0273fddabcb8474c4f6722fab38499d5050f9cc08b5f",
       "mode": "644",
       "role": "package_payload",
       "packagePath": "packages/bee/prompts/worker-cell.md"
