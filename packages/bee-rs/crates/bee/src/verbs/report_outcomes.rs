@@ -450,6 +450,9 @@ fn collect_outcomes(root: &Path, feature_filter: Option<&str>) -> OutcomesReport
             report.unreadable.push(file.display().to_string());
             continue;
         };
+        if let Some(target) = obj.get("fixes_feature").and_then(Value::as_str) {
+            *report.fixes.entry(target.to_string()).or_insert(0) += 1;
+        }
         if let Some(feat) = feature_filter {
             let cell_feat = obj.get("feature").and_then(Value::as_str);
             if cell_feat != Some(feat) {
@@ -558,9 +561,6 @@ fn collect_outcomes(root: &Path, feature_filter: Option<&str>) -> OutcomesReport
 
         if let Some(feat) = obj.get("feature").and_then(Value::as_str) {
             report.tallies.entry(feat.to_string()).or_default().add(obj, reworked);
-        }
-        if let Some(target) = obj.get("fixes_feature").and_then(Value::as_str) {
-            *report.fixes.entry(target.to_string()).or_insert(0) += 1;
         }
     }
     report
@@ -1764,6 +1764,23 @@ mod tests {
         let card = scorecard_of(&root, None);
         assert_eq!(scorecard_row(&card, "slp-article-gaps").fix_first, Some(2));
         assert_eq!(scorecard_row(&card, "other-feat").fix_first, Some(0));
+    }
+
+    #[test]
+    fn scorecard_fix_first_survives_the_feature_filter_from_another_feature() {
+        let (_tmp, root) = scorecard_store();
+        scorecard_write(
+            &root,
+            ".bee/cells/c-23.json",
+            r#"{"id":"c-23","feature":"other-feat","fixes_feature":"slp-article-gaps"}"#,
+        );
+        let unfiltered = scorecard_of(&root, None);
+        let want = "slp-article-gaps";
+        let filtered = scorecard(&collect_outcomes(&root, Some(want)), &read_inputs(&root), None, Some(want));
+        assert_eq!(filtered.rows.len(), 1);
+        assert_eq!(scorecard_row(&filtered, want).fix_first, Some(2));
+        assert_eq!(scorecard_row(&filtered, want).fix_first, scorecard_row(&unfiltered, want).fix_first);
+        assert_eq!(filtered.to_json()["features"][0]["fix_first_cells"], 2);
     }
 
     #[test]
