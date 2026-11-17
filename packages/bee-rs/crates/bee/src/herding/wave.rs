@@ -1045,8 +1045,7 @@ pub(super) fn occupancy_with_panes_and_paseo(
     }
 
     let now_ms = chrono::Utc::now().timestamp_millis();
-    let occ =
-        wave_ledger::live_worker_count(&main_root, live_panes.as_ref(), now_ms, wave_ledger::DEFAULT_STALE_AFTER_MS);
+    let occ = live_count_excluding_finished(&main_root, live_panes, now_ms);
     emit_occupancy(&occ, json);
     (ExitCode::SUCCESS, occ, sweep_lines)
 }
@@ -1081,6 +1080,54 @@ fn quiet_occupancy_from(
         (None, Some(ids)) => Some(ids.into_iter().collect()),
         (set, None) => set,
     };
+    live_count_excluding_finished(main_root, panes, now_ms)
+}
+
+fn finished_worker_ids(main_root: &Path) -> HashSet<String> {
+    let bee_dir = main_root.join(".bee");
+    let Ok(entries) = std::fs::read_dir(bee_dir.join("mailbox")) else {
+        return HashSet::new();
+    };
+    let mut ids = HashSet::new();
+    for dir in entries.filter_map(|e| e.ok().map(|e| e.path())).filter(|p| p.is_dir()) {
+        let Some(job_id) = dir.file_name().and_then(|n| n.to_str()) else { continue };
+        let names: Vec<String> = match std::fs::read_dir(&dir) {
+            Ok(rd) => rd.filter_map(|e| e.ok().map(|e| e.file_name().to_string_lossy().into_owned())).collect(),
+            Err(_) => continue,
+        };
+        let Some(round) = super::mailbox::latest_result_round(&names) else { continue };
+        let Ok(text) = std::fs::read_to_string(super::mailbox::result_path(&bee_dir, job_id, round)) else {
+            continue;
+        };
+        let terminal = serde_json::from_str::<Value>(&text)
+            .ok()
+            .and_then(|v| v.get("status").and_then(Value::as_str).map(|s| matches!(s, "done" | "blocked" | "failed")))
+            .unwrap_or(false);
+        if !terminal {
+            continue;
+        }
+        let Ok(text) = std::fs::read_to_string(super::mailbox::job_path(&bee_dir, job_id)) else { continue };
+        let Ok(job) = serde_json::from_str::<Value>(&text) else { continue };
+        for key in ["paseo_agent_id", "pane_id"] {
+            if let Some(id) = job.get(key).and_then(Value::as_str).map(str::trim).filter(|s| !s.is_empty()) {
+                ids.insert(id.to_string());
+            }
+        }
+    }
+    ids
+}
+
+fn live_count_excluding_finished(
+    main_root: &Path,
+    live_panes: Option<HashSet<String>>,
+    now_ms: i64,
+) -> wave_ledger::Occupancy {
+    let panes = live_panes.map(|mut set| {
+        for id in finished_worker_ids(main_root) {
+            set.remove(&id);
+        }
+        set
+    });
     wave_ledger::live_worker_count(main_root, panes.as_ref(), now_ms, wave_ledger::DEFAULT_STALE_AFTER_MS)
 }
 
@@ -2993,5 +3040,33 @@ mod tests {
         let merged = quiet_occupancy_from(root, Some(panes), Some(vec!["paseo-agent-1".to_string()]), now);
         assert_eq!(merged, wave_ledger::Occupancy::Live(1));
         assert!(quiet_occupancy_from(root, None, None, now).is_fallback());
+    }
+
+    fn write_job(root: &Path, job_id: &str, agent: &str, result_status: Option<&str>) {
+        let dir = root.join(".bee").join("mailbox").join(job_id);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("job.json"), serde_json::json!({"transport": "paseo", "paseo_agent_id": agent}).to_string())
+            .unwrap();
+        if let Some(status) = result_status {
+            std::fs::write(dir.join("result-1.json"), serde_json::json!({"status": status}).to_string()).unwrap();
+        }
+    }
+
+    #[test]
+    fn a_job_with_a_terminal_result_frees_its_slot_but_a_running_job_still_counts() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        unresolved_worker_row(root, "job-done", "agent-done");
+        unresolved_worker_row(root, "job-blocked", "agent-blocked");
+        unresolved_worker_row(root, "job-failed", "agent-failed");
+        unresolved_worker_row(root, "job-running", "agent-running");
+        write_job(root, "job-done", "agent-done", Some("done"));
+        write_job(root, "job-blocked", "agent-blocked", Some("blocked"));
+        write_job(root, "job-failed", "agent-failed", Some("failed"));
+        write_job(root, "job-running", "agent-running", None);
+        let ids = ["agent-done", "agent-blocked", "agent-failed", "agent-running"].map(String::from).to_vec();
+        let now = chrono::Utc::now().timestamp_millis();
+        let occ = quiet_occupancy_from(root, Some(HashSet::new()), Some(ids), now);
+        assert_eq!(occ, wave_ledger::Occupancy::Live(1));
     }
 }

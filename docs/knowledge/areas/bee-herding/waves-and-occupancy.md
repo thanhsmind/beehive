@@ -287,3 +287,15 @@ next open cell of the first wave is claimed, prepared and started.
 - Workers report over a channel and the loop blocks on it, so no polling runs.
 - Rejected: one fixed batch per `--limit` (the existing mode), which leaves slots idle
   while the slowest run in the batch finishes.
+
+## A finished job frees its concurrency slot
+
+Read when: `limits.concurrency live N limit N` refuses a wave while no worker runs.
+
+- A worker whose job wrote a result file with status done, blocked or failed is not
+  counted live, whatever its paseo agent state or its ledger outcome (D9 of
+  issue-sweep-nov17). A job without a result still counts.
+- Rejected: trusting the paseo agent list alone, which keeps an idle, non-archived
+  agent counted, and trusting ledger rows alone, whose outcome stays null until a
+  merge records it.
+- Find the exclusion in `live_count_excluding_finished` in `herding/wave.rs`.
