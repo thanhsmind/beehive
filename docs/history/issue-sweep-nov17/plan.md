@@ -1,0 +1,843 @@
+---
+artifact_contract: bee-plan/v2
+mode: standard
+---
+
+# Plan: issue-sweep-nov17
+
+## Summary
+
+Eleven open bee-report issues are still live in current code; each blocks a
+normal flow in a host project. Nine code cells fix them, grouped by the file
+that owns the fault, and each code cell has an independent tester cell. Every
+code cell writes its red test first. Cells gis-3, gis-4 and gis-5 share
+`verbs/cells/tests.rs` and run in sequence.
+
+## Load-bearing claims
+
+| # | Claim | Label | Anchor |
+|---|---|---|---|
+| 1 | the intake exemption list holds only .bee/, docs/, plans/, AGENTS.md | read | packages/bee-rs/crates/bee/src/hooks/write_guard/guards.rs:43 |
+| 2 | the read-only allowlist has no date, echo or stat | read | packages/bee-rs/crates/bee/src/hooks/worker_guard.rs:10 |
+| 3 | the reservations list label is a fixed string | read | packages/bee-rs/crates/bee/src/verbs/reservations/emit.rs:234 |
+| 4 | new-cell normalization sets deps from deps only | read | packages/bee-rs/crates/bee/src/verbs/cells/validate.rs:562 |
+| 5 | the tester lookup reads deps | read | packages/bee-rs/crates/bee/src/verbs/cells/proof.rs:96 |
+
+## Cells — current slice (preview)
+
+| id | title | role |
+|---|---|---|
+| gis-1 | Read only real shell writes and pass skill projection staging in the write guard (issues 163, 165, 168) | code |
+| gis-1t | Check gis-1: read only real shell writes and pass skill projection staging in the write guard (issues 163, 165, 168) | test |
+| gis-2 | Allow date, echo, stat and pwd in a read-only herded worker (issue 170) | code |
+| gis-2t | Check gis-2: allow date, echo, stat and pwd in a read-only herded worker (issue 170) | test |
+| gis-3 | Release a cell's leases when it is capped and label lease expiry truthfully (issues 161, 167) | code |
+| gis-3t | Check gis-3: release a cell's leases when it is capped and label lease expiry truthfully (issues 161, 167) | test |
+| gis-4 | Cap a cell whose approved verify contains the proof separator (issue 160) | code |
+| gis-4t | Check gis-4: cap a cell whose approved verify contains the proof separator (issue 160) | test |
+| gis-5 | Refuse a cell that names its dependencies depends_on (issue 171) | code |
+| gis-5t | Check gis-5: refuse a cell that names its dependencies depends_on (issue 171) | test |
+| gis-6 | Make decisions reattribute --dry-run write nothing for a named record (issue 162) | code |
+| gis-6t | Check gis-6: make decisions reattribute --dry-run write nothing for a named record (issue 162) | test |
+| gis-7 | Skip the bee scratch area in the shared nested checkout scan (issue 158) | code |
+| gis-7t | Check gis-7: skip the bee scratch area in the shared nested checkout scan (issue 158) | test |
+| gis-8 | Free a herding slot when the job has a terminal result (issue 159) | code |
+| gis-8t | Check gis-8: free a herding slot when the job has a terminal result (issue 159) | test |
+| gis-9 | Report a herding agent that herding.agents does not declare as not ready (issue 164) | code |
+| gis-9t | Check gis-9: report a herding agent that herding.agents does not declare as not ready (issue 164) | test |
+
+```json
+[
+  {
+    "id": "gis-1",
+    "title": "Read only real shell writes and pass skill projection staging in the write guard (issues 163, 165, 168)",
+    "role": "code",
+    "deps": [],
+    "files": [
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/guards.rs",
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/checks.rs",
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/hook_local.rs",
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs"
+    ],
+    "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- hooks::write_guard",
+    "action": "GitHub issues 163, 165, 168. Repro A (163/168): on main with phase idle, or with a live peer session and an active standard feature with no worktree, the write guard refuses `git add -u -- .agents/skills .claude/skills .opencode/skills` (idle intake gate: GATE_ALLOWED_PREFIXES_INTAKE in guards.rs lacks the projection trees; worktree-first: worktree_first_exempt_rel in hook_local.rs). Repro B (165): `claude rm 4e1731f9` is refused as a delete of 4e1731f9 because extract_bash_targets in guards.rs tests every token against rm/mv/cp/..., not only the command head of a segment. Write each red test first in hooks/write_guard/tests.rs and watch it fail for the reported reason, then fix. Contract D1 (decision 719d1a38-dd96-47cb-98a0-31a4d4cb03cc): git add / git commit / git rm --cached whose paths are under .claude/skills/, .agents/skills/ or .opencode/skills/ pass the idle intake gate and the worktree-first guard; a Write or Edit into those trees is still gated as before. Contract D2 (decision 681f1ed6-be21-45f1-a916-587489c20626): rm, mv, cp, mkdir, touch, tee count as writes only at the head of a shell segment (after ; && || | or start, after sudo/env wrappers); as an argument of another program or inside quotes they add no target. `rm -rf src/x` and `echo x | tee src/y` must still be refused where they were. Run only the cell verify, never the full suite. No code comments.",
+    "must_haves": {
+      "truths": [
+        "git add of the three skill projection trees passes the idle intake gate and the worktree-first guard",
+        "a Write or Edit into .claude/skills is still gated as before",
+        "claude rm 4e1731f9 adds no write target",
+        "rm, mv, cp, mkdir, touch and tee at a segment head are still write targets"
+      ],
+      "prohibitions": [
+        "No code comments",
+        "Do not weaken any existing refusal beyond the contract"
+      ]
+    },
+    "feature": "issue-sweep-nov17",
+    "lane": "standard",
+    "decisions": [
+      "719d1a38-dd96-47cb-98a0-31a4d4cb03cc",
+      "681f1ed6-be21-45f1-a916-587489c20626"
+    ],
+    "read_first": [
+      "docs/history/issue-sweep-nov17/CONTEXT.md"
+    ],
+    "affects_skills": [],
+    "affects_specs": [],
+    "status": "open",
+    "behavior_change": true
+  },
+  {
+    "id": "gis-1t",
+    "title": "Check gis-1: read only real shell writes and pass skill projection staging in the write guard (issues 163, 165, 168)",
+    "role": "test",
+    "deps": [
+      "gis-1"
+    ],
+    "files": [
+      "docs/history/issue-sweep-nov17/gis-1t-check.md",
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs"
+    ],
+    "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- hooks::write_guard",
+    "action": "Independently check cell gis-1 without its worker's context. Read its diff and decisions 719d1a38-dd96-47cb-98a0-31a4d4cb03cc, 681f1ed6-be21-45f1-a916-587489c20626. Reproduce the reported symptom against the fixed code and confirm it is gone; confirm each truth with a test that fails on the parent commit of gis-1 and passes now (add one edge-case test of your own in the same test module). Run the cell verify and quote its pass count and the names of the new tests in the run. Write docs/history/issue-sweep-nov17/gis-1t-check.md (pass or fail per truth with a file:line anchor, then the verify counts) and commit it with your test. Report a failure instead of fixing the code. No code comments.",
+    "must_haves": {
+      "truths": [
+        "git add of the three skill projection trees passes the idle intake gate and the worktree-first guard",
+        "a Write or Edit into .claude/skills is still gated as before",
+        "claude rm 4e1731f9 adds no write target",
+        "rm, mv, cp, mkdir, touch and tee at a segment head are still write targets"
+      ],
+      "prohibitions": [
+        "Do not edit non-test source",
+        "No code comments"
+      ]
+    },
+    "feature": "issue-sweep-nov17",
+    "lane": "standard",
+    "decisions": [
+      "719d1a38-dd96-47cb-98a0-31a4d4cb03cc",
+      "681f1ed6-be21-45f1-a916-587489c20626"
+    ],
+    "read_first": [
+      "docs/history/issue-sweep-nov17/CONTEXT.md"
+    ],
+    "affects_skills": [],
+    "affects_specs": [],
+    "status": "open",
+    "behavior_change": true
+  },
+  {
+    "id": "gis-2",
+    "title": "Allow date, echo, stat and pwd in a read-only herded worker (issue 170)",
+    "role": "code",
+    "deps": [],
+    "files": [
+      "packages/bee-rs/crates/bee/src/hooks/worker_guard.rs"
+    ],
+    "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- hooks::worker_guard",
+    "action": "GitHub issue 170. Repro: a read-only herded worker (bee herding run --read-only) is refused `date -u`, `echo ok` and `stat <file>` by the worker guard because READ_ONLY_ALLOWED in hooks/worker_guard.rs lacks them. Write the red cases first in the worker_guard.rs test module (model on read_only_table) and watch them fail, then fix. Contract D3 (decision 6d88458e-14a4-4747-9d20-983f7d5de09e): date, echo, stat and pwd are allowed in read-only mode; command substitution, a redirect outside the mailbox, sh -c and eval stay refused (keep a case proving `echo x > src/a.rs` is still refused). Run only the cell verify, never the full suite. No code comments.",
+    "must_haves": {
+      "truths": [
+        "date -u, echo ok, stat x and pwd are allowed in a read-only herded run",
+        "echo with a redirect outside the mailbox is still refused",
+        "command substitution is still refused"
+      ],
+      "prohibitions": [
+        "No code comments",
+        "Do not weaken any existing refusal beyond the contract"
+      ]
+    },
+    "feature": "issue-sweep-nov17",
+    "lane": "standard",
+    "decisions": [
+      "6d88458e-14a4-4747-9d20-983f7d5de09e"
+    ],
+    "read_first": [
+      "docs/history/issue-sweep-nov17/CONTEXT.md"
+    ],
+    "affects_skills": [],
+    "affects_specs": [],
+    "status": "open",
+    "behavior_change": true
+  },
+  {
+    "id": "gis-2t",
+    "title": "Check gis-2: allow date, echo, stat and pwd in a read-only herded worker (issue 170)",
+    "role": "test",
+    "deps": [
+      "gis-2"
+    ],
+    "files": [
+      "docs/history/issue-sweep-nov17/gis-2t-check.md",
+      "packages/bee-rs/crates/bee/src/hooks/worker_guard.rs"
+    ],
+    "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- hooks::worker_guard",
+    "action": "Independently check cell gis-2 without its worker's context. Read its diff and decisions 6d88458e-14a4-4747-9d20-983f7d5de09e. Reproduce the reported symptom against the fixed code and confirm it is gone; confirm each truth with a test that fails on the parent commit of gis-2 and passes now (add one edge-case test of your own in the same test module). Run the cell verify and quote its pass count and the names of the new tests in the run. Write docs/history/issue-sweep-nov17/gis-2t-check.md (pass or fail per truth with a file:line anchor, then the verify counts) and commit it with your test. Report a failure instead of fixing the code. No code comments.",
+    "must_haves": {
+      "truths": [
+        "date -u, echo ok, stat x and pwd are allowed in a read-only herded run",
+        "echo with a redirect outside the mailbox is still refused",
+        "command substitution is still refused"
+      ],
+      "prohibitions": [
+        "Do not edit non-test source",
+        "No code comments"
+      ]
+    },
+    "feature": "issue-sweep-nov17",
+    "lane": "standard",
+    "decisions": [
+      "6d88458e-14a4-4747-9d20-983f7d5de09e"
+    ],
+    "read_first": [
+      "docs/history/issue-sweep-nov17/CONTEXT.md"
+    ],
+    "affects_skills": [],
+    "affects_specs": [],
+    "status": "open",
+    "behavior_change": true
+  },
+  {
+    "id": "gis-3",
+    "title": "Release a cell's leases when it is capped and label lease expiry truthfully (issues 161, 167)",
+    "role": "code",
+    "deps": [],
+    "files": [
+      "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+      "packages/bee-rs/crates/bee/src/verbs/reservations/emit.rs",
+      "packages/bee-rs/crates/bee/src/verbs/reservations/tests.rs"
+    ],
+    "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- verbs::reservations verbs::cells",
+    "action": "GitHub issues 161 and 167. Repro: claim and reserve a cell's files, cap it with `bee cells cap` (not cells finish); `bee reservations list` still shows its leases and a claim of another cell on the same path refuses RESERVATION_CONFLICT. The list prints the fixed text `active/expired by TTL` (verbs/reservations/emit.rs) whatever expires_at says. cells finish already releases (finish_cap_and_release) and unclaim releases (release_reservations_for_unclaimed_cell) in verbs/cells/handlers_close.rs. First check why plain cap does not release (search docs/knowledge and git log -S for the cap path) and record what you find in the cap report. Write the red tests first and watch them fail, then fix. Contract D4 (decision 3ee2db95-a684-42d6-8786-a89eb646ab4e): a cap releases every path lease and mirrored hold whose cell is that id, fail-open after the status flip; the list label reads active or expired from the lease's own expiry. Run only the cell verify, never the full suite. No code comments.",
+    "must_haves": {
+      "truths": [
+        "after cells cap the cell holds no path lease and another cell can claim the same path",
+        "reservations list labels a live lease active and a past-expiry lease expired"
+      ],
+      "prohibitions": [
+        "No code comments",
+        "Do not weaken any existing refusal beyond the contract"
+      ]
+    },
+    "feature": "issue-sweep-nov17",
+    "lane": "standard",
+    "decisions": [
+      "3ee2db95-a684-42d6-8786-a89eb646ab4e"
+    ],
+    "read_first": [
+      "docs/history/issue-sweep-nov17/CONTEXT.md"
+    ],
+    "affects_skills": [],
+    "affects_specs": [],
+    "status": "open",
+    "behavior_change": true
+  },
+  {
+    "id": "gis-3t",
+    "title": "Check gis-3: release a cell's leases when it is capped and label lease expiry truthfully (issues 161, 167)",
+    "role": "test",
+    "deps": [
+      "gis-3"
+    ],
+    "files": [
+      "docs/history/issue-sweep-nov17/gis-3t-check.md",
+      "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+      "packages/bee-rs/crates/bee/src/verbs/reservations/tests.rs"
+    ],
+    "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- verbs::reservations verbs::cells",
+    "action": "Independently check cell gis-3 without its worker's context. Read its diff and decisions 3ee2db95-a684-42d6-8786-a89eb646ab4e. Reproduce the reported symptom against the fixed code and confirm it is gone; confirm each truth with a test that fails on the parent commit of gis-3 and passes now (add one edge-case test of your own in the same test module). Run the cell verify and quote its pass count and the names of the new tests in the run. Write docs/history/issue-sweep-nov17/gis-3t-check.md (pass or fail per truth with a file:line anchor, then the verify counts) and commit it with your test. Report a failure instead of fixing the code. No code comments.",
+    "must_haves": {
+      "truths": [
+        "after cells cap the cell holds no path lease and another cell can claim the same path",
+        "reservations list labels a live lease active and a past-expiry lease expired"
+      ],
+      "prohibitions": [
+        "Do not edit non-test source",
+        "No code comments"
+      ]
+    },
+    "feature": "issue-sweep-nov17",
+    "lane": "standard",
+    "decisions": [
+      "3ee2db95-a684-42d6-8786-a89eb646ab4e"
+    ],
+    "read_first": [
+      "docs/history/issue-sweep-nov17/CONTEXT.md"
+    ],
+    "affects_skills": [],
+    "affects_specs": [],
+    "status": "open",
+    "behavior_change": true
+  },
+  {
+    "id": "gis-4",
+    "title": "Cap a cell whose approved verify contains the proof separator (issue 160)",
+    "role": "code",
+    "deps": [
+      "gis-3t"
+    ],
+    "files": [
+      "packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+    ],
+    "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- verbs::cells",
+    "action": "GitHub issue 160. Repro: a cell whose verify contains ' — ' (the proof separator) cannot be capped: parse_tests_proof in verbs/cells/finish_support.rs splits the proof on the first separator, so the command segment never equals verify and handlers_close.rs refuses `does not match approved cell verify command`. Write the red test first (cells/tests.rs, model on the pihp-mismatch cap refusal test) and watch it fail, then fix. Contract D5 (decision 8ed6f4ae-21fa-42ab-b750-e43a6ae8b8ba): when the proof begins with the verify byte for byte followed by the separator, the command is the whole verify and the rest parses as the result and scope segments; a proof whose command differs from verify is still refused. Run only the cell verify, never the full suite. No code comments.",
+    "must_haves": {
+      "truths": [
+        "a cell whose verify contains the separator caps with proof '<verify> — green:unit — <scope>'",
+        "a proof whose command differs from verify is still refused"
+      ],
+      "prohibitions": [
+        "No code comments",
+        "Do not weaken any existing refusal beyond the contract"
+      ]
+    },
+    "feature": "issue-sweep-nov17",
+    "lane": "standard",
+    "decisions": [
+      "8ed6f4ae-21fa-42ab-b750-e43a6ae8b8ba"
+    ],
+    "read_first": [
+      "docs/history/issue-sweep-nov17/CONTEXT.md"
+    ],
+    "affects_skills": [],
+    "affects_specs": [],
+    "status": "open",
+    "behavior_change": true
+  },
+  {
+    "id": "gis-4t",
+    "title": "Check gis-4: cap a cell whose approved verify contains the proof separator (issue 160)",
+    "role": "test",
+    "deps": [
+      "gis-4"
+    ],
+    "files": [
+      "docs/history/issue-sweep-nov17/gis-4t-check.md",
+      "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+    ],
+    "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- verbs::cells",
+    "action": "Independently check cell gis-4 without its worker's context. Read its diff and decisions 8ed6f4ae-21fa-42ab-b750-e43a6ae8b8ba. Reproduce the reported symptom against the fixed code and confirm it is gone; confirm each truth with a test that fails on the parent commit of gis-4 and passes now (add one edge-case test of your own in the same test module). Run the cell verify and quote its pass count and the names of the new tests in the run. Write docs/history/issue-sweep-nov17/gis-4t-check.md (pass or fail per truth with a file:line anchor, then the verify counts) and commit it with your test. Report a failure instead of fixing the code. No code comments.",
+    "must_haves": {
+      "truths": [
+        "a cell whose verify contains the separator caps with proof '<verify> — green:unit — <scope>'",
+        "a proof whose command differs from verify is still refused"
+      ],
+      "prohibitions": [
+        "Do not edit non-test source",
+        "No code comments"
+      ]
+    },
+    "feature": "issue-sweep-nov17",
+    "lane": "standard",
+    "decisions": [
+      "8ed6f4ae-21fa-42ab-b750-e43a6ae8b8ba"
+    ],
+    "read_first": [
+      "docs/history/issue-sweep-nov17/CONTEXT.md"
+    ],
+    "affects_skills": [],
+    "affects_specs": [],
+    "status": "open",
+    "behavior_change": true
+  },
+  {
+    "id": "gis-5",
+    "title": "Refuse a cell that names its dependencies depends_on (issue 171)",
+    "role": "code",
+    "deps": [
+      "gis-4t"
+    ],
+    "files": [
+      "packages/bee-rs/crates/bee/src/verbs/cells/validate.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+    ],
+    "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- verbs::cells",
+    "action": "GitHub issue 171. Repro: `bee cells add` with a cell JSON carrying \"depends_on\": [\"x-1\"] instead of \"deps\" is accepted; normalize_new_cell in verbs/cells/validate.rs keeps depends_on and sets deps to [], so has_dependent_with_role_test (verbs/cells/proof.rs) never sees the tester and worktree merge reports WORKTREE_MERGE_PROOF_DEBT. Write the red test first and watch it fail, then fix. Contract D6 (decision e092dbb6-042f-4063-acfa-2bbfc06025a1): cells add (including --dry-run and a whole-slice array) and cells update refuse a cell carrying depends_on or dependencies, with a message naming deps as the key to use; a cell with deps is unchanged. Run only the cell verify, never the full suite. No code comments.",
+    "must_haves": {
+      "truths": [
+        "cells add refuses a cell carrying depends_on and names deps",
+        "cells add refuses a cell carrying dependencies",
+        "a cell with deps is added unchanged"
+      ],
+      "prohibitions": [
+        "No code comments",
+        "Do not weaken any existing refusal beyond the contract"
+      ]
+    },
+    "feature": "issue-sweep-nov17",
+    "lane": "standard",
+    "decisions": [
+      "e092dbb6-042f-4063-acfa-2bbfc06025a1"
+    ],
+    "read_first": [
+      "docs/history/issue-sweep-nov17/CONTEXT.md"
+    ],
+    "affects_skills": [],
+    "affects_specs": [],
+    "status": "open",
+    "behavior_change": true
+  },
+  {
+    "id": "gis-5t",
+    "title": "Check gis-5: refuse a cell that names its dependencies depends_on (issue 171)",
+    "role": "test",
+    "deps": [
+      "gis-5"
+    ],
+    "files": [
+      "docs/history/issue-sweep-nov17/gis-5t-check.md",
+      "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+    ],
+    "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- verbs::cells",
+    "action": "Independently check cell gis-5 without its worker's context. Read its diff and decisions e092dbb6-042f-4063-acfa-2bbfc06025a1. Reproduce the reported symptom against the fixed code and confirm it is gone; confirm each truth with a test that fails on the parent commit of gis-5 and passes now (add one edge-case test of your own in the same test module). Run the cell verify and quote its pass count and the names of the new tests in the run. Write docs/history/issue-sweep-nov17/gis-5t-check.md (pass or fail per truth with a file:line anchor, then the verify counts) and commit it with your test. Report a failure instead of fixing the code. No code comments.",
+    "must_haves": {
+      "truths": [
+        "cells add refuses a cell carrying depends_on and names deps",
+        "cells add refuses a cell carrying dependencies",
+        "a cell with deps is added unchanged"
+      ],
+      "prohibitions": [
+        "Do not edit non-test source",
+        "No code comments"
+      ]
+    },
+    "feature": "issue-sweep-nov17",
+    "lane": "standard",
+    "decisions": [
+      "e092dbb6-042f-4063-acfa-2bbfc06025a1"
+    ],
+    "read_first": [
+      "docs/history/issue-sweep-nov17/CONTEXT.md"
+    ],
+    "affects_skills": [],
+    "affects_specs": [],
+    "status": "open",
+    "behavior_change": true
+  },
+  {
+    "id": "gis-6",
+    "title": "Make decisions reattribute --dry-run write nothing for a named record (issue 162)",
+    "role": "code",
+    "deps": [],
+    "files": [
+      "packages/bee-rs/crates/bee/src/verbs/decisions/verbs_write.rs",
+      "packages/bee-rs/crates/bee/src/verbs/decisions/tests.rs"
+    ],
+    "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- verbs::decisions",
+    "action": "GitHub issue 162. Repro: `bee decisions reattribute --id <d> --to <f> --dry-run` rewrites the record: run_reattribute in verbs/decisions/verbs_write.rs drops dry_run for the (id, to) arm and do_reattribute_named writes unconditionally. Write the red test first (model on a_named_reattribution_corrects_only_an_unclaiming_record) and watch it fail, then fix. Contract D7 (decision c9826c53-ab7c-49dc-ae86-f534c5dbe528): the named dry run leaves the store byte-identical and reports what it would correct; the real run still corrects it. Run only the cell verify, never the full suite. No code comments.",
+    "must_haves": {
+      "truths": [
+        "a named reattribute dry run leaves the decision store byte-identical",
+        "the named real run still corrects the record"
+      ],
+      "prohibitions": [
+        "No code comments",
+        "Do not weaken any existing refusal beyond the contract"
+      ]
+    },
+    "feature": "issue-sweep-nov17",
+    "lane": "standard",
+    "decisions": [
+      "c9826c53-ab7c-49dc-ae86-f534c5dbe528"
+    ],
+    "read_first": [
+      "docs/history/issue-sweep-nov17/CONTEXT.md"
+    ],
+    "affects_skills": [],
+    "affects_specs": [],
+    "status": "open",
+    "behavior_change": true
+  },
+  {
+    "id": "gis-6t",
+    "title": "Check gis-6: make decisions reattribute --dry-run write nothing for a named record (issue 162)",
+    "role": "test",
+    "deps": [
+      "gis-6"
+    ],
+    "files": [
+      "docs/history/issue-sweep-nov17/gis-6t-check.md",
+      "packages/bee-rs/crates/bee/src/verbs/decisions/tests.rs"
+    ],
+    "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- verbs::decisions",
+    "action": "Independently check cell gis-6 without its worker's context. Read its diff and decisions c9826c53-ab7c-49dc-ae86-f534c5dbe528. Reproduce the reported symptom against the fixed code and confirm it is gone; confirm each truth with a test that fails on the parent commit of gis-6 and passes now (add one edge-case test of your own in the same test module). Run the cell verify and quote its pass count and the names of the new tests in the run. Write docs/history/issue-sweep-nov17/gis-6t-check.md (pass or fail per truth with a file:line anchor, then the verify counts) and commit it with your test. Report a failure instead of fixing the code. No code comments.",
+    "must_haves": {
+      "truths": [
+        "a named reattribute dry run leaves the decision store byte-identical",
+        "the named real run still corrects the record"
+      ],
+      "prohibitions": [
+        "Do not edit non-test source",
+        "No code comments"
+      ]
+    },
+    "feature": "issue-sweep-nov17",
+    "lane": "standard",
+    "decisions": [
+      "c9826c53-ab7c-49dc-ae86-f534c5dbe528"
+    ],
+    "read_first": [
+      "docs/history/issue-sweep-nov17/CONTEXT.md"
+    ],
+    "affects_skills": [],
+    "affects_specs": [],
+    "status": "open",
+    "behavior_change": true
+  },
+  {
+    "id": "gis-7",
+    "title": "Skip the bee scratch area in the shared nested checkout scan (issue 158)",
+    "role": "code",
+    "deps": [],
+    "files": [
+      "packages/bee-rs/crates/bee/src/nested_checkout.rs"
+    ],
+    "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- nested_checkout",
+    "action": "GitHub issue 158. Repro: a git clone under .bee/tmp/<dir>/repo makes `bee worktree new` and `bee feature start` refuse with the shared nested checkout error while another session is live, because scan_for_nested_checkout in nested_checkout.rs does not skip .bee/tmp (NESTED_SCAN_SKIP_DIRS has no entry for it). Write the red test first (model on skip_dirs_and_the_depth_bound_are_honored with nested_repo) and watch it fail, then fix. Contract D8 (decision 93c9c272-731f-4aff-9124-df7ae1583fd8): a nested checkout under .bee/tmp is never reported; one elsewhere under .bee or the repo still is. Run only the cell verify, never the full suite. No code comments.",
+    "must_haves": {
+      "truths": [
+        "a nested git checkout under .bee/tmp is not reported",
+        "a nested checkout elsewhere in the repo is still reported"
+      ],
+      "prohibitions": [
+        "No code comments",
+        "Do not weaken any existing refusal beyond the contract"
+      ]
+    },
+    "feature": "issue-sweep-nov17",
+    "lane": "standard",
+    "decisions": [
+      "93c9c272-731f-4aff-9124-df7ae1583fd8"
+    ],
+    "read_first": [
+      "docs/history/issue-sweep-nov17/CONTEXT.md"
+    ],
+    "affects_skills": [],
+    "affects_specs": [],
+    "status": "open",
+    "behavior_change": true
+  },
+  {
+    "id": "gis-7t",
+    "title": "Check gis-7: skip the bee scratch area in the shared nested checkout scan (issue 158)",
+    "role": "test",
+    "deps": [
+      "gis-7"
+    ],
+    "files": [
+      "docs/history/issue-sweep-nov17/gis-7t-check.md",
+      "packages/bee-rs/crates/bee/src/nested_checkout.rs"
+    ],
+    "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- nested_checkout",
+    "action": "Independently check cell gis-7 without its worker's context. Read its diff and decisions 93c9c272-731f-4aff-9124-df7ae1583fd8. Reproduce the reported symptom against the fixed code and confirm it is gone; confirm each truth with a test that fails on the parent commit of gis-7 and passes now (add one edge-case test of your own in the same test module). Run the cell verify and quote its pass count and the names of the new tests in the run. Write docs/history/issue-sweep-nov17/gis-7t-check.md (pass or fail per truth with a file:line anchor, then the verify counts) and commit it with your test. Report a failure instead of fixing the code. No code comments.",
+    "must_haves": {
+      "truths": [
+        "a nested git checkout under .bee/tmp is not reported",
+        "a nested checkout elsewhere in the repo is still reported"
+      ],
+      "prohibitions": [
+        "Do not edit non-test source",
+        "No code comments"
+      ]
+    },
+    "feature": "issue-sweep-nov17",
+    "lane": "standard",
+    "decisions": [
+      "93c9c272-731f-4aff-9124-df7ae1583fd8"
+    ],
+    "read_first": [
+      "docs/history/issue-sweep-nov17/CONTEXT.md"
+    ],
+    "affects_skills": [],
+    "affects_specs": [],
+    "status": "open",
+    "behavior_change": true
+  },
+  {
+    "id": "gis-8",
+    "title": "Free a herding slot when the job has a terminal result (issue 159)",
+    "role": "code",
+    "deps": [],
+    "files": [
+      "packages/bee-rs/crates/bee/src/herding/wave.rs",
+      "packages/bee-rs/crates/bee/src/herding/wave_ledger.rs"
+    ],
+    "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- herding::wave",
+    "action": "GitHub issue 159. Repro: herding.limits.concurrency refuses (`limits.concurrency live N limit N`) while no worker runs: paseo_live_ids in herding/wave.rs counts every non-archived paseo agent, and live_worker_count in herding/wave_ledger.rs counts unresolved ledger rows (outcome null) even after the job wrote result-1.json with status done. Write the red test first (model on a_run_at_the_concurrency_limit_is_refused_and_retryable) and watch it fail, then fix at the source of the live count. Contract D9 (decision 882c75e1-eca8-4bd7-8d79-bbd76e8cdc0e): a worker whose job has a result with a terminal status (done, blocked, failed) is not counted live, whatever its paseo agent state or ledger outcome; a running job is still counted. Run only the cell verify, never the full suite. No code comments.",
+    "must_haves": {
+      "truths": [
+        "a job with a terminal result frees its concurrency slot",
+        "a running job still counts toward the limit"
+      ],
+      "prohibitions": [
+        "No code comments",
+        "Do not weaken any existing refusal beyond the contract"
+      ]
+    },
+    "feature": "issue-sweep-nov17",
+    "lane": "standard",
+    "decisions": [
+      "882c75e1-eca8-4bd7-8d79-bbd76e8cdc0e"
+    ],
+    "read_first": [
+      "docs/history/issue-sweep-nov17/CONTEXT.md"
+    ],
+    "affects_skills": [],
+    "affects_specs": [],
+    "status": "open",
+    "behavior_change": true
+  },
+  {
+    "id": "gis-8t",
+    "title": "Check gis-8: free a herding slot when the job has a terminal result (issue 159)",
+    "role": "test",
+    "deps": [
+      "gis-8"
+    ],
+    "files": [
+      "docs/history/issue-sweep-nov17/gis-8t-check.md",
+      "packages/bee-rs/crates/bee/src/herding/wave.rs"
+    ],
+    "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- herding::wave",
+    "action": "Independently check cell gis-8 without its worker's context. Read its diff and decisions 882c75e1-eca8-4bd7-8d79-bbd76e8cdc0e. Reproduce the reported symptom against the fixed code and confirm it is gone; confirm each truth with a test that fails on the parent commit of gis-8 and passes now (add one edge-case test of your own in the same test module). Run the cell verify and quote its pass count and the names of the new tests in the run. Write docs/history/issue-sweep-nov17/gis-8t-check.md (pass or fail per truth with a file:line anchor, then the verify counts) and commit it with your test. Report a failure instead of fixing the code. No code comments.",
+    "must_haves": {
+      "truths": [
+        "a job with a terminal result frees its concurrency slot",
+        "a running job still counts toward the limit"
+      ],
+      "prohibitions": [
+        "Do not edit non-test source",
+        "No code comments"
+      ]
+    },
+    "feature": "issue-sweep-nov17",
+    "lane": "standard",
+    "decisions": [
+      "882c75e1-eca8-4bd7-8d79-bbd76e8cdc0e"
+    ],
+    "read_first": [
+      "docs/history/issue-sweep-nov17/CONTEXT.md"
+    ],
+    "affects_skills": [],
+    "affects_specs": [],
+    "status": "open",
+    "behavior_change": true
+  },
+  {
+    "id": "gis-9",
+    "title": "Report a herding agent that herding.agents does not declare as not ready (issue 164)",
+    "role": "code",
+    "deps": [],
+    "files": [
+      "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+    ],
+    "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- verbs::drivers::prepare",
+    "action": "GitHub issue 164. Repro: with a role mapped to a herding agent name absent from herding.agents, `bee dispatch prepare --runtime claude --kind gather --role extraction --json` returns `bee herding run --agent <name>` with transport_ready true, and herding run then fails spawn_failed unknown herding agent. In verbs/drivers/prepare.rs the None arm of the transport_ready match (PaseoSpec::from_config returns None) falls back to the environment probe without checking the name. Write the red test first in the prepare.rs test module (model on paseo_agent_not_ready_on_malformed_paseo_block) and watch it fail, then fix. Contract D10 (decision 2bcf3437-1985-407f-a814-f41d946a5cca): an undeclared agent name gives transport_ready false and a transport_reason naming the unknown agent and the declared agents; a declared agent is unchanged. Run only the cell verify, never the full suite. No code comments.",
+    "must_haves": {
+      "truths": [
+        "an undeclared herding agent gives transport_ready false naming the declared agents",
+        "a declared herding agent is unchanged"
+      ],
+      "prohibitions": [
+        "No code comments",
+        "Do not weaken any existing refusal beyond the contract"
+      ]
+    },
+    "feature": "issue-sweep-nov17",
+    "lane": "standard",
+    "decisions": [
+      "2bcf3437-1985-407f-a814-f41d946a5cca"
+    ],
+    "read_first": [
+      "docs/history/issue-sweep-nov17/CONTEXT.md"
+    ],
+    "affects_skills": [],
+    "affects_specs": [],
+    "status": "open",
+    "behavior_change": true
+  },
+  {
+    "id": "gis-9t",
+    "title": "Check gis-9: report a herding agent that herding.agents does not declare as not ready (issue 164)",
+    "role": "test",
+    "deps": [
+      "gis-9"
+    ],
+    "files": [
+      "docs/history/issue-sweep-nov17/gis-9t-check.md",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+    ],
+    "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- verbs::drivers::prepare",
+    "action": "Independently check cell gis-9 without its worker's context. Read its diff and decisions 2bcf3437-1985-407f-a814-f41d946a5cca. Reproduce the reported symptom against the fixed code and confirm it is gone; confirm each truth with a test that fails on the parent commit of gis-9 and passes now (add one edge-case test of your own in the same test module). Run the cell verify and quote its pass count and the names of the new tests in the run. Write docs/history/issue-sweep-nov17/gis-9t-check.md (pass or fail per truth with a file:line anchor, then the verify counts) and commit it with your test. Report a failure instead of fixing the code. No code comments.",
+    "must_haves": {
+      "truths": [
+        "an undeclared herding agent gives transport_ready false naming the declared agents",
+        "a declared herding agent is unchanged"
+      ],
+      "prohibitions": [
+        "Do not edit non-test source",
+        "No code comments"
+      ]
+    },
+    "feature": "issue-sweep-nov17",
+    "lane": "standard",
+    "decisions": [
+      "2bcf3437-1985-407f-a814-f41d946a5cca"
+    ],
+    "read_first": [
+      "docs/history/issue-sweep-nov17/CONTEXT.md"
+    ],
+    "affects_skills": [],
+    "affects_specs": [],
+    "status": "open",
+    "behavior_change": true
+  }
+]
+```
+
+## Role assignments
+
+```json
+{
+  "schema_version": "1.0",
+  "runtime": "claude",
+  "roster_sha256": "d4e696dbde7989d6388dacce3fd7057cb3a6935b46024b79698596a46f6f41d3",
+  "stages": [
+    {
+      "stage": "deployment",
+      "classification": "not-applicable",
+      "role": "deploy",
+      "reason": "No release rides this feature."
+    },
+    {
+      "stage": "planning",
+      "classification": "not-applicable",
+      "role": "plan",
+      "reason": "The plan is this page."
+    },
+    {
+      "stage": "implementation",
+      "classification": "required",
+      "role": "code",
+      "reason": "Nine code cells, one per fix."
+    },
+    {
+      "stage": "test-and-live-proof",
+      "classification": "required",
+      "role": "test",
+      "reason": "Nine independent tester cells, one per code cell."
+    },
+    {
+      "stage": "documentation-and-capture",
+      "classification": "not-applicable",
+      "role": "docs",
+      "reason": "Capture runs at close through the leader."
+    },
+    {
+      "stage": "read-only-gather",
+      "classification": "required",
+      "role": "read",
+      "reason": "Issue triage ran as four read-only gathers."
+    },
+    {
+      "stage": "fact-extraction",
+      "classification": "not-applicable",
+      "role": "extraction",
+      "reason": "No narrow lookup is needed."
+    },
+    {
+      "stage": "generation-fallback",
+      "classification": "not-applicable",
+      "role": "generation",
+      "reason": "Every job has a specific role."
+    },
+    {
+      "stage": "independent-review",
+      "classification": "not-applicable",
+      "role": "review",
+      "reason": "Independent review stays user-invoked."
+    },
+    {
+      "stage": "generic-advisor",
+      "classification": "not-applicable",
+      "role": "advisor",
+      "reason": "Standard lane bug fixes, each pinned by its own red test."
+    },
+    {
+      "stage": "supervision",
+      "classification": "not-applicable",
+      "role": "supervisor",
+      "reason": "No unattended loop."
+    },
+    {
+      "stage": "blind-lane-1",
+      "classification": "not-applicable",
+      "role": "lane-1",
+      "reason": "No competing designs."
+    },
+    {
+      "stage": "blind-lane-2",
+      "classification": "not-applicable",
+      "role": "lane-2",
+      "reason": "No competing designs."
+    },
+    {
+      "stage": "blind-lane-3",
+      "classification": "not-applicable",
+      "role": "lane-3",
+      "reason": "No competing designs."
+    },
+    {
+      "stage": "design-ui",
+      "classification": "not-applicable",
+      "role": "design",
+      "reason": "No rendered UI."
+    },
+    {
+      "stage": "hat-facts-gaps",
+      "classification": "not-applicable",
+      "role": "hat-facts-gaps",
+      "reason": "Each fix is a narrow contract with a reproduced fault site."
+    },
+    {
+      "stage": "hat-risks",
+      "classification": "not-applicable",
+      "role": "hat-risks",
+      "reason": "Each fix is a narrow contract with a reproduced fault site."
+    },
+    {
+      "stage": "hat-value",
+      "classification": "not-applicable",
+      "role": "hat-value",
+      "reason": "Each fix closes a filed bug."
+    },
+    {
+      "stage": "hat-alternatives",
+      "classification": "not-applicable",
+      "role": "hat-alternatives",
+      "reason": "Alternatives are recorded on each decision."
+    },
+    {
+      "stage": "hat-user-impact",
+      "classification": "not-applicable",
+      "role": "hat-user-impact",
+      "reason": "Each fix removes a refusal users hit."
+    },
+    {
+      "stage": "writing",
+      "classification": "not-applicable",
+      "role": "writer",
+      "reason": "No prose ships."
+    }
+  ]
+}
+```
+
+## Proof
+
+- Each code cell: its cell verify green with the new red-first test in the run.
+- Each tester cell: the cell verify count and the new test names quoted.
+- Feature end: `bee test` in the worktree before merge.
