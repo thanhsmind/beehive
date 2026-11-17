@@ -916,6 +916,9 @@ pub(crate) fn cap_cell_from_flags(root: &Path, f: &CapFlags, finish: bool) -> MR
     guard.release();
     let mut saved = saved?;
     release_claim_file_best_effort(root, id, seen_claim.as_deref());
+    if !finish {
+        release_reservations_for_unclaimed_cell(root, id);
+    }
     // D4 (human-mailbox): the cap is on disk and the claim is released —
     // this stop has HAPPENED, so its entry is appended now, not gathered
     // at the end of the run. Never refuses (D10), never conditional on

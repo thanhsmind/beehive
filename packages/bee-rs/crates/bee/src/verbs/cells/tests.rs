@@ -2485,6 +2485,37 @@ use std::time::Instant;
         assert!(held_paths(root).is_empty(), "the cap releases every lease the claim took");
     }
 
+    #[test]
+    fn a_plain_cap_releases_only_its_own_cells_leases_and_frees_the_path() {
+        let tmp = cn_root();
+        let root = tmp.path();
+        write_bee_config(root, &json!({"commands": {"test": "echo ok"}}));
+        lane_with_route(root, "pcr");
+        write_cell_fixture(
+            root,
+            "pcr-a",
+            &cell_with_files("pcr-a", "pcr", json!(["src/pcr_one.rs", "src/pcr_two.rs"])),
+        );
+        write_cell_fixture(root, "pcr-b", &cell_with_files("pcr-b", "pcr", json!(["src/pcr_one.rs"])));
+        claim_cell_with_reservations(root, main_topo(root), "pcr-a", "wk-1", Some("sess-1"), None, None)
+            .unwrap();
+        foreign_lease(root, "worker-other", "other-cell", "src/other.rs");
+        assert_eq!(held_paths(root).len(), 3);
+
+        let mut cap = wf_cap_flags("pcr-a");
+        cap.session_flag = Some("sess-1".to_string());
+        let capped = cap_cell_from_flags(root, &cap, false).unwrap();
+        assert_eq!(capped["status"], json!("capped"));
+
+        assert_eq!(
+            held_paths(root),
+            vec![("src/other.rs".to_string(), "worker-other".to_string(), "other-cell".to_string())]
+        );
+        let next =
+            claim_cell_with_reservations(root, main_topo(root), "pcr-b", "wk-2", Some("sess-2"), None, None);
+        assert!(next.is_ok(), "another cell claims the path the capped cell held");
+    }
+
     /// Constraint 1: a claim with no overlapping hold succeeds exactly as it
     /// did before this cell — the acquire adds NO key to the emitted cell
     /// record, so `run_claim`'s payload and text are byte-identical.

@@ -986,6 +986,22 @@ use std::time::Instant;
         std::fs::write(&file, format!("{}\n", jsjson::stringify_pretty(&record))).unwrap();
     }
 
+    #[test]
+    fn the_list_line_labels_a_live_lease_active_and_a_past_expiry_lease_expired() {
+        let tmp = fixture_root();
+        let root_s = root_str(tmp.path());
+        write_lease_file(&root_s, "src/live.ts", json!("2999-01-01T00:00:00.000Z"));
+        write_lease_file(&root_s, "src/never.ts", Value::Null);
+        write_lease_file(&root_s, "src/gone.ts", json!("2020-01-02T00:00:00.000Z"));
+        let mut rows = list_reservations(&root_s, false, now_ms()).ok().unwrap();
+        rows.sort_by(|a, b| a.path.cmp(&b.path));
+        let lines: Vec<String> = rows.iter().map(reservation_line).collect();
+        assert!(lines[0].ends_with("| expired"), "{}", lines[0]);
+        assert!(lines[1].ends_with("| active"), "{}", lines[1]);
+        assert!(lines[2].ends_with("| active"), "{}", lines[2]);
+        assert!(lines.iter().all(|l| !l.contains("by TTL")), "{lines:?}");
+    }
+
     fn write_holds_ledger(root: &Path, holds: Value) {
         std::fs::create_dir_all(holds_ledger_path(root).parent().unwrap()).unwrap();
         std::fs::write(holds_ledger_path(root), jsjson::stringify(&json!({"holds": holds}))).unwrap();
