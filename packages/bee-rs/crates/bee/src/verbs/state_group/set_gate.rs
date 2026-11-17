@@ -1062,6 +1062,27 @@ pub(crate) fn run_gate_body(root: &Path, flags: &Flags) -> R2<Out> {
     } else if target.lane().is_some() {
         durable_stamp_unreachable = true;
     }
+    {
+        let touched_gates: Vec<&str> =
+            if merge { vec!["shape", "execution"] } else { vec![name.as_str()] };
+        for gate_name in touched_gates {
+            let note = format!("gate {gate_name} set to {approved} by {actor}");
+            crate::audit::append(
+                root,
+                "gate",
+                routed_feature.as_deref().unwrap_or_default(),
+                None,
+                &note,
+                "bee gate",
+                bypass_level.as_deref(),
+            )
+            .map_err(|e| {
+                Err2::Msg(format!(
+                    "gate: the gate was set but its audit row could not be written ({e}). FIX: run `bee audit log --kind gate --feature <f> --note \"{note}\"`."
+                ))
+            })?;
+        }
+    }
     if actor == "auto" {
         let gate_names = if merge { "shape, execution".to_string() } else { name.clone() };
         let note = format!(

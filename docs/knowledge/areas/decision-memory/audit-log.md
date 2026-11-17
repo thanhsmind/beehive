@@ -11,7 +11,7 @@ bee:
   decisions: ["knowledge-first-lean-decisions D3, D4, D5, D6 (docs/history/knowledge-first-lean-decisions/plan.md, 2026-11-07)"]
   sources: ["knowledge-first-lean-decisions cells kbc-2, kbc-3, kbc-4 (traces in .bee/cells/, 2026-11-07)", packages/bee-rs/crates/bee/src/audit.rs, packages/bee-rs/crates/bee/src/verbs/audit.rs, packages/bee/LEADER.md (§ Capture what settles)]
   authoritative_for: "decision-memory: what belongs in the audit log and what stays a decision"
-  anchors: [packages/bee/LEADER.md, packages/bee-rs/crates/bee/src/audit.rs, packages/bee-rs/crates/bee/src/verbs/upkeep_group.rs]
+  anchors: [packages/bee/LEADER.md, packages/bee-rs/crates/bee/src/audit.rs, packages/bee-rs/crates/bee/src/verbs/upkeep_group.rs, packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs]
   verified_at: 2026-11-15
   verified_commit: a963c71a41249647b5aa15a64118f007f39c4c67
 ---
@@ -62,6 +62,13 @@ word first in the note, and the newest row of each kind is the `last_run` that
 `bee upkeep due` reads. They do not end in `-deferral`, so no door reads them as
 an escape. A run that logs no row stays due; find the reasons with
 `bee upkeep due --json`.
+
+**B7 — Every gate set leaves a `gate` row, manual or auto** (outcome-scorecard
+D2). Without it nobody can count how often a plan was reopened, because only an
+auto set wrote a row (`gate-bypass`). The `gate` row is written for each gate a
+set touched, so a merged shape+execution set writes two; `gate-bypass` stays
+beside it for auto. A refused set writes nothing. Find the writer by searching
+`"gate"` in `verbs/state_group/set_gate.rs`.
 
 ## Open Gaps
 

@@ -3,8 +3,9 @@ use crate::verbs::decisions::read_jsonl;
 use serde_json::{json, Map, Value};
 use std::path::{Path, PathBuf};
 
-pub(crate) const KINDS: [&str; 18] = [
+pub(crate) const KINDS: [&str; 19] = [
     "gate-bypass",
+    "gate",
     "close",
     "merge",
     "release",
