@@ -143,6 +143,7 @@ One slice; it is the whole feature.
 | biw-5 | Ask "should we build this" at triage and teach plans the new keys | skills/bee-shaping/SKILL.md, skills/bee-planning/references/cells.md, plan-artifact.md, regen output | biw-1, biw-3 | Qualify asks the three questions; planning docs show `why` and `out_of_scope` | regen + pointer and parity tests |
 | biw-5c | Check the doctrine edit | — | biw-5 | — | `pointer_integrity`, `instruction_laws`, `rule_index_parity` |
 | biw-6 | Consolidate knowledge and write delivery | docs/knowledge/**, delivery.md (new) | biw-1t, biw-3t, biw-5c | concepts describe the new keys and the warning | `.bee/bin/bee knowledge check` |
+| biw-6c | Check the knowledge consolidation | — | biw-6 | — | `.bee/bin/bee knowledge check` |
 
 ```json
 [
@@ -572,6 +573,56 @@ One slice; it is the whole feature.
       "prohibitions": [
         "No restating of code in area concepts",
         "No code comments"
+      ],
+      "open_choices": []
+    },
+    "trace": {
+      "worker": null,
+      "outcome": null,
+      "files_changed": [],
+      "deviations": [],
+      "friction": null,
+      "capped_at": null,
+      "behavior_change": false
+    }
+  },
+  {
+    "id": "biw-6c",
+    "feature": "brief-intent-and-wip",
+    "title": "Check the knowledge consolidation",
+    "lane": "standard",
+    "role": "test",
+    "status": "open",
+    "deps": [
+      "biw-6"
+    ],
+    "decisions": [
+      "66f6a453-752a-4fb1-a8ea-ff666e2057ff"
+    ],
+    "files": [
+      "docs/history/brief-intent-and-wip/delivery.md"
+    ],
+    "read_first": [
+      "docs/history/brief-intent-and-wip/CONTEXT.md",
+      "docs/history/brief-intent-and-wip/plan.md"
+    ],
+    "affects_skills": [],
+    "affects_specs": [],
+    "action": "Check biw-6's commit read-only: run `.bee/bin/bee knowledge check`, confirm delivery.md lists every concept the feature changed, and confirm the concepts describe must_haves.why, must_haves.out_of_scope and wip_limit with code anchors and D-numbers, never raw decision ids. Edit nothing; report each mismatch.",
+    "verify": ".bee/bin/bee knowledge check",
+    "must_haves": {
+      "why": "The writer cell needs a separate test-role check before the feature can close.",
+      "out_of_scope": [
+        "editing any file"
+      ],
+      "truths": [
+        "bee knowledge check is green or its red is reported with output",
+        "every concept change named in delivery.md exists"
+      ],
+      "artifacts": [],
+      "key_links": [],
+      "prohibitions": [
+        "No edits"
       ],
       "open_choices": []
     },
