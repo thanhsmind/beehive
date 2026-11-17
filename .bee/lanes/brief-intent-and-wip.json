@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "brief-intent-and-wip",
   "mode": null,
-  "phase": "exploring",
+  "phase": "idle",
   "approved_gates": {
     "context": false,
     "shape": true,
@@ -11,9 +11,9 @@
     "uat": true
   },
   "summary": "Feature \"brief-intent-and-wip\" started at phase \"exploring\" (lane).",
-  "next_action": "Continue bee-exploring for \"brief-intent-and-wip\" (lane).",
+  "next_action": "bee close finished \"brief-intent-and-wip\" — feature is closed.",
   "created_at": "2026-11-17T03:01:36.234Z",
-  "run_state": "done",
+  "run_state": "shaping",
   "waiting_on": null,
   "route": {
     "class": "feature",
