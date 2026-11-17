@@ -80,7 +80,7 @@
     },
     {
       "path": ".bee/expertise/performance.md",
-      "sha256": "71afb3cb39be78c6538a0eb12baa0f3b460194140d3d70e35bfcdb66052088e8",
+      "sha256": "d7cd2a69bdc41cb1d00399bf60cfd7ad3c916369c1ec0cc1c3ae3ad5bfa45ac5",
       "mode": "644",
       "role": "runtime_expertise"
     },
@@ -142,7 +142,7 @@
     },
     {
       "path": ".claude-plugin/skills/.bee-render.json",
-      "sha256": "dce030701aa935a167763ea710a6a39f01fb21e7ddb5945a2c5ff50f4f114cc5",
+      "sha256": "cecde6aac225ac290b5f0a48c8aceb49d92be6ad369373baa6c864525f2b84dc",
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/.bee-render.json"
@@ -737,14 +737,14 @@
     },
     {
       "path": ".claude-plugin/skills/bee-planning/playbooks/perf/hillclimb.md",
-      "sha256": "380a9d3c9e6e338f878b398bf9de82e37b5b5404b057560fde015b4ae8bbf962",
+      "sha256": "82e903c47850eae0e50eb1a7d486278af31be2921af0988a16b47c2a81313ddb",
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/bee-planning/playbooks/perf/hillclimb.md"
     },
     {
       "path": ".claude-plugin/skills/bee-planning/playbooks/perf/perf-issue.md",
-      "sha256": "71dbc517513ab3d7269d754d1cfde9cb00a7b149046e67099b689d76ea93b4bc",
+      "sha256": "2647e4b4e7f406fd39bba7f8856e8e811eeb754ef31012cf5a913a6ec62360ae",
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/bee-planning/playbooks/perf/perf-issue.md"
@@ -1049,6 +1049,13 @@
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/bee-principle-experience-first/SKILL.md"
+    },
+    {
+      "path": ".claude-plugin/skills/bee-principle-explain-the-number/SKILL.md",
+      "sha256": "e8665dc42c8ed400fb6bc5e10d007e617237a3f8807c627c5c2841f186c81b3a",
+      "mode": "644",
+      "role": "plugin_skill_claude_render",
+      "packagePath": ".claude-plugin/skills/bee-principle-explain-the-number/SKILL.md"
     },
     {
       "path": ".claude-plugin/skills/bee-principle-foundational-thinking/LICENSE.pstack",
@@ -1871,7 +1878,7 @@
     },
     {
       "path": ".codex-plugin/skills/.bee-render.json",
-      "sha256": "076c1002ebfdc0c26b99296c0b251d5363b1916e01dcaa5ae1229b12c0053b85",
+      "sha256": "9efc7e27fcbac7d4c1f2ff7cc310fb6edc94eac48a990ebd6fb41b64845afea3",
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/.bee-render.json"
@@ -2466,14 +2473,14 @@
     },
     {
       "path": ".codex-plugin/skills/bee-planning/playbooks/perf/hillclimb.md",
-      "sha256": "380a9d3c9e6e338f878b398bf9de82e37b5b5404b057560fde015b4ae8bbf962",
+      "sha256": "82e903c47850eae0e50eb1a7d486278af31be2921af0988a16b47c2a81313ddb",
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/bee-planning/playbooks/perf/hillclimb.md"
     },
     {
       "path": ".codex-plugin/skills/bee-planning/playbooks/perf/perf-issue.md",
-      "sha256": "71dbc517513ab3d7269d754d1cfde9cb00a7b149046e67099b689d76ea93b4bc",
+      "sha256": "2647e4b4e7f406fd39bba7f8856e8e811eeb754ef31012cf5a913a6ec62360ae",
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/bee-planning/playbooks/perf/perf-issue.md"
@@ -2778,6 +2785,13 @@
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/bee-principle-experience-first/SKILL.md"
+    },
+    {
+      "path": ".codex-plugin/skills/bee-principle-explain-the-number/SKILL.md",
+      "sha256": "e8665dc42c8ed400fb6bc5e10d007e617237a3f8807c627c5c2841f186c81b3a",
+      "mode": "644",
+      "role": "plugin_skill_codex_render",
+      "packagePath": ".codex-plugin/skills/bee-principle-explain-the-number/SKILL.md"
     },
     {
       "path": ".codex-plugin/skills/bee-principle-foundational-thinking/LICENSE.pstack",
@@ -3785,7 +3799,7 @@
     },
     {
       "path": "expertise/performance.md",
-      "sha256": "71afb3cb39be78c6538a0eb12baa0f3b460194140d3d70e35bfcdb66052088e8",
+      "sha256": "d7cd2a69bdc41cb1d00399bf60cfd7ad3c916369c1ec0cc1c3ae3ad5bfa45ac5",
       "mode": "644",
       "role": "expertise_guide"
     },
@@ -5700,14 +5714,14 @@
     },
     {
       "path": "skills/bee-planning/playbooks/perf/hillclimb.md",
-      "sha256": "380a9d3c9e6e338f878b398bf9de82e37b5b5404b057560fde015b4ae8bbf962",
+      "sha256": "82e903c47850eae0e50eb1a7d486278af31be2921af0988a16b47c2a81313ddb",
       "mode": "644",
       "role": "plugin_skill",
       "packagePath": "skills/bee-planning/playbooks/perf/hillclimb.md"
     },
     {
       "path": "skills/bee-planning/playbooks/perf/perf-issue.md",
-      "sha256": "71dbc517513ab3d7269d754d1cfde9cb00a7b149046e67099b689d76ea93b4bc",
+      "sha256": "2647e4b4e7f406fd39bba7f8856e8e811eeb754ef31012cf5a913a6ec62360ae",
       "mode": "644",
       "role": "plugin_skill",
       "packagePath": "skills/bee-planning/playbooks/perf/perf-issue.md"
@@ -6012,6 +6026,13 @@
       "mode": "644",
       "role": "plugin_skill",
       "packagePath": "skills/bee-principle-experience-first/SKILL.md"
+    },
+    {
+      "path": "skills/bee-principle-explain-the-number/SKILL.md",
+      "sha256": "e8665dc42c8ed400fb6bc5e10d007e617237a3f8807c627c5c2841f186c81b3a",
+      "mode": "644",
+      "role": "plugin_skill",
+      "packagePath": "skills/bee-principle-explain-the-number/SKILL.md"
     },
     {
       "path": "skills/bee-principle-foundational-thinking/LICENSE.pstack",

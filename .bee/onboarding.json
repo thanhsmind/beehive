@@ -22,7 +22,7 @@
       "knowledge/patterns/rules-that-ship-as-a-check.md": "73100f56893c0f2c78c58604878d06949acdd3b0d2ba5a4166a2dbe7561d188e",
       "merges.md": "bca07c0dce2296d5d1b1b4b5d2714bd92085371589de6383037ca13d4277af1d",
       "operations.md": "3ed0389975c84cfb6276ca01aa7cbb9fe6646b84ab3b4096d7f7e09ab545ef05",
-      "performance.md": "71afb3cb39be78c6538a0eb12baa0f3b460194140d3d70e35bfcdb66052088e8",
+      "performance.md": "d7cd2a69bdc41cb1d00399bf60cfd7ad3c916369c1ec0cc1c3ae3ad5bfa45ac5",
       "planning.md": "1e19f1daab82d2cda72934ca1729692921db9380bbd351a66ceaa4a85122c921",
       "review.md": "8f81efce730d2996c7c8222c5511d46d9791287ed14586b572c24999b37e114e",
       "security.md": "c39709516b888a41ae620fa7b070f8c2b28623c8f1d8f4639267385de4edeed8",
@@ -191,5 +191,5 @@
   },
   "design_role_offered": true,
   "created_at": "2026-07-24T03:53:44.750Z",
-  "updated_at": "2026-11-17T09:58:31.307Z"
+  "updated_at": "2026-11-17T10:16:43.016Z"
 }

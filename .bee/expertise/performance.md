@@ -201,6 +201,67 @@ conclusions from it. The common ways a benchmark misleads:
 - **Changing two things.** One variable per measurement, or the result is
   unattributable.
 
+Before you run, and before you trust or report any number, apply four moves:
+
+- **Write down the decision threshold and noise floor first.** Name the
+  measurement that would change your course and the run-to-run spread on an
+  unchanged build. If the spread exceeds the effect, stop rather than fitting a
+  story to noise.
+- **Ask why the number is not double.** Identify the resource or code path
+  capping the result using a profile or runtime counters collected during an
+  actual run — never a guess from reading source.
+- **List what else the number could be measuring.** Check for dropped errors,
+  cached or skipped work, dead code that never ran, an untuned baseline,
+  background noise, or an unrepresentative slice, and rule each one out with
+  evidence.
+- **Keep the context with the number.** Always carry the run count, the spread,
+  and the measured limiter alongside any reported figure.
+
+### The benchmark checklist
+
+Run through these seven questions before reporting a speedup, a regression, a
+hillclimb baseline, or a choice between implementations. Answer each from run
+evidence, not source inspection. For a quick ballpark requested by the user, a
+single run is acceptable if you still verify questions 4 and 7 and label it as
+one run; a choice between options is never a ballpark.
+
+1. **What is the limiter?** Profile in a separate, unreported run (tracers and
+   profilers add overhead) using CPU, I/O wait, and syscall counters, then map
+   hot spots to source. Check the load generator too: if it saturates first,
+   you measured the generator. When a change does not move the number, the
+   limiter explains why.
+2. **Was every side tuned like production?** Use release builds, production
+   flags and environment, batching and pool settings, realistic cache warmth,
+   and matching versions and data. Leaving one side on defaults compares
+   configurations rather than implementations; tune it and re-measure before
+   picking a winner.
+3. **Did the result cross a physical or arithmetic limit?** Compare bytes per
+   second against disk or network bandwidth, operations per second against core
+   capacity, and time saved against the changed component's share of total
+   runtime. Numbers past a hard ceiling measured something else, such as a
+   cache hit, a no-op, or a bug.
+4. **Were errors counted and outputs verified?** Count failures and non-success
+   responses, and check that outputs are correct rather than merely present.
+   Fast rejections and slow timeouts distort timings; add error counters if the
+   script lacks them.
+5. **Does it repeat across runs?** Run at least five alternating trials per side
+   (`A, B, A, B, ...`) so warmup, lazy init, caches, and machine drift hit both
+   equally, and report the median and range. A gap smaller than the run-to-run
+   spread is noise.
+6. **What share of the end-to-end path does it move?** Pair any microbenchmark
+   with a measurement of the full user-facing path under realistic data size
+   and concurrency, and state the micro result as a fraction of the whole.
+7. **Did the work actually run inside the timed region?** Confirm requests
+   reached the target, rows were written, bytes were read, and results were
+   consumed rather than discarded by the compiler, skipped by lazy evaluation,
+   or cut short by timeouts.
+
+Report one of four verdicts — **faster**, **slower**, **no measurable
+difference**, or **inconclusive** — followed by the number with its unit, run
+count, range, and limiter. Call the verdict **inconclusive** (and name the
+missing evidence) if you claim a difference without a measured limiter, if any
+side ran untuned, or if questions 4 and 7 could not be checked.
+
 For anything that must not regress, the durable form is a measurement in
 the suite with a threshold, so the regression is caught by a machine and
 not by a customer. Keep it stable enough not to flake — a performance

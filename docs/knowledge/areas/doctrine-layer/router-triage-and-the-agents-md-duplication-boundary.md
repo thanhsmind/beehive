@@ -12,7 +12,7 @@ bee:
   decisions: [router-cost D5, router-cost D6, router-cost D7, "pstack-gaps D4/D5 (docs/history/pstack-gaps/CONTEXT.md, 2026-09-01 — every rule id gains a spoken line here and a spoken rule obliges the reply to name what it changed)", "pstack-gaps D6 (docs/history/pstack-gaps/CONTEXT.md, 2026-09-01 — tests/rule_index_parity.rs pins the markers, the index rows and the spoken lines against each other)"]
   sources: [docs/history/router-cost/CONTEXT.md, "docs/history/router-cost/ (cells rc-3, rc-4, capped)"]
   authoritative_for: "doctrine-layer: router triage and the duplication boundary"
-  anchors: [packages/bee-rs/crates/bee/src/verbs/status_full/orient.rs, packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs, packages/bee-rs/crates/bee/src/principles.rs, packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs, packages/bee-rs/crates/bee/tests/rule_index_parity.rs, packages/bee/AGENTS.block.md, plans/cutover-readiness.md, packages/bee/LEADER.md, packages/bee/playbooks/, skills/bee-hive/references/gates-and-delegation.md, skills/bee-planning/SKILL.md, skills/bee-planning/references/cells.md, skills/bee-shaping/references/mini-brief-template.md, skills/bee-shaping/references/implement-plan-template.md, skills/bee-swarming/references/swarming-reference.md, skills/bee-hive/SKILL.md, skills/bee-swarming/SKILL.md, skills/bee-hive/references/routing-and-contracts.md, skills/bee-hive/references/scout-and-ticks.md, skills/bee-capturing/SKILL.md, skills/bee-hive/references/go-mode.md, skills/bee-swarming/references/worker-details.md, skills/bee-herding/README.md, skills/bee-herding/references/role-dispatch.md, packages/bee/prompts/worker-cell.md, skills/bee-evolving/SKILL.md, expertise/, skills/, skills/bee-principle-red-before-green/SKILL.md, skills/bee-principle-chestertons-fence/SKILL.md, skills/bee-principle-smallest-honest-shape/SKILL.md, skills/bee-principle-split-never-shrink/SKILL.md, skills/bee-principle-the-deletion-test/SKILL.md, skills/bee-principle-single-source-of-truth/SKILL.md, skills/bee-principle-record-at-the-moment-of-settlement/SKILL.md, skills/bee-principle-test-behavior-not-structure/SKILL.md, skills/bee-principle-verify-before-reporting/SKILL.md, skills/bee-principle-the-rebuild-test/SKILL.md, skills/bee-principle-one-fact-one-home/SKILL.md, skills/bee-principle-reproduce-first/SKILL.md, skills/bee-principle-crash-site-versus-fault-site/SKILL.md, skills/bee-principle-never-invent-behavior-neither-side-has/SKILL.md, skills/bee-principle-attack-the-premise/SKILL.md, skills/bee-principle-build-the-lever/SKILL.md, skills/bee-principle-lock-the-contract/SKILL.md, skills/bee-principle-split-on-a-real-dependency/SKILL.md, skills/bee-principle-encode-lessons-in-structure/SKILL.md, skills/bee-principle-subtract-before-you-add/SKILL.md, skills/bee-principle-migrate-callers-then-delete/SKILL.md, skills/bee-principle-boundary-discipline/SKILL.md, skills/bee-principle-make-illegal-states-unrepresentable/SKILL.md, skills/bee-principle-separate-before-serializing-shared-state/SKILL.md, skills/bee-principle-foundational-thinking/SKILL.md, skills/bee-principle-redesign-from-first-principles/SKILL.md, skills/bee-principle-outcome-oriented-execution/SKILL.md, skills/bee-principle-laziness-protocol/SKILL.md, skills/bee-principle-minimize-reader-load/SKILL.md, skills/bee-principle-model-the-domain/SKILL.md, packages/bee-rs/crates/bee/tests/pointer_integrity.rs]
+  anchors: [packages/bee-rs/crates/bee/src/verbs/status_full/orient.rs, packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs, packages/bee-rs/crates/bee/src/principles.rs, packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs, packages/bee-rs/crates/bee/tests/rule_index_parity.rs, packages/bee/AGENTS.block.md, plans/cutover-readiness.md, packages/bee/LEADER.md, packages/bee/playbooks/, skills/bee-hive/references/gates-and-delegation.md, skills/bee-planning/SKILL.md, skills/bee-planning/references/cells.md, skills/bee-shaping/references/mini-brief-template.md, skills/bee-shaping/references/implement-plan-template.md, skills/bee-swarming/references/swarming-reference.md, skills/bee-hive/SKILL.md, skills/bee-swarming/SKILL.md, skills/bee-hive/references/routing-and-contracts.md, skills/bee-hive/references/scout-and-ticks.md, skills/bee-capturing/SKILL.md, skills/bee-hive/references/go-mode.md, skills/bee-swarming/references/worker-details.md, skills/bee-herding/README.md, skills/bee-herding/references/role-dispatch.md, packages/bee/prompts/worker-cell.md, skills/bee-evolving/SKILL.md, expertise/, skills/, skills/bee-principle-red-before-green/SKILL.md, skills/bee-principle-chestertons-fence/SKILL.md, skills/bee-principle-smallest-honest-shape/SKILL.md, skills/bee-principle-split-never-shrink/SKILL.md, skills/bee-principle-the-deletion-test/SKILL.md, skills/bee-principle-single-source-of-truth/SKILL.md, skills/bee-principle-record-at-the-moment-of-settlement/SKILL.md, skills/bee-principle-test-behavior-not-structure/SKILL.md, skills/bee-principle-verify-before-reporting/SKILL.md, skills/bee-principle-the-rebuild-test/SKILL.md, skills/bee-principle-one-fact-one-home/SKILL.md, skills/bee-principle-reproduce-first/SKILL.md, skills/bee-principle-crash-site-versus-fault-site/SKILL.md, skills/bee-principle-never-invent-behavior-neither-side-has/SKILL.md, skills/bee-principle-attack-the-premise/SKILL.md, skills/bee-principle-build-the-lever/SKILL.md, skills/bee-principle-lock-the-contract/SKILL.md, skills/bee-principle-split-on-a-real-dependency/SKILL.md, skills/bee-principle-encode-lessons-in-structure/SKILL.md, skills/bee-principle-subtract-before-you-add/SKILL.md, skills/bee-principle-migrate-callers-then-delete/SKILL.md, skills/bee-principle-boundary-discipline/SKILL.md, skills/bee-principle-make-illegal-states-unrepresentable/SKILL.md, skills/bee-principle-separate-before-serializing-shared-state/SKILL.md, skills/bee-principle-foundational-thinking/SKILL.md, skills/bee-principle-redesign-from-first-principles/SKILL.md, skills/bee-principle-outcome-oriented-execution/SKILL.md, skills/bee-principle-laziness-protocol/SKILL.md, skills/bee-principle-minimize-reader-load/SKILL.md, skills/bee-principle-model-the-domain/SKILL.md, skills/bee-principle-explain-the-number/SKILL.md, packages/bee-rs/crates/bee/tests/pointer_integrity.rs]
   verified_at: 2026-11-15
   verified_commit: a963c71a41249647b5aa15a64118f007f39c4c67
 ---
@@ -325,8 +325,10 @@ Craft principles stay homed in the `expertise/` guides and ship as thin
 names the candidates for a task from its route class, so this index is read on
 the way in, never always-loaded (expertise-principles D2). Which route the leader loads, and when a session
 prints no route at all, is owned by [per-task route, tester pairing and proof floors](per-task-route-tester-pairing-and-proof-floors.md). Rows use the same
-grammar as the section above: `spoken:` and `classes:` both sit ABOVE
-`applied_at:`, because the indented block after `applied_at:` is read as paths.
+grammar as the section above: `spoken:`, `classes:`, and an optional `signals:`
+line all sit ABOVE `applied_at:`, because the indented block after `applied_at:`
+is read as paths. `signals:` is optional, read by `bee orient` for ranking,
+see `docs/history/pstack-guide-gaps/CONTEXT.md` D4.
 
 Two rules complete the layer. The reply must name each principle it applied
 and the decision that principle changed, or say plainly that it changed
@@ -351,108 +353,126 @@ Where the Claude runtime fetches a principle body from is a config choice, not p
 - `bee-principle-red-before-green` (expertise/tests.md § Red before green):
   spoken: reproduce the bug as a failing test and watch it fail for the reported reason before you fix it — a never-red test proves nothing
   classes: feature, bugfix, refactor
+  signals: packages/**, *.rs, bugfix, small
   - applied_at:
     - `skills/bee-principle-red-before-green/SKILL.md`
 
 - `bee-principle-chestertons-fence` (expertise/thinking.md § Chesterton's Fence):
   spoken: find out why it was put there before you take it down — "I don't see why this is here" is the argument for investigating, never for removing
   classes: refactor, bugfix, feature
+  signals: packages/**, .bee/**, standard, high-risk
   - applied_at:
     - `skills/bee-principle-chestertons-fence/SKILL.md`
 
 - `bee-principle-smallest-honest-shape` (expertise/planning.md § The smallest honest shape):
   spoken: size the work from what it endangers, not from how the request sounds — the smallest shape that is still honest, then escalate on evidence
   classes: feature, refactor, research, spike
+  signals: tiny, small, spike, docs
   - applied_at:
     - `skills/bee-principle-smallest-honest-shape/SKILL.md`
 
 - `bee-principle-split-never-shrink` (expertise/planning.md § Scope integrity: split, never shrink):
   spoken: work that will not fit gets split into slices or renegotiated with its owner — never quietly delivered smaller than what was agreed
   classes: feature, refactor, release
+  signals: standard, high-risk, release
   - applied_at:
     - `skills/bee-principle-split-never-shrink/SKILL.md`
 
 - `bee-principle-the-deletion-test` (expertise/architecture.md § The Deletion Test):
   spoken: delete the module in your head and inline it at every call site — if the complexity vanishes it was a pass-through, if it reappears N times it earned its keep
   classes: refactor, feature
+  signals: packages/**, *.rs, small, standard
   - applied_at:
     - `skills/bee-principle-the-deletion-test/SKILL.md`
 
 - `bee-principle-single-source-of-truth` (expertise/architecture.md § Single Source of Truth):
   spoken: every fact gets one authoritative home and everything else derives from it — when copies already disagree, elect the owner instead of syncing them
   classes: feature, refactor, docs
+  signals: packages/**, docs/**, skills/**, standard
   - applied_at:
     - `skills/bee-principle-single-source-of-truth/SKILL.md`
 
 - `bee-principle-record-at-the-moment-of-settlement` (expertise/decisions.md § Record at the moment of settlement):
   spoken: write the record when the decision lands — "okay, so we'll do X" is the trigger, and a cleanup pass at the end reconstructs from memory and loses the boundaries
   classes: feature, research, docs
+  signals: docs/**, .bee/**, standard, research
   - applied_at:
     - `skills/bee-principle-record-at-the-moment-of-settlement/SKILL.md`
 
 - `bee-principle-test-behavior-not-structure` (expertise/tests.md § Test behavior, not structure):
   spoken: assert what the code observably does, never its choreography — a refactor that preserves behavior must not turn the suite red
   classes: feature, bugfix, refactor
+  signals: packages/**, *.rs, small, standard
   - applied_at:
     - `skills/bee-principle-test-behavior-not-structure/SKILL.md`
 
 - `bee-principle-verify-before-reporting` (expertise/review.md § Verify before reporting):
   spoken: reproduce or trace a suspected defect before you file it, and record the suspicions that failed verification instead of dropping them silently — a wrong finding buries real ones
   classes: feature, bugfix, refactor, docs, release, perf
+  signals: packages/**, skills/**, high-risk, release
   - applied_at:
     - `skills/bee-principle-verify-before-reporting/SKILL.md`
 
 - `bee-principle-the-rebuild-test` (expertise/documentation.md § The rebuild test):
   spoken: a spec is good when a stranger could rebuild the behavior on a different stack from it alone — every question they would have to ask you is a hole
   classes: docs
+  signals: docs/**, skills/**, *.md
   - applied_at:
     - `skills/bee-principle-the-rebuild-test/SKILL.md`
 
 - `bee-principle-one-fact-one-home` (expertise/knowledge.md § One fact, one home):
   spoken: read what the base already holds before writing, then extend the existing entry instead of filing a near-duplicate beside it — each copy must be kept true
   classes: docs, feature, refactor
+  signals: docs/**, skills/**, *.md
   - applied_at:
     - `skills/bee-principle-one-fact-one-home/SKILL.md`
 
 - `bee-principle-reproduce-first` (expertise/debugging.md § Reproduce first):
   spoken: get the failure happening on demand — exact command, exact input, exact wrong output — before you read the implementation, and let that repro be the finish line too
   classes: bugfix
+  signals: packages/**, *.rs, small, standard
   - applied_at:
     - `skills/bee-principle-reproduce-first/SKILL.md`
 
 - `bee-principle-crash-site-versus-fault-site` (expertise/debugging.md § Crash site versus fault site):
   spoken: the crash is where the bad state was detected, not where it was created — trace the value back to its origin and fix it there, never with a check at the crash site
   classes: bugfix
+  signals: packages/**, *.rs, small, standard
   - applied_at:
     - `skills/bee-principle-crash-site-versus-fault-site/SKILL.md`
 
 - `bee-principle-never-invent-behavior-neither-side-has` (expertise/merges.md § Never invent behavior neither side has):
   spoken: a conflict with no clean answer is not yours to design — never ship a compromise neither side contains; pick one and record it as a named guess, or escalate to whoever owns the tradeoff
   classes: refactor, feature, release
+  signals: packages/**, skills/**, high-risk, release
   - applied_at:
     - `skills/bee-principle-never-invent-behavior-neither-side-has/SKILL.md`
 
 - `bee-principle-attack-the-premise` (expertise/debugging.md § Attack the premise):
   spoken: when a second fix fails the same check, stop patching — write the premise both fixes share in one sentence, remove the wrong assignment, then fix
   classes: bugfix, feature, refactor
+  signals: packages/**, *.rs, standard, high-risk
   - applied_at:
     - `skills/bee-principle-attack-the-premise/SKILL.md`
 
 - `bee-principle-build-the-lever` (expertise/planning.md § Build the lever):
   spoken: repeated work that is not obvious at a glance gets a tool — do one unit by hand, make the tool match it, then run it on the rest
   classes: feature, refactor
+  signals: packages/**, skills/**, standard
   - applied_at:
     - `skills/bee-principle-build-the-lever/SKILL.md`
 
 - `bee-principle-lock-the-contract` (expertise/planning.md § Lock the contract):
   spoken: a cell's action names the outcome and the contract it must keep — inputs, outputs, persisted state, error shape, the proving tests — and leaves the implementation to the worker
   classes: feature, refactor, perf
+  signals: packages/**, standard, high-risk
   - applied_at:
     - `skills/bee-principle-lock-the-contract/SKILL.md`
 
 - `bee-principle-split-on-a-real-dependency` (expertise/planning.md § Split only on a real dependency):
   spoken: a phase, slice or expand-migrate-contract needs a real dependency — skip it and go straight to the final state: what breaks? Nothing breaks, it is not a phase
   classes: feature, refactor, perf
+  signals: standard, high-risk, packages/**
   - applied_at:
     - `skills/bee-principle-split-on-a-real-dependency/SKILL.md`
 
@@ -462,36 +482,42 @@ port pstack Slice 3 (pstack-principles D1, D2, D3: skill shape, homes, classes).
 - `bee-principle-encode-lessons-in-structure` (expertise/knowledge.md § Encode lessons in structure):
   spoken: a lesson seen twice becomes structure, strongest first — a code change that makes the mistake impossible, then a check, then prose only when it needs judgment; once the structure exists, the prose copy goes
   classes: docs, bugfix
+  signals: packages/**, skills/**, docs/**, *.md
   - applied_at:
     - `skills/bee-principle-encode-lessons-in-structure/SKILL.md`
 
 - `bee-principle-subtract-before-you-add` (expertise/planning.md § Subtract before you add):
   spoken: put the removal step before the construction step, cut to the minimum before polishing, and build for use you have seen — no guard or stub the contract does not ask for
   classes: refactor
+  signals: packages/**, *.rs, small, standard
   - applied_at:
     - `skills/bee-principle-subtract-before-you-add/SKILL.md`
 
 - `bee-principle-migrate-callers-then-delete` (expertise/architecture.md § Migrate Callers, Then Delete):
   spoken: a new internal API ships with every caller moved and the old API deleted in the same change — no compatibility shim unless someone outside the change depends on it
   classes: refactor
+  signals: packages/**, *.rs, standard, high-risk
   - applied_at:
     - `skills/bee-principle-migrate-callers-then-delete/SKILL.md`
 
 - `bee-principle-boundary-discipline` (expertise/architecture.md § Explicit Boundaries and Contracts):
   spoken: parse and validate input once where it enters, trust typed data inside, keep decisions in pure functions the thin shell calls, and never leak the boundary's private types
   classes: feature, refactor
+  signals: packages/**, *.rs, auth, external, high-risk
   - applied_at:
     - `skills/bee-principle-boundary-discipline/SKILL.md`
 
 - `bee-principle-make-illegal-states-unrepresentable` (expertise/architecture.md § Make Illegal States Unrepresentable):
   spoken: give each meaning its own type, validate once at creation, parse outside data at the edge and match every variant — so the wrong value fails to compile
   classes: feature, refactor
+  signals: packages/**, *.rs, *.tla, high-risk
   - applied_at:
     - `skills/bee-principle-make-illegal-states-unrepresentable/SKILL.md`
 
 - `bee-principle-separate-before-serializing-shared-state` (expertise/architecture.md § One Writer for Shared State):
   spoken: remove the sharing first — each actor its own file, key or record, merged at read time — and enforce one writer only when one shared target is a real invariant
   classes: feature, perf
+  signals: packages/bee-rs/**/herding/**, .bee/**, *.tla, high-risk
   - applied_at:
     - `skills/bee-principle-separate-before-serializing-shared-state/SKILL.md`
 
@@ -503,6 +529,7 @@ pstack "when it applies" line.
 - `bee-principle-foundational-thinking` (expertise/architecture.md § Foundational Thinking: Data Structures First):
   spoken: settle the data shape before the logic — define the core types, trace every access pattern against them, isolate state two actors would share, and lay the groundwork every later phase uses first — a late data-structure change is a rewrite, an early one is a one-line diff
   classes: feature, refactor
+  signals: packages/**, *.rs, standard, high-risk
   - applied_at:
     - `skills/bee-principle-foundational-thinking/SKILL.md`
 <!-- /bee:not-a-deferral -->
@@ -511,6 +538,7 @@ pstack "when it applies" line.
 - `bee-principle-redesign-from-first-principles` (expertise/architecture.md § Redesign From First Principles):
   spoken: when a new requirement lands on an existing design, do not bolt it on — read every affected file, ask what you would build from scratch with it, and carry the change through every reference — a bolt-on is paid for at every later change
   classes: feature, refactor
+  signals: packages/**, *.rs, standard, high-risk
   - applied_at:
     - `skills/bee-principle-redesign-from-first-principles/SKILL.md`
 <!-- /bee:not-a-deferral -->
@@ -518,6 +546,7 @@ pstack "when it applies" line.
 - `bee-principle-outcome-oriented-execution` (expertise/planning.md § Outcome-oriented execution):
   spoken: for a planned rewrite or migration, converge on the verified end state — declare where breakage is allowed and which step restores green, keep focused checks on what you touch, and run the full verification before done — a smooth middle is paid for in shims that outlive it
   classes: refactor, feature
+  signals: packages/**, standard, high-risk
   - applied_at:
     - `skills/bee-principle-outcome-oriented-execution/SKILL.md`
 
@@ -528,18 +557,21 @@ Slice 4 (pstack-playbook-port D5, cell ppb-27): classes follow each pstack
 - `bee-principle-laziness-protocol` (expertise/architecture.md § Laziness Protocol):
   spoken: lean toward deletion and the smallest change that solves it — look for removals before additions, keep the call hierarchy flat, make each decision once, and question any signal you are asked to thread through layers — a human maintainer's fatigue is the test
   classes: refactor, feature, bugfix
+  signals: packages/**, *.rs, tiny, small
   - applied_at:
     - `skills/bee-principle-laziness-protocol/SKILL.md`
 
 - `bee-principle-minimize-reader-load` (expertise/review.md § Reader load):
   spoken: count the layers between a question and its answer and the hidden state a reader must hold — collapse a wrapper with one caller, shrink mutable scope, and name the invariant once at the boundary — a new reader should say where X comes from in thirty seconds
   classes: refactor, feature
+  signals: packages/**, *.rs, small, standard
   - applied_at:
     - `skills/bee-principle-minimize-reader-load/SKILL.md`
 
 - `bee-principle-model-the-domain` (expertise/architecture.md § Model the Domain):
   spoken: encode the domain in a structure, not in scattered conditionals — a state machine, a typed object, a tagged union or a lookup table — so invalid states have no spelling and the branches go; a second boolean that must track the first is the tell
   classes: feature, refactor
+  signals: packages/**, *.rs, *.tla, standard
   - applied_at:
     - `skills/bee-principle-model-the-domain/SKILL.md`
 
@@ -550,18 +582,21 @@ Slice 4 (pstack-playbook-port D5, cell ppb-28): classes follow each pstack
 - `bee-principle-prove-it-works` (expertise/tests.md § Prove it works):
   spoken: before you call a task done, check the real artifact — run the feature, read the actual value, inspect the diff — never a proxy, a self-report or "it compiles"; when a check fails, suspect how you observed before you suspect the system
   classes: feature, bugfix, refactor, perf, release, docs
+  signals: packages/**, skills/**, small, release
   - applied_at:
     - `skills/bee-principle-prove-it-works/SKILL.md`
 
 - `bee-principle-sequence-verifiable-units` (expertise/planning.md § Sequence work into verifiable units):
   spoken: cut a sweep or migration into small units that each end in a checkable state, verify each before the next, and order commits so the sequence proves itself — the failing test first, the fix on top
   classes: refactor, feature, bugfix
+  signals: packages/**, standard, high-risk
   - applied_at:
     - `skills/bee-principle-sequence-verifiable-units/SKILL.md`
 
 - `bee-principle-make-operations-idempotent` (expertise/operations.md § Make operations idempotent):
   spoken: make every command, lifecycle step and loop converge on the same end state however many times it runs or wherever a crashed run stopped — run it twice, then crash it at every point
   classes: feature, refactor, release
+  signals: packages/bee-rs/**/herding/**, *.tla, high-risk
   - applied_at:
     - `skills/bee-principle-make-operations-idempotent/SKILL.md`
 
@@ -572,26 +607,37 @@ Slice 4 (pstack-playbook-port D5, cell ppb-29): classes follow each pstack
 - `bee-principle-guard-the-context-window` (expertise/thinking.md § Guard the Context Window):
   spoken: keep bulk out of the main thread — route large outputs and multi-file hunts to a read-only gather, read by relevance, cap the files per unit, and read the artifact itself when the exact bytes decide the answer
   classes: research, refactor, feature
+  signals: docs/**, packages/**, spike, research
   - applied_at:
     - `skills/bee-principle-guard-the-context-window/SKILL.md`
 
 - `bee-principle-never-block-on-the-human` (expertise/decisions.md § Never block on the human):
   spoken: on reversible work, do it, show it and say why instead of asking — one short yes/no question only for genuine ambiguity, and confirmation stays for irreversible actions, product direction and locked decisions
   classes: feature, bugfix, refactor, perf, spike, docs
+  signals: tiny, small, standard, docs
   - applied_at:
     - `skills/bee-principle-never-block-on-the-human/SKILL.md`
 
 - `bee-principle-exhaust-the-design-space` (expertise/thinking.md § Exhaust the Design Space):
   spoken: when a novel interaction or architectural choice has no precedent, compare two or three candidates of different shapes side by side before you commit — a second flavor of the first shape does not count
   classes: feature, spike
+  signals: spike, standard, high-risk
   - applied_at:
     - `skills/bee-principle-exhaust-the-design-space/SKILL.md`
 
 - `bee-principle-experience-first` (expertise/thinking.md § Experience First):
   spoken: where implementation convenience and user delight conflict, choose delight — every feature earns its place, fewer polished beats more rough, and the user includes whoever imports or maintains the code
   classes: feature, spike
+  signals: skills/**, packages/**, spike, standard
   - applied_at:
     - `skills/bee-principle-experience-first/SKILL.md`
+
+- `bee-principle-explain-the-number` (expertise/performance.md § Measuring without lying to yourself):
+  spoken: state the decision threshold and noise floor before running, name the measured limiter and rule out what else the number could measure — keep run count, spread and limiter with every figure
+  classes: perf, research, feature, bugfix, release
+  signals: perf, packages/bee-rs/**/perf*
+  - applied_at:
+    - `skills/bee-principle-explain-the-number/SKILL.md`
 
 ## Open Gaps
 
