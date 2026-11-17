@@ -11,14 +11,14 @@
     "uat": false
   },
   "summary": "Feature \"brief-intent-and-wip\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at d4b6162; reload the product and test \"brief-intent-and-wip\", then either approve uat (\"bee gate --name uat --approved true --lane brief-intent-and-wip\") or fix it in the worktree and merge again.",
+  "next_action": "Continue bee-exploring for \"brief-intent-and-wip\" (lane).",
   "created_at": "2026-11-17T03:01:36.234Z",
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "gate",
-    "subject": "uat: brief-intent-and-wip",
-    "asked_at": "2026-11-17T03:51:19.168Z",
-    "session": "bee-worktree-merge-sessionless"
+    "subject": "uat for brief-intent-and-wip: owner tests main, then approves uat",
+    "asked_at": "2026-11-17T03:51:58.517Z",
+    "session": "f80793de-7fb8-4695-a340-4c6cfd30bb1b"
   },
   "route": {
     "class": "feature",
