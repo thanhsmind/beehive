@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "pstack-guide-gaps",
   "mode": null,
-  "phase": "exploring",
+  "phase": "idle",
   "approved_gates": {
     "context": false,
     "shape": true,
@@ -11,9 +11,9 @@
     "uat": true
   },
   "summary": "Feature \"pstack-guide-gaps\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at f74fd9c; reload the product and test \"pstack-guide-gaps\", then either approve uat (\"bee gate --name uat --approved true --lane pstack-guide-gaps\") or fix it in the worktree and merge again.",
+  "next_action": "bee close finished \"pstack-guide-gaps\" — feature is closed.",
   "created_at": "2026-11-17T09:46:04.298Z",
-  "run_state": "done",
+  "run_state": "shaping",
   "waiting_on": null,
   "route": {
     "class": "feature",

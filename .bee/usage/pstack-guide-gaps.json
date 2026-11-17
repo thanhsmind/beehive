@@ -1,38 +1,38 @@
 {
   "schema": "bee-usage/v1",
   "feature": "pstack-guide-gaps",
-  "closed_at": "2026-11-17T12:18:38.804Z",
+  "closed_at": "2026-11-17T12:18:46.538Z",
   "sessions": [
     {
       "session_id": "a0ce07c8-1091-48d9-9002-9da6c530abb5",
       "models": {
         "claude-opus-5-5": {
-          "input": 372,
-          "output": 96979,
-          "cache_write": 611016,
-          "cache_read": 36836308,
-          "new": 708367,
-          "cached": 36836308,
-          "total": 37544675
+          "input": 374,
+          "output": 97196,
+          "cache_write": 611840,
+          "cache_read": 37157815,
+          "new": 709410,
+          "cached": 37157815,
+          "total": 37867225
         }
       },
       "subagent_models": {},
       "subagent_count": 0,
       "started_ms": 1794907058281,
-      "ended_ms": 1794917914603,
+      "ended_ms": 1794917922035,
       "totals": {
-        "new": 708367,
-        "cached": 36836308,
-        "total": 37544675
+        "new": 709410,
+        "cached": 37157815,
+        "total": 37867225
       }
     }
   ],
   "skipped": 0,
   "totals": {
     "main": {
-      "new": 708367,
-      "cached": 36836308,
-      "total": 37544675
+      "new": 709410,
+      "cached": 37157815,
+      "total": 37867225
     },
     "subagents": {
       "new": 0,
@@ -40,9 +40,9 @@
       "total": 0
     },
     "total": {
-      "new": 1192108,
-      "cached": 45510554,
-      "total": 46702662
+      "new": 1193151,
+      "cached": 45832061,
+      "total": 47025212
     },
     "herding": {
       "new": 483741,
