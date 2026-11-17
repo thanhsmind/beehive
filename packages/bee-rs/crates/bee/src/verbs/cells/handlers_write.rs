@@ -517,6 +517,9 @@ pub(crate) fn update_frozen_hint(key: &str) -> Option<&'static str> {
         "tier" => Some(
             "tier is retired as the model selector — a cell's \"role\" is the job that picks its model, and escalation is the \"escalate\" flag (bee cells escalate --id ID)",
         ),
+        "depends_on" | "dependencies" => Some(
+            "a cell names what it waits on with \"deps\", not this key — use \"deps\"",
+        ),
         "role" => Some(
             "a cell role changes only through controlled re-routing (bee cells reroute --id ID --role ROLE --decision DECISION)",
         ),

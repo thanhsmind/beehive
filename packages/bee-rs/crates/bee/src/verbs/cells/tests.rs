@@ -4063,6 +4063,36 @@ use std::time::Instant;
         assert_eq!(update_frozen_hint("nonsense"), None);
     }
 
+    #[test]
+    fn add_refuses_a_cell_that_names_its_dependencies_by_a_foreign_key() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let base = || {
+            json!({"id": "d-1", "feature": "f", "title": "t", "action": "a", "verify": "v", "lane": "tiny", "role": "code", "affects_skills": [], "affects_specs": []})
+        };
+        for key in ["depends_on", "dependencies"] {
+            let mut cell = base();
+            cell[key] = json!(["x-1"]);
+            let message = thrown(validate_new_cell(root, &cell));
+            assert!(message.contains(key), "{message}");
+            assert!(message.contains("\"deps\""), "{message}");
+            let batch = validate_new_cell_problems(root, &cell).unwrap();
+            assert!(batch.iter().any(|p| p.contains("\"deps\"")), "{batch:?}");
+        }
+        let mut ok = base();
+        ok["deps"] = json!(["x-1"]);
+        assert_eq!(validate_new_cell(root, &ok).ok(), Some(()));
+        assert_eq!(normalize_new_cell(&ok).unwrap()["deps"], json!(["x-1"]));
+    }
+
+    #[test]
+    fn update_names_deps_for_a_foreign_dependency_key() {
+        for key in ["depends_on", "dependencies"] {
+            let hint = update_frozen_hint(key).expect("a foreign dependency key is refused with a hint");
+            assert!(hint.contains("\"deps\""), "{hint}");
+        }
+    }
+
     // ── cells claim-next (R6): the sweep + the selection filters ──────────
 
     fn cn_root() -> tempfile::TempDir {
