@@ -927,6 +927,7 @@
     "contract:nested-scan-skips-scratch",
     "contract:herding-live-count",
     "contract:prepare-unknown-agent",
-    "contract:principle-ranking"
+    "contract:principle-ranking",
+    "contract:release-published"
   ]
 }
