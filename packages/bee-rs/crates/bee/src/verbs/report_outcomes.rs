@@ -1767,6 +1767,23 @@ mod tests {
     }
 
     #[test]
+    fn scorecard_fix_first_survives_the_feature_filter_from_another_feature() {
+        let (_tmp, root) = scorecard_store();
+        scorecard_write(
+            &root,
+            ".bee/cells/c-23.json",
+            r#"{"id":"c-23","feature":"other-feat","fixes_feature":"slp-article-gaps"}"#,
+        );
+        let unfiltered = scorecard_of(&root, None);
+        let want = "slp-article-gaps";
+        let filtered = scorecard(&collect_outcomes(&root, Some(want)), &read_inputs(&root), None, Some(want));
+        assert_eq!(filtered.rows.len(), 1);
+        assert_eq!(scorecard_row(&filtered, want).fix_first, Some(2));
+        assert_eq!(scorecard_row(&filtered, want).fix_first, scorecard_row(&unfiltered, want).fix_first);
+        assert_eq!(filtered.to_json()["features"][0]["fix_first_cells"], 2);
+    }
+
+    #[test]
     fn scorecard_cost_sums_usage_across_two_jobs() {
         let (_tmp, root) = scorecard_store();
         let card = scorecard_of(&root, None);
