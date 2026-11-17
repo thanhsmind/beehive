@@ -113,6 +113,11 @@ history.
     it never fails. The one silent case is `code` or `read` on a runtime whose
     `team.<runtime>` configures NEITHER of them — the pre-roles window, where
     falling through is the intended no-op; configuring either key closes it.
+11. **Optional `fixes_feature: <slug>` for fix-first cells.** A fix-first cell
+    opened under the known-red-base rule (`rule: agents-never-build-on-red`,
+    `bee-hive/references/gates-and-delegation.md`) sets the optional top-level
+    `fixes_feature` field to the slug of the feature whose defect it fixes, so
+    `bee report outcomes --by-feature` can count it (`outcome-scorecard` D4).
 
 ## Example cell JSON
 

@@ -1112,6 +1112,25 @@ pub(crate) fn report_from_job(
             Value::Array(entries.iter().cloned().map(Value::String).collect()),
         );
     }
+    let handback = &result.handback;
+    if let Some(reaction) = &handback.reaction {
+        map.insert("reaction".to_string(), Value::String(reaction.clone()));
+    }
+    for (key, items) in [
+        ("skipped", &handback.skipped),
+        ("unknowns", &handback.unknowns),
+        ("found", &handback.found),
+    ] {
+        if !items.is_empty() {
+            map.insert(
+                key.to_string(),
+                Value::Array(items.iter().cloned().map(Value::String).collect()),
+            );
+        }
+    }
+    if let Some(stopped) = &handback.stopped {
+        map.insert("stopped".to_string(), Value::String(stopped.clone()));
+    }
     serde_json::to_string(&Value::Object(map)).map_err(|e| e.to_string())
 }
 

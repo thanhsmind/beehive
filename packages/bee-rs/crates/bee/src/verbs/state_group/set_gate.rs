@@ -1062,6 +1062,27 @@ pub(crate) fn run_gate_body(root: &Path, flags: &Flags) -> R2<Out> {
     } else if target.lane().is_some() {
         durable_stamp_unreachable = true;
     }
+    {
+        let touched_gates: Vec<&str> =
+            if merge { vec!["shape", "execution"] } else { vec![name.as_str()] };
+        for gate_name in touched_gates {
+            let note = format!("gate {gate_name} set to {approved} by {actor}");
+            crate::audit::append(
+                root,
+                "gate",
+                routed_feature.as_deref().unwrap_or_default(),
+                None,
+                &note,
+                "bee gate",
+                bypass_level.as_deref(),
+            )
+            .map_err(|e| {
+                Err2::Msg(format!(
+                    "gate: the gate was set but its audit row could not be written ({e}). FIX: run `bee audit log --kind gate --feature <f> --note \"{note}\"`."
+                ))
+            })?;
+        }
+    }
     if actor == "auto" {
         let gate_names = if merge { "shape, execution".to_string() } else { name.clone() };
         let note = format!(
@@ -2392,6 +2413,113 @@ mod tests {
     // WHO moved the gate, under what bypass level, and why, on the LIVE
     // WORKFLOW RECORD (`.bee/runtime/workflows/<id>/state.json`), never on
     // the legacy state/lane file, which never carried actor/reason.
+
+    fn gate_audit_notes(root: &Path, kind: &str) -> Vec<(String, String, Value)> {
+        crate::audit::rows(root, Some(kind), None)
+            .into_iter()
+            .map(|r| {
+                (
+                    r["feature"].as_str().unwrap_or_default().to_string(),
+                    r["note"].as_str().unwrap_or_default().to_string(),
+                    r.get("bypass_level").cloned().unwrap_or(Value::Null),
+                )
+            })
+            .collect()
+    }
+
+    #[test]
+    fn gate_audit_row_is_written_for_a_manual_approve() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        write_gate_trace_fixture(root, "gate-audit-approve", None);
+        let out = run_gate_body(root, &flags(&["--no-lane", "--name", "context", "--approved", "true"])).unwrap();
+        let Out::Emit(..) = out else { panic!("expected the approval to succeed") };
+        assert_eq!(
+            gate_audit_notes(root, "gate"),
+            vec![("gate-audit-approve".to_string(), "gate context set to true by user".to_string(), Value::Null)]
+        );
+        assert!(gate_audit_notes(root, "gate-bypass").is_empty());
+    }
+
+    #[test]
+    fn gate_audit_row_is_written_for_a_manual_unapprove() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        write_gate_trace_fixture(root, "gate-audit-unapprove", None);
+        let out = run_gate_body(root, &flags(&["--no-lane", "--name", "shape", "--approved", "false"])).unwrap();
+        let Out::Emit(..) = out else { panic!("expected the unapproval to succeed") };
+        assert_eq!(
+            gate_audit_notes(root, "gate"),
+            vec![("gate-audit-unapprove".to_string(), "gate shape set to false by user".to_string(), Value::Null)]
+        );
+        assert!(gate_audit_notes(root, "gate-bypass").is_empty());
+    }
+
+    #[test]
+    fn gate_audit_row_and_the_bypass_row_are_both_written_for_an_auto_set() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        write_gate_trace_fixture(root, "gate-audit-auto", None);
+        let out = run_gate_body(
+            root,
+            &flags(&[
+                "--no-lane", "--name", "review", "--approved", "true",
+                "--actor", "auto", "--bypass-level", "normal", "--reason", "gate_bypass=normal",
+            ]),
+        )
+        .unwrap();
+        let Out::Emit(..) = out else { panic!("expected the auto approval to succeed") };
+        assert_eq!(
+            gate_audit_notes(root, "gate"),
+            vec![("gate-audit-auto".to_string(), "gate review set to true by auto".to_string(), json!("normal"))]
+        );
+        assert_eq!(
+            gate_audit_notes(root, "gate-bypass"),
+            vec![(
+                "gate-audit-auto".to_string(),
+                "gate review set to true by auto: gate_bypass=normal".to_string(),
+                json!("normal")
+            )]
+        );
+    }
+
+    #[test]
+    fn gate_audit_row_is_written_once_per_gate_for_a_merged_set() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        w(
+            root,
+            ".bee/lanes/gate-audit-merge.json",
+            r#"{"feature":"gate-audit-merge","phase":"planning","mode":"tiny"}"#,
+        );
+        let out = run_gate_body(root, &flags(&["--lane", "gate-audit-merge", "--merge", "--approved", "true"])).unwrap();
+        let Out::Emit(..) = out else { panic!("expected the merged approval to succeed") };
+        assert_eq!(
+            gate_audit_notes(root, "gate"),
+            vec![
+                ("gate-audit-merge".to_string(), "gate shape set to true by user".to_string(), Value::Null),
+                ("gate-audit-merge".to_string(), "gate execution set to true by user".to_string(), Value::Null),
+            ]
+        );
+        assert!(gate_audit_notes(root, "gate-bypass").is_empty());
+    }
+
+    #[test]
+    fn gate_audit_row_is_never_written_for_a_refused_set() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        write_gate_trace_fixture(root, "gate-audit-refused", None);
+        let refusals: [&[&str]; 3] = [
+            &["--no-lane", "--name", "context", "--approved", "true", "--actor", "robot"],
+            &["--no-lane", "--name", "context", "--approved", "true", "--actor", "auto", "--reason", "ci"],
+            &["--no-lane", "--name", "uat", "--approved", "true", "--actor", "auto", "--bypass-level", "normal", "--reason", "ci"],
+        ];
+        for argv in refusals {
+            let out = run_gate_body(root, &flags(argv)).unwrap();
+            let Out::Thrown(_) = out else { panic!("expected {argv:?} to be refused") };
+        }
+        assert!(!crate::audit::audit_path(root).exists(), "a refused set must leave no audit row");
+    }
 
     fn write_gate_trace_fixture(root: &Path, feature: &str, mode: Option<&str>) {
         let state = match mode {

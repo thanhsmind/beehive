@@ -204,11 +204,13 @@ fn gate_actor_auto_writes_one_gate_bypass_audit_row_and_no_decision() {
     );
     assert!(ok, "{text}");
     let rows = audit_rows(&repo);
-    assert_eq!(rows.len(), 1, "{rows:?}");
-    assert_eq!(rows[0]["kind"], "gate-bypass");
-    assert_eq!(rows[0]["feature"], "demo-feature");
-    assert_eq!(rows[0]["bypass_level"], "normal");
-    let note = rows[0]["note"].as_str().unwrap();
+    assert_eq!(rows.len(), 2, "{rows:?}");
+    assert_eq!(rows[0]["kind"], "gate");
+    assert_eq!(rows[0]["note"], "gate context set to true by auto");
+    assert_eq!(rows[1]["kind"], "gate-bypass");
+    assert_eq!(rows[1]["feature"], "demo-feature");
+    assert_eq!(rows[1]["bypass_level"], "normal");
+    let note = rows[1]["note"].as_str().unwrap();
     assert!(note.contains("context") && note.contains("gate_bypass=normal"), "{note}");
 
     let decisions = std::fs::read_to_string(repo.join(".bee/decisions.jsonl")).unwrap_or_default();
@@ -216,7 +218,10 @@ fn gate_actor_auto_writes_one_gate_bypass_audit_row_and_no_decision() {
 
     let (ok, text) = bee(&repo, &["gate", "--no-lane", "--name", "review", "--approved", "true"]);
     assert!(ok, "{text}");
-    assert_eq!(audit_rows(&repo).len(), 1, "a user approval writes no audit row");
+    let rows = audit_rows(&repo);
+    assert_eq!(rows.len(), 3, "a user approval writes a gate row and no gate-bypass row");
+    assert_eq!(rows[2]["kind"], "gate");
+    assert_eq!(rows[2]["note"], "gate review set to true by user");
 }
 
 #[test]

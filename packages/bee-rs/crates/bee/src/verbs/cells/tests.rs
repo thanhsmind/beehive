@@ -13967,6 +13967,127 @@ use std::time::Instant;
         );
     }
 
+    fn from_job_carries_cap(cell_id: &str, handback: Value) -> MR<Out> {
+        let tmp = tempfile::tempdir().unwrap();
+        let (main, wt) = setup_from_job_fixture(tmp.path(), "myfeat");
+        let job_id = format!("job-{cell_id}");
+        std::fs::write(wt.join("file.txt"), "updated\n").unwrap();
+        git_ok(&wt, &["commit", "-qam", &format!("worker commit\n\ncell: {cell_id}")]);
+        write_from_job_mailbox(&main, &job_id, cell_id, &wt, "done", &["file.txt"], "cargo test --bin bee", None);
+        let res_path = main.join(".bee").join("mailbox").join(&job_id).join("result-1.json");
+        let mut res: Value = serde_json::from_str(&std::fs::read_to_string(&res_path).unwrap()).unwrap();
+        for (k, v) in handback.as_object().unwrap() {
+            res[k] = v.clone();
+        }
+        std::fs::write(&res_path, jsjson::stringify_pretty(&res)).unwrap();
+        write_cell_fixture(
+            &main,
+            cell_id,
+            &json!({
+                "id": cell_id, "feature": "myfeat", "title": "job cell",
+                "action": "do work", "verify": "cargo test --bin bee",
+                "lane": "tiny", "status": "claimed", "deps": [], "files": [],
+                "trace": { "worker": "w-worker" },
+            }),
+        );
+        finish_cap_and_release(&main, None, cap_flags_from_job(cell_id, &job_id, Some("green:unit")), None)
+    }
+
+    fn from_job_carries_trace(cell_id: &str, handback: Value) -> Value {
+        let Out::Emit(result_val, _, 0) = from_job_carries_cap(cell_id, handback).unwrap() else {
+            panic!("expected Out::Emit")
+        };
+        assert_eq!(result_val["status"], json!("capped"));
+        result_val["trace"].clone()
+    }
+
+    #[test]
+    fn from_job_carries_reaction_confirm() {
+        let trace = from_job_carries_trace("fjc-1", json!({"reaction": " ConFIRM "}));
+        assert_eq!(trace["reaction"], json!("confirm"));
+        assert_eq!(trace["report"]["reaction"], json!("confirm"));
+    }
+
+    #[test]
+    fn from_job_carries_skipped() {
+        let trace = from_job_carries_trace("fjc-2", json!({"skipped": ["e2e — no browser"]}));
+        assert_eq!(trace["skipped"], json!(["e2e — no browser"]));
+        assert_eq!(trace["report"]["skipped"], json!(["e2e — no browser"]));
+    }
+
+    #[test]
+    fn from_job_carries_unknowns() {
+        let trace = from_job_carries_trace("fjc-3", json!({"unknowns": ["the API is stable"]}));
+        assert_eq!(trace["unknowns"], json!(["the API is stable"]));
+        assert_eq!(trace["report"]["unknowns"], json!(["the API is stable"]));
+    }
+
+    #[test]
+    fn from_job_carries_found() {
+        let trace = from_job_carries_trace("fjc-4", json!({"found": ["a dead flag in drivers"]}));
+        assert_eq!(trace["found"], json!(["a dead flag in drivers"]));
+        assert_eq!(trace["report"]["found"], json!(["a dead flag in drivers"]));
+    }
+
+    #[test]
+    fn from_job_carries_stopped_beside_a_partial_reaction() {
+        let trace = from_job_carries_trace(
+            "fjc-5",
+            json!({"reaction": "partial", "stopped": "the parser — it never ran"}),
+        );
+        assert_eq!(trace["reaction"], json!("partial"));
+        assert_eq!(trace["stopped"], json!("the parser — it never ran"));
+        assert_eq!(trace["report"]["stopped"], json!("the parser — it never ran"));
+    }
+
+    #[test]
+    fn from_job_carries_nothing_when_the_handback_keys_are_absent() {
+        let trace = from_job_carries_trace("fjc-6", json!({}));
+        for key in ["reaction", "skipped", "unknowns", "found", "stopped"] {
+            assert!(trace.get(key).is_none(), "an absent {key} must write nothing to the trace");
+            assert!(trace["report"].get(key).is_none(), "an absent {key} must stay out of the report");
+        }
+    }
+
+    #[test]
+    fn from_job_carries_an_empty_list_as_absent() {
+        let trace = from_job_carries_trace("fjc-7", json!({"skipped": [], "unknowns": [], "found": []}));
+        for key in ["skipped", "unknowns", "found"] {
+            assert!(trace.get(key).is_none(), "an empty {key} carries nothing");
+            assert!(trace["report"].get(key).is_none(), "an empty {key} stays out of the report");
+        }
+    }
+
+    #[test]
+    fn from_job_carries_an_invalid_reaction_into_the_native_refusal() {
+        let text = r#"{"status":"done","summary":"s","files_changed":["file.txt"],"proof":"p"}"#;
+        let mut result = crate::herding::mailbox::parse_result_text(1, text).unwrap();
+        result.handback.reaction = Some("maybe".to_string());
+        let git = GitFacts { head: "abc1234".to_string(), changed_files: Vec::new() };
+        let report = report_from_job(&json!({}), &result, Some(git), "cargo test", "green:unit", None).unwrap();
+        let refusal = thrown(parse_report_flag(&report));
+        assert!(
+            refusal.contains("cells finish: --report key \"reaction\" must be one of confirm, partial, challenge, blocked"),
+            "{refusal}"
+        );
+    }
+
+    #[test]
+    fn from_job_carries_a_partial_reaction_without_stopped_into_the_native_refusal() {
+        let refusal = thrown(from_job_carries_cap("fjc-8", json!({"reaction": "partial"})));
+        assert!(
+            refusal.contains("cells finish: --report key \"reaction\" is \"partial\" without \"stopped\""),
+            "{refusal}"
+        );
+    }
+
+    #[test]
+    fn from_job_carries_a_result_file_reaction_outside_the_set_as_absent() {
+        let trace = from_job_carries_trace("fjc-9", json!({"reaction": "maybe"}));
+        assert!(trace.get("reaction").is_none());
+        assert!(trace["report"].get("reaction").is_none());
+    }
+
     fn knowledge_wrong_report(extra: Value) -> String {
         let mut report = json!({
             "outcome": "o", "commit": "abc1234", "files": [],
