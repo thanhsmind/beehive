@@ -6701,6 +6701,70 @@ use std::time::Instant;
         assert!(cap_cell_from_flags(root, &cap_flags_report("fl-2", Some(&report)), false).is_ok());
     }
 
+    fn principle_cap_with(root: &Path, entries: Value) -> MR<Value> {
+        let idx = root.join(crate::principles::PRINCIPLE_INDEX);
+        std::fs::create_dir_all(idx.parent().unwrap()).unwrap();
+        std::fs::write(&idx, crate::principles::TEST_INDEX).unwrap();
+        floor_cell(root, "code", json!(["src/a.rs"]));
+        let report = json!({"outcome":"o","commit":"c","files":[],"tests":"echo ok — green:unit — fixture","deviations":[],"principles_used":entries});
+        cap_cell_from_flags(root, &cap_flags_report("fl-1", Some(&report.to_string())), false)
+    }
+
+    #[test]
+    fn a_cap_refuses_a_principle_slug_that_names_no_index_row() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_bee_config(root, &json!({"commands": {"test": "none"}}));
+        floor_lane(root, Some("bugfix"));
+        let refusal = thrown(principle_cap_with(root, json!(["bee-principle-made-up — wrote the test first"])));
+        assert!(refusal.contains("\"bee-principle-made-up\""), "{refusal}");
+        assert!(refusal.contains("no row of the Principle homes index"), "{refusal}");
+        let refusal = thrown(principle_cap_with(
+            root,
+            json!(["bee-principle-red-before-green — wrote the test first", "bee-principle-not-a-principle — read it"]),
+        ));
+        assert!(refusal.contains("\"bee-principle-not-a-principle\""), "{refusal}");
+        let mut flagged = cap_flags_report("fl-1", Some(&floor_report("echo ok — green:unit — fixture")));
+        flagged.principle_used = Some("tdd — wrote the test first".to_string());
+        floor_cell(root, "code", json!(["src/a.rs"]));
+        let refusal = thrown(cap_cell_from_flags(root, &flagged, false));
+        assert!(refusal.contains("no row of the Principle homes index"), "{refusal}");
+        assert_eq!(read_cell_fixture(root, "fl-1")["status"], json!("claimed"));
+    }
+
+    #[test]
+    fn a_cap_refuses_a_principle_entry_with_an_empty_changed_part() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_bee_config(root, &json!({"commands": {"test": "none"}}));
+        floor_lane(root, Some("bugfix"));
+        for entry in ["bee-principle-red-before-green", "bee-principle-red-before-green — ", "bee-principle-red-before-green —   "] {
+            let refusal = thrown(principle_cap_with(root, json!([entry])));
+            assert!(refusal.contains("empty changed part"), "{entry:?}: {refusal}");
+        }
+        assert_eq!(read_cell_fixture(root, "fl-1")["status"], json!("claimed"));
+    }
+
+    #[test]
+    fn a_cap_records_off_route_only_for_a_known_principle_outside_the_routed_class() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_bee_config(root, &json!({"commands": {"test": "none"}}));
+        floor_lane(root, Some("bugfix"));
+        let capped = principle_cap_with(
+            root,
+            json!(["bee-principle-red-before-green — wrote the test first", "bee-principle-one-home — kept one copy"]),
+        )
+        .unwrap();
+        assert_eq!(
+            capped["trace"]["principles_used"],
+            json!([
+                {"slug": "bee-principle-red-before-green", "changed": "wrote the test first"},
+                {"slug": "bee-principle-one-home", "changed": "kept one copy", "off_route": true}
+            ])
+        );
+    }
+
     fn floor_lane(root: &Path, class: Option<&str>) {
         std::fs::create_dir_all(root.join(".bee/lanes")).unwrap();
         let lane = root.join(".bee/lanes/f.json");

@@ -428,4 +428,156 @@ mod tests {
             assert!(!row.classes.is_empty(), "row has no classes: {row:?}");
         }
     }
+
+    fn principle_repo(rows: &[(&str, &str, &str)], config: Option<&str>) -> tempfile::TempDir {
+        let dir = tempfile::tempdir().unwrap();
+        let mut body = String::from("# Concept\n\n## Principle homes\n\n");
+        for (slug, classes, signals) in rows {
+            body.push_str(&format!("- `{slug}` (x):\n  spoken: rule of {slug}\n  classes: {classes}\n"));
+            if !signals.is_empty() {
+                body.push_str(&format!("  signals: {signals}\n"));
+            }
+        }
+        let idx = dir.path().join(PRINCIPLE_INDEX);
+        std::fs::create_dir_all(idx.parent().unwrap()).unwrap();
+        std::fs::write(&idx, body).unwrap();
+        if let Some(config) = config {
+            std::fs::create_dir_all(dir.path().join(".bee")).unwrap();
+            std::fs::write(dir.path().join(".bee/config.json"), config).unwrap();
+        }
+        dir
+    }
+
+    fn principle_slugs_shown(lines: &[String]) -> Vec<String> {
+        lines[1..]
+            .iter()
+            .filter_map(|l| l.strip_prefix("  - `"))
+            .filter_map(|l| l.split_once('`'))
+            .map(|(slug, _)| slug.to_string())
+            .collect()
+    }
+
+    fn overflow_lines(lines: &[String]) -> Vec<&String> {
+        lines.iter().filter(|l| l.contains(" more of this class")).collect()
+    }
+
+    #[test]
+    fn a_principle_row_whose_signals_match_the_lane_or_a_touched_file_ranks_above_one_matching_nothing() {
+        let dir = principle_repo(
+            &[
+                ("bee-principle-plain", "feature", ""),
+                ("bee-principle-lane", "feature", "standard"),
+                ("bee-principle-file", "feature", "src/**/*.rs"),
+            ],
+            None,
+        );
+        let none = principle_lines(dir.path(), Some("feature"), &Hints::default());
+        assert_eq!(
+            principle_slugs_shown(&none),
+            vec!["bee-principle-plain", "bee-principle-lane", "bee-principle-file"]
+        );
+        let lane = Hints { lane: Some("standard".into()), ..Hints::default() };
+        assert_eq!(
+            principle_slugs_shown(&principle_lines(dir.path(), Some("feature"), &lane)),
+            vec!["bee-principle-lane", "bee-principle-plain", "bee-principle-file"]
+        );
+        let file = Hints { files: vec!["src/verbs/cap.rs".into()], ..Hints::default() };
+        assert_eq!(
+            principle_slugs_shown(&principle_lines(dir.path(), Some("feature"), &file)),
+            vec!["bee-principle-file", "bee-principle-plain", "bee-principle-lane"]
+        );
+        let elsewhere = Hints { files: vec!["docs/a.md".into()], lane: Some("small".into()), ..Hints::default() };
+        assert_eq!(
+            principle_slugs_shown(&principle_lines(dir.path(), Some("feature"), &elsewhere)),
+            vec!["bee-principle-plain", "bee-principle-lane", "bee-principle-file"]
+        );
+    }
+
+    #[test]
+    fn a_principle_row_with_fewer_classes_ranks_above_one_with_more_when_signals_tie() {
+        let dir = principle_repo(
+            &[
+                ("bee-principle-wide", "feature, bugfix, refactor", "standard"),
+                ("bee-principle-mid", "feature, bugfix", ""),
+                ("bee-principle-narrow", "feature", ""),
+                ("bee-principle-narrow-signalled", "feature", "standard"),
+            ],
+            None,
+        );
+        assert_eq!(
+            principle_slugs_shown(&principle_lines(dir.path(), Some("feature"), &Hints::default())),
+            vec![
+                "bee-principle-narrow",
+                "bee-principle-narrow-signalled",
+                "bee-principle-mid",
+                "bee-principle-wide"
+            ]
+        );
+        let lane = Hints { lane: Some("standard".into()), ..Hints::default() };
+        assert_eq!(
+            principle_slugs_shown(&principle_lines(dir.path(), Some("feature"), &lane)),
+            vec![
+                "bee-principle-narrow-signalled",
+                "bee-principle-wide",
+                "bee-principle-narrow",
+                "bee-principle-mid"
+            ]
+        );
+    }
+
+    fn nine_feature_rows() -> Vec<(String, &'static str, &'static str)> {
+        (1..=9).map(|n| (format!("bee-principle-p{n}"), "feature", "")).collect()
+    }
+
+    fn principle_repo_owned(rows: &[(String, &str, &str)], config: Option<&str>) -> tempfile::TempDir {
+        let borrowed: Vec<(&str, &str, &str)> = rows.iter().map(|(s, c, g)| (s.as_str(), *c, *g)).collect();
+        principle_repo(&borrowed, config)
+    }
+
+    #[test]
+    fn at_most_principles_cap_principle_rows_print_and_the_rest_share_one_overflow_line() {
+        let mut rows = nine_feature_rows();
+        rows.push(("bee-principle-only-bugfix".into(), "bugfix", ""));
+        let dir = principle_repo_owned(&rows, None);
+        let lines = principle_lines(dir.path(), Some("feature"), &Hints::default());
+        assert_eq!(
+            principle_slugs_shown(&lines),
+            (1..=7).map(|n| format!("bee-principle-p{n}")).collect::<Vec<_>>()
+        );
+        assert_eq!(lines.len(), 1 + 7 + 1, "{lines:?}");
+        assert_eq!(
+            lines.last().unwrap(),
+            "  - 2 more of this class, ranked lower and still yours to apply by name: `bee-principle-p8`, `bee-principle-p9`"
+        );
+        let small = principle_lines(dir.path(), Some("bugfix"), &Hints::default());
+        assert_eq!(small.len(), 2, "{small:?}");
+        assert!(overflow_lines(&small).is_empty(), "{small:?}");
+
+        let seven: Vec<(String, &str, &str)> = nine_feature_rows().into_iter().take(7).collect();
+        let exact = principle_repo_owned(&seven, None);
+        let at_cap = principle_lines(exact.path(), Some("feature"), &Hints::default());
+        assert_eq!(at_cap.len(), 8, "{at_cap:?}");
+        assert!(overflow_lines(&at_cap).is_empty(), "{at_cap:?}");
+    }
+
+    #[test]
+    fn principles_cap_from_config_sets_the_principle_count_and_an_invalid_value_falls_back_to_seven() {
+        let three = principle_repo_owned(&nine_feature_rows(), Some(r#"{"principles_cap":3}"#));
+        let lines = principle_lines(three.path(), Some("feature"), &Hints::default());
+        assert_eq!(principle_slugs_shown(&lines).len(), 3, "{lines:?}");
+        assert!(lines.last().unwrap().starts_with("  - 6 more of this class"), "{lines:?}");
+
+        let wide = principle_repo_owned(&nine_feature_rows(), Some(r#"{"principles_cap":20}"#));
+        let lines = principle_lines(wide.path(), Some("feature"), &Hints::default());
+        assert_eq!(principle_slugs_shown(&lines).len(), 9, "{lines:?}");
+        assert!(overflow_lines(&lines).is_empty(), "{lines:?}");
+
+        for invalid in ["0", "-2", "2.5", "\"five\"", "null", "[3]"] {
+            let config = format!(r#"{{"principles_cap":{invalid}}}"#);
+            let dir = principle_repo_owned(&nine_feature_rows(), Some(&config));
+            let lines = principle_lines(dir.path(), Some("feature"), &Hints::default());
+            assert_eq!(principle_slugs_shown(&lines).len(), 7, "cap {invalid}: {lines:?}");
+            assert!(lines.last().unwrap().starts_with("  - 2 more of this class"), "cap {invalid}: {lines:?}");
+        }
+    }
 }

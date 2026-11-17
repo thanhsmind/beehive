@@ -13238,6 +13238,43 @@ Finish with: .bee/bin/bee cells finish --id c-golden --outcome "<one line>" --fi
         cell_principles(root, root, &cell).0
     }
 
+    fn signalled_principles_root(tmp: &tempfile::TempDir) -> PathBuf {
+        let root = principles_root(tmp, Some("0"));
+        w(
+            &root,
+            crate::principles::PRINCIPLE_INDEX,
+            "# Concept\n\n## Principle homes\n\n- `bee-principle-plain` (x):\n  spoken: plain rule\n  classes: bugfix\n- `bee-principle-lane` (x):\n  spoken: lane rule\n  classes: bugfix\n  signals: standard\n- `bee-principle-rust` (x):\n  spoken: rust rule\n  classes: bugfix\n  signals: src/**/*.rs\n",
+        );
+        root
+    }
+
+    fn first_principle(lines: &[String]) -> String {
+        lines.get(1).cloned().unwrap_or_default()
+    }
+
+    #[test]
+    fn the_worker_principles_arm_ranks_by_the_cells_own_files() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = signalled_principles_root(&tmp);
+        let (arm, plain) = cell_principles(&root, &root, &json!({"id": "c-1", "feature": "demo", "files": ["docs/a.md"]}));
+        assert_eq!(arm, "principles");
+        assert!(first_principle(&plain).contains("`bee-principle-plain`"), "{plain:?}");
+        let (_, rust) = cell_principles(&root, &root, &json!({"id": "c-1", "feature": "demo", "files": ["src/verbs/cap.rs"]}));
+        assert!(first_principle(&rust).contains("`bee-principle-rust`"), "{rust:?}");
+    }
+
+    #[test]
+    fn the_worker_principles_arm_ranks_by_the_routed_lane() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = signalled_principles_root(&tmp);
+        let cell = json!({"id": "c-1", "feature": "demo", "lane": "standard", "files": []});
+        let (_, unrouted) = cell_principles(&root, &root, &cell);
+        assert!(first_principle(&unrouted).contains("`bee-principle-plain`"), "{unrouted:?}");
+        w(&root, ".bee/lanes/demo.json", r#"{"feature":"demo","route":{"class":"bugfix","lane":"standard"}}"#);
+        let (_, routed) = cell_principles(&root, &root, &cell);
+        assert!(first_principle(&routed).contains("`bee-principle-lane`"), "{routed:?}");
+    }
+
     const PRINCIPLES_USED_ASK: &str = "When a Principles block appears above, the result file also carries a `principles_used` array";
 
     fn principled_worker_prompt(is_herding: bool) -> String {
