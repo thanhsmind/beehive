@@ -1,0 +1,104 @@
+{
+  "id": "rel2111-1c",
+  "feature": "release-2-111-0",
+  "title": "Check the published 2.111.0 release",
+  "lane": "small",
+  "role": "test",
+  "deps": [
+    "rel2111-1"
+  ],
+  "decisions": [
+    "292386c8-e40c-46c3-8727-f24939efaaff",
+    "0ca81e7e-f78e-4310-8dcb-bffd2c277a6c"
+  ],
+  "files": [
+    "docs/history/release-2-111-0/reports/rel2111-1c.md"
+  ],
+  "read_first": [
+    "docs/history/release-2-111-0/CONTEXT.md",
+    "docs/history/release-2-111-0/plan.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Check the release independently, read-only: both plugin manifests on main report 2.111.0; tag v2.111.0 exists locally and on origin (git ls-remote --tags origin v2.111.0); the GitHub release v2.111.0 lists the five binaries and SHA256SUMS (gh release view v2.111.0 --json assets); the release-binaries run for v2.111.0 concluded success. Write each check with its command and output to docs/history/release-2-111-0/reports/rel2111-1c.md and commit it with the trailer cell: rel2111-1c. Bee commands you may run: bee herding notify; never bee dispatch.",
+  "verify": "gh release view v2.111.0 --json assets --jq '.assets | length'",
+  "must_haves": {
+    "truths": [
+      "the report shows each of the four checks with its command and output"
+    ],
+    "prohibitions": [
+      "No edit outside the report file"
+    ]
+  },
+  "behavior_change": false,
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "w-rel2111-1c",
+    "outcome": "All four read-only checks of 2.111.0 pass (manifests 2.111.0, tag local+origin at 48b384e35, release has 5 binaries + SHA256SUMS, run 44024890766 success); report committed 7eb45f93e",
+    "files_changed": [
+      "docs/history/release-2-111-0/reports/rel2111-1c.md"
+    ],
+    "deviations": [
+      "sync-ack: report file only"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-17T05:39:56.962Z",
+    "behavior_change": false,
+    "verification_evidence": "gh release view v2.111.0 --json assets --jq '.assets | length' → 6 — green:live — reads the published release itself",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "f80793de-7fb8-4695-a340-4c6cfd30bb1b",
+    "verify_command": "gh release view v2.111.0 --json assets --jq '.assets | length'",
+    "claimed_at": "2026-11-17T05:38:44.499Z",
+    "knowledge_delta": [],
+    "sync_ack": "report file only",
+    "no_mistakes": true,
+    "no_knowledge_used": true,
+    "principles_used": [
+      {
+        "slug": "bee-principle-prove-it-works",
+        "changed": "read the live tag on origin, the release assets and the CI run instead of trusting the deploy report"
+      }
+    ],
+    "report": {
+      "outcome": "All four read-only checks of 2.111.0 pass (manifests 2.111.0, tag local+origin at 48b384e35, release has 5 binaries + SHA256SUMS, run 44024890766 success); report committed 7eb45f93e",
+      "commit": "7eb45f93ead90d4fef9180527ed89ba07c31a4c7",
+      "files": [
+        "docs/history/release-2-111-0/reports/rel2111-1c.md"
+      ],
+      "tests": "gh release view v2.111.0 --json assets --jq '.assets | length' — green:unit — gh release view v2.111.0 --json assets --jq '.assets | length' → 6 — green:live — reads the published release itself",
+      "deviations": [],
+      "knowledge_used": [],
+      "principles_used": [
+        "bee-principle-prove-it-works — read the live tag on origin, the release assets and the CI run instead of trusting the deploy report"
+      ],
+      "reaction": "confirm",
+      "skipped": [
+        "cargo clippy + cargo test proof command — no source changed; this cell only adds a report"
+      ],
+      "patch_id": "2fe17aa4ec1568d7d537d8da6ba634d2d1e19156"
+    },
+    "reaction": "confirm",
+    "skipped": [
+      "cargo clippy + cargo test proof command — no source changed; this cell only adds a report"
+    ],
+    "warnings": [],
+    "tests": "boundary"
+  },
+  "usage": {
+    "new": 28813,
+    "cached": 231432,
+    "total": 260245,
+    "models": {
+      "claude-opus-5-5": {
+        "new": 28813,
+        "cached": 231432,
+        "total": 260245
+      }
+    },
+    "jobs": [
+      "job-1794893928799-1854028-1"
+    ]
+  }
+}

@@ -1,0 +1,97 @@
+{
+  "id": "rel2111-1",
+  "feature": "release-2-111-0",
+  "title": "Publish release 2.111.0 through the sanctioned script",
+  "lane": "small",
+  "role": "deploy",
+  "deps": [],
+  "decisions": [
+    "292386c8-e40c-46c3-8727-f24939efaaff"
+  ],
+  "files": [
+    ".claude-plugin/plugin.json",
+    ".codex-plugin/plugin.json",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/release-2-111-0/CONTEXT.md",
+    "scripts/release.sh"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Run `scripts/release.sh 2.111.0` with BEE_DISPATCH_ID set to an authorized deployment dispatch and the CI-pinned opencode 1.18.16 (/mnt/data/Projects/goglbe/beehive/.bee/tmp/oc11816/bin) first on PATH and CARGO_TARGET_DIR=/home/thanhsmind/.cache/cargo-target-rel21110, so the opencode contract tests run green. The script bumps both plugin manifests, runs the regen chain (render-skill-trees, onboard --apply, release-manifest --write), runs the declared test suite before tagging, makes the release commit, tags v2.111.0, pushes main and the tag, waits for the release-binaries workflow and verifies the published assets. Never walk those steps by hand. Re-running at a version already committed is idempotent — it resumes the tail. The regen obligation on .claude-plugin/plugin.json is discharged INSIDE the script's own regen chain, which is why the release manifest rides this cell's files.",
+  "verify": "bash scripts/release.sh 2.111.0 && bee dev release-manifest --check",
+  "must_haves": {
+    "truths": [
+      "both plugin manifests report 2.111.0",
+      "tag v2.111.0 exists locally and on the remote",
+      "the GitHub release for v2.111.0 carries the binaries and SHA256SUMS",
+      "the script printed its final OK line"
+    ],
+    "artifacts": [
+      {
+        "path": ".claude-plugin/plugin.json",
+        "substantive": "version 2.111.0"
+      },
+      {
+        "path": ".codex-plugin/plugin.json",
+        "substantive": "version 2.111.0"
+      }
+    ],
+    "key_links": [
+      "the pushed tag is what triggers release-binaries.yml"
+    ],
+    "prohibitions": [
+      "Do not hand-walk bump, tag or push",
+      "Do not skip the test gate"
+    ]
+  },
+  "behavior_change": false,
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "leader-rel2111",
+    "outcome": null,
+    "files_changed": [
+      ".claude-plugin/plugin.json",
+      ".codex-plugin/plugin.json",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [
+      "The herded deploy worker exited before the script finished; the script kept running and the leader read its log /tmp/release-2.111.0.log to EXIT=0 — something else had to be fixed first",
+      "sync-ack: version bump only; no behavior moved"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-17T05:38:40.348Z",
+    "behavior_change": false,
+    "verification_evidence": "https://github.com/thanhsmind/beehive/actions/runs/44024890766 success; script final line 'release  OK       bee 2.111.0 is live'; release-manifest --check 970 files match",
+    "verify_output": "green:live",
+    "verify_passed": true,
+    "claim_session": "f80793de-7fb8-4695-a340-4c6cfd30bb1b",
+    "verify_command": "bash scripts/release.sh 2.111.0 && bee dev release-manifest --check",
+    "claimed_at": "2026-11-17T05:29:06.365Z",
+    "knowledge_delta": [],
+    "sync_ack": "version bump only; no behavior moved",
+    "no_mistakes": true,
+    "commit_pending": "scripts/release.sh writes the release commit 48b384e35 with its own subject and no cell trailer",
+    "report": {
+      "outcome": "Published bee 2.111.0 through scripts/release.sh: release commit 48b384e35, tag v2.111.0 pushed, release-binaries run 44024890766 success, five binaries and SHA256SUMS published, script printed OK",
+      "commit": "48b384e35",
+      "files": [
+        ".claude-plugin/plugin.json",
+        ".codex-plugin/plugin.json",
+        "docs/history/codex-harness-hardening/release-manifest.json"
+      ],
+      "tests": "bash scripts/release.sh 2.111.0 && bee dev release-manifest --check — green:live — https://github.com/thanhsmind/beehive/actions/runs/44024890766 success; script final line 'release  OK       bee 2.111.0 is live'; release-manifest --check 970 files match",
+      "deviations": [
+        "The herded deploy worker exited before the script finished; the script kept running and the leader read its log /tmp/release-2.111.0.log to EXIT=0 — something else had to be fixed first"
+      ],
+      "mistakes": [],
+      "patch_id": "9f3ee536b3a697dbada8008f864bb19bff3e69a4"
+    },
+    "warnings": [],
+    "tests": "boundary"
+  },
+  "usage": null,
+  "usage_reason": "no herding job names this cell: no session is attributable to it"
+}
