@@ -293,3 +293,4 @@
 {"id":"336abd48-ab16-413b-8b33-7bdc20089bce","ts":"2026-11-17T05:47:17.989Z","kind":"gate","feature":"issue-sweep-nov17","note":"gate shape set to true by auto","source":"bee gate","bypass_level":"full"}
 {"id":"8039ec43-2670-4877-bf54-10c60806218d","ts":"2026-11-17T05:47:17.989Z","kind":"gate","feature":"issue-sweep-nov17","note":"gate execution set to true by auto","source":"bee gate","bypass_level":"full"}
 {"id":"7e4aa73b-399e-4471-97fe-54a0b0d24ba4","ts":"2026-11-17T05:47:17.989Z","kind":"gate-bypass","feature":"issue-sweep-nov17","note":"gate shape, execution set to true by auto: gate_bypass full: standard-lane bug fixes, each pinned by a red test and an independent tester cell","source":"bee gate","bypass_level":"full"}
+{"id":"677e9fe2-4ac1-4b53-b9e2-dc6f5c069d70","ts":"2026-11-17T09:12:40.527Z","kind":"gate","feature":"issue-sweep-nov17","note":"gate uat set to true by user","source":"bee gate"}
