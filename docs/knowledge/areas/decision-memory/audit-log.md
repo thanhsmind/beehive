@@ -8,15 +8,17 @@ bee:
   lifecycle: active
   areas: [decision-memory]
   required_context: [areas/decision-memory/overview.md]
-  decisions: ["knowledge-first-lean-decisions D3, D4, D5, D6 (docs/history/knowledge-first-lean-decisions/plan.md, 2026-11-07)"]
-  sources: ["knowledge-first-lean-decisions cells kbc-2, kbc-3, kbc-4 (traces in .bee/cells/, 2026-11-07)", packages/bee-rs/crates/bee/src/audit.rs, packages/bee-rs/crates/bee/src/verbs/audit.rs, packages/bee/LEADER.md (§ Capture what settles)]
+  decisions: ["knowledge-first-lean-decisions D3, D4, D5, D6 (docs/history/knowledge-first-lean-decisions/plan.md, 2026-11-07)", "outcome-scorecard D2 (docs/history/outcome-scorecard/CONTEXT.md, 2026-11-17 — every gate set appends a gate audit row; gate-bypass stays for auto)"]
+  sources: ["knowledge-first-lean-decisions cells kbc-2, kbc-3, kbc-4 (traces in .bee/cells/, 2026-11-07)", "outcome-scorecard cells osc-2/osc-2t (docs/history/outcome-scorecard/plan.md, 2026-11-17)", packages/bee-rs/crates/bee/src/audit.rs, packages/bee-rs/crates/bee/src/verbs/audit.rs, packages/bee/LEADER.md (§ Capture what settles)]
   authoritative_for: "decision-memory: what belongs in the audit log and what stays a decision"
   anchors: [packages/bee/LEADER.md, packages/bee-rs/crates/bee/src/audit.rs, packages/bee-rs/crates/bee/src/verbs/upkeep_group.rs, packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs]
-  verified_at: 2026-11-15
-  verified_commit: a963c71a41249647b5aa15a64118f007f39c4c67
+  verified_at: 2026-11-17
+  verified_commit: 993b9548c8f1ec83c3b7d0e846b7930e662ae316
 ---
 
 # Decision Memory — the audit log for bookkeeping
+
+Read when: deciding whether an event belongs in `.bee/audit.jsonl` or `.bee/decisions.jsonl`, or reading and writing gate and bookkeeping audit rows.
 
 The decision store is read for rules, behavior and trade-offs. Over 30 days
 about a fifth of its rows were gate auto-approval audit lines and another fifth
@@ -36,7 +38,7 @@ tracked file with `merge=union`, written by `bee audit log --kind <k> --feature
 <f> --note "<text>"` and read by `bee audit list`. It is tracked on purpose:
 `.bee/logs/` is git-ignored, so rows there would never reach main through a
 worktree merge, and the close doors run on main. The kind set is closed:
-`gate-bypass`, `close`, `merge`, `release`, `scribing`, `promote`, `handoff`
+`gate`, `gate-bypass`, `close`, `merge`, `release`, `scribing`, `promote`, `handoff`
 and nine `*-deferral` kinds (judge, uat, capture, knowledge-freshness, impact,
 routing, doc, leader-check, dissent).
 
