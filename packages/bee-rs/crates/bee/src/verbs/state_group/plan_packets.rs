@@ -1158,6 +1158,154 @@ mod tests {
         assert!(err.contains("requires non-empty must_haves.truths"), "{err}");
     }
 
+    fn why_and_out_of_scope_plan(lane: &str, must_haves: Value) -> String {
+        let cells = json!([{
+            "id": "c1", "feature": "demo-feat", "title": "t", "lane": lane, "role": "code",
+            "action": "a", "files": ["src/lib.rs"], "read_first": [], "must_haves": must_haves,
+            "verify": "cargo test -p bee"
+        }]);
+        sample_plan_with_cells("demo-feat", &serde_json::to_string(&cells).unwrap())
+    }
+
+    fn why_and_out_of_scope_err(lane: &str, must_haves: Value) -> String {
+        parse_plan_packets(&why_and_out_of_scope_plan(lane, must_haves))
+            .expect_err("the packet should be refused")
+    }
+
+    #[test]
+    fn plan_packet_why_and_out_of_scope_missing_why_is_reported_by_key() {
+        for lane in ["standard", "high-risk"] {
+            let err = why_and_out_of_scope_err(
+                lane,
+                json!({ "truths": ["t"], "out_of_scope": [] }),
+            );
+            assert!(
+                err.contains(&format!(
+                    "cell \"c1\" requires non-empty must_haves.why for lane \"{lane}\""
+                )),
+                "{err}"
+            );
+            assert!(!err.contains("must_haves.out_of_scope"), "{err}");
+            assert!(!err.contains("must_haves.truths"), "{err}");
+        }
+    }
+
+    #[test]
+    fn plan_packet_why_and_out_of_scope_empty_string_why_is_reported_by_key() {
+        for why in ["", "   \n\t"] {
+            let err = why_and_out_of_scope_err(
+                "standard",
+                json!({ "truths": ["t"], "why": why, "out_of_scope": [] }),
+            );
+            assert!(err.contains("requires non-empty must_haves.why"), "{why:?}: {err}");
+            assert!(!err.contains("must_haves.out_of_scope"), "{err}");
+        }
+        let err = why_and_out_of_scope_err(
+            "standard",
+            json!({ "truths": ["t"], "why": 7, "out_of_scope": [] }),
+        );
+        assert!(err.contains("requires non-empty must_haves.why"), "{err}");
+    }
+
+    #[test]
+    fn plan_packet_why_and_out_of_scope_missing_out_of_scope_is_reported_by_key() {
+        for lane in ["standard", "high-risk"] {
+            let err = why_and_out_of_scope_err(
+                lane,
+                json!({ "truths": ["t"], "why": "it matters" }),
+            );
+            assert!(
+                err.contains(&format!(
+                    "cell \"c1\" requires must_haves.out_of_scope (array of strings) for lane \"{lane}\""
+                )),
+                "{err}"
+            );
+            assert!(!err.contains("must_haves.why"), "{err}");
+        }
+    }
+
+    #[test]
+    fn plan_packet_why_and_out_of_scope_non_array_out_of_scope_is_reported_by_key() {
+        for out_of_scope in [json!("nothing"), json!({}), json!(null), json!(["ok", 3])] {
+            let err = why_and_out_of_scope_err(
+                "standard",
+                json!({ "truths": ["t"], "why": "it matters", "out_of_scope": out_of_scope }),
+            );
+            assert!(
+                err.contains("requires must_haves.out_of_scope (array of strings)"),
+                "{out_of_scope}: {err}"
+            );
+            assert!(!err.contains("must_haves.why"), "{err}");
+        }
+    }
+
+    #[test]
+    fn plan_packet_why_and_out_of_scope_both_missing_reports_both_keys() {
+        let err = why_and_out_of_scope_err("high-risk", json!({ "truths": ["t"] }));
+        assert!(err.contains("must_haves.why"), "{err}");
+        assert!(err.contains("must_haves.out_of_scope"), "{err}");
+    }
+
+    #[test]
+    fn plan_packet_why_and_out_of_scope_empty_out_of_scope_array_passes() {
+        for lane in ["standard", "high-risk"] {
+            let cells = parse_plan_packets(&why_and_out_of_scope_plan(
+                lane,
+                json!({ "truths": ["t"], "why": "it matters", "out_of_scope": [] }),
+            ))
+            .unwrap_or_else(|e| panic!("{lane}: {e}"));
+            assert_eq!(cells.len(), 1);
+        }
+        parse_plan_packets(&why_and_out_of_scope_plan(
+            "standard",
+            json!({ "truths": ["t"], "why": "it matters", "out_of_scope": ["the add path"] }),
+        ))
+        .unwrap();
+    }
+
+    #[test]
+    fn plan_packet_why_and_out_of_scope_not_required_on_tiny_and_small() {
+        for lane in ["tiny", "small"] {
+            parse_plan_packets(&why_and_out_of_scope_plan(lane, json!({})))
+                .unwrap_or_else(|e| panic!("{lane}: {e}"));
+            parse_plan_packets(&why_and_out_of_scope_plan(lane, json!({ "truths": ["t"] })))
+                .unwrap_or_else(|e| panic!("{lane}: {e}"));
+        }
+    }
+
+    #[test]
+    fn gate_preview_why_and_out_of_scope_refuses_a_standard_packet_without_them() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        std::fs::create_dir_all(root.join("src")).unwrap();
+        std::fs::write(root.join("src").join("lib.rs"), "fn test() {}\n").unwrap();
+        write_state_file(
+            root,
+            r#"{"schema_version":"1.0","phase":"planning","feature":"demo-feat","mode":"standard"}"#,
+        );
+        waive_read_set(root, "demo-feat");
+        let flags = parse_flags(&["--no-lane"]).unwrap().0;
+
+        write_plan(root, "demo-feat", &why_and_out_of_scope_plan("standard", json!({ "truths": ["t"] })));
+        let Out::Thrown(err) = run_gate_preview_body(root, &flags, false).unwrap() else {
+            panic!("preview should refuse a packet without why and out_of_scope")
+        };
+        assert!(err.contains("must_haves.why"), "{err}");
+        assert!(err.contains("must_haves.out_of_scope"), "{err}");
+
+        write_plan(
+            root,
+            "demo-feat",
+            &why_and_out_of_scope_plan(
+                "standard",
+                json!({ "truths": ["t"], "why": "it matters", "out_of_scope": [] }),
+            ),
+        );
+        if let Out::Thrown(err) = run_gate_preview_body(root, &flags, false).unwrap() {
+            panic!("preview should accept why and an empty out_of_scope: {err}");
+        }
+    }
+
     #[test]
     fn pihp_gate_packet_shape_approval_refuses_missing_and_stale_preview() {
         let tmp = tmp_root();

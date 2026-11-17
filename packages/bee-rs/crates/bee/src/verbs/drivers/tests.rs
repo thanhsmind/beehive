@@ -10981,6 +10981,53 @@ Finish with: .bee/bin/bee cells finish --id c-golden --outcome "<one line>" --fi
     }
 
     #[test]
+    fn worker_cell_prompt_names_why_and_out_of_scope_and_found() {
+        let cell = json!({
+            "id": "c-1",
+            "feature": "feat",
+            "status": "claimed",
+            "must_haves": {
+                "truths": ["t"],
+                "why": "the reason this cell matters",
+                "out_of_scope": ["the neighbouring verb"]
+            }
+        });
+        let rendered = prompt_body_for(
+            std::path::Path::new("/unused"),
+            "cell",
+            Some(&cell),
+            Some("w1"),
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            false,
+        )
+        .unwrap()
+        .unwrap();
+        assert!(rendered.contains("The cell names five parts apart:"), "{rendered}");
+        assert!(
+            rendered.contains("- Why — `must_haves.why`: why this work matters; use it to choose where the cell is silent."),
+            "{rendered}"
+        );
+        assert!(
+            rendered.contains("- Out of scope — `must_haves.out_of_scope`: never do this work; name a need there in `found`, or return `[PARKED]`"),
+            "{rendered}"
+        );
+        assert!(rendered.contains("the reason this cell matters"), "{rendered}");
+        assert!(rendered.contains("the neighbouring verb"), "{rendered}");
+        let result_form = rendered
+            .lines()
+            .find(|l| l.starts_with("{\"outcome\":"))
+            .expect("the Result form JSON line");
+        let form: serde_json::Value = serde_json::from_str(result_form).unwrap();
+        assert!(form.get("found").is_some_and(serde_json::Value::is_array), "{result_form}");
+    }
+
+    #[test]
     fn herding_cell_dispatch_stdin_contains_no_bee_commands_and_has_three_part_proof() {
         let tmp = tempfile::tempdir().unwrap();
         let root = repo(&tmp, BRIEF_HOST);
