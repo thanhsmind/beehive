@@ -610,6 +610,7 @@ impl CellTally {
 
 struct GateRow {
     feature: String,
+    bypass: bool,
     reopen: bool,
 }
 
@@ -694,10 +695,11 @@ fn read_inputs(root: &Path) -> ScoreInputs {
             let Ok(Value::Object(row)) = serde_json::from_str::<Value>(line) else { continue };
             let kind = row.get("kind").and_then(Value::as_str);
             let feature = row.get("feature").and_then(Value::as_str);
-            if let (Some("gate" | "gate-bypass"), Some(feature)) = (kind, feature) {
+            if let (Some(kind @ ("gate" | "gate-bypass")), Some(feature)) = (kind, feature) {
                 let note = row.get("note").and_then(Value::as_str).unwrap_or_default();
                 inputs.gate_rows.push(GateRow {
                     feature: feature.to_string(),
+                    bypass: kind == "gate-bypass",
                     reopen: note.contains(" set to false"),
                 });
             }
@@ -731,7 +733,8 @@ fn cycle_secs(created: Option<Stamp>, closed: Option<Stamp>, capped: Option<Stam
 
 fn gate_reopens(rows: &[GateRow], feature: &str) -> Option<usize> {
     let mine: Vec<&GateRow> = rows.iter().filter(|r| r.feature == feature).collect();
-    (!mine.is_empty()).then(|| mine.iter().filter(|r| r.reopen).count())
+    let audited = mine.iter().any(|r| !r.bypass);
+    (!mine.is_empty()).then(|| mine.iter().filter(|r| r.reopen && (!audited || !r.bypass)).count())
 }
 
 fn fix_first(fixes: &BTreeMap<String, usize>, feature: &str) -> Option<usize> {
