@@ -1,0 +1,106 @@
+{
+  "id": "rel21120-1c",
+  "feature": "release-2-112-0",
+  "title": "Check the published 2.112.0 release",
+  "lane": "small",
+  "role": "test",
+  "deps": [
+    "rel21120-1"
+  ],
+  "decisions": [
+    "c281e145-b118-4795-b96f-2bff8658ff77",
+    "759bba8e-ccc0-4429-8650-d3700dcad812"
+  ],
+  "files": [
+    "docs/history/release-2-112-0/reports/rel21120-1c.md"
+  ],
+  "read_first": [
+    "docs/history/release-2-112-0/CONTEXT.md",
+    "docs/history/release-2-112-0/plan.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Check the release independently, read-only: both plugin manifests on main report 2.112.0; tag v2.112.0 exists locally and on origin (git ls-remote --tags origin v2.112.0); the GitHub release v2.112.0 lists the five binaries and SHA256SUMS (gh release view v2.112.0 --json assets); the release-binaries run for v2.112.0 concluded success. Write each check with its command and output to docs/history/release-2-112-0/reports/rel21120-1c.md and commit it with the trailer cell: rel21120-1c. Bee commands you may run: bee herding notify; never bee dispatch.",
+  "verify": "gh release view v2.112.0 --json assets --jq '.assets | length'",
+  "must_haves": {
+    "truths": [
+      "the report shows each of the four checks with its command and output"
+    ],
+    "prohibitions": [
+      "No edit outside the report file"
+    ]
+  },
+  "behavior_change": false,
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "rel-check",
+    "outcome": "All four read-only checks of 2.112.0 pass (manifests 2.112.0, tag on origin at 887c266c6, 5 binaries + SHA256SUMS, release-binaries run success); report committed 56798c353",
+    "files_changed": [
+      "docs/history/release-2-112-0/reports/rel21120-1c.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-11-17T12:33:05.805Z",
+    "behavior_change": false,
+    "verification_evidence": "reads the published release; https://github.com/thanhsmind/beehive/releases/tag/v2.112.0",
+    "verify_output": "green:live",
+    "verify_passed": true,
+    "claim_session": "a0ce07c8-1091-48d9-9002-9da6c530abb5",
+    "verify_command": "gh release view v2.112.0 --json assets --jq '.assets | length'",
+    "claimed_at": "2026-11-17T12:32:07.860Z",
+    "knowledge_delta": [],
+    "no_mistakes": true,
+    "no_knowledge_used": true,
+    "principles_used": [
+      {
+        "slug": "bee-principle-prove-it-works",
+        "changed": "read each fact from the real source (git show main:, ls-remote, gh release, gh run) instead of trusting the upstream cell's report"
+      },
+      {
+        "slug": "bee-principle-verify-before-reporting",
+        "changed": "checked tag, main and origin/main all resolve to the same sha before declaring the tag check passed"
+      }
+    ],
+    "report": {
+      "outcome": "All four read-only checks of 2.112.0 pass (manifests 2.112.0, tag on origin at 887c266c6, 5 binaries + SHA256SUMS, release-binaries run success); report committed 56798c353",
+      "commit": "56798c353761566286d4c4c533369c9a9bddb4e4",
+      "files": [
+        "docs/history/release-2-112-0/reports/rel21120-1c.md"
+      ],
+      "tests": "gh release view v2.112.0 --json assets --jq '.assets | length' — green:live — reads the published release; https://github.com/thanhsmind/beehive/releases/tag/v2.112.0",
+      "deviations": [],
+      "knowledge_used": [],
+      "principles_used": [
+        "bee-principle-prove-it-works — read each fact from the real source (git show main:, ls-remote, gh release, gh run) instead of trusting the upstream cell's report",
+        "bee-principle-verify-before-reporting — checked tag, main and origin/main all resolve to the same sha before declaring the tag check passed"
+      ],
+      "reaction": "confirm",
+      "skipped": [
+        "cargo clippy -D warnings + cargo test --release — the commit adds one markdown report and touches no Rust"
+      ],
+      "patch_id": "00966ba9d518f898ed4c305d00c4b2f0b6c466b4"
+    },
+    "reaction": "confirm",
+    "skipped": [
+      "cargo clippy -D warnings + cargo test --release — the commit adds one markdown report and touches no Rust"
+    ],
+    "warnings": [],
+    "tests": "boundary"
+  },
+  "usage": {
+    "new": 31633,
+    "cached": 182979,
+    "total": 214612,
+    "models": {
+      "claude-opus-5-5": {
+        "new": 31633,
+        "cached": 182979,
+        "total": 214612
+      }
+    },
+    "jobs": [
+      "job-1794918731479-4001612-1"
+    ]
+  }
+}
