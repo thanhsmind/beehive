@@ -2516,6 +2516,37 @@ use std::time::Instant;
         assert!(next.is_ok(), "another cell claims the path the capped cell held");
     }
 
+    #[test]
+    fn a_plain_cap_frees_every_agents_lease_on_the_cell_and_keeps_the_same_agents_other_cell_lease() {
+        let tmp = cn_root();
+        let root = tmp.path();
+        write_bee_config(root, &json!({"commands": {"test": "echo ok"}}));
+        lane_with_route(root, "gtc");
+        write_cell_fixture(root, "gtc-a", &cell_with_files("gtc-a", "gtc", json!(["src/gtc_one.rs"])));
+        write_cell_fixture(
+            root,
+            "gtc-b",
+            &cell_with_files("gtc-b", "gtc", json!(["src/gtc_one.rs", "src/gtc_helper.rs"])),
+        );
+        claim_cell_with_reservations(root, main_topo(root), "gtc-a", "wk-1", Some("sess-1"), None, None)
+            .unwrap();
+        foreign_lease(root, "wk-helper", "gtc-a", "src/gtc_helper.rs");
+        foreign_lease(root, "wk-1", "gtc-unrelated", "src/gtc_kept.rs");
+        assert_eq!(held_paths(root).len(), 3);
+
+        let mut cap = wf_cap_flags("gtc-a");
+        cap.session_flag = Some("sess-1".to_string());
+        assert_eq!(cap_cell_from_flags(root, &cap, false).unwrap()["status"], json!("capped"));
+
+        assert_eq!(
+            held_paths(root),
+            vec![("src/gtc_kept.rs".to_string(), "wk-1".to_string(), "gtc-unrelated".to_string())]
+        );
+        let next =
+            claim_cell_with_reservations(root, main_topo(root), "gtc-b", "wk-2", Some("sess-2"), None, None);
+        assert!(next.is_ok(), "both paths the capped cell held are claimable");
+    }
+
     /// Constraint 1: a claim with no overlapping hold succeeds exactly as it
     /// did before this cell — the acquire adds NO key to the emitted cell
     /// record, so `run_claim`'s payload and text are byte-identical.
