@@ -1341,10 +1341,13 @@ fn helper_env(hook: &str) -> &'static [(&'static str, &'static str)] {
 }
 
 fn run_helper_hook(hook: &str, stdin: &[u8], cwd: &Path) -> Output {
+    let empty_global_cfg = cwd.join(".bee").join("empty-global-config");
+    std::fs::create_dir_all(&empty_global_cfg).expect("create empty global config dir");
     let mut child = Command::new(bee_bin())
         .args(["hook", hook])
         .current_dir(cwd)
         .env("BEE_HOOK_NO_DELEGATE", "1")
+        .env("BEEHIVE_CONFIG_DIR", &empty_global_cfg)
         .env_remove("BEE_HERDING_WORKER")
         .env_remove("PASEO_AGENT_ID")
         .env_remove("BEE_HERDING_READ_ONLY")
@@ -2286,10 +2289,12 @@ fn every_advisory_hook_the_opencode_belt_calls_is_a_hook_bee_serves() {
          test would then pass vacuously"
     );
 
+    let empty_global_cfg = tempfile::tempdir().expect("tempdir");
     let mut unknown: Vec<String> = Vec::new();
     for name in &names {
         let mut child = std::process::Command::new(bee_bin())
             .args(["hook", name.as_str()])
+            .env("BEEHIVE_CONFIG_DIR", empty_global_cfg.path())
             .env_remove("BEE_HERDING_WORKER")
             .stdin(std::process::Stdio::piped())
             .stdout(std::process::Stdio::piped())
