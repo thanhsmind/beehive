@@ -1,0 +1,607 @@
+---
+artifact_contract: bee-plan/v2
+mode: standard
+---
+
+# Plan: Brief intent and WIP
+
+## Summary
+
+Workers get two more lines in every task they are handed: why the work
+matters, and what they must not touch. A plan that leaves them out is
+refused before work starts. New backlog items are asked who needs them, how
+success shows, and what stops them. Opening a new feature while many others
+are still open prints a warning.
+
+Mode: `standard` — 2 risk flags: changes behavior an existing test asserts
+(cell validation), public contracts (cell schema and a new config key)
+Why this is the least workflow that protects the work: the schema change
+touches every plan writer, so it needs a plan and a tester, but nothing here
+deletes data or touches auth.
+
+Situation followed: `skills/bee-planning/playbooks/feature/feature.md`
+("feature"). Architect skipped: the data shape is two keys on an existing
+untyped JSON object plus one integer config key; there is no competing
+structure to compare. Statechart: n/a, no event-order flow.
+
+## Requirements (from CONTEXT.md)
+
+- D1: `must_haves.why` and `must_haves.out_of_scope`, required on standard
+  and high-risk lanes at the plan-packet check only (refinement f459fb3f);
+  add and update keep today's rules; the worker prompt names both.
+- D2: Qualify asks who needs it, how we will know it worked, what makes us
+  stop; no answer to the first two parks.
+- D3: `wip_limit` (absent = 5, 0 = off); `bee feature start` warns at or
+  above the limit, naming count, limit and three oldest open features;
+  never refuses.
+
+## Load-bearing claims
+
+Labels are `read` or `ran`; the evidence is a verbatim substring of the
+anchored line.
+
+| # | Claim | Label | Anchor | Verbatim evidence |
+|---|-------|-------|--------|-------------------|
+| 1 | `bee cells add` checks the cell against the approved preview packet, so a preview-only check still reaches every planned cell | read | packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs:398 | `check_cell_matches_approved_preview(&root, feature, &payload)` |
+| 2 | An add-time check would dead-end plans approved before the change, because add requires `must_haves` to equal the approved packet | read | packages/bee-rs/crates/bee/src/verbs/state_group/plan_packets.rs:746 | `pub(crate) fn check_cell_matches_approved_preview(` |
+| 3 | The plan-packet check behind `bee gate --preview` checks truths per lane | read | packages/bee-rs/crates/bee/src/verbs/state_group/plan_packets.rs:174 | `requires non-empty must_haves.truths for lane` |
+| 4 | The worker prompt carries the whole stored cell, so new keys reach the worker | read | packages/bee/prompts/worker-cell.md:23 | `{{cell_json}}` |
+| 5 | The worker prompt names the parts of `must_haves` in a list D1 extends | read | packages/bee/prompts/worker-cell.md:26 | `what must be true when you finish.` |
+| 6 | `bee feature start` opens the lane in one place where D3's count can run | read | packages/bee-rs/crates/bee/src/verbs/feature_group.rs:172 | `let legacy = start_lane(` |
+| 7 | Qualify is the triage step D2 extends | read | skills/bee-shaping/SKILL.md:93 | `## Qualify (headless triage)` |
+| 8 | Many lanes sit open today, so D3 warns in this repo at once | ran | `.bee/bin/bee state lanes --json` counted by phase | `'exploring': 24, 'swarming': 19, 'planning': 17, 'compounding': 14, 'scribing': 1` |
+| 9 | No WIP config key exists yet | ran | `rg -n "wip_limit" packages skills` | `exit 1, no match` |
+
+## Discovery
+
+A read-only gather (job-1794884531545-117700-1) mapped the subsystem: only
+`must_haves.truths` is validated (validate.rs, handlers_write.rs,
+plan_packets.rs); `prohibitions` and `open_choices` are unchecked; no WIP
+count or limit exists; Qualify lives at skills/bee-shaping/SKILL.md:93.
+Read set extends CONTEXT.md with skills/bee-planning/references/plan-artifact.md
+(the consolidation cell example JSON, which gains the two keys).
+
+## Approach
+
+Recommended path: extend the plan-packet truths check with `why` and
+`out_of_scope` (D1, refined by f459fb3f after the hat wave found that an
+add-time check dead-ends plans approved before the change); add two bullets to the worker prompt (D1); add a
+read of `wip_limit` and one warning line inside `bee feature start` (D3);
+add three questions to Qualify (D2); update planning docs and examples so
+every plan writer emits the keys.
+
+Rejected: a typed `MustHaves` struct (rewrites every reader of an untyped
+value for two keys); refusing `bee feature start` past the limit (WIP is a
+preference, and the article's own rule is to enforce only what must never
+bend); requiring the keys on tiny and small lanes (matches truths, which
+those lanes do not require).
+
+Waves: wave 1 runs biw-1 and biw-3 in parallel (disjoint files). Wave 2 runs
+biw-1t, biw-3t and biw-5; biw-5 waits for both code cells because it is the
+one cell that runs the skill-tree regen. biw-5c follows biw-5. biw-6 runs
+last.
+
+## Role assignments
+
+```json
+{
+  "schema_version": "1.0",
+  "runtime": "claude",
+  "roster_sha256": "d4e696dbde7989d6388dacce3fd7057cb3a6935b46024b79698596a46f6f41d3",
+  "stages": [
+    {"stage":"implementation","classification":"required","role":"code","reason":"biw-1 and biw-3 change Rust and the worker prompt."},
+    {"stage":"test-and-live-proof","classification":"required","role":"test","reason":"biw-1t and biw-3t add the new tests, with no context shared with the implementers."},
+    {"stage":"documentation-and-capture","classification":"required","role":"docs","reason":"biw-5 edits the planning and shaping skills; biw-5c checks parity."},
+    {"stage":"writing","classification":"required","role":"writer","reason":"biw-6 consolidates knowledge and writes delivery.md."},
+    {"stage":"read-only-gather","classification":"required","role":"read","reason":"The subsystem map before planning."},
+    {"stage":"planning","classification":"not-applicable","role":"plan","reason":"The leader wrote this plan."},
+    {"stage":"deployment","classification":"not-applicable","role":"deploy","reason":"No release rides this feature."},
+    {"stage":"fact-extraction","classification":"not-applicable","role":"extraction","reason":"The gather covered every lookup."},
+    {"stage":"generation-fallback","classification":"not-applicable","role":"generation","reason":"Every job has a specific role."},
+    {"stage":"independent-review","classification":"not-applicable","role":"review","reason":"Independent review stays user-invoked."},
+    {"stage":"generic-advisor","classification":"not-applicable","role":"advisor","reason":"Standard lane; the hat wave is the consult."},
+    {"stage":"supervision","classification":"not-applicable","role":"supervisor","reason":"No unattended loop."},
+    {"stage":"blind-lane-1","classification":"not-applicable","role":"lane-1","reason":"No competing designs."},
+    {"stage":"blind-lane-2","classification":"not-applicable","role":"lane-2","reason":"No competing designs."},
+    {"stage":"blind-lane-3","classification":"not-applicable","role":"lane-3","reason":"No competing designs."},
+    {"stage":"design-ui","classification":"not-applicable","role":"design","reason":"No rendered UI."},
+    {"stage":"hat-facts-gaps","classification":"required","role":"hat-facts-gaps","reason":"More than five product files open the default three-seat wave."},
+    {"stage":"hat-alternatives","classification":"required","role":"hat-alternatives","reason":"Default seat."},
+    {"stage":"hat-user-impact","classification":"required","role":"hat-user-impact","reason":"Default seat."},
+    {"stage":"hat-risks","classification":"not-applicable","role":"hat-risks","reason":"Five seats are for high-risk only."},
+    {"stage":"hat-value","classification":"not-applicable","role":"hat-value","reason":"Five seats are for high-risk only."}
+  ]
+}
+```
+
+## Risk map
+
+| Component | Risk | Why | Lands in | Proof |
+|---|---|---|---|---|
+| Fixtures that run a standard packet through the preview | MEDIUM | the one fact: set_gate.rs:3309, plan_group.rs:495 and pi_plugin_contracts.rs:8119 expect preview success on packets with truths only | biw-1 | `cargo test -p bee` filters for preview, packet and golden green |
+| Plans approved before the change | LOW | add and update are unchanged, so their cells still add | biw-1 | add path untouched in the diff |
+| Warning noise | LOW | warn only, one line, `0` turns it off | biw-3 | a test with the limit at 0 prints nothing |
+
+## Shape
+
+| Epic | Capability/Risk Area | Why It Exists | Slices | Proof Needed |
+|---|---|---|---|---|
+| Brief intent | cell schema, checks, worker prompt | workers choose with the reason in hand | 1 | related tests + new tests |
+| WIP | config key, feature start warning | stop the open-work pile from growing | 1 | related tests + new tests |
+| Triage | Qualify questions, planning docs | ask "should we" before building | 1 | parity and pointer checks |
+
+One slice; it is the whole feature.
+
+## Cells — current slice (preview)
+
+| id | title | files | deps | you see | proof |
+|---|---|---|---|---|---|
+| biw-1 | Require a reason and non-goals in each cell brief | plan_packets.rs, worker-cell.md, forced fixtures | — | `bee gate --preview` on a standard packet with no `why` reports it and names the key; workers read "Why" and "Out of scope" lines | `cargo test … -p bee -- preview packet worker_cell golden` |
+| biw-1t | Test the reason and non-goals checks | test modules of biw-1 files | biw-1 | — | `cargo test … --bin bee -- why_and_out_of_scope` |
+| biw-3 | Warn when too many features are open | feature_group.rs | — | `bee feature start` prints one warning line naming the open count and the oldest features | `cargo test … --bin bee -- feature_start` |
+| biw-3t | Test the open-work warning | test modules of biw-3 files | biw-3 | — | `cargo test … --bin bee -- wip_limit` |
+| biw-5 | Ask "should we build this" at triage and teach plans the new keys | skills/bee-shaping/SKILL.md, skills/bee-planning/references/cells.md, plan-artifact.md, regen output | biw-1, biw-3 | Qualify asks the three questions; planning docs show `why` and `out_of_scope` | regen + pointer and parity tests |
+| biw-5c | Check the doctrine edit | — | biw-5 | — | `pointer_integrity`, `instruction_laws`, `rule_index_parity` |
+| biw-6 | Consolidate knowledge and write delivery | docs/knowledge/**, delivery.md (new) | biw-1t, biw-3t, biw-5c | concepts describe the new keys and the warning | `.bee/bin/bee knowledge check` |
+
+```json
+[
+  {
+    "id": "biw-1",
+    "feature": "brief-intent-and-wip",
+    "title": "Require a reason and non-goals in each cell brief",
+    "lane": "standard",
+    "role": "code",
+    "status": "open",
+    "deps": [],
+    "decisions": [
+      "66f6a453-752a-4fb1-a8ea-ff666e2057ff",
+      "f459fb3f-681d-4b83-ae94-b7cfbd045bee"
+    ],
+    "files": [
+      "packages/bee-rs/crates/bee/src/verbs/state_group/plan_packets.rs",
+      "packages/bee/prompts/worker-cell.md",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+      "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs",
+      "packages/bee-rs/crates/bee/src/verbs/plan_group.rs",
+      "packages/bee-rs/crates/bee/tests/gate_preview.rs",
+      "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+      "packages/bee-rs/crates/bee/tests/discovery_verbs.rs"
+    ],
+    "read_first": [
+      "docs/history/brief-intent-and-wip/CONTEXT.md",
+      "docs/history/brief-intent-and-wip/plan.md",
+      "packages/bee-rs/crates/bee/src/verbs/state_group/plan_packets.rs",
+      "packages/bee/prompts/worker-cell.md"
+    ],
+    "affects_skills": [],
+    "affects_specs": [
+      "docs/knowledge/areas/workflow-state/"
+    ],
+    "action": "Implement docs/history/brief-intent-and-wip/CONTEXT.md D1. The check lives only in the plan-packet check behind `bee gate --preview` (plan_packets.rs:174 `requires non-empty must_haves.truths for lane`): beside the truths check, for lanes standard and high-risk, require `must_haves.why` as a non-empty trimmed string and `must_haves.out_of_scope` as an array of strings (empty allowed); each problem names the missing key. Do not change validate.rs or handlers_write.rs: `bee cells add` and `bee cells update` keep today's rules. In packages/bee/prompts/worker-cell.md change \"The cell names three parts apart:\" to five parts; after the Goal bullet add a `Why — must_haves.why` bullet (use it to choose where the cell is silent), and after Hard constraints an `Out of scope — must_haves.out_of_scope` bullet (never do this work; name a need there in `found`, or return [PARKED]; a herding worker writes status question). Add `\"found\": [\"<discovery outside the cell>\"]` to the Result form JSON at worker-cell.md:95 (`bee cells finish` already accepts it, finish_support.rs:84). Update the golden GOLDEN_NATIVE_CELL_PROMPT in verbs/drivers/tests.rs (near :10882) and any other golden copy of the prompt. Then find every fixture that runs a standard or high-risk packet through the preview: `rg -n 'truths' packages/bee-rs/crates` and `rg -n 'gate --preview|gate_preview|run_preview' packages/bee-rs/crates`; known sites are set_gate.rs:3309, plan_group.rs:495 and tests/pi_plugin_contracts.rs:8119, :8188, :8224. Add both keys where the new check now refuses. A forced fixture in a file outside `files` is a recorded departure, never skipped. Edit only the existing tests the change forces; the tester cell adds the new ones. Run the verify and quote the count each target matched.",
+    "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --no-fail-fast -- preview packet worker_cell golden",
+    "must_haves": {
+      "why": "A worker that knows why the work matters and what to leave alone can choose well where its cell is silent; today it only gets the goal and the hard constraints.",
+      "out_of_scope": [
+        "checks at bee cells add or bee cells update",
+        "tiny and small lanes",
+        "a typed MustHaves struct",
+        "skills/ docs: biw-5 owns them",
+        "validating prohibitions or open_choices"
+      ],
+      "truths": [
+        "bee gate --preview reports a standard or high-risk packet with no non-empty must_haves.why, naming must_haves.why",
+        "bee gate --preview reports a standard or high-risk packet with no out_of_scope array, naming must_haves.out_of_scope",
+        "out_of_scope: [] passes the preview",
+        "bee cells add and bee cells update behave as before",
+        "the rendered worker prompt names must_haves.why, must_haves.out_of_scope and carries found in its Result form",
+        "the existing preview, packet and golden prompt tests are green"
+      ],
+      "artifacts": [
+        {
+          "path": "packages/bee/prompts/worker-cell.md",
+          "substantive": "the Why and Out of scope bullets"
+        }
+      ],
+      "key_links": [
+        "plan_packets.rs is the one home of the rule"
+      ],
+      "prohibitions": [
+        "No code comments",
+        "Never hand-edit .bee/*.json(l)",
+        "No change to validate.rs or handlers_write.rs"
+      ],
+      "open_choices": []
+    },
+    "trace": {
+      "worker": null,
+      "outcome": null,
+      "files_changed": [],
+      "deviations": [],
+      "friction": null,
+      "capped_at": null,
+      "behavior_change": true
+    }
+  },
+  {
+    "id": "biw-1t",
+    "feature": "brief-intent-and-wip",
+    "title": "Test the reason and non-goals checks",
+    "lane": "standard",
+    "role": "test",
+    "status": "open",
+    "deps": [
+      "biw-1"
+    ],
+    "decisions": [
+      "66f6a453-752a-4fb1-a8ea-ff666e2057ff",
+      "f459fb3f-681d-4b83-ae94-b7cfbd045bee"
+    ],
+    "files": [
+      "packages/bee-rs/crates/bee/src/verbs/state_group/plan_packets.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+    ],
+    "read_first": [
+      "docs/history/brief-intent-and-wip/CONTEXT.md",
+      "docs/history/brief-intent-and-wip/plan.md"
+    ],
+    "affects_skills": [],
+    "affects_specs": [],
+    "action": "Pin D1 of docs/history/brief-intent-and-wip/CONTEXT.md with tests whose names contain `why_and_out_of_scope`. Edit only inside the `#[cfg(test)] mod tests` of plan_packets.rs and in drivers/tests.rs. Judge existing coverage first and author only the gap, red-first against the pre-biw-1 behavior where you can. Cover the plan-packet check: missing why, empty-string why, missing out_of_scope and a non-array out_of_scope are each reported naming the key; out_of_scope [] passes; tiny and small packets pass without both. Cover the rendered worker-cell prompt: it contains must_haves.why, must_haves.out_of_scope and a found key in the Result form. Run the filter and quote its count.",
+    "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- why_and_out_of_scope",
+    "must_haves": {
+      "why": "A code cell never certifies itself; an independent tester pins the new rule so a later change cannot drop it silently.",
+      "out_of_scope": [
+        "changing production code: a failing test that shows a bug is reported, not fixed"
+      ],
+      "truths": [
+        "every behavior listed in the action has a test whose name contains why_and_out_of_scope",
+        "the filter matches at least seven tests and all pass"
+      ],
+      "artifacts": [],
+      "key_links": [
+        "the tests call the same entry points biw-1 changed"
+      ],
+      "prohibitions": [
+        "No code comments",
+        "No edit outside test modules"
+      ],
+      "open_choices": []
+    },
+    "trace": {
+      "worker": null,
+      "outcome": null,
+      "files_changed": [],
+      "deviations": [],
+      "friction": null,
+      "capped_at": null,
+      "behavior_change": false
+    }
+  },
+  {
+    "id": "biw-3",
+    "feature": "brief-intent-and-wip",
+    "title": "Warn when too many features are open",
+    "lane": "standard",
+    "role": "code",
+    "status": "open",
+    "deps": [],
+    "decisions": [
+      "66f6a453-752a-4fb1-a8ea-ff666e2057ff"
+    ],
+    "files": [
+      "packages/bee-rs/crates/bee/src/verbs/feature_group.rs"
+    ],
+    "read_first": [
+      "docs/history/brief-intent-and-wip/CONTEXT.md",
+      "docs/history/brief-intent-and-wip/plan.md",
+      "packages/bee-rs/crates/bee/src/verbs/feature_group.rs",
+      "packages/bee-rs/crates/bee/src/uat.rs",
+      "packages/bee-rs/crates/bee/src/verbs/intent_group.rs"
+    ],
+    "affects_skills": [],
+    "affects_specs": [
+      "docs/knowledge/areas/workflow-state/"
+    ],
+    "action": "Implement docs/history/brief-intent-and-wip/CONTEXT.md D3. Read `wip_limit` from the merged config the way uat.rs reads `uat_stop` (uat.rs:32 `match config.get(\"uat_stop\") {`): a non-negative integer, absent means 5, 0 turns the check off, any other value is treated as absent. No key registry exists; `bee config set --key wip_limit --value 3` already works, so add none. In feature_group.rs run_start, after the lane opens (anchor :172 `let legacy = start_lane(`), count lane records from `.bee/lanes/*.json` (the same source `bee state lanes` lists), one per feature, whose phase is exploring, planning, swarming, compounding or scribing and whose status is not closed, excluding the feature just started. When the count is at or above the limit, print exactly one warning line on stderr in text mode and add a `wip_warning` object {count, limit, oldest: [up to three feature slugs ordered by created_at, oldest first]} to the --json output. The command still succeeds and its exit code does not change. Keep the decision in a pure function the handler calls. Edit only the existing tests the change forces; the tester cell adds the new ones. Run the related tests and quote the count each filter matched.",
+    "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- feature_start",
+    "must_haves": {
+      "why": "Starting work is nearly free for agents, so open work piles up (75 open lanes today); a visible limit makes the leader finish or drop old work before opening more.",
+      "out_of_scope": [
+        "refusing bee feature start",
+        "counting PBIs or backlog items",
+        "closing or pruning old lanes",
+        "skills/ docs: biw-5 owns them"
+      ],
+      "truths": [
+        "with 5 or more other open lanes and no wip_limit, bee feature start prints one warning naming the count, the limit 5 and up to three oldest open features by created_at",
+        "with wip_limit 0 it prints no warning",
+        "below the limit it prints no warning",
+        "the warning never changes the exit code"
+      ],
+      "artifacts": [
+        {
+          "path": "packages/bee-rs/crates/bee/src/verbs/feature_group.rs",
+          "substantive": "the WIP count and warning"
+        }
+      ],
+      "key_links": [
+        "run_start calls the pure WIP decision function"
+      ],
+      "prohibitions": [
+        "No code comments",
+        "Never hand-edit .bee/*.json(l)",
+        "Never refuse the start"
+      ],
+      "open_choices": []
+    },
+    "trace": {
+      "worker": null,
+      "outcome": null,
+      "files_changed": [],
+      "deviations": [],
+      "friction": null,
+      "capped_at": null,
+      "behavior_change": true
+    }
+  },
+  {
+    "id": "biw-3t",
+    "feature": "brief-intent-and-wip",
+    "title": "Test the open-work warning",
+    "lane": "standard",
+    "role": "test",
+    "status": "open",
+    "deps": [
+      "biw-3"
+    ],
+    "decisions": [
+      "66f6a453-752a-4fb1-a8ea-ff666e2057ff"
+    ],
+    "files": [
+      "packages/bee-rs/crates/bee/src/verbs/feature_group.rs"
+    ],
+    "read_first": [
+      "docs/history/brief-intent-and-wip/CONTEXT.md",
+      "docs/history/brief-intent-and-wip/plan.md"
+    ],
+    "affects_skills": [],
+    "affects_specs": [],
+    "action": "Pin D3 of docs/history/brief-intent-and-wip/CONTEXT.md with tests whose names contain `wip_limit`, all inside the test module of feature_group.rs, where the existing feature_start tests live. Judge existing coverage first and author only the gap. Cover the pure decision function: absent key with 5 open lanes warns with limit 5; 4 open lanes does not; wip_limit 0 never warns; a non-integer value is treated as absent; lanes in any phase outside the five D3 phases are not counted; a closed lane is not counted; the started feature is not counted; oldest lists at most three slugs ordered by created_at. Cover one feature start through the handler that warns and still succeeds. Run the filter and quote its count.",
+    "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- wip_limit",
+    "must_haves": {
+      "why": "A code cell never certifies itself; an independent tester pins the warning rule.",
+      "out_of_scope": [
+        "changing production code: a failing test that shows a bug is reported, not fixed"
+      ],
+      "truths": [
+        "every behavior listed in the action has a test whose name contains wip_limit",
+        "the filter matches at least eight tests and all pass"
+      ],
+      "artifacts": [],
+      "key_links": [
+        "the tests call the decision function biw-3 added"
+      ],
+      "prohibitions": [
+        "No code comments",
+        "No edit outside the test module"
+      ],
+      "open_choices": []
+    },
+    "trace": {
+      "worker": null,
+      "outcome": null,
+      "files_changed": [],
+      "deviations": [],
+      "friction": null,
+      "capped_at": null,
+      "behavior_change": false
+    }
+  },
+  {
+    "id": "biw-5",
+    "feature": "brief-intent-and-wip",
+    "title": "Ask should-we at triage and teach plans the new keys",
+    "lane": "standard",
+    "role": "docs",
+    "status": "open",
+    "deps": [
+      "biw-1",
+      "biw-3"
+    ],
+    "decisions": [
+      "66f6a453-752a-4fb1-a8ea-ff666e2057ff"
+    ],
+    "files": [
+      "skills/bee-shaping/SKILL.md",
+      "skills/bee-planning/references/cells.md",
+      "skills/bee-planning/references/plan-artifact.md",
+      "skills/bee-swarming/references/execute.md"
+    ],
+    "read_first": [
+      "docs/history/brief-intent-and-wip/CONTEXT.md",
+      "docs/history/brief-intent-and-wip/plan.md",
+      "skills/bee-shaping/SKILL.md",
+      "skills/bee-planning/references/cells.md"
+    ],
+    "affects_skills": [
+      "bee-shaping",
+      "bee-planning"
+    ],
+    "affects_specs": [],
+    "action": "Implement D2 and the doc half of D1 of docs/history/brief-intent-and-wip/CONTEXT.md. In skills/bee-shaping/SKILL.md section `## Qualify (headless triage)` add one numbered step before the clarity judgment: ask who needs it (a named user or caller), how we will know it worked (a check that can pass or fail), and what makes us stop; an item that cannot answer the first two parks with the gap written into Outstanding Questions. In skills/bee-planning/references/cells.md add `why` and `out_of_scope` to the must_haves contract text, the example JSON and the validity rule that names truths for standard/high-risk, and say the check runs at the plan-packet preview. In skills/bee-planning/references/plan-artifact.md add both keys to the consolidation cell example JSON. Mention `wip_limit` where cells.md or the config docs list config keys only if such a list exists; do not create one. Keep one home for each fact: cite, never copy. In skills/bee-swarming/references/execute.md, where it teaches truths, prohibitions and open_choices, add one line pointing to the worker prompt's Why and Out of scope bullets (cite, never copy). Then run the repo's regen (`bee dev regen`) and commit its output in the same commit. Use plain words; write no code comments.",
+    "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test instruction_laws",
+    "must_haves": {
+      "why": "Plan writers learn the cell shape from these docs; if the docs omit the new keys every plan is refused, and triage without a should-we question keeps filling the backlog.",
+      "out_of_scope": [
+        "Rust code",
+        "LEADER.md and AGENTS.md",
+        "pruning hooks or rules"
+      ],
+      "truths": [
+        "Qualify lists the three questions and the park rule",
+        "cells.md and the plan-artifact consolidation example show why and out_of_scope",
+        "regen output is committed with the edit"
+      ],
+      "artifacts": [
+        {
+          "path": "skills/bee-shaping/SKILL.md",
+          "substantive": "the three triage questions"
+        }
+      ],
+      "key_links": [
+        "the doc rule matches the biw-1 checks"
+      ],
+      "prohibitions": [
+        "No copy of a fact that already has a home"
+      ],
+      "open_choices": []
+    },
+    "trace": {
+      "worker": null,
+      "outcome": null,
+      "files_changed": [],
+      "deviations": [],
+      "friction": null,
+      "capped_at": null,
+      "behavior_change": false
+    }
+  },
+  {
+    "id": "biw-5c",
+    "feature": "brief-intent-and-wip",
+    "title": "Check the doctrine edit",
+    "lane": "standard",
+    "role": "test",
+    "status": "open",
+    "deps": [
+      "biw-5"
+    ],
+    "decisions": [
+      "66f6a453-752a-4fb1-a8ea-ff666e2057ff"
+    ],
+    "files": [
+      "skills/bee-shaping/SKILL.md",
+      "skills/bee-planning/references/cells.md",
+      "skills/bee-planning/references/plan-artifact.md",
+      "skills/bee-swarming/references/execute.md"
+    ],
+    "read_first": [
+      "docs/history/brief-intent-and-wip/plan.md"
+    ],
+    "affects_skills": [],
+    "affects_specs": [],
+    "action": "Run the doc parity and pointer checks over biw-5's commit: `cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test instruction_laws`, then the `pointer_integrity` and `rule_index_parity` tests (find their targets with `rg -l 'fn pointer_integrity|rule_index_parity' packages/bee-rs/crates/bee/tests`). Read biw-5's diff against CONTEXT.md D1 and D2 and report any mismatch. Edit nothing; report results.",
+    "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test instruction_laws",
+    "must_haves": {
+      "why": "A docs cell needs a second worker to check its parity and pointers.",
+      "out_of_scope": [
+        "editing any file"
+      ],
+      "truths": [
+        "instruction_laws, pointer_integrity and rule_index_parity are green or each red is reported with its output"
+      ],
+      "artifacts": [],
+      "key_links": [],
+      "prohibitions": [
+        "No edits"
+      ],
+      "open_choices": []
+    },
+    "trace": {
+      "worker": null,
+      "outcome": null,
+      "files_changed": [],
+      "deviations": [],
+      "friction": null,
+      "capped_at": null,
+      "behavior_change": false
+    }
+  },
+  {
+    "id": "biw-6",
+    "feature": "brief-intent-and-wip",
+    "title": "Consolidate this feature's knowledge and write its delivery",
+    "lane": "standard",
+    "role": "writer",
+    "status": "open",
+    "deps": [
+      "biw-1t",
+      "biw-3t",
+      "biw-5c"
+    ],
+    "decisions": [
+      "66f6a453-752a-4fb1-a8ea-ff666e2057ff"
+    ],
+    "files": [
+      "docs/knowledge/**",
+      "docs/history/brief-intent-and-wip/delivery.md"
+    ],
+    "read_first": [
+      "docs/history/brief-intent-and-wip/CONTEXT.md",
+      "docs/history/brief-intent-and-wip/plan.md"
+    ],
+    "affects_skills": [],
+    "affects_specs": [],
+    "action": "Run the writer consolidation step on this feature: run `bee knowledge consolidate --feature brief-intent-and-wip`. Dedupe and trim the deltas the cells wrote, anchor each concept to the code it describes, never restate code, and write docs/history/brief-intent-and-wip/delivery.md listing the concepts changed and why, one line each. The concepts must cover the must_haves why/out_of_scope rule and the wip_limit key and warning; cite D-numbers, never raw decision ids. Run `.bee/bin/bee knowledge check` green. One commit. In delivery.md add one follow-up line: this repo has many open lanes, so close or idle stale lanes, or set wip_limit.",
+    "verify": ".bee/bin/bee knowledge check",
+    "must_haves": {
+      "why": "docs/knowledge is the state layer; a concept that lags the code misleads the next reader.",
+      "out_of_scope": [
+        "code",
+        "skills/"
+      ],
+      "truths": [
+        "area concepts describe must_haves.why, must_haves.out_of_scope and wip_limit, anchored to code",
+        "docs/history/brief-intent-and-wip/delivery.md lists every concept the feature changed"
+      ],
+      "artifacts": [
+        {
+          "path": "docs/history/brief-intent-and-wip/delivery.md",
+          "substantive": "the feature's delivery record"
+        }
+      ],
+      "key_links": [
+        "the delivery lands in the same merge as the code"
+      ],
+      "prohibitions": [
+        "No restating of code in area concepts",
+        "No code comments"
+      ],
+      "open_choices": []
+    },
+    "trace": {
+      "worker": null,
+      "outcome": null,
+      "files_changed": [],
+      "deviations": [],
+      "friction": null,
+      "capped_at": null,
+      "behavior_change": false
+    }
+  }
+]
+```
+
+## Test matrix
+
+| Case | Kind | Pass when |
+|---|---|---|
+| standard packet with why and out_of_scope [] | happy | `bee gate --preview` passes |
+| standard packet without why | error | preview reports a problem naming `must_haves.why` |
+| standard packet with out_of_scope as a string | error | preview reports a problem naming `must_haves.out_of_scope` |
+| small packet without both | edge | preview passes |
+| `bee cells add` of a standard cell without both, no approved preview | edge (same on main and head) | add succeeds on both |
+| feature start with 5 other open lanes | happy | stderr has one warning line; exit 0 |
+| feature start with wip_limit 0 | edge | no warning |
+| wip_limit "x" | error | treated as absent (limit 5) |
+
+## Open Questions
+
+(none)
+
+## Out of scope
+
+Pruning hooks or rules that state only a preference (option B, a later
+feature). Closing the 75 open lanes. Requiring the keys on tiny and small
+lanes.
