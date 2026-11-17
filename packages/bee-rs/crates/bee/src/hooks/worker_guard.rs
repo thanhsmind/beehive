@@ -638,6 +638,40 @@ mod tests {
     }
 
     #[test]
+    fn read_only_echo_and_date_redirect_edges() {
+        let tmp = tempfile::tempdir().unwrap();
+        let cwd = tmp.path();
+        let mailbox = cwd.join(".bee").join("mailbox").join("job-1");
+        let mb = mailbox.display().to_string();
+        let bash = |command: &str| {
+            let input = serde_json::json!({ "command": command });
+            evaluate_read_only("Bash", input.as_object(), cwd, Some(&mailbox))
+        };
+        for allowed in [
+            format!("date -u +%FT%TZ >> '{mb}/progress.jsonl'"),
+            format!("echo '{{\"step\":\"ack\"}}' >> {mb}/progress.jsonl"),
+            "stat -c %s src/a.rs 2>/dev/null".to_string(),
+            "pwd; echo ok".to_string(),
+        ] {
+            assert!(bash(&allowed).is_none(), "expected allow: {allowed} -> {:?}", bash(&allowed));
+        }
+        for denied in [
+            "echo ok >> src/a.rs".to_string(),
+            "echo ok >| src/a.rs".to_string(),
+            "pwd > /tmp/where".to_string(),
+            format!("echo ok > '{mb}/../escape'"),
+            format!("date -u 2>&1 > '{mb}/../../x'"),
+        ] {
+            let reason = bash(&denied).unwrap_or_else(|| panic!("expected deny: {denied}"));
+            assert!(reason.contains("outside the job mailbox"), "{denied} -> {reason}");
+        }
+        for denied in ["echo \"$(date -u)\"", "echo <(stat a)", "stat $(pwd)/a"] {
+            let reason = bash(denied).unwrap_or_else(|| panic!("expected deny: {denied}"));
+            assert!(reason.contains("command substitution"), "{denied} -> {reason}");
+        }
+    }
+
+    #[test]
     fn read_only_judges_a_middle_tilde_mailbox_path_by_where_it_points() {
         let tmp = tempfile::tempdir().unwrap();
         let cwd = tmp.path();
