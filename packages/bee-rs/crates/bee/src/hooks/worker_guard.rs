@@ -7,7 +7,7 @@ use serde_json::{Map, Value};
 use std::path::{Component, Path, PathBuf};
 use std::process::ExitCode;
 
-const READ_ONLY_ALLOWED: &str = "Bash(cd:*),Bash(cat:*),Bash(head:*),Bash(tail:*),Bash(wc:*),Bash(ls:*),Bash(rg:*),Bash(fd:*),Bash(jq:*),Bash(git log:*),Bash(git show:*),Bash(git diff:*),Bash(git status:*),Bash(git blame:*),Bash(.bee/bin/bee status:*),Bash(.bee/bin/bee orient:*),Bash(.bee/bin/bee herding status:*),Bash(.bee/bin/bee herding notify:*),Bash(mv:*)";
+const READ_ONLY_ALLOWED: &str = "Bash(cd:*),Bash(cat:*),Bash(head:*),Bash(tail:*),Bash(wc:*),Bash(date:*),Bash(echo:*),Bash(stat:*),Bash(pwd:*),Bash(ls:*),Bash(rg:*),Bash(fd:*),Bash(jq:*),Bash(git log:*),Bash(git show:*),Bash(git diff:*),Bash(git status:*),Bash(git blame:*),Bash(.bee/bin/bee status:*),Bash(.bee/bin/bee orient:*),Bash(.bee/bin/bee herding status:*),Bash(.bee/bin/bee herding notify:*),Bash(mv:*)";
 
 const WRITE_TOOLS: [&str; 4] = ["Edit", "Write", "MultiEdit", "NotebookEdit"];
 
@@ -603,6 +603,38 @@ mod tests {
         assert!(write("Edit", &format!("{mb}/../job-2/result-1.json")).is_some());
         assert!(write("Write", "").is_some());
         assert!(evaluate_read_only("Write", serde_json::json!({ "file_path": format!("{mb}/r") }).as_object(), cwd, None).is_some());
+    }
+
+    #[test]
+    fn read_only_allows_date_echo_stat_and_pwd() {
+        let tmp = tempfile::tempdir().unwrap();
+        let cwd = tmp.path();
+        let mailbox = cwd.join(".bee").join("mailbox").join("job-1");
+        let mb = mailbox.display().to_string();
+        let bash = |command: &str| {
+            let input = serde_json::json!({ "command": command });
+            evaluate_read_only("Bash", input.as_object(), cwd, Some(&mailbox))
+        };
+        for allowed in [
+            "date -u".to_string(),
+            "echo ok".to_string(),
+            "stat src/a.rs".to_string(),
+            "pwd".to_string(),
+            "date -u && pwd".to_string(),
+            format!("echo ok > '{mb}/progress.jsonl'"),
+        ] {
+            assert!(bash(&allowed).is_none(), "expected allow: {allowed} -> {:?}", bash(&allowed));
+        }
+        for denied in [
+            "echo x > src/a.rs",
+            "echo $(date -u)",
+            "echo `date -u`",
+            "sh -c 'echo ok'",
+            "eval echo ok",
+            "date -u | tee src/a.rs",
+        ] {
+            assert!(bash(denied).is_some(), "expected deny: {denied}");
+        }
     }
 
     #[test]
