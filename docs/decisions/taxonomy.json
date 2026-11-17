@@ -916,6 +916,16 @@
     "contract:prose-load-doc-parity",
     "contract:release-2-110-0-published",
     "contract:helper-hook-config-isolation",
-    "contract:outcome-scorecard"
+    "contract:outcome-scorecard",
+    "contract:skill-projection-staging",
+    "contract:bash-write-target-head",
+    "contract:read-only-worker-bash",
+    "contract:lease-release-on-cap",
+    "contract:cap-proof-with-separator",
+    "contract:deps-key-only",
+    "contract:reattribute-dry-run",
+    "contract:nested-scan-skips-scratch",
+    "contract:herding-live-count",
+    "contract:prepare-unknown-agent"
   ]
 }
