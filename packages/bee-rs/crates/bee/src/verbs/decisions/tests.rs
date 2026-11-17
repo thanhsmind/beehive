@@ -2122,6 +2122,46 @@ use std::time::Instant;
         assert_eq!(after[0]["feature"], "prompt-work-record");
     }
 
+    #[test]
+    fn a_named_dry_run_on_an_unstamped_record_in_a_shared_store_leaves_every_byte_and_no_temp_file() {
+        let tmp = fixture_root();
+        let root = tmp.path();
+        let unstamped = r#"{"id":"cafe0001-0000-0000-0000-000000000000","type":"decide","date":"2026-08-25T10:00:00.000Z","decision":"Keep the prompt record","rationale":"r"}"#;
+        let sibling = r#"{"id":"cafe0002-0000-0000-0000-000000000000","type":"decide","date":"2026-08-26T10:00:00.000Z","decision":"Another","rationale":"r","feature":"other"}"#;
+        write_events(root, &[unstamped, "not json", sibling]);
+        let path = decisions_path(root);
+        let before = std::fs::read(&path).unwrap();
+
+        for _ in 0..2 {
+            let Ok(Out::Emit(report, text, 0)) =
+                do_reattribute_named(root, "cafe", "prompt-work-record", true, 0)
+            else {
+                panic!("expected a dry-run report")
+            };
+            assert_eq!(std::fs::read(&path).unwrap(), before);
+            assert!(!path.with_extension("jsonl.reattribute.tmp").exists());
+            assert_eq!(report["changed"], 1);
+            assert_eq!(report["from"], "");
+            assert!(text.contains("would correct 1"), "{text}");
+            assert!(text.contains("(none) -> prompt-work-record"), "{text}");
+        }
+
+        let Ok(Out::Emit(real, text, 0)) =
+            do_reattribute_named(root, "cafe", "prompt-work-record", false, 0)
+        else {
+            panic!("expected a correction")
+        };
+        assert_eq!(real["dry_run"], false);
+        assert!(text.contains("corrected 1"), "{text}");
+        let raw = std::fs::read_to_string(&path).unwrap();
+        let lines: Vec<&str> = raw.lines().collect();
+        assert_eq!(lines.len(), 3);
+        let first: Value = serde_json::from_str(lines[0]).unwrap();
+        assert_eq!(first["feature"], "prompt-work-record");
+        assert_eq!(lines[1], "not json");
+        assert_eq!(lines[2], sibling);
+    }
+
     /// decision-attribution D5: the predicate reads a claim the record makes
     /// about itself, and refuses everything else.
     #[test]
