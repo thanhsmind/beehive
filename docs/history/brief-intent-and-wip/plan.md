@@ -144,6 +144,8 @@ One slice; it is the whole feature.
 | biw-5c | Check the doctrine edit | — | biw-5 | — | `pointer_integrity`, `instruction_laws`, `rule_index_parity` |
 | biw-6 | Consolidate knowledge and write delivery | docs/knowledge/**, delivery.md (new) | biw-1t, biw-3t, biw-5c | concepts describe the new keys and the warning | `.bee/bin/bee knowledge check` |
 | biw-6c | Check the knowledge consolidation | — | biw-6 | — | `.bee/bin/bee knowledge check` |
+| biw-7 | Keep the helper-hook parity test off the user-global config | tests/opencode_plugin_contracts.rs | biw-6c | the declared suite is green on a machine with a user-global team config | `cargo test … --test opencode_plugin_contracts` |
+| biw-7t | Check the helper-hook config isolation | — | biw-7 | — | `cargo test … --test opencode_plugin_contracts` |
 
 ```json
 [
@@ -623,6 +625,110 @@ One slice; it is the whole feature.
       "key_links": [],
       "prohibitions": [
         "No edits"
+      ],
+      "open_choices": []
+    },
+    "trace": {
+      "worker": null,
+      "outcome": null,
+      "files_changed": [],
+      "deviations": [],
+      "friction": null,
+      "capped_at": null,
+      "behavior_change": false
+    }
+  },
+  {
+    "id": "biw-7",
+    "feature": "brief-intent-and-wip",
+    "title": "Keep the helper-hook parity test off the user-global config",
+    "lane": "standard",
+    "role": "code",
+    "status": "open",
+    "deps": [
+      "biw-6c"
+    ],
+    "decisions": [
+      "80e8e184-1eba-4897-83d0-2337fea4f3d4"
+    ],
+    "files": [
+      "packages/bee-rs/crates/bee/tests/opencode_plugin_contracts.rs"
+    ],
+    "read_first": [
+      "packages/bee-rs/crates/bee/tests/opencode_plugin_contracts.rs",
+      "packages/bee-rs/crates/bee/src/config_layers.rs"
+    ],
+    "affects_skills": [],
+    "affects_specs": [],
+    "action": "In tests/opencode_plugin_contracts.rs fn run_helper_hook (near :1343, `fn run_helper_hook(hook: &str, stdin: &[u8], cwd: &Path) -> Output {`), make the spawned `bee hook` read no user-global config: set BEEHIVE_CONFIG_DIR to a directory inside `cwd` that holds no config.json (config_layers.rs global_config_dir checks BEEHIVE_CONFIG_DIR first). Check the other bee spawns in the same file (near :2291) and isolate them the same way when they read config. Change nothing else. Run `cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test opencode_plugin_contracts` on this machine, whose global config maps team.claude.generation to a herding agent, and quote the result.",
+    "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test opencode_plugin_contracts",
+    "must_haves": {
+      "why": "The declared suite is red on any developer machine with a user-global team config, which blocks every merge from that machine; CI stays green only because it has no global config.",
+      "out_of_scope": [
+        "the model-guard hook itself",
+        "the user-global config file",
+        "other test files"
+      ],
+      "truths": [
+        "three_belt_parity_every_blocking_rule_hits_helper_claude_codex_and_opencode passes on a machine whose global config maps generation to a herding agent",
+        "all opencode_plugin_contracts tests pass"
+      ],
+      "artifacts": [],
+      "key_links": [
+        "run_helper_hook sets the isolation for every helper spawn"
+      ],
+      "prohibitions": [
+        "No code comments",
+        "Never write ~/.config/beehive"
+      ],
+      "open_choices": []
+    },
+    "trace": {
+      "worker": null,
+      "outcome": null,
+      "files_changed": [],
+      "deviations": [],
+      "friction": null,
+      "capped_at": null,
+      "behavior_change": false
+    }
+  },
+  {
+    "id": "biw-7t",
+    "feature": "brief-intent-and-wip",
+    "title": "Check the helper-hook config isolation",
+    "lane": "standard",
+    "role": "test",
+    "status": "open",
+    "deps": [
+      "biw-7"
+    ],
+    "decisions": [
+      "80e8e184-1eba-4897-83d0-2337fea4f3d4"
+    ],
+    "files": [
+      "packages/bee-rs/crates/bee/tests/opencode_plugin_contracts.rs"
+    ],
+    "read_first": [
+      "packages/bee-rs/crates/bee/tests/opencode_plugin_contracts.rs"
+    ],
+    "affects_skills": [],
+    "affects_specs": [],
+    "action": "Check biw-7 independently: read its diff, confirm every bee spawn in opencode_plugin_contracts.rs that reads config is isolated from the user-global config, and run `cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test opencode_plugin_contracts` on this machine. Add a test only if a spawn is left unisolated and no existing test would catch it. Report the count.",
+    "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test opencode_plugin_contracts",
+    "must_haves": {
+      "why": "A code cell never certifies itself.",
+      "out_of_scope": [
+        "production code"
+      ],
+      "truths": [
+        "opencode_plugin_contracts is green on this machine"
+      ],
+      "artifacts": [],
+      "key_links": [],
+      "prohibitions": [
+        "No code comments",
+        "No production code edits"
       ],
       "open_choices": []
     },
