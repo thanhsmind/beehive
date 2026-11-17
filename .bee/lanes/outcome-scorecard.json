@@ -11,15 +11,10 @@
     "uat": true
   },
   "summary": "Feature \"outcome-scorecard\" started at phase \"exploring\" (lane).",
-  "next_action": "Continue bee-exploring for \"outcome-scorecard\" (lane).",
+  "next_action": "Merged into main at 9b380ca; capture what settled, then bee close --feature outcome-scorecard.",
   "created_at": "2026-11-17T04:14:15.578Z",
-  "run_state": "awaiting-approval",
-  "waiting_on": {
-    "kind": "gate",
-    "subject": "uat for outcome-scorecard: owner runs bee report outcomes --by-feature, then approves uat",
-    "asked_at": "2026-11-17T04:53:42.548Z",
-    "session": "f80793de-7fb8-4695-a340-4c6cfd30bb1b"
-  },
+  "run_state": null,
+  "waiting_on": null,
   "route": {
     "class": "feature",
     "lane": "standard",
@@ -1368,12 +1363,5 @@
         }
       ]
     }
-  },
-  "merge_ready": {
-    "since": "2026-11-17T05:24:25.639Z",
-    "branch": "wt/outcome-scorecard",
-    "worktree_id": "beehive--wt--outcome-scorecard",
-    "uat": "approved",
-    "blocked_by": []
   }
 }
