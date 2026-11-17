@@ -126,12 +126,13 @@ rule never disappears — only its elaboration moves.
   agent derive the call in a case the text never names, and the reason lives here and in the
   playbooks, never in the always-loaded contract. The bugfix playbook's cause-not-known paragraph ends
   with the cheap always-on-signal sentence (pstack-0-15-port D5, same cell).
-- **The formal-verification steps point outward.** The feature playbook's step 6 names the
-  `statechart` skill and step 7 names `create-formal-verification-skill` and
-  `maintain-formal-verification-skill`; all three live in the skillstation hub, tracked upstream
-  from pstack, and bee vendors none of them (formal-verification-pack D1, D2). Each step is skipped,
-  and the skip said, when the host lacks the skill. The verify skill the generator writes goes under
-  `.bee/verify/<name>/`, so `bee onboard --verify-only --apply` renders it into every runtime.
+- **The formal-verification steps are shipped by bee.** The feature playbook's step 3 points to
+  `skills/bee-formal-verifying/references/statechart.md` (a reference doc, not a skill) and step 8
+  names `bee-formal-verifying` and `bee-formal-upkeep`, all shipped by bee through the plugin skill
+  trees (`docs/history/pstack-guide-gaps/CONTEXT.md` D1, D2). Each step is skipped, and the skip
+  recorded, only on hosts running an older bee without them. The project-local verify skill
+  `bee-formal-verifying` writes goes under `.bee/verify/<name>/`, so `bee onboard --verify-only --apply`
+  renders it into every runtime.
 
 - The session preamble prints the Route line and the routed principles only when the session owns the route (per-task-router D4): bound through its session record lane or `session_binding`, or the repo has no lane records. An unbound session in a repo with lanes gets one hint line naming `bee orient --class <c>`. Rejected: reading the default record for an unbound session — it handed one feature's bugfix principles to an unrelated task. Find the predicate with `grep route_is_session_owned`.
 
@@ -359,7 +360,7 @@ Where the Claude runtime fetches a principle body from is a config choice, not p
 - `bee-principle-red-before-green` (expertise/tests.md § Red before green):
   spoken: reproduce the bug as a failing test and watch it fail for the reported reason before you fix it — a never-red test proves nothing
   classes: feature, bugfix, refactor
-  signals: packages/**, *.rs, bugfix, small
+  signals: packages/**, *.rs, small, standard
   - applied_at:
     - `skills/bee-principle-red-before-green/SKILL.md`
 
@@ -380,7 +381,7 @@ Where the Claude runtime fetches a principle body from is a config choice, not p
 - `bee-principle-split-never-shrink` (expertise/planning.md § Scope integrity: split, never shrink):
   spoken: work that will not fit gets split into slices or renegotiated with its owner — never quietly delivered smaller than what was agreed
   classes: feature, refactor, release
-  signals: standard, high-risk, release
+  signals: standard, high-risk, multi-domain
   - applied_at:
     - `skills/bee-principle-split-never-shrink/SKILL.md`
 
@@ -401,7 +402,7 @@ Where the Claude runtime fetches a principle body from is a config choice, not p
 - `bee-principle-record-at-the-moment-of-settlement` (expertise/decisions.md § Record at the moment of settlement):
   spoken: write the record when the decision lands — "okay, so we'll do X" is the trigger, and a cleanup pass at the end reconstructs from memory and loses the boundaries
   classes: feature, research, docs
-  signals: docs/**, .bee/**, standard, research
+  signals: docs/**, .bee/**, spike, standard
   - applied_at:
     - `skills/bee-principle-record-at-the-moment-of-settlement/SKILL.md`
 
@@ -415,7 +416,7 @@ Where the Claude runtime fetches a principle body from is a config choice, not p
 - `bee-principle-verify-before-reporting` (expertise/review.md § Verify before reporting):
   spoken: reproduce or trace a suspected defect before you file it, and record the suspicions that failed verification instead of dropping them silently — a wrong finding buries real ones
   classes: feature, bugfix, refactor, docs, release, perf
-  signals: packages/**, skills/**, high-risk, release
+  signals: packages/**, skills/**, high-risk, audit-security
   - applied_at:
     - `skills/bee-principle-verify-before-reporting/SKILL.md`
 
@@ -450,7 +451,7 @@ Where the Claude runtime fetches a principle body from is a config choice, not p
 - `bee-principle-never-invent-behavior-neither-side-has` (expertise/merges.md § Never invent behavior neither side has):
   spoken: a conflict with no clean answer is not yours to design — never ship a compromise neither side contains; pick one and record it as a named guess, or escalate to whoever owns the tradeoff
   classes: refactor, feature, release
-  signals: packages/**, skills/**, high-risk, release
+  signals: packages/**, skills/**, high-risk, multi-domain
   - applied_at:
     - `skills/bee-principle-never-invent-behavior-neither-side-has/SKILL.md`
 
@@ -509,7 +510,7 @@ port pstack Slice 3 (pstack-principles D1, D2, D3: skill shape, homes, classes).
 - `bee-principle-boundary-discipline` (expertise/architecture.md § Explicit Boundaries and Contracts):
   spoken: parse and validate input once where it enters, trust typed data inside, keep decisions in pure functions the thin shell calls, and never leak the boundary's private types
   classes: feature, refactor
-  signals: packages/**, *.rs, auth, external, high-risk
+  signals: packages/**, *.rs, auth, external-systems, high-risk
   - applied_at:
     - `skills/bee-principle-boundary-discipline/SKILL.md`
 
@@ -588,7 +589,7 @@ Slice 4 (pstack-playbook-port D5, cell ppb-28): classes follow each pstack
 - `bee-principle-prove-it-works` (expertise/tests.md § Prove it works):
   spoken: before you call a task done, check the real artifact — run the feature, read the actual value, inspect the diff — never a proxy, a self-report or "it compiles"; when a check fails, suspect how you observed before you suspect the system
   classes: feature, bugfix, refactor, perf, release, docs
-  signals: packages/**, skills/**, small, release
+  signals: packages/**, skills/**, small, standard
   - applied_at:
     - `skills/bee-principle-prove-it-works/SKILL.md`
 
@@ -613,7 +614,7 @@ Slice 4 (pstack-playbook-port D5, cell ppb-29): classes follow each pstack
 - `bee-principle-guard-the-context-window` (expertise/thinking.md § Guard the Context Window):
   spoken: keep bulk out of the main thread — route large outputs and multi-file hunts to a read-only gather, read by relevance, cap the files per unit, and read the artifact itself when the exact bytes decide the answer
   classes: research, refactor, feature
-  signals: docs/**, packages/**, spike, research
+  signals: docs/**, packages/**, spike, multi-domain
   - applied_at:
     - `skills/bee-principle-guard-the-context-window/SKILL.md`
 
@@ -641,7 +642,7 @@ Slice 4 (pstack-playbook-port D5, cell ppb-29): classes follow each pstack
 - `bee-principle-explain-the-number` (expertise/performance.md § Measuring without lying to yourself):
   spoken: state the decision threshold and noise floor before running, name the measured limiter and rule out what else the number could measure — keep run count, spread and limiter with every figure
   classes: perf, research, feature, bugfix, release
-  signals: perf, packages/bee-rs/**/perf*
+  signals: packages/bee-rs/**/perf*, *bench*, standard
   - applied_at:
     - `skills/bee-principle-explain-the-number/SKILL.md`
 

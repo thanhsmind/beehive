@@ -80,7 +80,7 @@
     },
     {
       "path": ".bee/expertise/performance.md",
-      "sha256": "d7cd2a69bdc41cb1d00399bf60cfd7ad3c916369c1ec0cc1c3ae3ad5bfa45ac5",
+      "sha256": "2c209581857a02b49e43cc6552beb581408058cb859859d7274371b7051a0ab8",
       "mode": "644",
       "role": "runtime_expertise"
     },
@@ -3799,7 +3799,7 @@
     },
     {
       "path": "expertise/performance.md",
-      "sha256": "d7cd2a69bdc41cb1d00399bf60cfd7ad3c916369c1ec0cc1c3ae3ad5bfa45ac5",
+      "sha256": "2c209581857a02b49e43cc6552beb581408058cb859859d7274371b7051a0ab8",
       "mode": "644",
       "role": "expertise_guide"
     },

@@ -221,15 +221,16 @@ Before you run, and before you trust or report any number, apply four moves:
 
 Run through these seven questions before reporting a speedup, a regression, a
 hillclimb baseline, or a choice between implementations. Answer each from run
-evidence, not source inspection. For a quick ballpark requested by the user, a
-single run is acceptable if you still verify questions 4 and 7 and label it as
-one run; a choice between options is never a ballpark.
+evidence, not source inspection. When the user explicitly asks for a rough
+estimate, one trial is fine as long as you still check items 4 and 7 and mark
+the result as a single run. Never treat a comparison between alternatives as a
+rough estimate.
 
 1. **What is the limiter?** Profile in a separate, unreported run (tracers and
    profilers add overhead) using CPU, I/O wait, and syscall counters, then map
-   hot spots to source. Check the load generator too: if it saturates first,
-   you measured the generator. When a change does not move the number, the
-   limiter explains why.
+   hot spots to source. Verify the client driving the test has headroom as well
+   — a saturated driver caps throughput before the target does. When a change
+   does not move the number, the limiter explains why.
 2. **Was every side tuned like production?** Use release builds, production
    flags and environment, batching and pool settings, realistic cache warmth,
    and matching versions and data. Leaving one side on defaults compares
