@@ -171,6 +171,21 @@ pub(crate) fn proof_reason_names_evidence(reason: &str) -> bool {
 /// structured trace proof fields (`verify_command`, `verify_output`,
 /// `verify_passed`, `verification_evidence`) on a successful cap.
 pub(crate) fn parse_tests_proof(s: &str) -> Option<(String, String, String)> {
+    parse_tests_proof_for(s, "")
+}
+
+pub(crate) fn parse_tests_proof_for(s: &str, verify: &str) -> Option<(String, String, String)> {
+    let verify = js_trim(verify);
+    if !verify.is_empty()
+        && let Some(rest) = s.strip_prefix(verify).and_then(|r| r.strip_prefix(PROOF_SEPARATOR))
+    {
+        let (result, reason) = rest.split_once(PROOF_SEPARATOR)?;
+        let (result, reason) = (js_trim(result), js_trim(reason));
+        if result.is_empty() || reason.is_empty() {
+            return None;
+        }
+        return Some((verify.to_string(), result.to_string(), reason.to_string()));
+    }
     let first = s.find(PROOF_SEPARATOR)?;
     let (command, rest) = s.split_at(first);
     let rest = &rest[PROOF_SEPARATOR.len()..];
@@ -198,7 +213,7 @@ pub(crate) fn parse_tests_proof(s: &str) -> Option<(String, String, String)> {
 /// segment must be one of [`PROOF_RESULT_VALUES`] (D1). Every refusal names the
 /// offending key so a cold reader fixes it without re-deriving the shape
 /// from this function.
-pub(crate) fn parse_report_flag(raw: &str) -> MR<Value> {
+pub(crate) fn parse_report_flag(raw: &str, verify: &str) -> MR<Value> {
     let parsed: Value = serde_json::from_str(raw)
         .map_err(|e| Fail::Thrown(format!("cells finish: --report is not valid JSON: {e}")))?;
     let Value::Object(mut map) = parsed else {
@@ -372,7 +387,7 @@ pub(crate) fn parse_report_flag(raw: &str) -> MR<Value> {
                 "cells finish: --report key \"tests\" no longer accepts \"{s}\" — the boundary/undeclared enum is retired. Record a proof string instead: \"<command> — <result> — <scope reason>\" (e.g. \"cargo test -p bee — green:unit — touched close.rs\"). In a no-test-sentinel repo, name the command segment \"none\" and put the parity/docs proof used in the reason segment (e.g. \"none — green:static — regen parity check only\")."
             )))
         }
-        Some(Value::String(s)) => match parse_tests_proof(s) {
+        Some(Value::String(s)) => match parse_tests_proof_for(s, verify) {
             Some((_, result, _)) if result == "red" => {
                 return Err(Fail::Thrown(
                     "cells finish: --report key \"tests\" result segment is \"red\" — a red is fix-first, never a cap. Fix the failure, re-run the proof, and cap with a passing result.".to_string(),

@@ -12033,6 +12033,42 @@ use std::time::Instant;
     }
 
     #[test]
+    fn gis4_verify_containing_the_separator_caps_with_the_whole_verify_as_command() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_bee_config(root, &json!({"commands": {"test": "none"}}));
+        let mut c = cell("gis4-sep", "claimed", "f", json!([]));
+        c["verify"] = json!("cargo test -p bee — --nocapture");
+        write_cell_fixture(root, "gis4-sep", &c);
+
+        let report = r#"{"outcome":"o","commit":"c","files":[],"tests":"cargo test -p bee — --nocapture — green:unit — touched tests.rs — and more","deviations":[]}"#;
+        let flags = cap_flags_report("gis4-sep", Some(report));
+        let capped = cap_cell_from_flags(root, &flags, false).unwrap();
+        assert_eq!(capped["status"], json!("capped"));
+        assert_eq!(capped["trace"]["verify_command"], json!("cargo test -p bee — --nocapture"));
+        assert_eq!(capped["trace"]["verify_output"], json!("green:unit"));
+        assert_eq!(capped["trace"]["verification_evidence"], json!("touched tests.rs — and more"));
+    }
+
+    #[test]
+    fn gis4_verify_containing_the_separator_still_refuses_a_different_command() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_bee_config(root, &json!({"commands": {"test": "none"}}));
+        let mut c = cell("gis4-diff", "claimed", "f", json!([]));
+        c["verify"] = json!("cargo test -p bee — --nocapture");
+        write_cell_fixture(root, "gis4-diff", &c);
+        let before = std::fs::read_to_string(cell_file(root, "gis4-diff")).unwrap();
+
+        let report = r#"{"outcome":"o","commit":"c","files":[],"tests":"cargo test -p other — --nocapture — green:unit — touched tests.rs","deviations":[]}"#;
+        let flags = cap_flags_report("gis4-diff", Some(report));
+        let refusal = thrown(cap_cell_from_flags(root, &flags, false));
+        assert!(refusal.contains("refused") || refusal.contains("result segment"), "{refusal}");
+        let after = std::fs::read_to_string(cell_file(root, "gis4-diff")).unwrap();
+        assert_eq!(before, after, "a refused cap must write nothing to disk");
+    }
+
+    #[test]
     fn pihp_replayable_proof_exact_trimmed_bytes_match() {
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
@@ -14127,7 +14163,7 @@ use std::time::Instant;
         result.handback.reaction = Some("maybe".to_string());
         let git = GitFacts { head: "abc1234".to_string(), changed_files: Vec::new() };
         let report = report_from_job(&json!({}), &result, Some(git), "cargo test", "green:unit", None).unwrap();
-        let refusal = thrown(parse_report_flag(&report));
+        let refusal = thrown(parse_report_flag(&report, ""));
         assert!(
             refusal.contains("cells finish: --report key \"reaction\" must be one of confirm, partial, challenge, blocked"),
             "{refusal}"

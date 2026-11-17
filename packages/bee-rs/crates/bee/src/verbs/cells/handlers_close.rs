@@ -308,8 +308,12 @@ pub(crate) fn cap_cell_from_flags(root: &Path, f: &CapFlags, finish: bool) -> MR
     // doors' proof-check exists to close. Shape check runs BEFORE the
     // (possibly long) test run and before any write — same "refuse before
     // doing real work" posture as `--deviation` above.
+    let cell_verify = match existing_map.get("verify") {
+        Some(Value::String(s)) => js_trim(s),
+        _ => "",
+    };
     let report_value: Value = match &f.report {
-        Some(raw) => parse_report_flag(raw)?,
+        Some(raw) => parse_report_flag(raw, cell_verify)?,
         None => {
             return Err(Fail::Thrown(format!(
                 "capCell: cell \"{id}\" refused — --report is required: a JSON object with keys {} (tests as a D8 proof string \"<command> — <result> — <scope reason>\", e.g. \"cargo test -p bee — green:unit — touched close.rs\").",
@@ -325,7 +329,7 @@ pub(crate) fn cap_cell_from_flags(root: &Path, f: &CapFlags, finish: bool) -> MR
     let (proof_command, proof_result, proof_reason) = match report_value
         .get("tests")
         .and_then(|v| v.as_str())
-        .and_then(parse_tests_proof)
+        .and_then(|s| parse_tests_proof_for(s, cell_verify))
     {
         Some(tuple) => tuple,
         None => {
@@ -333,10 +337,6 @@ pub(crate) fn cap_cell_from_flags(root: &Path, f: &CapFlags, finish: bool) -> MR
                 "capCell: cell \"{id}\" refused — --report key \"tests\" must be a proof string \"<command> — <result> — <scope reason>\"."
             )));
         }
-    };
-    let cell_verify = match existing_map.get("verify") {
-        Some(Value::String(s)) => js_trim(s),
-        _ => "",
     };
     if js_trim(&proof_command) != cell_verify {
         return Err(Fail::Thrown(format!(
