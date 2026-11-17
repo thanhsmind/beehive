@@ -1,7 +1,7 @@
 ---
 name: bee-formal-upkeep
 description: >-
-  Bring a project-local formal verification skill back in line after covered code changes: diff since the sync commit, update the model or harness, rerun, and separate drift from bugs. Use when covered code changed without rechecking. Not for creating a new check (bee-formal-verifying).
+  Reconcile a project-local formal verification skill with changed code: inspect commits since the sync commit, update the model or harness, rerun, and separate drift from bugs. Use when covered code changed without rechecking. Not for creating a new check (bee-formal-verifying).
 disable-model-invocation: true
 metadata:
   version: '0.1'
@@ -16,30 +16,30 @@ metadata:
 
 # Formal upkeep — keep formal checks true to the code
 
-A formal check only proves a property of the model or harness it runs against. When covered code changes and the verification does not, a passing check can describe code that no longer exists. This skill brings project-local formal checks back in line after merges, refactors, or edits that bypassed the verify skill.
+A formal check only speaks for the model or harness it executes. When covered implementation files evolve while the model stays static, green runs describe stale behavior. Use this skill to reconcile project-local formal checks after merges, refactors, or edits that bypassed verification.
 
 ## Outcomes
 
 Assign each check one outcome (a check can be both `updated` and `bug` when updating the model exposes a real code defect):
 
-- **in sync** — no change since the sync commit alters what the check describes, and the check passes.
-- **updated** — covered code changed, the verification now describes the new code, and the check passes (and still fails on a broken variant).
-- **bug** — the verification accurately describes the current code, and the code breaks the property. This is a code finding, not drift.
-- **blocked** — the check could not be brought back in line or could not run. State the exact blocker.
+- **in sync** — commits since the sync commit leave the modeled behavior intact, and the check passes.
+- **updated** — covered code shifted, the model or harness now reflects the new behavior, and the check passes while still catching a broken variant.
+- **bug** — the model or harness faithfully reflects the implementation, and the code violates the invariant; treat this as a product defect, not model drift.
+- **blocked** — reconciliation failed or the check could not execute; name the exact obstacle.
 
 ## Edit scope
 
-Edit only the verification: models, harnesses, property files, and the verify skill source under `.bee/verify/<name>/`. After any source edit, run `bee onboard --verify-only --apply` so every runtime skill home receives the update; never hand-edit rendered copies.
+Restrict edits to verification artifacts: models, harnesses, property configs, and the skill source under `.bee/verify/<name>/`. After changing any source file, run `bee onboard --verify-only --apply` to refresh every runtime skill home; never edit rendered copies directly.
 
-Never edit product code during an upkeep run unless the user explicitly asks. Never weaken a property or model to make a failing check pass; report the failure.
+Do not modify product code during upkeep unless explicitly instructed. Never relax an invariant or model constraint to turn a red check green; report the counterexample.
 
 ## Pass
 
-1. **Find the checks.** Inspect `.bee/verify/` for project-local skills that run a model checker, prover, or verifier against named code (see `.bee/verify/formal-cell-lifecycle` as the worked example). For each check, collect the properties, covered files and functions, bounds and assumptions, run command, and sync commit. If no formal verify skill exists, stop and point to `bee-formal-verifying`. If no sync commit is recorded, use the last commit that modified the verification files and state that in the report.
+1. **Locate existing checks.** Scan `.bee/verify/` for project-local skills that invoke a model checker, prover, or verifier on named source files (see `.bee/verify/formal-cell-lifecycle` as the worked example). Gather each skill's invariants, covered files and functions, bounds, command, and sync commit. If none exist, stop and direct the user to `bee-formal-verifying`. When a skill lacks a recorded sync commit, fall back to the most recent commit that touched its verification files and note that fallback in the report.
 
-2. **Run as-is.** Run each check once before changing anything and record the result. A pass here only means the old description still holds; a failure may be verification drift or a code bug. Do not classify until step 5.
+2. **Baseline run.** Execute each check as found before editing anything and log the outcome. A green baseline only confirms the prior model still holds; a red baseline may indicate either drift or a defect, which step 5 will separate.
 
-3. **Read every change to covered code.** Diff the covered files from the sync commit to `HEAD` and read each commit message. Also check for covered functions that were renamed, split, or moved to other files, and for new code that writes or reads the same guarded state. Classify each change:
+3. **Audit covered-code changes.** Inspect the git diff of covered files from the sync commit to `HEAD` along with commit messages. Look for renamed, split, or relocated functions and for new call sites reading or writing the same guarded state. Classify each change:
    - **No effect:** formatting, comments, or paths outside the check's coverage (verify against the model or harness, not just the commit message).
    - **Verification drift:** an indivisible step split or merged, a branch changed, a guard moved, a new path reached guarded state, or value ranges changed.
    - **Intentional promise change:** evidence in tests, docs, or commits shows the code's promise changed on purpose.
@@ -49,7 +49,7 @@ Never edit product code during an upkeep run unless the user explicitly asks. Ne
 
 5. **Rerun and judge.**
    - **Pass:** prove the updated check can still fail by testing a broken variant or temporary scratch break (for example, removing a guard or reordering a step), watching it fail, and dropping the break.
-   - **Fail:** replay the counterexample step by step against the real code (using `skills/bee-formal-verifying/references/statechart.md` for TLA+ traces). If any step cannot happen in code, fix the verification and record what was wrong. If every step can happen, report it as a `bug` with the introducing commit, the plain-word step sequence, and the harm in one sentence (attach a scratch test or live repro as evidence if cheap, without committing it to product code).
+   - **Fail:** trace every counterexample step against the live implementation (using `skills/bee-formal-verifying/references/statechart.md` for TLA+ traces). When a step is impossible in code, repair the model and log the discrepancy. When every step is reachable in code, file a `bug` citing the introducing commit, the plain-language trace, and a one-sentence harm statement (include a scratch test or live repro if inexpensive, without committing it to product code).
 
 6. **Update the verify skill.** Update the coverage table, covered files/functions, commands, bounds, and assumptions in `.bee/verify/<name>/SKILL.md`, and advance the sync commit to the verified commit (never advance the sync commit on a `blocked` check). Run `bee onboard --verify-only --apply` and execute the verify skill once as a cold agent would.
 
@@ -58,8 +58,8 @@ Never edit product code during an upkeep run unless the user explicitly asks. Ne
 For each check, report:
 - the outcome (`in sync`, `updated`, `bug`, `blocked`, or `updated` + `bug`) and the commits reviewed;
 - each verification change and its reason (code shape change or intentional promise change with evidence);
-- the rerun result and the broken variant or scratch break that proved the check can still fail;
-- each bug in plain words: counterexample steps, one-sentence harm, and introducing commit;
+- the post-update run and the broken variant or scratch break that proved failure detection;
+- for every bug, a plain-language trace, one-sentence harm, and the introducing commit;
 - what remains uncovered, including new code that should be covered.
 
-Keep verification updates in their own change, separate from any product fix.
+Commit verification changes separately from any product bug fix.

@@ -29,7 +29,7 @@ This is for new or changed behavior, built from a named data shape.
    flow's code, when the host has that reference. Each break it reports stays a
    guess until a test on the real code fails the same way, because a model can
    disagree with the code for reasons the code does not share. With no such
-   skill on the host (only for hosts on an older bee), skip this step and say
+   reference on the host (only for hosts on an older bee), skip this step and say
    so.
 4. Write the throughput checkpoint as four todo items, because the
    decomposition decides whether a fan-out helps or collides. A dimension that

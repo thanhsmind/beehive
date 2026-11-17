@@ -16,35 +16,35 @@ metadata:
 
 # Formal verifying — generate a project-local formal check
 
-Unit tests check the scenarios an author thought to write. Formal verification checks every case within stated bounds: every interleaving of steps in a state model, every input up to a size limit, or every possible input. This skill picks the part of the codebase where that exhaustive coverage matters most, builds and runs one check, and writes a project-local skill so future agents can verify changes against that promise.
+Example-based tests exercise only the paths an author anticipated. Formal methods explore the full state space inside declared limits: all action interleavings in a transition model, all inputs up to a bound, or the entire input domain. Use this skill to pick the highest-risk guarantee in a codebase, build one automated check for it, and package that check as a project-local skill.
 
-Write the generated skill for an agent reading it cold mid-change. A reader must be able to trust the result and act on it without knowing the verification language.
+Author the generated skill for a cold reader mid-change; an engineer or agent should be able to interpret its output and act without knowing the checker's syntax.
 
-## 1. Pick the target from the code
+## 1. Choose what to verify
 
-Inspect the codebase first; ask the user only for facts you cannot observe. Start in the area or bug the user named, if any.
+Ground the choice in the source tree and ask the user only for constraints you cannot read from code. Start in the area or bug the user named, if any.
 
 A strong target is a promise the code makes whose failure harms users and whose failure modes tests rarely hit (concurrent state transitions, lock/claim handoffs, retry loops, parsers, or invariants across boundaries). Pick the highest-risk promise in the repo rather than the easiest one to model.
 
-## 2. Let the question pick the tool
+## 2. Match the tool to the question
 
 Choose the lowest-cost tool that answers the exact question:
 
 - **Step order and concurrency:** use a model checker over a small model of the design. TLA+ with TLC is the default for event-order questions in any language.
 - **Every-input code behavior:** use a code-level verifier (for memory safety, integer overflow, or data-structure invariants) when one exists for the language.
-- **No verifier on the language:** say so explicitly and test the real code with generated inputs instead of modeling the function by hand.
+- **Languages without a verifier:** state the gap openly and write property-based or generated-input tests against the real implementation instead of hand-translating functions into a model.
 - **Unbounded size:** use a proof assistant only when a bound cannot settle the property.
 
-Prefer a tool the repo's developers can install and run reproducibly, and explain why you chose it in the handoff.
+Pick a tool the team can install and run deterministically, and document the rationale in your handoff.
 
 ## 3. What makes the check trustworthy
 
-- **True to the code.** Every model action or proof element maps to code a reviewer can open. One indivisible step in the verification corresponds to one indivisible step (such as one lock block) in the code. Use the repo's own names.
-- **Able to fail.** A check that has never failed proves nothing. Show each rule failing on a broken variant (for example, a removed guard or a reordered step) before trusting a pass.
-- **Findings stay findings.** If current code violates a rule, report the counterexample in the code's words. Never weaken a rule or model to force a pass, and never edit product code unless the user asks.
+- **True to the code.** Tie every model step or assertion to concrete source lines a reviewer can inspect. Match one indivisible model transition to one indivisible code operation (such as a single lock acquisition) and keep the repo's identifiers.
+- **Able to fail.** Never trust a green check you have not seen go red. Demonstrate failure on a broken variant (for instance, a dropped guard or swapped step) before accepting a pass.
+- **Findings stay findings.** Report any rule violation in the current implementation as a concrete sequence of code-level events. Do not relax invariants or tweak the model to force green, and leave product files untouched unless asked.
 - **Honest about scope.** Record bounds, assumptions, and exclusions. Passing means the property holds within those bounds, not across the entire system.
-- **Readable without the tool.** State each rule and its harm in one plain sentence. Write counterexamples as short step sequences in the code's own terms.
-- **Cheap to rerun.** Provide one command, pin tool versions, and keep the run fast enough for agents to run on every relevant change.
+- **Readable without the tool.** Explain each invariant and its user impact in one plain sentence, and translate counterexamples into short code-level event traces.
+- **Cheap to rerun.** Wrap execution in one command, pin tool versions, and bound the state space so agents can run it on every touch to covered code.
 - **Kept in step with the code.** Record the covered files, covered functions, and the sync commit where the verification was last confirmed to match the code.
 
 ## 4. Generate the skill under `.bee/verify/<name>/`
@@ -63,7 +63,7 @@ Create `.bee/verify/<name>/` (never `bee-` prefixed, because bee prunes unowned 
 
 See `.bee/verify/formal-cell-lifecycle` (`SKILL.md`, `check`, `CellLifecycle.tla`, `OwnerBlindClear.cfg`, and `NoOwnershipCheck.cfg`) as the worked example in this repo.
 
-Re-render the generated source into every runtime skill home (`.claude/skills/`, `.codex/skills/`, `.agents/skills/`, `.opencode/skills/`) using `bee onboard --verify-only --apply` (no bee checkout needed). Never hand-edit the rendered copies; they are overwritten on the next apply.
+Re-render the generated source into every runtime skill home (`.claude/skills/`, `.agents/skills/`, `.opencode/skills/`) using `bee onboard --verify-only --apply` (no bee checkout needed). Never hand-edit the rendered copies; they are overwritten on the next apply.
 
 ## 5. Prove it on a broken variant before handoff
 
@@ -71,7 +71,7 @@ Follow the generated skill once as a cold agent would:
 
 1. Run the check as-is and confirm it passes (or fails only on the findings you are reporting).
 2. Introduce a scratch change in the real code (or run the broken variant) that violates the guarded property, and confirm the check catches it.
-3. Drop the scratch change and confirm the check returns to its baseline result.
+3. Revert the scratch change and verify the check returns to its prior state.
 4. Run `bee onboard --verify-only --apply` so every runtime home has the proven skill.
 
 A generated verify skill that has not been run and shown to fail on a break is a draft, not a deliverable.
