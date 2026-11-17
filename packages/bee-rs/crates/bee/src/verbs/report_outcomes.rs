@@ -1589,4 +1589,296 @@ mod tests {
         assert_eq!(report_root_snapshot(target.path()), before);
         assert!(!bare.path().join(".bee").exists());
     }
+
+    fn scorecard_write(root: &Path, rel: &str, body: &str) {
+        let path = root.join(rel);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(path, body).unwrap();
+    }
+
+    fn scorecard_add_sources(root: &Path) {
+        scorecard_write(root, ".bee/lanes/slp-article-gaps.json", r#"{"feature":"slp-article-gaps","created_at":"2026-11-01T00:00:00Z"}"#);
+        scorecard_write(root, ".bee/lanes/other-feat.json", r#"{"feature":"other-feat","created_at":"2026-11-10T00:00:00Z"}"#);
+        scorecard_write(root, ".bee/usage/slp-article-gaps.json", r#"{"feature":"slp-article-gaps","closed_at":"2026-11-03T12:00:00Z"}"#);
+        let audit = [
+            r#"{"kind":"gate","feature":"slp-article-gaps","note":"gate execution set to false by user"}"#,
+            r#"{"kind":"gate","feature":"slp-article-gaps","note":"gate execution set to true by user"}"#,
+            r#"{"kind":"gate","feature":"slp-article-gaps","note":"gate shape set to false by auto"}"#,
+            r#"{"kind":"gate-bypass","feature":"slp-article-gaps","note":"gate shape set to false by auto: normal"}"#,
+            r#"{"kind":"gate-bypass","feature":"other-feat","note":"gate execution set to false by auto: normal"}"#,
+            r#"{"kind":"gate-bypass","feature":"other-feat","note":"gate execution set to true by auto: normal"}"#,
+            r#"{"kind":"cap","feature":"other-feat","note":"gate execution set to false by user"}"#,
+        ];
+        scorecard_write(root, ".bee/audit.jsonl", &format!("{}\n", audit.join("\n")));
+        scorecard_write(root, ".bee/mailbox/job-a/job.json", r#"{"feature":"slp-article-gaps","usage":{"cost_usd":0.5,"total_tokens":1000}}"#);
+        scorecard_write(root, ".bee/mailbox/job-b/job.json", r#"{"feature":"slp-article-gaps","usage":{"cost_usd":0.25,"total_tokens":500}}"#);
+        scorecard_write(root, ".bee/mailbox/job-c/job.json", r#"{"feature":"other-feat"}"#);
+    }
+
+    fn scorecard_store() -> (tempfile::TempDir, PathBuf) {
+        let (tmp, root) = setup_fixture_store();
+        scorecard_add_sources(&root);
+        scorecard_write(
+            &root,
+            ".bee/cells/c-20-other.json",
+            r#"{"id":"c-20","feature":"other-feat","fixes_feature":"slp-article-gaps","trace":{"capped_at":"2026-11-10T05:30:00Z"}}"#,
+        );
+        scorecard_write(
+            &root,
+            ".bee/cells/c-21-other.json",
+            r#"{"id":"c-21","feature":"other-feat","trace":{"capped_at":"2026-11-10T01:00:00Z"}}"#,
+        );
+        (tmp, root)
+    }
+
+    fn scorecard_of(root: &Path, since: Option<Stamp>) -> Scorecard {
+        scorecard(&collect_outcomes(root, None), &read_inputs(root), since, None)
+    }
+
+    fn scorecard_row<'a>(card: &'a Scorecard, feature: &str) -> &'a FeatureRow {
+        card.rows.iter().find(|r| r.feature == feature).unwrap()
+    }
+
+    fn scorecard_stamp(s: &str) -> Stamp {
+        parse_stamp(s).unwrap()
+    }
+
+    #[test]
+    fn scorecard_metrics_with_a_source_print_values() {
+        let (_tmp, root) = scorecard_store();
+        let card = scorecard_of(&root, None);
+        let slp = scorecard_row(&card, "slp-article-gaps");
+        assert_eq!(slp.cells, 19);
+        assert_eq!(slp.rework_rate, Some(10.5));
+        assert_eq!(slp.judge_revision_rate, Some(33.3));
+        assert_eq!(slp.reaction_coverage, Some(26.3));
+        assert_eq!(slp.cycle_secs, Some(216_000));
+        assert_eq!(slp.gate_reopens, Some(2));
+        assert_eq!(slp.fix_first, Some(1));
+        assert_eq!(slp.cost_usd, Some(0.75));
+        assert_eq!(slp.total_tokens, Some(1500));
+        assert!(slp.closed);
+        let text = card.to_text();
+        let lines: Vec<&str> = text.lines().collect();
+        assert_eq!(lines.len(), 3);
+        assert_eq!(
+            lines[1],
+            "slp-article-gaps: cells 19 · rework 10.5% · judge revisions 33.3% · reactions 26.3% · cycle 2d 12h · gate reopens 2 · fix-first 1 · cost $0.75 · tokens 1500"
+        );
+    }
+
+    #[test]
+    fn scorecard_metrics_without_a_source_print_not_recorded_never_zero() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path().to_path_buf();
+        scorecard_write(&root, ".bee/cells/a.json", r#"{"id":"a","feature":"bare"}"#);
+        let card = scorecard_of(&root, None);
+        let bare = scorecard_row(&card, "bare");
+        assert_eq!(bare.judge_revision_rate, None);
+        assert_eq!(bare.cycle_secs, None);
+        assert_eq!(bare.gate_reopens, None);
+        assert_eq!(bare.fix_first, None);
+        assert_eq!(bare.cost_usd, None);
+        assert_eq!(bare.total_tokens, None);
+        assert_eq!(
+            card.to_text().lines().nth(1).unwrap(),
+            "bare: cells 1 · rework 0% · judge revisions not recorded · reactions 0% · cycle not recorded · gate reopens not recorded · fix-first not recorded · cost not recorded · tokens not recorded"
+        );
+    }
+
+    #[test]
+    fn scorecard_lane_without_cells_prints_not_recorded_rates() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path().to_path_buf();
+        scorecard_write(&root, ".bee/lanes/fresh.json", r#"{"feature":"fresh","created_at":"2026-11-01T00:00:00Z"}"#);
+        let card = scorecard_of(&root, None);
+        let fresh = scorecard_row(&card, "fresh");
+        assert_eq!(fresh.cells, 0);
+        assert_eq!(fresh.rework_rate, None);
+        assert_eq!(fresh.reaction_coverage, None);
+        assert_eq!(fresh.cycle_secs, None);
+        assert_eq!(card.header(), "features: 1 (closed 0) · rework rate not recorded overall");
+        let line = card.to_text().lines().nth(1).unwrap().to_string();
+        assert!(line.starts_with("fresh: cells 0 · rework not recorded · judge revisions not recorded · reactions not recorded"), "{line}");
+        assert!(!line.contains(" 0%"), "{line}");
+    }
+
+    #[test]
+    fn scorecard_cycle_time_ends_at_the_usage_closed_at() {
+        let (_tmp, root) = scorecard_store();
+        scorecard_write(
+            &root,
+            ".bee/cells/c-22.json",
+            r#"{"id":"c-22","feature":"slp-article-gaps","trace":{"capped_at":"2026-11-09T00:00:00Z"}}"#,
+        );
+        let card = scorecard_of(&root, None);
+        assert_eq!(scorecard_row(&card, "slp-article-gaps").cycle_secs, Some(216_000));
+    }
+
+    #[test]
+    fn scorecard_cycle_time_falls_back_to_the_newest_capped_at() {
+        let (_tmp, root) = scorecard_store();
+        let card = scorecard_of(&root, None);
+        let other = scorecard_row(&card, "other-feat");
+        assert!(!other.closed);
+        assert_eq!(other.cycle_secs, Some(19_800));
+        assert!(card.to_text().contains("other-feat: cells 3 · rework 0% · judge revisions not recorded · reactions 33.3% · cycle 5h 30m · "));
+    }
+
+    #[test]
+    fn scorecard_gate_reopens_count_gate_rows_and_skip_bypass_rows_beside_them() {
+        let (_tmp, root) = scorecard_store();
+        let card = scorecard_of(&root, None);
+        assert_eq!(scorecard_row(&card, "slp-article-gaps").gate_reopens, Some(2));
+    }
+
+    #[test]
+    fn scorecard_gate_reopens_count_bypass_rows_when_no_gate_row_exists() {
+        let (_tmp, root) = scorecard_store();
+        let card = scorecard_of(&root, None);
+        assert_eq!(scorecard_row(&card, "other-feat").gate_reopens, Some(1));
+    }
+
+    #[test]
+    fn scorecard_gate_reopens_ignore_other_kinds_and_true_sets() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path().to_path_buf();
+        scorecard_write(&root, ".bee/cells/a.json", r#"{"id":"a","feature":"f"}"#);
+        scorecard_write(
+            &root,
+            ".bee/audit.jsonl",
+            "{\"kind\":\"cap\",\"feature\":\"f\",\"note\":\"gate shape set to false by user\"}\n{\"kind\":\"gate\",\"feature\":\"f\",\"note\":\"gate shape set to true by user\"}\nnot json\n",
+        );
+        let card = scorecard_of(&root, None);
+        assert_eq!(scorecard_row(&card, "f").gate_reopens, Some(0));
+    }
+
+    #[test]
+    fn scorecard_fix_first_counts_cells_naming_the_feature() {
+        let (_tmp, root) = scorecard_store();
+        scorecard_write(
+            &root,
+            ".bee/cells/c-23.json",
+            r#"{"id":"c-23","feature":"other-feat","fixes_feature":"slp-article-gaps"}"#,
+        );
+        let card = scorecard_of(&root, None);
+        assert_eq!(scorecard_row(&card, "slp-article-gaps").fix_first, Some(2));
+        assert_eq!(scorecard_row(&card, "other-feat").fix_first, Some(0));
+    }
+
+    #[test]
+    fn scorecard_cost_sums_usage_across_two_jobs() {
+        let (_tmp, root) = scorecard_store();
+        let card = scorecard_of(&root, None);
+        let slp = scorecard_row(&card, "slp-article-gaps");
+        assert_eq!(slp.cost_usd, Some(0.75));
+        assert_eq!(slp.total_tokens, Some(1500));
+        let other = scorecard_row(&card, "other-feat");
+        assert_eq!(other.cost_usd, None);
+        assert_eq!(other.total_tokens, None);
+    }
+
+    #[test]
+    fn scorecard_header_counts_closed_features_beside_overall_rework() {
+        let (_tmp, root) = scorecard_store();
+        let card = scorecard_of(&root, None);
+        assert_eq!(card.header(), "features: 2 (closed 1) · rework rate 9.1% overall");
+        let names: Vec<&str> = card.rows.iter().map(|r| r.feature.as_str()).collect();
+        assert_eq!(names, ["slp-article-gaps", "other-feat"]);
+        assert_eq!(card.to_text().lines().next().unwrap(), card.header());
+    }
+
+    #[test]
+    fn scorecard_since_a_duration_keeps_features_started_inside_it() {
+        let (_tmp, root) = scorecard_store();
+        let bound = parse_since("7d", scorecard_stamp("2026-11-15T00:00:00Z")).unwrap();
+        assert_eq!(bound, scorecard_stamp("2026-11-08T00:00:00Z"));
+        let card = scorecard_of(&root, Some(bound));
+        let names: Vec<&str> = card.rows.iter().map(|r| r.feature.as_str()).collect();
+        assert_eq!(names, ["other-feat"]);
+        assert_eq!(card.header(), "features: 1 (closed 0) · rework rate 0% overall");
+        assert_eq!(parse_since("48h", scorecard_stamp("2026-11-15T00:00:00Z")), Some(scorecard_stamp("2026-11-13T00:00:00Z")));
+    }
+
+    #[test]
+    fn scorecard_since_an_iso_bound_is_inclusive_and_drops_laneless_features() {
+        let (_tmp, root) = scorecard_store();
+        scorecard_write(&root, ".bee/cells/c-24.json", r#"{"id":"c-24","feature":"no-lane"}"#);
+        let at = parse_since("2026-11-10T00:00:00Z", Utc::now()).unwrap();
+        let names: Vec<String> = scorecard_of(&root, Some(at)).rows.into_iter().map(|r| r.feature).collect();
+        assert_eq!(names, ["other-feat"]);
+        let day = parse_since("2026-11-01", Utc::now()).unwrap();
+        let names: Vec<String> = scorecard_of(&root, Some(day)).rows.into_iter().map(|r| r.feature).collect();
+        assert_eq!(names, ["slp-article-gaps", "other-feat"]);
+        let all: Vec<String> = scorecard_of(&root, None).rows.into_iter().map(|r| r.feature).collect();
+        assert!(all.contains(&"no-lane".to_string()));
+    }
+
+    #[test]
+    fn scorecard_flags_parse_by_feature_and_since() {
+        let opts = parse(&[OsString::from("--by-feature"), OsString::from("--since"), OsString::from("7d")]).unwrap();
+        assert!(opts.by_feature);
+        assert!(opts.since.is_some());
+        let opts = parse(&[OsString::from("--since=2026-11-01T00:00:00Z"), OsString::from("--by-feature")]).unwrap();
+        assert_eq!(opts.since, Some(scorecard_stamp("2026-11-01T00:00:00Z")));
+        assert!(parse(&[OsString::from("--since"), OsString::from("soon")]).is_none());
+        assert!(parse(&[OsString::from("--since")]).is_none());
+        let plain = parse(&[]).unwrap();
+        assert!(!plain.by_feature);
+        assert!(plain.since.is_none());
+    }
+
+    #[test]
+    fn scorecard_json_carries_null_for_not_recorded() {
+        let (_tmp, root) = scorecard_store();
+        let json = scorecard_of(&root, None).to_json();
+        assert_eq!(json["header"], "features: 2 (closed 1) · rework rate 9.1% overall");
+        let slp = &json["features"][0];
+        assert_eq!(slp["feature"], "slp-article-gaps");
+        assert_eq!(slp["closed"], true);
+        assert_eq!(slp["cycle_time_seconds"], 216_000);
+        assert_eq!(slp["cost_usd"], 0.75);
+        assert_eq!(slp["total_tokens"], 1500);
+        let other = &json["features"][1];
+        assert_eq!(other["feature"], "other-feat");
+        assert_eq!(other["rework_rate"], 0.0);
+        assert!(other["judge_revision_rate"].is_null());
+        assert!(other["cost_usd"].is_null());
+        assert!(other["total_tokens"].is_null());
+        assert_eq!(other["fix_first_cells"], 0);
+
+        let tmp = tempfile::tempdir().unwrap();
+        scorecard_write(tmp.path(), ".bee/cells/a.json", r#"{"id":"a","feature":"bare"}"#);
+        let bare = scorecard_of(tmp.path(), None).to_json();
+        for key in ["created_at", "judge_revision_rate", "cycle_time_seconds", "gate_reopens", "fix_first_cells", "cost_usd", "total_tokens"] {
+            assert!(bare["features"][0][key].is_null(), "{key} must be null");
+        }
+    }
+
+    #[test]
+    fn scorecard_sources_leave_the_no_flag_output_on_its_golden() {
+        let (_tmp, root) = setup_fixture_store();
+        let golden = [
+            "worker reaction: 6 cells (3 changed) — confirm: 2, partial: 1, challenge: 1, blocked: 1, null: 1, absent: 13",
+            "dissent: 4 cells, 4 records (2 changed) — accept: 1, reject: 1, escalate: 1, unanswered: 1",
+            "semantic judge: 3 cells, 3 records (1 changed) — PASS: 1, NEEDS_REVISION: 1, other: 1",
+            "leader check: 2 cells, 2 records (1 changed) — gap: 1, ok: 1",
+            "rework: 2 cells (2 changed)",
+            "role reroute: 1 cells, 1 records (1 changed)",
+            "plan departure: 7 cells, 8 records — hit an unforeseen obstacle: 2, found a better route: 2, the plan was wrong about a fact: 1, something else had to be fixed first: 1, followed the plan: 1, other: 1",
+        ];
+        let before = collect_outcomes(&root, Some("slp-article-gaps"));
+        let before_text = render_text(&before);
+        let before_json = render_json(&before);
+        let lines: Vec<&str> = before_text.lines().collect();
+        assert_eq!(lines[..7], golden);
+        assert!(lines[7].starts_with("unreadable: 1 ("));
+
+        scorecard_add_sources(&root);
+        let after = collect_outcomes(&root, Some("slp-article-gaps"));
+        assert_eq!(render_text(&after), before_text);
+        assert_eq!(render_json(&after), before_json);
+        let after_json = render_json(&after);
+        assert!(after_json.get("features").is_none() && after_json.get("header").is_none());
+    }
 }
