@@ -12069,6 +12069,50 @@ use std::time::Instant;
     }
 
     #[test]
+    fn gis4t_separator_verify_refuses_a_near_miss_and_a_plain_different_command() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_bee_config(root, &json!({"commands": {"test": "none"}}));
+        let mut c = cell("gis4t-mis", "claimed", "f", json!([]));
+        c["verify"] = json!("cargo test -p bee — --nocapture");
+        write_cell_fixture(root, "gis4t-mis", &c);
+        let before = std::fs::read_to_string(cell_file(root, "gis4t-mis")).unwrap();
+
+        for tests in [
+            "cargo test -p bee — --exact — green:unit — touched tests.rs",
+            "cargo test -p bee — --nocapture --exact — green:unit — touched tests.rs",
+        ] {
+            let report = json!({"outcome":"o","commit":"c","files":[],"tests":tests,"deviations":[]}).to_string();
+            let flags = cap_flags_report("gis4t-mis", Some(&report));
+            assert!(cap_cell_from_flags(root, &flags, false).is_err(), "{tests} must be refused");
+        }
+        let report = r#"{"outcome":"o","commit":"c","files":[],"tests":"cargo test -p other — green:unit — touched tests.rs","deviations":[]}"#;
+        let flags = cap_flags_report("gis4t-mis", Some(report));
+        let refusal = thrown(cap_cell_from_flags(root, &flags, false));
+        assert!(refusal.contains("does not match approved cell verify command"), "{refusal}");
+        let after = std::fs::read_to_string(cell_file(root, "gis4t-mis")).unwrap();
+        assert_eq!(before, after, "a refused cap must write nothing to disk");
+    }
+
+    #[test]
+    fn gis4t_separator_verify_with_a_red_result_is_refused_as_red_and_writes_nothing() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_bee_config(root, &json!({"commands": {"test": "none"}}));
+        let mut c = cell("gis4t-red", "claimed", "f", json!([]));
+        c["verify"] = json!("cargo test -p bee — --nocapture");
+        write_cell_fixture(root, "gis4t-red", &c);
+        let before = std::fs::read_to_string(cell_file(root, "gis4t-red")).unwrap();
+
+        let report = r#"{"outcome":"o","commit":"c","files":[],"tests":"cargo test -p bee — --nocapture — red — one test failed","deviations":[]}"#;
+        let flags = cap_flags_report("gis4t-red", Some(report));
+        let refusal = thrown(cap_cell_from_flags(root, &flags, false));
+        assert!(refusal.contains("result segment is \"red\""), "{refusal}");
+        let after = std::fs::read_to_string(cell_file(root, "gis4t-red")).unwrap();
+        assert_eq!(before, after, "a refused cap must write nothing to disk");
+    }
+
+    #[test]
     fn pihp_replayable_proof_exact_trimmed_bytes_match() {
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
