@@ -13,7 +13,7 @@ ask: build
 
 **Chi phí và rủi ro:** Cỡ vừa: hai chỗ sửa, mỗi chỗ có một bài kiểm tra. Rủi ro: nếu xóa dòng nhập sai cách, chữ đang gõ có thể bị mất.
 
-**Anh cần làm:** Anh không cần làm gì. Kế hoạch mặc định là sửa trong lượt herding tới.
+**Anh cần làm:** Làm. Hai lỗi giao việc vẫn còn. Tôi sửa trong lượt tới.
 
 **Chuẩn xong:**
 - Lệnh ghi lại ô gốc một lần lúc bắt đầu chạy.

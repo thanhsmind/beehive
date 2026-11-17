@@ -13,7 +13,7 @@ ask: park
 
 **Chi phí và rủi ro:** Cỡ lớn. Cần một chương trình mới, một danh sách dự án, và một bước tìm hiểu trước. Rủi ro: các dự án dùng bản bee khác nhau, nên trang có thể đọc sai dữ liệu.
 
-**Anh cần làm:** Hoãn, hoặc mở bước tìm hiểu ngay. Tôi đề nghị hoãn. Waggledance đã cho xem nhiều dự án, nên cần biết trước hai thứ này khác nhau ở đâu.
+**Anh cần làm:** Hoãn. Bảng việc chung đã cho xem mọi dự án. Tôi chỉ mở lại khi biết rõ trang mới thêm được gì so với bảng đó.
 
 **Chuẩn xong:**
 - Chương trình chỉ đọc mở một cổng trên máy và liệt kê mọi dự án đã đăng ký.

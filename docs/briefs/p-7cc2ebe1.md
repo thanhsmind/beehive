@@ -13,7 +13,7 @@ ask: build
 
 **Chi phí và rủi ro:** Cỡ nhỏ. Rủi ro: một giới hạn mặc định quá thấp làm chậm các đợt chạy song song đang dùng hiện nay.
 
-**Anh cần làm:** Chọn con số mặc định. Một là đặt bốn thợ. Hai là không đặt mặc định, chỉ sửa tài liệu cho đúng. Tôi đề nghị đặt bốn, vì tài liệu đã hứa con số này.
+**Anh cần làm:** Làm. Mã đã giữ con số. Chỉ còn sửa một tài liệu và thêm một bài kiểm tra.
 
 **Chuẩn xong:**
 - Con số giới hạn chỉ nằm ở một nơi.

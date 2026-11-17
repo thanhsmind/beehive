@@ -13,7 +13,7 @@ ask: drop
 
 **Chi phí và rủi ro:** Lỗi đã được sửa. Bước kiểm tra trước khi gộp bây giờ đọc ba nguồn theo thứ tự. Hồ sơ của luồng là một trong ba nguồn đó. Mã có ghi rõ rằng trước đây bước này bỏ sót hồ sơ của luồng.
 
-**Anh cần làm:** Không cần làm gì. Tôi đề nghị bỏ việc này, vì lỗi đã được sửa trong mã.
+**Anh cần làm:** Bỏ khỏi danh sách. Lỗi đã được sửa trong mã.
 
 **Chuẩn xong:**
 - Việc được đánh dấu bỏ, có ghi lý do là lỗi đã được sửa.

@@ -13,7 +13,7 @@ ask: build
 
 **Chi phí và rủi ro:** Rất nhỏ: sửa một hàm và thêm một bài kiểm tra. Rủi ro thấp. Mục models nay đã đổi tên thành team, nên ít dự án còn gặp lỗi này.
 
-**Anh cần làm:** Anh không cần làm gì. Kế hoạch mặc định là sửa trong một lượt việc nhỏ.
+**Anh cần làm:** Làm. Lỗi rõ và nhỏ. Tôi sửa trong một lượt.
 
 **Chuẩn xong:**
 - Bộ chặn nhận ra CLI ghi trong mục models khi tệp cấu hình cũng có mục team.

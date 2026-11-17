@@ -2,7 +2,7 @@
 title: Chạy vòng tự cải tiến của bee trên phản hồi của một tuần làm việc
 audience: owner
 size: M
-ask: build
+ask: drop
 ---
 
 **Là gì:** Bee có một kỹ năng tự cải tiến. Kỹ năng này đọc các phản hồi đã gom, xếp hạng chỗ vướng, rồi đề xuất sửa. Việc này chạy kỹ năng đó một lần trên một tuần làm việc, khoảng 620 lần lưu thay đổi.
@@ -13,7 +13,7 @@ ask: build
 
 **Chi phí và rủi ro:** Cỡ vừa, phần lớn là đọc và xếp hạng. Rủi ro thấp: kỹ năng này không tự đẩy thay đổi nào lên, mọi đề xuất phải chờ anh duyệt. Dữ liệu đã cũ hai tháng, nên một phần chỗ vướng có thể đã được sửa.
 
-**Anh cần làm:** Chọn chạy ngay, hoặc bỏ để chạy lại trên dữ liệu mới hơn. Tôi đề nghị chạy ngay, nhưng gộp cả các tuần sau đó vào một lần, vì dữ liệu tuần này đã cũ.
+**Anh cần làm:** Bỏ. Dữ liệu của tuần đó đã cũ. Một lần chạy mới sẽ là một mục mới với dữ liệu mới.
 
 **Chuẩn xong:**
 - Có bản xếp hạng chỗ vướng từ dữ liệu đã gom.

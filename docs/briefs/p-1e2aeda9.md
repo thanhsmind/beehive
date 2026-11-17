@@ -13,7 +13,7 @@ ask: park
 
 **Chi phí và rủi ro:** Cỡ vừa: một trường cấu hình mới, một bước kiểm tra và các bài kiểm tra. Rủi ro: cấu hình sai chặn cả việc hợp lệ.
 
-**Anh cần làm:** Có hai cách. Cách 1: hoãn đến khi thấy máy phụ giao việc sai trong thực tế. Cách 2: làm ngay. Tôi đề nghị hoãn, vì chưa thấy lỗi này xảy ra.
+**Anh cần làm:** Hoãn. Chưa thấy lỗi này xảy ra trong thực tế.
 
 **Chuẩn xong:**
 - Cấu hình nhận một danh sách vai được phép giao cho mỗi vai.

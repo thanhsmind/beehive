@@ -13,7 +13,7 @@ ask: drop
 
 **Chi phí và rủi ro:** Không tốn gì. Mục này chỉ chưa được đóng sau khi luật vào skill. Nếu để lại, nó làm danh sách việc dài hơn và có thể bị làm lại.
 
-**Anh cần làm:** Không cần làm gì. Tôi đề nghị bỏ mục này, vì luật đã nằm trong skill herding và đang chạy.
+**Anh cần làm:** Bỏ khỏi danh sách. Luật đã nằm trong skill và đang chạy.
 
 **Chuẩn xong:**
 - Mục này được đóng.

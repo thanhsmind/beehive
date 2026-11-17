@@ -13,7 +13,7 @@ ask: park
 
 **Chi phí và rủi ro:** Cỡ vừa. Mỗi lời dặn phải tách thành phần cố định và phần sửa được. Rủi ro: một repo sửa sai, và máy phụ trả kết quả lệch quy ước.
 
-**Anh cần làm:** Hoãn, hoặc làm ngay. Tôi đề nghị hoãn đến khi một dự án thật cần sửa lời dặn.
+**Anh cần làm:** Hoãn. Chưa có dự án nào cần sửa lời dặn của vai trò. Tôi mở lại khi có dự án cần.
 
 **Chuẩn xong:**
 - Mỗi vai trò có lời dặn mặc định, và repo có thể thay nó bằng một file.

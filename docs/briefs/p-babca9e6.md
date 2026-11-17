@@ -13,7 +13,7 @@ ask: build
 
 **Chi phí và rủi ro:** Cỡ nhỏ, chỉ thêm chữ vào kết quả hoặc phần trợ giúp. Rủi ro thấp. Lệnh vẫn từ chối chạy trong worktree, như quyết định cũ.
 
-**Anh cần làm:** Anh không cần quyết định gì. Đây là việc nội bộ, nên tôi đề nghị làm khi có chỗ trống.
+**Anh cần làm:** Làm. Bảng giao việc chưa chỉ lệnh in lại. Việc nhỏ, nên tôi xếp lịch làm.
 
 **Chuẩn xong:**
 - Mỗi việc trong đợt có ghi lệnh tạo lại gói.

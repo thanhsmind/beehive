@@ -2,7 +2,7 @@
 title: Cho phép lưu bản kế hoạch đã khóa vào kho mã
 audience: internal
 size: S
-ask: build
+ask: drop
 ---
 
 **Là gì:** Sau khi anh duyệt hình dạng một tính năng, bản kế hoạch của tính năng đó bị khóa, và không ai được sửa nó nữa. Nhưng bộ chặn cũng chặn lệnh đưa tệp vào danh sách chờ lưu. Vì vậy bản kế hoạch đã khóa không lưu vào kho mã được.
@@ -12,7 +12,7 @@ ask: build
 **Nguồn gốc:** Lỗi này xảy ra ngày 29 tháng 8 khi làm một tính năng. Tôi đã đọc mã: bộ chặn vẫn coi lệnh đưa tệp vào là một lần ghi.
 
 **Chi phí và rủi ro:** Cỡ nhỏ, chỉ sửa bộ chặn. Rủi ro: nếu sửa quá rộng, một lệnh ghi thật có thể lọt qua.
-**Anh cần làm:** Không cần anh quyết định. Mặc định là sửa khi có chỗ trống, vì đây là lỗi rõ ràng.
+**Anh cần làm:** Bỏ khỏi danh sách. Lỗi đã được sửa và có bài kiểm tra.
 
 **Chuẩn xong:**
 - Lệnh đưa bản kế hoạch đã khóa vào danh sách chờ lưu chạy được.

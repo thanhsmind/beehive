@@ -13,7 +13,7 @@ ask: build
 
 **Chi phí và rủi ro:** Nhỏ. Danh sách lõi hiện là file của upstream, nên cần chọn: thêm một danh sách riêng của bee cho lõi, hoặc xin upstream mở rộng. Chờ thì máy vẫn có thể gọi sai lệnh ở phần lõi.
 
-**Anh cần làm:** Làm ngay, hoặc để sau. Tôi đề nghị làm sau đợt nâng 0.6.2, vì cách làm đã có sẵn từ các gói.
+**Anh cần làm:** Làm. Tài liệu nhắc tới các lệnh mà danh sách lệnh chính không có. Việc nhỏ, nên tôi xếp lịch làm.
 
 **Chuẩn xong:**
 - Mỗi lệnh mà tài liệu lõi nhắc tới đều có trong một danh sách.

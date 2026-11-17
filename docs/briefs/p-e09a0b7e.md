@@ -13,7 +13,7 @@ ask: park
 
 **Chi phí và rủi ro:** Cỡ nhỏ. Rủi ro chính: chặn nhầm trích dẫn đúng.
 
-**Anh cần làm:** Không cần làm gì. Tôi đề nghị hoãn, vì lỗi này chưa xảy ra trong việc thật.
+**Anh cần làm:** Hoãn. Đây là giới hạn đã biết và đã ghi lại. Lỗi này chưa xảy ra trong việc thật.
 
 **Chuẩn xong:**
 - Bee nhận ra câu đứng trước trỏ tới câu trích, như câu có dấu hai chấm ở cuối hoặc có "the following".
