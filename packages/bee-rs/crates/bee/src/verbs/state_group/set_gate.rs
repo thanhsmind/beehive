@@ -3306,7 +3306,7 @@ mod tests {
             w(
                 &granted,
                 "docs/history/demo/plan.md",
-                "# Plan: demo\n\n## Cells, current slice preview\n\n```json\n[{\"id\":\"c1\",\"feature\":\"demo\",\"title\":\"Do thing\",\"lane\":\"standard\",\"role\":\"code\",\"action\":\"Implement it\",\"files\":[\"src/main.rs\"],\"read_first\":[],\"must_haves\":{\"truths\":[\"It works\"]},\"verify\":\"cargo check\"}]\n```\n",
+                "# Plan: demo\n\n## Cells, current slice preview\n\n```json\n[{\"id\":\"c1\",\"feature\":\"demo\",\"title\":\"Do thing\",\"lane\":\"standard\",\"role\":\"code\",\"action\":\"Implement it\",\"files\":[\"src/main.rs\"],\"read_first\":[],\"must_haves\":{\"truths\":[\"It works\"],\"why\":\"test fixture\",\"out_of_scope\":[]},\"verify\":\"cargo check\"}]\n```\n",
             );
             let code_preview = crate::router::try_native(
                 &[

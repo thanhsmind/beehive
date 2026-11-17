@@ -492,7 +492,7 @@ mod tests {
 
     #[test]
     fn plan_group_preview_prints_the_warning_and_still_succeeds() {
-        let cell = r#"[{"id":"c1","feature":"demo","title":"t","lane":"standard","role":"code","action":"act","files":["src/a.rs"],"read_first":[],"must_haves":{"truths":["x"]},"verify":"true"}]"#;
+        let cell = r#"[{"id":"c1","feature":"demo","title":"t","lane":"standard","role":"code","action":"act","files":["src/a.rs"],"read_first":[],"must_haves":{"truths":["x"],"why":"test fixture","out_of_scope":[]},"verify":"true"}]"#;
         let body = plan_body("").replace("D1 and D2.", "D1 only.").replace("## Role assignments\n\nr\n\n", "").replace("\nc\n", &format!("\n```json\n{cell}\n```\n"));
         let tmp = repo(&body, Some(CONTEXT));
         let state = r#"{"schema_version":"1.0","feature":"demo","phase":"planning","approved_gates":{}}"#;

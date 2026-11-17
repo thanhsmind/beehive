@@ -80,7 +80,9 @@ history.
    parity/pointer check for docs, a judge verdict for behavior) — plan the
    cell so that proof exists by cap time (rule: agents-proof-at-cap).
    "Manually check" is not an exit.
-4. **must_haves are contracts:** `truths` (observable behavior),
+4. **must_haves are contracts:** `why` (non-empty string: the reason the
+   work matters), `out_of_scope` (array of strings, `[]` when none: what
+   the worker must leave alone), `truths` (observable behavior),
    `artifacts` (path + substantive description — no stub counts),
    `key_links` (wired, not just existing), `prohibitions` (what must NOT
    change). Required for `standard`/`high-risk`; `tiny` may omit.
@@ -130,6 +132,8 @@ history.
   "affects_specs": [],
   "action": "Mount the session middleware from auth-2 onto all /api/* routes (per D2). Preserve the existing public response envelope (per D4). Follow the error-handler registration pattern already used in router.ts.",
   "must_haves": {
+    "why": "Unauthenticated requests currently reach /api/* handlers without a session check.",
+    "out_of_scope": ["Public /healthz routes", "Token refresh flow"],
     "truths": ["Unauthenticated /api/* requests return 401"],
     "artifacts": [{"path": "src/auth/middleware.ts", "substantive": "exports authGuard, no TODO stubs"}],
     "key_links": ["router.ts imports and mounts authGuard"],
@@ -158,7 +162,9 @@ stays the source of truth:
    legal only in a repo whose `commands.test` declares itself no-test (the
    `"none"` sentinel). `role` non-empty (Cell quality rule 10).
 3. **Lane.** One of `tiny`/`small`/`standard`/`high-risk`/`spike`;
-   `standard`/`high-risk` cells carry non-empty `must_haves.truths`.
+   `standard`/`high-risk` cells carry non-empty `must_haves.truths`, plus
+   non-empty `must_haves.why` and an `out_of_scope` string array (empty
+   allowed) checked at the plan-packet preview (`bee gate --preview`).
 4. **Scope-derived obligations.** Any `files` path under a release-manifest
    or onboarding-ledger root obliges `verify` to carry `bee dev
    release-manifest --check`, `files` to carry the manifest record, and the

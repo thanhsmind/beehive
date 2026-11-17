@@ -107,10 +107,14 @@ on this path; everything unresolved is written down, never guessed.
 2. Risk territory (auth, data loss, security, external providers,
    validation removal) parks at any confidence — risk is a property of
    the change, not of the assessor's certainty.
-3. Judge clarity and size over the evidence with the triage table above —
+3. Ask whether we should build it at all: who needs it (a named user or
+   caller), how we will know it worked (a check that can pass or fail),
+   and what makes us stop. An item that cannot answer the first two
+   parks, with the gap written into `Outstanding Questions`.
+4. Judge clarity and size over the evidence with the triage table above —
    your own reasoning, never a keyword match; a vague row parks here
    instead of interviewing.
-4. `bee route` records the call. Proceed → Lock, then planning.
+5. `bee route` records the call. Proceed → Lock, then planning.
    Park → Lock writes the evidence and open questions into `Outstanding
    Questions`; a later human Explore starts there, not from scratch. When
    the park cause is vagueness, not risk, also run `bee discovery stub

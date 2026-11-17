@@ -7,17 +7,100 @@ use crate::verbs::state_group::{
 };
 use crate::verbs::status_full::find_granted_worktree_for_feature;
 use crate::verbs::workflow_store::{
-    acquire_named_lock, find_live_workflow, lane_lock_name, list_workflows, read_lane_strict,
-    rebuild_lane_projection, update_workflow_assuming_lock, wf_id, write_lane,
+    acquire_named_lock, find_live_workflow, lane_lock_name, list_lanes, list_workflows,
+    read_lane_strict, rebuild_lane_projection, update_workflow_assuming_lock, wf_id, write_lane,
 };
 use crate::verbs::worktree::{
     build_instruction, build_session_transition, create_feature_worktree,
     emit_pi_transition_marker_if_present, feature_slug_ok, p, prelude, CErr, CompanionSpec, Pre,
 };
 use serde_json::{json, Map, Value};
+use std::collections::HashSet;
 use std::ffi::OsString;
 use std::process::ExitCode;
 use std::time::Instant;
+
+const DEFAULT_WIP_LIMIT: usize = 5;
+
+const WIP_OPEN_PHASES: &[&str] = &[
+    "exploring",
+    "planning",
+    "swarming",
+    "compounding",
+    "scribing",
+];
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct WipWarning {
+    count: usize,
+    limit: usize,
+    oldest: Vec<String>,
+}
+
+fn wip_limit_from_config(config: &Map<String, Value>) -> usize {
+    match config.get("wip_limit") {
+        Some(Value::Number(n)) => n
+            .as_u64()
+            .and_then(|v| usize::try_from(v).ok())
+            .unwrap_or(DEFAULT_WIP_LIMIT),
+        _ => DEFAULT_WIP_LIMIT,
+    }
+}
+
+fn evaluate_wip_warning(
+    lanes: &[Map<String, Value>],
+    started_feature: &str,
+    config: &Map<String, Value>,
+) -> Option<WipWarning> {
+    let limit = wip_limit_from_config(config);
+    if limit == 0 {
+        return None;
+    }
+
+    let mut open: Vec<(&str, Option<&str>)> = Vec::new();
+    let mut seen = HashSet::new();
+    for lane in lanes {
+        let Some(feature) = lane.get("feature").and_then(Value::as_str) else {
+            continue;
+        };
+        if feature == started_feature || !seen.insert(feature) {
+            continue;
+        }
+        let Some(phase) = lane.get("phase").and_then(Value::as_str) else {
+            continue;
+        };
+        if !WIP_OPEN_PHASES.contains(&phase) {
+            continue;
+        }
+        if matches!(lane.get("status").and_then(Value::as_str), Some("closed")) {
+            continue;
+        }
+        let created_at = lane.get("created_at").and_then(Value::as_str);
+        open.push((feature, created_at));
+    }
+
+    let count = open.len();
+    if count < limit {
+        return None;
+    }
+
+    open.sort_by(|(feat_a, ts_a), (feat_b, ts_b)| {
+        (ts_a.is_none(), ts_a.unwrap_or(""), *feat_a)
+            .cmp(&(ts_b.is_none(), ts_b.unwrap_or(""), *feat_b))
+    });
+
+    let oldest = open
+        .into_iter()
+        .take(3)
+        .map(|(feat, _)| feat.to_string())
+        .collect();
+
+    Some(WipWarning {
+        count,
+        limit,
+        oldest,
+    })
+}
 
 pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
     if args.first()?.to_str()? != "feature" {
@@ -223,15 +306,37 @@ fn run_start(tokens: &[OsString], t0: Instant) -> Option<ExitCode> {
             let _ = update_workflow_assuming_lock(&main_root, &wf_id(wf), patch);
         }
 
+    let config = crate::state::read_config_raw(&main_root);
+    let lanes = list_lanes(&main_root).unwrap_or_default();
+    let wip_warning = evaluate_wip_warning(&lanes, &feature, &config);
+
     if use_json {
-        println!(
-            "{}",
-            jsjson::stringify(&json!({
-                "worktree": p(&created.worktree_root),
-                "instruction": instruction,
-            }))
-        );
+        let mut out = json!({
+            "worktree": p(&created.worktree_root),
+            "instruction": instruction,
+        });
+        if let Some(ref w) = wip_warning
+            && let Some(obj) = out.as_object_mut()
+        {
+            obj.insert(
+                "wip_warning".into(),
+                json!({
+                    "count": w.count,
+                    "limit": w.limit,
+                    "oldest": w.oldest,
+                }),
+            );
+        }
+        println!("{}", jsjson::stringify(&out));
     } else {
+        if let Some(ref w) = wip_warning {
+            eprintln!(
+                "warning: {} open features (wip_limit {}); oldest: {}",
+                w.count,
+                w.limit,
+                w.oldest.join(", ")
+            );
+        }
         println!("{}", p(&created.worktree_root));
         println!("{instruction}");
     }
@@ -824,5 +929,162 @@ mod tests {
             crate::verbs::reservations::Out::Emit(_, _, code) => assert_eq!(code, 0),
             crate::verbs::reservations::Out::Thrown(msg) => panic!("merged gate must pass, got: {msg}"),
         }
+    }
+
+    fn wip_lane(feature: &str, phase: &str, created_at: &str) -> Map<String, Value> {
+        json!({"feature": feature, "phase": phase, "created_at": created_at})
+            .as_object()
+            .unwrap()
+            .clone()
+    }
+
+    fn wip_config(v: Value) -> Map<String, Value> {
+        v.as_object().unwrap().clone()
+    }
+
+    fn five_open_lanes() -> Vec<Map<String, Value>> {
+        vec![
+            wip_lane("e-feat", "exploring", "2026-01-05T00:00:00Z"),
+            wip_lane("p-feat", "planning", "2026-01-04T00:00:00Z"),
+            wip_lane("s-feat", "swarming", "2026-01-03T00:00:00Z"),
+            wip_lane("c-feat", "compounding", "2026-01-02T00:00:00Z"),
+            wip_lane("x-feat", "scribing", "2026-01-01T00:00:00Z"),
+        ]
+    }
+
+    #[test]
+    fn wip_limit_absent_key_warns_at_five_open_lanes_with_limit_five() {
+        let w = evaluate_wip_warning(&five_open_lanes(), "new-feat", &wip_config(json!({})))
+            .expect("five open lanes meet the default limit");
+        assert_eq!(w.count, 5);
+        assert_eq!(w.limit, 5);
+    }
+
+    #[test]
+    fn wip_limit_four_open_lanes_do_not_warn() {
+        let mut lanes = five_open_lanes();
+        lanes.pop();
+        assert_eq!(evaluate_wip_warning(&lanes, "new-feat", &wip_config(json!({}))), None);
+    }
+
+    #[test]
+    fn wip_limit_zero_never_warns() {
+        let mut lanes = five_open_lanes();
+        lanes.extend(five_open_lanes().into_iter().map(|mut l| {
+            let f = format!("{}-2", l["feature"].as_str().unwrap());
+            l.insert("feature".into(), json!(f));
+            l
+        }));
+        let cfg = wip_config(json!({"wip_limit": 0}));
+        assert_eq!(evaluate_wip_warning(&lanes, "new-feat", &cfg), None);
+    }
+
+    #[test]
+    fn wip_limit_non_integer_value_is_treated_as_absent() {
+        let mut four = five_open_lanes();
+        four.pop();
+        for bad in [json!("2"), json!(2.5), json!(-1), json!(null), json!(true), json!([2])] {
+            let cfg = wip_config(json!({"wip_limit": bad.clone()}));
+            assert_eq!(wip_limit_from_config(&cfg), 5, "value {bad}");
+            assert_eq!(evaluate_wip_warning(&four, "new-feat", &cfg), None, "value {bad}");
+            let w = evaluate_wip_warning(&five_open_lanes(), "new-feat", &cfg)
+                .unwrap_or_else(|| panic!("value {bad} must fall back to 5"));
+            assert_eq!(w.limit, 5);
+        }
+    }
+
+    #[test]
+    fn wip_limit_ignores_lanes_outside_the_five_working_phases() {
+        let mut lanes = five_open_lanes();
+        lanes.pop();
+        for (i, phase) in ["idle", "done", "closed", "abandoned", "reviewing", "Exploring", ""]
+            .iter()
+            .enumerate()
+        {
+            lanes.push(wip_lane(&format!("other-{i}"), phase, "2025-01-01T00:00:00Z"));
+        }
+        let mut no_phase = wip_lane("no-phase", "x", "2025-01-01T00:00:00Z");
+        no_phase.remove("phase");
+        lanes.push(no_phase);
+        assert_eq!(evaluate_wip_warning(&lanes, "new-feat", &wip_config(json!({}))), None);
+    }
+
+    #[test]
+    fn wip_limit_ignores_a_closed_lane() {
+        let mut lanes = five_open_lanes();
+        lanes[0].insert("status".into(), json!("closed"));
+        assert_eq!(evaluate_wip_warning(&lanes, "new-feat", &wip_config(json!({}))), None);
+        lanes[0].insert("status".into(), json!("active"));
+        assert!(evaluate_wip_warning(&lanes, "new-feat", &wip_config(json!({}))).is_some());
+    }
+
+    #[test]
+    fn wip_limit_does_not_count_the_started_feature() {
+        let lanes = five_open_lanes();
+        assert_eq!(evaluate_wip_warning(&lanes, "e-feat", &wip_config(json!({}))), None);
+        assert!(evaluate_wip_warning(&lanes, "new-feat", &wip_config(json!({}))).is_some());
+    }
+
+    #[test]
+    fn wip_limit_oldest_lists_three_slugs_by_created_at() {
+        let mut lanes = five_open_lanes();
+        lanes.push(wip_lane("late-feat", "planning", "2026-02-01T00:00:00Z"));
+        let w = evaluate_wip_warning(&lanes, "new-feat", &wip_config(json!({}))).unwrap();
+        assert_eq!(w.count, 6);
+        assert_eq!(w.oldest, vec!["x-feat", "c-feat", "s-feat"]);
+    }
+
+    #[test]
+    fn wip_limit_custom_limit_is_honored() {
+        let mut lanes = five_open_lanes();
+        lanes.truncate(2);
+        let cfg = wip_config(json!({"wip_limit": 2}));
+        let w = evaluate_wip_warning(&lanes, "new-feat", &cfg).unwrap();
+        assert_eq!((w.count, w.limit), (2, 2));
+        assert_eq!(w.oldest, vec!["p-feat", "e-feat"]);
+        lanes.pop();
+        assert_eq!(evaluate_wip_warning(&lanes, "new-feat", &cfg), None);
+    }
+
+    #[test]
+    fn wip_limit_feature_start_warns_and_still_succeeds() {
+        let tmp = tempfile::tempdir().unwrap();
+        let repo = init_repo(tmp.path());
+        for lane in five_open_lanes() {
+            let slug = lane["feature"].as_str().unwrap().to_string();
+            std::fs::write(
+                repo.join(".bee").join("lanes").join(format!("{slug}.json")),
+                serde_json::to_string(&Value::Object(lane)).unwrap(),
+            )
+            .unwrap();
+        }
+        let _guard = CwdGuard::enter(&repo);
+
+        let before = list_lanes(&repo).unwrap_or_else(|_| panic!("list_lanes failed"));
+        let cfg = crate::state::read_config_raw(&repo);
+        let w = evaluate_wip_warning(&before, "wip-feat", &cfg)
+            .expect("the handler's inputs must produce a warning");
+        assert_eq!((w.count, w.limit), (5, 5));
+
+        let argv = vec![
+            OsString::from("feature"),
+            OsString::from("start"),
+            OsString::from("--feature"),
+            OsString::from("wip-feat"),
+            OsString::from("--class"),
+            OsString::from("feature"),
+            OsString::from("--lane"),
+            OsString::from("standard"),
+            OsString::from("--files"),
+            OsString::from("1"),
+        ];
+        let code = try_native(&argv, Instant::now());
+        assert_eq!(code, Some(ExitCode::SUCCESS));
+        assert!(tmp.path().join("testrepo--wt--wip-feat").exists());
+        assert!(repo.join(".bee").join("lanes").join("wip-feat.json").exists());
+
+        let after = list_lanes(&repo).unwrap_or_else(|_| panic!("list_lanes failed"));
+        let w = evaluate_wip_warning(&after, "wip-feat", &cfg).unwrap();
+        assert_eq!(w.count, 5);
     }
 }

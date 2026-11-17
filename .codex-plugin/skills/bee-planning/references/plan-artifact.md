@@ -244,6 +244,8 @@ the high-risk default, with feasibility proof named per epic. Never force
   "action": "Run the writer consolidation step on this feature: run `bee knowledge consolidate --feature <feature-slug>`. Dedupe and trim the deltas the cells wrote, anchor each concept to the code it describes, never restate code, and write docs/history/<feature-slug>/delivery.md listing the concepts changed and why, one line each. Run `.bee/bin/bee knowledge check` green. One commit.",
   "verify": ".bee/bin/bee knowledge check",
   "must_haves": {
+    "why": "docs/knowledge is the state layer; a concept that lags the code misleads the next reader.",
+    "out_of_scope": ["code", "skills/"],
     "truths": [
       "area and pattern concepts describe the feature's changes, anchored to code",
       "docs/history/<feature-slug>/delivery.md lists every concept the feature changed"

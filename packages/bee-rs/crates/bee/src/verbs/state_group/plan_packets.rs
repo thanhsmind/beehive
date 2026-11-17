@@ -174,6 +174,19 @@ pub(crate) fn parse_plan_packets(text: &str) -> Result<Vec<Value>, String> {
                             "{id_disp} requires non-empty must_haves.truths for lane \"{lane}\""
                         )),
                     }
+                    match mh.get("why").and_then(|v| v.as_str()).map(str::trim) {
+                        Some(s) if !s.is_empty() => {}
+                        _ => problems.push(format!(
+                            "{id_disp} requires non-empty must_haves.why for lane \"{lane}\""
+                        )),
+                    }
+                    match mh.get("out_of_scope") {
+                        Some(Value::Array(a))
+                            if a.iter().all(|item| matches!(item, Value::String(_))) => {}
+                        _ => problems.push(format!(
+                            "{id_disp} requires must_haves.out_of_scope (array of strings) for lane \"{lane}\""
+                        )),
+                    }
                 }
             }
             _ => problems.push(format!(
@@ -936,7 +949,9 @@ mod tests {
                 "files": ["src/parser.rs"],
                 "read_first": ["docs/spec.md"],
                 "must_haves": {
-                    "truths": ["Parser handles all tokens"]
+                    "truths": ["Parser handles all tokens"],
+                    "why": "test fixture",
+                    "out_of_scope": []
                 },
                 "verify": "cargo test -p bee parse_test"
             }
@@ -991,7 +1006,7 @@ mod tests {
                 "action": "Action 1",
                 "files": ["src/f1.rs"],
                 "read_first": [],
-                "must_haves": { "truths": ["truth 1"] },
+                "must_haves": { "truths": ["truth 1"], "why": "test fixture", "out_of_scope": [] },
                 "verify": "cargo test -p bee t1"
             }
         ]);
@@ -1014,7 +1029,7 @@ mod tests {
                 "action": format!("Action {i}"),
                 "files": [format!("src/f{i}.rs")],
                 "read_first": [],
-                "must_haves": { "truths": [format!("truth {i}")] },
+                "must_haves": { "truths": [format!("truth {i}")], "why": "test fixture", "out_of_scope": [] },
                 "verify": format!("cargo test -p bee t{i}")
             }));
         }
@@ -1063,7 +1078,7 @@ mod tests {
                 "action": format!("Action {i}"),
                 "files": [format!("src/f{i}.rs")],
                 "read_first": [],
-                "must_haves": { "truths": [format!("truth {i}")] },
+                "must_haves": { "truths": [format!("truth {i}")], "why": "test fixture", "out_of_scope": [] },
                 "verify": format!("cargo test -p bee t{i}")
             })
         };
@@ -1143,6 +1158,154 @@ mod tests {
         assert!(err.contains("requires non-empty must_haves.truths"), "{err}");
     }
 
+    fn why_and_out_of_scope_plan(lane: &str, must_haves: Value) -> String {
+        let cells = json!([{
+            "id": "c1", "feature": "demo-feat", "title": "t", "lane": lane, "role": "code",
+            "action": "a", "files": ["src/lib.rs"], "read_first": [], "must_haves": must_haves,
+            "verify": "cargo test -p bee"
+        }]);
+        sample_plan_with_cells("demo-feat", &serde_json::to_string(&cells).unwrap())
+    }
+
+    fn why_and_out_of_scope_err(lane: &str, must_haves: Value) -> String {
+        parse_plan_packets(&why_and_out_of_scope_plan(lane, must_haves))
+            .expect_err("the packet should be refused")
+    }
+
+    #[test]
+    fn plan_packet_why_and_out_of_scope_missing_why_is_reported_by_key() {
+        for lane in ["standard", "high-risk"] {
+            let err = why_and_out_of_scope_err(
+                lane,
+                json!({ "truths": ["t"], "out_of_scope": [] }),
+            );
+            assert!(
+                err.contains(&format!(
+                    "cell \"c1\" requires non-empty must_haves.why for lane \"{lane}\""
+                )),
+                "{err}"
+            );
+            assert!(!err.contains("must_haves.out_of_scope"), "{err}");
+            assert!(!err.contains("must_haves.truths"), "{err}");
+        }
+    }
+
+    #[test]
+    fn plan_packet_why_and_out_of_scope_empty_string_why_is_reported_by_key() {
+        for why in ["", "   \n\t"] {
+            let err = why_and_out_of_scope_err(
+                "standard",
+                json!({ "truths": ["t"], "why": why, "out_of_scope": [] }),
+            );
+            assert!(err.contains("requires non-empty must_haves.why"), "{why:?}: {err}");
+            assert!(!err.contains("must_haves.out_of_scope"), "{err}");
+        }
+        let err = why_and_out_of_scope_err(
+            "standard",
+            json!({ "truths": ["t"], "why": 7, "out_of_scope": [] }),
+        );
+        assert!(err.contains("requires non-empty must_haves.why"), "{err}");
+    }
+
+    #[test]
+    fn plan_packet_why_and_out_of_scope_missing_out_of_scope_is_reported_by_key() {
+        for lane in ["standard", "high-risk"] {
+            let err = why_and_out_of_scope_err(
+                lane,
+                json!({ "truths": ["t"], "why": "it matters" }),
+            );
+            assert!(
+                err.contains(&format!(
+                    "cell \"c1\" requires must_haves.out_of_scope (array of strings) for lane \"{lane}\""
+                )),
+                "{err}"
+            );
+            assert!(!err.contains("must_haves.why"), "{err}");
+        }
+    }
+
+    #[test]
+    fn plan_packet_why_and_out_of_scope_non_array_out_of_scope_is_reported_by_key() {
+        for out_of_scope in [json!("nothing"), json!({}), json!(null), json!(["ok", 3])] {
+            let err = why_and_out_of_scope_err(
+                "standard",
+                json!({ "truths": ["t"], "why": "it matters", "out_of_scope": out_of_scope }),
+            );
+            assert!(
+                err.contains("requires must_haves.out_of_scope (array of strings)"),
+                "{out_of_scope}: {err}"
+            );
+            assert!(!err.contains("must_haves.why"), "{err}");
+        }
+    }
+
+    #[test]
+    fn plan_packet_why_and_out_of_scope_both_missing_reports_both_keys() {
+        let err = why_and_out_of_scope_err("high-risk", json!({ "truths": ["t"] }));
+        assert!(err.contains("must_haves.why"), "{err}");
+        assert!(err.contains("must_haves.out_of_scope"), "{err}");
+    }
+
+    #[test]
+    fn plan_packet_why_and_out_of_scope_empty_out_of_scope_array_passes() {
+        for lane in ["standard", "high-risk"] {
+            let cells = parse_plan_packets(&why_and_out_of_scope_plan(
+                lane,
+                json!({ "truths": ["t"], "why": "it matters", "out_of_scope": [] }),
+            ))
+            .unwrap_or_else(|e| panic!("{lane}: {e}"));
+            assert_eq!(cells.len(), 1);
+        }
+        parse_plan_packets(&why_and_out_of_scope_plan(
+            "standard",
+            json!({ "truths": ["t"], "why": "it matters", "out_of_scope": ["the add path"] }),
+        ))
+        .unwrap();
+    }
+
+    #[test]
+    fn plan_packet_why_and_out_of_scope_not_required_on_tiny_and_small() {
+        for lane in ["tiny", "small"] {
+            parse_plan_packets(&why_and_out_of_scope_plan(lane, json!({})))
+                .unwrap_or_else(|e| panic!("{lane}: {e}"));
+            parse_plan_packets(&why_and_out_of_scope_plan(lane, json!({ "truths": ["t"] })))
+                .unwrap_or_else(|e| panic!("{lane}: {e}"));
+        }
+    }
+
+    #[test]
+    fn gate_preview_why_and_out_of_scope_refuses_a_standard_packet_without_them() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        std::fs::create_dir_all(root.join("src")).unwrap();
+        std::fs::write(root.join("src").join("lib.rs"), "fn test() {}\n").unwrap();
+        write_state_file(
+            root,
+            r#"{"schema_version":"1.0","phase":"planning","feature":"demo-feat","mode":"standard"}"#,
+        );
+        waive_read_set(root, "demo-feat");
+        let flags = parse_flags(&["--no-lane"]).unwrap().0;
+
+        write_plan(root, "demo-feat", &why_and_out_of_scope_plan("standard", json!({ "truths": ["t"] })));
+        let Out::Thrown(err) = run_gate_preview_body(root, &flags, false).unwrap() else {
+            panic!("preview should refuse a packet without why and out_of_scope")
+        };
+        assert!(err.contains("must_haves.why"), "{err}");
+        assert!(err.contains("must_haves.out_of_scope"), "{err}");
+
+        write_plan(
+            root,
+            "demo-feat",
+            &why_and_out_of_scope_plan(
+                "standard",
+                json!({ "truths": ["t"], "why": "it matters", "out_of_scope": [] }),
+            ),
+        );
+        if let Out::Thrown(err) = run_gate_preview_body(root, &flags, false).unwrap() {
+            panic!("preview should accept why and an empty out_of_scope: {err}");
+        }
+    }
+
     #[test]
     fn pihp_gate_packet_shape_approval_refuses_missing_and_stale_preview() {
         let tmp = tmp_root();
@@ -1155,7 +1318,7 @@ mod tests {
         );
         let cell_pkt = json!([{
             "id": "c1", "feature": "demo-feat", "title": "t", "lane": "standard", "role": "code",
-            "action": "a", "files": ["src/lib.rs"], "read_first": [], "must_haves": { "truths": ["t"] }, "verify": "cargo test -p bee"
+            "action": "a", "files": ["src/lib.rs"], "read_first": [], "must_haves": { "truths": ["t"], "why": "test fixture", "out_of_scope": [] }, "verify": "cargo test -p bee"
         }]);
         write_plan(root, "demo-feat", &sample_plan_with_cells("demo-feat", &serde_json::to_string(&cell_pkt).unwrap()));
         waive_read_set(root, "demo-feat");
@@ -1178,7 +1341,7 @@ mod tests {
         // 4. Modify plan -> preview becomes stale
         let cell_pkt2 = json!([{
             "id": "c1", "feature": "demo-feat", "title": "t modified", "lane": "standard", "role": "code",
-            "action": "a modified", "files": ["src/lib.rs"], "read_first": [], "must_haves": { "truths": ["t"] }, "verify": "cargo test -p bee"
+            "action": "a modified", "files": ["src/lib.rs"], "read_first": [], "must_haves": { "truths": ["t"], "why": "test fixture", "out_of_scope": [] }, "verify": "cargo test -p bee"
         }]);
         write_plan(root, "demo-feat", &sample_plan_with_cells("demo-feat", &serde_json::to_string(&cell_pkt2).unwrap()));
 
@@ -1378,7 +1541,7 @@ mode: standard
     "action": "Implement it",
     "files": ["src/main.rs"],
     "read_first": [],
-    "must_haves": {{ "truths": ["It works"] }},
+    "must_haves": {{ "truths": ["It works"], "why": "test fixture", "out_of_scope": [] }},
     "verify": "cargo check"
   }}
 ]
@@ -1432,7 +1595,7 @@ mode: standard
 [
   {
     "id": "c1", "feature": "v2-feat", "title": "t", "lane": "standard", "role": "code",
-    "action": "a", "files": ["src/main.rs"], "read_first": [], "must_haves": { "truths": ["t"] }, "verify": "cargo check"
+    "action": "a", "files": ["src/main.rs"], "read_first": [], "must_haves": { "truths": ["t"], "why": "test fixture", "out_of_scope": [] }, "verify": "cargo check"
   }
 ]
 ```
@@ -1471,7 +1634,7 @@ mode: standard
 [
   {
     "id": "c1", "feature": "v1-feat", "title": "t", "lane": "standard", "role": "code",
-    "action": "a", "files": ["src/main.rs"], "read_first": [], "must_haves": { "truths": ["t"] }, "verify": "cargo check"
+    "action": "a", "files": ["src/main.rs"], "read_first": [], "must_haves": { "truths": ["t"], "why": "test fixture", "out_of_scope": [] }, "verify": "cargo check"
   }
 ]
 ```
@@ -1516,7 +1679,7 @@ mode: standard
 [
   {
     "id": "c1", "feature": "v2-feat", "title": "t", "lane": "standard", "role": "code",
-    "action": "a", "files": ["src/main.rs"], "read_first": [], "must_haves": { "truths": ["t"] }, "verify": "cargo check"
+    "action": "a", "files": ["src/main.rs"], "read_first": [], "must_haves": { "truths": ["t"], "why": "test fixture", "out_of_scope": [] }, "verify": "cargo check"
   }
 ]
 ```
@@ -1556,7 +1719,7 @@ mode: standard
 
 ```json
 [
-  { "id": "c1", "feature": "v2-feat", "title": "t", "lane": "standard", "role": "code", "action": "a", "files": ["src/main.rs"], "read_first": [], "must_haves": { "truths": ["t"] }, "verify": "cargo check" }
+  { "id": "c1", "feature": "v2-feat", "title": "t", "lane": "standard", "role": "code", "action": "a", "files": ["src/main.rs"], "read_first": [], "must_haves": { "truths": ["t"], "why": "test fixture", "out_of_scope": [] }, "verify": "cargo check" }
 ]
 ```
 "#;
@@ -1590,7 +1753,7 @@ mode: standard
 
 ```json
 [
-  { "id": "c1", "feature": "v2-feat", "title": "t", "lane": "standard", "role": "code", "action": "a", "files": ["src/main.rs"], "read_first": [], "must_haves": { "truths": ["t"] }, "verify": "cargo check" }
+  { "id": "c1", "feature": "v2-feat", "title": "t", "lane": "standard", "role": "code", "action": "a", "files": ["src/main.rs"], "read_first": [], "must_haves": { "truths": ["t"], "why": "test fixture", "out_of_scope": [] }, "verify": "cargo check" }
 ]
 ```
 "#;
@@ -1641,7 +1804,7 @@ mode: standard
 
 ```json
 [
-  {{ "id": "c1", "feature": "v2-feat", "title": "t", "lane": "standard", "role": "code", "action": "a", "files": ["src/main.rs"], "read_first": [], "must_haves": {{ "truths": ["t"] }}, "verify": "cargo check" }}
+  {{ "id": "c1", "feature": "v2-feat", "title": "t", "lane": "standard", "role": "code", "action": "a", "files": ["src/main.rs"], "read_first": [], "must_haves": {{ "truths": ["t"], "why": "test fixture", "out_of_scope": [] }}, "verify": "cargo check" }}
 ]
 ```
 "#);
@@ -1677,7 +1840,7 @@ mode: standard
 
 ```json
 [
-  {{ "id": "c1", "feature": "v2-feat", "title": "t", "lane": "standard", "role": "code", "action": "a", "files": ["src/main.rs"], "read_first": [], "must_haves": {{ "truths": ["t"] }}, "verify": "cargo check" }}
+  {{ "id": "c1", "feature": "v2-feat", "title": "t", "lane": "standard", "role": "code", "action": "a", "files": ["src/main.rs"], "read_first": [], "must_haves": {{ "truths": ["t"], "why": "test fixture", "out_of_scope": [] }}, "verify": "cargo check" }}
 ]
 ```
 "#);
@@ -1733,7 +1896,7 @@ mode: standard
 
 ```json
 [
-  {{ "id": "c1", "feature": "v2-feat", "title": "t", "lane": "standard", "role": "code", "action": "a", "files": ["src/main.rs"], "read_first": [], "must_haves": {{ "truths": ["t"] }}, "verify": "cargo check" }}
+  {{ "id": "c1", "feature": "v2-feat", "title": "t", "lane": "standard", "role": "code", "action": "a", "files": ["src/main.rs"], "read_first": [], "must_haves": {{ "truths": ["t"], "why": "test fixture", "out_of_scope": [] }}, "verify": "cargo check" }}
 ]
 ```
 "#);
@@ -1768,7 +1931,7 @@ mode: standard
 
 ```json
 [
-  {{ "id": "c1", "feature": "v2-feat", "title": "t", "lane": "standard", "role": "code", "action": "a", "files": ["src/main.rs"], "read_first": [], "must_haves": {{ "truths": ["t"] }}, "verify": "cargo check" }}
+  {{ "id": "c1", "feature": "v2-feat", "title": "t", "lane": "standard", "role": "code", "action": "a", "files": ["src/main.rs"], "read_first": [], "must_haves": {{ "truths": ["t"], "why": "test fixture", "out_of_scope": [] }}, "verify": "cargo check" }}
 ]
 ```
 "#);
@@ -1787,7 +1950,7 @@ mode: standard
             r#"{"schema_version":"1.0","phase":"planning","feature":"v1-feat","mode":"standard"}"#,
         );
         let legacy_plan = sample_plan_with_cells("v1-feat", r#"[
-  { "id": "c1", "feature": "v1-feat", "title": "t", "lane": "standard", "role": "code", "action": "a", "files": ["src/main.rs"], "read_first": [], "must_haves": { "truths": ["t"] }, "verify": "cargo check" }
+  { "id": "c1", "feature": "v1-feat", "title": "t", "lane": "standard", "role": "code", "action": "a", "files": ["src/main.rs"], "read_first": [], "must_haves": { "truths": ["t"], "why": "test fixture", "out_of_scope": [] }, "verify": "cargo check" }
 ]"#);
         write_plan(root, "v1-feat", &legacy_plan);
 
