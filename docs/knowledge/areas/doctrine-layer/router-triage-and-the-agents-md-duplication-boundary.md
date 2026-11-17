@@ -129,7 +129,7 @@ rule never disappears — only its elaboration moves.
 - **The formal-verification steps are shipped by bee.** The feature playbook's step 3 points to
   `skills/bee-formal-verifying/references/statechart.md` (a reference doc, not a skill) and step 8
   names `bee-formal-verifying` and `bee-formal-upkeep`, all shipped by bee through the plugin skill
-  trees (`docs/history/pstack-guide-gaps/CONTEXT.md` D1, D2). Each step is skipped, and the skip
+  trees (pstack-guide-gaps D1, D2). Each step is skipped, and the skip
   recorded, only on hosts running an older bee without them. The project-local verify skill
   `bee-formal-verifying` writes goes under `.bee/verify/<name>/`, so `bee onboard --verify-only --apply`
   renders it into every runtime.
@@ -333,7 +333,7 @@ is read as paths. `signals:` is optional: a comma list of tokens, each matching 
 classes, then file order. At most `principles_cap` rows print (repo config key, default 7, a value below 1 falls
 back to 7), and the rest print as one extra line of slugs, lower-ranked rows of the same class that can still be
 applied by name. `bee orient`, the session preamble and the worker principles arm share that one ranked
-function; only the worker arm knows touched files (the cell's own) and passes them (`docs/history/pstack-guide-gaps/CONTEXT.md` D4).
+function; only the worker arm knows touched files (the cell's own) and passes them (pstack-guide-gaps D4, D5). `bee-principle-explain-the-number` and its benchmark checklist in `expertise/performance.md` § Measuring without lying to yourself come from pstack-guide-gaps D3.
 A cap or finish refuses a `principles_used` entry whose slug is no row here or whose changed part is empty; a
 known slug outside the routed list is accepted and recorded with `off_route: true` (same file, D5).
 
