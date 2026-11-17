@@ -504,7 +504,10 @@ worker) the result file that `--from-job` reads. What happens: the answer has
 two sources read in this order — `--knowledge-used "<docs/knowledge path> —
 <the decision it changed>"` on the flag, then the worker report's
 `knowledge_used` array (which `--from-job` fills from the result's own array
-through `report_from_job`, and never requires). Any entry lands on the trace
+through `report_from_job`, and never requires; the same function copies the
+result's `reaction`, `skipped`, `unknowns`, `found` and `stopped` onto the report
+when present, so a herded cap records them as the native cap does and an absent
+or empty answer stays absent). Any entry lands on the trace
 as `trace.knowledge_used`, a list of `{path, changed}` split on the FIRST
 ` — ` separator; a line carrying no separator keeps the whole value as the
 path and leaves `changed` empty. With no entry, a `--no-knowledge-used` flag
