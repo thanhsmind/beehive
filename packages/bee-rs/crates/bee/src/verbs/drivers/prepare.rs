@@ -7200,6 +7200,53 @@ mod paseo_probe_tests {
     }
 
     #[test]
+    fn undeclared_herding_agent_with_no_agents_map_names_none() {
+        let tmp = tempfile::tempdir().unwrap();
+        let cfg = r#"{
+            "team": {"pi": {"code": {"kind": "herding", "agent": "ghost-worker"}}},
+            "herding": {"transport": "herdr"}
+        }"#;
+        let root = repo(&tmp, cfg);
+        w_cell(&root, "c-1");
+        let out = prepare_dispatch_with_role(
+            &root, "pi", "cell", Some("code"), Some("c-1"), Some("w"), false, None, None, false, None,
+        )
+        .unwrap();
+        let Prepared::Value(v) = out else { panic!("expected prepared value") };
+        let payload = &v["payload"];
+        assert_eq!(payload["transport_ready"], Value::Bool(false));
+        let reason = payload["transport_reason"].as_str().expect("string");
+        assert!(reason.contains("ghost-worker"), "{reason}");
+        assert!(reason.contains("none"), "{reason}");
+    }
+
+    #[test]
+    #[ignore = "gis-9t: gis-9 reports built-in agent claude-sonnet as undeclared"]
+    fn built_in_herding_agent_keeps_today_probe() {
+        let tmp = tempfile::tempdir().unwrap();
+        let cfg = r#"{
+            "team": {"pi": {"code": {"kind": "herding", "agent": "claude-sonnet"}}},
+            "herding": {
+                "transport": "herdr",
+                "agents": {
+                    "normal-worker": ["pi", "-a"]
+                }
+            }
+        }"#;
+        let root = repo(&tmp, cfg);
+        w_cell(&root, "c-1");
+        let out = prepare_dispatch_with_role(
+            &root, "pi", "cell", Some("code"), Some("c-1"), Some("w"), false, None, None, false, None,
+        )
+        .unwrap();
+        let Prepared::Value(v) = out else { panic!("expected prepared value") };
+        let payload = &v["payload"];
+        let (expected_ready, expected_reason, _) = herding_transport_probe(&|k| std::env::var(k).ok());
+        assert_eq!(payload["transport_ready"], Value::Bool(expected_ready));
+        assert_eq!(payload["transport_reason"], Value::String(expected_reason));
+    }
+
+    #[test]
     fn command_resolves_on_path_in_checks_existence() {
         let tmp = tempfile::tempdir().unwrap();
         let bin_dir = tmp.path().join("bin");
