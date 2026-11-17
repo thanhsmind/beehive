@@ -5087,6 +5087,34 @@ use std::process::ExitCode;
         );
     }
 
+    #[test]
+    fn tester_write_verbs_behind_shell_keywords_and_wrappers_stay_targets() {
+        for (cmd, want) in [
+            ("if true; then rm src/x; fi", vec!["src/x"]),
+            ("while false; do touch src/t; done", vec!["src/t"]),
+            ("command tee src/t", vec!["src/t"]),
+            ("nohup mkdir src/m", vec!["src/m"]),
+            ("time cp a src/c", vec!["src/c"]),
+            ("! mv a src/b", vec!["a", "src/b"]),
+            ("sh -c 'rm src/x'", vec!["src/x"]),
+            ("/usr/bin/env -i FOO=1 rm src/x", vec!["src/x"]),
+            ("sudo -u root tee src/y", vec!["src/y"]),
+            ("claude rm 4e1731f9 && rm src/z", vec!["src/z"]),
+        ] {
+            assert_eq!(extract_bash_targets(cmd).paths, want, "{cmd:?}");
+        }
+        for cmd in ["claude rm 4e1731f9 --force", "claude mv a b", "git commit -m 'rm src/x'"] {
+            let t = extract_bash_targets(cmd);
+            assert!(t.paths.is_empty() && !t.broad_write, "{cmd:?} -> {:?}", t.paths);
+        }
+        let fx = build_git_fixture("idle");
+        stage_file(&fx.root, ".claude/skills/a/SKILL.md");
+        let e = expect_done(bash("claude rm 4e1731f9 && git add .claude/skills"), &fx.root);
+        assert_eq!(e.code, 0, "{}", e.stderr);
+        let e = expect_done(bash("git add .claude/skills && rm src/x"), &fx.root);
+        assert_eq!(e.code, 2, "{}", e.stderr);
+    }
+
     // ── D1: cp/mv operand roles + fd-digit/ampersand null redirects ────────
 
     #[test]
