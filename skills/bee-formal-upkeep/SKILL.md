@@ -35,7 +35,7 @@ Do not modify product code during upkeep unless explicitly instructed. Never rel
 
 ## Pass
 
-1. **Locate existing checks.** Scan `.bee/verify/` for project-local skills that invoke a model checker, prover, or verifier on named source files (see `.bee/verify/formal-cell-lifecycle` as the worked example). Gather each skill's invariants, covered files and functions, bounds, command, and sync commit. If none exist, stop and direct the user to `bee-formal-verifying`. When a skill lacks a recorded sync commit, fall back to the most recent commit that touched its verification files and note that fallback in the report.
+1. **Locate existing checks.** Scan `.bee/verify/` for project-local skills that invoke a model checker, prover, or verifier on named source files (see the `formal-cell-lifecycle` verify skill in the bee repo itself as the worked example). Gather each skill's invariants, covered files and functions, bounds, command, and sync commit. If none exist, stop and direct the user to `bee-formal-verifying`. When a skill lacks a recorded sync commit, fall back to the most recent commit that touched its verification files and note that fallback in the report.
 
 2. **Baseline run.** Execute each check as found before editing anything and log the outcome. A green baseline only confirms the prior model still holds; a red baseline may indicate either drift or a defect, which step 5 will separate.
 
@@ -49,7 +49,7 @@ Do not modify product code during upkeep unless explicitly instructed. Never rel
 
 5. **Rerun and judge.**
    - **Pass:** prove the updated check can still fail by testing a broken variant or temporary scratch break (for example, removing a guard or reordering a step), watching it fail, and dropping the break.
-   - **Fail:** trace every counterexample step against the live implementation (using `skills/bee-formal-verifying/references/statechart.md` for TLA+ traces). When a step is impossible in code, repair the model and log the discrepancy. When every step is reachable in code, file a `bug` citing the introducing commit, the plain-language trace, and a one-sentence harm statement (include a scratch test or live repro if inexpensive, without committing it to product code).
+   - **Fail:** trace every counterexample step against the live implementation (using `bee-formal-verifying/references/statechart.md` for TLA+ traces). When a step is impossible in code, repair the model and log the discrepancy. When every step is reachable in code, file a `bug` citing the introducing commit, the plain-language trace, and a one-sentence harm statement (include a scratch test or live repro if inexpensive, without committing it to product code).
 
 6. **Update the verify skill.** Update the coverage table, covered files/functions, commands, bounds, and assumptions in `.bee/verify/<name>/SKILL.md`, and advance the sync commit to the verified commit (never advance the sync commit on a `blocked` check). Run `bee onboard --verify-only --apply` and execute the verify skill once as a cold agent would.
 

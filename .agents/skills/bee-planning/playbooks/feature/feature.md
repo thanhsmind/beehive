@@ -22,7 +22,7 @@ This is for new or changed behavior, built from a named data shape.
    `architect skipped: <reason>`; do not fold the design decision silently into
    implementation, because a choice nobody recorded is a choice nobody can
    review.
-3. Model an event-order flow with `skills/bee-formal-verifying/references/statechart.md`, so that TLC walks
+3. Model an event-order flow with `bee-formal-verifying/references/statechart.md`, so that TLC walks
    every step order and finds the stuck state a unit test never reaches:
    payment hold, capture and refund with retry, a message queue, a re-run or
    idempotent job, a multi-state workflow, a lock or lease. Do it before the

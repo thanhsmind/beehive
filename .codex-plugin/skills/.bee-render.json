@@ -40,11 +40,11 @@
     },
     {
       "name": "bee-formal-upkeep",
-      "sha256": "512ffe59d89f543fe779e234552e6c4e7a5044c3e41bf33223a0b7796a4d547d"
+      "sha256": "0b6d3459d129b749aefd32eb022bbca8890a4ce5e9d1d2baa847daeb2599187c"
     },
     {
       "name": "bee-formal-verifying",
-      "sha256": "5c50bf4e557e55c24afdae248d6c04ccdd82baff7a9b03c0661e1e40b1c519ac"
+      "sha256": "28ab13ad45f8b6aa9c10deaf5b60eec0b8ed261e51ae27ef61d0d6083321ff65"
     },
     {
       "name": "bee-grooming",
@@ -80,7 +80,7 @@
     },
     {
       "name": "bee-planning",
-      "sha256": "554f0806b00dd41d81f91c8788781a9129bd513754b7190ff99dd89a30b4af50"
+      "sha256": "704909841c5d419072bfd471c798b484ee736e40c57feb37f376669010472e70"
     },
     {
       "name": "bee-principle-attack-the-premise",

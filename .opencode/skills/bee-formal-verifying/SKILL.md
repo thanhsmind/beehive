@@ -61,7 +61,7 @@ Create `.bee/verify/<name>/` (never `bee-` prefixed, because bee prunes unowned 
 4. **Broken variants:** keep explicit broken configurations (or a `--variants` flag on the check script) so any future update can prove every rule still catches failures.
 5. **Reading TLC results:** when the check uses TLA+ and TLC, point to [`references/statechart.md`](references/statechart.md) for drawing a Mermaid statechart and replaying counterexamples against real code. Copy none of another skill's internal commands or options into the generated skill.
 
-See `.bee/verify/formal-cell-lifecycle` (`SKILL.md`, `check`, `CellLifecycle.tla`, `OwnerBlindClear.cfg`, and `NoOwnershipCheck.cfg`) as the worked example in this repo.
+See the `formal-cell-lifecycle` verify skill in this repo (`SKILL.md`, `check`, `CellLifecycle.tla`, `OwnerBlindClear.cfg`, and `NoOwnershipCheck.cfg`) as the worked example.
 
 Re-render the generated source into every runtime skill home (`.claude/skills/`, `.agents/skills/`, `.opencode/skills/`) using `bee onboard --verify-only --apply` (no bee checkout needed). Never hand-edit the rendered copies; they are overwritten on the next apply.
 
