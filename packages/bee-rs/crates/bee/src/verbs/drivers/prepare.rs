@@ -1671,6 +1671,25 @@ pub(crate) fn herding_transport_probe_for(
     }
 }
 
+fn declared_herding_agents(cfg: &Value) -> Vec<String> {
+    cfg.get("herding")
+        .and_then(|h| h.get("agents"))
+        .or_else(|| cfg.get("agents"))
+        .and_then(Value::as_object)
+        .map(|agents| agents.keys().cloned().collect())
+        .unwrap_or_default()
+}
+
+fn herding_agent_declared(cfg: &Value, name: &str) -> bool {
+    declared_herding_agents(cfg).iter().any(|declared| declared == name)
+}
+
+fn undeclared_agent_reason(cfg: &Value, name: &str) -> String {
+    let declared = declared_herding_agents(cfg);
+    let listed = if declared.is_empty() { "none".to_string() } else { declared.join(", ") };
+    format!("unknown herding agent {name:?} — herding.agents declares: {listed}")
+}
+
 /// provenance: dispatch-prepare.mjs prepareDispatch(root, {...}). Throws only
 /// on a malformed CALL; every legitimate cli-shaped / unconfigured-advisor /
 /// native-unavailable / claim-ownership resolution is a typed {ok:false}
@@ -3041,6 +3060,9 @@ pub(crate) fn prepare_dispatch_wire(
                         }
                     }
                     Some((_, Err(err))) => (false, err),
+                    None if agent.as_deref().is_some_and(|name| !herding_agent_declared(&cfg, name)) => {
+                        (false, undeclared_agent_reason(&cfg, agent.as_deref().unwrap_or_default()))
+                    }
                     None => {
                         let (ready, reason, _) = match transport_kind_at(root) {
                             Ok(kind) => herding_transport_probe_for(kind, &|k| std::env::var(k).ok()),
@@ -7122,6 +7144,34 @@ mod paseo_probe_tests {
         let reason = payload["transport_reason"].as_str().expect("string");
         assert!(reason.contains("bad-paseo"));
         assert!(reason.contains("provider"));
+    }
+
+    #[test]
+    fn undeclared_herding_agent_not_ready_names_declared_agents() {
+        let tmp = tempfile::tempdir().unwrap();
+        let cfg = r#"{
+            "team": {"pi": {"code": {"kind": "herding", "agent": "ghost-worker"}}},
+            "herding": {
+                "transport": "herdr",
+                "agents": {
+                    "normal-worker": ["pi", "-a"],
+                    "other-worker": ["pi"]
+                }
+            }
+        }"#;
+        let root = repo(&tmp, cfg);
+        w_cell(&root, "c-1");
+        let out = prepare_dispatch_with_role(
+            &root, "pi", "cell", Some("code"), Some("c-1"), Some("w"), false, None, None, false, None,
+        )
+        .unwrap();
+        let Prepared::Value(v) = out else { panic!("expected prepared value") };
+        let payload = &v["payload"];
+        assert_eq!(payload["transport_ready"], Value::Bool(false));
+        let reason = payload["transport_reason"].as_str().expect("string");
+        assert!(reason.contains("ghost-worker"), "{reason}");
+        assert!(reason.contains("normal-worker"), "{reason}");
+        assert!(reason.contains("other-worker"), "{reason}");
     }
 
     #[test]
