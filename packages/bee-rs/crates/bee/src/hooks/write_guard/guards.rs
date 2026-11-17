@@ -43,6 +43,13 @@ pub(crate) const GATE_ALLOWED_PREFIXES_GATED: [&str; 4] =
 pub(crate) const GATE_ALLOWED_PREFIXES_INTAKE: [&str; 4] =
     [".bee/", "docs/", "plans/", "AGENTS.md"];
 
+pub(crate) const SKILL_PROJECTION_PREFIXES: [&str; 3] =
+    [".claude/skills/", ".agents/skills/", ".opencode/skills/"];
+
+pub(crate) fn skill_projection_path(rel: &str) -> bool {
+    under_prefix_list(rel, &SKILL_PROJECTION_PREFIXES)
+}
+
 fn under_prefix_list(rel: &str, prefixes: &[&str]) -> bool {
     let normalized = normalize_rel(rel);
     prefixes.iter().any(|prefix| {
@@ -773,6 +780,34 @@ pub(crate) fn has_git_short_flag(tokens: &[String], letter: char) -> bool {
     })
 }
 
+fn is_head_prefix(tokens: &[String], i: usize) -> bool {
+    let token = tokens[i].as_str();
+    if matches!(
+        token,
+        "then" | "do" | "else" | "elif" | "if" | "while" | "until" | "!" | "{" | "time" | "nohup"
+            | "exec" | "command"
+    ) {
+        return true;
+    }
+    if let Some((name, _)) = token.split_once('=') {
+        return !name.is_empty() && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_');
+    }
+    if is_head_wrapper(token) {
+        return true;
+    }
+    let Some(prev) = i.checked_sub(1).map(|p| tokens[p].as_str()) else {
+        return false;
+    };
+    if token.starts_with('-') {
+        return is_head_wrapper(prev) || prev.starts_with('-');
+    }
+    matches!(prev, "-u" | "-g" | "-h" | "-p" | "-C" | "-r" | "-t" | "-U" | "-S")
+}
+
+fn is_head_wrapper(token: &str) -> bool {
+    matches!(token.rsplit('/').next().unwrap_or(""), "env" | "sudo")
+}
+
 pub(crate) fn extract_bash_targets(command: &str) -> BashTargets {
     let fenced = fence_heredocs(command);
     let deep = tokenize_deep(&fenced);
@@ -796,6 +831,7 @@ pub(crate) fn extract_bash_targets(command: &str) -> BashTargets {
         }
         paths.push(target.to_string());
     };
+    let mut at_head = true;
     let mut i = 0usize;
     while i < tokens.len() {
         let token = &tokens[i];
@@ -814,11 +850,16 @@ pub(crate) fn extract_bash_targets(command: &str) -> BashTargets {
             continue;
         }
         if is_separator(token) {
+            at_head = true;
             i += 1;
             continue;
         }
         let cmd = token.replace('\\', "/");
         let cmd = cmd.rsplit('/').next().unwrap_or("");
+        if at_head && is_head_prefix(&tokens, i) {
+            i += 1;
+            continue;
+        }
         if cmd == "cd" {
             // D4: mark every target from here on cd-opaque (once set, never
             // cleared — a second `cd` changes nothing already opaque) and
@@ -866,7 +907,13 @@ pub(crate) fn extract_bash_targets(command: &str) -> BashTargets {
                 end += 1;
             }
             let segment: Vec<String> = tokens[i + 2..end].to_vec();
+            let operands: Vec<&String> = segment.iter().filter(|t| !is_flag(t)).collect();
+            let staging_projection = (git_verb == "add"
+                || (git_verb == "rm" && segment.iter().any(|t| t == "--cached")))
+                && !operands.is_empty()
+                && operands.iter().all(|t| skill_projection_path(t));
             if git_verb == "add"
+                && !staging_projection
                 && (segment.iter().any(|t| t == "--all")
                     || segment.iter().any(|t| t == "--update")
                     || has_git_short_flag(&segment, 'A')
@@ -876,7 +923,8 @@ pub(crate) fn extract_bash_targets(command: &str) -> BashTargets {
             }
             for t in &segment {
                 if !is_flag(t) {
-                    let stage_only = git_verb == "add" && stage_only_target(t);
+                    let stage_only = (git_verb == "add" && stage_only_target(t))
+                        || (staging_projection && skill_projection_path(t));
                     if !stage_only {
                         add_target(t, &mut broad_write, &mut paths);
                     }
@@ -937,7 +985,7 @@ pub(crate) fn extract_bash_targets(command: &str) -> BashTargets {
             i = last + 1;
             continue;
         }
-        if matches!(cmd, "rm" | "mv" | "cp" | "mkdir" | "touch" | "tee") {
+        if at_head && matches!(cmd, "rm" | "mv" | "cp" | "mkdir" | "touch" | "tee") {
             let is_cp = cmd == "cp";
             let is_mv = cmd == "mv";
             let is_cp_mv = is_cp || is_mv;
@@ -1039,6 +1087,7 @@ pub(crate) fn extract_bash_targets(command: &str) -> BashTargets {
             i = last + 1;
             continue;
         }
+        at_head = false;
         i += 1;
     }
     let cd_opaque = match cd_marker {

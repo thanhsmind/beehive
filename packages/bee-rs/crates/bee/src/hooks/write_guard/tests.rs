@@ -3131,6 +3131,78 @@ use std::process::ExitCode;
     }
 
     #[test]
+    fn git_staging_skill_projection_trees_passes_the_idle_intake_gate() {
+        let fx = build_git_fixture("idle");
+        for rel in [".claude/skills/a/SKILL.md", ".agents/skills/a/SKILL.md", ".opencode/skills/a/SKILL.md"] {
+            stage_file(&fx.root, rel);
+        }
+        for cmd in [
+            "git add -u -- .agents/skills .claude/skills .opencode/skills",
+            "git add .claude/skills",
+            "git add -A .agents/skills .opencode/skills",
+            "git rm --cached -r .claude/skills",
+            "git commit -m sync -- .claude/skills .agents/skills",
+        ] {
+            let e = expect_done(bash(cmd), &fx.root);
+            assert_eq!(e.code, 0, "expected allow for {cmd:?}: {}", e.stderr);
+        }
+        let deny = expect_done(bash("git add .claude/skills src/new.js"), &fx.root);
+        assert_eq!(deny.code, 2, "{}", deny.stderr);
+        let deny = expect_done(bash("git rm .claude/skills/a/SKILL.md"), &fx.root);
+        assert_eq!(deny.code, 2, "{}", deny.stderr);
+    }
+
+    #[test]
+    fn write_and_edit_into_skill_projection_trees_stay_gated_at_idle() {
+        let fx = build_git_fixture("idle");
+        let e = expect_done(edit(".claude/skills/a/SKILL.md"), &fx.root);
+        assert_eq!(e.code, 2, "{}", e.stderr);
+        let e = expect_done(bash("echo x > .claude/skills/a/SKILL.md"), &fx.root);
+        assert_eq!(e.code, 2, "{}", e.stderr);
+    }
+
+    #[test]
+    fn worktree_first_allows_staging_skill_projection_trees_but_not_writing_them() {
+        let wtf = build_worktree_first_no_grant("swarming", Some("standard"));
+        add_live_session(&wtf.root, "other-live");
+        let run = |cmd: &str| {
+            expect_done(
+                json!({"tool_name":"Bash","tool_input":{"command":cmd},"session_id":"mine"}),
+                &wtf.root,
+            )
+        };
+        for cmd in [
+            "git add -u -- .agents/skills .claude/skills .opencode/skills",
+            "git add .claude/skills",
+            "git rm --cached -r .opencode/skills",
+        ] {
+            let e = run(cmd);
+            assert_eq!(e.code, 0, "expected allow for {cmd:?}: {}", e.stderr);
+        }
+        for cmd in ["echo x > .claude/skills/a/SKILL.md", "git add src/app.js", "git rm .claude/skills/a"] {
+            let e = run(cmd);
+            assert_eq!(e.code, 2, "expected deny for {cmd:?}: {}", e.stderr);
+            assert!(e.stderr.contains("worktree-first"), "{}", e.stderr);
+        }
+        let e = expect_done(
+            json!({"tool_name":"Edit","tool_input":{"file_path":".claude/skills/a/SKILL.md"},"session_id":"mine"}),
+            &wtf.root,
+        );
+        assert_eq!(e.code, 2, "{}", e.stderr);
+    }
+
+    #[test]
+    fn claude_rm_with_a_short_id_is_not_a_delete_of_the_id() {
+        let wtf = build_worktree_first_no_grant("swarming", Some("standard"));
+        let e = expect_done(bash("claude rm 4e1731f9"), &wtf.root);
+        assert_eq!(e.code, 0, "{}", e.stderr);
+        let e = expect_done(bash("rm -rf src/x"), &wtf.root);
+        assert_eq!(e.code, 2, "{}", e.stderr);
+        let e = expect_done(bash("echo x | tee src/y"), &wtf.root);
+        assert_eq!(e.code, 2, "{}", e.stderr);
+    }
+
+    #[test]
     fn git_commit_outside_terminal_phase_unaffected() {
         let fx = build_git_fixture("swarming");
         write_state(&fx.root, &swarming_state(true));
@@ -4969,6 +5041,50 @@ use std::process::ExitCode;
         assert_eq!(t.paths, vec!["f.txt"]);
         let t = extract_bash_targets("node x.mjs > out.log && echo done");
         assert_eq!(t.paths, vec!["out.log"]);
+    }
+
+    #[test]
+    fn extract_bash_targets_counts_a_write_verb_only_at_a_segment_head() {
+        for cmd in [
+            "claude rm 4e1731f9",
+            "echo rm src/x",
+            "npm run mv src/x",
+            "git log -- touch",
+            "echo \"rm src/x\"",
+        ] {
+            let t = extract_bash_targets(cmd);
+            assert!(t.paths.is_empty() && !t.broad_write, "{cmd:?} -> {:?}", t.paths);
+        }
+        assert_eq!(extract_bash_targets("rm -rf src/x").paths, vec!["src/x"]);
+        assert_eq!(extract_bash_targets("echo x | tee src/y").paths, vec!["src/y"]);
+        assert_eq!(extract_bash_targets("ls && mkdir src/d").paths, vec!["src/d"]);
+        assert_eq!(extract_bash_targets("ls; touch src/t").paths, vec!["src/t"]);
+        assert_eq!(extract_bash_targets("false || cp a src/c").paths, vec!["src/c"]);
+        assert_eq!(extract_bash_targets("mv a b").paths, vec!["a", "b"]);
+        assert_eq!(extract_bash_targets("sudo rm src/x").paths, vec!["src/x"]);
+        assert_eq!(extract_bash_targets("sudo -n rm src/x").paths, vec!["src/x"]);
+        assert_eq!(extract_bash_targets("env FOO=1 rm src/x").paths, vec!["src/x"]);
+        assert_eq!(extract_bash_targets("FOO=1 rm src/x").paths, vec!["src/x"]);
+    }
+
+    #[test]
+    fn extract_bash_targets_git_staging_of_skill_projection_trees_adds_no_target() {
+        for cmd in [
+            "git add -u -- .agents/skills .claude/skills .opencode/skills",
+            "git add .claude/skills",
+            "git add -A .agents/skills/bee-hive",
+            "git rm --cached -r .opencode/skills/x",
+        ] {
+            let t = extract_bash_targets(cmd);
+            assert!(t.paths.is_empty() && !t.broad_write, "{cmd:?} -> {:?}", t.paths);
+        }
+        assert!(extract_bash_targets("git add -u").broad_write);
+        assert!(extract_bash_targets("git add -u -- src .claude/skills").broad_write);
+        assert_eq!(extract_bash_targets("git rm .claude/skills/x").paths, vec![".claude/skills/x"]);
+        assert_eq!(
+            extract_bash_targets("git add src/a .claude/skills").paths,
+            vec!["src/a", ".claude/skills"]
+        );
     }
 
     // ── D1: cp/mv operand roles + fd-digit/ampersand null redirects ────────
