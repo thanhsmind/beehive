@@ -1,0 +1,205 @@
+{
+  "id": "pgg-4",
+  "feature": "pstack-guide-gaps",
+  "title": "Test principle ranking, the cap, the overflow line and the cap-time name check",
+  "lane": "standard",
+  "role": "test",
+  "deps": [
+    "pgg-3"
+  ],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee principle && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test principle_index_parity",
+  "must_haves": {
+    "truths": [
+      "a test shows a row whose signals match the lane or a touched file ranks above a row that matches nothing",
+      "a test shows a row with fewer classes ranks above a row with more classes when signals tie",
+      "a test shows at most principles_cap rows print and the rest appear as one overflow line, and that a class under the cap prints no overflow line",
+      "a test shows principles_cap from config changes the count and an invalid value falls back to 7",
+      "a test shows a cap refuses an unknown principle slug and an empty changed part, and records off_route true for a known slug outside the routed list",
+      "each new test was seen failing against a deliberately broken variant before it passed"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/principles.rs",
+        "substantive": "ranking and cap tests"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+        "substantive": "cap-time name check tests"
+      }
+    ],
+    "key_links": [
+      "tests assert behaviour through principle_lines and the cap verb, not private helpers"
+    ],
+    "prohibitions": [
+      "No code comments",
+      "Do not change non-test code; report a defect instead"
+    ],
+    "why": "A code cell never certifies itself; a separate tester pins pgg-3 behaviour.",
+    "out_of_scope": [
+      "production code changes"
+    ]
+  },
+  "decisions": [
+    "9d0ef7ad-246f-47ea-b551-cb0d49b741b6",
+    "8770ca73-090b-4f08-a245-1807bb495367"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/principles.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/pstack-guide-gaps/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/principles.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "You are the tester for pgg-3 and share no context with its author. Read docs/history/pstack-guide-gaps/CONTEXT.md D4 and D5 and the pgg-3 diff (git log -1 -p on the pgg-3 commit). Add tests in the tests module of src/principles.rs and in src/verbs/cells/tests.rs (and src/verbs/drivers/tests.rs for the worker arm passing the cell's files) that pin each must_have truth, through principle_lines and the cap verb as existing tests there do (see a_principles_arm_cap_needs_an_answer_and_a_holdout_arm_cap_does_not near tests.rs:6680 for the cap pattern). Name each test as a behaviour sentence and include the word principle in it so the verify filter selects it. For each new test, break the code it guards once (for example flip the rank order, or skip the slug check), watch it fail for that reason, and restore. If pgg-3 got a behaviour wrong, do not fix production code: report it as a finding. Allowed commands: cargo test with a filter, git. Never run the full suite, any bee dispatch verb or its help. No code comments. Proof: the verify command output with the count of new tests.",
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "pgg-test-4",
+    "outcome": "Added 9 principle tests pinning ranking, cap and overflow, config fallback, the cap-time slug and empty-changed refusals, off_route, and the worker arm; each seen red under a deliberate break; commit 9f519d4e99099d97d7c95fda92bc7b479d553b09",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/principles.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+    ],
+    "deviations": [
+      "sync-ack: test-only cell; the workflow-state skills describe the cap flow, whose wording pgg-3 kept"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-17T10:50:48.858Z",
+    "behavior_change": false,
+    "verification_evidence": "cargo test --release --bin bee principle (90 passed, 9 new) && cargo test --release --test principle_index_parity (5 passed) — green:unit — cell verify filter; 11 mutations each turned the guarding test red",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "a0ce07c8-1091-48d9-9002-9da6c530abb5",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee principle && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test principle_index_parity",
+    "claimed_at": "2026-11-17T10:29:39.111Z",
+    "knowledge_delta": [],
+    "sync_ack": "test-only cell; the workflow-state skills describe the cap flow, whose wording pgg-3 kept",
+    "no_mistakes": true,
+    "no_knowledge_used": true,
+    "principles_used": [
+      {
+        "slug": "bee-principle-red-before-green",
+        "changed": "broke each guarded line (11 mutations) and saw the test fail before trusting it"
+      },
+      {
+        "slug": "bee-principle-test-behavior-not-structure",
+        "changed": "asserted through principle_lines, cell_principles and the cap verb, not ranked_rows or known_slugs"
+      },
+      {
+        "slug": "bee-principle-verify-before-reporting",
+        "changed": "confirmed the lane gap with a failing probe and checked that route records do carry a lane before filing it"
+      }
+    ],
+    "report": {
+      "outcome": "Added 9 principle tests pinning ranking, cap and overflow, config fallback, the cap-time slug and empty-changed refusals, off_route, and the worker arm; each seen red under a deliberate break; commit 9f519d4e99099d97d7c95fda92bc7b479d553b09",
+      "commit": "9f519d4e99099d97d7c95fda92bc7b479d553b09",
+      "files": [
+        "packages/bee-rs/crates/bee/src/principles.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee principle && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test principle_index_parity — green:unit — cargo test --release --bin bee principle (90 passed, 9 new) && cargo test --release --test principle_index_parity (5 passed) — green:unit — cell verify filter; 11 mutations each turned the guarding test red",
+      "deviations": [],
+      "knowledge_used": [],
+      "principles_used": [
+        "bee-principle-red-before-green — broke each guarded line (11 mutations) and saw the test fail before trusting it",
+        "bee-principle-test-behavior-not-structure — asserted through principle_lines, cell_principles and the cap verb, not ranked_rows or known_slugs",
+        "bee-principle-verify-before-reporting — confirmed the lane gap with a failing probe and checked that route records do carry a lane before filing it"
+      ],
+      "reaction": "partial",
+      "skipped": [
+        "full suite and clippy -D warnings proof command — the cell action forbids the full suite; ran the cell verify plus clippy --tests on the bin",
+        "knowledge delta — the cell grants only the three test files"
+      ],
+      "found": [
+        "D4 gap: cell_route (verbs/drivers/prepare.rs) takes the ranking lane only from the feature route record, never from the cell's own lane field, although D4 says the worker arm passes the cell's lane; pinned the routed-lane behaviour instead and did not commit the failing probe",
+        "This brief's Principles block listed 32 rows with no overflow line, so the main checkout's bee binary likely predates pgg-3 (guess)"
+      ],
+      "stopped": "a test that the worker arm ranks by the cell's own lane — a probe shows cell_route ignores the cell lane (D4 defect), and production code is out of scope",
+      "patch_id": "7e39222f7cf1699746207ce9004687168e8ae724"
+    },
+    "reaction": "partial",
+    "skipped": [
+      "full suite and clippy -D warnings proof command — the cell action forbids the full suite; ran the cell verify plus clippy --tests on the bin",
+      "knowledge delta — the cell grants only the three test files"
+    ],
+    "found": [
+      "D4 gap: cell_route (verbs/drivers/prepare.rs) takes the ranking lane only from the feature route record, never from the cell's own lane field, although D4 says the worker arm passes the cell's lane; pinned the routed-lane behaviour instead and did not commit the failing probe",
+      "This brief's Principles block listed 32 rows with no overflow line, so the main checkout's bee binary likely predates pgg-3 (guess)"
+    ],
+    "stopped": "a test that the worker arm ranks by the cell's own lane — a probe shows cell_route ignores the cell lane (D4 defect), and production code is out of scope",
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "a test shows a row whose signals match the lane or a touched file ranks above a row that matches nothing",
+            "artifact": "packages/bee-rs/crates/bee/src/principles.rs"
+          },
+          {
+            "requirement": "a test shows a row with fewer classes ranks above a row with more classes when signals tie",
+            "artifact": "packages/bee-rs/crates/bee/src/principles.rs"
+          },
+          {
+            "requirement": "a test shows at most principles_cap rows print and the rest appear as one overflow line, and that a class under the cap prints no overflow line",
+            "artifact": "packages/bee-rs/crates/bee/src/principles.rs"
+          },
+          {
+            "requirement": "a test shows principles_cap from config changes the count and an invalid value falls back to 7",
+            "artifact": "packages/bee-rs/crates/bee/src/principles.rs"
+          },
+          {
+            "requirement": "a test shows a cap refuses an unknown principle slug and an empty changed part, and records off_route true for a known slug outside the routed list",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs"
+          },
+          {
+            "requirement": "each new test was seen failing against a deliberately broken variant before it passed",
+            "artifact": "packages/bee-rs/crates/bee/src/principles.rs"
+          },
+          {
+            "requirement": "tests assert behaviour through principle_lines and the cap verb, not private helpers",
+            "artifact": "packages/bee-rs/crates/bee/src/principles.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/principles.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/principles.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+          }
+        ],
+        "recorded_at": "2026-11-17T11:06:23.460Z",
+        "recorded_by": "a0ce07c8-1091-48d9-9002-9da6c530abb5",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": {
+    "new": 97219,
+    "cached": 1976456,
+    "total": 2073675,
+    "models": {
+      "claude-opus-5-5": {
+        "new": 97219,
+        "cached": 1976456,
+        "total": 2073675
+      }
+    },
+    "jobs": [
+      "job-1794911382583-3496762-1"
+    ]
+  }
+}

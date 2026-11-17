@@ -2383,5 +2383,10 @@
     "capped": 2,
     "dropped": 0,
     "archived_at": "2026-11-17T05:40:12.193Z"
+  },
+  "pstack-guide-gaps": {
+    "capped": 5,
+    "dropped": 0,
+    "archived_at": "2026-11-17T12:18:38.736Z"
   }
 }

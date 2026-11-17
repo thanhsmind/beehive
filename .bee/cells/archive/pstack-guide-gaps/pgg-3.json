@@ -1,0 +1,240 @@
+{
+  "id": "pgg-3",
+  "feature": "pstack-guide-gaps",
+  "title": "Rank and cap routed principles and refuse unknown principle names at cap",
+  "lane": "standard",
+  "role": "code",
+  "deps": [
+    "pgg-2"
+  ],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo clippy --release --manifest-path packages/bee-rs/Cargo.toml -- -D warnings && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee principle",
+  "must_haves": {
+    "truths": [
+      "parse_principles reads an optional signals line per row as a list of tokens",
+      "principle_lines takes route hints (lane, flags, touched files) and ranks the class's rows by signal matches, then fewer classes, then file order",
+      "at most principles_cap rows print, default 7, read from the repo config key principles_cap, and the remaining slugs print as one extra line",
+      "bee orient, the session preamble and the worker principles arm all call the same ranked function; the worker arm passes the cell's files and its feature's lane",
+      "a class with no more rows than the cap prints the same rows as before, ranked",
+      "a cap or finish refuses a principles_used slug that names no Principle homes row, and an entry whose changed part is empty",
+      "a known slug outside the routed list is accepted and recorded with off_route true in the trace"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/principles.rs",
+        "substantive": "signals parse, rank and cap"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+        "substantive": "principles_used validation"
+      }
+    ],
+    "key_links": [
+      "principle_lines is the one reader of the index"
+    ],
+    "prohibitions": [
+      "No code comments",
+      "Do not add a second reader of the index",
+      "Do not refuse a known off-route slug"
+    ],
+    "why": "A 29-row principle list is skimmed and the cap accepts any principle name.",
+    "out_of_scope": [
+      "new tests (pgg-4)",
+      "changing which classes a row routes to"
+    ]
+  },
+  "decisions": [
+    "9d0ef7ad-246f-47ea-b551-cb0d49b741b6",
+    "8770ca73-090b-4f08-a245-1807bb495367"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/principles.rs",
+    "packages/bee-rs/crates/bee/src/verbs/status_full/orient.rs",
+    "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs",
+    "packages/bee-rs/crates/bee/src/herding/mailbox.rs",
+    "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md",
+    "docs/knowledge/areas/workflow-state/dispatch.md"
+  ],
+  "read_first": [
+    "docs/history/pstack-guide-gaps/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/principles.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+    "packages/bee-rs/crates/bee/src/verbs/status_full/orient.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md"
+  ],
+  "action": "Implement CONTEXT.md D4 and D5 of docs/history/pstack-guide-gaps/CONTEXT.md in the bee CLI (packages/bee-rs/crates/bee). Facts from the code map: principle_lines(root, class) at src/principles.rs:116 is the one reader; parse_principles at :48-98 reads spoken and classes and ignores other continuation lines; render_lines at :128 filters by class in file order with no cap; orient calls it at src/verbs/status_full/orient.rs:638-649 and :746; the session preamble calls it (src/hooks/session_preamble/budget.rs); the worker arm is cell_principles at src/verbs/drivers/prepare.rs:1208-1227 (class from plan_group::route_class); the cap reader is read_principles_used_answer at src/verbs/cells/handlers_close.rs:1226-1255 with the trace write at :735-750; finish_support.rs:295-299 type-checks principles_used; herding/mailbox.rs:857-872 parses it from a herded result. (1) Add a signals field to the parsed row (optional comma list, trimmed). (2) Introduce a small hints value (lane: Option, flags: list, files: list) and change principle_lines to take it; callers with no route pass empty hints. A token matches when it equals the lane or a flag (case-insensitive) or, as a glob, matches any touched file path. Rank: signal match count descending, then number of classes ascending, then file order. (3) Cap: read principles_cap from the repo config (follow how principles_holdout_percent is read and registered; it is read straight from config with no registry), default 7, a value below 1 falls back to 7. Print the top rows as today, then one line naming the remaining slugs when any remain, worded so the reader knows they are lower-ranked rows of the same class and can still be applied by name. (4) Orient and preamble pass lane and flags from the route; the worker arm passes the cell's files and the feature's lane. (5) D5: in read_principles_used_answer and in the finish path, refuse with a typed message naming the bad entry and the fix when a slug matches no index row (use the same parse) or when the changed text is empty; when the slug is a known row but not in the routed list for this cell, record off_route: true beside slug and changed in the trace. (6) Fix existing tests that break only because the signature changed; do NOT write new tests: the tester cell pgg-4 writes them. (7) Knowledge sync: in the Principle homes grammar paragraph of docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md, state the ranking order, the cap key and default, and the overflow line, citing docs/history/pstack-guide-gaps/CONTEXT.md D4 and D5 (D-numbers, never raw ids); if docs/knowledge/areas/workflow-state/dispatch.md describes the principles arm or the principles_used cap answer, update that sentence. Allowed commands: cargo build, cargo clippy and cargo test with a filter, git. Never run the full suite, any bee dispatch verb or its help. No code comments in any language. Proof: the verify command output.",
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "pgg-code-3",
+    "outcome": "Principles rank by signals and cap at principles_cap with an overflow line; cap refuses unknown slugs and empty changed parts and records off_route; commit 445c559e844481d65db2ad0345f9d6f7e3dbdfc0",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/principles.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+      "packages/bee-rs/crates/bee/src/verbs/status_full/orient.rs",
+      "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+      "packages/bee-rs/crates/bee/src/verbs/plan_group.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+      "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs",
+      "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md",
+      "docs/knowledge/areas/workflow-state/dispatch.md"
+    ],
+    "deviations": [
+      "sync-ack: the cell also carries pgg-5's report file because both workers committed in one worktree index at the same time"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-17T10:29:32.519Z",
+    "behavior_change": false,
+    "verification_evidence": "cargo clippy --release -- -D warnings && cargo test --release --bin bee principle — green:unit — 81 passed, clippy clean",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "a0ce07c8-1091-48d9-9002-9da6c530abb5",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo clippy --release --manifest-path packages/bee-rs/Cargo.toml -- -D warnings && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee principle",
+    "claimed_at": "2026-11-17T10:22:23.291Z",
+    "knowledge_delta": [
+      "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md",
+      "docs/knowledge/areas/workflow-state/dispatch.md"
+    ],
+    "sync_ack": "the cell also carries pgg-5's report file because both workers committed in one worktree index at the same time",
+    "no_mistakes": true,
+    "no_principles_used": true,
+    "report": {
+      "outcome": "Principles rank by signals and cap at principles_cap with an overflow line; cap refuses unknown slugs and empty changed parts and records off_route; commit 445c559e844481d65db2ad0345f9d6f7e3dbdfc0",
+      "commit": "445c559e844481d65db2ad0345f9d6f7e3dbdfc0",
+      "files": [
+        "packages/bee-rs/crates/bee/src/principles.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+        "packages/bee-rs/crates/bee/src/verbs/status_full/orient.rs",
+        "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+        "packages/bee-rs/crates/bee/src/verbs/plan_group.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+        "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs",
+        "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md",
+        "docs/knowledge/areas/workflow-state/dispatch.md"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo clippy --release --manifest-path packages/bee-rs/Cargo.toml -- -D warnings && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee principle — green:unit — cargo clippy --release -- -D warnings && cargo test --release --bin bee principle — green:unit — 81 passed, clippy clean",
+      "deviations": [],
+      "principles_used": [],
+      "skipped": [
+        "full suite and the parity fence tests — brief forbids the full suite"
+      ],
+      "patch_id": "471de8bf688ba31f309b0dc4a2780690bbe3e485"
+    },
+    "skipped": [
+      "full suite and the parity fence tests — brief forbids the full suite"
+    ],
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "parse_principles reads an optional signals line per row as a list of tokens",
+            "artifact": "packages/bee-rs/crates/bee/src/principles.rs"
+          },
+          {
+            "requirement": "principle_lines takes route hints (lane, flags, touched files) and ranks the class's rows by signal matches, then fewer classes, then file order",
+            "artifact": "packages/bee-rs/crates/bee/src/principles.rs"
+          },
+          {
+            "requirement": "at most principles_cap rows print, default 7, read from the repo config key principles_cap, and the remaining slugs print as one extra line",
+            "artifact": "packages/bee-rs/crates/bee/src/principles.rs"
+          },
+          {
+            "requirement": "bee orient, the session preamble and the worker principles arm all call the same ranked function; the worker arm passes the cell's files and its feature's lane",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+          },
+          {
+            "requirement": "a class with no more rows than the cap prints the same rows as before, ranked",
+            "artifact": "packages/bee-rs/crates/bee/src/principles.rs"
+          },
+          {
+            "requirement": "a cap or finish refuses a principles_used slug that names no Principle homes row, and an entry whose changed part is empty",
+            "artifact": "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md"
+          },
+          {
+            "requirement": "a known slug outside the routed list is accepted and recorded with off_route true in the trace",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs"
+          },
+          {
+            "requirement": "principle_lines is the one reader of the index",
+            "artifact": "packages/bee-rs/crates/bee/src/principles.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/principles.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/principles.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/status_full/orient.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/status_full/orient.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/plan_group.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/plan_group.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs"
+          },
+          {
+            "requirement": "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md",
+            "artifact": "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md"
+          },
+          {
+            "requirement": "docs/knowledge/areas/workflow-state/dispatch.md",
+            "artifact": "docs/knowledge/areas/workflow-state/dispatch.md"
+          }
+        ],
+        "recorded_at": "2026-11-17T11:06:22.168Z",
+        "recorded_by": "a0ce07c8-1091-48d9-9002-9da6c530abb5",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": {
+    "new": 99016,
+    "cached": 1703663,
+    "total": 1802679,
+    "models": {
+      "claude-sonnet-5-5": {
+        "new": 99016,
+        "cached": 1703663,
+        "total": 1802679
+      }
+    },
+    "jobs": [
+      "job-1794910948271-3477624-1"
+    ]
+  }
+}

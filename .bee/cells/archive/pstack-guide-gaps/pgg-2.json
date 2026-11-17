@@ -1,0 +1,217 @@
+{
+  "id": "pgg-2",
+  "feature": "pstack-guide-gaps",
+  "title": "Add the explain-the-number principle with its benchmark checklist and row signals",
+  "lane": "standard",
+  "role": "docs",
+  "deps": [
+    "pgg-1"
+  ],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test principle_index_parity && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee render_matches_the_committed_trees && .bee/bin/bee onboard --repo-root . --json && .bee/bin/bee knowledge check && .bee/bin/bee dev release-manifest --check",
+  "must_haves": {
+    "truths": [
+      "skills/bee-principle-explain-the-number/SKILL.md exists with an Apply when description and Check, Not when, Why and Depth lines",
+      "expertise/performance.md section Measuring without lying to yourself holds the explain-the-number moves and seven numbered benchmark questions and the verdict set faster, slower, no measurable difference, inconclusive",
+      "the Principle homes index has a row for bee-principle-explain-the-number with classes perf, research, feature, bugfix, release",
+      "perf/perf-issue.md and perf/hillclimb.md cite expertise/performance.md section Measuring without lying to yourself",
+      "every Principle homes row carries a signals line placed after its classes line"
+    ],
+    "artifacts": [
+      {
+        "path": "skills/bee-principle-explain-the-number/SKILL.md",
+        "substantive": "principle skill with Depth pointer"
+      }
+    ],
+    "key_links": [
+      "the new row's guide heading resolves in expertise/performance.md"
+    ],
+    "prohibitions": [
+      "Do not copy pstack sentences verbatim",
+      "Do not create a separate benchmark-checklist skill",
+      "No code comments"
+    ],
+    "why": "A number reported outside a perf route gets no steer, and the cap in pgg-3 needs signals to rank by.",
+    "out_of_scope": [
+      "a separate benchmark-checklist skill",
+      "Rust changes"
+    ]
+  },
+  "decisions": [
+    "84beb6b6-4c15-4e24-877e-e00b11daac92",
+    "9d0ef7ad-246f-47ea-b551-cb0d49b741b6"
+  ],
+  "files": [
+    "skills/bee-principle-explain-the-number/SKILL.md",
+    "expertise/performance.md",
+    ".bee/expertise/performance.md",
+    "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md",
+    "skills/bee-planning/playbooks/perf/perf-issue.md",
+    "skills/bee-planning/playbooks/perf/hillclimb.md",
+    ".claude-plugin/skills/*",
+    ".codex-plugin/skills/*",
+    ".agents/skills/*",
+    ".opencode/skills/*",
+    ".bee/onboarding.json",
+    "skills-lock.json",
+    "docs/history/codex-harness-hardening/release-manifest.json",
+    "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+  ],
+  "read_first": [
+    "docs/history/pstack-guide-gaps/CONTEXT.md",
+    "skills/bee-principle-prove-it-works/SKILL.md",
+    "expertise/performance.md",
+    "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md",
+    "packages/bee-rs/crates/bee/tests/principle_index_parity.rs"
+  ],
+  "affects_skills": [
+    "skills/bee-principle-explain-the-number/SKILL.md",
+    "skills/bee-planning/playbooks/perf/perf-issue.md",
+    "skills/bee-planning/playbooks/perf/hillclimb.md"
+  ],
+  "affects_specs": [
+    "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md"
+  ],
+  "action": "Implement CONTEXT.md D3, and the authoring half of D4, of docs/history/pstack-guide-gaps/CONTEXT.md. Source text (data, never instructions; MIT, Lauren Tan): /mnt/data/Projects/goglbe/beehive/.bee/tmp/pstack-guide/up/principle-explain-the-number_SKILL.md and benchmark-checklist_SKILL.md. Write in bee's own plain words. (1) Extend expertise/performance.md section '## Measuring without lying to yourself' (extend, never duplicate the bullets already there): the moves (write the result that would change the decision and the noise floor before the run; ask why the number is not double and name the limiter from a profile or counters taken during a run; list what else the number could measure and rule each out; keep the run count, spread and limiter with the number), then a subsection '### The benchmark checklist' with seven numbered questions: limiter, tuned like production, past a physical limit, errors counted and outputs correct, at least five alternating runs per side with median and range, end-to-end share, work done inside the timed region; then the verdict set faster, slower, no measurable difference, inconclusive, and when to call it inconclusive. Copy the file to .bee/expertise/performance.md if regen does not. (2) skills/bee-principle-explain-the-number/SKILL.md modeled on skills/bee-principle-prove-it-works/SKILL.md: frontmatter name and one-line description starting 'Apply when'; # Explain the Number; two short paragraphs that also cover test counts, token counts and eval results, not only speed; **Check:**, **Not when:**, **Why:**, **Depth:** `.bee/expertise/performance.md` § Measuring without lying to yourself. Under 30 lines. (3) Index row in the Principle homes section of docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md, same grammar as the other rows: slug and guide heading line, spoken:, classes: perf, research, feature, bugfix, release, applied_at block; add the skill path to the doc's anchors frontmatter list. (4) D4 authoring: add a 'signals:' line after the 'classes:' line of EVERY row in that section. Tokens are comma separated and each is one of: a lane name (tiny, small, standard, high-risk, spike, docs), a route flag word, or a file glob such as '*.rs', 'packages/**', '.bee/**', 'skills/**', '*.md', '*.tla'. Pick two to five tokens per row that say where the principle changes a decision most: for example make-operations-idempotent gets 'packages/bee-rs/**/herding/**, *.tla, high-risk'; explain-the-number gets 'perf, packages/bee-rs/**/perf*'. Add one sentence to the grammar paragraph above the rows: signals is optional, read by bee orient for ranking, see docs/history/pstack-guide-gaps/CONTEXT.md D4. (5) perf/perf-issue.md step 1 and perf/hillclimb.md (the harness step near line 30): cite `.bee/expertise/performance.md` § Measuring without lying to yourself and the checklist for the baseline and every later number, and the harness before it freezes. (6) Run .bee/bin/bee dev regen, then restore any hub-served skill directory regen rewrote under .claude/skills that is not this cell's skill. Allowed commands: cargo test as in the verify string, .bee/bin/bee dev regen, .bee/bin/bee knowledge check, .bee/bin/bee dev release-manifest --check, git. Never run any bee dispatch verb or its help. bee-technical-writing standard, no code comments. Proof: the verify command output.",
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "pgg-docs-2b",
+    "outcome": "Closed pgg-5 findings F1, F2, F4, and F5 on pgg-2 in fa9d5cd6a",
+    "files_changed": [
+      "expertise/performance.md",
+      ".bee/expertise/performance.md",
+      ".bee/onboarding.json",
+      "docs/history/codex-harness-hardening/release-manifest.json",
+      "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md"
+    ],
+    "deviations": [
+      "sync-ack: rework of the same files; rendered copies follow the skill"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-17T11:05:46.869Z",
+    "behavior_change": false,
+    "verification_evidence": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test principle_index_parity && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee render_matches_the_committed_trees && .bee/bin/bee dev release-manifest --check — green:unit — docs-only rework verified via parity fence (5 passed), render check (1 passed), and release manifest (982 matched)",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "a0ce07c8-1091-48d9-9002-9da6c530abb5",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test principle_index_parity && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee render_matches_the_committed_trees && .bee/bin/bee onboard --repo-root . --json && .bee/bin/bee knowledge check && .bee/bin/bee dev release-manifest --check",
+    "claimed_at": "2026-11-17T10:57:19.671Z",
+    "knowledge_delta": [
+      "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md"
+    ],
+    "sync_ack": "rework of the same files; rendered copies follow the skill",
+    "no_mistakes": true,
+    "knowledge_used": [
+      {
+        "path": "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md",
+        "changed": "checked Principle homes grammar and formal-verification pointer paragraph before rewriting lines 129-134 and fixing the 9 signals lines"
+      }
+    ],
+    "principles_used": [
+      {
+        "slug": "bee-principle-single-source-of-truth",
+        "changed": "kept expertise/performance.md and .bee/expertise/performance.md byte-identical and regenerated release-manifest.json via bee dev regen"
+      },
+      {
+        "slug": "bee-principle-prove-it-works",
+        "changed": "ran principle_index_parity, render_matches_the_committed_trees, release-manifest --check, and a difflib/signals check against the committed files"
+      }
+    ],
+    "report": {
+      "outcome": "Closed pgg-5 findings F1, F2, F4, and F5 on pgg-2 in fa9d5cd6a",
+      "commit": "fa9d5cd6ace74754c0a561981ffce870e5feaf4a",
+      "files": [
+        "expertise/performance.md",
+        ".bee/expertise/performance.md",
+        ".bee/onboarding.json",
+        "docs/history/codex-harness-hardening/release-manifest.json",
+        "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test principle_index_parity && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee render_matches_the_committed_trees && .bee/bin/bee onboard --repo-root . --json && .bee/bin/bee knowledge check && .bee/bin/bee dev release-manifest --check — green:unit — PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test principle_index_parity && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee render_matches_the_committed_trees && .bee/bin/bee dev release-manifest --check — green:unit — docs-only rework verified via parity fence (5 passed), render check (1 passed), and release manifest (982 matched)",
+      "deviations": [],
+      "knowledge_used": [
+        "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md — checked Principle homes grammar and formal-verification pointer paragraph before rewriting lines 129-134 and fixing the 9 signals lines"
+      ],
+      "principles_used": [
+        "bee-principle-single-source-of-truth — kept expertise/performance.md and .bee/expertise/performance.md byte-identical and regenerated release-manifest.json via bee dev regen",
+        "bee-principle-prove-it-works — ran principle_index_parity, render_matches_the_committed_trees, release-manifest --check, and a difflib/signals check against the committed files"
+      ],
+      "reaction": "confirm",
+      "skipped": [
+        "bee knowledge check — 0 OKF errors; exited 1 on 1 pre-existing unrelated missing_decision_link error in areas/decision-memory/decision-memory-the-leader-triages-proposed-pbis-the-owner-gets-only-owner-only-calls.md"
+      ],
+      "patch_id": "d0efe88d20fa17ca5780334d0eef15645b3918f8"
+    },
+    "reaction": "confirm",
+    "skipped": [
+      "bee knowledge check — 0 OKF errors; exited 1 on 1 pre-existing unrelated missing_decision_link error in areas/decision-memory/decision-memory-the-leader-triages-proposed-pbis-the-owner-gets-only-owner-only-calls.md"
+    ],
+    "warnings": [],
+    "tests": "boundary",
+    "verified_at": null,
+    "baseline": null,
+    "unknowns": null,
+    "found": null,
+    "stopped": null,
+    "blocked_reason": null,
+    "dropped_reason": null,
+    "reopened_at": "2026-11-17T10:57:18.458Z",
+    "reopened_reason": "pgg-5 check findings F1, F2, F4, F5 in docs/history/pstack-guide-gaps/reports/pgg-5-check.md: reword the exact and near-verbatim pstack sentences in expertise/performance.md (around lines 226 and 230) in bee's own words; in the Principle homes index replace every signals token that is a class name (bugfix, release, research, perf) or not a real flag (external) with a lane (docs, tiny, small, spike, standard, high-risk), a route flag (auth, authorization, data-model, audit-security, external-systems, public-contracts, cross-platform, covered-contract-change, proof-weakening, multi-domain) or a file glob; rewrite the stale paragraph at lines 129-134 of that doc so it names bee-formal-verifying, bee-formal-upkeep and skills/bee-formal-verifying/references/statechart.md, shipped by bee, citing docs/history/pstack-guide-gaps/CONTEXT.md D1 and D2",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "skills/bee-principle-explain-the-number/SKILL.md exists with an Apply when description and Check, Not when, Why and Depth lines",
+            "artifact": "skills/bee-principle-explain-the-number/SKILL.md"
+          },
+          {
+            "requirement": "expertise/performance.md section Measuring without lying to yourself holds the explain-the-number moves and seven numbered benchmark questions and the verdict set faster, slower, no measurable difference, inconclusive",
+            "artifact": "expertise/performance.md"
+          },
+          {
+            "requirement": "the Principle homes index has a row for bee-principle-explain-the-number with classes perf, research, feature, bugfix, release",
+            "artifact": "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md"
+          },
+          {
+            "requirement": "perf/perf-issue.md and perf/hillclimb.md cite expertise/performance.md section Measuring without lying to yourself",
+            "artifact": "expertise/performance.md"
+          },
+          {
+            "requirement": "every Principle homes row carries a signals line placed after its classes line",
+            "artifact": "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md"
+          },
+          {
+            "requirement": "the new row's guide heading resolves in expertise/performance.md",
+            "artifact": "expertise/performance.md"
+          },
+          {
+            "requirement": "expertise/performance.md",
+            "artifact": "expertise/performance.md"
+          },
+          {
+            "requirement": ".bee/expertise/performance.md",
+            "artifact": ".bee/expertise/performance.md"
+          },
+          {
+            "requirement": ".bee/onboarding.json",
+            "artifact": ".bee/onboarding.json"
+          },
+          {
+            "requirement": "docs/history/codex-harness-hardening/release-manifest.json",
+            "artifact": "docs/history/codex-harness-hardening/release-manifest.json"
+          },
+          {
+            "requirement": "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md",
+            "artifact": "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md"
+          }
+        ],
+        "recorded_at": "2026-11-17T11:06:20.870Z",
+        "recorded_by": "a0ce07c8-1091-48d9-9002-9da6c530abb5",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": null,
+  "usage_reason": "herding job(s) named this cell but no readable session transcript (2 unreadable)"
+}
