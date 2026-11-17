@@ -1,6 +1,6 @@
 ---
 title: Có giữ chế độ tự gộp code khi agent bên ngoài vào làm ở đây?
-audience: owner
+audience: internal
 size: S
 ask: drop
 ---

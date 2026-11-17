@@ -1,6 +1,6 @@
 ---
 title: Chạy vòng tự cải tiến của bee trên phản hồi của một tuần làm việc
-audience: owner
+audience: internal
 size: M
 ask: drop
 ---

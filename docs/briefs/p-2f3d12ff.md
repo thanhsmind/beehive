@@ -1,6 +1,6 @@
 ---
 title: Đường "chỉ tìm hiểu" không sửa mã: đã có bee-how, phần chặn sửa ở việc khác
-audience: owner
+audience: internal
 size: S
 ask: drop
 ---
@@ -12,7 +12,7 @@ ask: drop
 
 **Chi phí và rủi ro:** Bỏ việc này không tốn gì. Nếu giữ, hai việc trùng nhau và có thể có người làm phần chặn sửa hai lần.
 
-**Anh cần làm:** Có hai cách. Cách 1: bỏ việc này và giữ việc chặn sửa mã. Cách 2: giữ cả hai việc. Tôi đề nghị cách 1, vì phần còn thiếu đã có chỗ riêng.
+**Anh cần làm:** Bỏ. Phần còn thiếu là rào chặn sửa mã, và rào đó đã có mục riêng đang chờ làm.
 
 **Chuẩn xong:**
 - Việc này được đóng, có ghi lý do: bee-how đã làm phần giải thích.

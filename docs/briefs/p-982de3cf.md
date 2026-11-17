@@ -1,6 +1,6 @@
 ---
 title: Danh sách lệnh của lõi bee-design khớp với các lệnh nó nhắc tới
-audience: owner
+audience: internal
 size: S
 ask: build
 ---

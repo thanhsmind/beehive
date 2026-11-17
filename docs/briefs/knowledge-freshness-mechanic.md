@@ -1,6 +1,6 @@
 ---
 title: Cơ chế độ mới cho tri thức dự án
-audience: owner
+audience: internal
 size: M
 ask: build
 ---
@@ -13,7 +13,7 @@ ask: build
 
 **Chi phí và rủi ro:** Mỗi lần đóng ô việc, người làm phải xác nhận lại hoặc sửa tri thức neo vào tệp vừa đổi. Rủi ro là bước đó bị né bằng lối thoát có ghi lý do.
 
-**Anh cần làm:** Duyệt định nghĩa neo: danh sách đường dẫn tường minh, gieo một lần từ phần Pointers. Đây là phỏng đoán của agent, anh có thể đổi.
+**Anh cần làm:** Không cần anh quyết. Leader đã chọn neo là danh sách đường dẫn tường minh.
 
 **Chuẩn xong:**
 - Kiểm tra bundle chấm bốn trạng thái; tra cứu in trạng thái cạnh kết quả.

@@ -1,6 +1,6 @@
 ---
 title: Tri thức chạy cùng luồng feature
-audience: owner
+audience: internal
 size: L
 ask: build
 ---

@@ -1,6 +1,6 @@
 ---
 title: Mọi dự án dùng bee tự phân loại việc đề xuất, không chờ anh
-audience: owner
+audience: internal
 size: S
 ask: build
 ---

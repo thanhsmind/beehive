@@ -1,6 +1,6 @@
 ---
 title: Kho knowledge có skill tạo và skill bảo trì, giống verify
-audience: owner
+audience: internal
 size: M
 ask: test
 ---

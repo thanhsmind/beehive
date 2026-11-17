@@ -1,6 +1,6 @@
 ---
 title: Chặn máy phụ giao việc cho vai mà nó không được phép giao
-audience: owner
+audience: internal
 size: M
 ask: park
 ---

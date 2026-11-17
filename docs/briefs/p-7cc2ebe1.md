@@ -1,6 +1,6 @@
 ---
 title: Giới hạn số thợ chạy cùng lúc chỉ ghi ở một nơi
-audience: owner
+audience: internal
 size: S
 ask: build
 ---

@@ -1,6 +1,6 @@
 ---
 title: Trang web chỉ để xem, tổng hợp bee của mọi dự án
-audience: owner
+audience: internal
 size: L
 ask: park
 ---

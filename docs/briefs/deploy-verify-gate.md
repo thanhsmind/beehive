@@ -1,6 +1,6 @@
 ---
 title: Mọi project chạy thử sản phẩm trước khi deploy
-audience: owner
+audience: internal
 size: M
 ask: test
 ---

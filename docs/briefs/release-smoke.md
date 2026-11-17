@@ -1,6 +1,6 @@
 ---
 title: Release tự chạy thử bản bee thật trước khi gắn tag
-audience: owner
+audience: internal
 size: S
 ask: test
 ---

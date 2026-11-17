@@ -1,6 +1,6 @@
 ---
 title: Định tuyến theo từng task, worker làm và worker test tách riêng
-audience: owner
+audience: internal
 size: M
 ask: build
 ---

@@ -1,6 +1,6 @@
 ---
 title: Viết lại knowledge hiện có theo năm luật mới
-audience: owner
+audience: internal
 size: L
 ask: park
 ---

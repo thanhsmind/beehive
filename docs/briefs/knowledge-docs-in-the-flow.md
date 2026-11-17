@@ -1,6 +1,6 @@
 ---
 title: Tài liệu thành một phần của luồng làm việc
-audience: owner
+audience: internal
 size: M
 ask: build
 ---

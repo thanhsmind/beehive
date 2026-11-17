@@ -1,6 +1,6 @@
 ---
 title: Kiểm tra biểu đồ, sơ đồ và chuyển động của design-os trong bee
-audience: owner
+audience: internal
 size: M
 ask: build
 ---

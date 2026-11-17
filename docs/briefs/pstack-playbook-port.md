@@ -1,6 +1,6 @@
 ---
 title: Mang toàn bộ playbook và skill liên quan của pstack vào bee
-audience: owner
+audience: internal
 size: L
 ask: build
 ---

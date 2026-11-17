@@ -1,6 +1,6 @@
 ---
 title: Dùng lệnh waggledance trước, công cụ MCP sau
-audience: owner
+audience: internal
 size: S
 ask: build
 ---

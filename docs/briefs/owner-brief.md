@@ -1,6 +1,6 @@
 ---
 title: Mỗi việc và mỗi tính năng có bản tóm tắt đủ để anh duyệt
-audience: owner
+audience: internal
 size: M
 ask: build
 ---

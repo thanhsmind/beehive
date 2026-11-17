@@ -1,6 +1,6 @@
 ---
 title: Bắt lỗi ở tầng cao hơn — bốn phần còn thiếu của kim tự tháp tin cậy
-audience: owner
+audience: internal
 size: M
 ask: test
 ---

@@ -1,6 +1,6 @@
 ---
 title: Cho phép sửa lời dặn của từng vai trò mà không cần build lại bee
-audience: owner
+audience: internal
 size: M
 ask: park
 ---
