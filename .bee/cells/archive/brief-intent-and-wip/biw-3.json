@@ -1,0 +1,157 @@
+{
+  "id": "biw-3",
+  "feature": "brief-intent-and-wip",
+  "title": "Warn when too many features are open",
+  "lane": "standard",
+  "role": "code",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "66f6a453-752a-4fb1-a8ea-ff666e2057ff"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/feature_group.rs"
+  ],
+  "read_first": [
+    "docs/history/brief-intent-and-wip/CONTEXT.md",
+    "docs/history/brief-intent-and-wip/plan.md",
+    "packages/bee-rs/crates/bee/src/verbs/feature_group.rs",
+    "packages/bee-rs/crates/bee/src/uat.rs",
+    "packages/bee-rs/crates/bee/src/verbs/intent_group.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/workflow-state/"
+  ],
+  "action": "Implement docs/history/brief-intent-and-wip/CONTEXT.md D3. Read `wip_limit` from the merged config the way uat.rs reads `uat_stop` (uat.rs:32 `match config.get(\"uat_stop\") {`): a non-negative integer, absent means 5, 0 turns the check off, any other value is treated as absent. No key registry exists; `bee config set --key wip_limit --value 3` already works, so add none. In feature_group.rs run_start, after the lane opens (anchor :172 `let legacy = start_lane(`), count lane records from `.bee/lanes/*.json` (the same source `bee state lanes` lists), one per feature, whose phase is exploring, planning, swarming, compounding or scribing and whose status is not closed, excluding the feature just started. When the count is at or above the limit, print exactly one warning line on stderr in text mode and add a `wip_warning` object {count, limit, oldest: [up to three feature slugs ordered by created_at, oldest first]} to the --json output. The command still succeeds and its exit code does not change. Keep the decision in a pure function the handler calls. Edit only the existing tests the change forces; the tester cell adds the new ones. Run the related tests and quote the count each filter matched.",
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- feature_start",
+  "must_haves": {
+    "why": "Starting work is nearly free for agents, so open work piles up (75 open lanes today); a visible limit makes the leader finish or drop old work before opening more.",
+    "out_of_scope": [
+      "refusing bee feature start",
+      "counting PBIs or backlog items",
+      "closing or pruning old lanes",
+      "skills/ docs: biw-5 owns them"
+    ],
+    "truths": [
+      "with 5 or more other open lanes and no wip_limit, bee feature start prints one warning naming the count, the limit 5 and up to three oldest open features by created_at",
+      "with wip_limit 0 it prints no warning",
+      "below the limit it prints no warning",
+      "the warning never changes the exit code"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/feature_group.rs",
+        "substantive": "the WIP count and warning"
+      }
+    ],
+    "key_links": [
+      "run_start calls the pure WIP decision function"
+    ],
+    "prohibitions": [
+      "No code comments",
+      "Never hand-edit .bee/*.json(l)",
+      "Never refuse the start"
+    ],
+    "open_choices": []
+  },
+  "trace": {
+    "worker": "biw-w3",
+    "outcome": "Implemented wip_limit warning in bee feature start (D3) and anchored knowledge delta in commit 885b797f0",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/feature_group.rs",
+      "docs/knowledge/areas/workflow-state/sessions-lanes-and-identity.md"
+    ],
+    "deviations": [
+      "sync-ack: the WIP warning is described in workflow-state/sessions-lanes-and-identity.md (committed in this cell); the five suspect concepts anchor feature_group.rs for unrelated behavior; biw-6 consolidates"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-17T03:25:54.627Z",
+    "behavior_change": true,
+    "verification_evidence": "cargo clippy --manifest-path packages/bee-rs/Cargo.toml -- -D warnings && cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- feature_start (2 passed) && feature_group (10 passed) — green:unit — feature_start and feature_group are the narrowest unit/handler tests for run_start; biw-3t adds dedicated wip_limit tests",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "f80793de-7fb8-4695-a340-4c6cfd30bb1b",
+    "verify_command": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- feature_start",
+    "claimed_at": "2026-11-17T03:18:07.533Z",
+    "knowledge_delta": [
+      "docs/knowledge/areas/workflow-state/sessions-lanes-and-identity.md"
+    ],
+    "sync_ack": "the WIP warning is described in workflow-state/sessions-lanes-and-identity.md (committed in this cell); the five suspect concepts anchor feature_group.rs for unrelated behavior; biw-6 consolidates",
+    "no_mistakes": true,
+    "knowledge_used": [
+      {
+        "path": "docs/knowledge/areas/workflow-state/sessions-lanes-and-identity.md",
+        "changed": "extended lane/session concept with the WIP warning at feature start"
+      }
+    ],
+    "principles_used": [
+      {
+        "slug": "bee-principle-boundary-discipline",
+        "changed": "kept wip_limit config parsing and lane filtering in pure functions (wip_limit_from_config, evaluate_wip_warning) called by run_start"
+      },
+      {
+        "slug": "bee-principle-smallest-honest-shape",
+        "changed": "reused list_lanes and read_config_raw without adding a config key registry"
+      }
+    ],
+    "report": {
+      "outcome": "Implemented wip_limit warning in bee feature start (D3) and anchored knowledge delta in commit 885b797f0",
+      "commit": "885b797f0631e7d267a94d5c12ca1560fc81ae2e",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/feature_group.rs",
+        "docs/knowledge/areas/workflow-state/sessions-lanes-and-identity.md"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- feature_start — green:unit — cargo clippy --manifest-path packages/bee-rs/Cargo.toml -- -D warnings && cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- feature_start (2 passed) && feature_group (10 passed) — green:unit — feature_start and feature_group are the narrowest unit/handler tests for run_start; biw-3t adds dedicated wip_limit tests",
+      "deviations": [],
+      "knowledge_used": [
+        "docs/knowledge/areas/workflow-state/sessions-lanes-and-identity.md — extended lane/session concept with the WIP warning at feature start"
+      ],
+      "principles_used": [
+        "bee-principle-boundary-discipline — kept wip_limit config parsing and lane filtering in pure functions (wip_limit_from_config, evaluate_wip_warning) called by run_start",
+        "bee-principle-smallest-honest-shape — reused list_lanes and read_config_raw without adding a config key registry"
+      ],
+      "patch_id": "fdeab6bb005e8fff9b71125f2949297dcce0143b"
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "with 5 or more other open lanes and no wip_limit, bee feature start prints one warning naming the count, the limit 5 and up to three oldest open features by created_at",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/verbs/feature_group.rs:21 DEFAULT_WIP_LIMIT=5; :50-103 evaluate_wip_warning (excludes started feature, five working phases, skips status closed, sorts by created_at, take(3)); :309-311 run_start calls it after lane opens with read_config_raw (merged config); :332-338 single eprintln line with count, limit, oldest; :318-329 wip_warning in --json; tests wip_limit_absent_key_warns_at_five_open_lanes_with_limit_five, wip_limit_oldest_lists_three_slugs_by_created_at ok"
+          },
+          {
+            "id": "with wip_limit 0 it prints no warning",
+            "status": "PASS",
+            "evidence": "feature_group.rs:56-58 limit==0 returns None; test wip_limit_zero_never_warns ok"
+          },
+          {
+            "id": "below the limit it prints no warning",
+            "status": "PASS",
+            "evidence": "feature_group.rs count<limit returns None; tests wip_limit_four_open_lanes_do_not_warn, wip_limit_does_not_count_the_started_feature ok"
+          },
+          {
+            "id": "the warning never changes the exit code",
+            "status": "PASS",
+            "evidence": "feature_group.rs:343 Some(ExitCode::SUCCESS) unconditional after the warning; test feature_group.rs:1050 wip_limit_feature_start_warns_and_still_succeeds asserts SUCCESS with 5 open lanes"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": "opus",
+        "model_independence": "unverified",
+        "recorded_at": "2026-11-17T05:04:18.006Z"
+      }
+    ]
+  },
+  "tester_rule": true,
+  "usage": null,
+  "usage_reason": "herding job(s) named this cell but no readable session transcript (1 unreadable)"
+}

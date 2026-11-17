@@ -1,0 +1,122 @@
+{
+  "id": "biw-3t",
+  "feature": "brief-intent-and-wip",
+  "title": "Test the open-work warning",
+  "lane": "standard",
+  "role": "test",
+  "status": "capped",
+  "deps": [
+    "biw-3"
+  ],
+  "decisions": [
+    "66f6a453-752a-4fb1-a8ea-ff666e2057ff"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/feature_group.rs"
+  ],
+  "read_first": [
+    "docs/history/brief-intent-and-wip/CONTEXT.md",
+    "docs/history/brief-intent-and-wip/plan.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Pin D3 of docs/history/brief-intent-and-wip/CONTEXT.md with tests whose names contain `wip_limit`, all inside the test module of feature_group.rs, where the existing feature_start tests live. Judge existing coverage first and author only the gap. Cover the pure decision function: absent key with 5 open lanes warns with limit 5; 4 open lanes does not; wip_limit 0 never warns; a non-integer value is treated as absent; lanes in any phase outside the five D3 phases are not counted; a closed lane is not counted; the started feature is not counted; oldest lists at most three slugs ordered by created_at. Cover one feature start through the handler that warns and still succeeds. Run the filter and quote its count.",
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- wip_limit",
+  "must_haves": {
+    "why": "A code cell never certifies itself; an independent tester pins the warning rule.",
+    "out_of_scope": [
+      "changing production code: a failing test that shows a bug is reported, not fixed"
+    ],
+    "truths": [
+      "every behavior listed in the action has a test whose name contains wip_limit",
+      "the filter matches at least eight tests and all pass"
+    ],
+    "artifacts": [],
+    "key_links": [
+      "the tests call the decision function biw-3 added"
+    ],
+    "prohibitions": [
+      "No code comments",
+      "No edit outside the test module"
+    ],
+    "open_choices": []
+  },
+  "trace": {
+    "worker": "biw-w3t",
+    "outcome": "Added 10 wip_limit tests in feature_group.rs test module pinning D3 (decision function + one handler start that succeeds); 10/10 pass, mutation turns 5 red; commit 4259e1f6ba9f6578db06b4751f24491b4fd5b2b0",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/feature_group.rs"
+    ],
+    "deviations": [
+      "sync-ack: the skills paths came from biw-5's concurrent commit in the same worktree; biw-3t's own commit 4259e1f6b touches only feature_group.rs tests"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-17T03:34:22.271Z",
+    "behavior_change": false,
+    "verification_evidence": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- wip_limit — green:unit — 10 passed, 0 failed, 5337 filtered out; test-only change to feature_group.rs. Full suite: clippy clean, one unrelated env-dependent failure in opencode_plugin_contracts.rs three_belt_parity (model-guard tier config)",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "f80793de-7fb8-4695-a340-4c6cfd30bb1b",
+    "verify_command": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- wip_limit",
+    "claimed_at": "2026-11-17T03:25:59.160Z",
+    "knowledge_delta": [],
+    "sync_ack": "the skills paths came from biw-5's concurrent commit in the same worktree; biw-3t's own commit 4259e1f6b touches only feature_group.rs tests",
+    "no_mistakes": true,
+    "knowledge_used": [
+      {
+        "path": "docs/knowledge/patterns/20260818-a-green-count-is-not-evidence-that-your-new-test-ran.md",
+        "changed": "quoted per-test names and ran a mutation to prove the new tests run and bite"
+      }
+    ],
+    "principles_used": [
+      {
+        "slug": "bee-principle-red-before-green",
+        "changed": "mutated production temporarily to watch 5 tests fail before trusting green"
+      },
+      {
+        "slug": "bee-principle-test-behavior-not-structure",
+        "changed": "asserted counts/limits/oldest outputs, not internal sorting steps"
+      },
+      {
+        "slug": "bee-principle-prove-it-works",
+        "changed": "drove one real feature start through try_native instead of only the pure function"
+      }
+    ],
+    "report": {
+      "outcome": "Added 10 wip_limit tests in feature_group.rs test module pinning D3 (decision function + one handler start that succeeds); 10/10 pass, mutation turns 5 red; commit 4259e1f6ba9f6578db06b4751f24491b4fd5b2b0",
+      "commit": "b056715c7dcd5e0f6dd0134cddde531ba5bb7baa",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/feature_group.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- wip_limit — green:unit — cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- wip_limit — green:unit — 10 passed, 0 failed, 5337 filtered out; test-only change to feature_group.rs. Full suite: clippy clean, one unrelated env-dependent failure in opencode_plugin_contracts.rs three_belt_parity (model-guard tier config)",
+      "deviations": [],
+      "knowledge_used": [
+        "docs/knowledge/patterns/20260818-a-green-count-is-not-evidence-that-your-new-test-ran.md — quoted per-test names and ran a mutation to prove the new tests run and bite"
+      ],
+      "principles_used": [
+        "bee-principle-red-before-green — mutated production temporarily to watch 5 tests fail before trusting green",
+        "bee-principle-test-behavior-not-structure — asserted counts/limits/oldest outputs, not internal sorting steps",
+        "bee-principle-prove-it-works — drove one real feature start through try_native instead of only the pure function"
+      ],
+      "patch_id": "0608eaf4d96bba94f138fbbcd3a2680d049ab33b"
+    },
+    "warnings": [],
+    "tests": "boundary"
+  },
+  "tester_rule": true,
+  "usage": {
+    "new": 51287,
+    "cached": 533790,
+    "total": 585077,
+    "models": {
+      "claude-opus-5-5": {
+        "new": 51287,
+        "cached": 533790,
+        "total": 585077
+      }
+    },
+    "jobs": [
+      "job-1794885962335-186137-1"
+    ]
+  }
+}

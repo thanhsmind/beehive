@@ -1,0 +1,110 @@
+{
+  "id": "biw-6",
+  "feature": "brief-intent-and-wip",
+  "title": "Consolidate this feature's knowledge and write its delivery",
+  "lane": "standard",
+  "role": "writer",
+  "status": "capped",
+  "deps": [
+    "biw-1t",
+    "biw-3t",
+    "biw-5c"
+  ],
+  "decisions": [
+    "66f6a453-752a-4fb1-a8ea-ff666e2057ff"
+  ],
+  "files": [
+    "docs/knowledge/**",
+    "docs/history/brief-intent-and-wip/delivery.md"
+  ],
+  "read_first": [
+    "docs/history/brief-intent-and-wip/CONTEXT.md",
+    "docs/history/brief-intent-and-wip/plan.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Run the writer consolidation step on this feature: run `bee knowledge consolidate --feature brief-intent-and-wip`. Dedupe and trim the deltas the cells wrote, anchor each concept to the code it describes, never restate code, and write docs/history/brief-intent-and-wip/delivery.md listing the concepts changed and why, one line each. The concepts must cover the must_haves why/out_of_scope rule and the wip_limit key and warning; cite D-numbers, never raw decision ids. Run `.bee/bin/bee knowledge check` green. One commit. In delivery.md add one follow-up line: this repo has many open lanes, so close or idle stale lanes, or set wip_limit.",
+  "verify": ".bee/bin/bee knowledge check",
+  "must_haves": {
+    "why": "docs/knowledge is the state layer; a concept that lags the code misleads the next reader.",
+    "out_of_scope": [
+      "code",
+      "skills/"
+    ],
+    "truths": [
+      "area concepts describe must_haves.why, must_haves.out_of_scope and wip_limit, anchored to code",
+      "docs/history/brief-intent-and-wip/delivery.md lists every concept the feature changed"
+    ],
+    "artifacts": [
+      {
+        "path": "docs/history/brief-intent-and-wip/delivery.md",
+        "substantive": "the feature's delivery record"
+      }
+    ],
+    "key_links": [
+      "the delivery lands in the same merge as the code"
+    ],
+    "prohibitions": [
+      "No restating of code in area concepts",
+      "No code comments"
+    ],
+    "open_choices": []
+  },
+  "trace": {
+    "worker": "w-biw-6",
+    "outcome": "Consolidated brief-intent-and-wip knowledge deltas into cells-authoring-and-revision.md and sessions-lanes-and-identity.md and wrote delivery.md b66f4ee17e8a7a50d2493367ce1617481c49e5cc",
+    "files_changed": [
+      "docs/knowledge/areas/workflow-state/cells-authoring-and-revision.md",
+      "docs/knowledge/areas/workflow-state/sessions-lanes-and-identity.md",
+      "docs/history/brief-intent-and-wip/delivery.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-11-17T03:40:15.989Z",
+    "behavior_change": false,
+    "verification_evidence": "writer cell touches only docs/knowledge and delivery.md, verified 328 concepts, 0 OKF/profile errors",
+    "verify_output": "green:static",
+    "verify_passed": true,
+    "claim_session": "f80793de-7fb8-4695-a340-4c6cfd30bb1b",
+    "verify_command": ".bee/bin/bee knowledge check",
+    "claimed_at": "2026-11-17T03:36:46.202Z",
+    "knowledge_delta": [
+      "docs/knowledge/areas/workflow-state/cells-authoring-and-revision.md",
+      "docs/knowledge/areas/workflow-state/sessions-lanes-and-identity.md"
+    ],
+    "no_mistakes": true,
+    "no_knowledge_used": true,
+    "principles_used": [
+      {
+        "slug": "bee-principle-one-fact-one-home",
+        "changed": "extended existing workflow-state concepts instead of creating new files"
+      },
+      {
+        "slug": "bee-principle-prove-it-works",
+        "changed": "ran .bee/bin/bee knowledge check and rg for raw decision ids after final edits"
+      }
+    ],
+    "report": {
+      "outcome": "Consolidated brief-intent-and-wip knowledge deltas into cells-authoring-and-revision.md and sessions-lanes-and-identity.md and wrote delivery.md b66f4ee17e8a7a50d2493367ce1617481c49e5cc",
+      "commit": "b66f4ee17e8a7a50d2493367ce1617481c49e5cc",
+      "files": [
+        "docs/knowledge/areas/workflow-state/cells-authoring-and-revision.md",
+        "docs/knowledge/areas/workflow-state/sessions-lanes-and-identity.md",
+        "docs/history/brief-intent-and-wip/delivery.md"
+      ],
+      "tests": ".bee/bin/bee knowledge check — green:static — writer cell touches only docs/knowledge and delivery.md, verified 328 concepts, 0 OKF/profile errors",
+      "deviations": [],
+      "knowledge_used": [],
+      "principles_used": [
+        "bee-principle-one-fact-one-home — extended existing workflow-state concepts instead of creating new files",
+        "bee-principle-prove-it-works — ran .bee/bin/bee knowledge check and rg for raw decision ids after final edits"
+      ],
+      "patch_id": "88dba60f830da746a2ad209e791a530b4064304f"
+    },
+    "warnings": [],
+    "tests": "boundary"
+  },
+  "tester_rule": true,
+  "usage": null,
+  "usage_reason": "herding job(s) named this cell but no readable session transcript (1 unreadable)"
+}

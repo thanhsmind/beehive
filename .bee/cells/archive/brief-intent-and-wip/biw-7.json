@@ -1,0 +1,97 @@
+{
+  "id": "biw-7",
+  "feature": "brief-intent-and-wip",
+  "title": "Keep the helper-hook parity test off the user-global config",
+  "lane": "standard",
+  "role": "code",
+  "status": "capped",
+  "deps": [
+    "biw-6c"
+  ],
+  "decisions": [
+    "80e8e184-1eba-4897-83d0-2337fea4f3d4"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/tests/opencode_plugin_contracts.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/tests/opencode_plugin_contracts.rs",
+    "packages/bee-rs/crates/bee/src/config_layers.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "In tests/opencode_plugin_contracts.rs fn run_helper_hook (near :1343, `fn run_helper_hook(hook: &str, stdin: &[u8], cwd: &Path) -> Output {`), make the spawned `bee hook` read no user-global config: set BEEHIVE_CONFIG_DIR to a directory inside `cwd` that holds no config.json (config_layers.rs global_config_dir checks BEEHIVE_CONFIG_DIR first). Check the other bee spawns in the same file (near :2291) and isolate them the same way when they read config. Change nothing else. Run `cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test opencode_plugin_contracts` on this machine, whose global config maps team.claude.generation to a herding agent, and quote the result.",
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test opencode_plugin_contracts",
+  "must_haves": {
+    "why": "The declared suite is red on any developer machine with a user-global team config, which blocks every merge from that machine; CI stays green only because it has no global config.",
+    "out_of_scope": [
+      "the model-guard hook itself",
+      "the user-global config file",
+      "other test files"
+    ],
+    "truths": [
+      "three_belt_parity_every_blocking_rule_hits_helper_claude_codex_and_opencode passes on a machine whose global config maps generation to a herding agent",
+      "all opencode_plugin_contracts tests pass"
+    ],
+    "artifacts": [],
+    "key_links": [
+      "run_helper_hook sets the isolation for every helper spawn"
+    ],
+    "prohibitions": [
+      "No code comments",
+      "Never write ~/.config/beehive"
+    ],
+    "open_choices": []
+  },
+  "trace": {
+    "worker": "w-biw-7",
+    "outcome": "Isolated bee hook spawns in opencode_plugin_contracts.rs from user-global config via BEEHIVE_CONFIG_DIR; 10/10 opencode_plugin_contracts tests and full clippy+release suite pass (04f376acf70e93828faf5d573c2d17953a92156a)",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/tests/opencode_plugin_contracts.rs"
+    ],
+    "deviations": [
+      "sync-ack: test-harness isolation only; no concept describes run_helper_hook's environment"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-17T03:48:34.718Z",
+    "behavior_change": false,
+    "verification_evidence": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test opencode_plugin_contracts — green:unit — all 10 tests pass on a machine with user-global config; full cargo clippy -D warnings and cargo test --release --no-fail-fast also exited 0",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "f80793de-7fb8-4695-a340-4c6cfd30bb1b",
+    "verify_command": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test opencode_plugin_contracts",
+    "claimed_at": "2026-11-17T03:43:39.364Z",
+    "knowledge_delta": [],
+    "sync_ack": "test-harness isolation only; no concept describes run_helper_hook's environment",
+    "no_mistakes": true,
+    "principles_used": [
+      {
+        "slug": "bee-principle-red-before-green",
+        "changed": "ran opencode_plugin_contracts before editing to observe three_belt_parity_every_blocking_rule_hits_helper_claude_codex_and_opencode fail on model-guard"
+      },
+      {
+        "slug": "bee-principle-prove-it-works",
+        "changed": "verified both opencode_plugin_contracts (10/10) and full clippy + release test suite pass after the edit"
+      }
+    ],
+    "report": {
+      "outcome": "Isolated bee hook spawns in opencode_plugin_contracts.rs from user-global config via BEEHIVE_CONFIG_DIR; 10/10 opencode_plugin_contracts tests and full clippy+release suite pass (04f376acf70e93828faf5d573c2d17953a92156a)",
+      "commit": "04f376acf70e93828faf5d573c2d17953a92156a",
+      "files": [
+        "packages/bee-rs/crates/bee/tests/opencode_plugin_contracts.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test opencode_plugin_contracts — green:unit — cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test opencode_plugin_contracts — green:unit — all 10 tests pass on a machine with user-global config; full cargo clippy -D warnings and cargo test --release --no-fail-fast also exited 0",
+      "deviations": [],
+      "principles_used": [
+        "bee-principle-red-before-green — ran opencode_plugin_contracts before editing to observe three_belt_parity_every_blocking_rule_hits_helper_claude_codex_and_opencode fail on model-guard",
+        "bee-principle-prove-it-works — verified both opencode_plugin_contracts (10/10) and full clippy + release test suite pass after the edit"
+      ],
+      "patch_id": "6ca9f767c8d46935fcd5f02439f28c58fc20be86"
+    },
+    "warnings": [],
+    "tests": "boundary"
+  },
+  "tester_rule": true,
+  "usage": null,
+  "usage_reason": "herding job(s) named this cell but no readable session transcript (1 unreadable)"
+}

@@ -1,0 +1,206 @@
+{
+  "id": "biw-5c",
+  "feature": "brief-intent-and-wip",
+  "title": "Check the doctrine edit",
+  "lane": "standard",
+  "role": "test",
+  "status": "capped",
+  "deps": [
+    "biw-5"
+  ],
+  "decisions": [
+    "66f6a453-752a-4fb1-a8ea-ff666e2057ff"
+  ],
+  "files": [
+    "skills/bee-shaping/SKILL.md",
+    "skills/bee-planning/references/cells.md",
+    "skills/bee-planning/references/plan-artifact.md",
+    "skills/bee-swarming/references/execute.md"
+  ],
+  "read_first": [
+    "docs/history/brief-intent-and-wip/plan.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Run the doc parity and pointer checks over biw-5's commit: `cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test instruction_laws`, then the `pointer_integrity` and `rule_index_parity` tests (find their targets with `rg -l 'fn pointer_integrity|rule_index_parity' packages/bee-rs/crates/bee/tests`). Read biw-5's diff against CONTEXT.md D1 and D2 and report any mismatch. Edit nothing; report results.",
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test instruction_laws",
+  "must_haves": {
+    "why": "A docs cell needs a second worker to check its parity and pointers.",
+    "out_of_scope": [
+      "editing any file"
+    ],
+    "truths": [
+      "instruction_laws, pointer_integrity and rule_index_parity are green or each red is reported with its output"
+    ],
+    "artifacts": [],
+    "key_links": [],
+    "prohibitions": [
+      "No edits"
+    ],
+    "open_choices": []
+  },
+  "trace": {
+    "worker": "w-biw-5c",
+    "outcome": "Read-only check of biw-5 (b056715c7): instruction_laws 10/10, pointer_integrity 10/10, rule_index_parity 5/5 green; diff matches CONTEXT D1 and D2, no mismatch; no edits, no commit",
+    "files_changed": [
+      ".agents/skills/.bee-render.json",
+      ".agents/skills/bee-planning/references/cells.md",
+      ".agents/skills/bee-planning/references/plan-artifact.md",
+      ".agents/skills/bee-shaping/SKILL.md",
+      ".agents/skills/bee-swarming/references/execute.md",
+      ".bee/bin/prompts/worker-cell.md",
+      ".bee/onboarding.json",
+      ".claude-plugin/skills/.bee-render.json",
+      ".claude-plugin/skills/bee-planning/references/cells.md",
+      ".claude-plugin/skills/bee-planning/references/plan-artifact.md",
+      ".claude-plugin/skills/bee-shaping/SKILL.md",
+      ".claude-plugin/skills/bee-swarming/references/execute.md",
+      ".claude/skills/.bee-render.json",
+      ".claude/skills/bee-planning/references/cells.md",
+      ".claude/skills/bee-planning/references/plan-artifact.md",
+      ".claude/skills/bee-shaping/SKILL.md",
+      ".claude/skills/bee-swarming/references/execute.md",
+      ".codex-plugin/skills/.bee-render.json",
+      ".codex-plugin/skills/bee-planning/references/cells.md",
+      ".codex-plugin/skills/bee-planning/references/plan-artifact.md",
+      ".codex-plugin/skills/bee-shaping/SKILL.md",
+      ".codex-plugin/skills/bee-swarming/references/execute.md",
+      ".opencode/skills/.bee-render.json",
+      ".opencode/skills/bee-planning/references/cells.md",
+      ".opencode/skills/bee-planning/references/plan-artifact.md",
+      ".opencode/skills/bee-shaping/SKILL.md",
+      ".opencode/skills/bee-swarming/references/execute.md",
+      "docs/history/brief-intent-and-wip/CONTEXT.md",
+      "docs/history/brief-intent-and-wip/plan.md",
+      "docs/history/codex-harness-hardening/release-manifest.json",
+      "docs/knowledge/areas/workflow-state/cells-authoring-and-revision.md",
+      "docs/knowledge/areas/workflow-state/sessions-lanes-and-identity.md",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+      "packages/bee-rs/crates/bee/src/verbs/feature_group.rs",
+      "packages/bee-rs/crates/bee/src/verbs/plan_group.rs",
+      "packages/bee-rs/crates/bee/src/verbs/state_group/plan_packets.rs",
+      "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs",
+      "packages/bee-rs/crates/bee/tests/gate_preview.rs",
+      "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+      "packages/bee/prompts/worker-cell.md",
+      "skills/bee-planning/references/cells.md",
+      "skills/bee-planning/references/plan-artifact.md",
+      "skills/bee-shaping/SKILL.md",
+      "skills/bee-swarming/references/execute.md"
+    ],
+    "deviations": [
+      "sync-ack: read-only check; the plan.md change it saw was the leader adding biw-6c"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-17T03:36:45.050Z",
+    "behavior_change": false,
+    "verification_evidence": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test instruction_laws --test pointer_integrity --test rule_index_parity — green:static — doc parity/pointer checks over a docs-only commit; exit 0, 25 passed 0 failed 0 filtered",
+    "verify_output": "green:static",
+    "verify_passed": true,
+    "claim_session": "f80793de-7fb8-4695-a340-4c6cfd30bb1b",
+    "verify_command": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test instruction_laws",
+    "claimed_at": "2026-11-17T03:34:29.623Z",
+    "knowledge_delta": [
+      "docs/knowledge/areas/workflow-state/cells-authoring-and-revision.md",
+      "docs/knowledge/areas/workflow-state/sessions-lanes-and-identity.md"
+    ],
+    "sync_ack": "read-only check; the plan.md change it saw was the leader adding biw-6c",
+    "no_mistakes": true,
+    "knowledge_used": [
+      {
+        "path": "docs/knowledge/patterns/20260818-a-green-count-is-not-evidence-that-your-new-test-ran.md",
+        "changed": "quoted per-target pass and filtered counts"
+      }
+    ],
+    "principles_used": [
+      {
+        "slug": "bee-principle-prove-it-works",
+        "changed": "opened worker-cell.md to confirm the execute.md pointer target exists instead of trusting the diff"
+      },
+      {
+        "slug": "bee-principle-verify-before-reporting",
+        "changed": "recorded the rule-4 wording as a minor note rather than a D1 mismatch after checking rule 3"
+      }
+    ],
+    "commit_pending": "read-only check cell: it edits nothing, so it has no commit",
+    "report": {
+      "outcome": "Read-only check of biw-5 (b056715c7): instruction_laws 10/10, pointer_integrity 10/10, rule_index_parity 5/5 green; diff matches CONTEXT D1 and D2, no mismatch; no edits, no commit",
+      "commit": "0ad512667fa7b4242393e0842e84362fc78df75f",
+      "files": [
+        ".agents/skills/.bee-render.json",
+        ".agents/skills/bee-planning/references/cells.md",
+        ".agents/skills/bee-planning/references/plan-artifact.md",
+        ".agents/skills/bee-shaping/SKILL.md",
+        ".agents/skills/bee-swarming/references/execute.md",
+        ".bee/bin/prompts/worker-cell.md",
+        ".bee/onboarding.json",
+        ".claude-plugin/skills/.bee-render.json",
+        ".claude-plugin/skills/bee-planning/references/cells.md",
+        ".claude-plugin/skills/bee-planning/references/plan-artifact.md",
+        ".claude-plugin/skills/bee-shaping/SKILL.md",
+        ".claude-plugin/skills/bee-swarming/references/execute.md",
+        ".claude/skills/.bee-render.json",
+        ".claude/skills/bee-planning/references/cells.md",
+        ".claude/skills/bee-planning/references/plan-artifact.md",
+        ".claude/skills/bee-shaping/SKILL.md",
+        ".claude/skills/bee-swarming/references/execute.md",
+        ".codex-plugin/skills/.bee-render.json",
+        ".codex-plugin/skills/bee-planning/references/cells.md",
+        ".codex-plugin/skills/bee-planning/references/plan-artifact.md",
+        ".codex-plugin/skills/bee-shaping/SKILL.md",
+        ".codex-plugin/skills/bee-swarming/references/execute.md",
+        ".opencode/skills/.bee-render.json",
+        ".opencode/skills/bee-planning/references/cells.md",
+        ".opencode/skills/bee-planning/references/plan-artifact.md",
+        ".opencode/skills/bee-shaping/SKILL.md",
+        ".opencode/skills/bee-swarming/references/execute.md",
+        "docs/history/brief-intent-and-wip/CONTEXT.md",
+        "docs/history/brief-intent-and-wip/plan.md",
+        "docs/history/codex-harness-hardening/release-manifest.json",
+        "docs/knowledge/areas/workflow-state/cells-authoring-and-revision.md",
+        "docs/knowledge/areas/workflow-state/sessions-lanes-and-identity.md",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+        "packages/bee-rs/crates/bee/src/verbs/feature_group.rs",
+        "packages/bee-rs/crates/bee/src/verbs/plan_group.rs",
+        "packages/bee-rs/crates/bee/src/verbs/state_group/plan_packets.rs",
+        "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs",
+        "packages/bee-rs/crates/bee/tests/gate_preview.rs",
+        "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+        "packages/bee/prompts/worker-cell.md",
+        "skills/bee-planning/references/cells.md",
+        "skills/bee-planning/references/plan-artifact.md",
+        "skills/bee-shaping/SKILL.md",
+        "skills/bee-swarming/references/execute.md"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test instruction_laws — green:static — cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test instruction_laws --test pointer_integrity --test rule_index_parity — green:static — doc parity/pointer checks over a docs-only commit; exit 0, 25 passed 0 failed 0 filtered",
+      "deviations": [],
+      "knowledge_used": [
+        "docs/knowledge/patterns/20260818-a-green-count-is-not-evidence-that-your-new-test-ran.md — quoted per-target pass and filtered counts"
+      ],
+      "principles_used": [
+        "bee-principle-prove-it-works — opened worker-cell.md to confirm the execute.md pointer target exists instead of trusting the diff",
+        "bee-principle-verify-before-reporting — recorded the rule-4 wording as a minor note rather than a D1 mismatch after checking rule 3"
+      ],
+      "patch_id": "af93fd649f14cc439c0b28bed7ee66782b9dcff2"
+    },
+    "warnings": [],
+    "tests": "boundary"
+  },
+  "regen_obligation_ack": "read-only check cell: it writes nothing, so it owes no regen",
+  "tester_rule": true,
+  "usage": {
+    "new": 35157,
+    "cached": 255700,
+    "total": 290857,
+    "models": {
+      "claude-opus-5-5": {
+        "new": 35157,
+        "cached": 255700,
+        "total": 290857
+      }
+    },
+    "jobs": [
+      "job-1794886504097-286484-1"
+    ]
+  }
+}

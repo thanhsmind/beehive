@@ -1,0 +1,182 @@
+{
+  "id": "biw-1",
+  "feature": "brief-intent-and-wip",
+  "title": "Require a reason and non-goals in each cell brief",
+  "lane": "standard",
+  "role": "code",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "66f6a453-752a-4fb1-a8ea-ff666e2057ff",
+    "f459fb3f-681d-4b83-ae94-b7cfbd045bee"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/state_group/plan_packets.rs",
+    "packages/bee/prompts/worker-cell.md",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs",
+    "packages/bee-rs/crates/bee/src/verbs/plan_group.rs",
+    "packages/bee-rs/crates/bee/tests/gate_preview.rs",
+    "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+    "packages/bee-rs/crates/bee/tests/discovery_verbs.rs",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/brief-intent-and-wip/CONTEXT.md",
+    "docs/history/brief-intent-and-wip/plan.md",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/plan_packets.rs",
+    "packages/bee/prompts/worker-cell.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/workflow-state/"
+  ],
+  "action": "Implement docs/history/brief-intent-and-wip/CONTEXT.md D1. The check lives only in the plan-packet check behind `bee gate --preview` (plan_packets.rs:174 `requires non-empty must_haves.truths for lane`): beside the truths check, for lanes standard and high-risk, require `must_haves.why` as a non-empty trimmed string and `must_haves.out_of_scope` as an array of strings (empty allowed); each problem names the missing key. Do not change validate.rs or handlers_write.rs: `bee cells add` and `bee cells update` keep today's rules. In packages/bee/prompts/worker-cell.md change \"The cell names three parts apart:\" to five parts; after the Goal bullet add a `Why — must_haves.why` bullet (use it to choose where the cell is silent), and after Hard constraints an `Out of scope — must_haves.out_of_scope` bullet (never do this work; name a need there in `found`, or return [PARKED]; a herding worker writes status question). Add `\"found\": [\"<discovery outside the cell>\"]` to the Result form JSON at worker-cell.md:95 (`bee cells finish` already accepts it, finish_support.rs:84). Update the golden GOLDEN_NATIVE_CELL_PROMPT in verbs/drivers/tests.rs (near :10882) and any other golden copy of the prompt. Then find every fixture that runs a standard or high-risk packet through the preview: `rg -n 'truths' packages/bee-rs/crates` and `rg -n 'gate --preview|gate_preview|run_preview' packages/bee-rs/crates`; known sites are set_gate.rs:3309, plan_group.rs:495 and tests/pi_plugin_contracts.rs:8119, :8188, :8224. Add both keys where the new check now refuses. A forced fixture in a file outside `files` is a recorded departure, never skipped. Edit only the existing tests the change forces; the tester cell adds the new ones. Run the verify and quote the count each target matched. Inside this cell run the full regen chain `bee dev regen` (render-skill-trees, onboard --repo-root . --apply, release-manifest --write) and commit its output with the change.",
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --no-fail-fast -- preview packet worker_cell golden && .bee/bin/bee dev release-manifest --check",
+  "must_haves": {
+    "why": "A worker that knows why the work matters and what to leave alone can choose well where its cell is silent; today it only gets the goal and the hard constraints.",
+    "out_of_scope": [
+      "checks at bee cells add or bee cells update",
+      "tiny and small lanes",
+      "a typed MustHaves struct",
+      "skills/ docs: biw-5 owns them",
+      "validating prohibitions or open_choices"
+    ],
+    "truths": [
+      "bee gate --preview reports a standard or high-risk packet with no non-empty must_haves.why, naming must_haves.why",
+      "bee gate --preview reports a standard or high-risk packet with no out_of_scope array, naming must_haves.out_of_scope",
+      "out_of_scope: [] passes the preview",
+      "bee cells add and bee cells update behave as before",
+      "the rendered worker prompt names must_haves.why, must_haves.out_of_scope and carries found in its Result form",
+      "the existing preview, packet and golden prompt tests are green"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee/prompts/worker-cell.md",
+        "substantive": "the Why and Out of scope bullets"
+      }
+    ],
+    "key_links": [
+      "plan_packets.rs is the one home of the rule"
+    ],
+    "prohibitions": [
+      "No code comments",
+      "Never hand-edit .bee/*.json(l)",
+      "No change to validate.rs or handlers_write.rs"
+    ],
+    "open_choices": []
+  },
+  "trace": {
+    "worker": "biw-w1",
+    "outcome": "Require must_haves.why and must_haves.out_of_scope in gate --preview and update worker-cell prompt, golden prompt, forced fixtures, and regen output 2e8e4237c",
+    "files_changed": [
+      ".bee/bin/prompts/worker-cell.md",
+      ".bee/onboarding.json",
+      "docs/history/codex-harness-hardening/release-manifest.json",
+      "docs/knowledge/areas/workflow-state/cells-authoring-and-revision.md",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+      "packages/bee-rs/crates/bee/src/verbs/plan_group.rs",
+      "packages/bee-rs/crates/bee/src/verbs/state_group/plan_packets.rs",
+      "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs",
+      "packages/bee-rs/crates/bee/tests/gate_preview.rs",
+      "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+      "packages/bee/prompts/worker-cell.md"
+    ],
+    "deviations": [
+      "sync-ack: the rule is described in workflow-state/cells-authoring-and-revision.md (committed in this cell); other suspect concepts anchoring these files cover unrelated behavior; biw-6 consolidates"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-17T03:29:15.574Z",
+    "behavior_change": true,
+    "verification_evidence": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --no-fail-fast -- preview packet worker_cell golden && .bee/bin/bee dev release-manifest --check — green:unit — bin bee 30 passed, gate_preview 6 passed, pi_plugin_contracts parity 1 passed, set_gate 69 passed, release-manifest 970 matched, clippy -D warnings clean",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "f80793de-7fb8-4695-a340-4c6cfd30bb1b",
+    "verify_command": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --no-fail-fast -- preview packet worker_cell golden && .bee/bin/bee dev release-manifest --check",
+    "claimed_at": "2026-11-17T03:18:23.982Z",
+    "knowledge_delta": [
+      "docs/knowledge/areas/workflow-state/cells-authoring-and-revision.md"
+    ],
+    "sync_ack": "the rule is described in workflow-state/cells-authoring-and-revision.md (committed in this cell); other suspect concepts anchoring these files cover unrelated behavior; biw-6 consolidates",
+    "no_mistakes": true,
+    "knowledge_used": [
+      {
+        "path": "docs/knowledge/areas/workflow-state/cells-authoring-and-revision.md",
+        "changed": "anchored why/out_of_scope preview-only boundary"
+      }
+    ],
+    "report": {
+      "outcome": "Require must_haves.why and must_haves.out_of_scope in gate --preview and update worker-cell prompt, golden prompt, forced fixtures, and regen output 2e8e4237c",
+      "commit": "2e8e4237c62af0ed7b472981b64cbeca187931ed",
+      "files": [
+        ".bee/bin/prompts/worker-cell.md",
+        ".bee/onboarding.json",
+        "docs/history/codex-harness-hardening/release-manifest.json",
+        "docs/knowledge/areas/workflow-state/cells-authoring-and-revision.md",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+        "packages/bee-rs/crates/bee/src/verbs/plan_group.rs",
+        "packages/bee-rs/crates/bee/src/verbs/state_group/plan_packets.rs",
+        "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs",
+        "packages/bee-rs/crates/bee/tests/gate_preview.rs",
+        "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+        "packages/bee/prompts/worker-cell.md"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --no-fail-fast -- preview packet worker_cell golden && .bee/bin/bee dev release-manifest --check — green:unit — cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --no-fail-fast -- preview packet worker_cell golden && .bee/bin/bee dev release-manifest --check — green:unit — bin bee 30 passed, gate_preview 6 passed, pi_plugin_contracts parity 1 passed, set_gate 69 passed, release-manifest 970 matched, clippy -D warnings clean",
+      "deviations": [],
+      "knowledge_used": [
+        "docs/knowledge/areas/workflow-state/cells-authoring-and-revision.md — anchored why/out_of_scope preview-only boundary"
+      ],
+      "patch_id": "aedcfcab90d764a5ae2ebcd1c6258fb8da1e04c4"
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "bee gate --preview reports a standard or high-risk packet with no non-empty must_haves.why, naming must_haves.why",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/verbs/state_group/plan_packets.rs:166 lane gate (standard|high-risk); :177-182 trimmed non-empty why else \"requires non-empty must_haves.why for lane\"; tests plan_packets.rs:1176,:1194,:1277 (gate_preview_why_and_out_of_scope_refuses_a_standard_packet_without_them)"
+          },
+          {
+            "id": "bee gate --preview reports a standard or high-risk packet with no out_of_scope array, naming must_haves.out_of_scope",
+            "status": "PASS",
+            "evidence": "plan_packets.rs:183-189 array-of-strings check, message \"requires must_haves.out_of_scope (array of strings)\"; tests plan_packets.rs:1211,:1228,:1243"
+          },
+          {
+            "id": "out_of_scope: [] passes the preview",
+            "status": "PASS",
+            "evidence": "plan_packets.rs:184-185 all() over empty array is true; test plan_packets.rs:1250 plan_packet_why_and_out_of_scope_empty_out_of_scope_array_passes"
+          },
+          {
+            "id": "bee cells add and bee cells update behave as before",
+            "status": "PASS",
+            "evidence": "`git log 2e8e4237c^..HEAD -- verbs/cells/validate.rs verbs/cells/handlers_write.rs` prints nothing: neither file changed; the rule lives only in plan_packets.rs"
+          },
+          {
+            "id": "the rendered worker prompt names must_haves.why, must_haves.out_of_scope and carries found in its Result form",
+            "status": "PASS",
+            "evidence": "packages/bee/prompts/worker-cell.md:25 'five parts', :27 Why bullet, :29 Out of scope bullet, :97 \"found\" key; .bee/bin/prompts/worker-cell.md identical (diff clean); golden drivers/tests.rs:10909,:10911,:10950; test drivers/tests.rs:10984 worker_cell_prompt_names_why_and_out_of_scope_and_found"
+          },
+          {
+            "id": "the existing preview, packet and golden prompt tests are green",
+            "status": "PASS",
+            "evidence": "cargo test --release -p bee --no-fail-fast -- preview packet worker_cell golden: bin 39 passed 0 failed; gate_preview 6 passed; all other targets ok 0 failed. bee dev release-manifest --check: 970 file(s) match stored manifest, 1 unhashed artifact(s) present"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": "opus",
+        "model_independence": "unverified",
+        "recorded_at": "2026-11-17T05:04:18.004Z"
+      }
+    ]
+  },
+  "tester_rule": true,
+  "usage": null,
+  "usage_reason": "herding job(s) named this cell but no readable session transcript (1 unreadable)"
+}

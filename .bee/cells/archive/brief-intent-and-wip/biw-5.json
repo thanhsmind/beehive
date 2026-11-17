@@ -1,0 +1,128 @@
+{
+  "id": "biw-5",
+  "feature": "brief-intent-and-wip",
+  "title": "Ask should-we at triage and teach plans the new keys",
+  "lane": "standard",
+  "role": "docs",
+  "status": "capped",
+  "deps": [
+    "biw-1",
+    "biw-3"
+  ],
+  "decisions": [
+    "66f6a453-752a-4fb1-a8ea-ff666e2057ff"
+  ],
+  "files": [
+    "skills/bee-shaping/SKILL.md",
+    "skills/bee-planning/references/cells.md",
+    "skills/bee-planning/references/plan-artifact.md",
+    "skills/bee-swarming/references/execute.md",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/brief-intent-and-wip/CONTEXT.md",
+    "docs/history/brief-intent-and-wip/plan.md",
+    "skills/bee-shaping/SKILL.md",
+    "skills/bee-planning/references/cells.md"
+  ],
+  "affects_skills": [
+    "skills/bee-shaping/SKILL.md",
+    "skills/bee-planning/references/cells.md",
+    "skills/bee-planning/references/plan-artifact.md",
+    "skills/bee-swarming/references/execute.md"
+  ],
+  "affects_specs": [],
+  "action": "Implement D2 and the doc half of D1 of docs/history/brief-intent-and-wip/CONTEXT.md. In skills/bee-shaping/SKILL.md section `## Qualify (headless triage)` add one numbered step before the clarity judgment: ask who needs it (a named user or caller), how we will know it worked (a check that can pass or fail), and what makes us stop; an item that cannot answer the first two parks with the gap written into Outstanding Questions. In skills/bee-planning/references/cells.md add `why` and `out_of_scope` to the must_haves contract text, the example JSON and the validity rule that names truths for standard/high-risk, and say the check runs at the plan-packet preview. In skills/bee-planning/references/plan-artifact.md add both keys to the consolidation cell example JSON. Mention `wip_limit` where cells.md or the config docs list config keys only if such a list exists; do not create one. Keep one home for each fact: cite, never copy. In skills/bee-swarming/references/execute.md, where it teaches truths, prohibitions and open_choices, add one line pointing to the worker prompt's Why and Out of scope bullets (cite, never copy). Use plain words; write no code comments. Inside this cell run the full regen chain `bee dev regen` (render-skill-trees, onboard --repo-root . --apply, release-manifest --write) and commit its output with the change.",
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test instruction_laws && .bee/bin/bee dev release-manifest --check",
+  "must_haves": {
+    "why": "Plan writers learn the cell shape from these docs; if the docs omit the new keys every plan is refused, and triage without a should-we question keeps filling the backlog.",
+    "out_of_scope": [
+      "Rust code",
+      "LEADER.md and AGENTS.md",
+      "pruning hooks or rules"
+    ],
+    "truths": [
+      "Qualify lists the three questions and the park rule",
+      "cells.md and the plan-artifact consolidation example show why and out_of_scope",
+      "regen output is committed with the edit"
+    ],
+    "artifacts": [
+      {
+        "path": "skills/bee-shaping/SKILL.md",
+        "substantive": "the three triage questions"
+      }
+    ],
+    "key_links": [
+      "the doc rule matches the biw-1 checks"
+    ],
+    "prohibitions": [
+      "No copy of a fact that already has a home"
+    ],
+    "open_choices": []
+  },
+  "trace": {
+    "worker": "w-biw-5",
+    "outcome": "Added Qualify triage questions, must_haves.why/out_of_scope planning docs, worker-prompt pointer in execute.md, and regen output in b056715c7dcd5e0f6dd0134cddde531ba5bb7baa",
+    "files_changed": [
+      "skills/bee-shaping/SKILL.md",
+      "skills/bee-planning/references/cells.md",
+      "skills/bee-planning/references/plan-artifact.md",
+      "skills/bee-swarming/references/execute.md",
+      ".bee/onboarding.json",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [
+      "sync-ack: doc edits are pointer-sized; the suspect concepts anchor these skill files for unrelated rules; biw-6 consolidates the feature's knowledge"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-17T03:34:22.508Z",
+    "behavior_change": false,
+    "verification_evidence": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test instruction_laws && .bee/bin/bee dev release-manifest --check — green:unit — 10 instruction_laws tests passed and 970 release-manifest files matched after bee dev regen",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "f80793de-7fb8-4695-a340-4c6cfd30bb1b",
+    "verify_command": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test instruction_laws && .bee/bin/bee dev release-manifest --check",
+    "claimed_at": "2026-11-17T03:29:31.185Z",
+    "knowledge_delta": [],
+    "sync_ack": "doc edits are pointer-sized; the suspect concepts anchor these skill files for unrelated rules; biw-6 consolidates the feature's knowledge",
+    "no_mistakes": true,
+    "no_knowledge_used": true,
+    "principles_used": [
+      {
+        "slug": "bee-principle-single-source-of-truth",
+        "changed": "cited packages/bee/prompts/worker-cell.md in execute.md instead of copying the Why/Out of scope rules"
+      },
+      {
+        "slug": "bee-principle-prove-it-works",
+        "changed": "ran bee dev regen, instruction_laws, and release-manifest --check after all edits"
+      }
+    ],
+    "report": {
+      "outcome": "Added Qualify triage questions, must_haves.why/out_of_scope planning docs, worker-prompt pointer in execute.md, and regen output in b056715c7dcd5e0f6dd0134cddde531ba5bb7baa",
+      "commit": "b056715c7dcd5e0f6dd0134cddde531ba5bb7baa",
+      "files": [
+        "skills/bee-shaping/SKILL.md",
+        "skills/bee-planning/references/cells.md",
+        "skills/bee-planning/references/plan-artifact.md",
+        "skills/bee-swarming/references/execute.md",
+        ".bee/onboarding.json",
+        "docs/history/codex-harness-hardening/release-manifest.json"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test instruction_laws && .bee/bin/bee dev release-manifest --check — green:unit — cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test instruction_laws && .bee/bin/bee dev release-manifest --check — green:unit — 10 instruction_laws tests passed and 970 release-manifest files matched after bee dev regen",
+      "deviations": [],
+      "knowledge_used": [],
+      "principles_used": [
+        "bee-principle-single-source-of-truth — cited packages/bee/prompts/worker-cell.md in execute.md instead of copying the Why/Out of scope rules",
+        "bee-principle-prove-it-works — ran bee dev regen, instruction_laws, and release-manifest --check after all edits"
+      ],
+      "patch_id": "0608eaf4d96bba94f138fbbcd3a2680d049ab33b"
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 204 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
+  },
+  "tester_rule": true,
+  "usage": null,
+  "usage_reason": "herding job(s) named this cell but no readable session transcript (1 unreadable)"
+}

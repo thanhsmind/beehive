@@ -2373,5 +2373,10 @@
     "capped": 10,
     "dropped": 0,
     "archived_at": "2026-11-17T05:27:57.644Z"
+  },
+  "brief-intent-and-wip": {
+    "capped": 10,
+    "dropped": 0,
+    "archived_at": "2026-11-17T05:28:01.482Z"
   }
 }
