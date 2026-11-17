@@ -1671,23 +1671,14 @@ pub(crate) fn herding_transport_probe_for(
     }
 }
 
-fn declared_herding_agents(cfg: &Value) -> Vec<String> {
-    cfg.get("herding")
-        .and_then(|h| h.get("agents"))
-        .or_else(|| cfg.get("agents"))
-        .and_then(Value::as_object)
-        .map(|agents| agents.keys().cloned().collect())
-        .unwrap_or_default()
-}
-
-fn herding_agent_declared(cfg: &Value, name: &str) -> bool {
-    declared_herding_agents(cfg).iter().any(|declared| declared == name)
-}
-
-fn undeclared_agent_reason(cfg: &Value, name: &str) -> String {
-    let declared = declared_herding_agents(cfg);
-    let listed = if declared.is_empty() { "none".to_string() } else { declared.join(", ") };
-    format!("unknown herding agent {name:?} — herding.agents declares: {listed}")
+fn undeclared_agent_reason(cfg: &Value, name: &str) -> Option<String> {
+    use crate::herding::wave::{AgentCommandError, resolve_agent_command};
+    match resolve_agent_command(cfg, Some(name)) {
+        Err(AgentCommandError::UnknownAgent { known, .. }) => {
+            Some(format!("unknown herding agent {name:?} — herding.agents declares: {}", known.join(", ")))
+        }
+        _ => None,
+    }
 }
 
 /// provenance: dispatch-prepare.mjs prepareDispatch(root, {...}). Throws only
@@ -3060,8 +3051,8 @@ pub(crate) fn prepare_dispatch_wire(
                         }
                     }
                     Some((_, Err(err))) => (false, err),
-                    None if agent.as_deref().is_some_and(|name| !herding_agent_declared(&cfg, name)) => {
-                        (false, undeclared_agent_reason(&cfg, agent.as_deref().unwrap_or_default()))
+                    None if agent.as_deref().and_then(|name| undeclared_agent_reason(&cfg, name)).is_some() => {
+                        (false, agent.as_deref().and_then(|name| undeclared_agent_reason(&cfg, name)).unwrap_or_default())
                     }
                     None => {
                         let (ready, reason, _) = match transport_kind_at(root) {
@@ -7200,7 +7191,7 @@ mod paseo_probe_tests {
     }
 
     #[test]
-    fn undeclared_herding_agent_with_no_agents_map_names_none() {
+    fn undeclared_herding_agent_with_no_agents_map_names_built_ins() {
         let tmp = tempfile::tempdir().unwrap();
         let cfg = r#"{
             "team": {"pi": {"code": {"kind": "herding", "agent": "ghost-worker"}}},
@@ -7217,11 +7208,10 @@ mod paseo_probe_tests {
         assert_eq!(payload["transport_ready"], Value::Bool(false));
         let reason = payload["transport_reason"].as_str().expect("string");
         assert!(reason.contains("ghost-worker"), "{reason}");
-        assert!(reason.contains("none"), "{reason}");
+        assert!(reason.contains("claude-sonnet"), "{reason}");
     }
 
     #[test]
-    #[ignore = "gis-9t: gis-9 reports built-in agent claude-sonnet as undeclared"]
     fn built_in_herding_agent_keeps_today_probe() {
         let tmp = tempfile::tempdir().unwrap();
         let cfg = r#"{
