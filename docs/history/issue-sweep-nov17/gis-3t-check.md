@@ -45,7 +45,14 @@ a | cell c | src/short.rs | reserved ... | expired
 
 `PATH="${CARGO_HOME:-$HOME/.cargo}/bin:$PATH" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- verbs::reservations verbs::cells`
 
-`test result: ok. 568 passed; 0 failed; 10 ignored; 0 measured; 4828 filtered out`. All four tests named above ran and passed.
+Re-run on the worktree at ffd637047: `test result: ok. 568 passed; 0 failed; 10 ignored; 0 measured; 4833 filtered out; finished in 5.16s`. The filtered-out count grew from 4828 because other cells added tests outside these modules.
+
+The four lease tests ran by name and passed:
+
+- `verbs::cells::tests::a_plain_cap_releases_only_its_own_cells_leases_and_frees_the_path` (gis-3)
+- `verbs::cells::tests::a_plain_cap_frees_every_agents_lease_on_the_cell_and_keeps_the_same_agents_other_cell_lease` (gis-3t)
+- `verbs::reservations::tests::the_list_line_labels_a_live_lease_active_and_a_past_expiry_lease_expired` (gis-3)
+- `verbs::reservations::tests::the_list_line_flips_to_expired_one_second_past_expiry_and_active_only_shows_no_expired_label` (gis-3t)
 
 ## Notes
 
