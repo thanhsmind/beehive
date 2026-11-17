@@ -362,6 +362,33 @@ mod tests {
         );
     }
 
+    #[test]
+    fn only_the_root_scratch_area_is_skipped_not_look_alikes() {
+        let (_tmp, root) = fixture();
+        write_live_session(&root, "other-session");
+        let ctrl = root.to_string_lossy().into_owned();
+
+        nested_repo(&root, ".bee/tmp");
+        assert!(
+            !has_any_shared_nested_checkout(&root, &ctrl, None).unwrap(),
+            "a .bee/tmp that is itself a git checkout is skipped"
+        );
+
+        nested_repo(&root, ".bee/tmp-old/repo");
+        assert!(
+            has_any_shared_nested_checkout(&root, &ctrl, None).unwrap(),
+            "a sibling whose name only starts with tmp is still reported"
+        );
+        std::fs::remove_dir_all(root.join(".bee/tmp-old")).unwrap();
+        assert!(!has_any_shared_nested_checkout(&root, &ctrl, None).unwrap());
+
+        nested_repo(&root, "pkg/.bee/tmp/repo");
+        assert!(
+            has_any_shared_nested_checkout(&root, &ctrl, None).unwrap(),
+            "a .bee/tmp below the repo root is still reported"
+        );
+    }
+
     /// Shape (a): a marker-verified companion mount fires the guard through
     /// THE write guard's own verification (never a second copy).
     #[test]
