@@ -39,7 +39,7 @@ Read when: reading or extending `bee report outcomes --by-feature`, checking why
 ## Rejected Options
 
 - **Git commit dates for cycle time:** rejected because squash merges and rebases rewrite commit timestamps; lane `created_at` and usage `closed_at` stay inside `.bee/`.
-- **Stored scorecard at `bee close`:** deferred (option B) until read-time derivation proves its numbers are useful.
+- **Stored scorecard at `bee close`:** not built (option B); the owner chose read-time derivation, which writes nothing.
 - **Inferring fix-first cells from titles:** rejected as guesswork; explicit `fixes_feature` on the cell (outcome-scorecard D4) keeps the count exact.
 
 ## Pointers (implementation)
