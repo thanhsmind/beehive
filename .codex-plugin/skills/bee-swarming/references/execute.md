@@ -43,7 +43,9 @@ included: add guidance beside those words, never over them.
    `[BLOCKED]`. An open choice (`must_haves.open_choices`) may be questioned
    with evidence through that same `bee cells dissent`; a conflict with a
    hard constraint (a prohibition or a locked decision) stays a
-   locked-decision `[BLOCKED]`. An unexpected red or an unfamiliar mechanism
+   locked-decision `[BLOCKED]`. For `must_haves.why` and
+   `must_haves.out_of_scope`, follow the worker prompt's `Why` and
+   `Out of scope` bullets (`packages/bee/prompts/worker-cell.md`). An unexpected red or an unfamiliar mechanism
    mid-cell is a pull moment: `bee knowledge search --text "<symptom>"`
    surfaces matching patterns and area concepts before you guess. A
    product question only the human can answer parks your cell, never the
