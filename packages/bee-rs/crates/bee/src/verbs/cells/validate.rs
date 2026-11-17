@@ -290,6 +290,13 @@ pub(crate) fn validate_new_cell_problems(root: &Path, cell: &Value) -> MR<Vec<St
         _ => return Ok(vec!["addCell: cell must be a JSON object.".into()]),
     };
     let mut problems: Vec<String> = Vec::new();
+    for key in ["depends_on", "dependencies"] {
+        if map.contains_key(key) {
+            problems.push(format!(
+                "addCell: \"{key}\" is not a cell field — a cell names what it waits on with \"deps\". FIX: rename \"{key}\" to \"deps\"."
+            ));
+        }
+    }
     for field in ["id", "feature", "title", "action", "verify"] {
         if !nonblank_string(map.get(field)) {
             problems.push(format!(

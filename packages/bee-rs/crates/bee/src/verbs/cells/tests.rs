@@ -2485,6 +2485,68 @@ use std::time::Instant;
         assert!(held_paths(root).is_empty(), "the cap releases every lease the claim took");
     }
 
+    #[test]
+    fn a_plain_cap_releases_only_its_own_cells_leases_and_frees_the_path() {
+        let tmp = cn_root();
+        let root = tmp.path();
+        write_bee_config(root, &json!({"commands": {"test": "echo ok"}}));
+        lane_with_route(root, "pcr");
+        write_cell_fixture(
+            root,
+            "pcr-a",
+            &cell_with_files("pcr-a", "pcr", json!(["src/pcr_one.rs", "src/pcr_two.rs"])),
+        );
+        write_cell_fixture(root, "pcr-b", &cell_with_files("pcr-b", "pcr", json!(["src/pcr_one.rs"])));
+        claim_cell_with_reservations(root, main_topo(root), "pcr-a", "wk-1", Some("sess-1"), None, None)
+            .unwrap();
+        foreign_lease(root, "worker-other", "other-cell", "src/other.rs");
+        assert_eq!(held_paths(root).len(), 3);
+
+        let mut cap = wf_cap_flags("pcr-a");
+        cap.session_flag = Some("sess-1".to_string());
+        let capped = cap_cell_from_flags(root, &cap, false).unwrap();
+        assert_eq!(capped["status"], json!("capped"));
+
+        assert_eq!(
+            held_paths(root),
+            vec![("src/other.rs".to_string(), "worker-other".to_string(), "other-cell".to_string())]
+        );
+        let next =
+            claim_cell_with_reservations(root, main_topo(root), "pcr-b", "wk-2", Some("sess-2"), None, None);
+        assert!(next.is_ok(), "another cell claims the path the capped cell held");
+    }
+
+    #[test]
+    fn a_plain_cap_frees_every_agents_lease_on_the_cell_and_keeps_the_same_agents_other_cell_lease() {
+        let tmp = cn_root();
+        let root = tmp.path();
+        write_bee_config(root, &json!({"commands": {"test": "echo ok"}}));
+        lane_with_route(root, "gtc");
+        write_cell_fixture(root, "gtc-a", &cell_with_files("gtc-a", "gtc", json!(["src/gtc_one.rs"])));
+        write_cell_fixture(
+            root,
+            "gtc-b",
+            &cell_with_files("gtc-b", "gtc", json!(["src/gtc_one.rs", "src/gtc_helper.rs"])),
+        );
+        claim_cell_with_reservations(root, main_topo(root), "gtc-a", "wk-1", Some("sess-1"), None, None)
+            .unwrap();
+        foreign_lease(root, "wk-helper", "gtc-a", "src/gtc_helper.rs");
+        foreign_lease(root, "wk-1", "gtc-unrelated", "src/gtc_kept.rs");
+        assert_eq!(held_paths(root).len(), 3);
+
+        let mut cap = wf_cap_flags("gtc-a");
+        cap.session_flag = Some("sess-1".to_string());
+        assert_eq!(cap_cell_from_flags(root, &cap, false).unwrap()["status"], json!("capped"));
+
+        assert_eq!(
+            held_paths(root),
+            vec![("src/gtc_kept.rs".to_string(), "wk-1".to_string(), "gtc-unrelated".to_string())]
+        );
+        let next =
+            claim_cell_with_reservations(root, main_topo(root), "gtc-b", "wk-2", Some("sess-2"), None, None);
+        assert!(next.is_ok(), "both paths the capped cell held are claimable");
+    }
+
     /// Constraint 1: a claim with no overlapping hold succeeds exactly as it
     /// did before this cell — the acquire adds NO key to the emitted cell
     /// record, so `run_claim`'s payload and text are byte-identical.
@@ -3999,6 +4061,56 @@ use std::time::Instant;
         );
         assert_eq!(update_frozen_hint("status"), Some("status moves only through claim/verify/cap/block/drop"));
         assert_eq!(update_frozen_hint("nonsense"), None);
+    }
+
+    #[test]
+    fn add_refuses_a_cell_that_names_its_dependencies_by_a_foreign_key() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let base = || {
+            json!({"id": "d-1", "feature": "f", "title": "t", "action": "a", "verify": "v", "lane": "tiny", "role": "code", "affects_skills": [], "affects_specs": []})
+        };
+        for key in ["depends_on", "dependencies"] {
+            let mut cell = base();
+            cell[key] = json!(["x-1"]);
+            let message = thrown(validate_new_cell(root, &cell));
+            assert!(message.contains(key), "{message}");
+            assert!(message.contains("\"deps\""), "{message}");
+            let batch = validate_new_cell_problems(root, &cell).unwrap();
+            assert!(batch.iter().any(|p| p.contains("\"deps\"")), "{batch:?}");
+        }
+        let mut ok = base();
+        ok["deps"] = json!(["x-1"]);
+        assert_eq!(validate_new_cell(root, &ok).ok(), Some(()));
+        assert_eq!(normalize_new_cell(&ok).unwrap()["deps"], json!(["x-1"]));
+    }
+
+    #[test]
+    fn update_names_deps_for_a_foreign_dependency_key() {
+        for key in ["depends_on", "dependencies"] {
+            let hint = update_frozen_hint(key).expect("a foreign dependency key is refused with a hint");
+            assert!(hint.contains("\"deps\""), "{hint}");
+        }
+    }
+
+    #[test]
+    fn add_batch_refuses_a_foreign_dependency_key_even_beside_deps_or_empty() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let cell = |id: &str, key: &str, value: Value| {
+            let mut c = json!({"id": id, "feature": "f", "title": "t", "action": "a", "verify": "v", "lane": "tiny", "role": "code", "affects_skills": [], "affects_specs": [], "deps": []});
+            c[key] = value;
+            c
+        };
+        for (key, value) in [("depends_on", json!([])), ("dependencies", Value::Null)] {
+            let (ok, rows, normalized) = build_add_cells_report(root, &[cell("d-2", key, value)]).unwrap();
+            assert!(!ok);
+            assert!(normalized.is_none());
+            assert!(rows[0].problems.iter().any(|p| p.contains(key) && p.contains("\"deps\"")), "{:?}", rows[0].problems);
+        }
+        let (ok, rows, normalized) = build_add_cells_report(root, &[cell("d-3", "deps", json!(["d-9"]))]).unwrap();
+        assert!(ok, "{:?}", rows[0].problems);
+        assert_eq!(normalized.unwrap()[0]["deps"], json!(["d-9"]));
     }
 
     // ── cells claim-next (R6): the sweep + the selection filters ──────────
@@ -11971,6 +12083,86 @@ use std::time::Instant;
     }
 
     #[test]
+    fn gis4_verify_containing_the_separator_caps_with_the_whole_verify_as_command() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_bee_config(root, &json!({"commands": {"test": "none"}}));
+        let mut c = cell("gis4-sep", "claimed", "f", json!([]));
+        c["verify"] = json!("cargo test -p bee — --nocapture");
+        write_cell_fixture(root, "gis4-sep", &c);
+
+        let report = r#"{"outcome":"o","commit":"c","files":[],"tests":"cargo test -p bee — --nocapture — green:unit — touched tests.rs — and more","deviations":[]}"#;
+        let flags = cap_flags_report("gis4-sep", Some(report));
+        let capped = cap_cell_from_flags(root, &flags, false).unwrap();
+        assert_eq!(capped["status"], json!("capped"));
+        assert_eq!(capped["trace"]["verify_command"], json!("cargo test -p bee — --nocapture"));
+        assert_eq!(capped["trace"]["verify_output"], json!("green:unit"));
+        assert_eq!(capped["trace"]["verification_evidence"], json!("touched tests.rs — and more"));
+    }
+
+    #[test]
+    fn gis4_verify_containing_the_separator_still_refuses_a_different_command() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_bee_config(root, &json!({"commands": {"test": "none"}}));
+        let mut c = cell("gis4-diff", "claimed", "f", json!([]));
+        c["verify"] = json!("cargo test -p bee — --nocapture");
+        write_cell_fixture(root, "gis4-diff", &c);
+        let before = std::fs::read_to_string(cell_file(root, "gis4-diff")).unwrap();
+
+        let report = r#"{"outcome":"o","commit":"c","files":[],"tests":"cargo test -p other — --nocapture — green:unit — touched tests.rs","deviations":[]}"#;
+        let flags = cap_flags_report("gis4-diff", Some(report));
+        let refusal = thrown(cap_cell_from_flags(root, &flags, false));
+        assert!(refusal.contains("refused") || refusal.contains("result segment"), "{refusal}");
+        let after = std::fs::read_to_string(cell_file(root, "gis4-diff")).unwrap();
+        assert_eq!(before, after, "a refused cap must write nothing to disk");
+    }
+
+    #[test]
+    fn gis4t_separator_verify_refuses_a_near_miss_and_a_plain_different_command() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_bee_config(root, &json!({"commands": {"test": "none"}}));
+        let mut c = cell("gis4t-mis", "claimed", "f", json!([]));
+        c["verify"] = json!("cargo test -p bee — --nocapture");
+        write_cell_fixture(root, "gis4t-mis", &c);
+        let before = std::fs::read_to_string(cell_file(root, "gis4t-mis")).unwrap();
+
+        for tests in [
+            "cargo test -p bee — --exact — green:unit — touched tests.rs",
+            "cargo test -p bee — --nocapture --exact — green:unit — touched tests.rs",
+        ] {
+            let report = json!({"outcome":"o","commit":"c","files":[],"tests":tests,"deviations":[]}).to_string();
+            let flags = cap_flags_report("gis4t-mis", Some(&report));
+            assert!(cap_cell_from_flags(root, &flags, false).is_err(), "{tests} must be refused");
+        }
+        let report = r#"{"outcome":"o","commit":"c","files":[],"tests":"cargo test -p other — green:unit — touched tests.rs","deviations":[]}"#;
+        let flags = cap_flags_report("gis4t-mis", Some(report));
+        let refusal = thrown(cap_cell_from_flags(root, &flags, false));
+        assert!(refusal.contains("does not match approved cell verify command"), "{refusal}");
+        let after = std::fs::read_to_string(cell_file(root, "gis4t-mis")).unwrap();
+        assert_eq!(before, after, "a refused cap must write nothing to disk");
+    }
+
+    #[test]
+    fn gis4t_separator_verify_with_a_red_result_is_refused_as_red_and_writes_nothing() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_bee_config(root, &json!({"commands": {"test": "none"}}));
+        let mut c = cell("gis4t-red", "claimed", "f", json!([]));
+        c["verify"] = json!("cargo test -p bee — --nocapture");
+        write_cell_fixture(root, "gis4t-red", &c);
+        let before = std::fs::read_to_string(cell_file(root, "gis4t-red")).unwrap();
+
+        let report = r#"{"outcome":"o","commit":"c","files":[],"tests":"cargo test -p bee — --nocapture — red — one test failed","deviations":[]}"#;
+        let flags = cap_flags_report("gis4t-red", Some(report));
+        let refusal = thrown(cap_cell_from_flags(root, &flags, false));
+        assert!(refusal.contains("result segment is \"red\""), "{refusal}");
+        let after = std::fs::read_to_string(cell_file(root, "gis4t-red")).unwrap();
+        assert_eq!(before, after, "a refused cap must write nothing to disk");
+    }
+
+    #[test]
     fn pihp_replayable_proof_exact_trimmed_bytes_match() {
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
@@ -14065,7 +14257,7 @@ use std::time::Instant;
         result.handback.reaction = Some("maybe".to_string());
         let git = GitFacts { head: "abc1234".to_string(), changed_files: Vec::new() };
         let report = report_from_job(&json!({}), &result, Some(git), "cargo test", "green:unit", None).unwrap();
-        let refusal = thrown(parse_report_flag(&report));
+        let refusal = thrown(parse_report_flag(&report, ""));
         assert!(
             refusal.contains("cells finish: --report key \"reaction\" must be one of confirm, partial, challenge, blocked"),
             "{refusal}"

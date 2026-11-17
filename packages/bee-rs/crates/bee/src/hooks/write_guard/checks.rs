@@ -907,7 +907,7 @@ A genuinely path-scoped `git commit -- <your paths>` is allowed too.",
             let offending = paths
                 .iter()
                 .map(|p| normalize_rel(p))
-                .find(|p| !under_allowed_prefix_intake(p));
+                .find(|p| !under_allowed_prefix_intake(p) && !skill_projection_path(p));
             if let Some(off) = offending {
                 return Ok(Some(WV::Deny(intake_refusal(
                     phase,

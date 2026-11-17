@@ -1671,6 +1671,16 @@ pub(crate) fn herding_transport_probe_for(
     }
 }
 
+fn undeclared_agent_reason(cfg: &Value, name: &str) -> Option<String> {
+    use crate::herding::wave::{AgentCommandError, resolve_agent_command};
+    match resolve_agent_command(cfg, Some(name)) {
+        Err(AgentCommandError::UnknownAgent { known, .. }) => {
+            Some(format!("unknown herding agent {name:?} — herding.agents declares: {}", known.join(", ")))
+        }
+        _ => None,
+    }
+}
+
 /// provenance: dispatch-prepare.mjs prepareDispatch(root, {...}). Throws only
 /// on a malformed CALL; every legitimate cli-shaped / unconfigured-advisor /
 /// native-unavailable / claim-ownership resolution is a typed {ok:false}
@@ -3041,6 +3051,9 @@ pub(crate) fn prepare_dispatch_wire(
                         }
                     }
                     Some((_, Err(err))) => (false, err),
+                    None if agent.as_deref().and_then(|name| undeclared_agent_reason(&cfg, name)).is_some() => {
+                        (false, agent.as_deref().and_then(|name| undeclared_agent_reason(&cfg, name)).unwrap_or_default())
+                    }
                     None => {
                         let (ready, reason, _) = match transport_kind_at(root) {
                             Ok(kind) => herding_transport_probe_for(kind, &|k| std::env::var(k).ok()),
@@ -7125,6 +7138,34 @@ mod paseo_probe_tests {
     }
 
     #[test]
+    fn undeclared_herding_agent_not_ready_names_declared_agents() {
+        let tmp = tempfile::tempdir().unwrap();
+        let cfg = r#"{
+            "team": {"pi": {"code": {"kind": "herding", "agent": "ghost-worker"}}},
+            "herding": {
+                "transport": "herdr",
+                "agents": {
+                    "normal-worker": ["pi", "-a"],
+                    "other-worker": ["pi"]
+                }
+            }
+        }"#;
+        let root = repo(&tmp, cfg);
+        w_cell(&root, "c-1");
+        let out = prepare_dispatch_with_role(
+            &root, "pi", "cell", Some("code"), Some("c-1"), Some("w"), false, None, None, false, None,
+        )
+        .unwrap();
+        let Prepared::Value(v) = out else { panic!("expected prepared value") };
+        let payload = &v["payload"];
+        assert_eq!(payload["transport_ready"], Value::Bool(false));
+        let reason = payload["transport_reason"].as_str().expect("string");
+        assert!(reason.contains("ghost-worker"), "{reason}");
+        assert!(reason.contains("normal-worker"), "{reason}");
+        assert!(reason.contains("other-worker"), "{reason}");
+    }
+
+    #[test]
     fn non_paseo_agent_keeps_today_probe_byte_identical() {
         let tmp = tempfile::tempdir().unwrap();
         let cfg = r#"{
@@ -7147,6 +7188,74 @@ mod paseo_probe_tests {
         let (expected_ready, expected_reason, _) = herding_transport_probe(&|k| std::env::var(k).ok());
         assert_eq!(payload["transport_ready"], Value::Bool(expected_ready));
         assert_eq!(payload["transport_reason"], Value::String(expected_reason));
+    }
+
+    #[test]
+    fn undeclared_herding_agent_with_no_agents_map_names_built_ins() {
+        let tmp = tempfile::tempdir().unwrap();
+        let cfg = r#"{
+            "team": {"pi": {"code": {"kind": "herding", "agent": "ghost-worker"}}},
+            "herding": {"transport": "herdr"}
+        }"#;
+        let root = repo(&tmp, cfg);
+        w_cell(&root, "c-1");
+        let out = prepare_dispatch_with_role(
+            &root, "pi", "cell", Some("code"), Some("c-1"), Some("w"), false, None, None, false, None,
+        )
+        .unwrap();
+        let Prepared::Value(v) = out else { panic!("expected prepared value") };
+        let payload = &v["payload"];
+        assert_eq!(payload["transport_ready"], Value::Bool(false));
+        let reason = payload["transport_reason"].as_str().expect("string");
+        assert!(reason.contains("ghost-worker"), "{reason}");
+        assert!(reason.contains("claude-sonnet"), "{reason}");
+    }
+
+    #[test]
+    fn built_in_herding_agent_keeps_today_probe() {
+        let tmp = tempfile::tempdir().unwrap();
+        let cfg = r#"{
+            "team": {"pi": {"code": {"kind": "herding", "agent": "claude-sonnet"}}},
+            "herding": {
+                "transport": "herdr",
+                "agents": {
+                    "normal-worker": ["pi", "-a"]
+                }
+            }
+        }"#;
+        let root = repo(&tmp, cfg);
+        w_cell(&root, "c-1");
+        let out = prepare_dispatch_with_role(
+            &root, "pi", "cell", Some("code"), Some("c-1"), Some("w"), false, None, None, false, None,
+        )
+        .unwrap();
+        let Prepared::Value(v) = out else { panic!("expected prepared value") };
+        let payload = &v["payload"];
+        let (expected_ready, expected_reason, _) = herding_transport_probe(&|k| std::env::var(k).ok());
+        assert_eq!(payload["transport_ready"], Value::Bool(expected_ready));
+        assert_eq!(payload["transport_reason"], Value::String(expected_reason));
+    }
+
+    #[test]
+    fn agent_declared_only_in_top_level_agents_is_not_ready() {
+        let tmp = tempfile::tempdir().unwrap();
+        let cfg = r#"{
+            "team": {"pi": {"code": {"kind": "herding", "agent": "top-only"}}},
+            "agents": {"top-only": ["pi", "-a"]},
+            "herding": {"transport": "herdr"}
+        }"#;
+        let root = repo(&tmp, cfg);
+        w_cell(&root, "c-1");
+        let out = prepare_dispatch_with_role(
+            &root, "pi", "cell", Some("code"), Some("c-1"), Some("w"), false, None, None, false, None,
+        )
+        .unwrap();
+        let Prepared::Value(v) = out else { panic!("expected prepared value") };
+        let payload = &v["payload"];
+        assert_eq!(payload["transport_ready"], Value::Bool(false));
+        let reason = payload["transport_reason"].as_str().expect("string");
+        assert!(reason.contains("unknown herding agent \"top-only\""), "{reason}");
+        assert!(crate::herding::wave::resolve_agent_command(&serde_json::from_str(cfg).unwrap(), Some("top-only")).is_err());
     }
 
     #[test]

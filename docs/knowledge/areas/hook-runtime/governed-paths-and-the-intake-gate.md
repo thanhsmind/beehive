@@ -621,6 +621,18 @@ permitted write is the commoner one.
   `pre_gate_main_write_pi_extension_blocks_early_source_writes` in
   `packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs`.
 
+## Skill projection staging and shell write heads
+
+- `git add`, `git commit -- <paths>` and `git rm --cached` whose every path is
+  under `.claude/skills/`, `.agents/skills/` or `.opencode/skills/` pass the
+  idle intake gate and the worktree-first guard (decisions 719d1a38, issues
+  163 and 168). Mixed with any other path they are refused as before, and a
+  Write or Edit into those trees stays gated.
+- `rm`, `mv`, `cp`, `mkdir`, `touch` and `tee` add a write target only at the
+  head of a shell segment, after `sudo` or `env` wrappers (decision 681f1ed6,
+  issue 165). A guess that scanning every token was safer failed: `claude rm
+  4e1731f9` read as a delete of the id.
+
 ## Open Gaps
 
 - Recorded tradeoff (bee-footprint P3): the workflow's disposable-experiment

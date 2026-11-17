@@ -986,6 +986,40 @@ use std::time::Instant;
         std::fs::write(&file, format!("{}\n", jsjson::stringify_pretty(&record))).unwrap();
     }
 
+    #[test]
+    fn the_list_line_labels_a_live_lease_active_and_a_past_expiry_lease_expired() {
+        let tmp = fixture_root();
+        let root_s = root_str(tmp.path());
+        write_lease_file(&root_s, "src/live.ts", json!("2999-01-01T00:00:00.000Z"));
+        write_lease_file(&root_s, "src/never.ts", Value::Null);
+        write_lease_file(&root_s, "src/gone.ts", json!("2020-01-02T00:00:00.000Z"));
+        let mut rows = list_reservations(&root_s, false, now_ms()).ok().unwrap();
+        rows.sort_by(|a, b| a.path.cmp(&b.path));
+        let lines: Vec<String> = rows.iter().map(reservation_line).collect();
+        assert!(lines[0].ends_with("| expired"), "{}", lines[0]);
+        assert!(lines[1].ends_with("| active"), "{}", lines[1]);
+        assert!(lines[2].ends_with("| active"), "{}", lines[2]);
+        assert!(lines.iter().all(|l| !l.contains("by TTL")), "{lines:?}");
+    }
+
+    #[test]
+    fn the_list_line_flips_to_expired_one_second_past_expiry_and_active_only_shows_no_expired_label() {
+        let tmp = fixture_root();
+        let root_s = root_str(tmp.path());
+        let just_past = iso_from_ms(now_ms() - 1000.0).ok().unwrap();
+        let just_ahead = iso_from_ms(now_ms() + 60_000.0).ok().unwrap();
+        write_lease_file(&root_s, "src/a_past.ts", json!(just_past));
+        write_lease_file(&root_s, "src/b_ahead.ts", json!(just_ahead));
+        let mut rows = list_reservations(&root_s, false, now_ms()).ok().unwrap();
+        rows.sort_by(|a, b| a.path.cmp(&b.path));
+        let labels: Vec<String> =
+            rows.iter().map(|r| reservation_line(r).rsplit(" | ").next().unwrap().to_string()).collect();
+        assert_eq!(labels, vec!["expired", "active"]);
+        let active = list_reservations(&root_s, true, now_ms()).ok().unwrap();
+        assert_eq!(active.len(), 1);
+        assert!(active.iter().all(|r| reservation_line(r).ends_with("| active")));
+    }
+
     fn write_holds_ledger(root: &Path, holds: Value) {
         std::fs::create_dir_all(holds_ledger_path(root).parent().unwrap()).unwrap();
         std::fs::write(holds_ledger_path(root), jsjson::stringify(&json!({"holds": holds}))).unwrap();

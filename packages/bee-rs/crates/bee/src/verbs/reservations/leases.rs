@@ -225,6 +225,7 @@ pub(crate) struct Resv {
     /// id), absent on a lease written before this change or from an
     /// ungranted linked worktree (no topology to report).
     pub(crate) holder: Option<Value>,
+    pub(crate) expired: bool,
 }
 
 pub(crate) fn lease_to_reservation(rec: &Map<String, Value>) -> Ex<Resv> {
@@ -270,6 +271,7 @@ pub(crate) fn lease_to_reservation(rec: &Map<String, Value>) -> Ex<Resv> {
         session,
         kind,
         holder,
+        expired: lease_record_expired(rec, now_ms())?,
     })
 }
 

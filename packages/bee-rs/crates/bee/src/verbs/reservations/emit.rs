@@ -178,6 +178,17 @@ pub(crate) fn finish(ctx: &Ctx, out: R2<Out>) -> Option<ExitCode> {
 
 // ─── reservations list ─────────────────────────────────────────────────────
 
+pub(crate) fn reservation_line(r: &Resv) -> String {
+    format!(
+        "{} | cell {} | {} | reserved {} | {}",
+        js_disp_opt(r.agent.as_ref()),
+        js_disp_opt(r.cell.as_ref()),
+        r.path,
+        js_disp_opt(r.reserved_at.as_ref()),
+        if r.expired { "expired" } else { "active" },
+    )
+}
+
 pub(crate) fn run_list(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
     if !keys_known(&flags, &["active-only"]) {
         return None;
@@ -227,17 +238,7 @@ pub(crate) fn run_list(flags: Flags, use_json: bool, t0: Instant) -> Option<Exit
             lines.push(
                 reservations
                     .iter()
-                    .map(|r| {
-                        // released_at is null by construction (msn-16 shim) —
-                        // the ternary's released branch is unreachable.
-                        format!(
-                            "{} | cell {} | {} | reserved {} | active/expired by TTL",
-                            js_disp_opt(r.agent.as_ref()),
-                            js_disp_opt(r.cell.as_ref()),
-                            r.path,
-                            js_disp_opt(r.reserved_at.as_ref()),
-                        )
-                    })
+                    .map(reservation_line)
                     .collect::<Vec<_>>()
                     .join("\n"),
             );

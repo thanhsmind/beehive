@@ -470,7 +470,7 @@ pub(crate) fn run_reattribute(flags: Flags, use_json: bool, t0: Instant) -> Opti
     let out = match (id, to) {
         (None, None) => do_reattribute(&ctx.root, dry_run, DECISIONS_LOCK_RETRY_ATTEMPTS),
         (Some(id), Some(to)) => {
-            do_reattribute_named(&ctx.root, &id, &to, DECISIONS_LOCK_RETRY_ATTEMPTS)
+            do_reattribute_named(&ctx.root, &id, &to, dry_run, DECISIONS_LOCK_RETRY_ATTEMPTS)
         }
         _ => Ok(Out::Thrown(
             "decisions reattribute: --id and --to come together or not at all — the pair names one explicit correction; the bare verb runs the automatic text-claim pass."
@@ -491,6 +491,7 @@ pub(crate) fn do_reattribute_named(
     root: &Path,
     id: &str,
     to: &str,
+    dry_run: bool,
     lock_retries: u32,
 ) -> R2<Out> {
     let id = js_trim(id);
@@ -574,7 +575,7 @@ pub(crate) fn do_reattribute_named(
     }
     let (from, to_val) = result.unwrap();
     let changed = from != to_val;
-    if changed {
+    if changed && !dry_run {
         let tmp = path.with_extension("jsonl.reattribute.tmp");
         let mut body = out_lines.join("\n");
         body.push('\n');
@@ -588,7 +589,8 @@ pub(crate) fn do_reattribute_named(
     drop(guard);
     let text = if changed {
         let shown = if from.is_empty() { "(none)".to_string() } else { from.clone() };
-        format!("decisions reattribute: corrected 1 — {} : {shown} -> {to_val}", truncate_chars_head(id, 8))
+        let verb = if dry_run { "would correct" } else { "corrected" };
+        format!("decisions reattribute: {verb} 1 — {} : {shown} -> {to_val}", truncate_chars_head(id, 8))
     } else {
         format!(
             "decisions reattribute: corrected 0 — {} already carries \"{to_val}\".",
@@ -596,7 +598,7 @@ pub(crate) fn do_reattribute_named(
         )
     };
     Ok(Out::Emit(
-        json!({"scanned": 1, "changed": if changed {1} else {0}, "id": id, "from": from, "to": to_val}),
+        json!({"scanned": 1, "changed": if changed {1} else {0}, "dry_run": dry_run, "id": id, "from": from, "to": to_val}),
         text,
         0,
     ))

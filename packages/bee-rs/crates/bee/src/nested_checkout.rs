@@ -180,6 +180,9 @@ fn scan_for_nested_checkout(root_real: &str, dir: &str, depth: usize) -> D<bool>
             continue;
         }
         let child = s(&entry.path());
+        if child == format!("{root_real}/.bee/tmp") {
+            continue;
+        }
         if guard::has_git_node_f2(&child).map_err(|_| {
             DetectErr::new(format!("the .git node under {child} could not be stat'd"))
         })? {
@@ -330,6 +333,60 @@ mod tests {
         assert!(!has_any_shared_nested_checkout(&root, &ctrl, None).unwrap());
         nested_repo(&root, "a/b/near");
         assert!(has_any_shared_nested_checkout(&root, &ctrl, None).unwrap());
+    }
+
+    #[test]
+    fn the_bee_scratch_area_is_skipped_but_other_bee_dirs_are_not() {
+        let (_tmp, root) = fixture();
+        write_live_session(&root, "other-session");
+        let ctrl = root.to_string_lossy().into_owned();
+
+        nested_repo(&root, ".bee/tmp/job/repo");
+        assert!(
+            !has_any_shared_nested_checkout(&root, &ctrl, None).unwrap(),
+            "a clone under .bee/tmp is never reported"
+        );
+
+        nested_repo(&root, "src/tmp/repo");
+        assert!(
+            has_any_shared_nested_checkout(&root, &ctrl, None).unwrap(),
+            "a tmp dir elsewhere is still scanned"
+        );
+        std::fs::remove_dir_all(root.join("src")).unwrap();
+        assert!(!has_any_shared_nested_checkout(&root, &ctrl, None).unwrap());
+
+        nested_repo(&root, ".bee/other/repo");
+        assert!(
+            has_any_shared_nested_checkout(&root, &ctrl, None).unwrap(),
+            "another dir under .bee is still reported"
+        );
+    }
+
+    #[test]
+    fn only_the_root_scratch_area_is_skipped_not_look_alikes() {
+        let (_tmp, root) = fixture();
+        write_live_session(&root, "other-session");
+        let ctrl = root.to_string_lossy().into_owned();
+
+        nested_repo(&root, ".bee/tmp");
+        assert!(
+            !has_any_shared_nested_checkout(&root, &ctrl, None).unwrap(),
+            "a .bee/tmp that is itself a git checkout is skipped"
+        );
+
+        nested_repo(&root, ".bee/tmp-old/repo");
+        assert!(
+            has_any_shared_nested_checkout(&root, &ctrl, None).unwrap(),
+            "a sibling whose name only starts with tmp is still reported"
+        );
+        std::fs::remove_dir_all(root.join(".bee/tmp-old")).unwrap();
+        assert!(!has_any_shared_nested_checkout(&root, &ctrl, None).unwrap());
+
+        nested_repo(&root, "pkg/.bee/tmp/repo");
+        assert!(
+            has_any_shared_nested_checkout(&root, &ctrl, None).unwrap(),
+            "a .bee/tmp below the repo root is still reported"
+        );
     }
 
     /// Shape (a): a marker-verified companion mount fires the guard through
