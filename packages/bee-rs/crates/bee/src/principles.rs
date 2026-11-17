@@ -40,6 +40,89 @@ pub(crate) struct Principle {
     pub(crate) spoken: String,
     /// Route classes this principle fires for.
     pub(crate) classes: Vec<String>,
+    pub(crate) signals: Vec<String>,
+}
+
+#[derive(Debug, Clone, Default)]
+pub(crate) struct Hints {
+    pub(crate) lane: Option<String>,
+    pub(crate) flags: Vec<String>,
+    pub(crate) files: Vec<String>,
+}
+
+impl Hints {
+    pub(crate) fn from_route(route: &serde_json::Value) -> Self {
+        let lane = route.get("lane").and_then(serde_json::Value::as_str).map(str::to_string);
+        let flags = match route.get("flags") {
+            Some(serde_json::Value::Array(items)) => {
+                items.iter().filter_map(|f| f.as_str().map(str::to_string)).collect()
+            }
+            _ => Vec::new(),
+        };
+        Hints { lane, flags, files: Vec::new() }
+    }
+
+    fn matches(&self, token: &str) -> bool {
+        let token = token.trim();
+        if token.is_empty() {
+            return false;
+        }
+        self.lane.as_deref().is_some_and(|l| l.eq_ignore_ascii_case(token))
+            || self.flags.iter().any(|f| f.eq_ignore_ascii_case(token))
+            || self.files.iter().any(|f| path_glob(token, f))
+    }
+}
+
+fn path_glob(pattern: &str, path: &str) -> bool {
+    fn go(p: &[u8], s: &[u8]) -> bool {
+        match p.first() {
+            None => s.is_empty(),
+            Some(b'*') if p.get(1) == Some(&b'*') => {
+                let rest = p[2..].strip_prefix(b"/").unwrap_or(&p[2..]);
+                (0..=s.len()).any(|i| go(rest, &s[i..]))
+            }
+            Some(b'*') => {
+                let mut i = 0;
+                loop {
+                    if go(&p[1..], &s[i..]) {
+                        return true;
+                    }
+                    if i == s.len() || s[i] == b'/' {
+                        return false;
+                    }
+                    i += 1;
+                }
+            }
+            Some(c) => s.first() == Some(c) && go(&p[1..], &s[1..]),
+        }
+    }
+    let path = path.trim_start_matches("./");
+    if pattern.contains('/') {
+        go(pattern.as_bytes(), path.as_bytes())
+    } else {
+        go(pattern.as_bytes(), path.rsplit('/').next().unwrap_or(path).as_bytes())
+    }
+}
+
+pub(crate) const PRINCIPLES_CAP_DEFAULT: usize = 7;
+
+pub(crate) fn principles_cap(root: &Path) -> usize {
+    match crate::state::read_config_raw(root).get("principles_cap") {
+        Some(serde_json::Value::Number(n)) => n
+            .as_u64()
+            .filter(|c| *c >= 1)
+            .map_or(PRINCIPLES_CAP_DEFAULT, |c| c as usize),
+        _ => PRINCIPLES_CAP_DEFAULT,
+    }
+}
+
+pub(crate) fn all_principles(root: &Path) -> Vec<Principle> {
+    parse_principles(&index_body(root))
+}
+
+fn index_body(root: &Path) -> String {
+    std::fs::read_to_string(root.join(PRINCIPLE_INDEX))
+        .unwrap_or_else(|_| BUILT_IN_INDEX.to_string())
 }
 
 /// Rows of the `## Principle homes` section, in file order. A row with no
@@ -59,28 +142,34 @@ pub(crate) fn parse_principles(body: &str) -> Vec<Principle> {
     let mut slug: Option<String> = None;
     let mut spoken = String::new();
     let mut classes: Vec<String> = Vec::new();
+    let mut signals: Vec<String> = Vec::new();
 
     // A row opens at column 0 (`- \`bee-principle-x\` (...)`); every
     // continuation — `spoken:`, `classes:`, and the `- applied_at:` block — is
     // indented, which is what keeps an applied_at bullet from reading as a new
     // row.
-    let mut flush = |slug: &mut Option<String>, spoken: &mut String, classes: &mut Vec<String>| {
+    let mut flush = |slug: &mut Option<String>,
+                     spoken: &mut String,
+                     classes: &mut Vec<String>,
+                     signals: &mut Vec<String>| {
         if let Some(s) = slug.take()
             && !spoken.is_empty() && !classes.is_empty() {
                 out.push(Principle {
                     slug: s,
                     spoken: std::mem::take(spoken),
                     classes: std::mem::take(classes),
+                    signals: std::mem::take(signals),
                 });
             }
         spoken.clear();
         classes.clear();
+        signals.clear();
     };
 
     for line in section.lines() {
         let trimmed = line.trim();
         if line.starts_with("- ") || line.starts_with("* ") {
-            flush(&mut slug, &mut spoken, &mut classes);
+            flush(&mut slug, &mut spoken, &mut classes, &mut signals);
             slug = backticked(&trimmed[2..]).map(str::to_string);
         } else if let Some(value) = trimmed.strip_prefix("spoken:") {
             spoken = value.trim().to_string();
@@ -90,9 +179,15 @@ pub(crate) fn parse_principles(body: &str) -> Vec<Principle> {
                 .map(|c| c.trim().trim_matches('`').to_string())
                 .filter(|c| !c.is_empty())
                 .collect();
+        } else if let Some(value) = trimmed.strip_prefix("signals:") {
+            signals = value
+                .split(',')
+                .map(|c| c.trim().trim_matches('`').to_string())
+                .filter(|c| !c.is_empty())
+                .collect();
         }
     }
-    flush(&mut slug, &mut spoken, &mut classes);
+    flush(&mut slug, &mut spoken, &mut classes, &mut signals);
 
     out
 }
@@ -109,27 +204,45 @@ pub(crate) fn route_is_session_owned(session_bound: bool, lane_records: usize) -
     session_bound || lane_records == 0
 }
 
-/// The block both surfaces show, or nothing at all.
+/// The block every surface shows, or nothing at all.
 ///
 /// `class` is the recorded route class. `None`, an empty class, a missing section, and zero matching rows all return an empty vector —
-/// an empty header is worse than silence.
-pub(crate) fn principle_lines(root: &Path, class: Option<&str>) -> Vec<String> {
+/// an empty header is worse than silence. Rows rank by signal matches against `hints`, then fewer classes, then file order, and at most `principles_cap` print.
+pub(crate) fn principle_lines(root: &Path, class: Option<&str>, hints: &Hints) -> Vec<String> {
     let class = class.map(str::trim).filter(|c| !c.is_empty());
     let Some(class) = class else {
         return Vec::new();
     };
-    let body = std::fs::read_to_string(root.join(PRINCIPLE_INDEX))
-        .unwrap_or_else(|_| BUILT_IN_INDEX.to_string());
-    render_lines(&body, class, crate::verbs::skillstation_group::principles_on_hub(root))
+    render_lines(
+        &index_body(root),
+        class,
+        crate::verbs::skillstation_group::principles_on_hub(root),
+        hints,
+        principles_cap(root),
+    )
 }
 
 /// `principle_lines` with the index text already in hand — the seam the unit
 /// tests drive, so they never need a repo tree on disk.
-fn render_lines(body: &str, class: &str, hub: bool) -> Vec<String> {
-    let matched: Vec<Principle> = parse_principles(body)
+fn ranked_rows(body: &str, class: &str, hints: &Hints) -> Vec<Principle> {
+    let mut matched: Vec<(usize, Principle)> = parse_principles(body)
         .into_iter()
         .filter(|p| p.classes.iter().any(|c| c.eq_ignore_ascii_case(class)))
+        .map(|p| (p.signals.iter().filter(|t| hints.matches(t)).count(), p))
         .collect();
+    matched.sort_by(|(a, pa), (b, pb)| b.cmp(a).then(pa.classes.len().cmp(&pb.classes.len())));
+    matched.into_iter().map(|(_, p)| p).collect()
+}
+
+pub(crate) fn routed_slugs(root: &Path, class: Option<&str>, hints: &Hints) -> Vec<String> {
+    let Some(class) = class.map(str::trim).filter(|c| !c.is_empty()) else {
+        return Vec::new();
+    };
+    ranked_rows(&index_body(root), class, hints).into_iter().map(|p| p.slug).collect()
+}
+
+fn render_lines(body: &str, class: &str, hub: bool, hints: &Hints, cap: usize) -> Vec<String> {
+    let matched = ranked_rows(body, class, hints);
     if matched.is_empty() {
         return Vec::new();
     }
@@ -139,9 +252,18 @@ fn render_lines(body: &str, class: &str, hub: bool) -> Vec<String> {
         header.push_str(" Load each one with skillstation skill show <slug> --json (its content field); the skillstation MCP tool skill_get, the slug as skill_id, is the fallback.");
     }
     let mut lines = vec![header];
+    let shown = matched.len().min(cap.max(1));
     lines.extend(
-        matched.iter().map(|p| format!("  - `{}` — {}", p.slug, p.spoken)),
+        matched[..shown].iter().map(|p| format!("  - `{}` — {}", p.slug, p.spoken)),
     );
+    if shown < matched.len() {
+        let rest: Vec<String> = matched[shown..].iter().map(|p| format!("`{}`", p.slug)).collect();
+        lines.push(format!(
+            "  - {} more of this class, ranked lower and still yours to apply by name: {}",
+            rest.len(),
+            rest.join(", ")
+        ));
+    }
     lines
 }
 
@@ -184,7 +306,7 @@ mod tests {
 
     #[test]
     fn a_class_with_matches_names_each_principle_and_its_spoken_line() {
-        let lines = render_lines(INDEX, "bugfix", false);
+        let lines = render_lines(INDEX, "bugfix", false, &Hints::default(), 7);
         assert_eq!(
             lines,
             vec![
@@ -198,8 +320,8 @@ mod tests {
 
     #[test]
     fn hub_mode_extends_only_the_header_line() {
-        let plain = render_lines(INDEX, "bugfix", false);
-        let hub = render_lines(INDEX, "bugfix", true);
+        let plain = render_lines(INDEX, "bugfix", false, &Hints::default(), 7);
+        let hub = render_lines(INDEX, "bugfix", true, &Hints::default(), 7);
         assert_eq!(
             hub[0],
             format!("{} Load each one with skillstation skill show <slug> --json (its content field); the skillstation MCP tool skill_get, the slug as skill_id, is the fallback.", plain[0])
@@ -213,7 +335,7 @@ mod tests {
         let idx = dir.path().join(PRINCIPLE_INDEX);
         std::fs::create_dir_all(idx.parent().unwrap()).unwrap();
         std::fs::write(&idx, INDEX).unwrap();
-        let plain = principle_lines(dir.path(), Some("bugfix"));
+        let plain = principle_lines(dir.path(), Some("bugfix"), &Hints::default());
         assert!(!plain[0].contains("skill_get"));
         std::fs::create_dir_all(dir.path().join(".bee")).unwrap();
         std::fs::write(
@@ -221,7 +343,7 @@ mod tests {
             r#"{"skillstation":{"principles":"hub"}}"#,
         )
         .unwrap();
-        assert!(principle_lines(dir.path(), Some("bugfix"))[0].contains("skill_get"));
+        assert!(principle_lines(dir.path(), Some("bugfix"), &Hints::default())[0].contains("skill_get"));
     }
 
     #[test]
@@ -230,12 +352,12 @@ mod tests {
         let idx = dir.path().join(PRINCIPLE_INDEX);
         std::fs::create_dir_all(idx.parent().unwrap()).unwrap();
         std::fs::write(&idx, INDEX).unwrap();
-        let local = principle_lines(dir.path(), Some("bugfix"));
+        let local = principle_lines(dir.path(), Some("bugfix"), &Hints::default());
         assert!(!local[0].contains("skillstation skill show"), "{}", local[0]);
         assert!(!local[0].contains("skill_get"), "{}", local[0]);
         std::fs::create_dir_all(dir.path().join(".bee")).unwrap();
         std::fs::write(dir.path().join(".bee/config.json"), r#"{"skillstation":{"principles":"hub"}}"#).unwrap();
-        let hub = principle_lines(dir.path(), Some("bugfix"));
+        let hub = principle_lines(dir.path(), Some("bugfix"), &Hints::default());
         let cli = hub[0].find("skillstation skill show").expect("hub header lacks the CLI load");
         let mcp = hub[0].find("skill_get").expect("hub header lacks the skill_get fallback");
         assert!(cli < mcp, "CLI at {cli} must precede skill_get at {mcp}: {}", hub[0]);
@@ -245,40 +367,40 @@ mod tests {
     #[test]
     fn a_row_listing_several_classes_matches_every_one_of_them() {
         for class in ["feature", "bugfix", "refactor"] {
-            let lines = render_lines(INDEX, class, false);
+            let lines = render_lines(INDEX, class, false, &Hints::default(), 7);
             assert!(
                 lines.iter().any(|l| l.contains("bee-principle-red-before-green")),
                 "class {class} lost the three-class row: {lines:?}"
             );
         }
         // `refactor` is the only class both rows carry.
-        assert_eq!(render_lines(INDEX, "refactor", false).len(), 3);
-        assert_eq!(render_lines(INDEX, "feature", false).len(), 2);
+        assert_eq!(render_lines(INDEX, "refactor", false, &Hints::default(), 7).len(), 3);
+        assert_eq!(render_lines(INDEX, "feature", false, &Hints::default(), 7).len(), 2);
     }
 
     #[test]
     fn a_class_matching_zero_rows_emits_no_block_at_all() {
-        assert!(render_lines(INDEX, "docs", false).is_empty());
+        assert!(render_lines(INDEX, "docs", false, &Hints::default(), 7).is_empty());
     }
 
     #[test]
     fn a_missing_section_emits_no_block_at_all() {
         assert!(parse_principles("# Concept\n\n## Open Gaps\n\n- nothing here\n").is_empty());
-        assert!(render_lines("# Concept\n\n## Open Gaps\n\n- nothing\n", "feature", false).is_empty());
+        assert!(render_lines("# Concept\n\n## Open Gaps\n\n- nothing\n", "feature", false, &Hints::default(), 7).is_empty());
     }
 
     #[test]
     fn no_route_recorded_emits_no_block_at_all() {
         let root = std::env::temp_dir();
-        assert!(principle_lines(&root, None).is_empty());
-        assert!(principle_lines(&root, Some("")).is_empty());
-        assert!(principle_lines(&root, Some("   ")).is_empty());
+        assert!(principle_lines(&root, None, &Hints::default()).is_empty());
+        assert!(principle_lines(&root, Some(""), &Hints::default()).is_empty());
+        assert!(principle_lines(&root, Some("   "), &Hints::default()).is_empty());
     }
 
     #[test]
     fn a_repo_without_the_index_file_gets_the_built_in_copy() {
         let dir = tempfile::tempdir().unwrap();
-        let lines = principle_lines(dir.path(), Some("bugfix"));
+        let lines = principle_lines(dir.path(), Some("bugfix"), &Hints::default());
         assert!(!lines.is_empty());
         assert!(lines.iter().any(|l| l.contains("bee-principle-red-before-green")), "{lines:?}");
         assert!(!lines[0].contains("skill_get"));
@@ -304,6 +426,158 @@ mod tests {
             assert!(row.slug.starts_with("bee-principle-"), "row slug is not a skill slug: {row:?}");
             assert!(!row.spoken.is_empty(), "row has no spoken line: {row:?}");
             assert!(!row.classes.is_empty(), "row has no classes: {row:?}");
+        }
+    }
+
+    fn principle_repo(rows: &[(&str, &str, &str)], config: Option<&str>) -> tempfile::TempDir {
+        let dir = tempfile::tempdir().unwrap();
+        let mut body = String::from("# Concept\n\n## Principle homes\n\n");
+        for (slug, classes, signals) in rows {
+            body.push_str(&format!("- `{slug}` (x):\n  spoken: rule of {slug}\n  classes: {classes}\n"));
+            if !signals.is_empty() {
+                body.push_str(&format!("  signals: {signals}\n"));
+            }
+        }
+        let idx = dir.path().join(PRINCIPLE_INDEX);
+        std::fs::create_dir_all(idx.parent().unwrap()).unwrap();
+        std::fs::write(&idx, body).unwrap();
+        if let Some(config) = config {
+            std::fs::create_dir_all(dir.path().join(".bee")).unwrap();
+            std::fs::write(dir.path().join(".bee/config.json"), config).unwrap();
+        }
+        dir
+    }
+
+    fn principle_slugs_shown(lines: &[String]) -> Vec<String> {
+        lines[1..]
+            .iter()
+            .filter_map(|l| l.strip_prefix("  - `"))
+            .filter_map(|l| l.split_once('`'))
+            .map(|(slug, _)| slug.to_string())
+            .collect()
+    }
+
+    fn overflow_lines(lines: &[String]) -> Vec<&String> {
+        lines.iter().filter(|l| l.contains(" more of this class")).collect()
+    }
+
+    #[test]
+    fn a_principle_row_whose_signals_match_the_lane_or_a_touched_file_ranks_above_one_matching_nothing() {
+        let dir = principle_repo(
+            &[
+                ("bee-principle-plain", "feature", ""),
+                ("bee-principle-lane", "feature", "standard"),
+                ("bee-principle-file", "feature", "src/**/*.rs"),
+            ],
+            None,
+        );
+        let none = principle_lines(dir.path(), Some("feature"), &Hints::default());
+        assert_eq!(
+            principle_slugs_shown(&none),
+            vec!["bee-principle-plain", "bee-principle-lane", "bee-principle-file"]
+        );
+        let lane = Hints { lane: Some("standard".into()), ..Hints::default() };
+        assert_eq!(
+            principle_slugs_shown(&principle_lines(dir.path(), Some("feature"), &lane)),
+            vec!["bee-principle-lane", "bee-principle-plain", "bee-principle-file"]
+        );
+        let file = Hints { files: vec!["src/verbs/cap.rs".into()], ..Hints::default() };
+        assert_eq!(
+            principle_slugs_shown(&principle_lines(dir.path(), Some("feature"), &file)),
+            vec!["bee-principle-file", "bee-principle-plain", "bee-principle-lane"]
+        );
+        let elsewhere = Hints { files: vec!["docs/a.md".into()], lane: Some("small".into()), ..Hints::default() };
+        assert_eq!(
+            principle_slugs_shown(&principle_lines(dir.path(), Some("feature"), &elsewhere)),
+            vec!["bee-principle-plain", "bee-principle-lane", "bee-principle-file"]
+        );
+    }
+
+    #[test]
+    fn a_principle_row_with_fewer_classes_ranks_above_one_with_more_when_signals_tie() {
+        let dir = principle_repo(
+            &[
+                ("bee-principle-wide", "feature, bugfix, refactor", "standard"),
+                ("bee-principle-mid", "feature, bugfix", ""),
+                ("bee-principle-narrow", "feature", ""),
+                ("bee-principle-narrow-signalled", "feature", "standard"),
+            ],
+            None,
+        );
+        assert_eq!(
+            principle_slugs_shown(&principle_lines(dir.path(), Some("feature"), &Hints::default())),
+            vec![
+                "bee-principle-narrow",
+                "bee-principle-narrow-signalled",
+                "bee-principle-mid",
+                "bee-principle-wide"
+            ]
+        );
+        let lane = Hints { lane: Some("standard".into()), ..Hints::default() };
+        assert_eq!(
+            principle_slugs_shown(&principle_lines(dir.path(), Some("feature"), &lane)),
+            vec![
+                "bee-principle-narrow-signalled",
+                "bee-principle-wide",
+                "bee-principle-narrow",
+                "bee-principle-mid"
+            ]
+        );
+    }
+
+    fn nine_feature_rows() -> Vec<(String, &'static str, &'static str)> {
+        (1..=9).map(|n| (format!("bee-principle-p{n}"), "feature", "")).collect()
+    }
+
+    fn principle_repo_owned(rows: &[(String, &str, &str)], config: Option<&str>) -> tempfile::TempDir {
+        let borrowed: Vec<(&str, &str, &str)> = rows.iter().map(|(s, c, g)| (s.as_str(), *c, *g)).collect();
+        principle_repo(&borrowed, config)
+    }
+
+    #[test]
+    fn at_most_principles_cap_principle_rows_print_and_the_rest_share_one_overflow_line() {
+        let mut rows = nine_feature_rows();
+        rows.push(("bee-principle-only-bugfix".into(), "bugfix", ""));
+        let dir = principle_repo_owned(&rows, None);
+        let lines = principle_lines(dir.path(), Some("feature"), &Hints::default());
+        assert_eq!(
+            principle_slugs_shown(&lines),
+            (1..=7).map(|n| format!("bee-principle-p{n}")).collect::<Vec<_>>()
+        );
+        assert_eq!(lines.len(), 1 + 7 + 1, "{lines:?}");
+        assert_eq!(
+            lines.last().unwrap(),
+            "  - 2 more of this class, ranked lower and still yours to apply by name: `bee-principle-p8`, `bee-principle-p9`"
+        );
+        let small = principle_lines(dir.path(), Some("bugfix"), &Hints::default());
+        assert_eq!(small.len(), 2, "{small:?}");
+        assert!(overflow_lines(&small).is_empty(), "{small:?}");
+
+        let seven: Vec<(String, &str, &str)> = nine_feature_rows().into_iter().take(7).collect();
+        let exact = principle_repo_owned(&seven, None);
+        let at_cap = principle_lines(exact.path(), Some("feature"), &Hints::default());
+        assert_eq!(at_cap.len(), 8, "{at_cap:?}");
+        assert!(overflow_lines(&at_cap).is_empty(), "{at_cap:?}");
+    }
+
+    #[test]
+    fn principles_cap_from_config_sets_the_principle_count_and_an_invalid_value_falls_back_to_seven() {
+        let three = principle_repo_owned(&nine_feature_rows(), Some(r#"{"principles_cap":3}"#));
+        let lines = principle_lines(three.path(), Some("feature"), &Hints::default());
+        assert_eq!(principle_slugs_shown(&lines).len(), 3, "{lines:?}");
+        assert!(lines.last().unwrap().starts_with("  - 6 more of this class"), "{lines:?}");
+
+        let wide = principle_repo_owned(&nine_feature_rows(), Some(r#"{"principles_cap":20}"#));
+        let lines = principle_lines(wide.path(), Some("feature"), &Hints::default());
+        assert_eq!(principle_slugs_shown(&lines).len(), 9, "{lines:?}");
+        assert!(overflow_lines(&lines).is_empty(), "{lines:?}");
+
+        for invalid in ["0", "-2", "2.5", "\"five\"", "null", "[3]"] {
+            let config = format!(r#"{{"principles_cap":{invalid}}}"#);
+            let dir = principle_repo_owned(&nine_feature_rows(), Some(&config));
+            let lines = principle_lines(dir.path(), Some("feature"), &Hints::default());
+            assert_eq!(principle_slugs_shown(&lines).len(), 7, "cap {invalid}: {lines:?}");
+            assert!(lines.last().unwrap().starts_with("  - 2 more of this class"), "cap {invalid}: {lines:?}");
         }
     }
 }

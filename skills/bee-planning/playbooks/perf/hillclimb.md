@@ -28,7 +28,9 @@ change has no single cause.
    as expected. If the ruler cannot distinguish them, revise the workload or
    metric. Once frozen, one repeatable command emits the metric, sampled
    enough to clear the noise (the median of several runs, not a single run);
-   changing it invalidates every earlier number. Record the baseline metric
+   changing it invalidates every earlier number. Vet the harness against
+   `.bee/expertise/performance.md` § Measuring without lying to yourself and
+   its benchmark checklist before it freezes. Record the baseline metric
    and a green run of the regression gate (the tests that must keep passing)
    before any change, so a later red is known to be the change's.
 3. Open the decision trail with `bee-show-me-your-work`, committed under

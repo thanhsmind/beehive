@@ -8,7 +8,9 @@ because source shows what the code does, never what it costs.
 1. Before the first run, write down the result that would change the
    decision and the noise floor — the run-to-run spread on an unchanged
    build. Stop when the spread is larger than the effect: a number with no
-   decision written before it gets fitted to whatever it shows.
+   decision written before it gets fitted to whatever it shows. Vet the
+   baseline and every later number against `.bee/expertise/performance.md`
+   § Measuring without lying to yourself and its benchmark checklist.
 2. Capture a baseline trace with the real command, on the surface where the
    cost was felt. Drive that surface through the project's `verify-app` skill
    when it has one, otherwise through the real interface itself. Record the

@@ -39,6 +39,14 @@
       "sha256": "d2f25f2746ec5b56f87171753f12ed932ec022f871431431720d8aff987b1f9d"
     },
     {
+      "name": "bee-formal-upkeep",
+      "sha256": "0b6d3459d129b749aefd32eb022bbca8890a4ce5e9d1d2baa847daeb2599187c"
+    },
+    {
+      "name": "bee-formal-verifying",
+      "sha256": "28ab13ad45f8b6aa9c10deaf5b60eec0b8ed261e51ae27ef61d0d6083321ff65"
+    },
+    {
       "name": "bee-grooming",
       "sha256": "5d8782f484ff8fab5912ba20e6d1448001f8d57b1f6ecefd9d875004e002fe3e"
     },
@@ -72,7 +80,7 @@
     },
     {
       "name": "bee-planning",
-      "sha256": "8cff4703a84214648858500a956f484c575849a3f3c75d1173ce06d30df0f8ee"
+      "sha256": "704909841c5d419072bfd471c798b484ee736e40c57feb37f376669010472e70"
     },
     {
       "name": "bee-principle-attack-the-premise",
@@ -105,6 +113,10 @@
     {
       "name": "bee-principle-experience-first",
       "sha256": "8e6d372fcfdf23361aa346dbd50b8a1d682479a7deba1295f68e299f5db40cd5"
+    },
+    {
+      "name": "bee-principle-explain-the-number",
+      "sha256": "84138e3a354a40ee8bbc8216f6520816c45bd1c2517cd4cc71f20f38d717f3cd"
     },
     {
       "name": "bee-principle-foundational-thinking",

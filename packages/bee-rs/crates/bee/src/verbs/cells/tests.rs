@@ -6692,13 +6692,77 @@ use std::time::Instant;
         let refusal = thrown(cap_cell_from_flags(root, &cap_flags_report("fl-1", Some(&report)), false));
         assert!(refusal.contains("--principle-used"), "got: {refusal}");
         let mut answered = cap_flags_report("fl-1", Some(&report));
-        answered.principle_used = Some("tdd — wrote the test first".to_string());
+        answered.principle_used = Some("bee-principle-red-before-green — wrote the test first".to_string());
         let capped = cap_cell_from_flags(root, &answered, false).unwrap();
-        assert_eq!(capped["trace"]["principles_used"][0]["slug"], json!("tdd"));
+        assert_eq!(capped["trace"]["principles_used"][0]["slug"], json!("bee-principle-red-before-green"));
         let mut other = cell("fl-2", "claimed", "f", json!([]));
         other["role"] = json!("code");
         write_cell_fixture(root, "fl-2", &other);
         assert!(cap_cell_from_flags(root, &cap_flags_report("fl-2", Some(&report)), false).is_ok());
+    }
+
+    fn principle_cap_with(root: &Path, entries: Value) -> MR<Value> {
+        let idx = root.join(crate::principles::PRINCIPLE_INDEX);
+        std::fs::create_dir_all(idx.parent().unwrap()).unwrap();
+        std::fs::write(&idx, crate::principles::TEST_INDEX).unwrap();
+        floor_cell(root, "code", json!(["src/a.rs"]));
+        let report = json!({"outcome":"o","commit":"c","files":[],"tests":"echo ok — green:unit — fixture","deviations":[],"principles_used":entries});
+        cap_cell_from_flags(root, &cap_flags_report("fl-1", Some(&report.to_string())), false)
+    }
+
+    #[test]
+    fn a_cap_refuses_a_principle_slug_that_names_no_index_row() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_bee_config(root, &json!({"commands": {"test": "none"}}));
+        floor_lane(root, Some("bugfix"));
+        let refusal = thrown(principle_cap_with(root, json!(["bee-principle-made-up — wrote the test first"])));
+        assert!(refusal.contains("\"bee-principle-made-up\""), "{refusal}");
+        assert!(refusal.contains("no row of the Principle homes index"), "{refusal}");
+        let refusal = thrown(principle_cap_with(
+            root,
+            json!(["bee-principle-red-before-green — wrote the test first", "bee-principle-not-a-principle — read it"]),
+        ));
+        assert!(refusal.contains("\"bee-principle-not-a-principle\""), "{refusal}");
+        let mut flagged = cap_flags_report("fl-1", Some(&floor_report("echo ok — green:unit — fixture")));
+        flagged.principle_used = Some("tdd — wrote the test first".to_string());
+        floor_cell(root, "code", json!(["src/a.rs"]));
+        let refusal = thrown(cap_cell_from_flags(root, &flagged, false));
+        assert!(refusal.contains("no row of the Principle homes index"), "{refusal}");
+        assert_eq!(read_cell_fixture(root, "fl-1")["status"], json!("claimed"));
+    }
+
+    #[test]
+    fn a_cap_refuses_a_principle_entry_with_an_empty_changed_part() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_bee_config(root, &json!({"commands": {"test": "none"}}));
+        floor_lane(root, Some("bugfix"));
+        for entry in ["bee-principle-red-before-green", "bee-principle-red-before-green — ", "bee-principle-red-before-green —   "] {
+            let refusal = thrown(principle_cap_with(root, json!([entry])));
+            assert!(refusal.contains("empty changed part"), "{entry:?}: {refusal}");
+        }
+        assert_eq!(read_cell_fixture(root, "fl-1")["status"], json!("claimed"));
+    }
+
+    #[test]
+    fn a_cap_records_off_route_only_for_a_known_principle_outside_the_routed_class() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_bee_config(root, &json!({"commands": {"test": "none"}}));
+        floor_lane(root, Some("bugfix"));
+        let capped = principle_cap_with(
+            root,
+            json!(["bee-principle-red-before-green — wrote the test first", "bee-principle-one-home — kept one copy"]),
+        )
+        .unwrap();
+        assert_eq!(
+            capped["trace"]["principles_used"],
+            json!([
+                {"slug": "bee-principle-red-before-green", "changed": "wrote the test first"},
+                {"slug": "bee-principle-one-home", "changed": "kept one copy", "off_route": true}
+            ])
+        );
     }
 
     fn floor_lane(root: &Path, class: Option<&str>) {
@@ -6827,11 +6891,11 @@ use std::time::Instant;
         assert_eq!(capped["trace"]["no_principles_used"], json!(true));
 
         floor_cell(root, "code", json!(["src/a.rs"]));
-        let listed = r#"{"outcome":"o","commit":"c","files":[],"tests":"echo ok — green:unit — fixture","deviations":[],"principles_used":["tdd — wrote the test first"]}"#;
+        let listed = r#"{"outcome":"o","commit":"c","files":[],"tests":"echo ok — green:unit — fixture","deviations":[],"principles_used":["bee-principle-red-before-green — wrote the test first"]}"#;
         let capped = cap_cell_from_flags(root, &cap_flags_report("fl-1", Some(listed)), false).unwrap();
         assert_eq!(
             capped["trace"]["principles_used"],
-            json!([{"slug": "tdd", "changed": "wrote the test first"}])
+            json!([{"slug": "bee-principle-red-before-green", "changed": "wrote the test first", "off_route": true}])
         );
 
         floor_cell(root, "code", json!(["src/a.rs"]));
@@ -12960,7 +13024,7 @@ use std::time::Instant;
 
         let result_path = main.join(".bee/mailbox").join(job_id).join("result-1.json");
         let mut res: Value = serde_json::from_str(&std::fs::read_to_string(&result_path).unwrap()).unwrap();
-        res["principles_used"] = json!(["small-diff — kept the change to one file"]);
+        res["principles_used"] = json!(["bee-principle-red-before-green — kept the change to one file"]);
         std::fs::write(&result_path, jsjson::stringify_pretty(&res)).unwrap();
         let out = finish_cap_and_release(&main, None, cap_flags_from_job(cell_id, job_id, Some("green:unit")), None).unwrap();
         let Out::Emit(result_val, _, 0) = out else {
@@ -12969,7 +13033,7 @@ use std::time::Instant;
         assert_eq!(result_val["status"], json!("capped"));
         assert_eq!(
             result_val["trace"]["principles_used"],
-            json!([{"slug": "small-diff", "changed": "kept the change to one file"}])
+            json!([{"slug": "bee-principle-red-before-green", "changed": "kept the change to one file", "off_route": true}])
         );
     }
 

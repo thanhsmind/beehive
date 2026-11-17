@@ -22,14 +22,15 @@ This is for new or changed behavior, built from a named data shape.
    `architect skipped: <reason>`; do not fold the design decision silently into
    implementation, because a choice nobody recorded is a choice nobody can
    review.
-3. Model an event-order flow with the `statechart` skill, so that TLC walks
+3. Model an event-order flow with `bee-formal-verifying/references/statechart.md`, so that TLC walks
    every step order and finds the stuck state a unit test never reaches:
    payment hold, capture and refund with retry, a message queue, a re-run or
    idempotent job, a multi-state workflow, a lock or lease. Do it before the
-   flow's code, when the host has that skill. Each break it reports stays a
+   flow's code, when the host has that reference. Each break it reports stays a
    guess until a test on the real code fails the same way, because a model can
-   disagree with the code for reasons the code does not share. With no
-   `statechart` skill on the host, skip this step and say so.
+   disagree with the code for reasons the code does not share. With no such
+   reference on the host (only for hosts on an older bee), skip this step and say
+   so.
 4. Write the throughput checkpoint as four todo items, because the
    decomposition decides whether a fan-out helps or collides. A dimension that
    genuinely does not apply (single file, no fan-out) keeps its item with
@@ -75,11 +76,11 @@ This is for new or changed behavior, built from a named data shape.
    state layer, not a write-up, and a concept that lags the code misleads the
    next reader.
 8. Keep a model that must stay true as the code moves with the
-   `create-formal-verification-skill` skill: it picks the code where a break
+   `bee-formal-verifying` skill: it picks the code where a break
    costs most, proves the property can fail, and leaves a project-local verify
    skill under `.bee/verify/<name>/` with the files it covers and its sync
    commit. A change to covered code runs that verify skill; drift that piled up
-   across merges takes `maintain-formal-verification-skill`. With neither skill
+   across merges takes `bee-formal-upkeep`. With neither skill
    on the host, skip this step and say so.
 9. Leave small, ordered commits and stack follow-ups: build, verify and commit each small unit before the next
    (`bee-principle-sequence-verifiable-units`), so a failure points at one unit and a
