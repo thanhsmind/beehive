@@ -926,6 +926,7 @@
     "contract:reattribute-dry-run",
     "contract:nested-scan-skips-scratch",
     "contract:herding-live-count",
-    "contract:prepare-unknown-agent"
+    "contract:prepare-unknown-agent",
+    "contract:principle-ranking"
   ]
 }
