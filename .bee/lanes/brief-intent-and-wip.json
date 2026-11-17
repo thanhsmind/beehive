@@ -11,10 +11,15 @@
     "uat": false
   },
   "summary": "Feature \"brief-intent-and-wip\" started at phase \"exploring\" (lane).",
-  "next_action": "Continue bee-exploring for \"brief-intent-and-wip\" (lane).",
+  "next_action": "Merged into main at d4b6162; reload the product and test \"brief-intent-and-wip\", then either approve uat (\"bee gate --name uat --approved true --lane brief-intent-and-wip\") or fix it in the worktree and merge again.",
   "created_at": "2026-11-17T03:01:36.234Z",
   "run_state": "awaiting-approval",
-  "waiting_on": null,
+  "waiting_on": {
+    "kind": "gate",
+    "subject": "uat: brief-intent-and-wip",
+    "asked_at": "2026-11-17T03:51:19.168Z",
+    "session": "bee-worktree-merge-sessionless"
+  },
   "route": {
     "class": "feature",
     "lane": "standard",
@@ -1497,12 +1502,5 @@
         }
       ]
     }
-  },
-  "merge_ready": {
-    "since": "2026-11-17T03:43:06.889Z",
-    "branch": "wt/brief-intent-and-wip",
-    "worktree_id": "beehive--wt--brief-intent-and-wip",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
