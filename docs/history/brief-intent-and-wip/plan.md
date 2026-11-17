@@ -166,7 +166,8 @@ One slice; it is the whole feature.
       "packages/bee-rs/crates/bee/src/verbs/plan_group.rs",
       "packages/bee-rs/crates/bee/tests/gate_preview.rs",
       "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
-      "packages/bee-rs/crates/bee/tests/discovery_verbs.rs"
+      "packages/bee-rs/crates/bee/tests/discovery_verbs.rs",
+      "docs/history/codex-harness-hardening/release-manifest.json"
     ],
     "read_first": [
       "docs/history/brief-intent-and-wip/CONTEXT.md",
@@ -178,8 +179,8 @@ One slice; it is the whole feature.
     "affects_specs": [
       "docs/knowledge/areas/workflow-state/"
     ],
-    "action": "Implement docs/history/brief-intent-and-wip/CONTEXT.md D1. The check lives only in the plan-packet check behind `bee gate --preview` (plan_packets.rs:174 `requires non-empty must_haves.truths for lane`): beside the truths check, for lanes standard and high-risk, require `must_haves.why` as a non-empty trimmed string and `must_haves.out_of_scope` as an array of strings (empty allowed); each problem names the missing key. Do not change validate.rs or handlers_write.rs: `bee cells add` and `bee cells update` keep today's rules. In packages/bee/prompts/worker-cell.md change \"The cell names three parts apart:\" to five parts; after the Goal bullet add a `Why — must_haves.why` bullet (use it to choose where the cell is silent), and after Hard constraints an `Out of scope — must_haves.out_of_scope` bullet (never do this work; name a need there in `found`, or return [PARKED]; a herding worker writes status question). Add `\"found\": [\"<discovery outside the cell>\"]` to the Result form JSON at worker-cell.md:95 (`bee cells finish` already accepts it, finish_support.rs:84). Update the golden GOLDEN_NATIVE_CELL_PROMPT in verbs/drivers/tests.rs (near :10882) and any other golden copy of the prompt. Then find every fixture that runs a standard or high-risk packet through the preview: `rg -n 'truths' packages/bee-rs/crates` and `rg -n 'gate --preview|gate_preview|run_preview' packages/bee-rs/crates`; known sites are set_gate.rs:3309, plan_group.rs:495 and tests/pi_plugin_contracts.rs:8119, :8188, :8224. Add both keys where the new check now refuses. A forced fixture in a file outside `files` is a recorded departure, never skipped. Edit only the existing tests the change forces; the tester cell adds the new ones. Run the verify and quote the count each target matched.",
-    "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --no-fail-fast -- preview packet worker_cell golden",
+    "action": "Implement docs/history/brief-intent-and-wip/CONTEXT.md D1. The check lives only in the plan-packet check behind `bee gate --preview` (plan_packets.rs:174 `requires non-empty must_haves.truths for lane`): beside the truths check, for lanes standard and high-risk, require `must_haves.why` as a non-empty trimmed string and `must_haves.out_of_scope` as an array of strings (empty allowed); each problem names the missing key. Do not change validate.rs or handlers_write.rs: `bee cells add` and `bee cells update` keep today's rules. In packages/bee/prompts/worker-cell.md change \"The cell names three parts apart:\" to five parts; after the Goal bullet add a `Why — must_haves.why` bullet (use it to choose where the cell is silent), and after Hard constraints an `Out of scope — must_haves.out_of_scope` bullet (never do this work; name a need there in `found`, or return [PARKED]; a herding worker writes status question). Add `\"found\": [\"<discovery outside the cell>\"]` to the Result form JSON at worker-cell.md:95 (`bee cells finish` already accepts it, finish_support.rs:84). Update the golden GOLDEN_NATIVE_CELL_PROMPT in verbs/drivers/tests.rs (near :10882) and any other golden copy of the prompt. Then find every fixture that runs a standard or high-risk packet through the preview: `rg -n 'truths' packages/bee-rs/crates` and `rg -n 'gate --preview|gate_preview|run_preview' packages/bee-rs/crates`; known sites are set_gate.rs:3309, plan_group.rs:495 and tests/pi_plugin_contracts.rs:8119, :8188, :8224. Add both keys where the new check now refuses. A forced fixture in a file outside `files` is a recorded departure, never skipped. Edit only the existing tests the change forces; the tester cell adds the new ones. Run the verify and quote the count each target matched. Inside this cell run the full regen chain `bee dev regen` (render-skill-trees, onboard --repo-root . --apply, release-manifest --write) and commit its output with the change.",
+    "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --no-fail-fast -- preview packet worker_cell golden && .bee/bin/bee dev release-manifest --check",
     "must_haves": {
       "why": "A worker that knows why the work matters and what to leave alone can choose well where its cell is silent; today it only gets the goal and the hard constraints.",
       "out_of_scope": [
@@ -416,7 +417,8 @@ One slice; it is the whole feature.
       "skills/bee-shaping/SKILL.md",
       "skills/bee-planning/references/cells.md",
       "skills/bee-planning/references/plan-artifact.md",
-      "skills/bee-swarming/references/execute.md"
+      "skills/bee-swarming/references/execute.md",
+      "docs/history/codex-harness-hardening/release-manifest.json"
     ],
     "read_first": [
       "docs/history/brief-intent-and-wip/CONTEXT.md",
@@ -425,12 +427,14 @@ One slice; it is the whole feature.
       "skills/bee-planning/references/cells.md"
     ],
     "affects_skills": [
-      "bee-shaping",
-      "bee-planning"
+      "skills/bee-shaping/SKILL.md",
+      "skills/bee-planning/references/cells.md",
+      "skills/bee-planning/references/plan-artifact.md",
+      "skills/bee-swarming/references/execute.md"
     ],
     "affects_specs": [],
-    "action": "Implement D2 and the doc half of D1 of docs/history/brief-intent-and-wip/CONTEXT.md. In skills/bee-shaping/SKILL.md section `## Qualify (headless triage)` add one numbered step before the clarity judgment: ask who needs it (a named user or caller), how we will know it worked (a check that can pass or fail), and what makes us stop; an item that cannot answer the first two parks with the gap written into Outstanding Questions. In skills/bee-planning/references/cells.md add `why` and `out_of_scope` to the must_haves contract text, the example JSON and the validity rule that names truths for standard/high-risk, and say the check runs at the plan-packet preview. In skills/bee-planning/references/plan-artifact.md add both keys to the consolidation cell example JSON. Mention `wip_limit` where cells.md or the config docs list config keys only if such a list exists; do not create one. Keep one home for each fact: cite, never copy. In skills/bee-swarming/references/execute.md, where it teaches truths, prohibitions and open_choices, add one line pointing to the worker prompt's Why and Out of scope bullets (cite, never copy). Then run the repo's regen (`bee dev regen`) and commit its output in the same commit. Use plain words; write no code comments.",
-    "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test instruction_laws",
+    "action": "Implement D2 and the doc half of D1 of docs/history/brief-intent-and-wip/CONTEXT.md. In skills/bee-shaping/SKILL.md section `## Qualify (headless triage)` add one numbered step before the clarity judgment: ask who needs it (a named user or caller), how we will know it worked (a check that can pass or fail), and what makes us stop; an item that cannot answer the first two parks with the gap written into Outstanding Questions. In skills/bee-planning/references/cells.md add `why` and `out_of_scope` to the must_haves contract text, the example JSON and the validity rule that names truths for standard/high-risk, and say the check runs at the plan-packet preview. In skills/bee-planning/references/plan-artifact.md add both keys to the consolidation cell example JSON. Mention `wip_limit` where cells.md or the config docs list config keys only if such a list exists; do not create one. Keep one home for each fact: cite, never copy. In skills/bee-swarming/references/execute.md, where it teaches truths, prohibitions and open_choices, add one line pointing to the worker prompt's Why and Out of scope bullets (cite, never copy). Use plain words; write no code comments. Inside this cell run the full regen chain `bee dev regen` (render-skill-trees, onboard --repo-root . --apply, release-manifest --write) and commit its output with the change.",
+    "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test instruction_laws && .bee/bin/bee dev release-manifest --check",
     "must_haves": {
       "why": "Plan writers learn the cell shape from these docs; if the docs omit the new keys every plan is refused, and triage without a should-we question keeps filling the backlog.",
       "out_of_scope": [
@@ -516,7 +520,8 @@ One slice; it is the whole feature.
       "friction": null,
       "capped_at": null,
       "behavior_change": false
-    }
+    },
+    "regen_obligation_ack": "read-only check cell: it writes nothing, so it owes no regen"
   },
   {
     "id": "biw-6",
