@@ -914,6 +914,7 @@
     "contract:preamble-load",
     "contract:fix-at-close-doctrine",
     "contract:prose-load-doc-parity",
-    "contract:release-2-110-0-published"
+    "contract:release-2-110-0-published",
+    "contract:helper-hook-config-isolation"
   ]
 }

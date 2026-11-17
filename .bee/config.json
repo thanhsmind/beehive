@@ -25,20 +25,6 @@
   "bee_report": {
     "ingest": true
   },
-  "herding": {
-    "ceiling_seconds": 1800,
-    "control_command": [
-      "claude",
-      "-p",
-      "{PROMPT}",
-      "--model",
-      "claude-fable-5-1",
-      "--max-turns",
-      "{MAX_TURNS}",
-      "--allowedTools",
-      "{ALLOWED_TOOLS}"
-    ]
-  },
   "handoff_context_tokens": 0,
   "design": {
     "packs": [
