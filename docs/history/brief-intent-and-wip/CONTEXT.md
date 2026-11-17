@@ -29,10 +29,21 @@ Opening a feature while many others are still open prints a warning.
 
 ## Read set
 
-- `packages/bee-rs/crates/bee/src/verbs/cells/validate.rs`
-- `packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs`
-- `packages/bee-rs/crates/bee/src/verbs/state_group/plan_packets.rs`
-- `packages/bee/prompts/worker-cell.md`
-- `packages/bee-rs/crates/bee/src/verbs/feature_group.rs`
-- `skills/bee-shaping/SKILL.md` ("Qualify (headless triage)")
-- `skills/bee-planning/references/cells.md`
+### Knowledge
+
+| Concept | Grade at read | Why it matters |
+|---------|---------------|----------------|
+| docs/knowledge/areas/doctrine-layer/per-task-route-tester-pairing-and-proof-floors.md | unverified | the worker prompt and cap rules biw-1 extends |
+| docs/knowledge/patterns/20260821-instruction-text-is-an-untested-code-path.md | confirmed | the prompt and skill text changes need pinned tests |
+| docs/knowledge/patterns/20260818-a-green-count-is-not-evidence-that-your-new-test-ran.md | confirmed | testers quote the filter count |
+
+### Code
+
+| Path | What it decides |
+|------|-----------------|
+| `packages/bee-rs/crates/bee/src/verbs/state_group/plan_packets.rs` | the plan-packet check and the approved-preview match at add |
+| `packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs` | add and update call the approved-preview match |
+| `packages/bee/prompts/worker-cell.md` | what a worker reads about its cell |
+| `packages/bee-rs/crates/bee/src/verbs/feature_group.rs` | `bee feature start` |
+| `skills/bee-shaping/SKILL.md` | Qualify triage |
+| `skills/bee-planning/references/cells.md` | the cell contract plan writers follow |
