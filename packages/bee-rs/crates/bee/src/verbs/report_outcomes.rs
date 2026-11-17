@@ -450,6 +450,9 @@ fn collect_outcomes(root: &Path, feature_filter: Option<&str>) -> OutcomesReport
             report.unreadable.push(file.display().to_string());
             continue;
         };
+        if let Some(target) = obj.get("fixes_feature").and_then(Value::as_str) {
+            *report.fixes.entry(target.to_string()).or_insert(0) += 1;
+        }
         if let Some(feat) = feature_filter {
             let cell_feat = obj.get("feature").and_then(Value::as_str);
             if cell_feat != Some(feat) {
@@ -558,9 +561,6 @@ fn collect_outcomes(root: &Path, feature_filter: Option<&str>) -> OutcomesReport
 
         if let Some(feat) = obj.get("feature").and_then(Value::as_str) {
             report.tallies.entry(feat.to_string()).or_default().add(obj, reworked);
-        }
-        if let Some(target) = obj.get("fixes_feature").and_then(Value::as_str) {
-            *report.fixes.entry(target.to_string()).or_insert(0) += 1;
         }
     }
     report
