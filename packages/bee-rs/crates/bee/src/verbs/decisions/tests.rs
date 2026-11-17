@@ -2042,7 +2042,7 @@ use std::time::Instant;
 
         // The pair corrects the unclaiming record; feature is the only delta.
         let Ok(Out::Emit(report, _, 0)) =
-            do_reattribute_named(root, "aaaaaaaa", "prompt-work-record", 0)
+            do_reattribute_named(root, "aaaaaaaa", "prompt-work-record", false, 0)
         else {
             panic!("expected a correction")
         };
@@ -2058,7 +2058,7 @@ use std::time::Instant;
 
         // Idempotent: the same pair again reports zero.
         let Ok(Out::Emit(again, _, 0)) =
-            do_reattribute_named(root, "aaaaaaaa", "prompt-work-record", 0)
+            do_reattribute_named(root, "aaaaaaaa", "prompt-work-record", false, 0)
         else {
             panic!("expected a zero report")
         };
@@ -2066,7 +2066,7 @@ use std::time::Instant;
 
         // A record whose own text claims a DIFFERENT feature refuses — that
         // territory belongs to the automatic pass.
-        let Ok(Out::Thrown(msg)) = do_reattribute_named(root, "bbbbbbbb", "prompt-work-record", 0)
+        let Ok(Out::Thrown(msg)) = do_reattribute_named(root, "bbbbbbbb", "prompt-work-record", false, 0)
         else {
             panic!("expected a refusal")
         };
@@ -2075,21 +2075,51 @@ use std::time::Instant;
         assert_eq!(untouched[1]["feature"], "model-role-split", "a refusal writes nothing");
 
         // …but naming the SAME feature the text claims is allowed.
-        let Ok(Out::Emit(fixed, _, 0)) = do_reattribute_named(root, "bbbbbbbb", "human-mailbox", 0)
+        let Ok(Out::Emit(fixed, _, 0)) = do_reattribute_named(root, "bbbbbbbb", "human-mailbox", false, 0)
         else {
             panic!("expected the agreeing correction")
         };
         assert_eq!(fixed["changed"], 1);
 
         // Unknown id and blank --to refuse.
-        let Ok(Out::Thrown(m)) = do_reattribute_named(root, "99999999", "x", 0) else {
+        let Ok(Out::Thrown(m)) = do_reattribute_named(root, "99999999", "x", false, 0) else {
             panic!("expected unknown-id refusal")
         };
         assert!(m.contains("no decision matches"), "{m}");
-        let Ok(Out::Thrown(m)) = do_reattribute_named(root, "aaaaaaaa", "  ", 0) else {
+        let Ok(Out::Thrown(m)) = do_reattribute_named(root, "aaaaaaaa", "  ", false, 0) else {
             panic!("expected blank --to refusal")
         };
         assert!(m.contains("--to is empty"), "{m}");
+    }
+
+    #[test]
+    fn a_named_reattribution_dry_run_writes_nothing_and_the_real_run_still_corrects() {
+        let tmp = fixture_root();
+        let root = tmp.path();
+        let unclaiming = r#"{"id":"aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee","type":"decide","date":"2026-08-25T10:00:00.000Z","decision":"Every incoming user request is recorded by bee before work starts","rationale":"r","feature":"model-role-split"}"#;
+        write_events(root, &[unclaiming]);
+        let before = std::fs::read(decisions_path(root)).unwrap();
+
+        let Ok(Out::Emit(report, text, 0)) =
+            do_reattribute_named(root, "aaaaaaaa", "prompt-work-record", true, 0)
+        else {
+            panic!("expected a dry-run report")
+        };
+        assert_eq!(std::fs::read(decisions_path(root)).unwrap(), before);
+        assert_eq!(report["dry_run"], true);
+        assert_eq!(report["changed"], 1);
+        assert_eq!(report["from"], "model-role-split");
+        assert_eq!(report["to"], "prompt-work-record");
+        assert!(text.contains("would correct"), "{text}");
+
+        let Ok(Out::Emit(real, _, 0)) =
+            do_reattribute_named(root, "aaaaaaaa", "prompt-work-record", false, 0)
+        else {
+            panic!("expected a correction")
+        };
+        assert_eq!(real["changed"], 1);
+        let after: Vec<Value> = read_jsonl(&decisions_path(root));
+        assert_eq!(after[0]["feature"], "prompt-work-record");
     }
 
     /// decision-attribution D5: the predicate reads a claim the record makes
