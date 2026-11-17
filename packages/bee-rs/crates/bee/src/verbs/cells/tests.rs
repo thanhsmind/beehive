@@ -4093,6 +4093,26 @@ use std::time::Instant;
         }
     }
 
+    #[test]
+    fn add_batch_refuses_a_foreign_dependency_key_even_beside_deps_or_empty() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let cell = |id: &str, key: &str, value: Value| {
+            let mut c = json!({"id": id, "feature": "f", "title": "t", "action": "a", "verify": "v", "lane": "tiny", "role": "code", "affects_skills": [], "affects_specs": [], "deps": []});
+            c[key] = value;
+            c
+        };
+        for (key, value) in [("depends_on", json!([])), ("dependencies", Value::Null)] {
+            let (ok, rows, normalized) = build_add_cells_report(root, &[cell("d-2", key, value)]).unwrap();
+            assert!(!ok);
+            assert!(normalized.is_none());
+            assert!(rows[0].problems.iter().any(|p| p.contains(key) && p.contains("\"deps\"")), "{:?}", rows[0].problems);
+        }
+        let (ok, rows, normalized) = build_add_cells_report(root, &[cell("d-3", "deps", json!(["d-9"]))]).unwrap();
+        assert!(ok, "{:?}", rows[0].problems);
+        assert_eq!(normalized.unwrap()[0]["deps"], json!(["d-9"]));
+    }
+
     // ── cells claim-next (R6): the sweep + the selection filters ──────────
 
     fn cn_root() -> tempfile::TempDir {
