@@ -7,17 +7,100 @@ use crate::verbs::state_group::{
 };
 use crate::verbs::status_full::find_granted_worktree_for_feature;
 use crate::verbs::workflow_store::{
-    acquire_named_lock, find_live_workflow, lane_lock_name, list_workflows, read_lane_strict,
-    rebuild_lane_projection, update_workflow_assuming_lock, wf_id, write_lane,
+    acquire_named_lock, find_live_workflow, lane_lock_name, list_lanes, list_workflows,
+    read_lane_strict, rebuild_lane_projection, update_workflow_assuming_lock, wf_id, write_lane,
 };
 use crate::verbs::worktree::{
     build_instruction, build_session_transition, create_feature_worktree,
     emit_pi_transition_marker_if_present, feature_slug_ok, p, prelude, CErr, CompanionSpec, Pre,
 };
 use serde_json::{json, Map, Value};
+use std::collections::HashSet;
 use std::ffi::OsString;
 use std::process::ExitCode;
 use std::time::Instant;
+
+const DEFAULT_WIP_LIMIT: usize = 5;
+
+const WIP_OPEN_PHASES: &[&str] = &[
+    "exploring",
+    "planning",
+    "swarming",
+    "compounding",
+    "scribing",
+];
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct WipWarning {
+    count: usize,
+    limit: usize,
+    oldest: Vec<String>,
+}
+
+fn wip_limit_from_config(config: &Map<String, Value>) -> usize {
+    match config.get("wip_limit") {
+        Some(Value::Number(n)) => n
+            .as_u64()
+            .and_then(|v| usize::try_from(v).ok())
+            .unwrap_or(DEFAULT_WIP_LIMIT),
+        _ => DEFAULT_WIP_LIMIT,
+    }
+}
+
+fn evaluate_wip_warning(
+    lanes: &[Map<String, Value>],
+    started_feature: &str,
+    config: &Map<String, Value>,
+) -> Option<WipWarning> {
+    let limit = wip_limit_from_config(config);
+    if limit == 0 {
+        return None;
+    }
+
+    let mut open: Vec<(&str, Option<&str>)> = Vec::new();
+    let mut seen = HashSet::new();
+    for lane in lanes {
+        let Some(feature) = lane.get("feature").and_then(Value::as_str) else {
+            continue;
+        };
+        if feature == started_feature || !seen.insert(feature) {
+            continue;
+        }
+        let Some(phase) = lane.get("phase").and_then(Value::as_str) else {
+            continue;
+        };
+        if !WIP_OPEN_PHASES.contains(&phase) {
+            continue;
+        }
+        if matches!(lane.get("status").and_then(Value::as_str), Some("closed")) {
+            continue;
+        }
+        let created_at = lane.get("created_at").and_then(Value::as_str);
+        open.push((feature, created_at));
+    }
+
+    let count = open.len();
+    if count < limit {
+        return None;
+    }
+
+    open.sort_by(|(feat_a, ts_a), (feat_b, ts_b)| {
+        (ts_a.is_none(), ts_a.unwrap_or(""), *feat_a)
+            .cmp(&(ts_b.is_none(), ts_b.unwrap_or(""), *feat_b))
+    });
+
+    let oldest = open
+        .into_iter()
+        .take(3)
+        .map(|(feat, _)| feat.to_string())
+        .collect();
+
+    Some(WipWarning {
+        count,
+        limit,
+        oldest,
+    })
+}
 
 pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
     if args.first()?.to_str()? != "feature" {
@@ -223,15 +306,37 @@ fn run_start(tokens: &[OsString], t0: Instant) -> Option<ExitCode> {
             let _ = update_workflow_assuming_lock(&main_root, &wf_id(wf), patch);
         }
 
+    let config = crate::state::read_config_raw(&main_root);
+    let lanes = list_lanes(&main_root).unwrap_or_default();
+    let wip_warning = evaluate_wip_warning(&lanes, &feature, &config);
+
     if use_json {
-        println!(
-            "{}",
-            jsjson::stringify(&json!({
-                "worktree": p(&created.worktree_root),
-                "instruction": instruction,
-            }))
-        );
+        let mut out = json!({
+            "worktree": p(&created.worktree_root),
+            "instruction": instruction,
+        });
+        if let Some(ref w) = wip_warning
+            && let Some(obj) = out.as_object_mut()
+        {
+            obj.insert(
+                "wip_warning".into(),
+                json!({
+                    "count": w.count,
+                    "limit": w.limit,
+                    "oldest": w.oldest,
+                }),
+            );
+        }
+        println!("{}", jsjson::stringify(&out));
     } else {
+        if let Some(ref w) = wip_warning {
+            eprintln!(
+                "warning: {} open features (wip_limit {}); oldest: {}",
+                w.count,
+                w.limit,
+                w.oldest.join(", ")
+            );
+        }
         println!("{}", p(&created.worktree_root));
         println!("{instruction}");
     }
