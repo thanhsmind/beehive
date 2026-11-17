@@ -218,14 +218,16 @@ pub(crate) fn plan_report(plan_path: &Path, plan: &str, class: Option<&str>) -> 
     PlanReport { mode, findings }
 }
 
-pub(crate) fn route_class(root: &Path, feature: &str) -> Option<String> {
-    let class_of = |v: &Map<String, Value>| {
-        v.get("route").and_then(|r| r.get("class")).and_then(Value::as_str).map(str::to_string)
-    };
+pub(crate) fn route_of(root: &Path, feature: &str) -> Option<Value> {
+    let route_of = |v: &Map<String, Value>| v.get("route").filter(|r| r.is_object()).cloned();
     let workflows = list_workflows(root).unwrap_or_default();
     find_live_workflow(&workflows, feature)
-        .and_then(class_of)
-        .or_else(|| read_lane_display(root, feature).ok().flatten().as_ref().and_then(class_of))
+        .and_then(route_of)
+        .or_else(|| read_lane_display(root, feature).ok().flatten().as_ref().and_then(route_of))
+}
+
+pub(crate) fn route_class(root: &Path, feature: &str) -> Option<String> {
+    route_of(root, feature)?.get("class").and_then(Value::as_str).map(str::to_string)
 }
 
 pub(crate) fn warning_lines(report: &PlanReport) -> String {

@@ -639,11 +639,10 @@ pub(crate) fn build_orient(ctx: &mut Ctx) -> R<JMap> {
             session_bound,
             crate::hooks::session_preamble::list_lanes(&control_root).len(),
         );
-        let class = match status.get("route") {
-            Some(route) if owned && truthy(route) => vget(route, "class").and_then(Value::as_str),
-            _ => None,
-        };
-        let principles = crate::principles::principle_lines(&ctx.root, class);
+        let route = status.get("route").filter(|route| owned && truthy(route));
+        let class = route.and_then(|route| vget(route, "class")).and_then(Value::as_str);
+        let hints = route.map(crate::principles::Hints::from_route).unwrap_or_default();
+        let principles = crate::principles::principle_lines(&ctx.root, class, &hints);
         if !principles.is_empty() {
             packet.insert("principles".into(), json!(principles));
         }
@@ -743,7 +742,7 @@ pub(crate) fn class_packet(root: &Path, class: &str) -> JMap {
         })
         .collect();
     packet.insert("situations".into(), Value::Array(situations));
-    packet.insert("principles".into(), json!(crate::principles::principle_lines(root, Some(class))));
+    packet.insert("principles".into(), json!(crate::principles::principle_lines(root, Some(class), &crate::principles::Hints::default())));
     packet
 }
 

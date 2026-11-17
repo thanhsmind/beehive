@@ -395,8 +395,8 @@ use crate::version::BEE_VERSION;
             packet.get("principles"),
             Some(&json!([
                 "- Principles (class=refactor) — name each one you apply and the decision it changed:",
-                "  - `bee-principle-red-before-green` — watch it fail for the reported reason before you fix it",
                 "  - `bee-principle-one-home` — a rule lives in one place and every other surface points at it",
+                "  - `bee-principle-red-before-green` — watch it fail for the reported reason before you fix it",
             ]))
         );
         let text = render_orient_text(&packet);
@@ -405,7 +405,7 @@ use crate::version::BEE_VERSION;
             .iter()
             .position(|l| l.starts_with("- Principles (class=refactor)"))
             .expect("principles block in the orient text");
-        assert!(lines[at + 1].starts_with("  - `bee-principle-red-before-green`"));
+        assert!(lines[at + 1].starts_with("  - `bee-principle-one-home`"));
         assert!(lines[at + 3].starts_with("skill: "));
     }
 
@@ -449,8 +449,8 @@ use crate::version::BEE_VERSION;
             [
                 "playbook: skills/bee-planning/playbooks/refactor.md",
                 "- Principles (class=refactor) — name each one you apply and the decision it changed:",
-                "  - `bee-principle-red-before-green` — watch it fail for the reported reason before you fix it",
                 "  - `bee-principle-one-home` — a rule lives in one place and every other surface points at it",
+                "  - `bee-principle-red-before-green` — watch it fail for the reported reason before you fix it",
                 "next: open the playbook file and make the todo list from its numbered steps",
             ]
             .join("\n")

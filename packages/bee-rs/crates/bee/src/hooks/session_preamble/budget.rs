@@ -690,6 +690,7 @@ pub fn build_session_preamble_within(
         lines.extend(crate::principles::principle_lines(
             root,
             vget(route, "class").and_then(Value::as_str),
+            &crate::principles::Hints::from_route(route),
         ));
     }
     if handoff_outcome.map(|o| o.ok).unwrap_or(false) {

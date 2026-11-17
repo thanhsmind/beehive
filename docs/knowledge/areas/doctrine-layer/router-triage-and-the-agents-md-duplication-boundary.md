@@ -327,8 +327,14 @@ the way in, never always-loaded (expertise-principles D2). Which route the leade
 prints no route at all, is owned by [per-task route, tester pairing and proof floors](per-task-route-tester-pairing-and-proof-floors.md). Rows use the same
 grammar as the section above: `spoken:`, `classes:`, and an optional `signals:`
 line all sit ABOVE `applied_at:`, because the indented block after `applied_at:`
-is read as paths. `signals:` is optional, read by `bee orient` for ranking,
-see `docs/history/pstack-guide-gaps/CONTEXT.md` D4.
+is read as paths. `signals:` is optional: a comma list of tokens, each matching the route lane, a route flag
+(both case-insensitive) or, as a glob, a touched file. Rows of the class rank by signal matches, then fewer
+classes, then file order. At most `principles_cap` rows print (repo config key, default 7, a value below 1 falls
+back to 7), and the rest print as one extra line of slugs, lower-ranked rows of the same class that can still be
+applied by name. `bee orient`, the session preamble and the worker principles arm share that one ranked
+function; only the worker arm knows touched files (the cell's own) and passes them (`docs/history/pstack-guide-gaps/CONTEXT.md` D4).
+A cap or finish refuses a `principles_used` entry whose slug is no row here or whose changed part is empty; a
+known slug outside the routed list is accepted and recorded with `off_route: true` (same file, D5).
 
 Two rules complete the layer. The reply must name each principle it applied
 and the decision that principle changed, or say plainly that it changed

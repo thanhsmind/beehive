@@ -1222,8 +1222,18 @@ pub(crate) fn cell_principles(
     if in_holdout(root, &format!("principles:{anchor}"), "principles_holdout_percent") {
         return ("holdout", Vec::new());
     }
-    let class = crate::verbs::plan_group::route_class(root, &tpl(vget(cell, "feature")));
-    ("principles", crate::principles::principle_lines(bundle_root, class.as_deref()))
+    let (class, hints) = cell_route(root, cell);
+    ("principles", crate::principles::principle_lines(bundle_root, class.as_deref(), &hints))
+}
+
+pub(crate) fn cell_route(root: &Path, cell: &Value) -> (Option<String>, crate::principles::Hints) {
+    let route = crate::verbs::plan_group::route_of(root, &tpl(vget(cell, "feature")));
+    let class = route.as_ref().and_then(|r| r.get("class")).and_then(Value::as_str).map(str::to_string);
+    let mut hints = route.as_ref().map(crate::principles::Hints::from_route).unwrap_or_default();
+    if let Some(Value::Array(files)) = vget(cell, "files") {
+        hints.files = files.iter().filter_map(|f| f.as_str().map(str::to_string)).collect();
+    }
+    (class, hints)
 }
 
 pub(crate) fn knowledge_arm(root: &Path, cell_id: &str) -> &'static str {

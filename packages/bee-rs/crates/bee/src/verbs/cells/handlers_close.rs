@@ -385,7 +385,7 @@ pub(crate) fn cap_cell_from_flags(root: &Path, f: &CapFlags, finish: bool) -> MR
     let mistakes_answer = read_mistakes_answer(id, f, &report_value)?;
 
     let knowledge_used_answer = read_knowledge_used_answer(f, &report_value);
-    let principles_used_answer = read_principles_used_answer(f, &report_value);
+    let principles_used_answer = read_principles_used_answer(root, id, f, &report_value)?;
     let knowledge_wrong_answer = read_knowledge_wrong_answer(f, &report_value);
 
     // decision 13ce1858 (test-cadence-boundary D1): the one test door used
@@ -734,11 +734,22 @@ pub(crate) fn cap_cell_from_flags(root: &Path, f: &CapFlags, finish: bool) -> MR
         }
         match &principles_used_answer {
             PrinciplesUsedAnswer::Recorded(list) => {
+                let (class, hints) = crate::verbs::drivers::cell_route(
+                    root,
+                    &Value::Object(cell_map.clone()),
+                );
+                let routed = crate::principles::routed_slugs(root, class.as_deref(), &hints);
                 trace.insert(
                     "principles_used".into(),
                     Value::Array(
                         list.iter()
-                            .map(|(slug, changed)| json!({"slug": slug, "changed": changed}))
+                            .map(|(slug, changed)| {
+                                let mut entry = json!({"slug": slug, "changed": changed});
+                                if !routed.contains(slug) {
+                                    entry["off_route"] = Value::Bool(true);
+                                }
+                                entry
+                            })
                             .collect(),
                     ),
                 );
@@ -1223,7 +1234,12 @@ pub(crate) enum PrinciplesUsedAnswer {
     None,
 }
 
-pub(crate) fn read_principles_used_answer(f: &CapFlags, report: &Value) -> PrinciplesUsedAnswer {
+pub(crate) fn read_principles_used_answer(
+    root: &Path,
+    id: &str,
+    f: &CapFlags,
+    report: &Value,
+) -> MR<PrinciplesUsedAnswer> {
     let mut asked = f.no_principle_used;
     let mut lines: Vec<String> = f.principle_used.iter().cloned().collect();
     if let Some(Value::Array(reported)) = report.get("principles_used") {
@@ -1240,18 +1256,32 @@ pub(crate) fn read_principles_used_answer(f: &CapFlags, report: &Value) -> Princ
         if slug.is_empty() {
             continue;
         }
+        if changed.is_empty() {
+            return Err(Fail::Thrown(format!(
+                "capCell: cell \"{id}\" refused — principles_used entry \"{text}\" has an empty changed part. Write \"<slug> — <the decision it changed>\", or drop the entry if the principle changed nothing."
+            )));
+        }
+        if !known_slugs(root).iter().any(|s| s == slug) {
+            return Err(Fail::Thrown(format!(
+                "capCell: cell \"{id}\" refused — principles_used entry \"{text}\" names \"{slug}\", which is no row of the Principle homes index. Use a slug from the principles block (bee orient --class <class> lists them), or drop the entry."
+            )));
+        }
         let entry = (slug.to_string(), changed.to_string());
         if !recorded.contains(&entry) {
             recorded.push(entry);
         }
     }
     if !recorded.is_empty() {
-        return PrinciplesUsedAnswer::Recorded(recorded);
+        return Ok(PrinciplesUsedAnswer::Recorded(recorded));
     }
     if asked {
-        return PrinciplesUsedAnswer::None;
+        return Ok(PrinciplesUsedAnswer::None);
     }
-    PrinciplesUsedAnswer::Silent
+    Ok(PrinciplesUsedAnswer::Silent)
+}
+
+fn known_slugs(root: &Path) -> Vec<String> {
+    crate::principles::all_principles(root).into_iter().map(|p| p.slug).collect()
 }
 
 pub(crate) fn prepare_put_in_principles_arm(root: &Path, id: &str) -> bool {

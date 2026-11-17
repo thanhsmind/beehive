@@ -13364,12 +13364,12 @@ Finish with: .bee/bin/bee cells finish --id c-golden --outcome "<one line>" --fi
     fn the_principles_block_is_the_class_names_and_one_line_rules_only() {
         let (prompt, _) = dispatch_principles_cell("0", "c-1", "code", "[]");
         let tmp = tempfile::tempdir().unwrap();
-        let expected = crate::principles::principle_lines(&principles_root(&tmp, Some("0")), Some("bugfix"));
+        let expected = crate::principles::principle_lines(&principles_root(&tmp, Some("0")), Some("bugfix"), &crate::principles::Hints::default());
         assert!(expected.len() > 1, "{expected:?}");
         let after = prompt.split_once(&format!("{PRINCIPLES_HEADER} (machine-assembled):\n")).expect("block").1;
         let block: Vec<&str> = after.lines().take_while(|l| !l.is_empty()).collect();
         assert_eq!(block, expected.iter().map(String::as_str).collect::<Vec<_>>());
-        for rule in &block[1..] {
+        for rule in block[1..].iter().filter(|r| !r.contains(" more of this class")) {
             assert!(rule.starts_with("  - `") && rule.contains("` — "), "{rule}");
         }
     }
