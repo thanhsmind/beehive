@@ -1,0 +1,5 @@
+interface:
+  display_name: "Bee Writing Skills"
+  short_description: "Build and pressure-test bee skills with the TDD-for-skills discipline. Use when creating a new bee skill, editing an existing one, or verifying a skill holds up under pressure. Do NOT use for project-specific AGENTS.md conventions or one-off instructions."
+policy:
+  allow_implicit_invocation: true
