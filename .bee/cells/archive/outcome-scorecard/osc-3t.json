@@ -1,0 +1,135 @@
+{
+  "id": "osc-3t",
+  "feature": "outcome-scorecard",
+  "title": "Test the per-feature scorecard",
+  "lane": "standard",
+  "role": "test",
+  "status": "capped",
+  "deps": [
+    "osc-3"
+  ],
+  "decisions": [
+    "459dfff7-8215-42c3-8a3f-e3c6856b3137",
+    "3ef1d289-3f8f-4985-a9f0-eace61066b90"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/report_outcomes.rs"
+  ],
+  "read_first": [
+    "docs/history/outcome-scorecard/CONTEXT.md",
+    "docs/history/outcome-scorecard/plan.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Pin docs/history/outcome-scorecard/CONTEXT.md D3 with tests whose names contain `scorecard`, inside the test module of report_outcomes.rs, extending its fixture store (setup_fixture_store :763). Cover each metric with a source and without (not recorded), cycle time from usage closed_at and from capped_at fallback, gate reopen counting from both kinds, fix-first counting, cost summing across two jobs, --since with a duration and an ISO bound, json nulls, and the no-flag output unchanged against the current golden. Run the filter and quote its count.",
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- scorecard",
+  "must_haves": {
+    "why": "A code cell never certifies itself.",
+    "out_of_scope": [
+      "production code"
+    ],
+    "truths": [
+      "every case in the action has a test whose name contains scorecard",
+      "the filter matches at least ten tests and all pass"
+    ],
+    "artifacts": [],
+    "key_links": [],
+    "prohibitions": [
+      "No code comments",
+      "No edit outside test modules"
+    ],
+    "open_choices": []
+  },
+  "trace": {
+    "worker": "w-osc-3t",
+    "outcome": "Added scorecard regression test: a cell in feature B with fixes_feature A counts under --by-feature --feature A (red with osc-3 fix reversed, green with it); commit 563c4539c11a5d4418261a206888a58006cbbaea",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/report_outcomes.rs"
+    ],
+    "deviations": [
+      "sync-ack: test-only commit"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-17T05:24:25.597Z",
+    "behavior_change": false,
+    "verification_evidence": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- scorecard — green:unit — 17 passed, 0 failed, 5371 filtered out; full proof command clippy -D warnings clean and full suite 5991 passed 0 failed",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "f80793de-7fb8-4695-a340-4c6cfd30bb1b",
+    "verify_command": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- scorecard",
+    "claimed_at": "2026-11-17T05:09:01.024Z",
+    "verified_at": null,
+    "baseline": null,
+    "reaction": "confirm",
+    "skipped": null,
+    "unknowns": null,
+    "found": null,
+    "stopped": null,
+    "knowledge_delta": [],
+    "sync_ack": "test-only commit",
+    "no_mistakes": true,
+    "knowledge_used": [
+      {
+        "path": "docs/knowledge/patterns/20260818-a-green-count-is-not-evidence-that-your-new-test-ran.md",
+        "changed": "reversed the osc-3 fix to watch the new test go red before trusting green"
+      }
+    ],
+    "principles_used": [
+      {
+        "slug": "bee-principle-red-before-green",
+        "changed": "reversed 3c6adc196's hunk and saw the new test fail with None vs Some(2) before restoring"
+      },
+      {
+        "slug": "bee-principle-test-behavior-not-structure",
+        "changed": "asserted the filtered row value and JSON field through the same collect_outcomes+scorecard path run uses"
+      },
+      {
+        "slug": "bee-principle-prove-it-works",
+        "changed": "ran the full clippy plus full-suite proof, not only the filter"
+      }
+    ],
+    "report": {
+      "outcome": "Added scorecard regression test: a cell in feature B with fixes_feature A counts under --by-feature --feature A (red with osc-3 fix reversed, green with it); commit 563c4539c11a5d4418261a206888a58006cbbaea",
+      "commit": "563c4539c11a5d4418261a206888a58006cbbaea",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/report_outcomes.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- scorecard — green:unit — cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- scorecard — green:unit — 17 passed, 0 failed, 5371 filtered out; full proof command clippy -D warnings clean and full suite 5991 passed 0 failed",
+      "deviations": [],
+      "knowledge_used": [
+        "docs/knowledge/patterns/20260818-a-green-count-is-not-evidence-that-your-new-test-ran.md — reversed the osc-3 fix to watch the new test go red before trusting green"
+      ],
+      "principles_used": [
+        "bee-principle-red-before-green — reversed 3c6adc196's hunk and saw the new test fail with None vs Some(2) before restoring",
+        "bee-principle-test-behavior-not-structure — asserted the filtered row value and JSON field through the same collect_outcomes+scorecard path run uses",
+        "bee-principle-prove-it-works — ran the full clippy plus full-suite proof, not only the filter"
+      ],
+      "reaction": "confirm",
+      "patch_id": "e4ac54d639586917e8f31f7585f0193e2884adcf"
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "blocked_reason": null,
+    "dropped_reason": null,
+    "reopened_at": "2026-11-17T05:09:00.472Z",
+    "reopened_reason": "judge found fix-first lost under --by-feature --feature X (osc-3 fixed in 3c6adc196); add a scorecard regression test where a cell in feature B carries fixes_feature A and --by-feature --feature A counts it"
+  },
+  "tester_rule": true,
+  "usage": {
+    "new": 168984,
+    "cached": 1824570,
+    "total": 1993554,
+    "models": {
+      "claude-opus-5-5": {
+        "new": 168984,
+        "cached": 1824570,
+        "total": 1993554
+      }
+    },
+    "jobs": [
+      "job-1794889613891-841860-1",
+      "job-1794890098301-1037152-1",
+      "job-1794892145260-1549394-1"
+    ]
+  }
+}

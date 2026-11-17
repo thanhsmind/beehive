@@ -1,0 +1,94 @@
+{
+  "id": "osc-1t",
+  "feature": "outcome-scorecard",
+  "title": "Test the herded reaction carry",
+  "lane": "standard",
+  "role": "test",
+  "status": "capped",
+  "deps": [
+    "osc-1"
+  ],
+  "decisions": [
+    "459dfff7-8215-42c3-8a3f-e3c6856b3137"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs"
+  ],
+  "read_first": [
+    "docs/history/outcome-scorecard/CONTEXT.md",
+    "docs/history/outcome-scorecard/plan.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Pin docs/history/outcome-scorecard/CONTEXT.md D1 with tests whose names contain `from_job_carries`, inside the test module of finish_support.rs (or the cells tests module the existing from_job tests use). Judge existing coverage first. Cover: reaction confirm carried; each of skipped, unknowns, found, stopped carried; absent keys stay absent; an invalid reaction value is handled as the native path handles it. Run the filter and quote its count.",
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- from_job_carries",
+  "must_haves": {
+    "why": "A code cell never certifies itself.",
+    "out_of_scope": [
+      "production code"
+    ],
+    "truths": [
+      "every case in the action has a test whose name contains from_job_carries",
+      "the filter matches at least six tests and all pass"
+    ],
+    "artifacts": [],
+    "key_links": [],
+    "prohibitions": [
+      "No code comments",
+      "No edit outside test modules"
+    ],
+    "open_choices": []
+  },
+  "trace": {
+    "worker": "w-osc-1t",
+    "outcome": "Added 10 from_job_carries tests in verbs/cells/tests.rs that pin outcome-scorecard D1 (reaction, skipped, unknowns, found and stopped carried; absent stays absent; invalid and partial-without-stopped meet the native refusal); filter shows 10 passed — 820bafb842678d8252ed46ec807e7d0916c98980",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+    ],
+    "deviations": [
+      "sync-ack: test-only commit in verbs/cells/tests.rs"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-17T04:34:05.293Z",
+    "behavior_change": false,
+    "verification_evidence": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- from_job_carries — green:unit — 10 passed, 0 failed; full proof: clippy -D warnings passed, workspace tests had 4 failures, all in sibling-owned uncommitted set_gate.rs gate_audit_row tests, everything else green",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "f80793de-7fb8-4695-a340-4c6cfd30bb1b",
+    "verify_command": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- from_job_carries",
+    "claimed_at": "2026-11-17T04:26:42.973Z",
+    "knowledge_delta": [],
+    "sync_ack": "test-only commit in verbs/cells/tests.rs",
+    "no_mistakes": true,
+    "no_knowledge_used": true,
+    "report": {
+      "outcome": "Added 10 from_job_carries tests in verbs/cells/tests.rs that pin outcome-scorecard D1 (reaction, skipped, unknowns, found and stopped carried; absent stays absent; invalid and partial-without-stopped meet the native refusal); filter shows 10 passed — 820bafb842678d8252ed46ec807e7d0916c98980",
+      "commit": "820bafb842678d8252ed46ec807e7d0916c98980",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- from_job_carries — green:unit — cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- from_job_carries — green:unit — 10 passed, 0 failed; full proof: clippy -D warnings passed, workspace tests had 4 failures, all in sibling-owned uncommitted set_gate.rs gate_audit_row tests, everything else green",
+      "deviations": [],
+      "knowledge_used": [],
+      "patch_id": "7261ef58ed70b848b24b845e1c0d4454423f153d"
+    },
+    "warnings": [],
+    "tests": "boundary"
+  },
+  "tester_rule": true,
+  "usage": {
+    "new": 57038,
+    "cached": 615559,
+    "total": 672597,
+    "models": {
+      "claude-opus-5-5": {
+        "new": 57038,
+        "cached": 615559,
+        "total": 672597
+      }
+    },
+    "jobs": [
+      "job-1794889610727-841443-1"
+    ]
+  }
+}

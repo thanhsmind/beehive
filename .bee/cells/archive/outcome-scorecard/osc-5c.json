@@ -1,0 +1,184 @@
+{
+  "id": "osc-5c",
+  "feature": "outcome-scorecard",
+  "title": "Check the knowledge consolidation",
+  "lane": "standard",
+  "role": "test",
+  "status": "capped",
+  "deps": [
+    "osc-5"
+  ],
+  "decisions": [
+    "459dfff7-8215-42c3-8a3f-e3c6856b3137"
+  ],
+  "files": [
+    "docs/history/outcome-scorecard/delivery.md"
+  ],
+  "read_first": [
+    "docs/history/outcome-scorecard/CONTEXT.md",
+    "docs/history/outcome-scorecard/plan.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Check osc-5's commit read-only: run `.bee/bin/bee knowledge check`, confirm delivery.md lists every concept the feature changed and that concepts cite D-numbers, never raw decision ids. Edit nothing; report each mismatch.",
+  "verify": ".bee/bin/bee knowledge check",
+  "must_haves": {
+    "why": "The writer cell needs a separate test-role check before the feature can close.",
+    "out_of_scope": [
+      "editing any file"
+    ],
+    "truths": [
+      "bee knowledge check is green or its red is reported",
+      "every concept named in delivery.md exists"
+    ],
+    "artifacts": [],
+    "key_links": [],
+    "prohibitions": [
+      "No edits"
+    ],
+    "open_choices": []
+  },
+  "trace": {
+    "worker": "w-osc-5c",
+    "outcome": "osc-5 (bd3bb10a7) checks clean: knowledge check OK with 0 errors, delivery.md lists all 5 changed concepts and every one exists, and new citations use outcome-scorecard D1-D4 with no raw ids; nothing edited and no commit",
+    "files_changed": [
+      ".agents/skills/.bee-render.json",
+      ".agents/skills/bee-planning/references/cells.md",
+      ".bee/onboarding.json",
+      ".claude-plugin/skills/.bee-render.json",
+      ".claude-plugin/skills/bee-planning/references/cells.md",
+      ".claude/skills/.bee-render.json",
+      ".claude/skills/bee-planning/references/cells.md",
+      ".codex-plugin/skills/.bee-render.json",
+      ".codex-plugin/skills/bee-planning/references/cells.md",
+      ".opencode/skills/.bee-render.json",
+      ".opencode/skills/bee-planning/references/cells.md",
+      "docs/history/codex-harness-hardening/release-manifest.json",
+      "docs/history/outcome-scorecard/CONTEXT.md",
+      "docs/history/outcome-scorecard/delivery.md",
+      "docs/history/outcome-scorecard/plan.md",
+      "docs/knowledge/areas/decision-memory/audit-log.md",
+      "docs/knowledge/areas/index.md",
+      "docs/knowledge/areas/workflow-state/cells-authoring-and-revision.md",
+      "docs/knowledge/areas/workflow-state/cells-completion-judge-and-archive.md",
+      "docs/knowledge/areas/workflow-state/index.md",
+      "docs/knowledge/areas/workflow-state/outcome-scorecard.md",
+      "docs/knowledge/areas/workflow-state/overview.md",
+      "docs/knowledge/index.md",
+      "packages/bee-rs/crates/bee/.bee/logs/timings.jsonl",
+      "packages/bee-rs/crates/bee/src/audit.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+      "packages/bee-rs/crates/bee/src/verbs/report_outcomes.rs",
+      "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs",
+      "packages/bee-rs/crates/bee/tests/audit_log.rs",
+      "skills/bee-planning/references/cells.md"
+    ],
+    "deviations": [
+      "sync-ack: read-only check"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-17T04:51:35.332Z",
+    "behavior_change": false,
+    "verification_evidence": ".bee/bin/bee knowledge check — green:static — read-only check of a docs-only commit; output: 329 concept(s), 0 OKF error(s), 0 profile error(s), 597 profile warning(s) — OK",
+    "verify_output": "green:static",
+    "verify_passed": true,
+    "claim_session": "f80793de-7fb8-4695-a340-4c6cfd30bb1b",
+    "verify_command": ".bee/bin/bee knowledge check",
+    "claimed_at": "2026-11-17T04:50:26.230Z",
+    "knowledge_delta": [
+      "docs/knowledge/areas/decision-memory/audit-log.md",
+      "docs/knowledge/areas/index.md",
+      "docs/knowledge/areas/workflow-state/cells-authoring-and-revision.md",
+      "docs/knowledge/areas/workflow-state/cells-completion-judge-and-archive.md",
+      "docs/knowledge/areas/workflow-state/index.md",
+      "docs/knowledge/areas/workflow-state/outcome-scorecard.md",
+      "docs/knowledge/areas/workflow-state/overview.md",
+      "docs/knowledge/index.md"
+    ],
+    "sync_ack": "read-only check",
+    "no_mistakes": true,
+    "knowledge_used": [
+      {
+        "path": "docs/knowledge/areas/workflow-state/outcome-scorecard.md",
+        "changed": "confirmed the concept the delivery names exists and cites D1-D4"
+      }
+    ],
+    "principles_used": [
+      {
+        "slug": "bee-principle-verify-before-reporting",
+        "changed": "checked the parent commit before reporting hex ids, which showed they were not osc-5's"
+      },
+      {
+        "slug": "bee-principle-prove-it-works",
+        "changed": "ran knowledge check and tested each delivery link instead of trusting the upstream summary"
+      }
+    ],
+    "commit_pending": "read-only check cell: it edits nothing",
+    "report": {
+      "outcome": "osc-5 (bd3bb10a7) checks clean: knowledge check OK with 0 errors, delivery.md lists all 5 changed concepts and every one exists, and new citations use outcome-scorecard D1-D4 with no raw ids; nothing edited and no commit",
+      "commit": "bd3bb10a75973f96ab7d562cac160bd323faaa35",
+      "files": [
+        ".agents/skills/.bee-render.json",
+        ".agents/skills/bee-planning/references/cells.md",
+        ".bee/onboarding.json",
+        ".claude-plugin/skills/.bee-render.json",
+        ".claude-plugin/skills/bee-planning/references/cells.md",
+        ".claude/skills/.bee-render.json",
+        ".claude/skills/bee-planning/references/cells.md",
+        ".codex-plugin/skills/.bee-render.json",
+        ".codex-plugin/skills/bee-planning/references/cells.md",
+        ".opencode/skills/.bee-render.json",
+        ".opencode/skills/bee-planning/references/cells.md",
+        "docs/history/codex-harness-hardening/release-manifest.json",
+        "docs/history/outcome-scorecard/CONTEXT.md",
+        "docs/history/outcome-scorecard/delivery.md",
+        "docs/history/outcome-scorecard/plan.md",
+        "docs/knowledge/areas/decision-memory/audit-log.md",
+        "docs/knowledge/areas/index.md",
+        "docs/knowledge/areas/workflow-state/cells-authoring-and-revision.md",
+        "docs/knowledge/areas/workflow-state/cells-completion-judge-and-archive.md",
+        "docs/knowledge/areas/workflow-state/index.md",
+        "docs/knowledge/areas/workflow-state/outcome-scorecard.md",
+        "docs/knowledge/areas/workflow-state/overview.md",
+        "docs/knowledge/index.md",
+        "packages/bee-rs/crates/bee/.bee/logs/timings.jsonl",
+        "packages/bee-rs/crates/bee/src/audit.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+        "packages/bee-rs/crates/bee/src/verbs/report_outcomes.rs",
+        "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs",
+        "packages/bee-rs/crates/bee/tests/audit_log.rs",
+        "skills/bee-planning/references/cells.md"
+      ],
+      "tests": ".bee/bin/bee knowledge check — green:static — .bee/bin/bee knowledge check — green:static — read-only check of a docs-only commit; output: 329 concept(s), 0 OKF error(s), 0 profile error(s), 597 profile warning(s) — OK",
+      "deviations": [],
+      "knowledge_used": [
+        "docs/knowledge/areas/workflow-state/outcome-scorecard.md — confirmed the concept the delivery names exists and cites D1-D4"
+      ],
+      "principles_used": [
+        "bee-principle-verify-before-reporting — checked the parent commit before reporting hex ids, which showed they were not osc-5's",
+        "bee-principle-prove-it-works — ran knowledge check and tested each delivery link instead of trusting the upstream summary"
+      ],
+      "patch_id": "8043dc4cd326c676ef171dd5a472686c8f7fc187"
+    },
+    "warnings": [],
+    "tests": "boundary"
+  },
+  "tester_rule": true,
+  "usage": {
+    "new": 42238,
+    "cached": 232736,
+    "total": 274974,
+    "models": {
+      "claude-opus-5-5": {
+        "new": 42238,
+        "cached": 232736,
+        "total": 274974
+      }
+    },
+    "jobs": [
+      "job-1794891026641-1312423-1"
+    ]
+  }
+}

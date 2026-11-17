@@ -1,0 +1,179 @@
+{
+  "id": "osc-3",
+  "feature": "outcome-scorecard",
+  "title": "Report a per-feature scorecard",
+  "lane": "standard",
+  "role": "code",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "459dfff7-8215-42c3-8a3f-e3c6856b3137"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/report_outcomes.rs"
+  ],
+  "read_first": [
+    "docs/history/outcome-scorecard/CONTEXT.md",
+    "docs/history/outcome-scorecard/plan.md",
+    "packages/bee-rs/crates/bee/src/verbs/report_outcomes.rs",
+    "packages/bee-rs/crates/bee/src/herding/run.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Implement docs/history/outcome-scorecard/CONTEXT.md D3 in report_outcomes.rs. Add flags `--by-feature` and `--since <duration like 7d or 48h, or an ISO timestamp>` to try_native (:29-67). Keep today's output byte-identical when neither flag is given. With --by-feature, compute per feature from the cells already scanned plus: lane `created_at` from `.bee/lanes/<feature>.json`; `closed_at` from `.bee/usage/<feature>.json` (close.rs write_usage_record :2567-2578); the newest `trace.capped_at`; audit rows from `.bee/audit.jsonl` of kind `gate` or `gate-bypass` whose note contains ` set to false`; cells whose top-level `fixes_feature` equals the feature; `usage.cost_usd` and `usage.total_tokens` summed from `.bee/mailbox/*/job.json` whose `feature` matches (herding/run.rs record_round_usage :3227). Print a header line `features: <n> (closed <c>) · rework rate <r>% overall`, then one line per feature, oldest first, each metric as a value or `not recorded`, never 0 for a missing source; --json returns {header, features:[...]} with null for not recorded. Keep each metric in a pure function over parsed records; read the store from the main root as today. Edit only the existing tests the change forces; the tester cell adds the new ones. Run the verify and quote the count.",
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- report_outcomes",
+  "must_haves": {
+    "why": "The owner wants to see whether agent work is getting better or worse; counts without rates, time or cost cannot show that, and the article's countermeasure rule needs throughput beside rework.",
+    "out_of_scope": [
+      "writing any record",
+      "the gate audit row: osc-2 owns it",
+      "the from-job carry: osc-1 owns it",
+      "a stored scorecard at bee close (option B)"
+    ],
+    "truths": [
+      "bee report outcomes with no new flag prints exactly what it printed before",
+      "--by-feature prints one line per feature with cells, rework rate, judge revision rate, reaction coverage, cycle time, gate reopens, fix-first cells and cost",
+      "a metric with no source prints not recorded",
+      "--since 7d drops features whose lane started earlier",
+      "--json carries null for not recorded"
+    ],
+    "artifacts": [],
+    "key_links": [],
+    "prohibitions": [
+      "No code comments",
+      "Never hand-edit .bee/*.json(l)"
+    ],
+    "open_choices": []
+  },
+  "trace": {
+    "worker": "w-osc-3",
+    "outcome": "fix-first now counted before the --feature filter, so --by-feature --feature X matches the unfiltered count; 3c6adc196aa76eb0a59f2d80e0b9eb2b52799414",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/report_outcomes.rs"
+    ],
+    "deviations": [
+      "sync-ack: outcome-scorecard concept already names the fix-first source"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-17T05:09:00.290Z",
+    "behavior_change": true,
+    "verification_evidence": "cargo clippy -D warnings && cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml — green:unit — bin 5361 passed 0 failed",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "f80793de-7fb8-4695-a340-4c6cfd30bb1b",
+    "verify_command": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- report_outcomes",
+    "claimed_at": "2026-11-17T05:04:30.101Z",
+    "knowledge_delta": [],
+    "sync_ack": "outcome-scorecard concept already names the fix-first source",
+    "no_mistakes": true,
+    "principles_used": [
+      {
+        "slug": "bee-principle-verify-before-reporting",
+        "changed": "reproduced the judge probe path in code before moving the tally"
+      }
+    ],
+    "report": {
+      "outcome": "fix-first now counted before the --feature filter, so --by-feature --feature X matches the unfiltered count; 3c6adc196aa76eb0a59f2d80e0b9eb2b52799414",
+      "commit": "3c6adc196aa76eb0a59f2d80e0b9eb2b52799414",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/report_outcomes.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- report_outcomes — green:unit — cargo clippy -D warnings && cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml — green:unit — bin 5361 passed 0 failed",
+      "deviations": [],
+      "principles_used": [
+        "bee-principle-verify-before-reporting — reproduced the judge probe path in code before moving the tally"
+      ],
+      "patch_id": "64481c5a39818f24f0c93addad9297d7dc1e0601"
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "verified_at": null,
+    "baseline": null,
+    "reaction": null,
+    "skipped": null,
+    "unknowns": null,
+    "found": null,
+    "stopped": null,
+    "blocked_reason": null,
+    "dropped_reason": null,
+    "reopened_at": "2026-11-17T04:27:34.012Z",
+    "reopened_reason": "gate reopens double-count auto sets: count gate rows, and gate-bypass rows only for a feature with no gate rows (decision D3 refinement, report_outcomes.rs:697)",
+    "no_principles_used": true,
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "NEEDS_REVISION",
+        "checks": [
+          {
+            "id": "bee report outcomes with no new flag prints exactly what it printed before",
+            "status": "PASS",
+            "evidence": "report_outcomes.rs:118-131 old render_text/render_json path untouched when !by_feature; test scorecard_sources_leave_the_no_flag_output_on_its_golden"
+          },
+          {
+            "id": "--by-feature prints one line per feature with cells, rework rate, judge revision rate, reaction coverage, cycle time, gate reopens, fix-first cells and cost",
+            "status": "PASS",
+            "evidence": "report_outcomes.rs:851-870 to_text; probe output `fa: cells 1 · rework 0% · judge revisions not recorded · reactions 0% · cycle not recorded · gate reopens not recorded · fix-first 1 · cost ...`"
+          },
+          {
+            "id": "a metric with no source prints not recorded",
+            "status": "PASS",
+            "evidence": "report_outcomes.rs:830-832 or_missing; test scorecard_metrics_without_a_source_print_not_recorded_never_zero"
+          },
+          {
+            "id": "--since 7d drops features whose lane started earlier",
+            "status": "PASS",
+            "evidence": "report_outcomes.rs:787-791; tests scorecard_since_a_duration_keeps_features_started_inside_it, scorecard_since_an_iso_bound_is_inclusive_and_drops_laneless_features"
+          },
+          {
+            "id": "--json carries null for not recorded",
+            "status": "PASS",
+            "evidence": "report_outcomes.rs:872-895 Option fields serialize null; test scorecard_json_carries_null_for_not_recorded"
+          },
+          {
+            "id": "D3 fix-first cells counted when --by-feature is combined with --feature",
+            "status": "FAIL",
+            "evidence": "report_outcomes.rs:453-458 skips cells of other features before the fixes_feature count at :561-563; probe: `--by-feature` → `fa: ... fix-first 1`, `--by-feature --feature fa` → `fa: ... fix-first not recorded`",
+            "failure_signature": "fix-first not recorded under --feature X although a cell in another feature carries fixes_feature X"
+          }
+        ],
+        "failure_signature": "fix-first not recorded under --feature X although a cell in another feature carries fixes_feature X",
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": "opus",
+        "model_independence": "unverified",
+        "recorded_at": "2026-11-17T05:04:25.160Z"
+      }
+    ],
+    "reopened_for_rework": {
+      "at": "2026-11-17T05:04:25.160Z",
+      "reason": "NEEDS_REVISION semantic-judge verdict recorded after cap"
+    },
+    "judge_overrides": [
+      {
+        "overridden_at": "2026-11-17T05:09:00.275Z",
+        "reason": "re-verified at new head, no judge (minor fix, 6 lines since cap); osc-3t is reopened to pin the failing check with a regression test",
+        "last_verdict": "NEEDS_REVISION"
+      }
+    ]
+  },
+  "tester_rule": true,
+  "usage": {
+    "new": 153368,
+    "cached": 1165194,
+    "total": 1318562,
+    "models": {
+      "claude-sonnet-5-5": {
+        "new": 153368,
+        "cached": 1165194,
+        "total": 1318562
+      }
+    },
+    "jobs": [
+      "job-1794889165595-634221-1",
+      "job-1794889662858-844169-1",
+      "job-1794891874712-1452475-1"
+    ]
+  }
+}

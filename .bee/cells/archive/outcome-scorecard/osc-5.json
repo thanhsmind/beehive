@@ -1,0 +1,149 @@
+{
+  "id": "osc-5",
+  "feature": "outcome-scorecard",
+  "title": "Consolidate this feature's knowledge and write its delivery",
+  "lane": "standard",
+  "role": "writer",
+  "status": "capped",
+  "deps": [
+    "osc-1t",
+    "osc-2t",
+    "osc-3t",
+    "osc-4c"
+  ],
+  "decisions": [
+    "459dfff7-8215-42c3-8a3f-e3c6856b3137"
+  ],
+  "files": [
+    "docs/knowledge/**",
+    "docs/history/outcome-scorecard/delivery.md"
+  ],
+  "read_first": [
+    "docs/history/outcome-scorecard/CONTEXT.md",
+    "docs/history/outcome-scorecard/plan.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Run `bee knowledge consolidate --feature outcome-scorecard`. Dedupe and trim the deltas the cells wrote, anchor each concept to the code it describes, never restate code, and write docs/history/outcome-scorecard/delivery.md listing the concepts changed and why, one line each. Concepts must cover the from-job carry, the gate audit kind, the scorecard metrics with their sources, and fixes_feature; cite D-numbers, never raw decision ids. Run `.bee/bin/bee knowledge check` green. One commit.",
+  "verify": ".bee/bin/bee knowledge check",
+  "must_haves": {
+    "why": "docs/knowledge is the state layer; a concept that lags the code misleads the next reader.",
+    "out_of_scope": [
+      "code",
+      "skills/"
+    ],
+    "truths": [
+      "concepts describe D1-D4 anchored to code",
+      "delivery.md lists every concept the feature changed"
+    ],
+    "artifacts": [],
+    "key_links": [],
+    "prohibitions": [
+      "No restating of code in area concepts",
+      "No code comments"
+    ],
+    "open_choices": []
+  },
+  "trace": {
+    "worker": "w-osc-5",
+    "outcome": "Consolidated outcome-scorecard knowledge across D1-D4, added workflow-state/outcome-scorecard.md, and wrote docs/history/outcome-scorecard/delivery.md; commit bd3bb10a7",
+    "files_changed": [
+      "docs/history/outcome-scorecard/delivery.md",
+      "docs/knowledge/areas/decision-memory/audit-log.md",
+      "docs/knowledge/areas/index.md",
+      "docs/knowledge/areas/workflow-state/cells-authoring-and-revision.md",
+      "docs/knowledge/areas/workflow-state/cells-completion-judge-and-archive.md",
+      "docs/knowledge/areas/workflow-state/index.md",
+      "docs/knowledge/areas/workflow-state/outcome-scorecard.md",
+      "docs/knowledge/areas/workflow-state/overview.md",
+      "docs/knowledge/index.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-11-17T04:50:21.190Z",
+    "behavior_change": false,
+    "verification_evidence": "docs/knowledge and delivery.md only, no Rust code touched",
+    "verify_output": "green:static",
+    "verify_passed": true,
+    "claim_session": "f80793de-7fb8-4695-a340-4c6cfd30bb1b",
+    "verify_command": ".bee/bin/bee knowledge check",
+    "claimed_at": "2026-11-17T04:44:23.640Z",
+    "knowledge_delta": [
+      "docs/knowledge/areas/decision-memory/audit-log.md",
+      "docs/knowledge/areas/index.md",
+      "docs/knowledge/areas/workflow-state/cells-authoring-and-revision.md",
+      "docs/knowledge/areas/workflow-state/cells-completion-judge-and-archive.md",
+      "docs/knowledge/areas/workflow-state/index.md",
+      "docs/knowledge/areas/workflow-state/outcome-scorecard.md",
+      "docs/knowledge/areas/workflow-state/overview.md",
+      "docs/knowledge/index.md"
+    ],
+    "no_mistakes": true,
+    "knowledge_used": [
+      {
+        "path": "docs/knowledge/areas/decision-memory/audit-log.md",
+        "changed": "extended B2 and metadata for D2"
+      },
+      {
+        "path": "docs/knowledge/areas/workflow-state/close-usage-record.md",
+        "changed": "verified .bee/usage/<feature>.json and job.json feature join for D3"
+      },
+      {
+        "path": "docs/knowledge/areas/workflow-state/cells-authoring-and-revision.md",
+        "changed": "verified fixes_feature documentation for D4"
+      },
+      {
+        "path": "docs/knowledge/areas/workflow-state/cells-completion-judge-and-archive.md",
+        "changed": "verified from-job carry documentation for D1"
+      }
+    ],
+    "principles_used": [
+      {
+        "slug": "bee-principle-one-fact-one-home",
+        "changed": "extended existing concepts for D1/D2/D4 and created one owning concept for D3"
+      },
+      {
+        "slug": "bee-principle-single-source-of-truth",
+        "changed": "linked outcome-scorecard.md from workflow-state/overview.md and regenerated indexes via bee knowledge index"
+      },
+      {
+        "slug": "bee-principle-prove-it-works",
+        "changed": "ran bee knowledge check and bee knowledge index --check after final commit"
+      }
+    ],
+    "report": {
+      "outcome": "Consolidated outcome-scorecard knowledge across D1-D4, added workflow-state/outcome-scorecard.md, and wrote docs/history/outcome-scorecard/delivery.md; commit bd3bb10a7",
+      "commit": "bd3bb10a75973f96ab7d562cac160bd323faaa35",
+      "files": [
+        "docs/history/outcome-scorecard/delivery.md",
+        "docs/knowledge/areas/decision-memory/audit-log.md",
+        "docs/knowledge/areas/index.md",
+        "docs/knowledge/areas/workflow-state/cells-authoring-and-revision.md",
+        "docs/knowledge/areas/workflow-state/cells-completion-judge-and-archive.md",
+        "docs/knowledge/areas/workflow-state/index.md",
+        "docs/knowledge/areas/workflow-state/outcome-scorecard.md",
+        "docs/knowledge/areas/workflow-state/overview.md",
+        "docs/knowledge/index.md"
+      ],
+      "tests": ".bee/bin/bee knowledge check — green:static — docs/knowledge and delivery.md only, no Rust code touched",
+      "deviations": [],
+      "knowledge_used": [
+        "docs/knowledge/areas/decision-memory/audit-log.md — extended B2 and metadata for D2",
+        "docs/knowledge/areas/workflow-state/close-usage-record.md — verified .bee/usage/<feature>.json and job.json feature join for D3",
+        "docs/knowledge/areas/workflow-state/cells-authoring-and-revision.md — verified fixes_feature documentation for D4",
+        "docs/knowledge/areas/workflow-state/cells-completion-judge-and-archive.md — verified from-job carry documentation for D1"
+      ],
+      "principles_used": [
+        "bee-principle-one-fact-one-home — extended existing concepts for D1/D2/D4 and created one owning concept for D3",
+        "bee-principle-single-source-of-truth — linked outcome-scorecard.md from workflow-state/overview.md and regenerated indexes via bee knowledge index",
+        "bee-principle-prove-it-works — ran bee knowledge check and bee knowledge index --check after final commit"
+      ],
+      "patch_id": "8043dc4cd326c676ef171dd5a472686c8f7fc187"
+    },
+    "warnings": [],
+    "tests": "boundary"
+  },
+  "tester_rule": true,
+  "usage": null,
+  "usage_reason": "herding job(s) named this cell but no readable session transcript (1 unreadable)"
+}

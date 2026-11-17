@@ -1,0 +1,143 @@
+{
+  "id": "osc-4c",
+  "feature": "outcome-scorecard",
+  "title": "Check the planning doc edit",
+  "lane": "standard",
+  "role": "test",
+  "status": "capped",
+  "deps": [
+    "osc-4"
+  ],
+  "decisions": [
+    "459dfff7-8215-42c3-8a3f-e3c6856b3137"
+  ],
+  "files": [
+    "skills/bee-planning/references/cells.md"
+  ],
+  "read_first": [
+    "docs/history/outcome-scorecard/CONTEXT.md",
+    "docs/history/outcome-scorecard/plan.md"
+  ],
+  "affects_skills": [
+    "skills/bee-planning/references/cells.md"
+  ],
+  "affects_specs": [],
+  "action": "Run `cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test instruction_laws --test pointer_integrity --test rule_index_parity` over osc-4's commit and read its diff against CONTEXT.md D4. Edit nothing; report results.",
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test instruction_laws",
+  "must_haves": {
+    "why": "A docs cell needs a second worker to check parity and pointers.",
+    "out_of_scope": [
+      "editing any file"
+    ],
+    "truths": [
+      "the three targets are green or each red is reported with output"
+    ],
+    "artifacts": [],
+    "key_links": [],
+    "prohibitions": [
+      "No edits"
+    ],
+    "open_choices": []
+  },
+  "trace": {
+    "worker": "w-osc-4c",
+    "outcome": "Checked osc-4 (b28903965) cells.md edit against D4: matches, pointer resolves, rendered copies identical; instruction_laws 10/10, pointer_integrity 10/10, rule_index_parity 5/5 green; no edits, no commit",
+    "files_changed": [
+      ".agents/skills/.bee-render.json",
+      ".agents/skills/bee-planning/references/cells.md",
+      ".bee/onboarding.json",
+      ".claude-plugin/skills/.bee-render.json",
+      ".claude-plugin/skills/bee-planning/references/cells.md",
+      ".claude/skills/.bee-render.json",
+      ".claude/skills/bee-planning/references/cells.md",
+      ".codex-plugin/skills/.bee-render.json",
+      ".codex-plugin/skills/bee-planning/references/cells.md",
+      ".opencode/skills/.bee-render.json",
+      ".opencode/skills/bee-planning/references/cells.md",
+      "docs/history/codex-harness-hardening/release-manifest.json",
+      "docs/history/outcome-scorecard/CONTEXT.md",
+      "docs/history/outcome-scorecard/plan.md",
+      "docs/knowledge/areas/decision-memory/audit-log.md",
+      "docs/knowledge/areas/workflow-state/cells-authoring-and-revision.md",
+      "packages/bee-rs/crates/bee/.bee/logs/timings.jsonl",
+      "packages/bee-rs/crates/bee/src/audit.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs",
+      "packages/bee-rs/crates/bee/src/verbs/report_outcomes.rs",
+      "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs",
+      "packages/bee-rs/crates/bee/tests/audit_log.rs",
+      "skills/bee-planning/references/cells.md"
+    ],
+    "deviations": [
+      "sync-ack: read-only check"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-17T04:25:33.497Z",
+    "behavior_change": false,
+    "verification_evidence": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test instruction_laws --test pointer_integrity --test rule_index_parity — green:static — read-only check of a doc edit; the three targets cover instruction laws, pointer resolution and rule-index parity",
+    "verify_output": "green:static",
+    "verify_passed": true,
+    "claim_session": "f80793de-7fb8-4695-a340-4c6cfd30bb1b",
+    "verify_command": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test instruction_laws",
+    "claimed_at": "2026-11-17T04:24:07.656Z",
+    "knowledge_delta": [
+      "docs/knowledge/areas/decision-memory/audit-log.md",
+      "docs/knowledge/areas/workflow-state/cells-authoring-and-revision.md"
+    ],
+    "sync_ack": "read-only check",
+    "no_mistakes": true,
+    "no_knowledge_used": true,
+    "commit_pending": "read-only check cell: it edits nothing",
+    "report": {
+      "outcome": "Checked osc-4 (b28903965) cells.md edit against D4: matches, pointer resolves, rendered copies identical; instruction_laws 10/10, pointer_integrity 10/10, rule_index_parity 5/5 green; no edits, no commit",
+      "commit": "b289039656b7f1e83410dea149776f4b4f8ac35e",
+      "files": [
+        ".agents/skills/.bee-render.json",
+        ".agents/skills/bee-planning/references/cells.md",
+        ".bee/onboarding.json",
+        ".claude-plugin/skills/.bee-render.json",
+        ".claude-plugin/skills/bee-planning/references/cells.md",
+        ".claude/skills/.bee-render.json",
+        ".claude/skills/bee-planning/references/cells.md",
+        ".codex-plugin/skills/.bee-render.json",
+        ".codex-plugin/skills/bee-planning/references/cells.md",
+        ".opencode/skills/.bee-render.json",
+        ".opencode/skills/bee-planning/references/cells.md",
+        "docs/history/codex-harness-hardening/release-manifest.json",
+        "docs/history/outcome-scorecard/CONTEXT.md",
+        "docs/history/outcome-scorecard/plan.md",
+        "docs/knowledge/areas/decision-memory/audit-log.md",
+        "docs/knowledge/areas/workflow-state/cells-authoring-and-revision.md",
+        "packages/bee-rs/crates/bee/.bee/logs/timings.jsonl",
+        "packages/bee-rs/crates/bee/src/audit.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs",
+        "packages/bee-rs/crates/bee/src/verbs/report_outcomes.rs",
+        "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs",
+        "packages/bee-rs/crates/bee/tests/audit_log.rs",
+        "skills/bee-planning/references/cells.md"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test instruction_laws — green:static — cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test instruction_laws --test pointer_integrity --test rule_index_parity — green:static — read-only check of a doc edit; the three targets cover instruction laws, pointer resolution and rule-index parity",
+      "deviations": [],
+      "knowledge_used": [],
+      "patch_id": "274d2babdd0ed59bebaa0ebc8b3eb51c17cb4b99"
+    },
+    "warnings": [],
+    "tests": "boundary"
+  },
+  "regen_obligation_ack": "read-only check cell: it writes nothing, so it owes no regen",
+  "tester_rule": true,
+  "usage": {
+    "new": 28304,
+    "cached": 111768,
+    "total": 140072,
+    "models": {
+      "claude-opus-5-5": {
+        "new": 28304,
+        "cached": 111768,
+        "total": 140072
+      }
+    },
+    "jobs": [
+      "job-1794889452302-737576-1"
+    ]
+  }
+}

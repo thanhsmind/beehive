@@ -1,0 +1,144 @@
+{
+  "id": "osc-2",
+  "feature": "outcome-scorecard",
+  "title": "Leave an audit row for every gate change",
+  "lane": "standard",
+  "role": "code",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "459dfff7-8215-42c3-8a3f-e3c6856b3137"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs",
+    "packages/bee-rs/crates/bee/src/audit.rs"
+  ],
+  "read_first": [
+    "docs/history/outcome-scorecard/CONTEXT.md",
+    "docs/history/outcome-scorecard/plan.md",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs",
+    "packages/bee-rs/crates/bee/src/audit.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Implement docs/history/outcome-scorecard/CONTEXT.md D2. Add kind `gate` to audit.rs KINDS (`pub(crate) const KINDS: [&str; 18] = [`) and to any test or doc list that pins the kinds. In set_gate.rs, beside the existing auto-only append (anchor :1071 `crate::audit::append(`), append one `gate` row for every successful gate set, manual or auto, with note `gate <name> set to <true|false> by <actor>` and the lane's feature; a merged shape+execution set writes one row per gate. Keep the `gate-bypass` row unchanged. A failed or refused set writes nothing. Edit only the existing tests the change forces; the tester cell adds the new ones. Run the verify and quote the count.",
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- gate",
+  "must_haves": {
+    "why": "Without a row for manual gate changes nobody can count how often a plan was reopened, which is the cost a weak plan puts on the owner.",
+    "out_of_scope": [
+      "report_outcomes.rs: osc-3 owns it",
+      "changing gate semantics or refusals"
+    ],
+    "truths": [
+      "a manual bee gate set appends one audit row of kind gate naming the gate, the value and the actor",
+      "an auto set appends the gate row and keeps its gate-bypass row",
+      "a refused set appends nothing",
+      "bee audit list shows the gate kind"
+    ],
+    "artifacts": [],
+    "key_links": [],
+    "prohibitions": [
+      "No code comments",
+      "Never hand-edit .bee/*.json(l)"
+    ],
+    "open_choices": []
+  },
+  "trace": {
+    "worker": "w-osc-2",
+    "outcome": "Every gate set now appends a `gate` audit row (one per gate, gate-bypass kept for auto); commit 6c258c028",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/audit.rs",
+      "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs",
+      "packages/bee-rs/crates/bee/tests/audit_log.rs",
+      "docs/knowledge/areas/decision-memory/audit-log.md"
+    ],
+    "deviations": [
+      "sync-ack: audit-log concept updated in this cell; osc-5 consolidates"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-17T04:26:41.962Z",
+    "behavior_change": true,
+    "verification_evidence": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- gate — green:unit — 221 passed, 0 failed; audit_log test 8 passed; clippy -D warnings clean",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "f80793de-7fb8-4695-a340-4c6cfd30bb1b",
+    "verify_command": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- gate",
+    "claimed_at": "2026-11-17T04:19:15.791Z",
+    "knowledge_delta": [
+      "docs/knowledge/areas/decision-memory/audit-log.md"
+    ],
+    "sync_ack": "audit-log concept updated in this cell; osc-5 consolidates",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Every gate set now appends a `gate` audit row (one per gate, gate-bypass kept for auto); commit 6c258c028",
+      "commit": "03ac79ecc6a6475a1b79e17f0de2dbd288250156",
+      "files": [
+        "packages/bee-rs/crates/bee/src/audit.rs",
+        "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs",
+        "packages/bee-rs/crates/bee/tests/audit_log.rs",
+        "docs/knowledge/areas/decision-memory/audit-log.md"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- gate — green:unit — cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- gate — green:unit — 221 passed, 0 failed; audit_log test 8 passed; clippy -D warnings clean",
+      "deviations": [],
+      "patch_id": "ccb014c8b615fd3f0cbb21decdb5683d59b21c1d"
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "a manual bee gate set appends one audit row of kind gate naming the gate, the value and the actor",
+            "status": "PASS",
+            "evidence": "set_gate.rs:1065-1085 note `gate {gate_name} set to {approved} by {actor}`; test gate_audit_row_is_written_for_a_manual_approve/unapprove; tests/audit_log.rs:221-224 via the CLI"
+          },
+          {
+            "id": "an auto set appends the gate row and keeps its gate-bypass row",
+            "status": "PASS",
+            "evidence": "set_gate.rs:1086-1105 gate-bypass block unchanged after the gate rows; test gate_audit_row_and_the_bypass_row_are_both_written_for_an_auto_set; audit_log.rs:207-214"
+          },
+          {
+            "id": "merged shape+execution set writes one row per gate",
+            "status": "PASS",
+            "evidence": "set_gate.rs:1067 touched_gates; test gate_audit_row_is_written_once_per_gate_for_a_merged_set"
+          },
+          {
+            "id": "a refused set appends nothing",
+            "status": "PASS",
+            "evidence": "all refusals return Out::Thrown before set_gate.rs:1065; test gate_audit_row_is_never_written_for_a_refused_set asserts audit.jsonl absent"
+          },
+          {
+            "id": "bee audit list shows the gate kind",
+            "status": "PASS",
+            "evidence": "audit.rs:6-8 KINDS includes \"gate\"; verbs/audit.rs:95 list --kind validates against KINDS; audit_log test 8 passed"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": "opus",
+        "model_independence": "unverified",
+        "recorded_at": "2026-11-17T05:04:18.012Z"
+      }
+    ]
+  },
+  "tester_rule": true,
+  "usage": {
+    "new": 50724,
+    "cached": 875229,
+    "total": 925953,
+    "models": {
+      "claude-sonnet-5-5": {
+        "new": 50724,
+        "cached": 875229,
+        "total": 925953
+      }
+    },
+    "jobs": [
+      "job-1794889164029-633874-1"
+    ]
+  }
+}

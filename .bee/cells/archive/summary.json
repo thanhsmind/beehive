@@ -2368,5 +2368,10 @@
     "capped": 2,
     "dropped": 0,
     "archived_at": "2026-11-16T22:30:58.083Z"
+  },
+  "outcome-scorecard": {
+    "capped": 10,
+    "dropped": 0,
+    "archived_at": "2026-11-17T05:27:57.644Z"
   }
 }
