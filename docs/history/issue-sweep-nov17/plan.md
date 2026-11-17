@@ -35,13 +35,13 @@ fault site, and a separate tester cell re-checks it from the parent commit.
 
 ## Load-bearing claims
 
-| # | Claim | Label | Anchor |
-|---|---|---|---|
-| 1 | the intake exemption list holds only .bee/, docs/, plans/, AGENTS.md | read | packages/bee-rs/crates/bee/src/hooks/write_guard/guards.rs:43 |
-| 2 | the read-only allowlist has no date, echo or stat | read | packages/bee-rs/crates/bee/src/hooks/worker_guard.rs:10 |
-| 3 | the reservations list label is a fixed string | read | packages/bee-rs/crates/bee/src/verbs/reservations/emit.rs:234 |
-| 4 | new-cell normalization sets deps from deps only | read | packages/bee-rs/crates/bee/src/verbs/cells/validate.rs:562 |
-| 5 | the tester lookup reads deps | read | packages/bee-rs/crates/bee/src/verbs/cells/proof.rs:96 |
+| # | Claim | Label | Anchor | Verbatim evidence |
+|---|---|---|---|---|
+| 1 | the intake exemption list holds only .bee/, docs/, plans/, AGENTS.md | read | packages/bee-rs/crates/bee/src/hooks/write_guard/guards.rs:43 | `pub(crate) const GATE_ALLOWED_PREFIXES_INTAKE: [&str; 4] =` |
+| 2 | the read-only allowlist has no date, echo or stat | read | packages/bee-rs/crates/bee/src/hooks/worker_guard.rs:10 | `const READ_ONLY_ALLOWED: &str = "Bash(cd:*),Bash(cat:*),Bash(head:*),Bash(tail:*),Bash(wc:*),Bash(ls:*),Bash(rg:*),Bash(fd:*),Bash(jq:*),Bash(git log:*),Bash(git show:*),Bash(git diff:*),Bash(git status:*),Bash(git blame:*),Bash(.bee/bin/bee status:*),Bash(.bee/bin/bee orient:*),Bash(.bee/bin/bee herding status:*),Bash(.bee/bin/bee herding notify:*),Bash(mv:*)";` |
+| 3 | the reservations list label is a fixed string | read | packages/bee-rs/crates/bee/src/verbs/reservations/emit.rs:234 | `"{} \| cell {} \| {} \| reserved {} \| active/expired by TTL",` |
+| 4 | new-cell normalization sets deps from deps only | read | packages/bee-rs/crates/bee/src/verbs/cells/validate.rs:562 | `let value = match map.get(key) {` |
+| 5 | the tester lookup reads deps | read | packages/bee-rs/crates/bee/src/verbs/cells/proof.rs:96 | `&& c.get("deps").and_then(Value::as_array).is_some_and(\|d\| d.iter().any(\|x\| x.as_str() == Some(id)))` |
 
 ## Role assignments
 
