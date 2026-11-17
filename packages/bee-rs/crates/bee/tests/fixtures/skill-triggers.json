@@ -123,6 +123,16 @@
   {"brief": "There is nothing here that can prove the CLI behaves — create that from scratch.", "expect": ["bee-verifying"], "near": "bee-verify-upkeep"},
   {"brief": "Onboarding says no test command exists; give me a way to drive this service end to end.", "expect": ["bee-verifying"], "near": "bee-verify-upkeep"},
 
+  {"brief": "Model-check this race condition in TLA+ and leave a repeatable check under .bee/verify/.", "expect": ["bee-formal-verifying"], "near": "bee-verifying"},
+  {"brief": "Unit tests never hit every interleaving of our claim lock — build a formal check that proves the invariant.", "expect": ["bee-formal-verifying"]},
+  {"brief": "Tạo một kiểm tra hình thức để chứng minh không có trạng thái kẹt giữa các bước đồng thời.", "expect": ["bee-formal-verifying"]},
+  {"brief": "We already have a TLA+ check under .bee/verify/, and several merges touched the covered Rust files — bring it back in line.", "expect": ["bee-formal-upkeep"], "near": "bee-formal-verifying"},
+  {"brief": "Check whether our existing formal model still describes the code after this refactor, and separate drift from bugs.", "expect": ["bee-formal-upkeep"], "near": "bee-formal-verifying"},
+  {"brief": "Kiểm tra lại mô hình hình thức hiện có xem code có bị lệch khỏi đặc tả không.", "expect": ["bee-formal-upkeep"]},
+  {"brief": "Prove our state machine never drops an in-flight lease and save the check as a project verify skill.", "expect": ["bee-formal-verifying"], "near": "bee-formal-upkeep"},
+  {"brief": "Audit our existing formal verification skill against recent commits since its sync commit.", "expect": ["bee-formal-upkeep"], "near": "bee-verify-upkeep"},
+  {"brief": "Drive the real web app in a browser and capture screenshots for every route.", "expect": ["bee-verifying"], "near": "bee-formal-upkeep"},
+
   {"brief": "Create a new skill for this workflow and pressure-test it.", "expect": ["bee-writing-skills"]},
   {"brief": "Edit this skill so it triggers on the right requests.", "expect": ["bee-writing-skills"]},
   {"brief": "Viết một kỹ năng mới rồi kiểm tra nó chịu áp lực thế nào.", "expect": ["bee-writing-skills"]},

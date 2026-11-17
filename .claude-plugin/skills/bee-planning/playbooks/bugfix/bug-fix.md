@@ -57,8 +57,9 @@ discipline holds for a perf defect, where the evidence is the trace
    would be expensive, integration-heavy or unclear.
 
 **When the cause is not known.** A symptom that turns on event order — a late,
-doubled or reordered message, a retry, a stuck flow — takes the `statechart`
-model of `feature/feature.md` step 3 as one candidate split. A fix in code that a
+doubled or reordered message, a retry, a stuck flow — takes the
+`skills/bee-formal-verifying/references/statechart.md` model of
+`feature/feature.md` step 3 as one candidate split. A fix in code that a
 project-local formal verify skill covers reruns that skill (`feature/feature.md`
 step 8). Revert every edit that a refuted hypothesis motivated. A one-line fix
 whose cause is already known keeps the short path. If the deciding fact took a
