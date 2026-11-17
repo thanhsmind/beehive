@@ -2,6 +2,7 @@ use crate::jsjson;
 use crate::roots::{resolve_store_root_worktree, RootsWt, StoreRoots};
 use crate::verbs::knowledge::{cwd_store_root, emit_no_root_error_at};
 use crate::verbs::{emit_no_root_error, emit_unsupported_root, record_timing};
+use chrono::{DateTime, Duration, NaiveDate, Utc};
 use serde_json::{json, Map, Value};
 use std::collections::BTreeMap;
 use std::ffi::OsString;
@@ -15,6 +16,8 @@ struct Opts {
     feature: Option<String>,
     root: Option<PathBuf>,
     json: bool,
+    by_feature: bool,
+    since: Option<DateTime<Utc>>,
 }
 
 impl Opts {
@@ -31,11 +34,29 @@ fn parse(tokens: &[OsString]) -> Option<Opts> {
     let mut feature = None;
     let mut root = None;
     let mut json = false;
+    let mut by_feature = false;
+    let mut since = None;
     let mut i = 0;
     while i < toks.len() {
         let tok = toks[i];
         if tok == "--json" {
             json = true;
+            i += 1;
+            continue;
+        }
+        if tok == "--by-feature" {
+            by_feature = true;
+            i += 1;
+            continue;
+        }
+        if tok == "--since" {
+            i += 1;
+            since = Some(parse_since(toks.get(i)?, Utc::now())?);
+            i += 1;
+            continue;
+        }
+        if let Some(val) = tok.strip_prefix("--since=") {
+            since = Some(parse_since(val, Utc::now())?);
             i += 1;
             continue;
         }
@@ -63,7 +84,7 @@ fn parse(tokens: &[OsString]) -> Option<Opts> {
         }
         return None;
     }
-    Some(Opts { feature, root, json })
+    Some(Opts { feature, root, json, by_feature, since })
 }
 
 pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
@@ -92,7 +113,14 @@ fn run(opts: &Opts, t0: Instant) -> ExitCode {
         }
     };
     let report = collect_outcomes(&ledger_root(&roots), opts.feature.as_deref());
-    if opts.json {
+    if opts.by_feature {
+        let card = scorecard(&report, &read_inputs(&ledger_root(&roots)), opts.since, opts.feature.as_deref());
+        if opts.json {
+            println!("{}", jsjson::stringify_pretty(&card.to_json()));
+        } else {
+            println!("{}", card.to_text());
+        }
+    } else if opts.json {
         println!("{}", jsjson::stringify_pretty(&render_json(&report)));
     } else {
         println!("{}", render_text(&report));
@@ -338,6 +366,8 @@ struct OutcomesReport {
     rework: ReworkMetrics,
     role_reroute: RoleRerouteMetrics,
     plan_departure: PlanDepartureMetrics,
+    tallies: BTreeMap<String, CellTally>,
+    fixes: BTreeMap<String, usize>,
 }
 
 fn find_cell_files(root: &Path) -> Vec<PathBuf> {
@@ -397,6 +427,8 @@ fn collect_outcomes(root: &Path, feature_filter: Option<&str>) -> OutcomesReport
         rework: ReworkMetrics::default(),
         role_reroute: RoleRerouteMetrics::default(),
         plan_departure: PlanDepartureMetrics::default(),
+        tallies: BTreeMap::new(),
+        fixes: BTreeMap::new(),
     };
     let files = find_cell_files(root);
     for file in files {
@@ -523,8 +555,340 @@ fn collect_outcomes(root: &Path, feature_filter: Option<&str>) -> OutcomesReport
                 report.plan_departure.cells_with_record += 1;
             }
         }
+
+        if let Some(feat) = obj.get("feature").and_then(Value::as_str) {
+            report.tallies.entry(feat.to_string()).or_default().add(obj, reworked);
+        }
+        if let Some(target) = obj.get("fixes_feature").and_then(Value::as_str) {
+            *report.fixes.entry(target.to_string()).or_insert(0) += 1;
+        }
     }
     report
+}
+
+type Stamp = DateTime<Utc>;
+
+#[derive(Default, Debug)]
+struct CellTally {
+    cells: usize,
+    reworked: usize,
+    judge_records: usize,
+    judge_revisions: usize,
+    with_reaction: usize,
+    newest_capped: Option<Stamp>,
+}
+
+impl CellTally {
+    fn add(&mut self, cell: &Map<String, Value>, reworked: bool) {
+        self.cells += 1;
+        if reworked {
+            self.reworked += 1;
+        }
+        let trace = cell.get("trace").and_then(Value::as_object);
+        if let Some(judges) = trace.and_then(|t| t.get("semantic_judge")).and_then(Value::as_array) {
+            for entry in judges {
+                self.judge_records += 1;
+                if entry.get("verdict").and_then(Value::as_str) == Some("NEEDS_REVISION") {
+                    self.judge_revisions += 1;
+                }
+            }
+        }
+        if trace
+            .and_then(|t| t.get("reaction"))
+            .and_then(Value::as_str)
+            .is_some_and(|r| !r.trim().is_empty())
+        {
+            self.with_reaction += 1;
+        }
+        let capped = trace
+            .and_then(|t| t.get("capped_at"))
+            .and_then(Value::as_str)
+            .and_then(parse_stamp);
+        self.newest_capped = self.newest_capped.max(capped);
+    }
+}
+
+struct GateRow {
+    feature: String,
+    reopen: bool,
+}
+
+struct JobUsage {
+    feature: String,
+    cost_usd: Option<f64>,
+    total_tokens: Option<u64>,
+}
+
+#[derive(Default)]
+struct ScoreInputs {
+    lanes: BTreeMap<String, Stamp>,
+    closes: BTreeMap<String, Stamp>,
+    gate_rows: Vec<GateRow>,
+    jobs: Vec<JobUsage>,
+}
+
+fn parse_stamp(s: &str) -> Option<Stamp> {
+    DateTime::parse_from_rfc3339(s).ok().map(|d| d.with_timezone(&Utc))
+}
+
+fn parse_since(s: &str, now: Stamp) -> Option<Stamp> {
+    if let Some(stamp) = parse_stamp(s) {
+        return Some(stamp);
+    }
+    if let Ok(day) = NaiveDate::parse_from_str(s, "%Y-%m-%d") {
+        return day.and_hms_opt(0, 0, 0).map(|n| n.and_utc());
+    }
+    let unit = s.chars().last()?;
+    let count: u32 = s[..s.len() - unit.len_utf8()].parse().ok()?;
+    let per_unit: i64 = match unit {
+        'w' => 604_800,
+        'd' => 86_400,
+        'h' => 3_600,
+        'm' => 60,
+        _ => return None,
+    };
+    now.checked_sub_signed(Duration::seconds(i64::from(count) * per_unit))
+}
+
+fn json_files(dir: &Path) -> Vec<PathBuf> {
+    let mut files: Vec<PathBuf> = std::fs::read_dir(dir)
+        .into_iter()
+        .flatten()
+        .flatten()
+        .map(|e| e.path())
+        .filter(|p| p.is_file() && p.extension().is_some_and(|x| x == "json"))
+        .collect();
+    files.sort();
+    files
+}
+
+fn read_object(path: &Path) -> Option<Map<String, Value>> {
+    match serde_json::from_str(&std::fs::read_to_string(path).ok()?).ok()? {
+        Value::Object(m) => Some(m),
+        _ => None,
+    }
+}
+
+fn read_inputs(root: &Path) -> ScoreInputs {
+    let bee = root.join(".bee");
+    let mut inputs = ScoreInputs::default();
+    for path in json_files(&bee.join("lanes")) {
+        let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or_default().to_string();
+        if let Some(lane) = read_object(&path) {
+            let name = lane.get("feature").and_then(Value::as_str).unwrap_or(&stem).to_string();
+            if let Some(at) = lane.get("created_at").and_then(Value::as_str).and_then(parse_stamp) {
+                inputs.lanes.insert(name, at);
+            }
+        }
+    }
+    for path in json_files(&bee.join("usage")) {
+        let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or_default().to_string();
+        if let Some(at) = read_object(&path)
+            .and_then(|r| r.get("closed_at").and_then(Value::as_str).and_then(parse_stamp))
+        {
+            inputs.closes.insert(stem, at);
+        }
+    }
+    if let Ok(raw) = std::fs::read_to_string(bee.join("audit.jsonl")) {
+        for line in raw.lines() {
+            let Ok(Value::Object(row)) = serde_json::from_str::<Value>(line) else { continue };
+            let kind = row.get("kind").and_then(Value::as_str);
+            let feature = row.get("feature").and_then(Value::as_str);
+            if let (Some("gate" | "gate-bypass"), Some(feature)) = (kind, feature) {
+                let note = row.get("note").and_then(Value::as_str).unwrap_or_default();
+                inputs.gate_rows.push(GateRow {
+                    feature: feature.to_string(),
+                    reopen: note.contains(" set to false"),
+                });
+            }
+        }
+    }
+    if let Ok(entries) = std::fs::read_dir(bee.join("mailbox")) {
+        let mut jobs: Vec<PathBuf> = entries.flatten().map(|e| e.path().join("job.json")).collect();
+        jobs.sort();
+        for path in jobs {
+            let Some(job) = read_object(&path) else { continue };
+            let Some(feature) = job.get("feature").and_then(Value::as_str) else { continue };
+            let usage = job.get("usage").and_then(Value::as_object);
+            inputs.jobs.push(JobUsage {
+                feature: feature.to_string(),
+                cost_usd: usage.and_then(|u| u.get("cost_usd")).and_then(Value::as_f64),
+                total_tokens: usage.and_then(|u| u.get("total_tokens")).and_then(Value::as_u64),
+            });
+        }
+    }
+    inputs
+}
+
+fn pct(num: usize, den: usize) -> Option<f64> {
+    (den > 0).then(|| (num as f64 / den as f64 * 1000.0).round() / 10.0)
+}
+
+fn cycle_secs(created: Option<Stamp>, closed: Option<Stamp>, capped: Option<Stamp>) -> Option<i64> {
+    let end = closed.or(capped)?;
+    Some((end - created?).num_seconds().max(0))
+}
+
+fn gate_reopens(rows: &[GateRow], feature: &str) -> Option<usize> {
+    let mine: Vec<&GateRow> = rows.iter().filter(|r| r.feature == feature).collect();
+    (!mine.is_empty()).then(|| mine.iter().filter(|r| r.reopen).count())
+}
+
+fn fix_first(fixes: &BTreeMap<String, usize>, feature: &str) -> Option<usize> {
+    (!fixes.is_empty()).then(|| fixes.get(feature).copied().unwrap_or(0))
+}
+
+fn job_cost(jobs: &[JobUsage], feature: &str) -> Option<f64> {
+    let costs: Vec<f64> = jobs.iter().filter(|j| j.feature == feature).filter_map(|j| j.cost_usd).collect();
+    (!costs.is_empty()).then(|| costs.iter().sum())
+}
+
+fn job_tokens(jobs: &[JobUsage], feature: &str) -> Option<u64> {
+    let tokens: Vec<u64> = jobs.iter().filter(|j| j.feature == feature).filter_map(|j| j.total_tokens).collect();
+    (!tokens.is_empty()).then(|| tokens.iter().sum())
+}
+
+struct FeatureRow {
+    feature: String,
+    created_at: Option<Stamp>,
+    closed: bool,
+    cells: usize,
+    reworked: usize,
+    rework_rate: Option<f64>,
+    judge_revision_rate: Option<f64>,
+    reaction_coverage: Option<f64>,
+    cycle_secs: Option<i64>,
+    gate_reopens: Option<usize>,
+    fix_first: Option<usize>,
+    cost_usd: Option<f64>,
+    total_tokens: Option<u64>,
+}
+
+struct Scorecard {
+    rows: Vec<FeatureRow>,
+}
+
+fn scorecard(
+    report: &OutcomesReport,
+    inputs: &ScoreInputs,
+    since: Option<Stamp>,
+    feature_filter: Option<&str>,
+) -> Scorecard {
+    let mut names: Vec<&String> = report.tallies.keys().chain(inputs.lanes.keys()).collect();
+    names.sort();
+    names.dedup();
+    let empty = CellTally::default();
+    let mut rows: Vec<FeatureRow> = names
+        .into_iter()
+        .filter(|f| feature_filter.is_none_or(|want| want == f.as_str()))
+        .filter_map(|f| {
+            let created_at = inputs.lanes.get(f).copied();
+            if let Some(bound) = since
+                && created_at.is_none_or(|c| c < bound)
+            {
+                return None;
+            }
+            let t = report.tallies.get(f).unwrap_or(&empty);
+            let closed_at = inputs.closes.get(f).copied();
+            Some(FeatureRow {
+                feature: f.clone(),
+                created_at,
+                closed: closed_at.is_some(),
+                cells: t.cells,
+                reworked: t.reworked,
+                rework_rate: pct(t.reworked, t.cells),
+                judge_revision_rate: pct(t.judge_revisions, t.judge_records),
+                reaction_coverage: pct(t.with_reaction, t.cells),
+                cycle_secs: cycle_secs(created_at, closed_at, t.newest_capped),
+                gate_reopens: gate_reopens(&inputs.gate_rows, f),
+                fix_first: fix_first(&report.fixes, f),
+                cost_usd: job_cost(&inputs.jobs, f),
+                total_tokens: job_tokens(&inputs.jobs, f),
+            })
+        })
+        .collect();
+    rows.sort_by(|a, b| {
+        (a.created_at.is_none(), a.created_at, &a.feature).cmp(&(b.created_at.is_none(), b.created_at, &b.feature))
+    });
+    Scorecard { rows }
+}
+
+fn fmt_duration(secs: i64) -> String {
+    let (d, h, m) = (secs / 86_400, secs % 86_400 / 3_600, secs % 3_600 / 60);
+    if d > 0 {
+        format!("{d}d {h}h")
+    } else if h > 0 {
+        format!("{h}h {m}m")
+    } else {
+        format!("{m}m")
+    }
+}
+
+fn or_missing<T>(v: Option<T>, fmt: impl Fn(T) -> String) -> String {
+    v.map_or_else(|| "not recorded".to_string(), fmt)
+}
+
+impl Scorecard {
+    fn overall_rework(&self) -> Option<f64> {
+        pct(
+            self.rows.iter().map(|r| r.reworked).sum(),
+            self.rows.iter().map(|r| r.cells).sum(),
+        )
+    }
+
+    fn header(&self) -> String {
+        let closed = self.rows.iter().filter(|r| r.closed).count();
+        let rework = match self.overall_rework() {
+            Some(r) => format!("rework rate {r}% overall"),
+            None => "rework rate not recorded overall".to_string(),
+        };
+        format!("features: {} (closed {closed}) · {rework}", self.rows.len())
+    }
+
+    fn to_text(&self) -> String {
+        let mut lines = vec![self.header()];
+        for r in &self.rows {
+            let percent = |v| or_missing(v, |p: f64| format!("{p}%"));
+            lines.push(format!(
+                "{}: cells {} · rework {} · judge revisions {} · reactions {} · cycle {} · gate reopens {} · fix-first {} · cost {} · tokens {}",
+                r.feature,
+                r.cells,
+                percent(r.rework_rate),
+                percent(r.judge_revision_rate),
+                percent(r.reaction_coverage),
+                or_missing(r.cycle_secs, fmt_duration),
+                or_missing(r.gate_reopens, |n| n.to_string()),
+                or_missing(r.fix_first, |n| n.to_string()),
+                or_missing(r.cost_usd, |c| format!("${c:.2}")),
+                or_missing(r.total_tokens, |n| n.to_string()),
+            ));
+        }
+        lines.join("\n")
+    }
+
+    fn to_json(&self) -> Value {
+        let features: Vec<Value> = self
+            .rows
+            .iter()
+            .map(|r| {
+                json!({
+                    "feature": r.feature,
+                    "created_at": r.created_at.map(|c| c.to_rfc3339()),
+                    "closed": r.closed,
+                    "cells": r.cells,
+                    "rework_rate": r.rework_rate,
+                    "judge_revision_rate": r.judge_revision_rate,
+                    "reaction_coverage": r.reaction_coverage,
+                    "cycle_time_seconds": r.cycle_secs,
+                    "gate_reopens": r.gate_reopens,
+                    "fix_first_cells": r.fix_first,
+                    "cost_usd": r.cost_usd,
+                    "total_tokens": r.total_tokens,
+                })
+            })
+            .collect();
+        json!({"header": self.header(), "features": features})
+    }
 }
 
 fn render_text(r: &OutcomesReport) -> String {
