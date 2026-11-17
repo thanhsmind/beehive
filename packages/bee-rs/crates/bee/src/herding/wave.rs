@@ -3069,4 +3069,22 @@ mod tests {
         let occ = quiet_occupancy_from(root, Some(HashSet::new()), Some(ids), now);
         assert_eq!(occ, wave_ledger::Occupancy::Live(1));
     }
+
+    #[test]
+    fn a_question_result_keeps_its_slot_and_a_finished_pane_job_frees_it() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        unresolved_worker_row(root, "job-question", "agent-question");
+        unresolved_worker_row(root, "job-pane", "%7");
+        write_job(root, "job-question", "agent-question", Some("question"));
+        let dir = root.join(".bee").join("mailbox").join("job-pane");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("job.json"), serde_json::json!({"transport": "tmux", "pane_id": "%7"}).to_string()).unwrap();
+        std::fs::write(dir.join("result-1.json"), serde_json::json!({"status": "question"}).to_string()).unwrap();
+        std::fs::write(dir.join("result-2.json"), serde_json::json!({"status": "done"}).to_string()).unwrap();
+        let panes: HashSet<String> = ["%7".to_string()].into_iter().collect();
+        let now = chrono::Utc::now().timestamp_millis();
+        let occ = quiet_occupancy_from(root, Some(panes), Some(vec!["agent-question".to_string()]), now);
+        assert_eq!(occ, wave_ledger::Occupancy::Live(1));
+    }
 }
