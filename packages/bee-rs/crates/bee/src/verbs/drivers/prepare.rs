@@ -7237,6 +7237,28 @@ mod paseo_probe_tests {
     }
 
     #[test]
+    fn agent_declared_only_in_top_level_agents_is_not_ready() {
+        let tmp = tempfile::tempdir().unwrap();
+        let cfg = r#"{
+            "team": {"pi": {"code": {"kind": "herding", "agent": "top-only"}}},
+            "agents": {"top-only": ["pi", "-a"]},
+            "herding": {"transport": "herdr"}
+        }"#;
+        let root = repo(&tmp, cfg);
+        w_cell(&root, "c-1");
+        let out = prepare_dispatch_with_role(
+            &root, "pi", "cell", Some("code"), Some("c-1"), Some("w"), false, None, None, false, None,
+        )
+        .unwrap();
+        let Prepared::Value(v) = out else { panic!("expected prepared value") };
+        let payload = &v["payload"];
+        assert_eq!(payload["transport_ready"], Value::Bool(false));
+        let reason = payload["transport_reason"].as_str().expect("string");
+        assert!(reason.contains("unknown herding agent \"top-only\""), "{reason}");
+        assert!(crate::herding::wave::resolve_agent_command(&serde_json::from_str(cfg).unwrap(), Some("top-only")).is_err());
+    }
+
+    #[test]
     fn command_resolves_on_path_in_checks_existence() {
         let tmp = tempfile::tempdir().unwrap();
         let bin_dir = tmp.path().join("bin");
