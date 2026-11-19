@@ -10,7 +10,6 @@ never a generation timestamp or any other wall-clock value.
 
 | ID | Story | CoS | Status | Feature |
 |----|-------|-----|--------|---------|
-| p-b366b91c | Onboarding tells a project when its knowledge bundle is missing or due for upkeep | From knowledge-skill-pair (docs/history/knowledge-skill-pair/CONTEXT.md, Out Of Scope): an onboarding notice that offers bee-knowledge-setup or points at bee-knowledge-upkeep, as verify has; optionally an upkeep-due line in bee knowledge report and the D7 thresholds in config | in-flight | orient-and-onboard-notices |
 | p-0d4da479 | Pin the doctor pi belt-contract branch with its own test and decide the dispatch prepare claim-probe race | A test in packages/bee-rs/crates/bee/src/doctor/tests.rs fails when the pi belt-contract branch in doctor.rs (near 1056) is disabled; the prepare.rs claim-probe race (probe verdict discarded before claim_and_reserve_for_dispatch, near 4311) is closed by a test or recorded with bee decisions log. Found by hrh-3, 2026-11-19: a_stale_pi_belt_row_names_bee_onboard_apply passes with the branch disabled. | proposed | — |
 | p-2ce14340 | Test bee state plan-conflicts verdict --id a,b end to end so the comma split is guarded | A test in packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs runs the verdict verb with --id a,b and asserts two verdict rows; replacing the comma split in run_plan_conflicts_verdict with a single id turns it red. Found by pcx-t, 2026-11-19. | proposed | — |
 | p-0b45c28d | Owner brief staleness: a brief records a digest of its sources and the briefs check flags it stale when they change | A brief may carry a sources digest; the briefs check reports a brief whose sources changed since it was written as stale; a brief with no digest stays valid. Moved out of owner-brief (D13): the spec marked it optional. | parked | owner-brief |
@@ -130,6 +129,7 @@ never a generation timestamp or any other wall-clock value.
 - [p-abfd7136] Rule ids become spoken: the user invokes one by name and the reply names what changed — done
 - [p-b11732c2] bee worktree new must require --with-companion (or refuse) when a live concurrent session touches a shared companion checkout — done
 - [p-b1f11111] cargo clippy --all-targets fails on never_loop in the blind dossier parser, and no cell owns it — done
+- [p-b366b91c] Onboarding tells a project when its knowledge bundle is missing or due for upkeep — done
 - [p-b4c2cb19] Make the pi belt contract tests pass on CI (node uncaught exception) — done
 - [p-b595a094] Main-verifies: feature-level verify by the orchestrator; workers implement+commit+report only; cap pending path + close-door gate — done
 - [p-b9700277] The worker consult's Advisor line is never rendered — P27's loop is live on paper, dead in wiring — done
