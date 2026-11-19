@@ -32,7 +32,8 @@ and fail-open, and the door change has a printed remedy.
 - D6: debt in preamble, orient, status and a doctor advisory; trigger 6e79d14e resolved by it.
 - D7: bee backlog fix-at close needs guard proof; backlog add refuses a hand close on a fix-at layer.
 - D8: bee backlog fix-at verify re-runs closed guards.
-- D9 and its refinement: fix-at next and promote, takeup auto-promote with a limit of one, upkeep kind fix-at.
+- D9: fix-at next and promote, takeup auto-promote with a limit of one, upkeep kind fix-at (no new skill: CONTEXT.md D9 text).
+- D12: the plan-check refinements (layer-matched closes, kept rejudge holds, one normalization, row-counted advisory, guardless groups skipped, control root).
 - D10: knowledge check reads evidence_ref.
 - D11: the doctrine names the loop.
 - C1 to C6: contracts and their test-name markers.
@@ -72,6 +73,8 @@ skills are hub-served (claim 11), so D9 carries the loop with verbs.
 Recommended path: six code cells, each followed by a tester that shares no
 context with it, one docs cell with a checker, and the writer cell. The
 ledger lands first because every later cell reads it.
+
+After the merge the leader rebuilds and reinstalls .bee/bin/bee, then runs the loop once live: resolves trigger more-than-20-backlog-rows-with-layer-fix__6e79d14e with the doctor advisory named as its outcome (D6, D12), closes the strip_prefix group with bee backlog fix-at close and the clippy guard as its guard-cmd, runs bee backlog fix-at verify, and runs bee backlog fix-at promote so the top group becomes a Guard PBI.
 
 Rejected: a count predicate for triggers (breaks a stated law for one
 trigger); a new bee-fix-at-upkeep skill (outward hub publish); blocking
@@ -136,6 +139,8 @@ Epic map, one slice. Playbook: `skills/bee-planning/playbooks/feature.md`, situa
 | Proven evidence | evidence_ref | D10 | 1 | evidence_ref |
 | Doctrine | AGENTS block, LEADER, promotion, static rules | D11 | 1 | parity and pointer tests |
 
+PLAN CHECK (hat wave, three seats; reports under `.bee/mailbox/job-1795072073328-232929-1/`, `job-1795072074978-233318-1/` and the user-impact job). BLOCKERS closed: the instruction law pins the hand close line, so mlc-7 owns tests/instruction_laws.rs and its needles now name fix-at close and reflect --cell; the flag-vocabulary pin, so mlc-5 owns catalog.rs; a --kept rejudge refiled at the next sweep, closed by D12 (newer-than-close) and mlc-3t (6); the trigger had no owner, so the leader resolves it after merge (Approach); orient, takeup auto-promote and the verify audit row had no test, now in mlc-4t (5) and mlc-5t (5)(8)(9). WARNINGS applied: layer-matched closes (D12, mlc-1t (7)(8)(9)); one normalization (D12); row-counted advisory (D12); guardless groups skipped by verify (D12); control root for takeup (D12); the door detail carries the commands with --cell last; unique test prefixes mistakes_door_ and evidence_ref_check_ so the green counts are honest; every tester shows each new test red once. NOTES applied: worker-cell.md dropped from mlc-7; third base and exercised in mlc-6t.
+
 SMALLER PATH: doctrine only (tell agents to close rows with proof) keeps the fix in prose, the layer this feature exists to shrink. A doctor row alone shows the debt but pulls nothing. Dropping D5 keeps recurrence exact-title only, which hides failed guards. PASS.
 
 ## Cells — current slice (preview)
@@ -145,16 +150,16 @@ SMALLER PATH: doctrine only (tell agents to close rows with proof) keeps the fix
 | mlc-1 | Fold fix-at backlog rows into one ledger | verbs/fix_at.rs, verbs/mod.rs, verbs/feedback.rs, verbs/backlog.rs, verbs/drivers/close.rs | — | code | `cargo test … --bin bee -- fix_at` |
 | mlc-1t | Test the fix-at ledger | verbs/fix_at.rs | mlc-1 | test | `cargo test … --bin bee -- fix_at_ledger` |
 | mlc-2 | Clear the mistakes door only for named cells | verbs/mailbox.rs, verbs/drivers/close.rs, generated/registry_payload.json | mlc-1t | code | `cargo test … --bin bee -- mistakes` |
-| mlc-2t | Test that the mistakes door names cells | verbs/drivers/close.rs, verbs/mailbox.rs | mlc-2 | test | `cargo test … --bin bee -- mistakes_door` |
+| mlc-2t | Test that the mistakes door names cells | verbs/drivers/close.rs, verbs/mailbox.rs | mlc-2 | test | `cargo test … --bin bee -- mistakes_door_` |
 | mlc-3 | File missed and repeated mistakes and catch reworded recurrences | verbs/fix_at.rs, verbs/work.rs, verbs/drivers/close.rs | mlc-2t | code | `cargo test … --bin bee -- fix_at` |
 | mlc-3t | Test fix-at intake | verbs/fix_at.rs, verbs/drivers/close.rs | mlc-3 | test | `cargo test … --bin bee -- fix_at_intake` |
 | mlc-4 | Show fix-at debt in preamble, orient, status and doctor | verbs/fix_at.rs, hooks/session_preamble/budget.rs, verbs/status_full/orient.rs, verbs/status_full/build.rs, doctor.rs | mlc-3t | code | `cargo test … --bin bee -- fix_at` |
-| mlc-4t | Test fix-at debt surfaces | verbs/fix_at.rs, hooks/session_preamble/budget.rs, doctor.rs | mlc-4 | test | `cargo test … --bin bee -- fix_at_debt` |
-| mlc-5 | Add the fix-at close, verify, next and promote verbs and the upkeep kind | verbs/fix_at.rs, verbs/backlog.rs, generated/registry_payload.json, router.rs, verbs/upkeep_group.rs, audit.rs, verbs/work.rs | mlc-4t | code | `cargo test … --bin bee -- backlog` |
-| mlc-5t | Test the fix-at verbs | verbs/backlog.rs, verbs/upkeep_group.rs | mlc-5 | test | `cargo test … --bin bee -- fix_at_verbs` |
+| mlc-4t | Test fix-at debt surfaces | verbs/fix_at.rs, hooks/session_preamble/budget.rs, doctor.rs, verbs/status_full/orient.rs, verbs/status_full/build.rs | mlc-4 | test | `cargo test … --bin bee -- fix_at_debt` |
+| mlc-5 | Add the fix-at close, verify, next and promote verbs and the upkeep kind | verbs/fix_at.rs, verbs/backlog.rs, generated/registry_payload.json, router.rs, verbs/upkeep_group.rs, audit.rs, verbs/work.rs, catalog.rs | mlc-4t | code | `cargo test … --bin bee -- backlog` |
+| mlc-5t | Test the fix-at verbs | verbs/backlog.rs, verbs/upkeep_group.rs, verbs/work.rs | mlc-5 | test | `cargo test … --bin bee -- fix_at_verbs` |
 | mlc-6 | Warn when evidence_ref names nothing | verbs/knowledge/check.rs | mlc-5t | code | `cargo test … --bin bee -- knowledge` |
-| mlc-6t | Test the evidence_ref checks | verbs/knowledge/tests.rs | mlc-6 | test | `cargo test … --bin bee -- evidence_ref` |
-| mlc-7 | Name the closed loop in the doctrine | packages/bee/AGENTS.block.md, packages/bee/LEADER.md, skills/bee-capturing/references/promotion.md, expertise/static-rules.md, packages/bee/prompts/worker-cell.md | mlc-6t | docs | `cargo test … --test instruction_laws` |
+| mlc-6t | Test the evidence_ref checks | verbs/knowledge/tests.rs | mlc-6 | test | `cargo test … --bin bee -- evidence_ref_check_` |
+| mlc-7 | Name the closed loop in the doctrine | packages/bee/AGENTS.block.md, packages/bee/LEADER.md, skills/bee-capturing/references/promotion.md, expertise/static-rules.md, packages/bee-rs/crates/bee/tests/instruction_laws.rs | mlc-6t | docs | `cargo test … --test instruction_laws` |
 | mlc-7c | Check the doctrine edit | docs/history/mistake-loop-closed/reports/mlc-7c.md | mlc-7 | review | `cargo test … --test pointer_integrity` |
 | mlc-8 | Sync the concepts and write the delivery note | docs/knowledge/areas/human-mailbox/overview.md, docs/knowledge/areas/feedback-digest/ranking-and-self-improvement.md, docs/knowledge/areas/okf-profile/conformance-check.md, docs/knowledge/areas/hook-runtime/token-economy-of-injected-context.md, docs/history/mistake-loop-closed/delivery.md, docs/briefs/mistake-loop-closed.md | mlc-7c | writer | `/mnt/data/Projects/goglbe/beehive/.bee/bin/bee knowledge check` |
 
@@ -170,6 +175,7 @@ SMALLER PATH: doctrine only (tell agents to close rows with proof) keeps the fix
     "deps": [],
     "decisions": [
       "70b7fc87-8a4f-44bc-955f-b997cd5c42a8",
+      "ab99fc6e-0606-420b-8ab1-97ba0ef92ac4",
       "3f2e2a7c-0ac8-4efa-8d03-e742da2db902"
     ],
     "files": [
@@ -189,7 +195,7 @@ SMALLER PATH: doctrine only (tell agents to close rows with proof) keeps the fix
     "affects_specs": [
       "docs/knowledge/areas/feedback-digest/"
     ],
-    "action": "Implement CONTEXT.md D1. Create verbs/fix_at.rs and register it in verbs/mod.rs. Types: enum GroupState { Open, Closed, Recurred }; struct Group { layer: String, title: String (the newest finding's raw title), key: String (normalize_title), state: GroupState, findings: usize, oldest_open_ts: Option<String>, newest_finding_ts: String, latest_close: Option<serde_json::Value>, features: Vec<String> }; struct Ledger { groups: Vec<Group> } with a pure fn Ledger::from_rows(rows: &[serde_json::Value]) -> Ledger and an IO fn Ledger::load(root: &Path) -> Option<Ledger> that reads .bee/backlog.jsonl the way feedback.rs fix_at_load does. Layers: fix-at:check, fix-at:architecture, fix-at:rejudge. A group is Closed when its latest backlog-closed row (same normalize_title, any layer field or the same layer) is newer than its newest finding; Recurred when a finding is newer than a close; Open when it never closed. oldest_open_ts is the oldest finding ts in the current epoch (after the latest close). Add Ledger::current_epoch_feature(layer, title) -> Option<String> with the exact semantics of backlog.rs current_epoch_finding_feature, and make that backlog.rs function a thin caller of it (or replace its call in close.rs). Rebuild feedback.rs fix_at_load on Ledger::from_rows, keeping every prose_load key and value identical (fix_at_check_open, fix_at_architecture_open, fix_at_closed count groups as today; Recurred counts as open). Existing tests in feedback.rs, backlog.rs and close.rs must stay green unchanged. Write no code comment of any kind. Never edit .bee/*.json or .bee/*.jsonl by hand. Run only the cell's verify filter, never the full suite. Allowed commands: cargo build, cargo test with a filter, cargo clippy, /mnt/data/Projects/goglbe/beehive/.bee/bin/bee dev regen, /mnt/data/Projects/goglbe/beehive/.bee/bin/bee knowledge check. Quote the count of tests the filter matched in the cap report.",
+    "action": "Implement CONTEXT.md D1. Create verbs/fix_at.rs and register it in verbs/mod.rs. Types: enum GroupState { Open, Closed, Recurred }; struct Group { layer: String, title: String (the newest finding's raw title), key: String (normalize_title), state: GroupState, findings: usize, oldest_open_ts: Option<String>, newest_finding_ts: String, latest_close: Option<serde_json::Value>, features: Vec<String> }; struct Ledger { groups: Vec<Group> } with a pure fn Ledger::from_rows(rows: &[serde_json::Value]) -> Ledger and an IO fn Ledger::load(root: &Path) -> Option<Ledger> that reads .bee/backlog.jsonl the way feedback.rs fix_at_load does. Layers: fix-at:check, fix-at:architecture, fix-at:rejudge. Rules per D12: a close is a row whose type or kind is backlog-closed; a close carrying a fix-at layer matches only its own layer, a close with no fix-at layer matches every layer by normalize_title; a finding is an is_finding_row row on a fix-at layer. A group is Closed when its latest matching close is newer than its newest finding; Recurred when a finding is newer than a close; Open when it never closed. oldest_open_ts is the oldest finding ts in the current epoch (after the latest close). Add Ledger::current_epoch_feature(layer, title) -> Option<String> with the exact semantics of backlog.rs current_epoch_finding_feature, and make that backlog.rs function a thin caller of it (or replace its call in close.rs). Rebuild feedback.rs fix_at_load on Ledger::from_rows, keeping every prose_load key and value identical (fix_at_check_open, fix_at_architecture_open, fix_at_closed count groups as today; Recurred counts as open). Existing tests in feedback.rs, backlog.rs and close.rs must stay green unchanged; if one goes red because of the D12 layer rule, stop and report it. Also run cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- feedback and -- backlog and quote both counts. Write no code comment of any kind. Never edit .bee/*.json or .bee/*.jsonl by hand. Run only the cell's verify filter, never the full suite. Allowed commands: cargo build, cargo test with a filter, cargo clippy, /mnt/data/Projects/goglbe/beehive/.bee/bin/bee dev regen, /mnt/data/Projects/goglbe/beehive/.bee/bin/bee knowledge check. Quote the count of tests the filter matched in the cap report.",
     "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- fix_at",
     "must_haves": {
       "truths": [
@@ -254,11 +260,11 @@ SMALLER PATH: doctrine only (tell agents to close rows with proof) keeps the fix
     ],
     "affects_skills": [],
     "affects_specs": [],
-    "action": "Add tests in verbs/fix_at.rs (a #[cfg(test)] mod) whose names contain fix_at_ledger, per contract fix-at-ledger: (1) two findings with whitespace-variant titles fold into one Open group with findings 2 and the older ts as oldest_open_ts; (2) a backlog-closed row newer than the findings makes the group Closed and carries that row as latest_close; (3) a finding newer than the close makes it Recurred and oldest_open_ts is the post-close finding; (4) check and architecture with one title are two groups; (5) rows of other layers and non-finding types are ignored; (6) current_epoch_feature returns the owning feature only in the current epoch. Do not change non-test code; if a test exposes a bug, stop and report it. Write no code comment of any kind. Never edit .bee/*.json or .bee/*.jsonl by hand. Run only the cell's verify filter, never the full suite. Allowed commands: cargo build, cargo test with a filter, cargo clippy, /mnt/data/Projects/goglbe/beehive/.bee/bin/bee dev regen, /mnt/data/Projects/goglbe/beehive/.bee/bin/bee knowledge check. Quote the count of tests the filter matched in the cap report.",
+    "action": "Add tests in verbs/fix_at.rs (a #[cfg(test)] mod) whose names contain fix_at_ledger, per contract fix-at-ledger: (1) two findings with whitespace-variant titles fold into one Open group with findings 2 and the older ts as oldest_open_ts; (2) a backlog-closed row newer than the findings makes the group Closed and carries that row as latest_close; (3) a finding newer than the close makes it Recurred and oldest_open_ts is the post-close finding; (4) check and architecture with one title are two groups; (5) rows of other layers and non-finding types are ignored; (6) current_epoch_feature returns the owning feature only in the current epoch; (7) a row with kind backlog-closed and no type closes like a type row; (8) a close carrying fix-at:check closes the check group and leaves the architecture group of the same title Open, while a layerless close closes both; (9) a non-finding row type on a fix-at layer is not counted. Do not change non-test code; if a test exposes a bug, stop and report it. Before capping, prove each new test can fail: break the guarded line of non-test code locally, run the filter, quote the red output, restore the line exactly (git diff of non-test files must be empty), then run the filter green and quote the count. Write no code comment of any kind. Never edit .bee/*.json or .bee/*.jsonl by hand. Run only the cell's verify filter, never the full suite. Allowed commands: cargo build, cargo test with a filter, cargo clippy, /mnt/data/Projects/goglbe/beehive/.bee/bin/bee dev regen, /mnt/data/Projects/goglbe/beehive/.bee/bin/bee knowledge check. Quote the count of tests the filter matched in the cap report.",
     "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- fix_at_ledger",
     "must_haves": {
       "truths": [
-        "six fix_at_ledger tests pass",
+        "nine fix_at_ledger tests pass and each was shown red once",
         "no non-test code changed"
       ],
       "artifacts": [
@@ -317,7 +323,7 @@ SMALLER PATH: doctrine only (tell agents to close rows with proof) keeps the fix
     "affects_specs": [
       "docs/knowledge/areas/human-mailbox/"
     ],
-    "action": "Implement CONTEXT.md D2. In verbs/mailbox.rs add cells: Vec<String> to struct Entry, read like files in from_value (absent reads as empty), written in to_value only when non-empty (the same additive rule source uses). bee mailbox reflect gains --cell taking a comma-separated list (add cell to the parse_shape list at the reflect arm); both the reflection and the --no-mistakes branch store it. In verbs/drivers/close.rs replace closing_run_answered_mistakes with a function returning the set of cell ids named by mistakes-answer entries of the closing run; the door is blocking when any debt id is not in that set; the detail and the refusal name the unanswered ids and print two ready commands: bee mailbox reflect --cell <ids> --wrong <...> --better <...> --fix-at <layer>, and bee mailbox reflect --no-mistakes --cell <ids>. Update the mailbox.reflect entry in generated/registry_payload.json (parameters and description) for --cell. Update the existing test the_refusals_own_remedy_clears_the_mistakes_door to pass --cell; that test edit is required by the change. Write no code comment of any kind. Never edit .bee/*.json or .bee/*.jsonl by hand. Run only the cell's verify filter, never the full suite. Allowed commands: cargo build, cargo test with a filter, cargo clippy, /mnt/data/Projects/goglbe/beehive/.bee/bin/bee dev regen, /mnt/data/Projects/goglbe/beehive/.bee/bin/bee knowledge check. Quote the count of tests the filter matched in the cap report.",
+    "action": "Implement CONTEXT.md D2. In verbs/mailbox.rs add cells: Vec<String> to struct Entry, read like files in from_value (absent reads as empty), written in to_value only when non-empty (the same additive rule source uses). bee mailbox reflect gains --cell taking a comma-separated list (add cell to the parse_shape list at the reflect arm); both the reflection and the --no-mistakes branch store it. In verbs/drivers/close.rs replace closing_run_answered_mistakes with a function returning the set of cell ids named by mistakes-answer entries of the closing run; the door is blocking when any debt id is not in that set; the Door command field stays a static string, so the detail and the refusal text carry the unanswered ids and two ready commands with --cell LAST: bee mailbox reflect --wrong <...> --better <...> --fix-at <layer> --cell <ids>, and bee mailbox reflect --no-mistakes --cell <ids>. Update the mailbox.reflect entry in generated/registry_payload.json (parameters and description) for --cell. Update the existing tests the_refusals_own_remedy_clears_the_mistakes_door (pass --cell) and close_refuses_a_feature_whose_capped_cell_never_answered_about_mistakes (only if its text assertion breaks); those two test edits are required by the change. Write no code comment of any kind. Never edit .bee/*.json or .bee/*.jsonl by hand. Run only the cell's verify filter, never the full suite. Allowed commands: cargo build, cargo test with a filter, cargo clippy, /mnt/data/Projects/goglbe/beehive/.bee/bin/bee dev regen, /mnt/data/Projects/goglbe/beehive/.bee/bin/bee knowledge check. Quote the count of tests the filter matched in the cap report.",
     "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- mistakes",
     "must_haves": {
       "truths": [
@@ -385,11 +391,11 @@ SMALLER PATH: doctrine only (tell agents to close rows with proof) keeps the fix
     ],
     "affects_skills": [],
     "affects_specs": [],
-    "action": "Add tests whose names contain mistakes_door, per contract mistakes-door-names-cells, in the close.rs and mailbox.rs test modules, reusing init_bee_repo and unanswered_cell: (1) two unanswered cells, a closing-run reflection with --cell naming one: close still refuses and names the other; (2) naming both clears the door; (3) a --no-mistakes answer with no --cell clears nothing; (4) the refusal text contains both printed commands with the ids; (5) an entry round-trips with cells and without (no cells key written when empty). Do not change non-test code; report any bug. Write no code comment of any kind. Never edit .bee/*.json or .bee/*.jsonl by hand. Run only the cell's verify filter, never the full suite. Allowed commands: cargo build, cargo test with a filter, cargo clippy, /mnt/data/Projects/goglbe/beehive/.bee/bin/bee dev regen, /mnt/data/Projects/goglbe/beehive/.bee/bin/bee knowledge check. Quote the count of tests the filter matched in the cap report.",
-    "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- mistakes_door",
+    "action": "Add tests whose names start with mistakes_door_, per contract mistakes-door-names-cells, in the close.rs and mailbox.rs test modules, reusing init_bee_repo and unanswered_cell: (1) two unanswered cells, a closing-run reflection with --cell naming one: close still refuses and names the other; (2) naming both clears the door; (3) a --no-mistakes answer with no --cell clears nothing; (4) the refusal text contains both printed commands with the ids; (5) an entry round-trips with cells and without (no cells key written when empty); (6) a reflection with no --cell is in the run's entries and in the composed letter, and the door still blocks. The filter mistakes_door_ matches zero tests before this cell. Do not change non-test code; report any bug. Before capping, prove each new test can fail: break the guarded line of non-test code locally, run the filter, quote the red output, restore the line exactly (git diff of non-test files must be empty), then run the filter green and quote the count. Write no code comment of any kind. Never edit .bee/*.json or .bee/*.jsonl by hand. Run only the cell's verify filter, never the full suite. Allowed commands: cargo build, cargo test with a filter, cargo clippy, /mnt/data/Projects/goglbe/beehive/.bee/bin/bee dev regen, /mnt/data/Projects/goglbe/beehive/.bee/bin/bee knowledge check. Quote the count of tests the filter matched in the cap report.",
+    "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- mistakes_door_",
     "must_haves": {
       "truths": [
-        "five mistakes_door tests pass",
+        "six mistakes_door_ tests pass and each was shown red once",
         "no non-test code changed"
       ],
       "artifacts": [
@@ -434,6 +440,7 @@ SMALLER PATH: doctrine only (tell agents to close rows with proof) keeps the fix
       "53a86f8e-28c8-4b7f-adea-fca7fc73d868",
       "1f70ed97-20e1-4929-bb0b-913eb4b219a4",
       "5c3b98fc-d7b5-48c6-8c90-eb837fd09cb7",
+      "ab99fc6e-0606-420b-8ab1-97ba0ef92ac4",
       "9fc55629-04c0-4e36-92ce-45b7fc63ab6c"
     ],
     "files": [
@@ -452,7 +459,7 @@ SMALLER PATH: doctrine only (tell agents to close rows with proof) keeps the fix
     "affects_specs": [
       "docs/knowledge/areas/human-mailbox/"
     ],
-    "action": "Implement CONTEXT.md D3, D4, D5. In verbs/fix_at.rs add a layer-free key fn (first four words of the wrong text after the same normalization reflection_key uses in mailbox_digest.rs; None under four words) and fn alias_title(ledger, layer, title) -> Filing { New, Skip, UnderClosed(String) }: a four-word key match on an Open or Recurred group of the same layer is Skip, on a Closed group is UnderClosed(that group's title). Make close.rs file_fix_at_rows use it: UnderClosed files under the closed group's exact title with the original wording kept in the detail. Add fn sweep_unfiled(root: &Path) -> SweepReport { filed, rejudged } in fix_at.rs: read every run (mailbox::runs_with_entries, read_entries); for each check or architecture reflection apply D3 (feature unattributed, file only when no current-epoch finding and the entry is newer than the group's latest close, through alias_title); group doctrine and none reflections by the layer-free key and file one fix-at:rejudge finding (title = the earliest wording, detail names the runs) when two or more distinct runs share it and no current-epoch fix-at row of any layer matches the key. Rows go through backlog::backlog_finding_row with severity P3 and are appended with fsutil append_jsonl; every error is fail-open. Call sweep_unfiled from verbs/work.rs right after compose_digests_for_finished_periods at the session takeup site. The sweep must be idempotent: a second run files nothing. Write no code comment of any kind. Never edit .bee/*.json or .bee/*.jsonl by hand. Run only the cell's verify filter, never the full suite. Allowed commands: cargo build, cargo test with a filter, cargo clippy, /mnt/data/Projects/goglbe/beehive/.bee/bin/bee dev regen, /mnt/data/Projects/goglbe/beehive/.bee/bin/bee knowledge check. Quote the count of tests the filter matched in the cap report.",
+    "action": "Implement CONTEXT.md D3, D4, D5 with the D12 refinements. In verbs/fix_at.rs add a layer-free key fn (first four words after mailbox_digest.rs normalize_shape, used on BOTH the mistake side and the group-title side; None under four words) and fn alias_title(ledger, layer, title) -> Filing { New, Skip, UnderClosed(String) }: a four-word key match on an Open or Recurred group of the same layer is Skip, on a Closed group is UnderClosed(that group's title). Make close.rs file_fix_at_rows use it: UnderClosed files under the closed group's exact title with the original wording kept in the detail. Add fn sweep_unfiled(root: &Path) -> SweepReport { filed, rejudged } in fix_at.rs: read every run (mailbox::runs_with_entries, read_entries); for each check or architecture reflection apply D3 (feature unattributed, file only when no current-epoch finding and the entry is newer than the group's latest close, through alias_title); group doctrine and none reflections by the layer-free key and file one fix-at:rejudge finding (title = the earliest wording, detail names the runs) when two or more distinct runs share it, counting only runs whose matching entry is newer than the latest close of any group with that key (so a --kept close holds), and no current-epoch fix-at row of any layer matches the key. Titles are built exactly as close.rs builds them (truncate_chars_head to BACKLOG_MAX_TITLE) so a mistake close already filed is never refiled. The sweep reads entries and reads and writes the backlog through the control root (hooks::session_init::control_root_for), never a worktree root. Rows go through backlog::backlog_finding_row with severity P3 and are appended with fsutil append_jsonl; every error is fail-open. Call sweep_unfiled from verbs/work.rs right after compose_digests_for_finished_periods at the session takeup site. The sweep must be idempotent: a second run files nothing. Write no code comment of any kind. Never edit .bee/*.json or .bee/*.jsonl by hand. Run only the cell's verify filter, never the full suite. Allowed commands: cargo build, cargo test with a filter, cargo clippy, /mnt/data/Projects/goglbe/beehive/.bee/bin/bee dev regen, /mnt/data/Projects/goglbe/beehive/.bee/bin/bee knowledge check. Quote the count of tests the filter matched in the cap report.",
     "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- fix_at",
     "must_haves": {
       "truths": [
@@ -520,11 +527,11 @@ SMALLER PATH: doctrine only (tell agents to close rows with proof) keeps the fix
     ],
     "affects_skills": [],
     "affects_specs": [],
-    "action": "Add tests whose names contain fix_at_intake, per contract fix-at-intake: (1) a check reflection in a run with no close is filed once as unattributed and a second sweep files nothing; (2) a check reflection older than the group's latest close is not filed; (3) a doctrine reflection key seen in two runs files one fix-at:rejudge row, seen in one run files none; (4) at close, a reworded mistake whose four-word key matches a Closed group files under the closed title and Ledger reports Recurred; (5) a match on an Open group counts as skipped. Build mailbox entries through the mailbox API, not by hand. Do not change non-test code; report any bug. Write no code comment of any kind. Never edit .bee/*.json or .bee/*.jsonl by hand. Run only the cell's verify filter, never the full suite. Allowed commands: cargo build, cargo test with a filter, cargo clippy, /mnt/data/Projects/goglbe/beehive/.bee/bin/bee dev regen, /mnt/data/Projects/goglbe/beehive/.bee/bin/bee knowledge check. Quote the count of tests the filter matched in the cap report.",
+    "action": "Add tests whose names contain fix_at_intake, per contract fix-at-intake: (1) a check reflection in a run with no close is filed once as unattributed and a second sweep files nothing; (2) a check reflection older than the group's latest close is not filed; (3) a doctrine reflection key seen in two runs files one fix-at:rejudge row, seen in one run files none; (4) at close, a reworded mistake whose four-word key matches a Closed group files under the closed title and Ledger reports Recurred; (5) a match on an Open group counts as skipped; (6) a rejudge group closed with a kept close row survives a second sweep with nothing filed; (7) an open fix-at:check finding with the same four-word key suppresses the rejudge row; (8) a mistake whose wording is longer than BACKLOG_MAX_TITLE, filed at close, is not refiled by the sweep; (9) the sweep files a reworded mistake under a Closed group's title and the detail keeps the original wording. Build mailbox entries through the mailbox API, not by hand. Do not change non-test code; report any bug. Before capping, prove each new test can fail: break the guarded line of non-test code locally, run the filter, quote the red output, restore the line exactly (git diff of non-test files must be empty), then run the filter green and quote the count. Write no code comment of any kind. Never edit .bee/*.json or .bee/*.jsonl by hand. Run only the cell's verify filter, never the full suite. Allowed commands: cargo build, cargo test with a filter, cargo clippy, /mnt/data/Projects/goglbe/beehive/.bee/bin/bee dev regen, /mnt/data/Projects/goglbe/beehive/.bee/bin/bee knowledge check. Quote the count of tests the filter matched in the cap report.",
     "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- fix_at_intake",
     "must_haves": {
       "truths": [
-        "five fix_at_intake tests pass",
+        "nine fix_at_intake tests pass and each was shown red once",
         "no non-test code changed"
       ],
       "artifacts": [
@@ -567,6 +574,7 @@ SMALLER PATH: doctrine only (tell agents to close rows with proof) keeps the fix
     ],
     "decisions": [
       "b62e676b-5d97-4f2d-ab0e-94cafcdcb0c7",
+      "ab99fc6e-0606-420b-8ab1-97ba0ef92ac4",
       "ffbc76fb-c745-4bf5-b1b3-8d2720d7c174"
     ],
     "files": [
@@ -586,7 +594,7 @@ SMALLER PATH: doctrine only (tell agents to close rows with proof) keeps the fix
     "affects_specs": [
       "docs/knowledge/areas/hook-runtime/"
     ],
-    "action": "Implement CONTEXT.md D6. In verbs/fix_at.rs add struct Debt { check_open, architecture_open, rejudge_open, recurred, oldest_open_days: Option<u64>, stale_open: usize (open groups older than 30 days) } and fn debt(root, now) -> Option<Debt> from the Ledger. Preamble (budget.rs, after the capture queue block): when any group is open, push '### Fix-at debt: N open (check X, architecture Y, rejudge Z; R recurred), oldest D days' and one bullet '- next: bee backlog fix-at next, then bee backlog fix-at promote'; register the block in DROPPABLE so it drops under budget pressure. Orient: one report-only blocker in the same voice as the promote-proposal blocker. bee status --json: key fix_at_debt with the Debt fields, null when no store. Doctor: a non-voting advisory (the advisory pattern beside owner_briefs_advisory) that warns when stale_open > 20 and names bee backlog fix-at next. All reads fail open. Write no code comment of any kind. Never edit .bee/*.json or .bee/*.jsonl by hand. Run only the cell's verify filter, never the full suite. Allowed commands: cargo build, cargo test with a filter, cargo clippy, /mnt/data/Projects/goglbe/beehive/.bee/bin/bee dev regen, /mnt/data/Projects/goglbe/beehive/.bee/bin/bee knowledge check. Quote the count of tests the filter matched in the cap report.",
+    "action": "Implement CONTEXT.md D6. In verbs/fix_at.rs add struct Debt { check_open, architecture_open, rejudge_open, recurred, oldest_open_days: Option<u64> (from oldest_open_ts), stale_open_rows: usize (open finding rows whose own ts is more than 30 days before now, per D12) } and fn debt(root, now) -> Option<Debt> from the Ledger, reading through the control root. Preamble (budget.rs, after the capture queue block): when any group is open, push '### Fix-at debt: N open (check X, architecture Y, rejudge Z; R recurred), oldest D days' and one bullet '- next: bee backlog fix-at next, then bee backlog fix-at promote'; make it droppable under budget pressure: add it to DROPPABLE (grow the array) with the fetch target 'bee backlog fix-at next' for the Omitted line, and push its span into blocks like the other droppable blocks. Orient: one report-only blocker in the same voice as the promote-proposal blocker. bee status --json: key fix_at_debt with the Debt fields, null when no store. Doctor: a non-voting advisory (the advisory pattern beside owner_briefs_advisory) that warns when stale_open_rows > 20 and names bee backlog fix-at next. All reads fail open. Write no code comment of any kind. Never edit .bee/*.json or .bee/*.jsonl by hand. Run only the cell's verify filter, never the full suite. Allowed commands: cargo build, cargo test with a filter, cargo clippy, /mnt/data/Projects/goglbe/beehive/.bee/bin/bee dev regen, /mnt/data/Projects/goglbe/beehive/.bee/bin/bee knowledge check. Quote the count of tests the filter matched in the cap report.",
     "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- fix_at",
     "must_haves": {
       "truths": [
@@ -641,19 +649,22 @@ SMALLER PATH: doctrine only (tell agents to close rows with proof) keeps the fix
     "files": [
       "packages/bee-rs/crates/bee/src/verbs/fix_at.rs",
       "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs",
-      "packages/bee-rs/crates/bee/src/doctor.rs"
+      "packages/bee-rs/crates/bee/src/doctor.rs",
+      "packages/bee-rs/crates/bee/src/verbs/status_full/orient.rs",
+      "packages/bee-rs/crates/bee/src/verbs/status_full/build.rs"
     ],
     "read_first": [
       "docs/history/mistake-loop-closed/CONTEXT.md",
-      "packages/bee-rs/crates/bee/src/verbs/fix_at.rs"
+      "packages/bee-rs/crates/bee/src/verbs/fix_at.rs",
+      "packages/bee-rs/crates/bee/src/verbs/status_full/orient.rs"
     ],
     "affects_skills": [],
     "affects_specs": [],
-    "action": "Add tests whose names contain fix_at_debt, per contract fix-at-debt: (1) debt counts per layer, recurred and oldest days from a fixture backlog; (2) the preamble carries the block with those numbers, and no block on an empty store; (3) the doctor advisory warns at 21 stale open groups and not at 20, and overall status is unchanged; (4) status --json fix_at_debt equals fix_at::debt. Do not change non-test code; report any bug. Write no code comment of any kind. Never edit .bee/*.json or .bee/*.jsonl by hand. Run only the cell's verify filter, never the full suite. Allowed commands: cargo build, cargo test with a filter, cargo clippy, /mnt/data/Projects/goglbe/beehive/.bee/bin/bee dev regen, /mnt/data/Projects/goglbe/beehive/.bee/bin/bee knowledge check. Quote the count of tests the filter matched in the cap report.",
+    "action": "Add tests whose names contain fix_at_debt, per contract fix-at-debt (put each in the test module of the file it drives): (1) debt counts per layer, recurred and oldest days from a fixture backlog; (2) the preamble carries the block with those numbers, and no block on an empty store; (3) the doctor advisory warns at 21 stale open rows and not at 20, and overall status is unchanged; (4) status --json fix_at_debt equals fix_at::debt; (5) orient's blockers carry the fix-at line with debt and not without; (6) under a forced small budget the block is dropped and the Omitted line names bee backlog fix-at next; (7) a row 31 days old is stale and a row 29 days old is not. Do not change non-test code; report any bug. Before capping, prove each new test can fail: break the guarded line of non-test code locally, run the filter, quote the red output, restore the line exactly (git diff of non-test files must be empty), then run the filter green and quote the count. Write no code comment of any kind. Never edit .bee/*.json or .bee/*.jsonl by hand. Run only the cell's verify filter, never the full suite. Allowed commands: cargo build, cargo test with a filter, cargo clippy, /mnt/data/Projects/goglbe/beehive/.bee/bin/bee dev regen, /mnt/data/Projects/goglbe/beehive/.bee/bin/bee knowledge check. Quote the count of tests the filter matched in the cap report.",
     "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- fix_at_debt",
     "must_haves": {
       "truths": [
-        "four fix_at_debt tests pass",
+        "seven fix_at_debt tests pass and each was shown red once",
         "no non-test code changed"
       ],
       "artifacts": [
@@ -698,6 +709,8 @@ SMALLER PATH: doctrine only (tell agents to close rows with proof) keeps the fix
       "d4eeb160-64e1-4605-86aa-da3ac8dc9d6c",
       "218f08e2-348a-4c12-8d0b-7e8ebdb3a57d",
       "925dc9db-8ea5-48e3-9b24-f95125ef28ab",
+      "925dc9db-8ea5-48e3-9b24-f95125ef28ab",
+      "ab99fc6e-0606-420b-8ab1-97ba0ef92ac4",
       "a7f3fbd2-ee19-4d08-adb0-c1b4c33d445a"
     ],
     "files": [
@@ -707,7 +720,8 @@ SMALLER PATH: doctrine only (tell agents to close rows with proof) keeps the fix
       "packages/bee-rs/crates/bee/src/router.rs",
       "packages/bee-rs/crates/bee/src/verbs/upkeep_group.rs",
       "packages/bee-rs/crates/bee/src/audit.rs",
-      "packages/bee-rs/crates/bee/src/verbs/work.rs"
+      "packages/bee-rs/crates/bee/src/verbs/work.rs",
+      "packages/bee-rs/crates/bee/src/catalog.rs"
     ],
     "read_first": [
       "docs/history/mistake-loop-closed/CONTEXT.md",
@@ -720,7 +734,7 @@ SMALLER PATH: doctrine only (tell agents to close rows with proof) keeps the fix
     "affects_specs": [
       "docs/knowledge/areas/feedback-digest/"
     ],
-    "action": "Implement CONTEXT.md D7, D8, D9 and the D9 refinement. bee backlog fix-at <close|verify|next|promote> dispatched from backlog.rs try_native (a fix-at arm with a sub-match, like pbi). close: flags layer, title, guard, guard-cmd, red-proof, commit, kept; refuses unknown or already Closed groups, empty guard/guard-cmd/red-proof (kept replaces all three only for fix-at:rejudge); runs guard-cmd with sh -c from the repo root with a 600 s timeout and refuses on non-zero exit, quoting the tail of its output; on success appends a backlog-closed row {ts,type,title,detail,severity P3,layer,feature,guard,guard_cmd,red_proof,commit} via a new row builder (backlog_finding_row keeps its seven keys). bee backlog add refuses --type backlog-closed when --layer starts with fix-at: and names bee backlog fix-at close. verify: re-runs every Closed group's guard_cmd; a non-zero exit appends a finding row (same layer and title, detail 'guard went red: <cmd>') and the verb exits 1; it logs one audit row of kind fix-at-upkeep (add the kind to audit.rs KINDS). next: prints the top group (Recurred, then findings desc, then oldest) with --json. promote: files one proposed PBI titled 'Guard: <title>' through the same writer bee backlog pbi add uses, refusing while a PBI whose title starts with 'Guard: ' is proposed or in flight. Session takeup in work.rs runs promote silently after sweep_unfiled when debt exists. upkeep_group.rs gains Kind::FixAt (name fix-at, audit kind fix-at-upkeep, run line 'bee backlog fix-at verify, then bee backlog fix-at promote', present when the ledger has any group, due when a Closed group exists and no fix-at-upkeep row is younger than 7 days); extend the --kind parse and refusal. Add registry_payload.json entries backlog.fix-at.close, backlog.fix-at.verify, backlog.fix-at.next, backlog.fix-at.promote with schemas and examples, and the router shape strings. Also run cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test registry_contracts and --bin bee -- backlog, and quote both. Write no code comment of any kind. Never edit .bee/*.json or .bee/*.jsonl by hand. Run only the cell's verify filter, never the full suite. Allowed commands: cargo build, cargo test with a filter, cargo clippy, /mnt/data/Projects/goglbe/beehive/.bee/bin/bee dev regen, /mnt/data/Projects/goglbe/beehive/.bee/bin/bee knowledge check. Quote the count of tests the filter matched in the cap report.",
+    "action": "Implement CONTEXT.md D7, D8, D9 and the D9 refinement. bee backlog fix-at <close|verify|next|promote> dispatched from backlog.rs try_native (a fix-at arm with a sub-match, like pbi). close: flags layer, title, guard, guard-cmd, red-proof, commit, kept; refuses unknown or already Closed groups, empty guard/guard-cmd/red-proof (kept replaces all three only for fix-at:rejudge); runs guard-cmd with sh -c from the repo root with a 600 s timeout and refuses on non-zero exit, quoting the tail of its output; on success appends a backlog-closed row {ts,type,title,detail,severity P3,layer,feature,guard,guard_cmd,red_proof,commit} via a new row builder (backlog_finding_row keeps its seven keys). bee backlog add refuses --type backlog-closed when --layer starts with fix-at: and names bee backlog fix-at close. verify: skips a Closed group with no guard_cmd and lists it as unverifiable (a kept rejudge, a legacy hand close); re-runs every other Closed group's guard_cmd; a non-zero exit appends a finding row (same layer and title, detail 'guard went red: <cmd>') and the verb exits 1; it logs one audit row of kind fix-at-upkeep (add the kind to audit.rs KINDS). next: prints the top group (Recurred, then findings desc, then oldest) with --json. promote: files one proposed PBI titled 'Guard: <title>' through the same writer bee backlog pbi add uses, refusing while a PBI whose title starts with 'Guard: ' is proposed or in flight. Session takeup in work.rs runs promote silently after sweep_unfiled when debt exists. Session takeup reads and writes through the control root. upkeep_group.rs gains Kind::FixAt (name fix-at, audit kind fix-at-upkeep, JSON item skill null and invoke 'bee backlog fix-at verify, then bee backlog fix-at promote', text run line the same command pair, present when the ledger has any group, due when a Closed group exists and no fix-at-upkeep row is younger than 7 days); extend the --kind parse and refusal. Add registry_payload.json entries backlog.fix-at.close, backlog.fix-at.verify, backlog.fix-at.next, backlog.fix-at.promote with schemas and examples, and the router shape strings. The new flag names (guard, guard-cmd, red-proof, commit, kept) grow the pinned flag vocabulary: bump PINNED_FLAG_COUNT in catalog.rs by the number of truly new names after the reuse check the test demands, and put the reason in the commit body. Also run cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test registry_contracts, --bin bee -- distinct_flag_vocabulary and --bin bee -- upkeep, and quote each count. Write no code comment of any kind. Never edit .bee/*.json or .bee/*.jsonl by hand. Run only the cell's verify filter, never the full suite. Allowed commands: cargo build, cargo test with a filter, cargo clippy, /mnt/data/Projects/goglbe/beehive/.bee/bin/bee dev regen, /mnt/data/Projects/goglbe/beehive/.bee/bin/bee knowledge check. Quote the count of tests the filter matched in the cap report.",
     "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- backlog",
     "must_haves": {
       "truths": [
@@ -784,20 +798,22 @@ SMALLER PATH: doctrine only (tell agents to close rows with proof) keeps the fix
     ],
     "files": [
       "packages/bee-rs/crates/bee/src/verbs/backlog.rs",
-      "packages/bee-rs/crates/bee/src/verbs/upkeep_group.rs"
+      "packages/bee-rs/crates/bee/src/verbs/upkeep_group.rs",
+      "packages/bee-rs/crates/bee/src/verbs/work.rs"
     ],
     "read_first": [
       "docs/history/mistake-loop-closed/CONTEXT.md",
       "packages/bee-rs/crates/bee/src/verbs/backlog.rs",
-      "packages/bee-rs/crates/bee/src/verbs/upkeep_group.rs"
+      "packages/bee-rs/crates/bee/src/verbs/upkeep_group.rs",
+      "packages/bee-rs/crates/bee/src/verbs/work.rs"
     ],
     "affects_skills": [],
     "affects_specs": [],
-    "action": "Add tests whose names contain fix_at_verbs, per contract fix-at-verbs: (1) close refuses with no --guard-cmd, with an empty --red-proof, and when the guard-cmd is 'false'; (2) close with guard-cmd 'true' appends one backlog-closed row carrying guard, guard_cmd, red_proof and the group turns Closed; (3) rejudge closes with --kept and no command; (4) bee backlog add --type backlog-closed --layer fix-at:check refuses and names fix-at close; (5) verify with a Closed group whose guard_cmd is 'false' appends a finding, exits 1 and the group is Recurred; (6) next orders a Recurred group first; (7) promote files one Guard PBI and refuses a second while it is proposed; (8) upkeep due --kind fix-at is due with a Closed group and no audit row. Do not change non-test code; report any bug. Write no code comment of any kind. Never edit .bee/*.json or .bee/*.jsonl by hand. Run only the cell's verify filter, never the full suite. Allowed commands: cargo build, cargo test with a filter, cargo clippy, /mnt/data/Projects/goglbe/beehive/.bee/bin/bee dev regen, /mnt/data/Projects/goglbe/beehive/.bee/bin/bee knowledge check. Quote the count of tests the filter matched in the cap report.",
+    "action": "Add tests whose names contain fix_at_verbs, per contract fix-at-verbs: (1) close refuses with an empty --guard, no --guard-cmd, an empty --red-proof, a guard-cmd 'false', an unknown group, an already Closed group, and --kept on a non-rejudge layer; (2) close with guard-cmd 'test -f .bee/backlog.jsonl' (proving it runs from the repo root) appends one backlog-closed row carrying guard, guard_cmd, red_proof and commit, and the group turns Closed; a Recurred group can be closed; (3) rejudge closes with --kept and no command; (4) bee backlog add --type backlog-closed --layer fix-at:check refuses and names fix-at close; (5) verify with a Closed group whose guard_cmd is 'false' appends a finding, exits 1, the group is Recurred, and one fix-at-upkeep audit row is written; a kept rejudge group is listed unverifiable and stays Closed; (6) next orders Recurred first, then more findings, then older; (7) promote files one Guard PBI, refuses a second while it is proposed and while it is in flight, and files nothing with no debt; (8) upkeep due --kind fix-at is due with a Closed group and no audit row, and not due after verify logged one; (9) session takeup with open debt files exactly one Guard PBI, a second takeup files none, and no debt files none. Do not change non-test code; report any bug. Before capping, prove each new test can fail: break the guarded line of non-test code locally, run the filter, quote the red output, restore the line exactly (git diff of non-test files must be empty), then run the filter green and quote the count. Write no code comment of any kind. Never edit .bee/*.json or .bee/*.jsonl by hand. Run only the cell's verify filter, never the full suite. Allowed commands: cargo build, cargo test with a filter, cargo clippy, /mnt/data/Projects/goglbe/beehive/.bee/bin/bee dev regen, /mnt/data/Projects/goglbe/beehive/.bee/bin/bee knowledge check. Quote the count of tests the filter matched in the cap report.",
     "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- fix_at_verbs",
     "must_haves": {
       "truths": [
-        "eight fix_at_verbs tests pass",
+        "nine fix_at_verbs tests pass and each was shown red once",
         "no non-test code changed"
       ],
       "artifacts": [
@@ -914,11 +930,11 @@ SMALLER PATH: doctrine only (tell agents to close rows with proof) keeps the fix
     ],
     "affects_skills": [],
     "affects_specs": [],
-    "action": "Add tests whose names contain evidence_ref, per contract evidence-ref-check, beside invalid_evidence_state_warns_by_file_and_value_never_errors using bundle, Cx and put: (1) a missing packages/ path warns evidence_ref_missing_path; (2) a crate-relative verbs/... path that exists under the src base is silent; (3) a value with two paths separated by ';' warns only for the missing one; (4) wired with no evidence_ref warns evidence_without_ref; (5) prose with no path is silent; (6) --strict fails on the warning. Do not change non-test code; report any bug. Write no code comment of any kind. Never edit .bee/*.json or .bee/*.jsonl by hand. Run only the cell's verify filter, never the full suite. Allowed commands: cargo build, cargo test with a filter, cargo clippy, /mnt/data/Projects/goglbe/beehive/.bee/bin/bee dev regen, /mnt/data/Projects/goglbe/beehive/.bee/bin/bee knowledge check. Quote the count of tests the filter matched in the cap report.",
-    "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- evidence_ref",
+    "action": "Add tests whose names start with evidence_ref_check_, per contract evidence-ref-check, beside invalid_evidence_state_warns_by_file_and_value_never_errors using bundle, Cx and put: (1) a missing packages/ path warns evidence_ref_missing_path; (2) a crate-relative verbs/... path that exists under the src base is silent; (3) a path that exists under packages/bee-rs/crates/bee (the third base) is silent; (4) a value with two paths separated by ';' warns only for the missing one; (5) wired with no evidence_ref warns evidence_without_ref, and so does exercised; (6) prose with no path is silent; (7) --strict fails on the warning. The filter evidence_ref_check_ matches zero tests before this cell. Do not change non-test code; report any bug. Before capping, prove each new test can fail: break the guarded line of non-test code locally, run the filter, quote the red output, restore the line exactly (git diff of non-test files must be empty), then run the filter green and quote the count. Write no code comment of any kind. Never edit .bee/*.json or .bee/*.jsonl by hand. Run only the cell's verify filter, never the full suite. Allowed commands: cargo build, cargo test with a filter, cargo clippy, /mnt/data/Projects/goglbe/beehive/.bee/bin/bee dev regen, /mnt/data/Projects/goglbe/beehive/.bee/bin/bee knowledge check. Quote the count of tests the filter matched in the cap report.",
+    "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- evidence_ref_check_",
     "must_haves": {
       "truths": [
-        "six evidence_ref tests pass",
+        "seven evidence_ref_check_ tests pass and each was shown red once",
         "no non-test code changed"
       ],
       "artifacts": [
@@ -970,7 +986,7 @@ SMALLER PATH: doctrine only (tell agents to close rows with proof) keeps the fix
       "packages/bee/LEADER.md",
       "skills/bee-capturing/references/promotion.md",
       "expertise/static-rules.md",
-      "packages/bee/prompts/worker-cell.md"
+      "packages/bee-rs/crates/bee/tests/instruction_laws.rs"
     ],
     "read_first": [
       "docs/history/mistake-loop-closed/CONTEXT.md",
@@ -981,17 +997,22 @@ SMALLER PATH: doctrine only (tell agents to close rows with proof) keeps the fix
     ],
     "affects_skills": [],
     "affects_specs": [],
-    "action": "Implement CONTEXT.md D11. In packages/bee/LEADER.md and packages/bee/AGENTS.block.md, the mistake bullet: a closing session answers for named cells with bee mailbox reflect --cell <ids>, and the door clears only the cells named. In skills/bee-capturing/references/promotion.md and expertise/static-rules.md ('Show it red, then green'): replace the hand-written bee backlog add --type backlog-closed line with bee backlog fix-at close --layer <l> --title <t> --guard <what> --guard-cmd <command> --red-proof <red output> --commit <sha>, and name bee backlog fix-at next and promote as the way to pick the next group. Keep every other line byte for byte. Then run /mnt/data/Projects/goglbe/beehive/.bee/bin/bee dev regen once from the worktree root; restore any hub-served skill tree it re-renders under .claude/skills with git restore and git clean -fd .claude/skills before committing. Proof: cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test instruction_laws, --test agents_block_render_parity and --test pointer_integrity. Write no code comment of any kind. Never edit .bee/*.json or .bee/*.jsonl by hand. Run only the cell's verify filter, never the full suite. Allowed commands: cargo build, cargo test with a filter, cargo clippy, /mnt/data/Projects/goglbe/beehive/.bee/bin/bee dev regen, /mnt/data/Projects/goglbe/beehive/.bee/bin/bee knowledge check. Quote the count of tests the filter matched in the cap report.",
+    "action": "Implement CONTEXT.md D11. In packages/bee/LEADER.md, extend the existing mistake bullet: a closing session answers for named cells with bee mailbox reflect --cell <ids>, and the door clears only the cells named. In packages/bee/AGENTS.block.md ADD one short bullet saying the same (no mistake bullet exists there today). In expertise/static-rules.md ('Show it red, then green'): replace the hand-written bee backlog add --type backlog-closed line with bee backlog fix-at close --layer <l> --title <t> --guard <what> --guard-cmd <command> --red-proof <red output> --commit <sha>. In skills/bee-capturing/references/promotion.md name bee backlog fix-at close with its proof flags where the tree points at closing a row, and name bee backlog fix-at next and promote as the way to pick the next group. In tests/instruction_laws.rs (fix_at_close_missing and its law near line 1414) change the needles from --type backlog-closed to bee backlog fix-at close, --guard-cmd and --red-proof, and add one needle for reflect --cell in packages/bee/AGENTS.block.md, so the law turns red when the doctrine is missing. Keep every other line byte for byte. Then run /mnt/data/Projects/goglbe/beehive/.bee/bin/bee dev regen once from the worktree root; restore any hub-served skill tree it re-renders under .claude/skills with git restore and git clean -fd .claude/skills before committing. Proof: cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test instruction_laws, --test agents_block_render_parity and --test pointer_integrity. Write no code comment of any kind. Never edit .bee/*.json or .bee/*.jsonl by hand. Run only the cell's verify filter, never the full suite. Allowed commands: cargo build, cargo test with a filter, cargo clippy, /mnt/data/Projects/goglbe/beehive/.bee/bin/bee dev regen, /mnt/data/Projects/goglbe/beehive/.bee/bin/bee knowledge check. Quote the count of tests the filter matched in the cap report.",
     "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test instruction_laws",
     "must_haves": {
       "truths": [
         "the doctrine names reflect --cell and bee backlog fix-at close with its proof flags",
-        "no doctrine line still tells an agent to append backlog-closed by hand on a fix-at layer"
+        "no doctrine line still tells an agent to append backlog-closed by hand on a fix-at layer",
+        "the instruction law needles name fix-at close, --guard-cmd, --red-proof and reflect --cell"
       ],
       "artifacts": [
         {
           "path": "skills/bee-capturing/references/promotion.md",
           "substantive": "the fix-at close step"
+        },
+        {
+          "path": "packages/bee-rs/crates/bee/tests/instruction_laws.rs",
+          "substantive": "the updated law needles"
         }
       ],
       "key_links": [
@@ -1042,7 +1063,7 @@ SMALLER PATH: doctrine only (tell agents to close rows with proof) keeps the fix
     ],
     "affects_skills": [],
     "affects_specs": [],
-    "action": "Checker for docs cell mlc-7. Edit no file except docs/history/mistake-loop-closed/reports/mlc-7c.md. Run cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pointer_integrity, --test rule_index_parity, --test agents_block_render_parity, --test instruction_laws, and /mnt/data/Projects/goglbe/beehive/.bee/bin/bee dev release-manifest --check; record each command with its result in the report; return BLOCKED with the output on any red. Write no code comment of any kind. Never edit .bee/*.json or .bee/*.jsonl by hand. Run only the cell's verify filter, never the full suite. Allowed commands: cargo build, cargo test with a filter, cargo clippy, /mnt/data/Projects/goglbe/beehive/.bee/bin/bee dev regen, /mnt/data/Projects/goglbe/beehive/.bee/bin/bee knowledge check. Quote the count of tests the filter matched in the cap report.",
+    "action": "Checker for docs cell mlc-7. Edit no file except docs/history/mistake-loop-closed/reports/mlc-7c.md. Run cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pointer_integrity, --test rule_index_parity, --test agents_block_render_parity, --test instruction_laws, and /mnt/data/Projects/goglbe/beehive/.bee/bin/bee dev release-manifest --check; then the content checks: rg -n 'reflect --cell' packages/bee/LEADER.md packages/bee/AGENTS.block.md AGENTS.md (each file must match), rg -n 'fix-at close' expertise/static-rules.md skills/bee-capturing/references/promotion.md (both must match), rg -n 'type backlog-closed' expertise/static-rules.md (must match nothing). Record each command with its result in the report; return BLOCKED with the output on any red. Write no code comment of any kind. Never edit .bee/*.json or .bee/*.jsonl by hand. Run only the cell's verify filter, never the full suite. Allowed commands: cargo build, cargo test with a filter, cargo clippy, /mnt/data/Projects/goglbe/beehive/.bee/bin/bee dev regen, /mnt/data/Projects/goglbe/beehive/.bee/bin/bee knowledge check. Quote the count of tests the filter matched in the cap report.",
     "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pointer_integrity",
     "must_haves": {
       "truths": [
