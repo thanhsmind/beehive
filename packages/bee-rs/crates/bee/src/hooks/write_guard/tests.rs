@@ -2096,6 +2096,43 @@ use std::process::ExitCode;
         assert!(push.stderr.contains("never exempted"), "{}", push.stderr);
     }
 
+    fn bash_as(cmd: &str, session: &str) -> Value {
+        json!({ "tool_name": "Bash", "tool_input": { "command": cmd }, "session_id": session })
+    }
+
+    #[test]
+    fn worker_outward_lets_the_grant_holder_without_a_claim_start_an_agent() {
+        let wtf = build_worktree_first("swarming", "standard", false);
+        for cmd in ["pi -p hi", "claude -p hi", "codex exec hi"] {
+            let e = expect_done(bash_as(cmd, "leader"), &wtf.wt_root);
+            assert_eq!(e.code, 0, "{cmd}: {}", e.stderr);
+        }
+        let push = expect_done(bash_as("git push origin main", "leader"), &wtf.wt_root);
+        assert_eq!(push.code, 2, "{}", push.stderr);
+        let gh = expect_done(bash_as("gh pr create --fill", "leader"), &wtf.wt_root);
+        assert_eq!(gh.code, 2, "{}", gh.stderr);
+    }
+
+    #[test]
+    fn worker_outward_still_refuses_a_grant_holder_with_a_claimed_cell() {
+        let wtf = build_worktree_first("swarming", "standard", false);
+        write_claim(&wtf.wt_root, "cell-1", "worker");
+        write_cell_record(&wtf.wt_root, "cell-1", "demo");
+        let e = expect_done(bash_as("claude -p hi", "worker"), &wtf.wt_root);
+        assert_eq!(e.code, 2, "{}", e.stderr);
+        assert!(e.stderr.contains("bee worker-outward guard denied"), "{}", e.stderr);
+        let other = expect_done(bash_as("claude -p hi", "leader"), &wtf.wt_root);
+        assert_eq!(other.code, 0, "{}", other.stderr);
+    }
+
+    #[test]
+    fn worker_outward_still_refuses_a_session_without_the_grant() {
+        let lx = build_linked(true);
+        let e = expect_done(bash_as("claude -p hi", "leader"), &lx.work_root);
+        assert_eq!(e.code, 2, "{}", e.stderr);
+        assert!(e.stderr.contains("bee worker-outward guard denied"), "{}", e.stderr);
+    }
+
     #[test]
     fn worker_outward_text_precedes_the_idle_intake_text() {
         let lx = build_linked(true);

@@ -736,6 +736,7 @@ pub(crate) fn check_git_bash_command(
         cwd,
         control_root_override,
         worktree_resolution,
+        session_id,
         &deep,
         &invocations,
         emit,
@@ -1003,6 +1004,7 @@ fn outward_arm(
     cwd: &str,
     control_root_override: Option<&str>,
     worktree_resolution: &str,
+    session_id: Option<&str>,
     deep: &DeepTokens,
     invocations: &[GitInvocation],
     emit: &mut Emit,
@@ -1039,6 +1041,11 @@ fn outward_arm(
             }
         };
         if !outward_guard_on(&mut config, root, control_root_override)? {
+            return Ok(None);
+        }
+        if matches!(form, OutwardForm::Launch)
+            && leader_holds_worktree_grant(root, control_root_override, session_id)?
+        {
             return Ok(None);
         }
         return Ok(Some(WV::Deny(outward_refusal(form, &blocked, cwd))));
@@ -1081,7 +1088,7 @@ fn outward_arm(
             let configured = config
                 .as_ref()
                 .is_some_and(|c| configured_cli_command(c, &segment[head_index..]));
-            if configured {
+            if configured || leader_holds_worktree_grant(root, control_root_override, session_id)? {
                 continue;
             }
             return Ok(Some(WV::Deny(outward_refusal(
@@ -1092,6 +1099,29 @@ fn outward_arm(
         }
     }
     Ok(None)
+}
+
+fn leader_holds_worktree_grant(
+    root: &str,
+    control_root_override: Option<&str>,
+    session_id: Option<&str>,
+) -> R<bool> {
+    let Some(sid) = session_id.map(js_trim).filter(|s| !s.is_empty()) else {
+        return Ok(false);
+    };
+    let topo = resolve_write_topology(root, control_root_override)?;
+    let (Some(workspace_root), Some(workspace_id), Some(worktree_id)) = (
+        topo.ctx.workspace_root.as_deref(),
+        topo.ctx.workspace_id.as_deref(),
+        topo.ctx.worktree_id.as_deref(),
+    ) else {
+        return Ok(false);
+    };
+    if workspace_id != worktree_id {
+        return Ok(false);
+    }
+    Ok(session_claimed_features(&topo.control_root, sid).is_empty()
+        && session_claimed_features(workspace_root, sid).is_empty())
 }
 
 fn outward_guard_on(
