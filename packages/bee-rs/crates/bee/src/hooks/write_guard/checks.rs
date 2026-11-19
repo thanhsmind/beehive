@@ -557,7 +557,7 @@ between the two checkouts at merge time.",
         return Ok(WV::Deny(format!(
             "bee research-class guard: the bound lane's route class is \"research\" and research is read-only — \
 writing \"{}\" is refused. Only docs/ and .bee/ accept writes. \
-FIX: re-route with `bee orient --class <c>` to a writing class (feature, bugfix, refactor, ...) before editing source.",
+FIX: re-route with `bee state route --set --class <c> --lane <lane>` to a writing class (feature, bugfix, refactor, ...) before editing source; read the class first with `bee orient --class <c>`.",
             normalized
         )));
     }

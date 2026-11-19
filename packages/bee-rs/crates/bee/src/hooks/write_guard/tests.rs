@@ -6682,7 +6682,7 @@ use std::process::ExitCode;
         let e = expect_done(edit("src/app.rs"), &fx.root);
         assert_eq!(e.code, 2, "{}", e.stderr);
         assert!(e.stderr.contains("research"), "{}", e.stderr);
-        assert!(e.stderr.contains("bee orient --class <c>"), "{}", e.stderr);
+        assert!(e.stderr.contains("bee state route --set --class <c> --lane <lane>"), "{}", e.stderr);
     }
 
     #[test]
