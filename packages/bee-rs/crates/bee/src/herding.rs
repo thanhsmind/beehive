@@ -1594,6 +1594,7 @@ pub(crate) fn status_with_panes_and_transport_and_paseo(
         println!("{}", status_json_text(&obj, full, main_root.as_deref()));
     } else {
         println!("herding: enabled={enabled} transport={transport_ready_str} ({transport_reason})");
+        println!("{STATUS_SCOPE_NOTE}");
         for line in &job_plain_lines {
             println!("{line}");
         }
@@ -1602,75 +1603,7 @@ pub(crate) fn status_with_panes_and_transport_and_paseo(
     (ExitCode::SUCCESS, Value::Object(obj), job_plain_lines)
 }
 
-const STATUS_BOUND_BYTES: usize = 16_000;
-const STATUS_ROW_KEYS: [&str; 9] =
-    ["job_id", "status", "round", "mark", "mark_reason", "pane_id", "paseo_agent_id", "parked", "unread_messages"];
-
-fn bounded_status(obj: &Map<String, Value>, rel: &str) -> Map<String, Value> {
-    let mut out = Map::new();
-    for (key, value) in obj {
-        match key.as_str() {
-            "jobs" => {}
-            "untracked_paseo_agents" => {
-                out.insert("untracked_paseo_agents_count".into(), value.as_array().map_or(0, Vec::len).into());
-            }
-            _ => {
-                out.insert(key.clone(), value.clone());
-            }
-        }
-    }
-    out.insert("bounded".into(), Value::Bool(true));
-    out.insert("full_output".into(), Value::String(rel.to_string()));
-    let mut rows: Vec<Value> = obj
-        .get("jobs")
-        .and_then(Value::as_array)
-        .map(|jobs| {
-            jobs.iter()
-                .filter_map(Value::as_object)
-                .map(|job| {
-                    Value::Object(
-                        STATUS_ROW_KEYS
-                            .iter()
-                            .filter_map(|k| job.get(*k).map(|v| ((*k).to_string(), v.clone())))
-                            .collect(),
-                    )
-                })
-                .collect()
-        })
-        .unwrap_or_default();
-    let total = rows.len();
-    out.insert("jobs".into(), Value::Array(Vec::new()));
-    let base = serde_json::to_string(&out).map_or(0, |t| t.len());
-    let mut used = base;
-    let mut keep = 0usize;
-    for row in &rows {
-        used += serde_json::to_string(row).map_or(0, |t| t.len()) + 1;
-        if used > STATUS_BOUND_BYTES - 40 {
-            break;
-        }
-        keep += 1;
-    }
-    rows.truncate(keep);
-    out.insert("jobs".into(), Value::Array(rows));
-    if keep < total {
-        out.insert("jobs_omitted".into(), (total - keep).into());
-    }
-    out
-}
-
-fn status_json_text(obj: &Map<String, Value>, full: bool, main_root: Option<&Path>) -> String {
-    let inline = || serde_json::to_string(&Value::Object(obj.clone())).unwrap();
-    let Some(root) = main_root.filter(|_| !full) else {
-        return inline();
-    };
-    let name = format!("herding-status-{}.json", chrono::Utc::now().format("%Y%m%dT%H%M%S%3fZ"));
-    let dir = root.join(".bee").join("tmp").join("output");
-    let written = std::fs::create_dir_all(&dir).and_then(|_| std::fs::write(dir.join(&name), inline()));
-    if written.is_err() {
-        return inline();
-    }
-    serde_json::to_string(&Value::Object(bounded_status(obj, &format!(".bee/tmp/output/{name}")))).unwrap()
-}
+const STATUS_SCOPE_NOTE: &str = "herding: this line reports the calling session's own pane, not worker availability — herdr reads HERDR_ENV and HERDR_PANE_ID, tmux reads TMUX and TMUX_PANE; a dispatch carries its own transport_ready and transport_reason";
 
 fn status(flags: &[&str]) -> ExitCode {
     let mut job_id: Option<&str> = None;
@@ -2191,6 +2124,13 @@ mod tests {
         // their order and their values.
         let keys: Vec<&str> = herdr.keys().map(String::as_str).collect();
         assert_eq!(keys, vec!["ready", "reason", "pane_id", "kind"]);
+    }
+
+    #[test]
+    fn status_scope_note_says_own_pane_not_availability_and_names_both_transports_variables() {
+        for needle in ["own pane", "not worker availability", "HERDR_ENV", "HERDR_PANE_ID", "TMUX", "TMUX_PANE", "transport_ready"] {
+            assert!(STATUS_SCOPE_NOTE.contains(needle), "{needle}");
+        }
     }
 
     #[test]

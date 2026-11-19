@@ -16,3 +16,9 @@ anyhow.workspace = true
 # (docs/history/research/herdr-orchestrator-distill.md, "Docs" — herdr's
 # error contract).
 serde_json.workspace = true
+
+[features]
+test-support = []
+
+[dev-dependencies]
+fleet = { path = ".", features = ["test-support"] }

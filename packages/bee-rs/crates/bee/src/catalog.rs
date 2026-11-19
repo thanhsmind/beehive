@@ -689,9 +689,9 @@ mod tests {
         // a discard. None of them meant "the options ruled out, with why".
         // 199 -> 199 (slp-advisor-nudge an-5): the advisor-nudge record of
         // 3cfd9980 adds NO flag name, and that is the design working. A nudge
-        // is one more member of the closed `--kind` set and its two new
-        // watch words (`budget-overrun`, `same-region-resubmit`) are two more
-        // members of the closed `--signal` set, so a caller who knows how to
+        // is one more member of the closed `--kind` set and its new watch
+        // word (`same-region-resubmit`) is one more member of the closed
+        // `--signal` set, so a caller who knows how to
         // raise an intervention already knows how to raise a nudge: same
         // --target-session, --point-key, --question, --signal and --tick. The
         // near miss checked and rejected: spelling the recommendation as its

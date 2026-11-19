@@ -2060,3 +2060,8 @@
 {"ts":"2026-11-19T15:14:17.842Z","kind":"pbi","event":"status","id":"p-35008d7f","status":"done"}
 {"ts":"2026-11-19T15:14:17.862Z","kind":"pbi","event":"status","id":"p-6061cd5f","status":"done"}
 {"ts":"2026-11-19T15:38:03.234Z","type":"friction","title":"Herded cell workers end timed_out_idle while running long cargo builds or tests: the paseo heartbeat goes stale though the worker is busy","detail":"2026-11-19: dlr-2, dlr-7, dlr-8, oox-t ended timed_out_idle (idle timeout 900 s) mid-run, one leaving a scratch mutation in herding.rs; five to seven workers ran in parallel.","severity":"P2","layer":"herding","feature":""}
+{"ts":"2026-11-19T16:00:59.655Z","kind":"pbi","event":"status","id":"p-7242d305","status":"done"}
+{"ts":"2026-11-19T16:00:59.709Z","kind":"pbi","event":"status","id":"p-babca9e6","status":"done"}
+{"ts":"2026-11-19T16:00:59.752Z","kind":"pbi","event":"status","id":"p-cbe95561","status":"done"}
+{"ts":"2026-11-19T16:00:59.787Z","kind":"pbi","event":"status","id":"p-1126e3ec","status":"done"}
+{"ts":"2026-11-19T16:05:09.922Z","type":"harness-issue","title":"bee herding run returns timed_out_idle or timed_out_ceiling but leaves the paseo agent running; the orphan keeps editing the worktree beside the re-dispatched worker","detail":"2026-11-19 oox-t: job job-1795100596841-3329102-1 ended timed_out_ceiling, yet its agent still ran /tmp/oox-t/all.sh and mutated verbs/knowledge/report.rs while the re-dispatched oox-t ran in the same worktree; both shared /tmp/oox-t scratch. herding cancel stopped five such orphans. A timeout outcome should stop the agent (or the wave should refuse a re-dispatch while the old job lives).","severity":"P1","layer":"herding","feature":""}
