@@ -62,8 +62,8 @@ bee-shaping.
 Interviews run in **rounds** over a **question frontier** — every
 question askable now without guessing an answer not yet heard. Ask the
 whole frontier in one round, numbered, each carrying the agent's
-recommended answer — the user still picks. A question that depends on
-an answer still open this round waits for the next round.
+recommended answer — the user still picks. The batching policy lives in
+`bee-hive/references/routing-and-contracts.md` "Question Format".
 
 Facts are the agent's job, never the user's. A frontier question that
 needs a repo or environment fact gets a dispatched read — a

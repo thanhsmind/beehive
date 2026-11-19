@@ -23,6 +23,12 @@ belt keeps working.
 
 ## Read set
 
+### Knowledge
+
+| Concept | Grade at read | Why it matters |
+|---------|---------------|----------------|
+| docs/knowledge/areas/hook-runtime/catalog-projections-and-activation.md | suspect | R42 and Open Gaps state the 2.x gap this feature closes. |
+
 ### Code
 
 | Path | What it decides |

@@ -1,0 +1,27 @@
+{
+  "schema_version": "1.0",
+  "feature": "heading-anchors-and-verb-homes",
+  "mode": "small",
+  "phase": "idle",
+  "approved_gates": {
+    "context": true,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"heading-anchors-and-verb-homes\" started at phase \"exploring\" (lane).",
+  "next_action": "Merged into main at 5a6ab5c; capture what settled, then bee close --feature heading-anchors-and-verb-homes.",
+  "created_at": "2026-11-19T10:28:32.014Z",
+  "run_state": null,
+  "waiting_on": null,
+  "route": {
+    "class": "bugfix",
+    "lane": "small",
+    "flags": [],
+    "product_files": 3,
+    "rationale": "D1 only: shared heading-line helper, two callers, one hijack test",
+    "updated_at": "2026-11-19T10:28:35.273Z",
+    "feature": "heading-anchors-and-verb-homes"
+  }
+}

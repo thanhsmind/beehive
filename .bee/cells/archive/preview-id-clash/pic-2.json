@@ -1,0 +1,162 @@
+{
+  "id": "pic-2",
+  "feature": "preview-id-clash",
+  "title": "Prove the preview id-clash refusal red then green",
+  "lane": "small",
+  "role": "test",
+  "deps": [
+    "pic-1"
+  ],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test gate_preview",
+  "must_haves": {
+    "truths": [
+      "a test previews a packet whose id is held by an archived cell of another feature and asserts a non-zero exit, the id and the holding feature in the output, and no gate_preview on the record",
+      "a test does the same for a live cell of another feature",
+      "a test shows an id held by a cell of the same feature still previews",
+      "the archived-clash test was run against the pic-1 parent commit and failed there, and the report quotes that failure",
+      "the report under docs/history/preview-id-clash/reports/ quotes each run's result line"
+    ]
+  },
+  "decisions": [
+    "fd9a503f-a07c-4099-8e71-f48c5a26d9b3",
+    "e03c4bf8-1e6b-4550-958c-f5afe300cd6a"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/tests/gate_preview.rs",
+    "docs/history/preview-id-clash/reports/pic-2.md"
+  ],
+  "read_first": [
+    "docs/history/preview-id-clash/CONTEXT.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Check contract preview-id-clash (decision fd9a503f). In packages/bee-rs/crates/bee/tests/gate_preview.rs, using its fixture helpers, add tests: (1) an archived cell file .bee/cells/archive/<other-feature>/<id>.json with feature <other-feature> plus a plan.md packet naming that id: gate --preview exits non-zero, output names the id and the other feature, and the record has no gate_preview; (2) the same with a live .bee/cells/<id>.json of another feature; (3) a live cell of the SAME feature with that id: preview succeeds. Red proof: check out the pic-1 parent version of plan_packets.rs into the tree, run test (1), see it fail, restore plan_packets.rs to HEAD and confirm git status shows it clean. Then run the verify green. Edit no production code. Write docs/history/preview-id-clash/reports/pic-2.md with each run and its result line. Commit the test file and report once (cell trailer).",
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "pic-test",
+    "outcome": "Tightened the three preview id-clash tests (id, live/archived, holder, hint, no gate_preview for both clashes); red on 89f62b698~1 plan_packets.rs, green at HEAD; commit 67303692ac8df4a9636a8fbdfea3a72938b8a541",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/tests/gate_preview.rs",
+      "docs/history/preview-id-clash/reports/pic-2.md"
+    ],
+    "deviations": [
+      "sync-ack: test and report only"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-19T11:09:49.396Z",
+    "behavior_change": false,
+    "verification_evidence": "cargo clippy -- -D warnings && cargo test --release --no-fail-fast (packages/bee-rs) — green:unit — exit 0, 6109 passed 0 failed; cell verify --test gate_preview 10 passed; red run on parent: 2 failed at the !success assert",
+    "verify_output": "green:red-first",
+    "verify_passed": true,
+    "claim_session": "d63a1e23-e8b8-482f-ae73-5e4e50e0c2aa",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test gate_preview",
+    "claimed_at": "2026-11-19T10:59:21.731Z",
+    "knowledge_delta": [],
+    "sync_ack": "test and report only",
+    "plan_followed": true,
+    "no_mistakes": true,
+    "knowledge_used": [
+      {
+        "path": "docs/knowledge/patterns/20260818-a-green-count-is-not-evidence-that-your-new-test-ran.md",
+        "changed": "confirmed each clash test ran by name in the green output, not just the 10-pass count"
+      }
+    ],
+    "principles_used": [
+      {
+        "slug": "bee-principle-red-before-green",
+        "changed": "ran the refusal tests against the parent plan_packets.rs and saw them fail at the non-zero-exit assert before trusting green"
+      },
+      {
+        "slug": "bee-principle-test-behavior-not-structure",
+        "changed": "asserted exit, output text and the persisted lane record only"
+      },
+      {
+        "slug": "bee-principle-laziness-protocol",
+        "changed": "merged the two refusal tests into one shared assert helper instead of adding parallel tests"
+      }
+    ],
+    "report": {
+      "outcome": "Tightened the three preview id-clash tests (id, live/archived, holder, hint, no gate_preview for both clashes); red on 89f62b698~1 plan_packets.rs, green at HEAD; commit 67303692ac8df4a9636a8fbdfea3a72938b8a541",
+      "commit": "67303692ac8df4a9636a8fbdfea3a72938b8a541",
+      "files": [
+        "packages/bee-rs/crates/bee/tests/gate_preview.rs",
+        "docs/history/preview-id-clash/reports/pic-2.md"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test gate_preview — green:red-first — cargo clippy -- -D warnings && cargo test --release --no-fail-fast (packages/bee-rs) — green:unit — exit 0, 6109 passed 0 failed; cell verify --test gate_preview 10 passed; red run on parent: 2 failed at the !success assert",
+      "deviations": [],
+      "knowledge_used": [
+        "docs/knowledge/patterns/20260818-a-green-count-is-not-evidence-that-your-new-test-ran.md — confirmed each clash test ran by name in the green output, not just the 10-pass count"
+      ],
+      "principles_used": [
+        "bee-principle-red-before-green — ran the refusal tests against the parent plan_packets.rs and saw them fail at the non-zero-exit assert before trusting green",
+        "bee-principle-test-behavior-not-structure — asserted exit, output text and the persisted lane record only",
+        "bee-principle-laziness-protocol — merged the two refusal tests into one shared assert helper instead of adding parallel tests"
+      ],
+      "reaction": "confirm",
+      "skipped": [
+        "knowledge delta — test-only change, behavior concept belongs to pic-1"
+      ],
+      "patch_id": "94ad20d5d4e619c278a852b3b294359f8ff9fdc3"
+    },
+    "reaction": "confirm",
+    "skipped": [
+      "knowledge delta — test-only change, behavior concept belongs to pic-1"
+    ],
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "a test previews a packet whose id is held by an archived cell of another feature and asserts a non-zero exit, the id and the holding feature in the output, and no gate_preview on the record",
+            "artifact": "packages/bee-rs/crates/bee/tests/gate_preview.rs"
+          },
+          {
+            "requirement": "a test does the same for a live cell of another feature",
+            "artifact": "packages/bee-rs/crates/bee/tests/gate_preview.rs"
+          },
+          {
+            "requirement": "a test shows an id held by a cell of the same feature still previews",
+            "artifact": "packages/bee-rs/crates/bee/tests/gate_preview.rs"
+          },
+          {
+            "requirement": "the archived-clash test was run against the pic-1 parent commit and failed there, and the report quotes that failure",
+            "artifact": "docs/history/preview-id-clash/reports/pic-2.md"
+          },
+          {
+            "requirement": "the report under docs/history/preview-id-clash/reports/ quotes each run's result line",
+            "artifact": "docs/history/preview-id-clash/reports/pic-2.md"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/tests/gate_preview.rs",
+            "artifact": "packages/bee-rs/crates/bee/tests/gate_preview.rs"
+          },
+          {
+            "requirement": "docs/history/preview-id-clash/reports/pic-2.md",
+            "artifact": "docs/history/preview-id-clash/reports/pic-2.md"
+          }
+        ],
+        "recorded_at": "2026-11-19T11:10:15.357Z",
+        "recorded_by": "d63a1e23-e8b8-482f-ae73-5e4e50e0c2aa",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": {
+    "new": 41300,
+    "cached": 354996,
+    "total": 396296,
+    "models": {
+      "claude-opus-5-5": {
+        "new": 41300,
+        "cached": 354996,
+        "total": 396296
+      }
+    },
+    "jobs": [
+      "job-1795085966898-2334034-1"
+    ]
+  }
+}

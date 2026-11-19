@@ -808,6 +808,8 @@ The plan preview accepts either documented flag spelling or the existing subcomm
 
 Adding cells checks each cell of the batch against the approved packet and refuses only a packet cell that is neither in the batch nor already stored, naming it; a batch smaller than the packet is accepted on its own, so a slice can land in several calls (open-issues-sweep, decision `01708244`, issue #127).
 
+Preview refuses a packet whose cell id is already held by a live or archived cell of a different feature, and writes nothing. Each refusal line names the id, the holding feature and whether that cell is live or archived, and says to rename the id in plan.md. An id held by a cell of the same feature passes, so a re-preview of a slice already added still works. The clash used to surface only at `cells add`, after approval, which cost an unapprove and a re-approve (preview-id-clash D1).
+
 ## Pointers (implementation)
 
 - Preview flag repair: `packages/bee-rs/crates/bee/src/verbs/reservations/flags.rs` treats `preview` as a boolean. Seven actual CLI tests in `packages/bee-rs/crates/bee/tests/gate_preview.rs` verify aliases and the real `approved_gates` fields. Evidence: `docs/history/codex-reliability-closeout/preview.md` and `crc-4-judge-final.json` in the same directory, decision `be57302a`.

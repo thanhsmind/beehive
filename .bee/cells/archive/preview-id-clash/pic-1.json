@@ -1,0 +1,137 @@
+{
+  "id": "pic-1",
+  "feature": "preview-id-clash",
+  "title": "Refuse a reused cell id at gate preview",
+  "lane": "small",
+  "role": "code",
+  "deps": [],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test gate_preview",
+  "must_haves": {
+    "truths": [
+      "run_gate_preview_body refuses before writing gate_preview when a packet cell id resolves to a live or archived cell whose feature differs from the previewed feature",
+      "the refusal text names the id, the holding feature, whether that cell is live or archived, and tells the reader to rename the id in plan.md",
+      "an id held by a cell of the same feature does not refuse",
+      "the existing gate_preview tests still pass"
+    ]
+  },
+  "decisions": [
+    "e03c4bf8-1e6b-4550-958c-f5afe300cd6a"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/state_group/plan_packets.rs"
+  ],
+  "read_first": [
+    "docs/history/preview-id-clash/CONTEXT.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Implement CONTEXT.md D1 in packages/bee-rs/crates/bee/src/verbs/state_group/plan_packets.rs run_gate_preview_body (line 500). After parse_plan_packets (line 541) and before gate_preview is inserted or written, for each packet cell with a string id, look it up with crate::verbs::cells::resolve_cell_file (verbs/cells/util.rs:254) against the cell-store root that `cells add` uses (see how verbs/cells/mod.rs:242 resolves it with resolve_root_serving_granted; use that root, falling back to the preview's root). Read the found file's feature field; if it differs from the previewed feature, collect a problem. If any problem, return Out::Thrown with one line per clash, shaped: gate preview: cell id \"<id>\" is already held by the <live|archived> cell of feature \"<f>\". FIX: rename the id in plan.md, then re-run bee gate --preview. A cell file is archived when its path is not cells_dir/<id>.json. Nothing is written on refusal. No code comment. Commit once (cell trailer). Proof: the verify command.",
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "pic-impl",
+    "outcome": "gate preview refuses a cell id held by a live or archived cell of another feature, writing nothing; commit 89f62b698",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/state_group/plan_packets.rs",
+      "packages/bee-rs/crates/bee/tests/gate_preview.rs"
+    ],
+    "deviations": [
+      "added three gate_preview tests outside the cell files — CONTEXT C1 named them — found a better route",
+      "sync-ack: one refusal in plan_packets.rs; the gates concept was updated by the leader in 85b7dfcbe"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-19T10:59:14.718Z",
+    "behavior_change": false,
+    "verification_evidence": "cargo clippy -D warnings && cargo test --release --no-fail-fast (packages/bee-rs) — green:unit — whole workspace incl. gate_preview 10/10",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "d63a1e23-e8b8-482f-ae73-5e4e50e0c2aa",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test gate_preview",
+    "claimed_at": "2026-11-19T10:48:02.317Z",
+    "knowledge_delta": [],
+    "sync_ack": "one refusal in plan_packets.rs; the gates concept was updated by the leader in 85b7dfcbe",
+    "mistakes": [
+      {
+        "wrong": "worker wrote tests/gate_preview.rs outside its files list",
+        "better": "the brief should say tests belong to the tester cell; pic-2 re-verifies them",
+        "fix_at": "none"
+      }
+    ],
+    "no_principles_used": true,
+    "report": {
+      "outcome": "gate preview refuses a cell id held by a live or archived cell of another feature, writing nothing; commit 89f62b698",
+      "commit": "89f62b698ce680e241a6b32a58bb1bf0c9011232",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/state_group/plan_packets.rs",
+        "packages/bee-rs/crates/bee/tests/gate_preview.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test gate_preview — green:unit — cargo clippy -D warnings && cargo test --release --no-fail-fast (packages/bee-rs) — green:unit — whole workspace incl. gate_preview 10/10",
+      "deviations": [],
+      "principles_used": [],
+      "skipped": [
+        "red-before-green — tests written alongside the fix"
+      ],
+      "found": [
+        "tests/gate_preview.rs was edited though outside the cell's files list; CONTEXT C1 requires those tests"
+      ],
+      "patch_id": "7ee48b9798bbe6f410512b7db4855edf17b75122"
+    },
+    "skipped": [
+      "red-before-green — tests written alongside the fix"
+    ],
+    "found": [
+      "tests/gate_preview.rs was edited though outside the cell's files list; CONTEXT C1 requires those tests"
+    ],
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "run_gate_preview_body refuses before writing gate_preview when a packet cell id resolves to a live or archived cell whose feature differs from the previewed feature",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/state_group/plan_packets.rs"
+          },
+          {
+            "requirement": "the refusal text names the id, the holding feature, whether that cell is live or archived, and tells the reader to rename the id in plan.md",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/state_group/plan_packets.rs"
+          },
+          {
+            "requirement": "an id held by a cell of the same feature does not refuse",
+            "artifact": "packages/bee-rs/crates/bee/tests/gate_preview.rs"
+          },
+          {
+            "requirement": "the existing gate_preview tests still pass",
+            "artifact": "docs/history/preview-id-clash/reports/pic-2.md"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/state_group/plan_packets.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/state_group/plan_packets.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/tests/gate_preview.rs",
+            "artifact": "packages/bee-rs/crates/bee/tests/gate_preview.rs"
+          }
+        ],
+        "recorded_at": "2026-11-19T11:10:15.347Z",
+        "recorded_by": "d63a1e23-e8b8-482f-ae73-5e4e50e0c2aa",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": {
+    "new": 42526,
+    "cached": 286990,
+    "total": 329516,
+    "models": {
+      "claude-sonnet-5-5": {
+        "new": 42526,
+        "cached": 286990,
+        "total": 329516
+      }
+    },
+    "jobs": [
+      "job-1795085287206-1941326-1"
+    ]
+  }
+}

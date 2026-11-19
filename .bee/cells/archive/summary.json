@@ -2398,5 +2398,15 @@
     "capped": 2,
     "dropped": 0,
     "archived_at": "2026-11-19T09:50:38.164Z"
+  },
+  "preview-id-clash": {
+    "capped": 2,
+    "dropped": 0,
+    "archived_at": "2026-11-19T11:11:45.916Z"
+  },
+  "heading-anchors-and-verb-homes": {
+    "capped": 2,
+    "dropped": 0,
+    "archived_at": "2026-11-19T11:12:18.074Z"
   }
 }

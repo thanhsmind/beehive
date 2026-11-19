@@ -114,7 +114,11 @@ on this path; everything unresolved is written down, never guessed.
 4. Judge clarity and size over the evidence with the triage table above —
    your own reasoning, never a keyword match; a vague row parks here
    instead of interviewing.
-5. `bee route` records the call. Proceed → Lock, then planning.
+5. The leader decides and records the verdict itself (build, park or
+   drop, decision 7942f87c); the owner's "Your call" paragraph carries
+   that verdict, never an open choice. Only a money, publishing or
+   irreversible call goes to the owner, decision-ready.
+   `bee route` records the call. Proceed → Lock, then planning.
    Park → Lock writes the evidence and open questions into `Outstanding
    Questions`; a later human Explore starts there, not from scratch. When
    the park cause is vagueness, not risk, also run `bee discovery stub

@@ -58,7 +58,7 @@ agent-works (`mirror.mjs`) parse it byte for byte, so the format below never cha
   | 2 | `**Vì sao:**` | `**Why:**` | The pain it removes, and who feels it. |
   | 3 | `**Nguồn gốc:**` | `**Origin:**` | One line: where the work came from. |
   | 4 | `**Chi phí và rủi ro:**` | `**Cost and risk:**` | The size, one or two risks, and what it depends on. |
-  | 5 | `**Anh cần làm:**` | `**Your call:**` | Two or three options, plus one recommendation with a one-line reason. |
+  | 5 | `**Anh cần làm:**` | `**Your call:**` | The leader's verdict (`build`, `park` or `drop`) with a one-line reason, never an open choice for the owner. Only an owner-only call (money, publishing, irreversible) keeps the question, two options at most and the leader's recommendation. |
   | 6 | `**Chuẩn xong:**` | `**Done when:**` | Two to four observable bullets, each a line that starts with `- `. |
 
   Each paragraph holds text after its label. No other body line starts with `**`.
@@ -146,7 +146,7 @@ ask: build
 
 **Chi phí và rủi ro:** Cỡ vừa. Rủi ro: người viết bỏ qua bước tóm tắt, nên công cụ báo việc thiếu. Đổi mẫu có thể làm hỏng bảng của agent-works, nên mẫu giữ nguyên. Phụ thuộc mẫu đã thống nhất với waggledance.
 
-**Anh cần làm:** Chọn duyệt để xây, hoãn, hoặc bỏ. Tôi đề nghị duyệt, vì các dự án khác chờ bản này để bổ sung tóm tắt.
+**Anh cần làm:** Tôi đã quyết định xây việc này, vì các dự án khác chờ bản này để bổ sung tóm tắt. Anh không cần chọn gì thêm.
 
 **Chuẩn xong:**
 - Việc mới có tóm tắt sai mẫu bị từ chối.

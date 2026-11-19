@@ -26,7 +26,7 @@ skills").
 
 **What the source does:** pstack's `how` fans explorer workers over a
 subsystem and writes one account of how it runs. bee already has that
-procedure: "Trace" in `bee-researching/references/trace-and-provenance.md`.
+procedure: "Trace" in bee-researching/references/trace-and-provenance.md.
 
 **bee context:** Any phase, on a how question about this repo. It reads and
 changes nothing.
@@ -153,7 +153,7 @@ appear in the body of `bee-how` or `bee-why` (plan § Test matrix).
 GREEN ran on 2026-09-11 WITH the shortcut loaded, one `plan` role (Opus)
 dispatch per brief, through `bee dispatch prepare --kind advisor --role
 plan`. Each run read only the shortcut `SKILL.md` and
-`bee-researching/references/trace-and-provenance.md`. The brief text is not
+bee-researching/references/trace-and-provenance.md. The brief text is not
 stored in the repo.
 
 ### Scenario GH1: vague target, time pressure — PASS
