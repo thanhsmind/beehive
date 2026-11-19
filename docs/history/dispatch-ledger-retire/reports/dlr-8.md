@@ -1,61 +1,86 @@
-# dlr-8 — Check the transport-check doc and the herding status message
+# dlr-8: check the transport-check doc and the herding status message
 
-Checker for dlr-4 (commit 0d31c78f0) and dlr-5. I checked CONTEXT.md D4 against the code at HEAD 3819638f4 without reading dlr-4's cap report. I edited no source.
+Checker for dlr-4 (commit 0d31c78f0) against CONTEXT.md D4. dlr-4's cap report was not read.
 
-## D4, as locked
+Outcome: partial. Truths 1, 2 and 4 hold. Truth 3 does not: with the
+message line removed, the herding status tests still pass.
 
-> The remaining work is doc: the bee-swarming Delegation contract states that a dispatch reads `transport_ready` and `transport_reason`, and that the fallback model applies only when the payload says `transport_ready: false`. `bee herding status` without a built job says it does not answer availability and names `HERDR_ENV` and `HERDR_PANE_ID`.
+## Truth 1: the swarming doc states the transport check
 
-## Check 1 — skills/bee-swarming/SKILL.md — PASS
-
-`skills/bee-swarming/SKILL.md:71-74`:
+`skills/bee-swarming/SKILL.md:71-74`, step 3 of the Delegation contract:
 
 > A herding payload carries `transport_ready` and
 > `transport_reason`: read them before you spawn. The payload's `fallback`
 > model applies only when it says `transport_ready: false`; `bee herding
 > status` reports the calling session's own pane, never worker availability.
 
-The doc says a dispatch reads both fields, and that the fallback applies only on `transport_ready: false`.
+This matches D4: a dispatch reads both fields, and the fallback model
+applies only on `transport_ready: false`. Holds.
 
-## Check 2 — the herding status message — PASS
+## Truth 2: herding status says it does not answer availability and names the variables
 
-`packages/bee-rs/crates/bee/src/herding.rs:1600`:
+`packages/bee-rs/crates/bee/src/herding.rs:1599`:
 
 > const STATUS_SCOPE_NOTE: &str = "herding: this line reports the calling session's own pane, not worker availability — herdr reads HERDR_ENV and HERDR_PANE_ID, tmux reads TMUX and TMUX_PANE; a dispatch carries its own transport_ready and transport_reason";
 
-`herding.rs:1591` prints it in the plain branch (`println!("{STATUS_SCOPE_NOTE}");`), right after the `herding: enabled=… transport=…` line. Both lines print whether or not `--job` is given, so the no-job case is covered. The message says it does not answer worker availability and names `HERDR_ENV` and `HERDR_PANE_ID`.
+It is printed at `herding.rs:1591`, in the plain (non `--json`) branch of
+`status_with_panes_and_transport_and_paseo`, right after the
+`herding: enabled=… transport=…` line:
 
-## Check 3 — verify — PASS, after fixing the filter
+> println!("{STATUS_SCOPE_NOTE}");
 
-As written, `-- herding::status` matched 6 tests, all in `herding::status_digest::tests`. The dlr-4 test is `herding::tests::status_scope_note_says_own_pane_not_availability_and_names_both_transports_variables`, and `herding::status` is not a substring of that path, so the verify as written never ran it. Output of the filter as written:
+That branch prints the note every time, whether or not a job is
+built. The `--json` branch does not include it. Holds.
 
-> test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 5513 filtered out
+## Truth 3: mutation, line removed, then restored
 
-The corrected filter is `-- herding::status herding::tests::status_scope_note`. Final run on the restored HEAD:
+The worktree already had the mutation when this round started: `git diff` showed the
+`println!("{STATUS_SCOPE_NOTE}");` line deleted at `herding.rs:1591` and
+nothing else changed. That is the exact line the cell's action says to
+remove, so I ran the mutation against it as it was.
 
-> test herding::tests::status_scope_note_says_own_pane_not_availability_and_names_both_transports_variables ... ok
-> test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 5512 filtered out; finished in 0.01s
-> test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s   (pointer_integrity)
+The verify filter `herding::status` matches 6 tests, all of them in
+`herding::status_digest::tests`. None of them covers the message. The tests
+for status itself live under `herding::tests::status*`, so I also ran that
+filter (19 tests).
 
-## Check 4 — mutation of the message line — PASS
+Under the mutation:
 
-I replaced `herding.rs:1600` in a scratch edit with `const STATUS_SCOPE_NOTE: &str = "herding: status";` and ran the test:
+```
+cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- herding::status
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 5513 filtered out
+cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- herding::tests::status
+test result: ok. 19 passed; 0 failed; 0 ignored; 0 measured; 5500 filtered out
+```
 
-> test herding::tests::status_scope_note_says_own_pane_not_availability_and_names_both_transports_variables ... FAILED
-> panicked at crates/bee/src/herding.rs:2126:13:
-> own pane
-> test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 5518 filtered out
+Expected a failure and got none. The mutation survives. The only test
+about the message is
+`status_scope_note_says_own_pane_not_availability_and_names_both_transports_variables`
+(`herding.rs:2123-2127`). It checks the `STATUS_SCOPE_NOTE` constant's
+text and never checks that status prints it. So deleting the `println!`
+breaks the behavior D4 asks for, and nothing catches it.
 
-Then I restored the file with `git checkout HEAD -- packages/bee-rs/crates/bee/src/herding.rs`, re-ran, and the test passed (Check 3 output). The tree was clean afterwards.
+After `git checkout HEAD -- packages/bee-rs/crates/bee/src/herding.rs`:
 
-## Gap found — the printing is not under test
+```
+cargo test ... --bin bee -- herding::tests::status
+test result: ok. 19 passed; 0 failed; 0 ignored; 0 measured; 5500 filtered out
+cargo test ... --test pointer_integrity
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
+```
 
-As a second scratch mutation, I deleted only the `println!("{STATUS_SCOPE_NOTE}");` line (`herding.rs:1591`) and ran every `herding::` test:
+Truth 3 does not hold. Making it hold requires a test that captures the plain
+`herding status` output and looks for the note, or a change that sends the
+printed lines through a function a test can call. Either one edits `herding.rs`,
+and this cell is not allowed to edit the files it checks. That work is left
+for a new cell.
 
-> test result: ok. 845 passed; 0 failed; 0 ignored; 0 measured; 4674 filtered out; finished in 28.16s
+## Verify filter
 
-The dlr-4 test checks the text of the constant, not that `bee herding status` prints it. If someone drops the print, no test fails. I restored from HEAD. Fixing this means adding an output-level test, which is outside this cell's scope ("editing any checked file"), so it goes in the report as a finding.
+`herding::status` is not a zero-match filter: it matches 6 `status_digest`
+tests. But it misses every test for the status output. A filter that
+covers the status tests is `herding::tests::status` (19 tests).
 
-## dlr-5
+## Edits
 
-dlr-5's own report says the parity checks passed with no edits. `pointer_integrity` is green here (10 passed), which agrees with it.
+This cell edited no source. The only file written is this report.
