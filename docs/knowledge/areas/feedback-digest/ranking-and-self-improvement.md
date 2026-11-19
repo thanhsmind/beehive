@@ -11,7 +11,7 @@ bee:
   decisions: [0022, c75fed88]
   sources: ["docs/history/evolving-loop/ (cells evolving-1 … evolving-11, capped)", docs/history/evolving-loop/reports/review-slice-a.md, docs/history/evolving-loop/reports/review-slice-b.md, "docs/history/cli-mutations/ (cell cli-mutations-2, capped; walkthrough.md)", "docs/specs/feedback-digest.md#R12", "docs/specs/feedback-digest.md#R13", "docs/specs/feedback-digest.md#R14", "docs/specs/feedback-digest.md#R15", "docs/specs/feedback-digest.md#P3"]
   authoritative_for: "feedback-digest: ranking and self-improvement"
-  anchors: [packages/bee-rs/crates/bee/src/verbs/feedback.rs]
+  anchors: [packages/bee-rs/crates/bee/src/verbs/feedback.rs, packages/bee-rs/crates/bee/src/verbs/fix_at.rs]
 ---
 
 # Feedback Digest — Ranking and the Self-Improvement Process
@@ -136,3 +136,14 @@ previous change never counts as approval of the next publication.
 - **P3** — The self-improvement process: `docs/handbook/evolving.md`; contract in
   `docs/07-contracts.md`; decision record `docs/decisions/0022-evolving-loop.md`
 - **Fix-at fold and load** — Read when: the digest shows one entry for many filed copies, or `prose_load` reports open and closed counts. Backlog finding and friction rows with the same type, layer, normalized title and close epoch (the count of older `backlog-closed` rows with that title) fold into one entry at read time, earliest `ts` kept, pain not summed; a post-close copy stays its own entry so rank still says `recurred`. `prose_load` counts distinct (layer, title) keys as open or closed and renders the SessionStart preamble size; find them in `verbs/feedback.rs` (`close_epoch`, `fix_at_load`, `preamble_load`). Decisions: fix-at-loop D2, D6, D8, D10 (`docs/history/fix-at-loop/CONTEXT.md`).
+
+## The fix-at ledger has one home
+
+Read when: you need to know whether a fix-at group is open, closed or recurred.
+
+`verbs/fix_at.rs` `Ledger::from_rows` is the only place that decides it; `fix_at_load` in the
+digest and the close dedupe (`current_epoch_finding_feature`) both call it. Two copies of the rule
+had drifted: the digest matched closes by title across layers, the dedupe read `kind` as well as
+`type`. A close that names a fix-at layer matches only that layer; a close with none matches every
+layer by normalized title. Recurred counts as open in the prose_load keys. Find the group fields
+in the `Group` struct rather than copying them here.

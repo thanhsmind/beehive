@@ -45,7 +45,7 @@
 
 use super::feedback::{
     backlog_allowed_type, emit_error, emit_success, find_ci, js_is_space, js_trim, js_truthy,
-    normalize_title, now_iso, parse_shape, random_bytes, read_jsonl, require_flag, value_js_safe, ParsedArgs,
+    now_iso, parse_shape, random_bytes, read_jsonl, require_flag, value_js_safe, ParsedArgs,
 };
 use crate::fsutil::append_jsonl;
 use crate::jsjson;
@@ -383,7 +383,7 @@ fn matches_whole_token(haystacks: &[String], token: &str) -> bool {
 const FINDING_KINDS: [&str; 2] = ["friction", "finding"];
 
 /// isBacklogFindingRow: kind:'pbi' never; kind OR type in {friction,finding}.
-fn is_finding_row(row: &Value) -> bool {
+pub(crate) fn is_finding_row(row: &Value) -> bool {
     let Value::Object(m) = row else { return false };
     if m.get("kind").and_then(Value::as_str) == Some("pbi") {
         return false;
@@ -436,21 +436,7 @@ pub(crate) fn backlog_finding_exists(root: &Path, feature: &str, layer: &str, ti
 }
 
 pub(crate) fn current_epoch_finding_feature(root: &Path, layer: &str, title: &str) -> Option<String> {
-    let rows = read_jsonl(&backlog_jsonl_path(root)).rows;
-    let key = normalize_title(&Value::String(title.to_string()));
-    let field = |row: &Value, name: &str| row.get(name).and_then(Value::as_str).unwrap_or("").to_string();
-    let same_title = |row: &Value| normalize_title(&row.get("title").cloned().unwrap_or(Value::Null)) == key;
-    let closed_at = rows
-        .iter()
-        .filter(|row| {
-            (field(row, "type") == "backlog-closed" || field(row, "kind") == "backlog-closed") && same_title(row)
-        })
-        .map(|row| field(row, "ts"))
-        .max();
-    rows.iter()
-        .filter(|row| is_finding_row(row) && field(row, "layer") == layer && same_title(row))
-        .find(|row| closed_at.as_ref().is_none_or(|c| field(row, "ts") > *c))
-        .map(|row| field(row, "feature"))
+    super::fix_at::Ledger::load(root)?.current_epoch_feature(layer, title)
 }
 
 /// matchesBacklogFeature: String(row.feature) whole-token match.
