@@ -321,3 +321,14 @@ fn every_index_row_carries_a_non_empty_spoken_line() {
         silent.join(" "),
     );
 }
+
+#[test]
+fn a_paragraph_quoting_the_heading_does_not_move_the_rule_homes_section() {
+    let text = format!(
+        "# Concept\n\nSee the `{HEADING}` index below.\n\n- `decoy` (packages/bee/decoy.md)\n\n{HEADING}\n\n- `real` (packages/bee/LEADER.md)\n\n## After\n"
+    );
+    let section = rule_homes_section(&text);
+    assert_eq!(section, "\n- `real` (packages/bee/LEADER.md)\n\n");
+    let ids: Vec<String> = rows(section).into_iter().map(|r| r.id).collect();
+    assert_eq!(ids, vec!["real".to_string()]);
+}

@@ -305,3 +305,23 @@ fn glob_match_segs(pat_segs: &[&str], path_segs: &[&str]) -> bool {
     }
     false
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn heading_section_quoted_earlier_does_not_move_parse_agents_rule_homes() {
+        let body = "# Concept\n\nThe index lives under `## AGENTS.md rule homes` below.\n\n- `decoy-rule` (packages/bee/decoy.md)\n\n## AGENTS.md rule homes\n\n- `real-rule` (packages/bee/LEADER.md)\n  spoken: say it\n  applied_at:\n    - skills/a/SKILL.md\n\n## After\n\n- `late-rule` (packages/bee/late.md)\n";
+        let areas = vec!["doctrine-layer".to_string()];
+        assert_eq!(
+            parse_agents_rule_homes(body, &areas),
+            vec![RuleHome {
+                rule: "real-rule".to_string(),
+                home: "packages/bee/LEADER.md".to_string(),
+                areas,
+                applied_at: vec!["skills/a/SKILL.md".to_string()],
+            }]
+        );
+    }
+}
