@@ -4,8 +4,8 @@
   "condition": "more than 20 backlog rows with layer fix-at:check or fix-at:architecture stand older than 30 days — then a bee doctor row that counts them is worth building",
   "tier": "manual",
   "predicate": null,
-  "status": "waiting",
+  "status": "resolved",
   "created_at": "2026-09-22T06:24:03.275Z",
-  "updated_at": "2026-09-22T06:24:03.275Z",
-  "outcome": null
+  "updated_at": "2026-11-19T09:21:28.906Z",
+  "outcome": "Built as the bee doctor advisory fix_at_debt (mistake-loop-closed D6, D12): it warns when more than 20 open fix-at finding rows are older than 30 days; first live reading 183 rows."
 }

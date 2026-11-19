@@ -1435,3 +1435,4 @@
 {"ts":"2026-11-17T15:44:59.150Z","event":"complete","id":"18d32f1f-6875-49bf-a8c0-ee8fc87e6808"}
 {"ts":"2026-11-17T15:45:03.287Z","event":"complete","id":"7c3db940-5d2a-4b44-a77d-7c10ee83d02e"}
 {"ts":"2026-11-17T15:45:07.474Z","event":"complete","id":"0c80ad83-9f2c-4659-b625-af6f6e78a308"}
+{"ts":"2026-11-19T09:20:16.568Z","event":"add","id":"681fd991-c57d-4673-8c25-90c595c2bdf4","kind":"worktree-cleanup","feature":"mistake-loop-closed","cells":[],"areas":[],"files":["/mnt/data/Projects/goglbe/beehive--wt--mistake-loop-closed"],"reason":"Worktree beehive--wt--mistake-loop-closed (branch wt/mistake-loop-closed) merged into main at 578e9cea3f6d12fd7aaac3bd8a3958d7d5c700d7 and kept per default (D1) — remove it with `bee worktree prune`."}
