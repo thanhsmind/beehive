@@ -31,6 +31,9 @@
 use std::collections::BTreeSet;
 use std::path::PathBuf;
 
+#[path = "../src/verbs/knowledge/heading_section.rs"]
+mod heading_section;
+
 /// The generated operating block, and the source it is rendered from.
 const AGENTS_MD: &str = "AGENTS.md";
 const AGENTS_BLOCK: &str = "packages/bee/AGENTS.block.md";
@@ -49,7 +52,11 @@ const INDEX: &str =
 const HEADING: &str = "## AGENTS.md rule homes";
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).ancestors().nth(4).unwrap().to_path_buf()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .ancestors()
+        .nth(4)
+        .unwrap()
+        .to_path_buf()
 }
 
 fn read(rel: &str) -> String {
@@ -64,7 +71,9 @@ fn marker_list(text: &str) -> Vec<String> {
     let mut cursor = 0usize;
     while let Some(rel) = text[cursor..].find("<!--") {
         let start = cursor + rel + 4;
-        let Some(rel_end) = text[start..].find("-->") else { break };
+        let Some(rel_end) = text[start..].find("-->") else {
+            break;
+        };
         let end = start + rel_end;
         if let Some(id) = text[start..end].trim().strip_prefix("rule:") {
             let id = id.trim();
@@ -107,19 +116,14 @@ fn rule_files() -> Vec<(String, String)> {
 
 /// The rule-homes section only, bounded the way the parser bounds it.
 fn rule_homes_section(text: &str) -> &str {
-    let start = text.find(HEADING).unwrap_or_else(|| {
+    heading_section::section_after_heading(text, HEADING).unwrap_or_else(|| {
         panic!(
             "{INDEX} no longer carries the heading {HEADING:?}.\n\n`parse_agents_rule_homes` \
              finds the section by that exact string, so losing it empties the parser AND this \
              fence in silence. FIX: restore the heading, or move the index and point both this \
              fence and that parser at its new home."
         )
-    });
-    let rest = &text[start + HEADING.len()..];
-    match rest.find("\n## ") {
-        Some(end) => &rest[..end],
-        None => rest,
-    }
+    })
 }
 
 struct Row {
@@ -134,7 +138,9 @@ struct Row {
 fn row_id(line: &str) -> Option<String> {
     let rest = line.strip_prefix("- `")?;
     let close = rest.find('`')?;
-    rest[close + 1..].starts_with(" (").then(|| rest[..close].to_string())
+    rest[close + 1..]
+        .starts_with(" (")
+        .then(|| rest[..close].to_string())
 }
 
 fn row_home(line: &str) -> Option<String> {
@@ -150,7 +156,11 @@ fn rows(section: &str) -> Vec<Row> {
 
     for line in section.lines() {
         if let Some(id) = row_id(line) {
-            out.push(Row { home: row_home(line), id, spoken: None });
+            out.push(Row {
+                home: row_home(line),
+                id,
+                spoken: None,
+            });
             in_applied_at = false;
             continue;
         }
@@ -174,8 +184,7 @@ fn the_rendered_block_carries_the_same_markers_as_its_source() {
     let rendered = markers(&read(AGENTS_MD));
     let source = markers(&read(AGENTS_BLOCK));
 
-    let missing_from_source: Vec<&str> =
-        rendered.difference(&source).map(String::as_str).collect();
+    let missing_from_source: Vec<&str> = rendered.difference(&source).map(String::as_str).collect();
     let missing_from_rendered: Vec<&str> =
         source.difference(&rendered).map(String::as_str).collect();
 
@@ -268,7 +277,10 @@ fn every_marked_rule_has_an_index_row_naming_its_file_and_every_row_a_marker() {
         .filter_map(|(id, file)| {
             let row = index_rows.iter().find(|r| &r.id == id)?;
             (row.home.as_deref() != Some(file.as_str())).then(|| {
-                format!("{id}: row names {:?}, marker is in {file}", row.home.as_deref().unwrap_or(""))
+                format!(
+                    "{id}: row names {:?}, marker is in {file}",
+                    row.home.as_deref().unwrap_or("")
+                )
             })
         })
         .collect();
@@ -308,4 +320,15 @@ fn every_index_row_carries_a_non_empty_spoken_line() {
          line under `applied_at:` would be parsed as a path.",
         silent.join(" "),
     );
+}
+
+#[test]
+fn a_paragraph_quoting_the_heading_does_not_move_the_rule_homes_section() {
+    let text = format!(
+        "# Concept\n\nSee the `{HEADING}` index below.\n\n- `decoy` (packages/bee/decoy.md)\n\n{HEADING}\n\n- `real` (packages/bee/LEADER.md)\n\n## After\n"
+    );
+    let section = rule_homes_section(&text);
+    assert_eq!(section, "\n- `real` (packages/bee/LEADER.md)\n\n");
+    let ids: Vec<String> = rows(section).into_iter().map(|r| r.id).collect();
+    assert_eq!(ids, vec!["real".to_string()]);
 }
