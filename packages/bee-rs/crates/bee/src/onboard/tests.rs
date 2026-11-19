@@ -1806,6 +1806,18 @@ fn notices_surface_detected_commands_and_a_stale_advisor_key() {
         .any(|n| n.as_str().unwrap().starts_with("advisor mode was removed in 0.1.23")));
 }
 
+#[test]
+fn onboard_notice_collection_offers_knowledge_setup_when_the_bundle_is_absent() {
+    let fx = fixture();
+    assert!(!fx.repo.join("docs").join("knowledge").join("index.md").exists());
+    let p = plan(&fx, &[]);
+    assert!(
+        p["notices"].as_array().unwrap().iter().any(|n| n.as_str() == Some(notices::KNOWLEDGE_SETUP_OFFER)),
+        "{:?}",
+        p["notices"]
+    );
+}
+
 // ── R6 cutover: stale vendored artifacts are REACHED, not stranded ────────
 //
 // Before the cutover, onboarding could remove a vendored LIB module that left

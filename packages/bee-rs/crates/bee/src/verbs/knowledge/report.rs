@@ -746,6 +746,13 @@ pub(crate) fn build_pull_rate(root: &Path) -> (Value, Vec<String>) {
 
 // ─── routing ────────────────────────────────────────────────────────────
 
+fn upkeep_line(codes: Option<&[&str]>) -> String {
+    match codes {
+        Some(codes) => format!("upkeep: due — {}", codes.join(", ")),
+        None => "upkeep: not due".to_string(),
+    }
+}
+
 pub(crate) fn run_report(flags: Flags, json: bool, pre_json: bool, t0: Instant) -> Option<ExitCode> {
     if !keys_known(&flags, &["root"]) {
         return None;
@@ -776,6 +783,8 @@ pub(crate) fn run_report(flags: Flags, json: bool, pre_json: bool, t0: Instant) 
     lines.extend(knowledge_wrong_lines);
     let (pull_rate, pull_lines) = build_pull_rate(&ctx.root);
     lines.extend(pull_lines);
+    let upkeep_codes = crate::verbs::upkeep_group::knowledge_due_codes(&ctx.root);
+    lines.push(upkeep_line(upkeep_codes.as_deref()));
 
     let mut result = Map::new();
     let measured_count = measured.len();
@@ -791,6 +800,7 @@ pub(crate) fn run_report(flags: Flags, json: bool, pre_json: bool, t0: Instant) 
     result.insert("knowledge_used".into(), knowledge_used);
     result.insert("knowledge_wrong".into(), knowledge_wrong);
     result.insert("pull_rate".into(), pull_rate);
+    result.insert("upkeep_due".into(), Value::Bool(upkeep_codes.is_some()));
     Some(ctx.emit(&Value::Object(result), &lines.join("\n"), 0))
 }
 
@@ -1659,5 +1669,20 @@ mod tests {
         assert_eq!(run_report(flags, json, json, Instant::now()), Some(ExitCode::SUCCESS));
         assert_eq!(report_root_snapshot(target.path()), before);
         assert!(cwd_store.path().join(".bee/logs/timings.jsonl").exists());
+    }
+
+    #[test]
+    fn report_upkeep_line_names_the_due_reasons_or_says_not_due() {
+        let (tmp, dir) = bundle();
+        write(&dir, "index.md", "# Index\n");
+        let codes = crate::verbs::upkeep_group::knowledge_due_codes(tmp.path());
+        assert_eq!(upkeep_line(codes.as_deref()), "upkeep: due — never_run");
+        write_root(
+            tmp.path(),
+            "audit.jsonl",
+            "{\"id\":\"x\",\"ts\":\"2999-01-01T00:00:00.000Z\",\"kind\":\"knowledge-upkeep\",\"feature\":\"upkeep\",\"note\":\"clean — ok\",\"source\":\"test\"}\n",
+        );
+        let codes = crate::verbs::upkeep_group::knowledge_due_codes(tmp.path());
+        assert_eq!(upkeep_line(codes.as_deref()), "upkeep: not due");
     }
 }
