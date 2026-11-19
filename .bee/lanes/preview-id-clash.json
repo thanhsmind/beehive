@@ -11,9 +11,9 @@
     "uat": false
   },
   "summary": "Feature \"preview-id-clash\" started at phase \"exploring\" (lane).",
-  "next_action": "Continue bee-exploring for \"preview-id-clash\" (lane).",
+  "next_action": "Merged into main at faa91c1; capture what settled, then bee close --feature preview-id-clash.",
   "created_at": "2026-11-19T10:46:46.751Z",
-  "run_state": "awaiting-approval",
+  "run_state": null,
   "waiting_on": null,
   "route": {
     "class": "bugfix",
@@ -429,12 +429,5 @@
         }
       ]
     }
-  },
-  "merge_ready": {
-    "since": "2026-11-19T11:09:49.509Z",
-    "branch": "wt/preview-id-clash",
-    "worktree_id": "beehive--wt--preview-id-clash",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
