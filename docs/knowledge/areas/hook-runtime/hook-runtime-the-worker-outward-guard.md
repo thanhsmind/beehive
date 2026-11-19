@@ -8,7 +8,7 @@ bee:
   id: hook-runtime-hook-runtime-the-worker-outward-guard
   lifecycle: active
   areas: [hook-runtime]
-  decisions: [worker-outward-guard D1-D11, paseo-pi-hardening D5 be1699f8, paseo-pi-hardening D9 e2af1dab, "contract:worker-guard 9659395e"]
+  decisions: [worker-outward-guard D1-D11, guard-config-and-class D3, paseo-pi-hardening D5 be1699f8, paseo-pi-hardening D9 e2af1dab, "contract:worker-guard 9659395e"]
   sources: [docs/history/worker-outward-guard/CONTEXT.md, docs/history/paseo-pi-hardening/CONTEXT.md, docs/history/paseo-pi-hardening/plan.md]
   anchors: [.pi/extensions/bee-guard/events.ts, .pi/extensions/bee-guard/index.ts, packages/bee-rs/crates/bee/src/hooks/write_guard/checks.rs, packages/bee-rs/crates/bee/src/hooks/write_guard/paths.rs, packages/bee-rs/crates/bee/src/hooks/write_guard/main.rs, packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs, packages/bee-rs/crates/bee/src/hooks/worker_guard.rs, packages/bee-rs/crates/bee/src/hooks/mod.rs, packages/bee-rs/crates/bee/tests/pi_worker_guard_contracts.rs]
   verified_at: 2026-10-06
@@ -44,6 +44,8 @@ Adapted from the Seatworks plugin, which denies `git push`, `gh` and agent launc
 **Refuse a GitHub write** (worker-outward-guard D3, D10): a `gh` command head is allowed only when its subcommand pair is on the read-only list after global flags are skipped; `--input` is always refused; a glued or `=`-joined method other than GET is a write; `api graphql` is a read unless a token is `mutation`.
 
 **Refuse an unsanctioned launch** (worker-outward-guard D4, D10): a command head of `claude`, `codex`, `pi` or `opencode` is refused unless it is a sanctioned launch. The `bee` command is never judged, so dispatch, herding and every bee verb run as before.
+
+**Let the leader with the grant launch an agent** (guard-config-and-class D3): a session that holds the worktree grant and has no live claimed cell may start `pi`, `claude`, `codex` or `opencode` in that linked worktree, so the leader can run its own live proof. This is the one named exception to the location rule in D1: workers, claim holders and sessions without the grant stay refused. Push and GitHub writes are never exempted. The grant is read as the worktree being its own store root; the claim as the session's own live claim in that store. No config switch, because a switch would let any worker open it.
 
 **Say the remedy for the form** (worker-outward-guard D5, D11): a push refusal tells a cell worker to stop and report blocked and tells a human to land through the worktree merge from main, releases through the release script from main; a GitHub-write refusal names the same landing path and lists the reads that still run; a launch refusal names the dispatch door. Every refusal names the current worktree id and ends with the opt-out, spelled with the MAIN checkout's configuration file and the note that the worktree's copy is not read.
 

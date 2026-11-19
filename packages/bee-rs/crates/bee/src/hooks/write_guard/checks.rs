@@ -548,6 +548,20 @@ between the two checkouts at merge time.",
         _ => Value::String("idle".into()),
     };
 
+    let research_route = record
+        .get("route")
+        .and_then(|r| r.get("class"))
+        .and_then(Value::as_str)
+        == Some("research");
+    if research_route && !normalized.starts_with("docs/") && !normalized.starts_with(".bee/") {
+        return Ok(WV::Deny(format!(
+            "bee research-class guard: the bound lane's route class is \"research\" and research is read-only — \
+writing \"{}\" is refused. Only docs/ and .bee/ accept writes. \
+FIX: re-route with `bee state route --set --class <c> --lane <lane>` to a writing class (feature, bugfix, refactor, ...) before editing source; read the class first with `bee orient --class <c>`.",
+            normalized
+        )));
+    }
+
     // Workspace-ownership deny (msn-21, class (c)).
     if let Some(sid) = session_id.map(js_trim).filter(|s| !s.is_empty()) {
         // sfg-1/sfg-3: `"claim"` is grouped with `"default"` because neither
@@ -722,6 +736,7 @@ pub(crate) fn check_git_bash_command(
         cwd,
         control_root_override,
         worktree_resolution,
+        session_id,
         &deep,
         &invocations,
         emit,
@@ -844,7 +859,10 @@ A genuinely path-scoped `git commit -- <your paths>` is allowed too.",
         return Ok(None);
     }
 
-    let config = read_config(Path::new(&topo.control_root))?;
+    let config = crate::config_layers::read_merged(
+            Path::new(&topo.control_root),
+            crate::config_layers::CorruptPolicy::Strict,
+        );
     let idle_gate_on = !matches!(
         config.get("guards"),
         Some(g) if truthy(g) && g.get("idle_gate") == Some(&Value::Bool(false))
@@ -986,6 +1004,7 @@ fn outward_arm(
     cwd: &str,
     control_root_override: Option<&str>,
     worktree_resolution: &str,
+    session_id: Option<&str>,
     deep: &DeepTokens,
     invocations: &[GitInvocation],
     emit: &mut Emit,
@@ -1022,6 +1041,11 @@ fn outward_arm(
             }
         };
         if !outward_guard_on(&mut config, root, control_root_override)? {
+            return Ok(None);
+        }
+        if matches!(form, OutwardForm::Launch)
+            && leader_holds_worktree_grant(root, control_root_override, session_id)?
+        {
             return Ok(None);
         }
         return Ok(Some(WV::Deny(outward_refusal(form, &blocked, cwd))));
@@ -1064,7 +1088,7 @@ fn outward_arm(
             let configured = config
                 .as_ref()
                 .is_some_and(|c| configured_cli_command(c, &segment[head_index..]));
-            if configured {
+            if configured || leader_holds_worktree_grant(root, control_root_override, session_id)? {
                 continue;
             }
             return Ok(Some(WV::Deny(outward_refusal(
@@ -1077,6 +1101,29 @@ fn outward_arm(
     Ok(None)
 }
 
+fn leader_holds_worktree_grant(
+    root: &str,
+    control_root_override: Option<&str>,
+    session_id: Option<&str>,
+) -> R<bool> {
+    let Some(sid) = session_id.map(js_trim).filter(|s| !s.is_empty()) else {
+        return Ok(false);
+    };
+    let topo = resolve_write_topology(root, control_root_override)?;
+    let (Some(workspace_root), Some(workspace_id), Some(worktree_id)) = (
+        topo.ctx.workspace_root.as_deref(),
+        topo.ctx.workspace_id.as_deref(),
+        topo.ctx.worktree_id.as_deref(),
+    ) else {
+        return Ok(false);
+    };
+    if workspace_id != worktree_id {
+        return Ok(false);
+    }
+    Ok(session_claimed_features(&topo.control_root, sid).is_empty()
+        && session_claimed_features(workspace_root, sid).is_empty())
+}
+
 fn outward_guard_on(
     slot: &mut Option<Map<String, Value>>,
     root: &str,
@@ -1084,7 +1131,10 @@ fn outward_guard_on(
 ) -> R<bool> {
     if slot.is_none() {
         let topo = resolve_write_topology(root, control_root_override)?;
-        let config = read_config(Path::new(&topo.control_root))?;
+        let config = crate::config_layers::read_merged(
+            Path::new(&topo.control_root),
+            crate::config_layers::CorruptPolicy::Strict,
+        );
         if matches!(
             config.get("guards"),
             Some(g) if truthy(g) && g.get("worker_outward") == Some(&Value::Bool(false))
@@ -1167,11 +1217,10 @@ pub(crate) fn codex_read_only_exec(head: &str, rest: &[String]) -> bool {
 
 fn configured_cli_command(config: &Map<String, Value>, segment: &[String]) -> bool {
     let line = segment.join(" ");
-    let Some(Value::Object(models)) = config.get("team").or_else(|| config.get("models")) else {
-        return false;
-    };
-    models
-        .values()
+    ["team", "models"]
+        .iter()
+        .filter_map(|key| config.get(*key).and_then(Value::as_object))
+        .flat_map(|slots| slots.values())
         .filter_map(Value::as_object)
         .flat_map(|runtime| runtime.values())
         .any(|slot| {
