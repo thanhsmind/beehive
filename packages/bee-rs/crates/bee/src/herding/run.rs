@@ -212,6 +212,7 @@ pub(super) struct Options {
     pub(crate) allow_question: bool,
     pub(crate) read_only: bool,
     pub(crate) claude_session: Option<ClaudeSessionSpec>,
+    dispatch_pane: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -324,9 +325,14 @@ fn parse_options(flags: &[&str]) -> Result<Options, String> {
     let mut read_only = false;
     let mut session_model: Option<&str> = None;
     let mut session_effort: Option<&str> = None;
+    let mut dispatch_pane: Option<&str> = None;
     let mut i = 0usize;
     while i < flags.len() {
         match flags[i] {
+            "--dispatch-pane" => {
+                dispatch_pane = flags.get(i + 1).copied();
+                i += 2;
+            }
             "--session-model" => {
                 session_model = flags.get(i + 1).copied();
                 i += 2;
@@ -519,6 +525,7 @@ fn parse_options(flags: &[&str]) -> Result<Options, String> {
         allow_question,
         read_only,
         claude_session,
+        dispatch_pane: dispatch_pane.map(str::to_string),
     })
 }
 
@@ -1452,6 +1459,7 @@ fn is_agent_prompt_timeout(e: &str) -> bool {
 fn start_with_retry(
     start: &mut dyn FnMut() -> Result<(), String>,
     sleep: &mut dyn FnMut(Duration),
+    clear_input: &mut dyn FnMut(),
 ) -> Result<(), String> {
     let mut last = String::new();
     for attempt in 1..=START_RETRY_ATTEMPTS {
@@ -1460,6 +1468,7 @@ fn start_with_retry(
             Err(e) if is_pane_busy_error(&e) => {
                 last = e;
                 if attempt < START_RETRY_ATTEMPTS {
+                    clear_input();
                     sleep(POLL_INTERVAL * 5);
                 }
             }
@@ -2696,9 +2705,12 @@ fn execute_new(opts: &Options, herdr: &dyn PaneTransport) -> ExecResult {
             eprintln!("bee herding run: workspace-trust pre-flight failed ({msg}) — proceeding anyway");
         }
 
-    let own_pane = match herdr.pane_current() {
-        Ok(p) => p,
-        Err(e) => return ExecResult { outcome: RunOutcome::SpawnFailed(e), pane_id: None, closed_pane: false },
+    let own_pane = match &opts.dispatch_pane {
+        Some(p) => p.clone(),
+        None => match herdr.pane_current() {
+            Ok(p) => p,
+            Err(e) => return ExecResult { outcome: RunOutcome::SpawnFailed(e), pane_id: None, closed_pane: false },
+        },
     };
     // hss-2: the layout read and the split itself run under one
     // cross-process lock, so concurrent spawns from one tab see each other's
@@ -2754,6 +2766,9 @@ fn execute_new(opts: &Options, herdr: &dyn PaneTransport) -> ExecResult {
     let start_result = start_with_retry(
         &mut || herdr.agent_start(&opts.job_id, &kind, &new_pane, &args),
         &mut |d| std::thread::sleep(d),
+        &mut || {
+            let _ = herdr.pane_send_key(&new_pane, "ctrl+u");
+        },
     );
     if let Err(e) = start_result {
         // role-dispatch.md §8's own cleanup rule: a start failure closes the
@@ -5935,7 +5950,11 @@ fn spawn_detached_runner(flags: &[&str], opts: &Options) -> Result<(), String> {
     use std::os::unix::process::CommandExt;
     use std::process::{Command, Stdio};
     let exe = std::env::current_exe().map_err(|e| format!("could not resolve the bee executable: {e}"))?;
-    let (args, pipe_task) = runner_args(flags, &opts.job_id);
+    let (mut args, pipe_task) = runner_args(flags, &opts.job_id);
+    if let Some(pane) = &opts.dispatch_pane {
+        args.push("--dispatch-pane".to_string());
+        args.push(pane.clone());
+    }
     let mut child = Command::new(exe)
         .args(&args)
         .env(DETACHED_RUNNER_ENV, "1")
@@ -6298,6 +6317,12 @@ pub(super) fn run(flags: &[&str]) -> ExitCode {
             }
         }
     };
+    if let Some(t) = &transport
+        && !opts.is_continue
+        && opts.dispatch_pane.is_none()
+    {
+        opts.dispatch_pane = t.pane_current().ok();
+    }
     let marker = std::env::var(DETACHED_RUNNER_ENV).ok();
     if let (Some(session), true) =
         (opts.inbox_session.as_deref(), should_detach(opts.inbox_session.is_some(), opts.dry_run, marker.as_deref()))
@@ -7771,6 +7796,7 @@ mod tests {
             allow_question: true,
             read_only: false,
             claude_session: None,
+            dispatch_pane: None,
         }
     }
 
@@ -7857,6 +7883,7 @@ mod tests {
             allow_question: true,
             read_only: false,
             claude_session: None,
+            dispatch_pane: None,
         }
     }
 
@@ -8027,6 +8054,7 @@ mod tests {
                 }
             },
             &mut |_d| {},
+            &mut || {},
         );
         assert!(out.is_ok());
         assert_eq!(*calls.borrow(), 3, "two busy refusals then success");
@@ -8041,6 +8069,7 @@ mod tests {
                 Err("herdr agent start x exited 1: unknown kind".to_string())
             },
             &mut |_d| {},
+            &mut || {},
         );
         assert!(out.is_err());
         assert_eq!(*calls.borrow(), 1, "a non-busy error fails immediately");
@@ -8051,6 +8080,7 @@ mod tests {
         let out = start_with_retry(
             &mut || Err("agent_pane_busy: still booting".to_string()),
             &mut |_d| {},
+            &mut || {},
         );
         let err = out.unwrap_err();
         assert!(err.contains("start attempts"), "{err}");
