@@ -928,6 +928,13 @@
     "contract:herding-live-count",
     "contract:prepare-unknown-agent",
     "contract:principle-ranking",
-    "contract:release-published"
+    "contract:release-published",
+    "contract:fix-at-ledger",
+    "contract:mistakes-door-names-cells",
+    "contract:fix-at-intake",
+    "contract:fix-at-debt",
+    "contract:fix-at-verbs",
+    "contract:evidence-ref-check",
+    "contract:doctrine-names-loop"
   ]
 }
