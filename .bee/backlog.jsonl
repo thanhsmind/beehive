@@ -2071,3 +2071,7 @@
 {"ts":"2026-11-19T16:17:47.186Z","kind":"pbi","event":"status","id":"p-5614f047","status":"done"}
 {"ts":"2026-11-19T16:17:47.197Z","kind":"pbi","event":"status","id":"p-7cc2ebe1","status":"done"}
 {"ts":"2026-11-19T16:17:47.208Z","kind":"pbi","event":"status","id":"p-6b237338","status":"done"}
+{"ts":"2026-11-19T16:23:36.898Z","kind":"pbi","event":"status","id":"p-28defd13","status":"done"}
+{"ts":"2026-11-19T16:23:36.919Z","kind":"pbi","event":"status","id":"p-69bee217","status":"done"}
+{"ts":"2026-11-19T16:23:36.941Z","kind":"pbi","event":"status","id":"p-b9e2a334","status":"done"}
+{"ts":"2026-11-19T16:31:41.905Z","kind":"pbi","event":"add","id":"p-2ce14340","title":"Test bee state plan-conflicts verdict --id a,b end to end so the comma split is guarded","status":"proposed","cos":"A test in packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs runs the verdict verb with --id a,b and asserts two verdict rows; replacing the comma split in run_plan_conflicts_verdict with a single id turns it red. Found by pcx-t, 2026-11-19."}

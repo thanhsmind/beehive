@@ -23,5 +23,12 @@
     "rationale": null,
     "updated_at": "2026-11-19T14:52:37.769Z",
     "feature": "plan-conflicts-and-briefs"
+  },
+  "merge_ready": {
+    "since": "2026-11-19T16:30:56.114Z",
+    "branch": "wt/plan-conflicts-and-briefs",
+    "worktree_id": "beehive--wt--plan-conflicts-and-briefs",
+    "uat": "pending",
+    "blocked_by": []
   }
 }
