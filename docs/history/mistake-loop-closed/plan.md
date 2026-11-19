@@ -159,7 +159,7 @@ SMALLER PATH: doctrine only (tell agents to close rows with proof) keeps the fix
 | mlc-5t | Test the fix-at verbs | verbs/backlog.rs, verbs/upkeep_group.rs, verbs/work.rs | mlc-5 | test | `cargo test … --bin bee -- fix_at_verbs` |
 | mlc-6 | Warn when evidence_ref names nothing | verbs/knowledge/check.rs | mlc-5t | code | `cargo test … --bin bee -- knowledge` |
 | mlc-6t | Test the evidence_ref checks | verbs/knowledge/tests.rs | mlc-6 | test | `cargo test … --bin bee -- evidence_ref_check_` |
-| mlc-7 | Name the closed loop in the doctrine | packages/bee/AGENTS.block.md, packages/bee/LEADER.md, skills/bee-capturing/references/promotion.md, expertise/static-rules.md, packages/bee-rs/crates/bee/tests/instruction_laws.rs | mlc-6t | docs | `cargo test … --test instruction_laws` |
+| mlc-7 | Name the closed loop in the doctrine | packages/bee/AGENTS.block.md, packages/bee/LEADER.md, skills/bee-capturing/references/promotion.md, expertise/static-rules.md, packages/bee-rs/crates/bee/tests/instruction_laws.rs, docs/history/codex-harness-hardening/release-manifest.json, AGENTS.md | mlc-6t | docs | `cargo test … --test instruction_laws && /mnt/data/Projects/goglbe/beehive/.bee/bin/bee dev release-manifest --check` |
 | mlc-7c | Check the doctrine edit | docs/history/mistake-loop-closed/reports/mlc-7c.md | mlc-7 | review | `cargo test … --test pointer_integrity` |
 | mlc-8 | Sync the concepts and write the delivery note | docs/knowledge/areas/human-mailbox/overview.md, docs/knowledge/areas/feedback-digest/ranking-and-self-improvement.md, docs/knowledge/areas/okf-profile/conformance-check.md, docs/knowledge/areas/hook-runtime/token-economy-of-injected-context.md, docs/history/mistake-loop-closed/delivery.md, docs/briefs/mistake-loop-closed.md | mlc-7c | writer | `/mnt/data/Projects/goglbe/beehive/.bee/bin/bee knowledge check` |
 
@@ -986,7 +986,9 @@ SMALLER PATH: doctrine only (tell agents to close rows with proof) keeps the fix
       "packages/bee/LEADER.md",
       "skills/bee-capturing/references/promotion.md",
       "expertise/static-rules.md",
-      "packages/bee-rs/crates/bee/tests/instruction_laws.rs"
+      "packages/bee-rs/crates/bee/tests/instruction_laws.rs",
+      "docs/history/codex-harness-hardening/release-manifest.json",
+      "AGENTS.md"
     ],
     "read_first": [
       "docs/history/mistake-loop-closed/CONTEXT.md",
@@ -998,7 +1000,7 @@ SMALLER PATH: doctrine only (tell agents to close rows with proof) keeps the fix
     "affects_skills": [],
     "affects_specs": [],
     "action": "Implement CONTEXT.md D11. In packages/bee/LEADER.md, extend the existing mistake bullet: a closing session answers for named cells with bee mailbox reflect --cell <ids>, and the door clears only the cells named. In packages/bee/AGENTS.block.md ADD one short bullet saying the same (no mistake bullet exists there today). In expertise/static-rules.md ('Show it red, then green'): replace the hand-written bee backlog add --type backlog-closed line with bee backlog fix-at close --layer <l> --title <t> --guard <what> --guard-cmd <command> --red-proof <red output> --commit <sha>. In skills/bee-capturing/references/promotion.md name bee backlog fix-at close with its proof flags where the tree points at closing a row, and name bee backlog fix-at next and promote as the way to pick the next group. In tests/instruction_laws.rs (fix_at_close_missing and its law near line 1414) change the needles from --type backlog-closed to bee backlog fix-at close, --guard-cmd and --red-proof, and add one needle for reflect --cell in packages/bee/AGENTS.block.md, so the law turns red when the doctrine is missing. Keep every other line byte for byte. Then run /mnt/data/Projects/goglbe/beehive/.bee/bin/bee dev regen once from the worktree root; restore any hub-served skill tree it re-renders under .claude/skills with git restore and git clean -fd .claude/skills before committing. Proof: cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test instruction_laws, --test agents_block_render_parity and --test pointer_integrity. Write no code comment of any kind. Never edit .bee/*.json or .bee/*.jsonl by hand. Run only the cell's verify filter, never the full suite. Allowed commands: cargo build, cargo test with a filter, cargo clippy, /mnt/data/Projects/goglbe/beehive/.bee/bin/bee dev regen, /mnt/data/Projects/goglbe/beehive/.bee/bin/bee knowledge check. Quote the count of tests the filter matched in the cap report.",
-    "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test instruction_laws",
+    "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test instruction_laws && /mnt/data/Projects/goglbe/beehive/.bee/bin/bee dev release-manifest --check",
     "must_haves": {
       "truths": [
         "the doctrine names reflect --cell and bee backlog fix-at close with its proof flags",
