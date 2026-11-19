@@ -23,7 +23,7 @@ shows the moves; this file carries the craft and judgment detail.
   the line is never a question, and the playback plus sharpened ask stay
   at most three lines. A wrong reading caught here costs one line;
   caught at the gate, it costs the plan.
-- **Batching.** Follow the policy in `skills/bee-hive/references/routing-and-contracts.md`
+- **Batching.** Follow the policy in `bee-hive/references/routing-and-contracts.md`
   "Question Format". Broad questions lead — they are the ones others hinge on.
 - **Propose, then invert.** Lead with a concrete recommendation the user
   can accept in a word; then invert — "what must this NOT do?" — the
