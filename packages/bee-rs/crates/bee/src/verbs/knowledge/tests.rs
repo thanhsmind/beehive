@@ -4299,3 +4299,50 @@ mod freshness_tests {
         assert_eq!(section["unrecorded_features"], 1);
     }
 }
+
+mod report_upkeep_wiring_tests {
+    use super::*;
+
+    const ARGV_ENV: &str = "BEE_RS_KNOWLEDGE_REPORT_TEST_ARGV";
+    const CHILD_TEST: &str = "verbs::knowledge::tests::report_upkeep_wiring_tests::report_child_process";
+    const OUT_OPEN: &str = "<<<bee-stdout";
+    const OUT_CLOSE: &str = "bee-stdout>>>";
+
+    #[test]
+    #[ignore = "child process of report_stdout(): needs a fixture cwd, never runs in-process"]
+    fn report_child_process() -> ExitCode {
+        let raw = std::env::var(ARGV_ENV).expect("child spawned without an argv env var");
+        let argv: Vec<OsString> = raw.split('\u{1f}').map(OsString::from).collect();
+        println!("{OUT_OPEN}");
+        let code = try_native(&argv, Instant::now()).expect("knowledge report must be served natively");
+        println!("{OUT_CLOSE}");
+        code
+    }
+
+    fn report_stdout(root: &Path) -> String {
+        let exe = std::env::current_exe().expect("test binary path");
+        let out = std::process::Command::new(exe)
+            .args([CHILD_TEST, "--exact", "--ignored", "--nocapture"])
+            .env(ARGV_ENV, ["knowledge", "report"].join("\u{1f}"))
+            .current_dir(root)
+            .output()
+            .expect("spawn the child test binary");
+        let raw = String::from_utf8_lossy(&out.stdout).into_owned();
+        let start = raw.find(OUT_OPEN).unwrap_or_else(|| panic!("child never printed {OUT_OPEN}:\n{raw}")) + OUT_OPEN.len();
+        let end = raw[start..].find(OUT_CLOSE).unwrap_or_else(|| panic!("child never printed {OUT_CLOSE}:\n{raw}")) + start;
+        raw[start..end].to_string()
+    }
+
+    #[test]
+    fn knowledge_report_prints_exactly_one_upkeep_line() {
+        let repo = tempfile::tempdir().unwrap();
+        let root = dunce::canonicalize(repo.path()).unwrap();
+        std::fs::create_dir_all(root.join(".bee")).unwrap();
+        std::fs::write(root.join(".bee").join("onboarding.json"), "{}\n").unwrap();
+        std::fs::create_dir_all(root.join("docs").join("knowledge")).unwrap();
+        std::fs::write(root.join("docs").join("knowledge").join("index.md"), "# Index\n").unwrap();
+        let stdout = report_stdout(&root);
+        let upkeep: Vec<&str> = stdout.lines().filter(|l| l.starts_with("upkeep:")).collect();
+        assert_eq!(upkeep.len(), 1, "{stdout}");
+    }
+}
