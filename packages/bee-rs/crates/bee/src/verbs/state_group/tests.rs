@@ -3007,7 +3007,7 @@ use std::time::Instant;
 
         let candidates = ok(derive_candidates(root, "f1"));
         let mut review = build_conflict_review(json!(1), candidates, "2026-08-22T00:00:00.000Z");
-        apply_conflict_verdict(&mut review, "dec-match", "retires-prior", Some("supersedes dec-old"))
+        apply_conflict_verdict(&mut review, &["dec-match"], "retires-prior", Some("supersedes dec-old"))
             .expect("a derived id must be settable");
 
         let rows = review["candidates"].as_array().unwrap();
@@ -3032,8 +3032,8 @@ use std::time::Instant;
             ok(derive_candidates(root, "f1")),
             "2026-08-22T00:00:00.000Z",
         );
-        apply_conflict_verdict(&mut review, "dec-match", "compatible", None).unwrap();
-        apply_conflict_verdict(&mut review, "koh-plan-conflicts", "conflicts", None).unwrap();
+        apply_conflict_verdict(&mut review, &["dec-match"], "compatible", None).unwrap();
+        apply_conflict_verdict(&mut review, &["koh-plan-conflicts"], "conflicts", None).unwrap();
         assert!(review["candidates"]
             .as_array()
             .unwrap()
@@ -3067,11 +3067,52 @@ use std::time::Instant;
             "2026-08-22T00:00:00.000Z",
         );
         let before = jsjson::stringify(&review);
-        let message = apply_conflict_verdict(&mut review, "not-a-candidate", "compatible", None)
+        let message = apply_conflict_verdict(&mut review, &["not-a-candidate"], "compatible", None)
             .expect_err("an unknown id must refuse");
         assert!(message.contains("not-a-candidate"), "message: {message}");
         assert!(message.contains("dec-match"), "the refusal lists what IS known: {message}");
         assert_eq!(jsjson::stringify(&review), before, "a refusal writes nothing");
+    }
+
+    #[test]
+    fn plan_conflicts_batch_of_ids_records_one_verdict_per_id() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        write_matching_cell(root);
+        write_decisions_fixture(root);
+        write_rule_home_fixture(root);
+
+        let mut review = build_conflict_review(
+            json!(1),
+            ok(derive_candidates(root, "f1")),
+            "2026-08-22T00:00:00.000Z",
+        );
+        apply_conflict_verdict(&mut review, &["dec-match", "koh-plan-conflicts"], "compatible", Some("n"))
+            .expect("every id is a candidate");
+        for row in review["candidates"].as_array().unwrap() {
+            assert_eq!(row["verdict"], json!("compatible"), "{}", jsjson::stringify(row));
+            assert_eq!(row["note"], json!("n"));
+        }
+    }
+
+    #[test]
+    fn plan_conflicts_unknown_id_in_a_batch_refuses_the_whole_batch() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        write_matching_cell(root);
+        write_decisions_fixture(root);
+        write_rule_home_fixture(root);
+
+        let mut review = build_conflict_review(
+            json!(1),
+            ok(derive_candidates(root, "f1")),
+            "2026-08-22T00:00:00.000Z",
+        );
+        let before = jsjson::stringify(&review);
+        let message = apply_conflict_verdict(&mut review, &["dec-match", "nope"], "compatible", None)
+            .expect_err("one unknown id must refuse the batch");
+        assert!(message.contains("nope"), "message: {message}");
+        assert_eq!(jsjson::stringify(&review), before, "a refused batch writes nothing");
     }
 
     /// The verdict vocabulary is closed — the registry's own enum and the

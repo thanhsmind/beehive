@@ -442,12 +442,9 @@ pub(crate) fn build_conflict_review(plan_rev: Value, candidates: Vec<Value>, der
     })
 }
 
-/// Sets exactly one candidate's verdict and note in place. Returns the
-/// refusal text for an id no candidate carries — the caller has already
-/// checked the verdict value itself.
 pub(crate) fn apply_conflict_verdict(
     review: &mut Value,
-    id: &str,
+    ids: &[&str],
     verdict: &str,
     note: Option<&str>,
 ) -> Result<(), String> {
@@ -455,11 +452,14 @@ pub(crate) fn apply_conflict_verdict(
         Some(Value::Array(items)) => items.iter().map(|c| js_disp_opt(jget(c, "id"))).collect(),
         _ => Vec::new(),
     };
+    if let Some(missing) = ids.iter().find(|id| !known.iter().any(|k| k == *id)) {
+        return Err(unknown_candidate_refusal(missing, &known));
+    }
     let Some(Value::Array(items)) = review.get_mut("candidates") else {
-        return Err(unknown_candidate_refusal(id, &known));
+        return Ok(());
     };
     for c in items.iter_mut() {
-        if js_disp_opt(jget(c, "id")) != id {
+        if !ids.contains(&js_disp_opt(jget(c, "id")).as_str()) {
             continue;
         }
         let Some(obj) = c.as_object_mut() else { continue };
@@ -471,9 +471,8 @@ pub(crate) fn apply_conflict_verdict(
                 None => Value::Null,
             },
         );
-        return Ok(());
     }
-    Err(unknown_candidate_refusal(id, &known))
+    Ok(())
 }
 
 fn unknown_candidate_refusal(id: &str, known: &[String]) -> String {
@@ -628,6 +627,7 @@ pub(crate) fn run_plan_conflicts_verdict(flags: Flags, use_json: bool, t0: Insta
         if !CONFLICT_VERDICTS.contains(&verdict.as_str()) {
             return Ok(Out::Thrown(unknown_verdict_refusal(&verdict)));
         }
+        let ids: Vec<&str> = id.split(',').map(str::trim).filter(|s| !s.is_empty()).collect();
         let note = flag_value(&flags, "note");
         with_lane_workflow(&ctx, &flags, "state plan-conflicts verdict", |current, lane| {
             let Some(review) = current.get("conflict_review") else {
@@ -636,13 +636,15 @@ pub(crate) fn run_plan_conflicts_verdict(flags: Flags, use_json: bool, t0: Insta
                 )));
             };
             let mut review = review.clone();
-            if let Err(refusal) = apply_conflict_verdict(&mut review, &id, &verdict, note.as_deref()) {
+            if let Err(refusal) = apply_conflict_verdict(&mut review, &ids, &verdict, note.as_deref()) {
                 return Ok(Err(refusal));
             }
             let mut patch = Map::new();
             patch.insert("conflict_review".into(), review.clone());
             let text = format!(
-                "Recorded verdict \"{verdict}\" for candidate \"{id}\" on lane \"{lane}\"."
+                "Recorded verdict \"{verdict}\" for {} candidate(s) ({}) on lane \"{lane}\".",
+                ids.len(),
+                ids.join(", ")
             );
             Ok(Ok((patch, review, text)))
         })
