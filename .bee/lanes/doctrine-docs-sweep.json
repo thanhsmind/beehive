@@ -972,5 +972,12 @@
   },
   "gate_revoked_at": {
     "execution": "2026-11-19T10:50:56.951Z"
+  },
+  "merge_ready": {
+    "since": "2026-11-19T11:15:05.787Z",
+    "branch": "wt/doctrine-docs-sweep",
+    "worktree_id": "beehive--wt--doctrine-docs-sweep",
+    "uat": "pending",
+    "blocked_by": []
   }
 }
