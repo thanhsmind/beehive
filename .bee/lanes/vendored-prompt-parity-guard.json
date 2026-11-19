@@ -11,9 +11,9 @@
     "uat": false
   },
   "summary": "Feature \"vendored-prompt-parity-guard\" started at phase \"exploring\" (lane).",
-  "next_action": "Continue bee-exploring for \"vendored-prompt-parity-guard\" (lane).",
+  "next_action": "Merged into main at ace2de3; capture what settled, then bee close --feature vendored-prompt-parity-guard.",
   "created_at": "2026-11-19T09:41:10.612Z",
-  "run_state": "awaiting-approval",
+  "run_state": null,
   "waiting_on": null,
   "route": {
     "class": "bugfix",
@@ -427,12 +427,5 @@
         }
       ]
     }
-  },
-  "merge_ready": {
-    "since": "2026-11-19T09:45:33.922Z",
-    "branch": "wt/vendored-prompt-parity-guard",
-    "worktree_id": "beehive--wt--vendored-prompt-parity-guard",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
