@@ -2,6 +2,9 @@
 #![allow(unused_imports)]
 
 use super::*;
+
+#[path = "heading_section.rs"]
+mod heading_section;
 use serde_json::Value;
 use std::collections::HashMap;
 use std::path::Path;
@@ -127,7 +130,7 @@ pub(crate) fn load_ownership(repo_root: &Path) -> Ownership {
         }
 
         // 3. AGENTS.md rule homes section
-        if body.contains("## AGENTS.md rule homes") {
+        if heading_section::section_after_heading(body, "## AGENTS.md rule homes").is_some() {
             let parsed_agents = parse_agents_rule_homes(body, &file_areas);
             agents_homes.extend(parsed_agents);
         }
@@ -149,14 +152,10 @@ pub(crate) fn load_ownership(repo_root: &Path) -> Ownership {
 
 fn parse_agents_rule_homes(body: &str, default_areas: &[String]) -> Vec<RuleHome> {
     let mut out = Vec::new();
-    let Some(start_pos) = body.find("## AGENTS.md rule homes") else {
+    let Some(section_text) =
+        heading_section::section_after_heading(body, "## AGENTS.md rule homes")
+    else {
         return out;
-    };
-    let rest = &body[start_pos + "## AGENTS.md rule homes".len()..];
-    let section_text = if let Some(end_pos) = rest.find("\n## ") {
-        &rest[..end_pos]
-    } else {
-        rest
     };
 
     let mut current_rule: Option<String> = None;
