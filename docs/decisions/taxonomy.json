@@ -936,6 +936,7 @@
     "contract:fix-at-verbs",
     "contract:evidence-ref-check",
     "contract:doctrine-names-loop",
-    "lesson"
+    "lesson",
+    "contract:vendored-prompt-parity"
   ]
 }
