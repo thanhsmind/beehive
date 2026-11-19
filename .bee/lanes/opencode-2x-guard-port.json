@@ -11,10 +11,15 @@
     "uat": false
   },
   "summary": "Feature \"opencode-2x-guard-port\" started at phase \"exploring\" (lane).",
-  "next_action": "Continue bee-exploring for \"opencode-2x-guard-port\" (lane).",
+  "next_action": "Merged into main at 85dfb45; reload the product and test \"opencode-2x-guard-port\", then either approve uat (\"bee gate --name uat --approved true --lane opencode-2x-guard-port\") or fix it in the worktree and merge again.",
   "created_at": "2026-11-19T10:12:36.230Z",
   "run_state": "awaiting-approval",
-  "waiting_on": null,
+  "waiting_on": {
+    "kind": "gate",
+    "subject": "uat: opencode-2x-guard-port",
+    "asked_at": "2026-11-19T10:48:24.159Z",
+    "session": "bee-worktree-merge-sessionless"
+  },
   "route": {
     "class": "feature",
     "lane": "standard",
@@ -672,12 +677,5 @@
   },
   "gate_revoked_at": {
     "execution": "2026-11-19T10:44:26.671Z"
-  },
-  "merge_ready": {
-    "since": "2026-11-19T10:33:35.204Z",
-    "branch": "wt/opencode-2x-guard-port",
-    "worktree_id": "beehive--wt--opencode-2x-guard-port",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
