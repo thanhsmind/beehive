@@ -148,7 +148,7 @@
     },
     {
       "path": ".claude-plugin/skills/.bee-render.json",
-      "sha256": "a006eb30ab3c2882c358199a360983a19b629eff846121f8b3402e284cc1e6d7",
+      "sha256": "57349e5491cc31c32a1194cde30cd48cb3c2921250120a3544af14aac97df2ae",
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/.bee-render.json"
@@ -1898,7 +1898,7 @@
     },
     {
       "path": ".codex-plugin/skills/.bee-render.json",
-      "sha256": "6d727c5b29331829d4d579fbcdc9aec92d2d13efcdf7f66204ab19a4baad19b2",
+      "sha256": "76765d3559dd75f764f23ec9b1b6053a334e30a7052413de9b17a52c73d1d3be",
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/.bee-render.json"
