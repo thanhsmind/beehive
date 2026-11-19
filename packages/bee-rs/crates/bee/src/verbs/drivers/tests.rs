@@ -13618,4 +13618,12 @@ Finish with: .bee/bin/bee cells finish --id c-golden --outcome "<one line>" --fi
             assert!(!prompt.contains(LEARNED_HEADER), "{kind}: {prompt}");
             assert_eq!(record.get("knowledge_arm"), None, "{kind}");
         }
+    
+    #[test]
+    fn wave_entry_rebuild_command_names_the_cell_and_its_worker() {
+        assert_eq!(
+            wave_rebuild_command("claude", "dlr-2"),
+            ".bee/bin/bee dispatch prepare --runtime claude --kind cell --cell dlr-2 --worker w-dlr-2 --json"
+        );
     }
+}

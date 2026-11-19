@@ -88,6 +88,15 @@ token and the catalog ratchet goes red. Pointers:
 `packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs`
 (`run_dispatch_wave`).
 
+**An all-silent wave says so, and each entry names its rebuild command
+(dispatch-ledger-retire D2/D3).** `wave --run` adds `empty_wave: true` and a
+one-line `empty_wave_reason` when at least one worker ran and every one returned
+no exit code and no output, so a leader can tell nobody answered from nothing
+launching. Zero rows is never flagged. Each wave entry carries `rebuild`, the
+`bee dispatch prepare ... --cell <id> --worker w-<id> --json` command that
+regenerates its payload. `bee herding wave` and fleet `WaveResult` are outside
+this and unchanged.
+
 **A cell dispatch names its cell on the herding command (dispatch-cell-id-flag,
 `3aa96ff2`).** When the door prepares a cell for a herding worker, the command
 it returns carries `--cell-id "<id>"`. Gather, reviewer and advisor commands
