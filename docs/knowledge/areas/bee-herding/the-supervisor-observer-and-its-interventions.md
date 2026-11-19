@@ -56,10 +56,10 @@ registry's liveness, the wave ledger and occupancy, cells with their budgets,
 and decisions with their triggers. The supervisor itself still polls nothing:
 the one added reader is the Detector, a code-only tick that writes facts for
 the supervisor to judge (see "The Detector" below). The day-one signals it looks for are a **struggling loop**, a **big decision**, and
-a **danger operation**; two more join them where the inputs exist — work
-running past twice its recorded estimate, measured by the harness and never
-self-reported, and two consecutive submissions that differ only inside the same
-region (a8f4b8ab).
+a **danger operation**; one more joins them where the input exists — two
+consecutive submissions that differ only inside the same region (a8f4b8ab). The
+estimate-overrun signal was retired because nothing ever wrote an estimate to
+read (dispatch-ledger-retire D5); an estimate input would be a new PBI.
 
 The supervisor may run `bee herding status`. A `permission` kind exists in the human-decision queue for blocked Paseo workers.
 
@@ -181,7 +181,7 @@ notify.
 ## The advisor-nudge record
 
 A second record kind, `advisor-nudge`, fires when a poor-work signal
-(struggling-loop, budget overrun, same-region resubmits) supports it
+(struggling-loop, same-region resubmits) supports it
 (3cfd9980). It **recommends only** — the supervisor still decides nothing and
 acts on nothing (787a9eb0 holds): it never summons the advisor itself. The
 struggling session's own lead reads the nudge at its next turn boundary and

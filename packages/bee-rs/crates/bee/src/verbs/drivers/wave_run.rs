@@ -28,6 +28,7 @@ pub(crate) fn run_rolling_with(
     let mut native: Vec<Value> = Vec::new();
     let mut skipped: Vec<Value> = Vec::new();
     let mut rows: Vec<Value> = Vec::new();
+    let mut silent = true;
     std::thread::scope(|scope| {
         let (tx, rx) = mpsc::channel::<(String, Spawn)>();
         let mut live = 0usize;
@@ -57,10 +58,11 @@ pub(crate) fn run_rolling_with(
             }
             let Ok((id, spawn)) = rx.recv() else { break };
             live -= 1;
+            silent &= is_silent(&spawn);
             rows.push(save_row(root, &id, &spawn));
         }
     });
-    finish_value(rows, native, &skipped)
+    finish_value(rows, native, &skipped, silent)
 }
 
 fn save_row(root: &Path, id: &str, spawn: &Spawn) -> Value {
@@ -72,11 +74,30 @@ fn save_row(root: &Path, id: &str, spawn: &Spawn) -> Value {
     row(id, spawn, &path)
 }
 
-fn finish_value(rows: Vec<Value>, native: Vec<Value>, skipped: &[Value]) -> (Value, u8) {
+fn is_silent(spawn: &Spawn) -> bool {
+    spawn.exit.is_none() && spawn.stdout.trim().is_empty()
+}
+
+fn finish_value(
+    rows: Vec<Value>,
+    native: Vec<Value>,
+    skipped: &[Value],
+    silent: bool,
+) -> (Value, u8) {
+    let empty_wave = silent && !rows.is_empty();
     let all_done = rows
         .iter()
         .all(|r| r.get("outcome").and_then(Value::as_str) == Some("done"));
     let mut out = Map::new();
+    if empty_wave {
+        out.insert("empty_wave".into(), Value::Bool(true));
+        out.insert(
+            "empty_wave_reason".into(),
+            Value::String(
+                "every launched worker returned no exit code and no output; nobody answered".into(),
+            ),
+        );
+    }
     out.insert("ran".into(), Value::Array(rows));
     out.insert("native".into(), Value::Array(native));
     out.insert("skipped".into(), Value::Array(skipped.to_vec()));
@@ -122,12 +143,13 @@ pub(crate) fn run_wave_with(
             .collect()
     });
 
+    let silent = spawned.iter().all(is_silent);
     let rows: Vec<Value> = herding
         .iter()
         .zip(spawned.iter())
         .map(|((id, _), spawn)| save_row(root, id, spawn))
         .collect();
-    finish_value(rows, native, skipped)
+    finish_value(rows, native, skipped, silent)
 }
 
 pub(crate) fn is_herding(item: &Value) -> bool {
@@ -446,6 +468,61 @@ mod tests {
         assert_eq!(value["native"].as_array().unwrap().len(), 1, "{value}");
         assert_eq!(value["native"][0], agent_item("n-1").1, "{value}");
         assert_eq!(value["ran"].as_array().unwrap().len(), 2, "{value}");
+    }
+
+    fn silent_spawn() -> Spawn {
+        Spawn { exit: None, stdout: String::new() }
+    }
+
+    #[test]
+    fn wave_flags_empty_wave_when_every_row_is_silent() {
+        let tmp = tempfile::tempdir().unwrap();
+        let items = vec![herding_item("c-1"), herding_item("c-2")];
+        let runner = |_c: &str, _i: &str, _p: &Path| silent_spawn();
+        let (value, code) = run_wave_with(tmp.path(), &items, &[], &runner);
+        assert_eq!(code, 1, "{value}");
+        assert_eq!(value["empty_wave"], json!(true), "{value}");
+        assert!(
+            value["empty_wave_reason"].as_str().is_some_and(|r| !r.is_empty()),
+            "{value}"
+        );
+    }
+
+    #[test]
+    fn wave_with_one_answer_is_not_flagged_empty() {
+        let tmp = tempfile::tempdir().unwrap();
+        let items = vec![herding_item("c-1"), herding_item("c-2")];
+        let runner = |_c: &str, stdin: &str, _p: &Path| {
+            if stdin.contains("c-1") {
+                Spawn { exit: Some(0), stdout: done_envelope("c-1") }
+            } else {
+                silent_spawn()
+            }
+        };
+        let (value, _code) = run_wave_with(tmp.path(), &items, &[], &runner);
+        assert!(value.get("empty_wave").is_none(), "{value}");
+    }
+
+    #[test]
+    fn wave_with_zero_rows_is_not_flagged_empty() {
+        let tmp = tempfile::tempdir().unwrap();
+        let runner = |_c: &str, _i: &str, _p: &Path| -> Spawn { panic!("nothing runs") };
+        let (value, _code) = run_wave_with(tmp.path(), &[agent_item("c-3")], &[], &runner);
+        assert!(value.get("empty_wave").is_none(), "{value}");
+        let mut fill = |_slots: usize, _s: &mut Vec<Value>| Vec::new();
+        let (value, _code) = run_rolling_with(tmp.path(), Some(2), &mut fill, &runner);
+        assert!(value.get("empty_wave").is_none(), "{value}");
+    }
+
+    #[test]
+    fn rolling_flags_empty_wave_when_every_row_is_silent() {
+        let tmp = tempfile::tempdir().unwrap();
+        let capped = std::sync::Mutex::new(Vec::new());
+        let started = std::sync::Mutex::new(Vec::new());
+        let runner = |_c: &str, _i: &str, _p: &Path| silent_spawn();
+        let mut fill = ready_fill(&["a", "b"], &[], &capped, &started, &[]);
+        let (value, _code) = run_rolling_with(tmp.path(), Some(2), &mut fill, &runner);
+        assert_eq!(value["empty_wave"], json!(true), "{value}");
     }
 
     #[test]

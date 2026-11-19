@@ -1588,6 +1588,7 @@ pub(crate) fn status_with_panes_and_transport_and_paseo(
         emit(obj.clone());
     } else {
         println!("herding: enabled={enabled} transport={transport_ready_str} ({transport_reason})");
+        println!("{STATUS_SCOPE_NOTE}");
         for line in &job_plain_lines {
             println!("{line}");
         }
@@ -1595,6 +1596,8 @@ pub(crate) fn status_with_panes_and_transport_and_paseo(
 
     (ExitCode::SUCCESS, Value::Object(obj), job_plain_lines)
 }
+
+const STATUS_SCOPE_NOTE: &str = "herding: this line reports the calling session's own pane, not worker availability — herdr reads HERDR_ENV and HERDR_PANE_ID, tmux reads TMUX and TMUX_PANE; a dispatch carries its own transport_ready and transport_reason";
 
 fn status(flags: &[&str]) -> ExitCode {
     let mut job_id: Option<&str> = None;
@@ -2115,6 +2118,13 @@ mod tests {
         // their order and their values.
         let keys: Vec<&str> = herdr.keys().map(String::as_str).collect();
         assert_eq!(keys, vec!["ready", "reason", "pane_id", "kind"]);
+    }
+
+    #[test]
+    fn status_scope_note_says_own_pane_not_availability_and_names_both_transports_variables() {
+        for needle in ["own pane", "not worker availability", "HERDR_ENV", "HERDR_PANE_ID", "TMUX", "TMUX_PANE", "transport_ready"] {
+            assert!(STATUS_SCOPE_NOTE.contains(needle), "{needle}");
+        }
     }
 
     #[test]
