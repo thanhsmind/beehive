@@ -1,37 +1,46 @@
-# Test and CI hygiene — Context
+# Test CI hygiene — Context
 
 **Feature slug:** test-ci-hygiene
 **Date:** 2026-11-19
-**Backlog items:** p-9b2e8ee4, p-624e2d7d, p-814029a8
-**Shaping session:** complete under gate bypass full (owner said go on the 2026-11-19 backlog sweep)
-**Scope:** Standard
+**Scope:** Tiny
 **Domain types:** RUN
 
-## Feature Boundary
+## What was asked
 
-Tests stop writing into the crate folder. The opencode registry derivation
-works on the opencode version the repo installs, and CI pins that version. The
-fleet fake backend leaves the release binary.
+Backlog item p-814029a8: the fleet crate declares `pub mod fake` with no gate,
+so `FakeBackend` and its fault-injection API compile into the library that the
+bee binary links.
+
+## What will be done
+
+Gate the module behind a `test-support` feature (also on under `cfg(test)`),
+turn the feature on for fleet's own integration tests and for the bee crate's
+tests through dev-dependencies, and prove a release build of the bee binary no
+longer holds the fake.
 
 ## Locked Decisions
 
-| ID | Decision | Rationale |
-|----|----------|-----------|
-| D1 | No test writes `packages/bee-rs/crates/bee/.bee/`. The dispatch authorize tests (and any other writer found through `verbs/mod.rs` timings append, near line 200) run with a temp root. The tracked `packages/bee-rs/crates/bee/.bee/logs/timings.jsonl` is removed from git. A test or a post-suite check asserts the folder is absent after the tests run. | p-9b2e8ee4. The stray file dirties worktrees and blocks `bee worktree merge`. |
-| D2 | `tests/opencode_plugin_contracts.rs` registry derivation handles the opencode-ai 1.18.21 literal shape, with a regression test over both 1.18.16 and 1.18.21 shapes. CI (`.github/workflows/ci.yml` and `windows.yml`) pins the same opencode version that the repo tooling installs. | p-624e2d7d. A developer machine and CI must agree about green. |
-| D3 | `fleet` gets a `test-support` cargo feature. `pub mod fake` in `crates/fleet/src/backend.rs` compiles only under `cfg(any(test, feature = "test-support"))`. The bee crate enables it only in `[dev-dependencies]`. Proof: a release build of bee does not contain the `FakeBackend` symbol. | p-814029a8. Integration tests link fleet as an external consumer, so a bare `cfg(test)` is not enough. |
+| ID | Decision | Store id |
+|---|---|---|
+| D1 | `fake` is declared under `cfg(any(test, feature = "test-support"))`; fleet and bee enable the feature through dev-dependencies. | c597c5b7 |
+| C1 | Test contract fake-backend-gated: no `FakeBackend` symbol in a release bee binary, and every FakeBackend test still runs and passes. | b0bcc68f |
 
 ## Read set
+
+### Knowledge
+
+| Concept | Grade at read | Why it matters |
+|---------|---------------|----------------|
+| docs/knowledge/areas/rust-runtime/overview.md | suspect | names the compiled runtime the fleet crate links into |
 
 ### Code
 
 | Path | What it decides |
 |------|-----------------|
-| `packages/bee-rs/crates/bee/src/verbs/mod.rs` | D1 writer. |
-| `packages/bee-rs/crates/bee/tests/opencode_plugin_contracts.rs` | D2. |
-| `.github/workflows/ci.yml`, `.github/workflows/windows.yml` | D2 pins. |
-| `packages/bee-rs/crates/fleet/src/backend.rs`, `packages/bee-rs/crates/fleet/Cargo.toml` | D3. |
+| `packages/bee-rs/crates/fleet/src/backend.rs` | the ungated `pub mod fake` |
+| `packages/bee-rs/crates/fleet/Cargo.toml` | where the feature and dev-dependency go |
+| `packages/bee-rs/crates/bee/Cargo.toml` | bee's dev-dependency on fleet |
 
-## Handoff Note
+## Out of scope
 
-CONTEXT.md is the source of truth. Decision IDs are stable.
+Any change to FakeBackend behavior.
