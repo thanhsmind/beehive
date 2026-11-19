@@ -23,6 +23,12 @@ allowlist with a reason.
 
 ## Read set
 
+### Knowledge
+
+| Concept | Grade at read | Why it matters |
+|---------|---------------|----------------|
+| docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md | suspect | Holds the `## AGENTS.md rule homes` index that `parse_agents_rule_homes` and the parity test both read. |
+
 ### Code
 
 | Path | What it decides |

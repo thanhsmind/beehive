@@ -31,7 +31,15 @@ This is for new or changed behavior, built from a named data shape.
    disagree with the code for reasons the code does not share. With no such
    reference on the host (only for hosts on an older bee), skip this step and say
    so.
-4. Write the throughput checkpoint as four todo items, because the
+4. For a package or API that other code calls, write the caller's tutorial
+   first: the README or usage page a stranger would follow to call it, with
+   the real import, the call and its output. Check the design against that
+   tutorial before any delegate writes code, and again at verify, because an
+   API drawn from the inside shows its awkward seams only when someone calls
+   it (`bee-principle-the-rebuild-test`). A tutorial step the code cannot
+   honor sends the design back, not the tutorial. A feature no other code
+   calls skips it as `tutorial skipped: <reason>`.
+5. Write the throughput checkpoint as four todo items, because the
    decomposition decides whether a fan-out helps or collides. A dimension that
    genuinely does not apply (single file, no fan-out) keeps its item with
    `n/a: <reason>` rather than being dropped, so the skip stays visible.
@@ -42,7 +50,7 @@ This is for new or changed behavior, built from a named data shape.
      (`bee-principle-separate-before-serializing-shared-state`). Serialize only
      for real invariants.
    - **Smallest safe decomposition.** If one worker is best, name why.
-5. Delegate the code to a worker started as a cell
+6. Delegate the code to a worker started as a cell
    (`bee dispatch prepare --kind cell`) on the code role's configured model,
    with a specific scope: the file paths, the named data shape from step 2 and
    its organizing structure, and success criteria. Review its diff yourself.
@@ -67,30 +75,30 @@ This is for new or changed behavior, built from a named data shape.
      files, because a rewrite from memory drifts from what it copies. Port a
      shared-primitive improvement to all its consumers and verify each, because
      a fix in one caller leaves the siblings broken. Commit liberally.
-6. Verify on the matching surface, and prove the user-visible path, not only
+7. Verify on the matching surface, and prove the user-visible path, not only
    the unit sitting under it: the user walks the path, never the unit. Drive
    that surface through the project's `verify-app` skill when it has one,
    otherwise through the real interface itself. An inconclusive run, or a run
    on a different surface, is not a pass; flag it.
-7. Sync `docs/knowledge/` in the SAME change when behavior moves. It is the
+8. Sync `docs/knowledge/` in the SAME change when behavior moves. It is the
    state layer, not a write-up, and a concept that lags the code misleads the
    next reader.
-8. Keep a model that must stay true as the code moves with the
+9. Keep a model that must stay true as the code moves with the
    `bee-formal-verifying` skill: it picks the code where a break
    costs most, proves the property can fail, and leaves a project-local verify
    skill under `.bee/verify/<name>/` with the files it covers and its sync
    commit. A change to covered code runs that verify skill; drift that piled up
    across merges takes `bee-formal-upkeep`. With neither skill
    on the host, skip this step and say so.
-9. Leave small, ordered commits and stack follow-ups: build, verify and commit each small unit before the next
+10. Leave small, ordered commits and stack follow-ups: build, verify and commit each small unit before the next
    (`bee-principle-sequence-verifiable-units`), so a failure points at one unit and a
    reviewer reads the story bottom-up. Each cap commit ends with the
    `cell: <id>` trailer.
-10. When the design is contested, run `bee-interrogate` over the change before
+11. When the design is contested, run `bee-interrogate` over the change before
     shipping, because the reviewers that did not write it find what its author
     anchored past, and a contested design that ships unreviewed is found at the
     owner's acceptance.
-11. Land through the bee path in `playbooks/session/opening-a-pr.md`: the draft
+12. Land through the bee path in `playbooks/session/opening-a-pr.md`: the draft
     PR the `ship_visibility` rule opens on the first cap, `bee worktree merge`
     on green, and the `uat` door of `bee close`, which stays the owner's.
     Nothing here marks the PR ready or merges it by hand, because a PR that

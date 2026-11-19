@@ -1,0 +1,681 @@
+{
+  "schema_version": "1.0",
+  "feature": "opencode-2x-guard-port",
+  "mode": null,
+  "phase": "exploring",
+  "approved_gates": {
+    "context": false,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"opencode-2x-guard-port\" started at phase \"exploring\" (lane).",
+  "next_action": "Merged into main at 85dfb45; reload the product and test \"opencode-2x-guard-port\", then either approve uat (\"bee gate --name uat --approved true --lane opencode-2x-guard-port\") or fix it in the worktree and merge again.",
+  "created_at": "2026-11-19T10:12:36.230Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": {
+    "kind": "gate",
+    "subject": "uat: opencode-2x-guard-port",
+    "asked_at": "2026-11-19T10:48:24.159Z",
+    "session": "bee-worktree-merge-sessionless"
+  },
+  "route": {
+    "class": "feature",
+    "lane": "standard",
+    "flags": [],
+    "product_files": 3,
+    "rationale": null,
+    "updated_at": "2026-11-19T10:12:32.644Z",
+    "feature": "opencode-2x-guard-port"
+  },
+  "gate_preview": {
+    "feature": "opencode-2x-guard-port",
+    "plan_sha256": "8b7b20f35095a6da87aebadd34fee9227e26cc396455bedb93d2816c74abc015",
+    "previewed_at": "2026-11-19T10:44:32.407Z",
+    "cells": [
+      {
+        "id": "oc2-1",
+        "feature": "opencode-2x-guard-port",
+        "title": "Port the bee guard belt to the opencode 2.x plugin API",
+        "lane": "standard",
+        "role": "code",
+        "deps": [],
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test opencode_plugin_contracts && .bee/bin/bee dev release-manifest --check",
+        "must_haves": {
+          "truths": [
+            "a file under .opencode/plugins exports default {id, setup} whose setup subscribes api.tool.hook with execute.before",
+            "the 2.x hook maps tool ids shell, patch, subagent, write, edit, read, grep, glob and question and reads the file field path",
+            "the 1.x entry and the 2.x entry call one shared rule core with no copied mapping table",
+            "a harness test drives every blocking mapped row through the 2.x entry: deny throws with the reason, allow passes, crash throws, missing binary throws",
+            "the verify command passes"
+          ],
+          "why": "opencode 2.x users run with no bee guard today.",
+          "out_of_scope": [
+            "advisory hooks (chat.message, event, execute.after, shell.env) on 2.x",
+            "experimental 2.x tools artifact_create, artifact_update, schedule_create"
+          ]
+        },
+        "decisions": [
+          "9e9f6433-8823-42e7-9113-58ee71681dc6",
+          "42af3b4f-becd-4aa6-98ac-391b4b310081"
+        ],
+        "files": [
+          ".opencode/plugins/bee-guard.ts",
+          ".opencode/plugins/bee-guard-2x.ts",
+          "packages/bee-rs/crates/bee/tests/opencode_plugin_contracts.rs",
+          "packages/bee-rs/crates/bee/src/onboard/plan.rs",
+          "packages/bee-rs/crates/bee/src/onboard/tests.rs",
+          "docs/history/codex-harness-hardening/release-manifest.json"
+        ],
+        "read_first": [
+          "docs/history/opencode-2x-guard-port/CONTEXT.md",
+          "docs/history/opencode-support/discovery.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Implement CONTEXT.md D1 and D2 and contract opencode-2x-belt (decision 42af3b4f). Facts from the opencode 2.2.5 binary (static read 2026-11-19): the loader accepts only default {id, effect} or {id, setup}; setup(api) may return a cleanup function; a setup plugin subscribes with api.tool.hook('execute.before', fn) and fn receives {tool, sessionID, agent, messageID, id, input}; the arguments are in input and a hook may assign input; a throw inside the hook is caught and becomes the tool error; write, edit and read take path, patch keeps patchText, shell keeps command; the 1.x ids bash, task, apply_patch became shell, subagent, patch. 2.x still scans .opencode/plugins. Before writing, start opencode 1.18.16 (npx -y opencode-ai@1.18.16, run under .bee/tmp/oc11816) and the installed 2.2.5 with a probe file to settle how each runtime treats a default export of the other shape; pick one file or two files so that neither runtime fails to start and each loads exactly its own guard; record the probe result in the cap report. Keep one rule core (binary resolution, runBlockingHook, mapToolCall) that both entries use; if two files, the 2.x entry imports the core from the 1.x file or a shared module that opencode does not load as a plugin, and onboard (packages/bee-rs/crates/bee/src/onboard/plan.rs list_opencode_plugin_files) installs every file the belt needs. Add harness tests in opencode_plugin_contracts.rs per the contract, reusing run_harness and write_stub_bee. Update the registry gate so shell, patch and subagent count as mapped on 2.x. Write no code comment. Run only the verify command, never the full suite. After the change run bee dev regen so the release manifest is current, and commit it. Commit once with the cell trailer."
+      },
+      {
+        "id": "oc2-2",
+        "feature": "opencode-2x-guard-port",
+        "title": "Run the opencode contracts on opencode 2.x in CI",
+        "lane": "standard",
+        "role": "code",
+        "deps": [],
+        "verify": "rg -q '@opencode/cli@2.2.5' .github/workflows/ci.yml && rg -q 'opencode-ai@1.18.16' .github/workflows/ci.yml",
+        "must_haves": {
+          "truths": [
+            ".github/workflows/ci.yml keeps the job that installs opencode-ai@1.18.16",
+            ".github/workflows/ci.yml has a job that installs @opencode/cli@2.2.5 and runs cargo test --test opencode_plugin_contracts",
+            "the verify command passes"
+          ],
+          "why": "CI pins opencode 1.18.16, so it never sees a 2.x regression.",
+          "out_of_scope": [
+            "moving the 1.x pin"
+          ]
+        },
+        "decisions": [
+          "9e9f6433-8823-42e7-9113-58ee71681dc6"
+        ],
+        "files": [
+          ".github/workflows/ci.yml"
+        ],
+        "read_first": [
+          "docs/history/opencode-2x-guard-port/CONTEXT.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Implement CONTEXT.md D3. In .github/workflows/ci.yml add one job opencode-2x on ubuntu that sets up Rust and node the same way the existing job does, runs npm i -g @opencode/cli@2.2.5, and runs PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test opencode_plugin_contracts. Leave the 1.18.16 install in the existing job. Write no YAML comment. Commit once with the cell trailer."
+      },
+      {
+        "id": "oc2-3",
+        "feature": "opencode-2x-guard-port",
+        "title": "Prove the 2.x belt on real opencode binaries",
+        "lane": "standard",
+        "role": "test",
+        "deps": [
+          "oc2-1"
+        ],
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test opencode_plugin_contracts",
+        "must_haves": {
+          "truths": [
+            "opencode 2.2.5 started in a scratch project with the belt files shows no plugin load error and lists the bee guard as loaded",
+            "opencode 1.18.16 started in a scratch project with the belt files shows no plugin load error",
+            "with the throw removed from the 2.x hook the 2.x harness test fails, and restored it passes",
+            "the report under docs/history/opencode-2x-guard-port/reports/oc2-3.md quotes each run's command and result line"
+          ],
+          "why": "A code cell never certifies itself; the harness is not the real runtime.",
+          "out_of_scope": [
+            "editing belt source"
+          ]
+        },
+        "decisions": [
+          "42af3b4f-becd-4aa6-98ac-391b4b310081"
+        ],
+        "files": [
+          "docs/history/opencode-2x-guard-port/reports/oc2-3.md"
+        ],
+        "read_first": [
+          "docs/history/opencode-2x-guard-port/CONTEXT.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Check contract opencode-2x-belt on the oc2-1 commit without reading its cap report first. Live load: make a scratch project under .bee/tmp/oc2-live with a copy of the belt files in .opencode/plugins and a stub .bee/bin/bee; start the installed opencode 2.2.5 and opencode-ai@1.18.16 (npx -y, installed under .bee/tmp/oc11816) in it with a non-interactive command that loads plugins (find one: a debug or serve subcommand with logs), and capture the plugin load lines. Red-green: remove the throw in the 2.x hook, run the verify, expect a failing 2.x harness test, restore with a checkout of HEAD, run the verify, expect pass. Add a test if a contract truth has no test. Write docs/history/opencode-2x-guard-port/reports/oc2-3.md with each command and its result line verbatim. Return BLOCKED with evidence if a runtime fails to load the guard. Commit only the report and any added test, with the cell trailer."
+      },
+      {
+        "id": "oc2-4",
+        "feature": "opencode-2x-guard-port",
+        "title": "Record that opencode 2.x runs the bee guard",
+        "lane": "standard",
+        "role": "docs",
+        "deps": [
+          "oc2-1"
+        ],
+        "verify": ".bee/bin/bee knowledge check",
+        "must_haves": {
+          "truths": [
+            "docs/knowledge/areas/hook-runtime/catalog-projections-and-activation.md Open Gaps no longer says opencode 2.x runs with no bee guard",
+            "R42 in that concept states which 2.x ids the belt maps and cites opencode-2x-guard-port D1",
+            "docs/history/opencode-support/discovery.md oc2x-1 gap lines for shell, patch and subagent say they are mapped by opencode-2x-guard-port",
+            "the verify command passes"
+          ],
+          "why": "The concept still states the 2.x gap as open.",
+          "out_of_scope": [
+            "code changes"
+          ]
+        },
+        "decisions": [
+          "9e9f6433-8823-42e7-9113-58ee71681dc6"
+        ],
+        "files": [
+          "docs/knowledge/areas/hook-runtime/catalog-projections-and-activation.md",
+          "docs/history/opencode-support/discovery.md"
+        ],
+        "read_first": [
+          "docs/history/opencode-2x-guard-port/CONTEXT.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Sync the concept to the shipped belt from the oc2-1 commit: rewrite the Open Gaps opencode 2.x line and R42, citing 'opencode-2x-guard-port D1' (never raw decision ids). In discovery.md oc2x-1, mark shell, patch and subagent as mapped by opencode-2x-guard-port; keep the other gap lines that still hold. Avoid the words deferred, until and later. Commit once with the cell trailer."
+      },
+      {
+        "id": "oc2-5",
+        "feature": "opencode-2x-guard-port",
+        "title": "Check the CI matrix and the opencode 2.x knowledge sync",
+        "lane": "standard",
+        "role": "test",
+        "deps": [
+          "oc2-2",
+          "oc2-4"
+        ],
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test proof_gate && .bee/bin/bee knowledge check",
+        "must_haves": {
+          "truths": [
+            ".github/workflows/ci.yml installs opencode-ai@1.18.16 and @opencode/cli@2.2.5 through one matrix on the job whose cargo test line equals commands.test",
+            "the proof_gate test passes",
+            "docs/knowledge/areas/hook-runtime/catalog-projections-and-activation.md R42 and Open Gaps match the shipped one-file belt in .opencode/plugins/bee-guard.ts",
+            "docs/history/opencode-support/discovery.md marks shell, patch and subagent as mapped",
+            "the report under docs/history/opencode-2x-guard-port/reports/oc2-5.md quotes each check and its result line"
+          ],
+          "why": "A code or docs cell never certifies itself; oc2-2 and oc2-4 have no checker yet.",
+          "out_of_scope": [
+            "editing ci.yml or the concept"
+          ]
+        },
+        "decisions": [
+          "9e9f6433-8823-42e7-9113-58ee71681dc6",
+          "42af3b4f-becd-4aa6-98ac-391b4b310081"
+        ],
+        "files": [
+          "docs/history/opencode-2x-guard-port/reports/oc2-5.md"
+        ],
+        "read_first": [
+          "docs/history/opencode-2x-guard-port/CONTEXT.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Check oc2-2 (commit 0346e7012) and oc2-4 (commit 3e1a1a2c9) without reading their cap reports. Read .github/workflows/ci.yml and confirm the matrix and that the job's cargo test run line is byte-identical to .bee/config.json commands.test. Run the verify. Read the concept R42 and Open Gaps lines and the belt's default export at the end of .opencode/plugins/bee-guard.ts and say whether each concept claim holds. Read the discovery oc2x-1 gap lines. Write docs/history/opencode-2x-guard-port/reports/oc2-5.md with each check, its command or file:line, and the result. Edit no other file. Return BLOCKED with evidence if a check fails. Commit only the report with `git commit -- <path>` and the cell trailer."
+      }
+    ],
+    "role_plan": {
+      "schema_version": "1.0",
+      "runtime": "claude",
+      "roster_sha256": "d4e696dbde7989d6388dacce3fd7057cb3a6935b46024b79698596a46f6f41d3",
+      "stages": [
+        {
+          "stage": "implementation",
+          "classification": "required",
+          "role": "code",
+          "reason": "oc2-1 and oc2-2 write the belt and the CI job."
+        },
+        {
+          "stage": "test-and-live-proof",
+          "classification": "required",
+          "role": "test",
+          "reason": "oc2-3 proves the belt on real opencode binaries."
+        },
+        {
+          "stage": "docs",
+          "classification": "required",
+          "role": "docs",
+          "reason": "oc2-4 syncs the concept and discovery gap lines."
+        },
+        {
+          "stage": "slice-judge",
+          "classification": "not-applicable",
+          "role": "review",
+          "reason": "Review stays user-invoked."
+        },
+        {
+          "stage": "hat-facts-gaps",
+          "classification": "not-applicable",
+          "role": "hat-facts-gaps",
+          "reason": "Facts came from the binary read."
+        },
+        {
+          "stage": "hat-alternatives",
+          "classification": "not-applicable",
+          "role": "hat-alternatives",
+          "reason": "The loader leaves one shape."
+        },
+        {
+          "stage": "hat-user-impact",
+          "classification": "not-applicable",
+          "role": "hat-user-impact",
+          "reason": "Users gain a guard; nothing is removed."
+        },
+        {
+          "stage": "hat-risks",
+          "classification": "not-applicable",
+          "role": "hat-risks",
+          "reason": "oc2-3 live-loads both runtimes."
+        },
+        {
+          "stage": "hat-value",
+          "classification": "not-applicable",
+          "role": "hat-value",
+          "reason": "Owner-approved backlog item."
+        },
+        {
+          "stage": "deployment",
+          "classification": "not-applicable",
+          "role": "deploy",
+          "reason": "No release in this feature."
+        },
+        {
+          "stage": "planning",
+          "classification": "not-applicable",
+          "role": "plan",
+          "reason": "The leader wrote the plan."
+        },
+        {
+          "stage": "read-only-gather",
+          "classification": "not-applicable",
+          "role": "read",
+          "reason": "Gather already ran."
+        },
+        {
+          "stage": "fact-extraction",
+          "classification": "not-applicable",
+          "role": "extraction",
+          "reason": "No extraction stage."
+        },
+        {
+          "stage": "generation-fallback",
+          "classification": "not-applicable",
+          "role": "generation",
+          "reason": "Every cell has a configured role."
+        },
+        {
+          "stage": "writing",
+          "classification": "not-applicable",
+          "role": "writer",
+          "reason": "No prose deliverable beyond docs."
+        },
+        {
+          "stage": "generic-advisor",
+          "classification": "not-applicable",
+          "role": "advisor",
+          "reason": "No consult needed."
+        },
+        {
+          "stage": "supervision",
+          "classification": "not-applicable",
+          "role": "supervisor",
+          "reason": "Attended session."
+        },
+        {
+          "stage": "blind-lane-1",
+          "classification": "not-applicable",
+          "role": "lane-1",
+          "reason": "No blind lanes."
+        },
+        {
+          "stage": "blind-lane-2",
+          "classification": "not-applicable",
+          "role": "lane-2",
+          "reason": "No blind lanes."
+        },
+        {
+          "stage": "blind-lane-3",
+          "classification": "not-applicable",
+          "role": "lane-3",
+          "reason": "No blind lanes."
+        },
+        {
+          "stage": "design-ui",
+          "classification": "not-applicable",
+          "role": "design",
+          "reason": "No rendered UI."
+        }
+      ]
+    }
+  },
+  "approved_cell_packet": {
+    "feature": "opencode-2x-guard-port",
+    "plan_sha256": "8b7b20f35095a6da87aebadd34fee9227e26cc396455bedb93d2816c74abc015",
+    "previewed_at": "2026-11-19T10:44:32.407Z",
+    "cells": [
+      {
+        "id": "oc2-1",
+        "feature": "opencode-2x-guard-port",
+        "title": "Port the bee guard belt to the opencode 2.x plugin API",
+        "lane": "standard",
+        "role": "code",
+        "deps": [],
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test opencode_plugin_contracts && .bee/bin/bee dev release-manifest --check",
+        "must_haves": {
+          "truths": [
+            "a file under .opencode/plugins exports default {id, setup} whose setup subscribes api.tool.hook with execute.before",
+            "the 2.x hook maps tool ids shell, patch, subagent, write, edit, read, grep, glob and question and reads the file field path",
+            "the 1.x entry and the 2.x entry call one shared rule core with no copied mapping table",
+            "a harness test drives every blocking mapped row through the 2.x entry: deny throws with the reason, allow passes, crash throws, missing binary throws",
+            "the verify command passes"
+          ],
+          "why": "opencode 2.x users run with no bee guard today.",
+          "out_of_scope": [
+            "advisory hooks (chat.message, event, execute.after, shell.env) on 2.x",
+            "experimental 2.x tools artifact_create, artifact_update, schedule_create"
+          ]
+        },
+        "decisions": [
+          "9e9f6433-8823-42e7-9113-58ee71681dc6",
+          "42af3b4f-becd-4aa6-98ac-391b4b310081"
+        ],
+        "files": [
+          ".opencode/plugins/bee-guard.ts",
+          ".opencode/plugins/bee-guard-2x.ts",
+          "packages/bee-rs/crates/bee/tests/opencode_plugin_contracts.rs",
+          "packages/bee-rs/crates/bee/src/onboard/plan.rs",
+          "packages/bee-rs/crates/bee/src/onboard/tests.rs",
+          "docs/history/codex-harness-hardening/release-manifest.json"
+        ],
+        "read_first": [
+          "docs/history/opencode-2x-guard-port/CONTEXT.md",
+          "docs/history/opencode-support/discovery.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Implement CONTEXT.md D1 and D2 and contract opencode-2x-belt (decision 42af3b4f). Facts from the opencode 2.2.5 binary (static read 2026-11-19): the loader accepts only default {id, effect} or {id, setup}; setup(api) may return a cleanup function; a setup plugin subscribes with api.tool.hook('execute.before', fn) and fn receives {tool, sessionID, agent, messageID, id, input}; the arguments are in input and a hook may assign input; a throw inside the hook is caught and becomes the tool error; write, edit and read take path, patch keeps patchText, shell keeps command; the 1.x ids bash, task, apply_patch became shell, subagent, patch. 2.x still scans .opencode/plugins. Before writing, start opencode 1.18.16 (npx -y opencode-ai@1.18.16, run under .bee/tmp/oc11816) and the installed 2.2.5 with a probe file to settle how each runtime treats a default export of the other shape; pick one file or two files so that neither runtime fails to start and each loads exactly its own guard; record the probe result in the cap report. Keep one rule core (binary resolution, runBlockingHook, mapToolCall) that both entries use; if two files, the 2.x entry imports the core from the 1.x file or a shared module that opencode does not load as a plugin, and onboard (packages/bee-rs/crates/bee/src/onboard/plan.rs list_opencode_plugin_files) installs every file the belt needs. Add harness tests in opencode_plugin_contracts.rs per the contract, reusing run_harness and write_stub_bee. Update the registry gate so shell, patch and subagent count as mapped on 2.x. Write no code comment. Run only the verify command, never the full suite. After the change run bee dev regen so the release manifest is current, and commit it. Commit once with the cell trailer."
+      },
+      {
+        "id": "oc2-2",
+        "feature": "opencode-2x-guard-port",
+        "title": "Run the opencode contracts on opencode 2.x in CI",
+        "lane": "standard",
+        "role": "code",
+        "deps": [],
+        "verify": "rg -q '@opencode/cli@2.2.5' .github/workflows/ci.yml && rg -q 'opencode-ai@1.18.16' .github/workflows/ci.yml",
+        "must_haves": {
+          "truths": [
+            ".github/workflows/ci.yml keeps the job that installs opencode-ai@1.18.16",
+            ".github/workflows/ci.yml has a job that installs @opencode/cli@2.2.5 and runs cargo test --test opencode_plugin_contracts",
+            "the verify command passes"
+          ],
+          "why": "CI pins opencode 1.18.16, so it never sees a 2.x regression.",
+          "out_of_scope": [
+            "moving the 1.x pin"
+          ]
+        },
+        "decisions": [
+          "9e9f6433-8823-42e7-9113-58ee71681dc6"
+        ],
+        "files": [
+          ".github/workflows/ci.yml"
+        ],
+        "read_first": [
+          "docs/history/opencode-2x-guard-port/CONTEXT.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Implement CONTEXT.md D3. In .github/workflows/ci.yml add one job opencode-2x on ubuntu that sets up Rust and node the same way the existing job does, runs npm i -g @opencode/cli@2.2.5, and runs PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test opencode_plugin_contracts. Leave the 1.18.16 install in the existing job. Write no YAML comment. Commit once with the cell trailer."
+      },
+      {
+        "id": "oc2-3",
+        "feature": "opencode-2x-guard-port",
+        "title": "Prove the 2.x belt on real opencode binaries",
+        "lane": "standard",
+        "role": "test",
+        "deps": [
+          "oc2-1"
+        ],
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test opencode_plugin_contracts",
+        "must_haves": {
+          "truths": [
+            "opencode 2.2.5 started in a scratch project with the belt files shows no plugin load error and lists the bee guard as loaded",
+            "opencode 1.18.16 started in a scratch project with the belt files shows no plugin load error",
+            "with the throw removed from the 2.x hook the 2.x harness test fails, and restored it passes",
+            "the report under docs/history/opencode-2x-guard-port/reports/oc2-3.md quotes each run's command and result line"
+          ],
+          "why": "A code cell never certifies itself; the harness is not the real runtime.",
+          "out_of_scope": [
+            "editing belt source"
+          ]
+        },
+        "decisions": [
+          "42af3b4f-becd-4aa6-98ac-391b4b310081"
+        ],
+        "files": [
+          "docs/history/opencode-2x-guard-port/reports/oc2-3.md"
+        ],
+        "read_first": [
+          "docs/history/opencode-2x-guard-port/CONTEXT.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Check contract opencode-2x-belt on the oc2-1 commit without reading its cap report first. Live load: make a scratch project under .bee/tmp/oc2-live with a copy of the belt files in .opencode/plugins and a stub .bee/bin/bee; start the installed opencode 2.2.5 and opencode-ai@1.18.16 (npx -y, installed under .bee/tmp/oc11816) in it with a non-interactive command that loads plugins (find one: a debug or serve subcommand with logs), and capture the plugin load lines. Red-green: remove the throw in the 2.x hook, run the verify, expect a failing 2.x harness test, restore with a checkout of HEAD, run the verify, expect pass. Add a test if a contract truth has no test. Write docs/history/opencode-2x-guard-port/reports/oc2-3.md with each command and its result line verbatim. Return BLOCKED with evidence if a runtime fails to load the guard. Commit only the report and any added test, with the cell trailer."
+      },
+      {
+        "id": "oc2-4",
+        "feature": "opencode-2x-guard-port",
+        "title": "Record that opencode 2.x runs the bee guard",
+        "lane": "standard",
+        "role": "docs",
+        "deps": [
+          "oc2-1"
+        ],
+        "verify": ".bee/bin/bee knowledge check",
+        "must_haves": {
+          "truths": [
+            "docs/knowledge/areas/hook-runtime/catalog-projections-and-activation.md Open Gaps no longer says opencode 2.x runs with no bee guard",
+            "R42 in that concept states which 2.x ids the belt maps and cites opencode-2x-guard-port D1",
+            "docs/history/opencode-support/discovery.md oc2x-1 gap lines for shell, patch and subagent say they are mapped by opencode-2x-guard-port",
+            "the verify command passes"
+          ],
+          "why": "The concept still states the 2.x gap as open.",
+          "out_of_scope": [
+            "code changes"
+          ]
+        },
+        "decisions": [
+          "9e9f6433-8823-42e7-9113-58ee71681dc6"
+        ],
+        "files": [
+          "docs/knowledge/areas/hook-runtime/catalog-projections-and-activation.md",
+          "docs/history/opencode-support/discovery.md"
+        ],
+        "read_first": [
+          "docs/history/opencode-2x-guard-port/CONTEXT.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Sync the concept to the shipped belt from the oc2-1 commit: rewrite the Open Gaps opencode 2.x line and R42, citing 'opencode-2x-guard-port D1' (never raw decision ids). In discovery.md oc2x-1, mark shell, patch and subagent as mapped by opencode-2x-guard-port; keep the other gap lines that still hold. Avoid the words deferred, until and later. Commit once with the cell trailer."
+      },
+      {
+        "id": "oc2-5",
+        "feature": "opencode-2x-guard-port",
+        "title": "Check the CI matrix and the opencode 2.x knowledge sync",
+        "lane": "standard",
+        "role": "test",
+        "deps": [
+          "oc2-2",
+          "oc2-4"
+        ],
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test proof_gate && .bee/bin/bee knowledge check",
+        "must_haves": {
+          "truths": [
+            ".github/workflows/ci.yml installs opencode-ai@1.18.16 and @opencode/cli@2.2.5 through one matrix on the job whose cargo test line equals commands.test",
+            "the proof_gate test passes",
+            "docs/knowledge/areas/hook-runtime/catalog-projections-and-activation.md R42 and Open Gaps match the shipped one-file belt in .opencode/plugins/bee-guard.ts",
+            "docs/history/opencode-support/discovery.md marks shell, patch and subagent as mapped",
+            "the report under docs/history/opencode-2x-guard-port/reports/oc2-5.md quotes each check and its result line"
+          ],
+          "why": "A code or docs cell never certifies itself; oc2-2 and oc2-4 have no checker yet.",
+          "out_of_scope": [
+            "editing ci.yml or the concept"
+          ]
+        },
+        "decisions": [
+          "9e9f6433-8823-42e7-9113-58ee71681dc6",
+          "42af3b4f-becd-4aa6-98ac-391b4b310081"
+        ],
+        "files": [
+          "docs/history/opencode-2x-guard-port/reports/oc2-5.md"
+        ],
+        "read_first": [
+          "docs/history/opencode-2x-guard-port/CONTEXT.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Check oc2-2 (commit 0346e7012) and oc2-4 (commit 3e1a1a2c9) without reading their cap reports. Read .github/workflows/ci.yml and confirm the matrix and that the job's cargo test run line is byte-identical to .bee/config.json commands.test. Run the verify. Read the concept R42 and Open Gaps lines and the belt's default export at the end of .opencode/plugins/bee-guard.ts and say whether each concept claim holds. Read the discovery oc2x-1 gap lines. Write docs/history/opencode-2x-guard-port/reports/oc2-5.md with each check, its command or file:line, and the result. Edit no other file. Return BLOCKED with evidence if a check fails. Commit only the report with `git commit -- <path>` and the cell trailer."
+      }
+    ],
+    "role_plan": {
+      "schema_version": "1.0",
+      "runtime": "claude",
+      "roster_sha256": "d4e696dbde7989d6388dacce3fd7057cb3a6935b46024b79698596a46f6f41d3",
+      "stages": [
+        {
+          "stage": "implementation",
+          "classification": "required",
+          "role": "code",
+          "reason": "oc2-1 and oc2-2 write the belt and the CI job."
+        },
+        {
+          "stage": "test-and-live-proof",
+          "classification": "required",
+          "role": "test",
+          "reason": "oc2-3 proves the belt on real opencode binaries."
+        },
+        {
+          "stage": "docs",
+          "classification": "required",
+          "role": "docs",
+          "reason": "oc2-4 syncs the concept and discovery gap lines."
+        },
+        {
+          "stage": "slice-judge",
+          "classification": "not-applicable",
+          "role": "review",
+          "reason": "Review stays user-invoked."
+        },
+        {
+          "stage": "hat-facts-gaps",
+          "classification": "not-applicable",
+          "role": "hat-facts-gaps",
+          "reason": "Facts came from the binary read."
+        },
+        {
+          "stage": "hat-alternatives",
+          "classification": "not-applicable",
+          "role": "hat-alternatives",
+          "reason": "The loader leaves one shape."
+        },
+        {
+          "stage": "hat-user-impact",
+          "classification": "not-applicable",
+          "role": "hat-user-impact",
+          "reason": "Users gain a guard; nothing is removed."
+        },
+        {
+          "stage": "hat-risks",
+          "classification": "not-applicable",
+          "role": "hat-risks",
+          "reason": "oc2-3 live-loads both runtimes."
+        },
+        {
+          "stage": "hat-value",
+          "classification": "not-applicable",
+          "role": "hat-value",
+          "reason": "Owner-approved backlog item."
+        },
+        {
+          "stage": "deployment",
+          "classification": "not-applicable",
+          "role": "deploy",
+          "reason": "No release in this feature."
+        },
+        {
+          "stage": "planning",
+          "classification": "not-applicable",
+          "role": "plan",
+          "reason": "The leader wrote the plan."
+        },
+        {
+          "stage": "read-only-gather",
+          "classification": "not-applicable",
+          "role": "read",
+          "reason": "Gather already ran."
+        },
+        {
+          "stage": "fact-extraction",
+          "classification": "not-applicable",
+          "role": "extraction",
+          "reason": "No extraction stage."
+        },
+        {
+          "stage": "generation-fallback",
+          "classification": "not-applicable",
+          "role": "generation",
+          "reason": "Every cell has a configured role."
+        },
+        {
+          "stage": "writing",
+          "classification": "not-applicable",
+          "role": "writer",
+          "reason": "No prose deliverable beyond docs."
+        },
+        {
+          "stage": "generic-advisor",
+          "classification": "not-applicable",
+          "role": "advisor",
+          "reason": "No consult needed."
+        },
+        {
+          "stage": "supervision",
+          "classification": "not-applicable",
+          "role": "supervisor",
+          "reason": "Attended session."
+        },
+        {
+          "stage": "blind-lane-1",
+          "classification": "not-applicable",
+          "role": "lane-1",
+          "reason": "No blind lanes."
+        },
+        {
+          "stage": "blind-lane-2",
+          "classification": "not-applicable",
+          "role": "lane-2",
+          "reason": "No blind lanes."
+        },
+        {
+          "stage": "blind-lane-3",
+          "classification": "not-applicable",
+          "role": "lane-3",
+          "reason": "No blind lanes."
+        },
+        {
+          "stage": "design-ui",
+          "classification": "not-applicable",
+          "role": "design",
+          "reason": "No rendered UI."
+        }
+      ]
+    }
+  },
+  "gate_revoked_at": {
+    "execution": "2026-11-19T10:44:26.671Z"
+  }
+}

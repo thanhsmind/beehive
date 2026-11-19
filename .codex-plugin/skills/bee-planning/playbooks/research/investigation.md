@@ -18,8 +18,8 @@ outcome is words with anchors.
    recorded decisions and the code only shows the result.
 3. Trace the runtime path, not just the file list, because the list shows what
    exists and not what runs. Both this step and the next have ONE home:
-   `bee-researching/references/trace-and-provenance.md` — § "Trace" for this
-   step, § "Provenance sweep" for the next.
+   `bee-researching/references/trace.md` for this
+   step, `bee-researching/references/provenance.md` for the next.
 4. Name every source searched that came up EMPTY, so that nobody searches it
    again or reads its silence as unchecked.
 5. Write the `bee-how`-shaped account: Overview, Key Concepts, How It Works,

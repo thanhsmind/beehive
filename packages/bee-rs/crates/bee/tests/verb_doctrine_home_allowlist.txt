@@ -1,0 +1,42 @@
+backlog badges :: mechanical README badge refresh that a maintainer or script runs, not a step an agent chooses
+cells archive :: housekeeping that moves a fully terminal feature's cells out of the hot scan path
+cells rebind-session :: crash-recovery repair that re-owns claims for a successor session, driven by the recovery flow
+config unset :: inverse of config set, a plain config-edit helper with no workflow step around it
+config validate :: diagnostic that checks the config layers, surfaced through doctor and onboarding rather than doctrine
+decisions archive :: log-compaction housekeeping for decisions.jsonl with no agent decision in it
+decisions redact :: maintainer correction of one decision's status, used on request and not part of a flow
+decisions render :: renders docs/decisions/index.md, a generated view run by the binary and scripts
+dev install-support :: installer JSON steps called by the install scripts, never by an agent
+dev plugin-distribution :: installer distribution preflight called by the install scripts, never by an agent
+dev release-manifest :: release and CI hash check run by scripts/release.sh and CI, not by an agent
+dev render-hook-manifests :: maintainer regeneration of hook manifests after a hook change, a bee-repo dev verb
+herding command-template :: prints a cockpit command line for the control-loop shell scripts to run, not an agent verb
+herding herdr-pane-id :: resolves a pane id for the control-loop shell scripts, not an agent verb
+intent advance :: written by the intent hooks around compaction, not named in any agent flow
+intent clear :: written by the intent hooks around compaction, not named in any agent flow
+intent show :: read by the PreCompact and resume hooks to render the anchor, not named in any agent flow
+perf log :: internal performance-log read for the bee maintainer, outside agent doctrine
+perf render :: internal performance-log render for the bee maintainer, outside agent doctrine
+perf report :: internal per-project performance report for the bee maintainer, outside agent doctrine
+perf section :: internal performance-log write, outside agent doctrine
+perf stop :: closing half of perf start, called by the timing hooks and not by an agent
+perf sync :: internal performance-log backfill for the bee maintainer, outside agent doctrine
+recovery scan :: releasing door that the session-start hook and the sweep call, not an agent step
+recovery window :: derives a crash-recovery mining window for the recovery flow's own prompt, not an agent verb
+reservations sweep :: TTL cleanup that the binary runs on its own, with release as the agent-facing verb
+reviews candidates :: reads the review-candidate ledger for the bee-reviewing flow's internals, not an agent verb
+reviews show :: reads one stored review session for the bee-reviewing flow's internals, not an agent verb
+state advisor-ref show :: staleness read used by the advisor flow's own checks, not an agent verb
+state session bind :: flow alias for binding a session to a lane, which the lane and worktree verbs perform
+state worker clear :: worker-roster write that the dispatch and herding verbs make, not an agent verb
+state worker remove :: worker-roster write that the dispatch and herding verbs make, not an agent verb
+state worker update :: worker-roster write that the dispatch and herding verbs make, not an agent verb
+state workflows list :: read-only workflow listing used by status and the workflow runner, not an agent verb
+supervisor back :: away-window verb that the supervisor flow's own door drives, not named in agent doctrine
+supervisor consent-sweep :: opt-in tick run by the supervisor loop, never an agent step
+supervisor mark-delivered :: mailbox stamp written by the supervisor delivery path, not an agent verb
+supervisor metrics :: read-only health counters for the supervisor, outside agent doctrine
+supervisor pending :: mailbox read that the supervisor's session hook makes at turn start, not an agent verb
+supervisor presence :: read-only presence mark for the supervisor, outside agent doctrine
+supervisor report :: read-only wake report for the supervisor, outside agent doctrine
+timings report :: read-only slowest-command rank of the self-timing log for the bee maintainer, outside agent doctrine

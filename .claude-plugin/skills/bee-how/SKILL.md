@@ -15,7 +15,7 @@ metadata:
 
 # How
 
-This skill is a door, never a copy. It scopes a how question, invokes bee-researching, loads `bee-researching/references/trace-and-provenance.md`, and runs "Trace". Trace owns every step and the answer shape. Never restate, shorten or reorder a step of it here.
+This skill is a door, never a copy. It scopes a how question, invokes bee-researching, loads `bee-researching/references/trace.md`, and runs "Trace". Trace owns every step and the answer shape. Never restate, shorten or reorder a step of it here.
 
 ## Run
 
