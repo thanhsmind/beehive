@@ -124,7 +124,7 @@ miner; a four-word key is deterministic).
 - fix-at close runs a command — LOW — the one fact: the agent writes the command, the same trust as commands.test, with a timeout — Lands in: mlc-5 — proof: fix_at_verbs (1)(2).
 - The new preamble block pushes the preamble past budget — LOW — the one fact: the block is DROPPABLE — Lands in: mlc-4 — proof: fix_at_debt (2).
 
-Waves: serial, mlc-1 → mlc-1t → mlc-2 → mlc-2t → mlc-3 → mlc-3t → mlc-4 → mlc-4t → mlc-5 → mlc-5t → mlc-6 → mlc-6t → mlc-7 → mlc-7c → mlc-8. Reason: every code cell builds the one bee crate in one worktree (a single scarce resource), and mlc-3 to mlc-5 read the ledger mlc-1 adds.
+Waves: serial, mlc-1 → mlc-1t → mlc-2 → mlc-2t → mlc-3 → mlc-3t → mlc-4 → mlc-4t → mlc-5 → mlc-5t → mlc-6 → mlc-6t → mlc-7 → mlc-7c → mlc-8 → mlc-9 (test-role checker for the docs cells). Reason: every code cell builds the one bee crate in one worktree (a single scarce resource), and mlc-3 to mlc-5 read the ledger mlc-1 adds.
 
 ## Shape
 
@@ -162,6 +162,7 @@ SMALLER PATH: doctrine only (tell agents to close rows with proof) keeps the fix
 | mlc-7 | Name the closed loop in the doctrine | packages/bee/AGENTS.block.md, packages/bee/LEADER.md, skills/bee-capturing/references/promotion.md, expertise/static-rules.md, packages/bee-rs/crates/bee/tests/instruction_laws.rs, docs/history/codex-harness-hardening/release-manifest.json, AGENTS.md | mlc-6t | docs | `cargo test … --test instruction_laws && /mnt/data/Projects/goglbe/beehive/.bee/bin/bee dev release-manifest --check` |
 | mlc-7c | Check the doctrine edit | docs/history/mistake-loop-closed/reports/mlc-7c.md | mlc-7 | review | `cargo test … --test pointer_integrity` |
 | mlc-8 | Sync the concepts and write the delivery note | docs/knowledge/areas/human-mailbox/overview.md, docs/knowledge/areas/feedback-digest/ranking-and-self-improvement.md, docs/knowledge/areas/okf-profile/conformance-check.md, docs/knowledge/areas/hook-runtime/token-economy-of-injected-context.md, docs/history/mistake-loop-closed/delivery.md, docs/briefs/mistake-loop-closed.md | mlc-7c | writer | `/mnt/data/Projects/goglbe/beehive/.bee/bin/bee knowledge check` |
+| mlc-9 | Check the doctrine and concept sync on the test role | docs/history/mistake-loop-closed/reports/mlc-9.md | mlc-7, mlc-7c, mlc-8 | test | `cargo test … --test instruction_laws` |
 
 ```json
 [
@@ -1167,6 +1168,67 @@ SMALLER PATH: doctrine only (tell agents to close rows with proof) keeps the fix
       "out_of_scope": [
         "Rust code",
         "doctrine files"
+      ]
+    },
+    "trace": {
+      "worker": null,
+      "outcome": null,
+      "files_changed": [],
+      "deviations": [],
+      "friction": null,
+      "capped_at": null,
+      "behavior_change": false
+    }
+  },
+  {
+    "id": "mlc-9",
+    "feature": "mistake-loop-closed",
+    "title": "Check the doctrine and concept sync on the test role",
+    "lane": "standard",
+    "role": "test",
+    "status": "open",
+    "deps": [
+      "mlc-7",
+      "mlc-7c",
+      "mlc-8"
+    ],
+    "decisions": [
+      "3fd971c2-8849-4760-86a3-f5846b463dca",
+      "a7f3fbd2-ee19-4d08-adb0-c1b4c33d445a"
+    ],
+    "files": [
+      "docs/history/mistake-loop-closed/reports/mlc-9.md"
+    ],
+    "read_first": [
+      "docs/history/mistake-loop-closed/CONTEXT.md",
+      "docs/history/mistake-loop-closed/delivery.md",
+      "docs/history/mistake-loop-closed/reports/mlc-7c.md"
+    ],
+    "affects_skills": [],
+    "affects_specs": [],
+    "action": "Checker on the test role for docs cells mlc-7, mlc-7c and mlc-8. Edit no file except docs/history/mistake-loop-closed/reports/mlc-9.md. Run cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test instruction_laws, --test pointer_integrity, --test rule_index_parity, --test agents_block_render_parity, --bin bee -- no_shipped_command_spelling, and /mnt/data/Projects/goglbe/beehive/.bee/bin/bee knowledge check; confirm each of the four concepts mlc-8 edited names the shipped behavior of its decisions (rg for fix-at close, reflect --cell, Fix-at debt, evidence_ref_missing_path). Record each command with its result in the report; return BLOCKED with the output on any red. Write no code comment of any kind. Never edit .bee/*.json or .bee/*.jsonl by hand. Run only the cell's verify filter, never the full suite. Allowed commands: cargo build, cargo test with a filter, cargo clippy, /mnt/data/Projects/goglbe/beehive/.bee/bin/bee dev regen, /mnt/data/Projects/goglbe/beehive/.bee/bin/bee knowledge check. Quote the count of tests the filter matched in the cap report.",
+    "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test instruction_laws",
+    "must_haves": {
+      "truths": [
+        "every doctrine and concept check is recorded green in the report"
+      ],
+      "artifacts": [
+        {
+          "path": "docs/history/mistake-loop-closed/reports/mlc-9.md",
+          "substantive": "the check report"
+        }
+      ],
+      "key_links": [
+        "the report names each command"
+      ],
+      "prohibitions": [
+        "Edit only the report",
+        "No code comments",
+        "Never rewrite .bee/backlog.jsonl"
+      ],
+      "why": "The merge door needs a test-role checker behind each docs cell.",
+      "out_of_scope": [
+        "every file except its report"
       ]
     },
     "trace": {
