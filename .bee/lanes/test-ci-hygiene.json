@@ -11,9 +11,9 @@
     "uat": false
   },
   "summary": "Feature \"test-ci-hygiene\" started at phase \"exploring\" (lane).",
-  "next_action": "Continue bee-exploring for \"test-ci-hygiene\" (lane).",
+  "next_action": "Merged into main at 95167af; capture what settled, then bee close --feature test-ci-hygiene.",
   "created_at": "2026-11-19T10:36:37.453Z",
-  "run_state": "awaiting-approval",
+  "run_state": null,
   "waiting_on": null,
   "gate_preview": {
     "feature": "test-ci-hygiene",
@@ -558,12 +558,5 @@
   },
   "gate_revoked_at": {
     "execution": "2026-11-19T11:18:53.700Z"
-  },
-  "merge_ready": {
-    "since": "2026-11-19T15:49:55.586Z",
-    "branch": "wt/test-ci-hygiene",
-    "worktree_id": "beehive--wt--test-ci-hygiene",
-    "uat": "pending",
-    "blocked_by": []
   }
 }

@@ -60,6 +60,7 @@ The interpreted reference is retired: no `.mjs` file remains anywhere in the rep
 - **R3** — The hot paths spawn no child process (D5).
 - **R4** — Activation is complete: every ported handler is wired into live routing, and no interpreted handler remains to fall back to (D1, D10).
 - **R5** — The additive review derivation cache may exist only because it is invisible to the reference runtime and disposable; no existing store's shape changes to accommodate the port (decision a7d7b3d5).
+- **R6** — The fleet crate's `FakeBackend` compiles only under `cfg(any(test, feature = "test-support"))`; fleet and bee enable `test-support` through dev-dependencies, so a release bee binary carries no fake backend (test-ci-hygiene D3, decision c597c5b7).
 
 ## Edge Cases Settled
 

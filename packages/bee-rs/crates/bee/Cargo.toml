@@ -28,3 +28,4 @@ assert_cmd = "2"
 predicates = "3"
 tempfile = "3"
 filetime = "0.2"
+fleet = { workspace = true, features = ["test-support"] }
