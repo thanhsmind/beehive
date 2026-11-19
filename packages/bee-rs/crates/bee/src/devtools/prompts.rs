@@ -271,6 +271,43 @@ mod tests {
         }
     }
 
+    fn md_names(dir: &std::path::Path) -> Vec<String> {
+        let mut names: Vec<String> = std::fs::read_dir(dir)
+            .unwrap_or_else(|e| panic!("{} readable: {e}", dir.display()))
+            .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+            .filter(|name| name.ends_with(".md"))
+            .collect();
+        names.sort();
+        names
+    }
+
+    #[test]
+    fn vendored_prompts_match_source_file_for_file() {
+        let source = repo_root().join("packages").join("bee").join("prompts");
+        let vendored = repo_root().join(".bee").join("bin").join("prompts");
+        let source_names = md_names(&source);
+        assert!(!source_names.is_empty(), "no prompts found under {}", source.display());
+        for name in &source_names {
+            let want = std::fs::read_to_string(source.join(name))
+                .unwrap_or_else(|e| panic!("{} readable: {e}", source.join(name).display()))
+                .replace("\r\n", "\n");
+            let have_path = vendored.join(name);
+            let have = std::fs::read_to_string(&have_path)
+                .unwrap_or_else(|e| {
+                    panic!("vendored {} missing or unreadable ({e}) — run `bee dev regen`", have_path.display())
+                })
+                .replace("\r\n", "\n");
+            assert!(want == have, "vendored {} differs from its source — run `bee dev regen`", have_path.display());
+        }
+        for name in md_names(&vendored) {
+            assert!(
+                source_names.contains(&name),
+                "vendored {} has no source twin in packages/bee/prompts — run `bee dev regen`",
+                vendored.join(&name).display()
+            );
+        }
+    }
+
     // ── THE pin: the shared grammar corpus, run through BOTH ports ───────
     //
     // Every case below is asserted twice: once against this module's `render`
