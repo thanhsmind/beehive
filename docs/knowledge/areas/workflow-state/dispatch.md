@@ -11,7 +11,7 @@ bee:
   decisions: [30606de4-5fae-4c9d-9e3f-8f47a494f8a3 (one unified command entry point publishing a machine-readable catalog), bbc6bcea (shim-retire D1 — the legacy per-group forwarders are deleted; bee is the sole shipped CLI), 8ef2bae6 (cli-ergonomics D1 — exhaustive refusal, every problem + a runnable example in one message), "80b64c20 (packages-engine-move D1-D5: onboarding/distribution engine relocated to packages/bee/scripts, strict-flag validation universal, migration-tooling pattern)", "b0ef4f66 (packages-engine-move-3: capture add --text friction record corrected — never a silent no-op, message now names the actual unknown flag via a universal dispatcher-level check)", "knowledge-in-the-flow D2/D8 (feature pack rows, advisor rows, and feature-level holdout arm)"]
   sources: ["docs/history/knowledge-outcome-measure/plan.md (D2-D5: the holdout arm)", "harness-integration-adopt cells hia-1 and hia-2 (traces and reports, 2026-07-12)", "dispatcher-unify cells du-1..du-6 (traces and reports, 2026-07-12, flushed capture stubs b6a2233c/9e68432b)", "docs/specs/workflow-state.md#B8", "docs/specs/workflow-state.md#R12", "docs/specs/workflow-state.md#R13", "docs/specs/workflow-state.md#E10", "docs/specs/workflow-state.md#E11", "docs/specs/workflow-state.md#P6", "docs/specs/workflow-state.md#P10", docs/history/packages-engine-move/, "knowledge-in-the-flow cell kitf-1 (dispatch.jsonl pack rows with feature arm, commit b8b65b828, 2026-11-09)", "knowledge-in-the-flow cell kitf-2 (advisor prompt carries feature pack and logs feature arm, commit c28c5c490, 2026-11-09)", CONTEXT.md docs/history/knowledge-in-the-flow/CONTEXT.md]
   authoritative_for: "workflow-state: unified command discovery, validation, and dispatch"
-  anchors: [packages/bee-rs/crates/bee/src/verbs/drivers/wave_run.rs, packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs, packages/bee-rs/crates/bee/src/registry.rs, packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs, packages/bee-rs/crates/bee/src/verbs/decisions/read.rs, packages/bee-rs/crates/bee/src/verbs/cells/validate.rs, packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs, packages/bee-rs/crates/bee/src/verbs/cells/tests.rs, packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs, packages/bee-rs/crates/bee/src/verbs/knowledge/pack.rs]
+  anchors: [packages/bee-rs/crates/bee/src/herding.rs, packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs, packages/bee-rs/crates/bee/src/verbs/state_group/workers.rs, packages/bee-rs/crates/bee/src/verbs/drivers/wave_run.rs, packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs, packages/bee-rs/crates/bee/src/registry.rs, packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs, packages/bee-rs/crates/bee/src/verbs/decisions/read.rs, packages/bee-rs/crates/bee/src/verbs/cells/validate.rs, packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs, packages/bee-rs/crates/bee/src/verbs/cells/tests.rs, packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs, packages/bee-rs/crates/bee/src/verbs/knowledge/pack.rs]
   verified_at: 2026-11-10
   verified_commit: 2f0495d24e30048da79fa3d5dcc287605cf6869c
 ---
@@ -96,6 +96,23 @@ launching. Zero rows is never flagged. Each wave entry carries `rebuild`, the
 `bee dispatch prepare ... --cell <id> --worker w-<id> --json` command that
 regenerates its payload. `bee herding wave` and fleet `WaveResult` are outside
 this and unchanged.
+
+**A finished cell retires its worker row (dispatch-ledger-retire D1).**
+Registration writes the `workers[]` row as `running`; `cap_cell_from_flags`
+(every cap door shares it) now calls `reconcile_capped_workers` once, after the
+cell guard drops, so the row reads `capped`. The call warns on failure and never
+fails the cap, the same stance as the worktree merge's caller; rows already
+archived as `running` stay (forward-only). The prune keep set is unchanged: it
+already skips a worker whose cell file is capped and deliberately keeps one whose
+cell file is missing or corrupt. A keep-set skip on row status was rejected
+because it would prune exactly where that fail-open is intended. Read
+`packages/bee-rs/crates/bee/src/verbs/state_group/workers.rs` for the keep set.
+
+**The transport check is the payload's, not `bee herding status`
+(dispatch-ledger-retire D4).** A herding payload carries `transport_ready` and
+`transport_reason`; the swarming fallback model applies only when it says
+`transport_ready: false`. `bee herding status` prints a scope note saying its
+transport line is the calling session's own pane, not worker availability.
 
 **A cell dispatch names its cell on the herding command (dispatch-cell-id-flag,
 `3aa96ff2`).** When the door prepares a cell for a herding worker, the command
