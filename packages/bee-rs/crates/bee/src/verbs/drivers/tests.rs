@@ -45,6 +45,26 @@ use std::time::Instant;
         root
     }
 
+    struct TempCwd {
+        _lock: std::sync::MutexGuard<'static, ()>,
+        orig: PathBuf,
+    }
+
+    impl TempCwd {
+        fn enter(path: &Path) -> Self {
+            let lock = crate::verbs::drivers::TEST_CWD_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+            let orig = std::env::current_dir().unwrap();
+            std::env::set_current_dir(path).unwrap();
+            Self { _lock: lock, orig }
+        }
+    }
+
+    impl Drop for TempCwd {
+        fn drop(&mut self) {
+            let _ = std::env::set_current_dir(&self.orig);
+        }
+    }
+
     // ── CUTOVER: corrupt JSON on a read path ───────────────────────────────
 
     /// `rj` (readJson(file, null)) used to answer Delegate on a corrupt file,
@@ -12497,6 +12517,8 @@ Finish with: .bee/bin/bee cells finish --id c-golden --outcome "<one line>" --fi
     #[test]
     fn test_deploy_authorization_cli_routing() {
         let t0 = Instant::now();
+        let tmp = tempfile::tempdir().unwrap();
+        let _cwd = TempCwd::enter(&repo(&tmp, "{}"));
         let os = |v: &[&str]| -> Vec<OsString> { v.iter().map(OsString::from).collect() };
 
         // dispatch prepare accepts --release-version
@@ -12510,6 +12532,20 @@ Finish with: .bee/bin/bee cells finish --id c-golden --outcome "<one line>" --fi
             &os(&["dispatch", "authorize", "--id", "disp-1", "--release-version", "2.38.0"]),
             t0
         ).is_some());
+    }
+
+    #[test]
+    fn dispatch_authorize_timings_land_under_the_temp_root_not_the_crate_dir() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, "{}");
+        let crate_log = Path::new(env!("CARGO_MANIFEST_DIR")).join(".bee").join("logs").join("timings.jsonl");
+        let before = std::fs::read_to_string(&crate_log).ok();
+        let _cwd = TempCwd::enter(&root);
+        let os = |v: &[&str]| -> Vec<OsString> { v.iter().map(OsString::from).collect() };
+        assert!(try_native(&os(&["dispatch", "authorize", "--id", "disp-1", "--release-version", "2.38.0"]), Instant::now()).is_some());
+        let log = std::fs::read_to_string(root.join(".bee").join("logs").join("timings.jsonl")).unwrap();
+        assert!(log.contains("\"cmd\":\"dispatch authorize\""), "{log}");
+        assert_eq!(std::fs::read_to_string(&crate_log).ok(), before);
     }
 
     #[test]
