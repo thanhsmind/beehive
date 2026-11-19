@@ -2403,5 +2403,10 @@
     "capped": 2,
     "dropped": 0,
     "archived_at": "2026-11-19T11:11:45.916Z"
+  },
+  "heading-anchors-and-verb-homes": {
+    "capped": 2,
+    "dropped": 0,
+    "archived_at": "2026-11-19T11:12:18.074Z"
   }
 }

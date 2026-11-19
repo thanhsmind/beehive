@@ -1,0 +1,152 @@
+{
+  "id": "hav-2",
+  "feature": "heading-anchors-and-verb-homes",
+  "title": "Prove a paragraph quoting the heading no longer moves the section",
+  "lane": "small",
+  "role": "test",
+  "status": "capped",
+  "deps": [
+    "hav-1"
+  ],
+  "decisions": [
+    "D1",
+    "4b590a43-3bd9-4eac-bea8-1b05c539a2b9"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/heading_section.rs",
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/ownership.rs",
+    "packages/bee-rs/crates/bee/tests/rule_index_parity.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/heading_section.rs",
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/ownership.rs",
+    "packages/bee-rs/crates/bee/tests/rule_index_parity.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Add tests for D1 and prove them red then green. (1) #[cfg(test)] unit tests in heading_section.rs: a paragraph quoting the heading before the real heading line does not move the section; a longer line that starts with the heading text does not match; CRLF heading line matches; no heading line gives None; section ends at the next '## ' line. (2) A #[cfg(test)] test in ownership.rs whose name contains heading_section: parse_agents_rule_homes on a body whose earlier paragraph quotes '## AGENTS.md rule homes' and whose real section holds one rule row returns exactly that row. (3) A test in tests/rule_index_parity.rs: rule_homes_section on a text with a quoting paragraph first returns the real section. Prove red: temporarily swap the helper body to a first-occurrence find, run the new tests and keep the failing output, then restore the helper byte for byte and run them green. Write no code comments. Do not edit production behavior.",
+  "must_haves": {
+    "why": "D1 requires a test proving a paragraph quoting the heading no longer moves the section.",
+    "out_of_scope": [
+      "other heading lookups in the crate",
+      "the verb-home test"
+    ],
+    "truths": [
+      "New tests fail on a first-occurrence helper and pass on the anchored helper",
+      "The helper is restored unchanged after the red run"
+    ]
+  },
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee heading_section && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test rule_index_parity",
+  "tester_rule": true,
+  "trace": {
+    "worker": "hav-test",
+    "outcome": "Added 7 D1 tests (5 helper unit, 1 parse_agents_rule_homes, 1 parity fence); all red on a first-occurrence helper, helper restored byte-identical, all green — 361ed678d884e4d94cd8449352ae48b1a62210b1",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/knowledge/heading_section.rs",
+      "packages/bee-rs/crates/bee/src/verbs/knowledge/ownership.rs",
+      "packages/bee-rs/crates/bee/tests/rule_index_parity.rs"
+    ],
+    "deviations": [
+      "sync-ack: tests only; the doctrine-layer concept update lands in the capture step"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-19T11:06:36.363Z",
+    "behavior_change": false,
+    "verification_evidence": "cargo test --release -p bee --bin bee heading_section && cargo test --release -p bee --test rule_index_parity (6 passed; 11 passed) — green:unit — the cell adds tests only, and this command runs every one of them plus the existing fence",
+    "verify_output": "green:red-first",
+    "verify_passed": true,
+    "claim_session": "9acad07d-7ec0-4839-9315-0677d9801946",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee heading_section && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test rule_index_parity",
+    "claimed_at": "2026-11-19T10:36:25.727Z",
+    "knowledge_delta": [],
+    "sync_ack": "tests only; the doctrine-layer concept update lands in the capture step",
+    "plan_followed": true,
+    "no_mistakes": true,
+    "principles_used": [
+      {
+        "slug": "bee-principle-red-before-green",
+        "changed": "the tests were run red against a first-occurrence helper before the anchored helper was restored"
+      },
+      {
+        "slug": "bee-principle-red-before-green",
+        "changed": "swapped the helper to first-occurrence and kept the failing output for all 7 new tests before restoring it"
+      },
+      {
+        "slug": "bee-principle-test-behavior-not-structure",
+        "changed": "tests assert returned section text and returned RuleHome rows, not how the helper scans"
+      },
+      {
+        "slug": "bee-principle-prove-it-works",
+        "changed": "the 0-test red run was traced to a raced shared target dir and rerun in a private target dir rather than trusted"
+      }
+    ],
+    "report": {
+      "outcome": "Added 7 D1 tests (5 helper unit, 1 parse_agents_rule_homes, 1 parity fence); all red on a first-occurrence helper, helper restored byte-identical, all green — 361ed678d884e4d94cd8449352ae48b1a62210b1",
+      "commit": "361ed678d884e4d94cd8449352ae48b1a62210b1",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/knowledge/heading_section.rs",
+        "packages/bee-rs/crates/bee/src/verbs/knowledge/ownership.rs",
+        "packages/bee-rs/crates/bee/tests/rule_index_parity.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee heading_section && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test rule_index_parity — green:red-first — cargo test --release -p bee --bin bee heading_section && cargo test --release -p bee --test rule_index_parity (6 passed; 11 passed) — green:unit — the cell adds tests only, and this command runs every one of them plus the existing fence",
+      "deviations": [],
+      "principles_used": [
+        "bee-principle-red-before-green — swapped the helper to first-occurrence and kept the failing output for all 7 new tests before restoring it",
+        "bee-principle-test-behavior-not-structure — tests assert returned section text and returned RuleHome rows, not how the helper scans",
+        "bee-principle-prove-it-works — the 0-test red run was traced to a raced shared target dir and rerun in a private target dir rather than trusted"
+      ],
+      "reaction": "confirm",
+      "skipped": [
+        "full cargo test --release --no-fail-fast workspace run — cost; the change is test-only and the verify covers every touched test",
+        "clippy --all-targets — 77 errors that predate this cell, none in the added lines; the brief's default-target clippy exits 0"
+      ],
+      "found": [
+        "the shared cargo target dir ~/.cache/cargo-target races across worktrees: a test run executed another worktree's bee binary (5508 vs 5510 tests); use a per-worktree CARGO_TARGET_DIR for red/green proofs"
+      ],
+      "patch_id": "1424ab02c8b1f44e8cf70fc1843fe9ba7d07fb66"
+    },
+    "reaction": "confirm",
+    "skipped": [
+      "full cargo test --release --no-fail-fast workspace run — cost; the change is test-only and the verify covers every touched test",
+      "clippy --all-targets — 77 errors that predate this cell, none in the added lines; the brief's default-target clippy exits 0"
+    ],
+    "found": [
+      "the shared cargo target dir ~/.cache/cargo-target races across worktrees: a test run executed another worktree's bee binary (5508 vs 5510 tests); use a per-worktree CARGO_TARGET_DIR for red/green proofs"
+    ],
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "New tests fail on a first-occurrence helper and pass on the anchored helper",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/knowledge/heading_section.rs"
+          },
+          {
+            "requirement": "The helper is restored unchanged after the red run",
+            "artifact": "packages/bee-rs/crates/bee/tests/rule_index_parity.rs"
+          }
+        ],
+        "recorded_at": "2026-11-19T11:12:09.870Z",
+        "recorded_by": "9acad07d-7ec0-4839-9315-0677d9801946",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": {
+    "new": 62800,
+    "cached": 737547,
+    "total": 800347,
+    "models": {
+      "claude-opus-5-5": {
+        "new": 62800,
+        "cached": 737547,
+        "total": 800347
+      }
+    },
+    "jobs": [
+      "job-1795084589218-1751532-1"
+    ]
+  }
+}
