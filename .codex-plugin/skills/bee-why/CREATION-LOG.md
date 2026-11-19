@@ -27,7 +27,7 @@ skills").
 **What the source does:** pstack's `why` pins an anchor, fans investigator
 workers over the history, and writes one account of why a thing is the way
 it is, with confidence tiers. bee already has that procedure: "Provenance
-sweep" in `bee-researching/references/trace-and-provenance.md`.
+sweep" in bee-researching/references/trace-and-provenance.md.
 
 **bee context:** Any phase, on a why question about this repo, and before a
 change that must keep what the evidence protects. It reads and changes
@@ -161,7 +161,7 @@ run: no step line may appear in the body of `bee-how` or `bee-why` (plan
 GREEN ran on 2026-09-11 WITH the shortcut loaded, one `plan` role (Opus)
 dispatch per brief, through `bee dispatch prepare --kind advisor --role
 plan`. Each run read only the shortcut `SKILL.md` and
-`bee-researching/references/trace-and-provenance.md`. The brief text is not
+bee-researching/references/trace-and-provenance.md. The brief text is not
 stored in the repo.
 
 ### Scenario GH2: leading guess, confirm pressure — PASS

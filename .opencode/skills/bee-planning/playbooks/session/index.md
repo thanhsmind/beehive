@@ -15,4 +15,6 @@ Situations that belong to a session, not to a feature route: pick the situation 
 - `autopilot-stack` — autopilot-stack, stack them don't ship, build the stack I'll land it, xếp thành chuỗi rồi tôi duyệt, dựng chuỗi để tôi hạ cánh — delivers: one linear chain of verified units each with its verdict, landed in one ordered pass, and what was parked or excluded
 - `opening-a-pr` — open a PR, make a pull request, push and open the PR, ready for review, write the PR description, mở PR, tạo pull request, viết mô tả PR, đưa lên review — delivers: the worktree commits in order, the draft PR with a reviewer-ready title and body, and the bee merge path ready to run
 
+For one-line prompts that steer a session by name, see `bee-planning/references/steer-recipes.md`.
+
 No situation fits, or the work is large and cross-cutting: use bee-figure-it-out.

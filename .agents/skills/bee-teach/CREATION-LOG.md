@@ -40,7 +40,7 @@ through two bee research procedures and changes nothing.
   replace the gate question. The Gate Presentation Contract and the
   one-next-action rule win, and teach returns to the gate question.
 - How and why questions route to bee's own procedures, "Trace" and
-  "Provenance sweep" in `bee-researching/references/trace-and-provenance.md`.
+  "Provenance sweep" in bee-researching/references/trace-and-provenance.md.
   bee already has one home for them (pstack-gaps CONTEXT.md), so a second
   skill for each would give two homes to one procedure.
 - The Provenance sweep stays narrow by default, and every category not

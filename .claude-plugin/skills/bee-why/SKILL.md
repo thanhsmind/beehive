@@ -15,7 +15,7 @@ metadata:
 
 # Why
 
-This skill is a door, never a copy. It scopes a why question, invokes bee-researching, loads `bee-researching/references/trace-and-provenance.md`, and runs "Provenance sweep". The sweep owns every step, the confidence tiers and the answer shape. Never restate, shorten or reorder a step of it here.
+This skill is a door, never a copy. It scopes a why question, invokes bee-researching, loads `bee-researching/references/provenance.md`, and runs "Provenance sweep". The sweep owns every step, the confidence tiers and the answer shape. Never restate, shorten or reorder a step of it here.
 
 ## Run
 

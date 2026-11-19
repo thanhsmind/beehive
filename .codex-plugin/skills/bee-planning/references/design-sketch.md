@@ -4,7 +4,7 @@ Load when new code has an open shape on `standard` or `high-risk` work:
 several whole shapes are viable and no pattern in the repo fits. Never load
 it for a bug fix, a rename, or a change with a pattern to copy. Lanes open
 only after a traced model of the code the shape touches exists, per
-`bee-researching/references/trace-and-provenance.md` ("Trace"), and the
+`bee-researching/references/trace.md` ("Trace"), and the
 lanes' brief names that trace in its read diet: a lane that designs against
 a guessed runtime designs for the wrong system.
 
@@ -148,7 +148,7 @@ A few edge cases do not condemn a shape: complexity in the data is not
 complexity in the design.
 
 A scrap returns to `bee-planning`. Trace what was built, per
-`bee-researching/references/trace-and-provenance.md` ("Trace"); redesign as
+`bee-researching/references/trace.md` ("Trace"); redesign as
 if the new constraints held from day one; subtract before adding, so the new
 sketch is smaller than the old one before it grows. Supersede the old sketch
 through `bee decisions log --relation supersedes:<id>`, then take the new

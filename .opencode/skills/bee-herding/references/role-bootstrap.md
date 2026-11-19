@@ -47,10 +47,24 @@ yourself; the bypass level is a user-owned safety posture. Below `full`, the
 dispatch loop refuses every cycle anyway (Dispatch role §2), so there is
 nothing to gain by bootstrapping.
 
-### 4. Resolve the workspace id
+### 4. Pre-flight — the four trust preconditions
+
+Ask the human to confirm each one before the loop starts unattended. Any
+answer of no or not sure → stop and name it; never start the loop on a hope.
+
+1. The task was done once by hand, so a real run shows what finished looks
+   like and what the loop will meet.
+2. The agent has the tools the task needs: commands, credentials, access and
+   a verify command that runs from a fresh worktree.
+3. Every stage can stop the line: a red verify, a refused gate or a reported
+   conflict halts the run instead of passing along a bad state.
+4. Failures that repeated already became checks, so the loop does not
+   re-learn them each night.
+
+### 5. Resolve the workspace id
 
 On tmux there is nothing to resolve — the workspace IS the tmux session you
-are already in (D3). Skip to §5, and run every later step from the pane you
+are already in (D3). Skip to §6, and run every later step from the pane you
 want to become the chat pane: the cockpit and runtime windows appear in that
 same session, and the dispatch and merge panes are split off your own pane.
 
@@ -63,7 +77,7 @@ Everywhere else:
 - No id comes back, or the human's id does not resolve → list what you found
   and ask which to use. Never guess.
 
-### 5. Check for an existing cockpit before bootstrapping again
+### 6. Check for an existing cockpit before bootstrapping again
 
 ```
 bee herding pane-id --label dispatch
@@ -77,7 +91,7 @@ instead of re-bootstrapping, and point at README.md's stale-label fix
 no such pane. The script refuses the `dispatch` case too; the check exists so
 you can explain why before spending a run on it.
 
-### 6. Run the bootstrap script
+### 7. Run the bootstrap script
 
 Only once every pre-flight has passed and no cockpit was found:
 

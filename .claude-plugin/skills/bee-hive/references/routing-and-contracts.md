@@ -193,9 +193,9 @@ chatter. They trust fresh output, not assurance.
 
 **Rules.**
 
-1. **One question at a time**, formatted apart from progress text, phrased so the
-   user can restate what they are deciding in their own words ("Question Format";
-   the Gate Presentation Contract is the template). A question buried in a
+1. **Questions** are formatted apart from progress text, batched per the policy in
+   "Question Format", phrased so the user can restate what they are deciding in
+   their own words (the Gate Presentation Contract is the template). A question buried in a
    progress paragraph does not count as asked.
 2. **A red or a refusal is never silenced** — not by a quiet switch, not by a
    bypass level, not by "I'll mention it at the end".
@@ -308,7 +308,7 @@ RECOMMENDATION: <the option the evidence favors, and why in one line>
   (c) <option> — <expected outcome>
 ```
 
-One decision per question. Independent questions may share one `AskUserQuestion` call (up to 4 — `gates-and-delegation.md`, "AskUserQuestion"); dependent ones go one at a time. Never answer your own question.
+One decision per question. **Batching policy:** ask one question at a time when an answer can reframe the scope — a batch buries the reframe. Ask a numbered batch in one round when the questions are independent of each other (a wayfinding frontier); a batch may share one `AskUserQuestion` call (up to 4 — `gates-and-delegation.md`, "AskUserQuestion"). A question that depends on an answer still open waits for the next round. Never answer your own question.
 
 ## File Quick Reference
 
