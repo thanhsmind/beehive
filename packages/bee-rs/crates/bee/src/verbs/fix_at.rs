@@ -141,75 +141,149 @@ mod tests {
     use super::*;
     use serde_json::json;
 
+    const CHECK: &str = "fix-at:check";
+    const ARCH: &str = "fix-at:architecture";
+
     fn finding(ts: &str, layer: &str, title: &str, feature: &str) -> Value {
         json!({"ts": ts, "type": "finding", "title": title, "layer": layer, "feature": feature})
     }
 
-    fn close(ts: &str, layer: Option<&str>, title: &str) -> Value {
+    fn typed_close(ts: &str, layer: Option<&str>, title: &str) -> Value {
         match layer {
             Some(l) => json!({"ts": ts, "type": "backlog-closed", "title": title, "layer": l}),
-            None => json!({"ts": ts, "kind": "backlog-closed", "title": title}),
+            None => json!({"ts": ts, "type": "backlog-closed", "title": title}),
         }
     }
 
-    fn state(ledger: &Ledger, layer: &str) -> GroupState {
-        ledger.groups.iter().find(|g| g.layer == layer).unwrap().state
+    fn group<'a>(ledger: &'a Ledger, layer: &str) -> &'a Group {
+        ledger.groups.iter().find(|g| g.layer == layer).unwrap()
     }
 
     #[test]
-    fn fix_at_ledger_folds_one_group_per_layer_and_normalized_title() {
+    fn fix_at_ledger_whitespace_variant_titles_fold_into_one_open_group() {
         let rows = vec![
-            finding("2026-01-01", "fix-at:check", "Strip  Prefix", "a"),
-            finding("2026-01-02", "fix-at:check", "strip prefix", "b"),
-            finding("2026-01-03", "fix-at:architecture", "strip prefix", "c"),
-            finding("2026-01-04", "other", "strip prefix", "d"),
+            finding("2026-01-02T00:00:00Z", CHECK, "  strip prefix ", "b"),
+            finding("2026-01-01T00:00:00Z", CHECK, "Strip  Prefix", "a"),
+        ];
+        let ledger = Ledger::from_rows(&rows);
+        assert_eq!(ledger.groups.len(), 1);
+        let g = &ledger.groups[0];
+        assert_eq!(g.state, GroupState::Open);
+        assert_eq!(g.findings, 2);
+        assert_eq!(g.oldest_open_ts.as_deref(), Some("2026-01-01T00:00:00Z"));
+        assert!(g.latest_close.is_none());
+    }
+
+    #[test]
+    fn fix_at_ledger_newer_close_turns_the_group_closed_and_is_its_latest_close() {
+        let closing = typed_close("2026-01-03T00:00:00Z", None, "Strip Prefix");
+        let rows = vec![
+            finding("2026-01-01T00:00:00Z", CHECK, "strip prefix", "a"),
+            typed_close("2026-01-02T00:00:00Z", None, "strip prefix"),
+            closing.clone(),
+            finding("2026-01-01T12:00:00Z", CHECK, "strip prefix", "b"),
+        ];
+        let ledger = Ledger::from_rows(&rows);
+        let g = group(&ledger, CHECK);
+        assert_eq!(g.state, GroupState::Closed);
+        assert_eq!(g.latest_close.as_ref(), Some(&closing));
+        assert_eq!(g.oldest_open_ts, None);
+    }
+
+    #[test]
+    fn fix_at_ledger_finding_newer_than_the_close_turns_recurred_from_that_finding() {
+        let rows = vec![
+            finding("2026-01-01T00:00:00Z", CHECK, "t", "a"),
+            typed_close("2026-01-02T00:00:00Z", None, "t"),
+            finding("2026-01-04T00:00:00Z", CHECK, "t", "c"),
+            finding("2026-01-03T00:00:00Z", CHECK, "t", "b"),
+        ];
+        let ledger = Ledger::from_rows(&rows);
+        let g = group(&ledger, CHECK);
+        assert_eq!(g.state, GroupState::Recurred);
+        assert_eq!(g.findings, 3);
+        assert_eq!(g.oldest_open_ts.as_deref(), Some("2026-01-03T00:00:00Z"));
+    }
+
+    #[test]
+    fn fix_at_ledger_check_and_architecture_with_one_title_are_two_groups() {
+        let rows = vec![
+            finding("2026-01-01T00:00:00Z", CHECK, "same title", "a"),
+            finding("2026-01-02T00:00:00Z", ARCH, "same title", "b"),
         ];
         let ledger = Ledger::from_rows(&rows);
         assert_eq!(ledger.groups.len(), 2);
-        let check = ledger.groups.iter().find(|g| g.layer == "fix-at:check").unwrap();
-        assert_eq!(check.findings, 2);
-        assert_eq!(check.title, "strip prefix");
-        assert_eq!(check.oldest_open_ts.as_deref(), Some("2026-01-01"));
-        assert_eq!(check.features, vec!["a", "b"]);
-        assert_eq!(check.state, GroupState::Open);
+        assert_eq!(group(&ledger, CHECK).findings, 1);
+        assert_eq!(group(&ledger, ARCH).findings, 1);
     }
 
     #[test]
-    fn fix_at_ledger_close_turns_closed_and_a_newer_finding_turns_recurred() {
-        let mut rows = vec![finding("2026-01-01", "fix-at:check", "t", "a"), close("2026-01-02", None, "T")];
-        assert_eq!(state(&Ledger::from_rows(&rows), "fix-at:check"), GroupState::Closed);
-        rows.push(finding("2026-01-03", "fix-at:check", "t", "b"));
-        let ledger = Ledger::from_rows(&rows);
-        let group = &ledger.groups[0];
-        assert_eq!(group.state, GroupState::Recurred);
-        assert_eq!(group.oldest_open_ts.as_deref(), Some("2026-01-03"));
-        assert_eq!(group.features, vec!["b"]);
-        assert!(group.latest_close.is_some());
-    }
-
-    #[test]
-    fn fix_at_ledger_layered_close_matches_only_its_own_layer() {
+    fn fix_at_ledger_ignores_other_layers_and_non_finding_rows() {
         let rows = vec![
-            finding("2026-01-01", "fix-at:check", "t", "a"),
-            finding("2026-01-01", "fix-at:architecture", "t", "a"),
-            close("2026-01-02", Some("fix-at:check"), "t"),
+            finding("2026-01-01T00:00:00Z", "other", "t", "a"),
+            json!({"ts": "2026-01-02T00:00:00Z", "type": "finding", "title": "t", "feature": "a"}),
+            json!({"ts": "2026-01-03T00:00:00Z", "kind": "pbi", "type": "finding", "title": "t", "layer": CHECK}),
+            finding("2026-01-04T00:00:00Z", CHECK, "t", "b"),
         ];
         let ledger = Ledger::from_rows(&rows);
-        assert_eq!(state(&ledger, "fix-at:check"), GroupState::Closed);
-        assert_eq!(state(&ledger, "fix-at:architecture"), GroupState::Open);
+        assert_eq!(ledger.groups.len(), 1);
+        let g = group(&ledger, CHECK);
+        assert_eq!(g.findings, 1);
+        assert_eq!(g.oldest_open_ts.as_deref(), Some("2026-01-04T00:00:00Z"));
     }
 
     #[test]
-    fn fix_at_ledger_current_epoch_feature_follows_the_latest_close() {
+    fn fix_at_ledger_current_epoch_feature_names_only_the_current_epoch_owner() {
         let rows = vec![
-            finding("2026-01-01", "fix-at:check", "t", "old"),
-            close("2026-01-02", None, "t"),
-            finding("2026-01-03", "fix-at:check", "t", "new"),
+            finding("2026-01-01T00:00:00Z", CHECK, "t", "old"),
+            typed_close("2026-01-02T00:00:00Z", None, "t"),
+            finding("2026-01-03T00:00:00Z", CHECK, "t", "new"),
         ];
-        let ledger = Ledger::from_rows(&rows);
-        assert_eq!(ledger.current_epoch_feature("fix-at:check", "T"), Some("new".to_string()));
-        assert_eq!(ledger.current_epoch_feature("fix-at:architecture", "t"), None);
+        let recurred = Ledger::from_rows(&rows);
+        assert_eq!(recurred.current_epoch_feature(CHECK, " T "), Some("new".to_string()));
+        assert_eq!(recurred.current_epoch_feature(ARCH, "t"), None);
         let closed = Ledger::from_rows(&rows[..2]);
-        assert_eq!(closed.current_epoch_feature("fix-at:check", "t"), None);
+        assert_eq!(closed.current_epoch_feature(CHECK, "t"), None);
+        let open = Ledger::from_rows(&rows[..1]);
+        assert_eq!(open.current_epoch_feature(CHECK, "t"), Some("old".to_string()));
+    }
+
+    #[test]
+    fn fix_at_ledger_kind_backlog_closed_row_without_type_closes_the_group() {
+        let closing = json!({"ts": "2026-01-02T00:00:00Z", "kind": "backlog-closed", "title": "t"});
+        let rows = vec![finding("2026-01-01T00:00:00Z", CHECK, "t", "a"), closing.clone()];
+        let ledger = Ledger::from_rows(&rows);
+        let g = group(&ledger, CHECK);
+        assert_eq!(g.state, GroupState::Closed);
+        assert_eq!(g.latest_close.as_ref(), Some(&closing));
+    }
+
+    #[test]
+    fn fix_at_ledger_layered_close_closes_its_layer_and_layerless_close_closes_both() {
+        let findings = vec![
+            finding("2026-01-01T00:00:00Z", CHECK, "t", "a"),
+            finding("2026-01-01T00:00:00Z", ARCH, "t", "a"),
+        ];
+        let mut layered = findings.clone();
+        layered.push(typed_close("2026-01-02T00:00:00Z", Some(CHECK), "t"));
+        let ledger = Ledger::from_rows(&layered);
+        assert_eq!(group(&ledger, CHECK).state, GroupState::Closed);
+        assert_eq!(group(&ledger, ARCH).state, GroupState::Open);
+        let mut layerless = findings;
+        layerless.push(typed_close("2026-01-02T00:00:00Z", None, "t"));
+        let ledger = Ledger::from_rows(&layerless);
+        assert_eq!(group(&ledger, CHECK).state, GroupState::Closed);
+        assert_eq!(group(&ledger, ARCH).state, GroupState::Closed);
+    }
+
+    #[test]
+    fn fix_at_ledger_non_finding_row_type_on_a_fix_at_layer_is_not_counted() {
+        let rows = vec![
+            json!({"ts": "2026-01-01T00:00:00Z", "type": "note", "title": "t", "layer": CHECK, "feature": "a"}),
+            json!({"ts": "2026-01-02T00:00:00Z", "type": "finding", "title": "u", "layer": ARCH, "feature": "a"}),
+        ];
+        let ledger = Ledger::from_rows(&rows);
+        assert_eq!(ledger.groups.len(), 1);
+        assert_eq!(ledger.groups[0].layer, ARCH);
     }
 }
