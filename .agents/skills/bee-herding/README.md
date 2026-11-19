@@ -11,7 +11,7 @@ cockpit ─┬─ chat      (yours)
          ├─ dispatch  (loops: starts work in isolated worktrees)
          └─ merge     (idle: an owner gesture you run by hand)
 
-runtime ─── up to 4 working agents, one per backlog item, each in its own worktree
+runtime ─── up to `herding.limits.concurrency` working agents, one per backlog item, each in its own worktree
 ```
 
 Every interval, **dispatch** looks for a free runtime slot and a ready backlog item, and starts an agent on it — but only if you have turned dispatch on (see step 3 below), and only in an isolated worktree that never touches main. **Merge is not a loop.** It is a gesture you run by hand when you want finished worktrees retired: it checks that every capped cell already carries a recorded proof line, merges them into main, and closes their panes. That asymmetry is deliberate — merge is the one action that lands work in main, so a human is present whenever it happens.
@@ -87,7 +87,7 @@ Watch your chat pane. Working looks like:
 - `dispatch: refusing <PBI-ID> — <what it saw>` when it declines something
 - `merge: <slug> merged and cleaned up`
 
-**Silence is ambiguous**: either nothing is ready, or all four slots are busy. Both are normal. `herdr pane list --workspace <id>` shows which — a runtime pane per live item, labelled with its worktree.
+**Silence is ambiguous**: either nothing is ready, or all worker slots (`herding.limits.concurrency`) are busy. Both are normal. `herdr pane list --workspace <id>` shows which — a runtime pane per live item, labelled with its worktree.
 
 ## Stop and resume
 
@@ -131,7 +131,7 @@ Stopping the loop alone does not clear the label.
 
 - **It will not start at all until you enable it**, and it will not merge into main without you present. Those two — the enable marker and merge-as-a-gesture — are the real containment, not the lane filter.
 - **It will not merge past a real conflict or a capped cell with no recorded proof**, ever, on its own — CI runs the full declared suite against the merged main on every push, the deterministic net.
-- **It will not exceed four concurrent working agents.**
+- **It will not exceed `herding.limits.concurrency` concurrent working agents (unset, bee sizes it from the CPU count).**
 - **It will not decide an item is finished because its agent went quiet.** Only bee's own record — cells capped with recorded evidence — counts as finished. An agent reports idle the moment it stops typing, whether it is thinking, waiting, or dead.
 
 ## What it does NOT reliably do — read this
@@ -140,7 +140,7 @@ Stopping the loop alone does not clear the label.
 
 ## Things worth knowing
 
-- **The working agents run with permission checks bypassed and no allowlist — this is a knowingly accepted risk (owner decision).** That, not the lane filter, is the real limit on what damage is possible: the filter decides *which item* is picked up, not *what commands* the agent may run. **Blast radius:** each agent is confined to its own git worktree and branch until a merge — a git boundary, not a security sandbox: it shares the machine, network, credentials and every ambient tool. What bounds it: the enable marker, merge-as-a-gesture, the stop file, the four-slot cap, and worktree isolation. See SKILL.md "Accepted risk".
+- **The working agents run with permission checks bypassed and no allowlist — this is a knowingly accepted risk (owner decision).** That, not the lane filter, is the real limit on what damage is possible: the filter decides *which item* is picked up, not *what commands* the agent may run. **Blast radius:** each agent is confined to its own git worktree and branch until a merge — a git boundary, not a security sandbox: it shares the machine, network, credentials and every ambient tool. What bounds it: the enable marker, merge-as-a-gesture, the stop file, the `herding.limits.concurrency` slot cap, and worktree isolation. See SKILL.md "Accepted risk".
 - **The two control panes are NOT bypassed — they run an enumerated command surface.** Dispatch and merge each carry an `--allowedTools` allowlist sized to exactly what they do (dispatch creates worktrees; merge aborts/merges/cleans on main), never "read-only" (which would stall them) and never `bypassPermissions`. Merge writes to main (merges, deletes branches, drops grants) — it does not run verify or execute any code the working agents wrote; its own zero-mutation proof check only reads cell records. See SKILL.md "Safety boundaries".
-- **Verify runs one at a time**, behind a lock shared by main and every worktree. Four concurrent verifies on a normal laptop produce red results caused by memory pressure, which look exactly like real failures. If you adopt this skill elsewhere, set your own lock path in `commands.test`.
+- **Verify runs one at a time**, behind a lock shared by main and every worktree. Several concurrent verifies on a normal laptop produce red results caused by memory pressure, which look exactly like real failures. If you adopt this skill elsewhere, set your own lock path in `commands.test`.
 - **The impact ranking is judgement, not a stored field.** Two cycles over the same backlog can choose differently. The reason announced in chat is the only audit trail.

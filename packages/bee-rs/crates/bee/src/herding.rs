@@ -1423,6 +1423,7 @@ pub(crate) fn status_with_panes_and_transport_and_paseo(
 ) -> (ExitCode, Value, Vec<String>) {
     let mut explicit: Option<&str> = None;
     let mut json = false;
+    let mut full = false;
     let mut i = 0usize;
     while i < flags.len() {
         if flags[i] == "--main-root" {
@@ -1437,6 +1438,11 @@ pub(crate) fn status_with_panes_and_transport_and_paseo(
         }
         if flags[i] == "--json" {
             json = true;
+            i += 1;
+            continue;
+        }
+        if flags[i] == "--full" {
+            full = true;
             i += 1;
             continue;
         }
@@ -1585,7 +1591,7 @@ pub(crate) fn status_with_panes_and_transport_and_paseo(
     );
 
     if json {
-        emit(obj.clone());
+        println!("{}", status_json_text(&obj, full, main_root.as_deref()));
     } else {
         println!("herding: enabled={enabled} transport={transport_ready_str} ({transport_reason})");
         println!("{STATUS_SCOPE_NOTE}");
@@ -1595,6 +1601,76 @@ pub(crate) fn status_with_panes_and_transport_and_paseo(
     }
 
     (ExitCode::SUCCESS, Value::Object(obj), job_plain_lines)
+}
+
+const STATUS_BOUND_BYTES: usize = 16_000;
+const STATUS_ROW_KEYS: [&str; 9] =
+    ["job_id", "status", "round", "mark", "mark_reason", "pane_id", "paseo_agent_id", "parked", "unread_messages"];
+
+fn bounded_status(obj: &Map<String, Value>, rel: &str) -> Map<String, Value> {
+    let mut out = Map::new();
+    for (key, value) in obj {
+        match key.as_str() {
+            "jobs" => {}
+            "untracked_paseo_agents" => {
+                out.insert("untracked_paseo_agents_count".into(), value.as_array().map_or(0, Vec::len).into());
+            }
+            _ => {
+                out.insert(key.clone(), value.clone());
+            }
+        }
+    }
+    out.insert("bounded".into(), Value::Bool(true));
+    out.insert("full_output".into(), Value::String(rel.to_string()));
+    let mut rows: Vec<Value> = obj
+        .get("jobs")
+        .and_then(Value::as_array)
+        .map(|jobs| {
+            jobs.iter()
+                .filter_map(Value::as_object)
+                .map(|job| {
+                    Value::Object(
+                        STATUS_ROW_KEYS
+                            .iter()
+                            .filter_map(|k| job.get(*k).map(|v| ((*k).to_string(), v.clone())))
+                            .collect(),
+                    )
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    let total = rows.len();
+    out.insert("jobs".into(), Value::Array(Vec::new()));
+    let base = serde_json::to_string(&out).map_or(0, |t| t.len());
+    let mut used = base;
+    let mut keep = 0usize;
+    for row in &rows {
+        used += serde_json::to_string(row).map_or(0, |t| t.len()) + 1;
+        if used > STATUS_BOUND_BYTES - 40 {
+            break;
+        }
+        keep += 1;
+    }
+    rows.truncate(keep);
+    out.insert("jobs".into(), Value::Array(rows));
+    if keep < total {
+        out.insert("jobs_omitted".into(), (total - keep).into());
+    }
+    out
+}
+
+fn status_json_text(obj: &Map<String, Value>, full: bool, main_root: Option<&Path>) -> String {
+    let inline = || serde_json::to_string(&Value::Object(obj.clone())).unwrap();
+    let Some(root) = main_root.filter(|_| !full) else {
+        return inline();
+    };
+    let name = format!("herding-status-{}.json", chrono::Utc::now().format("%Y%m%dT%H%M%S%3fZ"));
+    let dir = root.join(".bee").join("tmp").join("output");
+    let written = std::fs::create_dir_all(&dir).and_then(|_| std::fs::write(dir.join(&name), inline()));
+    if written.is_err() {
+        return inline();
+    }
+    serde_json::to_string(&Value::Object(bounded_status(obj, &format!(".bee/tmp/output/{name}")))).unwrap()
 }
 
 const STATUS_SCOPE_NOTE: &str = "herding: this line reports the calling session's own pane, not worker availability — herdr reads HERDR_ENV and HERDR_PANE_ID, tmux reads TMUX and TMUX_PANE; a dispatch carries its own transport_ready and transport_reason";
@@ -2179,6 +2255,70 @@ mod tests {
             }
         }
         fn pane_send_key(&self, _pane: &str, _key: &str) -> Result<(), String> { Ok(()) }
+    }
+
+    fn seed_many_jobs(root: &Path, n: usize) {
+        for i in 0..n {
+            let dir = root.join(".bee").join("mailbox").join(format!("job-{i:04}"));
+            std::fs::create_dir_all(&dir).unwrap();
+            std::fs::write(
+                dir.join("job.json"),
+                serde_json::json!({"job_id": format!("job-{i:04}"), "pane_id": format!("w4:p{i}"), "round": 1}).to_string(),
+            )
+            .unwrap();
+            std::fs::write(
+                dir.join("messages.jsonl"),
+                format!("{}\n", serde_json::json!({"kind": "progress", "text": "x".repeat(2000)})),
+            )
+            .unwrap();
+        }
+    }
+
+    #[test]
+    fn status_json_default_is_bounded_and_names_the_spilled_full_form() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        seed_many_jobs(root, 300);
+        let live: HashSet<String> = HashSet::new();
+        let (_, full_val, _) =
+            status_with_panes_and_transport(&["--main-root", root.to_str().unwrap(), "--json"], None, Some(Some(live)));
+        let Value::Object(full_obj) = full_val else { panic!("object") };
+        let full_len = serde_json::to_string(&Value::Object(full_obj.clone())).unwrap().len();
+        assert!(full_len > STATUS_BOUND_BYTES * 10, "{full_len}");
+
+        let text = status_json_text(&full_obj, false, Some(root));
+        assert!(text.len() <= STATUS_BOUND_BYTES, "{}", text.len());
+        let bounded: Value = serde_json::from_str(&text).unwrap();
+        assert_eq!(bounded.get("bounded"), Some(&Value::Bool(true)));
+        let rel = bounded.get("full_output").and_then(Value::as_str).expect("full_output named");
+        assert!(rel.starts_with(".bee/tmp/output/"), "{rel}");
+        let rows = bounded.get("jobs").and_then(Value::as_array).unwrap();
+        assert!(!rows.is_empty());
+        assert!(rows.iter().all(|r| r.get("job_id").is_some() && r.get("last_message").is_none()));
+        let omitted = bounded.get("jobs_omitted").and_then(Value::as_u64).unwrap_or(0) as usize;
+        assert_eq!(rows.len() + omitted, 300);
+
+        let spilled: Value = serde_json::from_str(&std::fs::read_to_string(root.join(rel)).unwrap()).unwrap();
+        assert_eq!(spilled.get("jobs").and_then(Value::as_array).map(Vec::len), Some(300));
+        assert!(spilled["jobs"][0].get("last_message").is_some());
+    }
+
+    #[test]
+    fn status_json_full_flag_prints_the_whole_form_inline() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        seed_many_jobs(root, 40);
+        let (_, val, _) = status_with_panes_and_transport(
+            &["--main-root", root.to_str().unwrap(), "--json", "--full"],
+            None,
+            Some(Some(HashSet::new())),
+        );
+        let Value::Object(obj) = val else { panic!("object") };
+        let text = status_json_text(&obj, true, Some(root));
+        let parsed: Value = serde_json::from_str(&text).unwrap();
+        assert!(parsed.get("bounded").is_none());
+        assert!(parsed["jobs"][0].get("last_message").is_some());
+        assert!(!root.join(".bee/tmp/output").exists());
     }
 
     #[test]
