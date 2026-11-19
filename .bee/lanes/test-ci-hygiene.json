@@ -558,5 +558,12 @@
   },
   "gate_revoked_at": {
     "execution": "2026-11-19T11:18:53.700Z"
+  },
+  "merge_ready": {
+    "since": "2026-11-19T15:49:55.586Z",
+    "branch": "wt/test-ci-hygiene",
+    "worktree_id": "beehive--wt--test-ci-hygiene",
+    "uat": "pending",
+    "blocked_by": []
   }
 }

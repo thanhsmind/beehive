@@ -39,5 +39,12 @@
       "bee-herding"
     ],
     "next_action": "Run compounding."
+  },
+  "merge_ready": {
+    "since": "2026-11-19T15:51:39.770Z",
+    "branch": "wt/herding-run-hardening",
+    "worktree_id": "beehive--wt--herding-run-hardening",
+    "uat": "pending",
+    "blocked_by": []
   }
 }

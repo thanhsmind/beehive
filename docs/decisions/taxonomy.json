@@ -955,6 +955,7 @@
     "contract:verb-doctrine-home",
     "contract:orient-onboard-notices",
     "contract:guard-config-and-class",
-    "contract:plan-conflicts-and-briefs"
+    "contract:plan-conflicts-and-briefs",
+    "blind"
   ]
 }

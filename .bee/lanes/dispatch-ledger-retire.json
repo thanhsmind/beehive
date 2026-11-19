@@ -37,8 +37,8 @@
   },
   "gate_preview": {
     "feature": "dispatch-ledger-retire",
-    "plan_sha256": "919fd07a9738ebda16f3dc5b9d6d2fd1d1e2a9b2c270a9210a0a6edff176cade",
-    "previewed_at": "2026-11-19T10:19:59.891Z",
+    "plan_sha256": "aba2060e295e30a5917e7b7cd0960a02094193075bc4f25987d9bc8eb0df47fa",
+    "previewed_at": "2026-11-19T15:23:19.325Z",
     "cells": [
       {
         "id": "dlr-1",
@@ -475,6 +475,43 @@
             "No code comments"
           ]
         }
+      },
+      {
+        "id": "dlr-8",
+        "feature": "dispatch-ledger-retire",
+        "title": "Check the transport-check doc and the herding status message",
+        "lane": "standard",
+        "role": "test",
+        "deps": [
+          "dlr-4",
+          "dlr-5"
+        ],
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- herding::status && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pointer_integrity",
+        "must_haves": {
+          "truths": [
+            "skills/bee-swarming/SKILL.md states that a dispatch reads transport_ready and transport_reason and that the fallback model applies only when the payload says transport_ready false",
+            "bee herding status without a built job says it does not answer availability and names HERDR_ENV and HERDR_PANE_ID",
+            "with that message line reverted the herding status test fails, restored it passes",
+            "the report under docs/history/dispatch-ledger-retire/reports/dlr-8.md quotes each check"
+          ],
+          "why": "dlr-4 and dlr-5 have no test-role checker.",
+          "out_of_scope": [
+            "editing any checked file"
+          ]
+        },
+        "decisions": [
+          "649b82da-039f-4d04-94bc-d106be285a0e",
+          "f5916b45-b4f3-4f75-92a9-2dfba2e0d6aa"
+        ],
+        "files": [
+          "docs/history/dispatch-ledger-retire/reports/dlr-8.md"
+        ],
+        "read_first": [
+          "docs/history/dispatch-ledger-retire/CONTEXT.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Check CONTEXT.md D4 on commit 0d31c78f0 (dlr-4) without reading its cap report. Read skills/bee-swarming/SKILL.md and the herding status not-built message in packages/bee-rs/crates/bee/src/herding.rs. Run the verify (fix the filter to the real test names if it matches zero and say so). Mutation: revert the message line in a scratch edit, run, expect a failure, restore from HEAD, run, expect pass. Write the report. Edit no source. Commit only the report with git commit -- <path> (git add -N first) and the cell trailer."
       }
     ],
     "role_plan": {
@@ -613,8 +650,8 @@
   },
   "approved_cell_packet": {
     "feature": "dispatch-ledger-retire",
-    "plan_sha256": "919fd07a9738ebda16f3dc5b9d6d2fd1d1e2a9b2c270a9210a0a6edff176cade",
-    "previewed_at": "2026-11-19T10:19:59.891Z",
+    "plan_sha256": "aba2060e295e30a5917e7b7cd0960a02094193075bc4f25987d9bc8eb0df47fa",
+    "previewed_at": "2026-11-19T15:23:19.325Z",
     "cells": [
       {
         "id": "dlr-1",
@@ -1051,6 +1088,43 @@
             "No code comments"
           ]
         }
+      },
+      {
+        "id": "dlr-8",
+        "feature": "dispatch-ledger-retire",
+        "title": "Check the transport-check doc and the herding status message",
+        "lane": "standard",
+        "role": "test",
+        "deps": [
+          "dlr-4",
+          "dlr-5"
+        ],
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- herding::status && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pointer_integrity",
+        "must_haves": {
+          "truths": [
+            "skills/bee-swarming/SKILL.md states that a dispatch reads transport_ready and transport_reason and that the fallback model applies only when the payload says transport_ready false",
+            "bee herding status without a built job says it does not answer availability and names HERDR_ENV and HERDR_PANE_ID",
+            "with that message line reverted the herding status test fails, restored it passes",
+            "the report under docs/history/dispatch-ledger-retire/reports/dlr-8.md quotes each check"
+          ],
+          "why": "dlr-4 and dlr-5 have no test-role checker.",
+          "out_of_scope": [
+            "editing any checked file"
+          ]
+        },
+        "decisions": [
+          "649b82da-039f-4d04-94bc-d106be285a0e",
+          "f5916b45-b4f3-4f75-92a9-2dfba2e0d6aa"
+        ],
+        "files": [
+          "docs/history/dispatch-ledger-retire/reports/dlr-8.md"
+        ],
+        "read_first": [
+          "docs/history/dispatch-ledger-retire/CONTEXT.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Check CONTEXT.md D4 on commit 0d31c78f0 (dlr-4) without reading its cap report. Read skills/bee-swarming/SKILL.md and the herding status not-built message in packages/bee-rs/crates/bee/src/herding.rs. Run the verify (fix the filter to the real test names if it matches zero and say so). Mutation: revert the message line in a scratch edit, run, expect a failure, restore from HEAD, run, expect pass. Write the report. Edit no source. Commit only the report with git commit -- <path> (git add -N first) and the cell trailer."
       }
     ],
     "role_plan": {
@@ -1188,6 +1262,13 @@
     }
   },
   "gate_revoked_at": {
-    "execution": "2026-11-19T10:19:59.727Z"
+    "execution": "2026-11-19T15:23:15.088Z"
+  },
+  "merge_ready": {
+    "since": "2026-11-19T15:53:22.063Z",
+    "branch": "wt/dispatch-ledger-retire",
+    "worktree_id": "beehive--wt--dispatch-ledger-retire",
+    "uat": "pending",
+    "blocked_by": []
   }
 }
