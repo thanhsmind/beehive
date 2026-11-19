@@ -16,7 +16,7 @@
     },
     {
       "name": "bee-capturing",
-      "sha256": "852a715c85429ec8046df49a970f297a8c239b5c165f46ebb20d109bdf0efc11"
+      "sha256": "1741816ff8d2160d809f6090dfeb9431d83bc59721b201e489340ab2df1eeb94"
     },
     {
       "name": "bee-comment-review",
@@ -260,7 +260,7 @@
     },
     {
       "name": "bee-swarming",
-      "sha256": "1d0965a146ce2e1c050ec89203fa8630af66811621fa3789f0f4ea92ab214643"
+      "sha256": "123b33b7896aea18c04133990ccdd42419018da4c4a4e8ad8b072ea465a34321"
     },
     {
       "name": "bee-tdd",
