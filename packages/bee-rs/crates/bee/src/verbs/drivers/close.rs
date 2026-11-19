@@ -5802,6 +5802,145 @@ mod tests {
         assert!(!text.contains("--cell demo-1"), "demo-1 was answered: {text}");
     }
 
+    fn mistakes_door_second_cell(root: &Path) {
+        w(
+            root,
+            ".bee/cells/demo-2.json",
+            r#"{"id":"demo-2","feature":"demo","status":"capped","trace":{"report":{"outcome":"o","commit":"c","files":[],"tests":"cargo test — green — the touched module","deviations":[]}}}"#,
+        );
+    }
+
+    fn mistakes_door_run() -> String {
+        crate::verbs::mailbox::run_id(crate::verbs::cells::resolve_session_flag_env(None).as_deref())
+    }
+
+    fn mistakes_door_reflection(cells: &[&str]) -> crate::verbs::mailbox::Entry {
+        let mut entry = crate::verbs::mailbox::Entry::reflection(
+            "2026-08-31T01:00:00.000Z",
+            "Capped a cell without naming what went wrong",
+            "Name the mistake at the cap",
+            "check",
+        );
+        entry.cells = cells.iter().map(|c| c.to_string()).collect();
+        entry
+    }
+
+    fn mistakes_door_close(root: &Path) -> (Value, String, i64) {
+        let out = close_handler(root, "demo", false, None, None, &HashMap::new()).unwrap();
+        let Out::Emit(result, text, code) = out else { panic!("expected Emit") };
+        (result, text, code as i64)
+    }
+
+    fn mistakes_door_blocking(result: &Value) -> bool {
+        result["doors"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|d| d["door"] == "mistakes")
+            .map(|d| d["blocking"] == json!(true))
+            .unwrap_or(false)
+    }
+
+    #[test]
+    fn mistakes_door_reflection_naming_one_of_two_cells_still_refuses_and_names_the_other() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        init_bee_repo(root);
+        unanswered_cell(root);
+        mistakes_door_second_cell(root);
+        crate::verbs::mailbox::record_stop(root, &mistakes_door_run(), &mistakes_door_reflection(&["demo-1"]));
+
+        let (result, text, code) = mistakes_door_close(root);
+        assert_eq!(code, 1, "demo-2 is unanswered: {text}");
+        assert!(mistakes_door_blocking(&result), "text: {text}");
+        assert!(text.contains("cell(s) demo-2 have no reflection"), "text: {text}");
+        assert!(!text.contains("demo-1"), "demo-1 was named and answered: {text}");
+    }
+
+    #[test]
+    fn mistakes_door_reflection_naming_both_cells_clears_the_door() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        init_bee_repo(root);
+        unanswered_cell(root);
+        mistakes_door_second_cell(root);
+        crate::verbs::mailbox::record_stop(
+            root,
+            &mistakes_door_run(),
+            &mistakes_door_reflection(&["demo-1", "demo-2"]),
+        );
+
+        let (result, text, code) = mistakes_door_close(root);
+        assert_eq!(code, 0, "both cells are answered: {text}");
+        assert!(!mistakes_door_blocking(&result), "text: {text}");
+    }
+
+    #[test]
+    fn mistakes_door_no_mistakes_answer_without_cell_clears_nothing() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        init_bee_repo(root);
+        unanswered_cell(root);
+        mistakes_door_second_cell(root);
+        crate::verbs::mailbox::record_stop(
+            root,
+            &mistakes_door_run(),
+            &crate::verbs::mailbox::Entry::no_mistakes("2026-08-31T01:00:00.000Z"),
+        );
+
+        let (result, text, code) = mistakes_door_close(root);
+        assert_eq!(code, 1, "an answer naming no cell clears nothing: {text}");
+        assert!(mistakes_door_blocking(&result), "text: {text}");
+        assert!(text.contains("cell(s) demo-1, demo-2 have no reflection"), "text: {text}");
+    }
+
+    #[test]
+    fn mistakes_door_refusal_prints_both_commands_with_the_unanswered_ids() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        init_bee_repo(root);
+        unanswered_cell(root);
+        mistakes_door_second_cell(root);
+
+        let (_result, text, code) = mistakes_door_close(root);
+        assert_eq!(code, 1, "text: {text}");
+        assert!(
+            text.contains(
+                "`bee mailbox reflect --wrong \"<what went wrong>\" --better \"<what would have been better>\" --fix-at <architecture|check|doctrine|none> --cell demo-1,demo-2`"
+            ),
+            "the reflect command carries the ids: {text}"
+        );
+        assert!(
+            text.contains("`bee mailbox reflect --no-mistakes --cell demo-1,demo-2`"),
+            "the clean-run command carries the ids: {text}"
+        );
+    }
+
+    #[test]
+    fn mistakes_door_reflection_without_cell_reaches_the_letter_but_still_blocks() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        init_bee_repo(root);
+        unanswered_cell(root);
+        let run = mistakes_door_run();
+        crate::verbs::mailbox::record_stop(root, &run, &mistakes_door_reflection(&[]));
+
+        let entries = crate::verbs::mailbox::read_entries(root, &run);
+        let recorded: Vec<_> = entries.iter().filter(|e| e.is_reflection()).collect();
+        assert_eq!(recorded.len(), 1, "the reflection is in the run's entries");
+        assert!(recorded[0].cells.is_empty());
+        let body = crate::verbs::mailbox::compose_body(&entries);
+        assert!(
+            body.contains("Capped a cell without naming what went wrong — better: Name the mistake at the cap"),
+            "the reflection reaches the letter: {body}"
+        );
+
+        let (result, text, code) = mistakes_door_close(root);
+        assert_eq!(code, 1, "a reflection naming no cell clears nothing: {text}");
+        assert!(mistakes_door_blocking(&result), "text: {text}");
+        assert!(text.contains("--cell demo-1"), "text: {text}");
+    }
+
     #[test]
     fn a_green_close_appends_one_feature_close_entry_carrying_the_three_lists() {
         let tmp = tempfile::tempdir().unwrap();

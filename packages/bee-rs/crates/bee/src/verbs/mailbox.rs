@@ -5583,4 +5583,22 @@ nested:
         assert_eq!(back.cells, vec!["a-1".to_string(), "a-2".to_string()]);
         assert_eq!(read_cells(Some(" a-1, ,a-2,a-1")), back.cells);
     }
+
+    #[test]
+    fn mistakes_door_entry_round_trips_with_cells_and_writes_no_cells_key_when_empty() {
+        let bare = Entry::reflection("2026-08-31T01:00:00.000Z", "w", "b", "check");
+        let bare_value = bare.to_value();
+        assert!(bare_value.get("cells").is_none(), "no cells key when empty: {bare_value}");
+        let bare_back = Entry::from_value(&bare_value).unwrap();
+        assert!(bare_back.cells.is_empty());
+        assert_eq!(bare_back.to_value(), bare_value);
+
+        let mut named = Entry::reflection("2026-08-31T01:00:00.000Z", "w", "b", "check");
+        named.cells = vec!["c-1".to_string(), "c-2".to_string()];
+        let named_value = named.to_value();
+        assert_eq!(named_value["cells"], json!(["c-1", "c-2"]));
+        let named_back = Entry::from_value(&named_value).unwrap();
+        assert_eq!(named_back.cells, vec!["c-1".to_string(), "c-2".to_string()]);
+        assert_eq!(named_back.to_value(), named_value);
+    }
 }
