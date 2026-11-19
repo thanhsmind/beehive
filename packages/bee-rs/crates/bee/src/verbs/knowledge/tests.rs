@@ -1566,6 +1566,101 @@ use std::time::Instant;
         assert!(msg(warns[0]).contains("doc-only"), "the bad value must be named: {}", msg(warns[0]));
     }
 
+    fn touch(dir: &Path, rel: &str) {
+        let abs = dir.parent().unwrap().parent().unwrap().join(rel);
+        std::fs::create_dir_all(abs.parent().unwrap()).unwrap();
+        std::fs::write(abs, "").unwrap();
+    }
+
+    fn evidence_ref_codes(dir: &Path) -> Vec<String> {
+        let report = check_bundle(dir, false).unwrap();
+        report
+            .warnings
+            .iter()
+            .filter(|f| f["code"] == "evidence_ref_missing_path" || f["code"] == "evidence_without_ref")
+            .map(|f| format!("{}: {}", f["code"].as_str().unwrap(), msg(f)))
+            .collect()
+    }
+
+    #[test]
+    fn evidence_ref_check_missing_packages_path_warns() {
+        let (_tmp, dir) = bundle();
+        let missing = "packages/bee-rs/crates/bee/src/verbs/knowledge/gone.rs";
+        put(&dir, "patterns/p.md", Cx::new("p-one").bee("evidence", json!("wired")).bee("evidence_ref", json!(missing)));
+        let report = check_bundle(&dir, false).unwrap();
+        let warns = of_code(&report.warnings, "evidence_ref_missing_path");
+        assert_eq!(warns.len(), 1, "{:?}", report.warnings);
+        assert_eq!(warns[0]["file"], "patterns/p.md");
+        assert!(msg(warns[0]).contains(missing), "{}", msg(warns[0]));
+        assert!(report.ok, "a warning alone must not fail un-strict");
+    }
+
+    #[test]
+    fn evidence_ref_check_crate_relative_path_under_src_is_silent() {
+        let (_tmp, dir) = bundle();
+        touch(&dir, "packages/bee-rs/crates/bee/src/verbs/knowledge/check.rs");
+        put(&dir, "patterns/p.md", Cx::new("p-one").bee("evidence", json!("wired")).bee("evidence_ref", json!("verbs/knowledge/check.rs")));
+        assert!(evidence_ref_codes(&dir).is_empty(), "{:?}", evidence_ref_codes(&dir));
+    }
+
+    #[test]
+    fn evidence_ref_check_path_under_crate_base_is_silent() {
+        let (_tmp, dir) = bundle();
+        touch(&dir, "packages/bee-rs/crates/bee/tests/guard.rs");
+        put(&dir, "patterns/p.md", Cx::new("p-one").bee("evidence", json!("exercised")).bee("evidence_ref", json!("tests/guard.rs")));
+        assert!(evidence_ref_codes(&dir).is_empty(), "{:?}", evidence_ref_codes(&dir));
+    }
+
+    #[test]
+    fn evidence_ref_check_two_paths_warn_only_for_the_missing_one() {
+        let (_tmp, dir) = bundle();
+        touch(&dir, "packages/bee-rs/crates/bee/src/verbs/real.rs");
+        put(&dir, "patterns/p.md", Cx::new("p-one").bee("evidence", json!("wired")).bee("evidence_ref", json!("verbs/real.rs;verbs/gone.rs")));
+        let report = check_bundle(&dir, false).unwrap();
+        let warns = of_code(&report.warnings, "evidence_ref_missing_path");
+        assert_eq!(warns.len(), 1, "{:?}", report.warnings);
+        assert!(msg(warns[0]).contains("\"verbs/gone.rs\""), "{}", msg(warns[0]));
+        assert!(!msg(warns[0]).contains("real.rs"), "{}", msg(warns[0]));
+    }
+
+    #[test]
+    fn evidence_ref_check_wired_or_exercised_without_ref_warns() {
+        for state in ["wired", "exercised"] {
+            let (_tmp, dir) = bundle();
+            put(&dir, "patterns/p.md", Cx::new("p-one").bee("evidence", json!(state)));
+            let report = check_bundle(&dir, false).unwrap();
+            let warns = of_code(&report.warnings, "evidence_without_ref");
+            assert_eq!(warns.len(), 1, "{state}: {:?}", report.warnings);
+            assert_eq!(warns[0]["file"], "patterns/p.md");
+            assert!(report.ok, "{state}: a warning alone must not fail un-strict");
+        }
+        let (_tmp, dir) = bundle();
+        put(&dir, "patterns/p.md", Cx::new("p-one").bee("evidence", json!("present")));
+        assert!(evidence_ref_codes(&dir).is_empty(), "{:?}", evidence_ref_codes(&dir));
+    }
+
+    #[test]
+    fn evidence_ref_check_prose_without_a_path_is_silent() {
+        let (_tmp, dir) = bundle();
+        put(
+            &dir,
+            "patterns/p.md",
+            Cx::new("p-one").bee("evidence", json!("wired")).bee("evidence_ref", json!("the guard test (run by hand); see the knowledge suite")),
+        );
+        assert!(evidence_ref_codes(&dir).is_empty(), "{:?}", evidence_ref_codes(&dir));
+        assert!(check_bundle(&dir, true).unwrap().ok);
+    }
+
+    #[test]
+    fn evidence_ref_check_strict_fails_on_the_warning() {
+        let (_tmp, dir) = bundle();
+        put(&dir, "patterns/p.md", Cx::new("p-one").bee("evidence", json!("wired")).bee("evidence_ref", json!("src/verbs/gone.rs")));
+        let loose = check_bundle(&dir, false).unwrap();
+        assert_eq!(of_code(&loose.warnings, "evidence_ref_missing_path").len(), 1, "{:?}", loose.warnings);
+        assert!(loose.ok);
+        assert!(!check_bundle(&dir, true).unwrap().ok, "--strict promotes evidence_ref_missing_path to failing");
+    }
+
     // ═══ profile ERRORS (G14 layer 3 / cell f3-3) ══════════════════════════
 
     /// Node: 'profile ERROR: duplicate bee.authoritative_for FAILS the chain'
