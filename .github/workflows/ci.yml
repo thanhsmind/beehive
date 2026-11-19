@@ -38,6 +38,12 @@ jobs:
   verify:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        opencode:
+          - opencode-ai@1.18.16
+          - '@opencode/cli@2.2.5'
     # issues: write is scoped to this job only, so a red chain can file or
     # comment on a verify-red issue; contents: read must be listed explicitly
     # too — specifying any permission here resets every unlisted scope to
@@ -76,7 +82,7 @@ jobs:
       # day or two, so an unpinned install would make an upstream release able
       # to turn this suite red with no change of ours.
       - name: Install the OpenCode runtime (pinned) for the belt gates
-        run: npm i -g opencode-ai@1.18.16
+        run: npm i -g ${{ matrix.opencode }}
 
       # This is .bee/config.json `commands.verify` verbatim — the single
       # source of truth for the verify chain, so CI can never drift from what
@@ -116,7 +122,7 @@ jobs:
       # every work-in-progress push into tracker noise and train everyone to
       # ignore the label.
       - name: File verify-red issue on failure
-        if: failure() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
+        if: failure() && matrix.opencode == 'opencode-ai@1.18.16' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -132,23 +138,3 @@ jobs:
             gh issue create --title "$title" --body "$body" --label verify-red || \
               gh issue create --title "$title" --body "$body"
           fi
-
-  opencode-2x:
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: dtolnay/rust-toolchain@stable
-
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: packages/bee-rs
-
-      - name: Install the OpenCode 2.x runtime (pinned)
-        run: npm i -g @opencode/cli@2.2.5
-
-      - name: Run the OpenCode plugin contracts on 2.x
-        run: PATH="${CARGO_HOME:-$HOME/.cargo}/bin:$PATH" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test opencode_plugin_contracts
