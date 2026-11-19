@@ -132,3 +132,23 @@ jobs:
             gh issue create --title "$title" --body "$body" --label verify-red || \
               gh issue create --title "$title" --body "$body"
           fi
+
+  opencode-2x:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: packages/bee-rs
+
+      - name: Install the OpenCode 2.x runtime (pinned)
+        run: npm i -g @opencode/cli@2.2.5
+
+      - name: Run the OpenCode plugin contracts on 2.x
+        run: PATH="${CARGO_HOME:-$HOME/.cargo}/bin:$PATH" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test opencode_plugin_contracts
