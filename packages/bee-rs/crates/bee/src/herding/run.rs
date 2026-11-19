@@ -212,6 +212,7 @@ pub(super) struct Options {
     pub(crate) allow_question: bool,
     pub(crate) read_only: bool,
     pub(crate) claude_session: Option<ClaudeSessionSpec>,
+    dispatch_pane: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -324,9 +325,14 @@ fn parse_options(flags: &[&str]) -> Result<Options, String> {
     let mut read_only = false;
     let mut session_model: Option<&str> = None;
     let mut session_effort: Option<&str> = None;
+    let mut dispatch_pane: Option<&str> = None;
     let mut i = 0usize;
     while i < flags.len() {
         match flags[i] {
+            "--dispatch-pane" => {
+                dispatch_pane = flags.get(i + 1).copied();
+                i += 2;
+            }
             "--session-model" => {
                 session_model = flags.get(i + 1).copied();
                 i += 2;
@@ -519,6 +525,7 @@ fn parse_options(flags: &[&str]) -> Result<Options, String> {
         allow_question,
         read_only,
         claude_session,
+        dispatch_pane: dispatch_pane.map(str::to_string),
     })
 }
 
@@ -1452,6 +1459,7 @@ fn is_agent_prompt_timeout(e: &str) -> bool {
 fn start_with_retry(
     start: &mut dyn FnMut() -> Result<(), String>,
     sleep: &mut dyn FnMut(Duration),
+    clear_input: &mut dyn FnMut(),
 ) -> Result<(), String> {
     let mut last = String::new();
     for attempt in 1..=START_RETRY_ATTEMPTS {
@@ -1460,6 +1468,7 @@ fn start_with_retry(
             Err(e) if is_pane_busy_error(&e) => {
                 last = e;
                 if attempt < START_RETRY_ATTEMPTS {
+                    clear_input();
                     sleep(POLL_INTERVAL * 5);
                 }
             }
@@ -2696,9 +2705,12 @@ fn execute_new(opts: &Options, herdr: &dyn PaneTransport) -> ExecResult {
             eprintln!("bee herding run: workspace-trust pre-flight failed ({msg}) — proceeding anyway");
         }
 
-    let own_pane = match herdr.pane_current() {
-        Ok(p) => p,
-        Err(e) => return ExecResult { outcome: RunOutcome::SpawnFailed(e), pane_id: None, closed_pane: false },
+    let own_pane = match &opts.dispatch_pane {
+        Some(p) => p.clone(),
+        None => match herdr.pane_current() {
+            Ok(p) => p,
+            Err(e) => return ExecResult { outcome: RunOutcome::SpawnFailed(e), pane_id: None, closed_pane: false },
+        },
     };
     // hss-2: the layout read and the split itself run under one
     // cross-process lock, so concurrent spawns from one tab see each other's
@@ -2754,6 +2766,9 @@ fn execute_new(opts: &Options, herdr: &dyn PaneTransport) -> ExecResult {
     let start_result = start_with_retry(
         &mut || herdr.agent_start(&opts.job_id, &kind, &new_pane, &args),
         &mut |d| std::thread::sleep(d),
+        &mut || {
+            let _ = herdr.pane_send_key(&new_pane, "ctrl+u");
+        },
     );
     if let Err(e) = start_result {
         // role-dispatch.md §8's own cleanup rule: a start failure closes the
@@ -5911,7 +5926,7 @@ fn should_detach(has_inbox_session: bool, dry_run: bool, runner_marker: Option<&
 /// launcher's job id. When the task did not come inline through `--task`,
 /// the runner reads the launcher's task text from its stdin pipe. The second
 /// value says whether that pipe carries the task.
-fn runner_args(flags: &[&str], job_id: &str) -> (Vec<String>, bool) {
+fn runner_args(flags: &[&str], job_id: &str, dispatch_pane: Option<&str>) -> (Vec<String>, bool) {
     let inline_task = flags
         .iter()
         .position(|f| *f == "--task")
@@ -5921,6 +5936,9 @@ fn runner_args(flags: &[&str], job_id: &str) -> (Vec<String>, bool) {
     args.extend(["--job-id".to_string(), job_id.to_string()]);
     if !inline_task {
         args.extend(["--task-file".to_string(), "-".to_string()]);
+    }
+    if let Some(pane) = dispatch_pane {
+        args.extend(["--dispatch-pane".to_string(), pane.to_string()]);
     }
     (args, !inline_task)
 }
@@ -5935,7 +5953,7 @@ fn spawn_detached_runner(flags: &[&str], opts: &Options) -> Result<(), String> {
     use std::os::unix::process::CommandExt;
     use std::process::{Command, Stdio};
     let exe = std::env::current_exe().map_err(|e| format!("could not resolve the bee executable: {e}"))?;
-    let (args, pipe_task) = runner_args(flags, &opts.job_id);
+    let (args, pipe_task) = runner_args(flags, &opts.job_id, opts.dispatch_pane.as_deref());
     let mut child = Command::new(exe)
         .args(&args)
         .env(DETACHED_RUNNER_ENV, "1")
@@ -6298,6 +6316,12 @@ pub(super) fn run(flags: &[&str]) -> ExitCode {
             }
         }
     };
+    if let Some(t) = &transport
+        && !opts.is_continue
+        && opts.dispatch_pane.is_none()
+    {
+        opts.dispatch_pane = t.pane_current().ok();
+    }
     let marker = std::env::var(DETACHED_RUNNER_ENV).ok();
     if let (Some(session), true) =
         (opts.inbox_session.as_deref(), should_detach(opts.inbox_session.is_some(), opts.dry_run, marker.as_deref()))
@@ -6420,14 +6444,14 @@ mod tests {
     #[test]
     fn runner_args_keep_every_flag_add_the_job_id_and_pipe_a_file_task() {
         let flags = ["--agent", "pi", "--task-file", "/tmp/t.md", "--inbox-session", "s1", "--json"];
-        let (args, pipe) = runner_args(&flags, "job-9");
+        let (args, pipe) = runner_args(&flags, "job-9", None);
         let mut want: Vec<&str> = vec!["herding", "run"];
         want.extend(flags);
         want.extend(["--job-id", "job-9", "--task-file", "-"]);
         assert_eq!(args, want);
         assert!(pipe);
         // An inline --task already rides argv, so no pipe and no stdin read.
-        let (args, pipe) = runner_args(&["--task", "do it", "--inbox-session", "s1"], "job-9");
+        let (args, pipe) = runner_args(&["--task", "do it", "--inbox-session", "s1"], "job-9", None);
         assert_eq!(args, ["herding", "run", "--task", "do it", "--inbox-session", "s1", "--job-id", "job-9"]);
         assert!(!pipe);
     }
@@ -7262,6 +7286,8 @@ mod tests {
         /// stats nothing.
         probe_path: RefCell<Option<PathBuf>>,
         probe_seen: RefCell<Option<bool>>,
+        pane_current_calls: RefCell<u32>,
+        start_results: RefCell<Vec<Result<(), String>>>,
     }
 
     impl FakeHerdr {
@@ -7297,6 +7323,8 @@ mod tests {
                 process_info_calls: RefCell::new(Vec::new()),
                 probe_path: RefCell::new(None),
                 probe_seen: RefCell::new(None),
+                pane_current_calls: RefCell::new(0),
+                start_results: RefCell::new(Vec::new()),
             }
         }
 
@@ -7307,6 +7335,7 @@ mod tests {
 
     impl PaneTransport for FakeHerdr {
         fn pane_current(&self) -> Result<String, String> {
+            *self.pane_current_calls.borrow_mut() += 1;
             Ok(self.own_pane.to_string())
         }
         fn pane_layout(&self, _pane_id: &str) -> Option<Vec<PaneGeom>> {
@@ -7344,6 +7373,9 @@ mod tests {
             self.call_log.borrow_mut().push("agent_start");
             *self.started_kind.borrow_mut() = Some(kind.to_string());
             *self.started_args.borrow_mut() = Some(args.to_vec());
+            if !self.start_results.borrow().is_empty() {
+                return self.start_results.borrow_mut().remove(0);
+            }
             self.start_result.clone()
         }
         fn agent_status(&self, _job_id: &str) -> Option<String> {
@@ -7355,6 +7387,7 @@ mod tests {
         }
         fn pane_send_key(&self, pane_id: &str, key: &str) -> Result<(), String> {
             self.send_key_calls.borrow_mut().push((pane_id.to_string(), key.to_string()));
+            self.call_log.borrow_mut().push("pane_send_key");
             Ok(())
         }
         fn agent_prompt(&self, job_id: &str, prompt: &str, _until: &str, _timeout_ms: u64) -> Result<(), String> {
@@ -7771,6 +7804,7 @@ mod tests {
             allow_question: true,
             read_only: false,
             claude_session: None,
+            dispatch_pane: None,
         }
     }
 
@@ -7857,6 +7891,7 @@ mod tests {
             allow_question: true,
             read_only: false,
             claude_session: None,
+            dispatch_pane: None,
         }
     }
 
@@ -7926,6 +7961,28 @@ mod tests {
         assert_eq!(exit, ExitCode::FAILURE);
         assert!(!bee_dir.join("mailbox").exists(), "the refusal must not create the mailbox tree");
         assert!(!mailbox::job_path(&bee_dir, "job-1").exists(), "the refusal must not write job.json");
+    }
+
+    #[test]
+    fn run_refuses_at_the_depth_limit_before_any_side_effect() {
+        let tmp = tempfile::tempdir().unwrap();
+        let bee_dir = tmp.path().join(".bee");
+        std::fs::create_dir_all(&bee_dir).unwrap();
+        std::fs::write(bee_dir.join("config.json"), r#"{"herding":{"limits":{"depth":0}}}"#).unwrap();
+        let root = tmp.path().display().to_string();
+        let exit = run(&[
+            "--task", "do the thing",
+            "--job-id", "job-limits-1",
+            "--main-root", &root,
+            "--no-pane",
+            "--dry-run",
+            "--json",
+        ]);
+        assert_eq!(exit, ExitCode::FAILURE, "a depth limit of 0 must refuse a fresh run");
+        assert!(
+            !mailbox::job_path(&bee_dir, "job-limits-1").exists(),
+            "the limits refusal must not write job.json"
+        );
     }
 
     #[test]
@@ -8027,6 +8084,7 @@ mod tests {
                 }
             },
             &mut |_d| {},
+            &mut || {},
         );
         assert!(out.is_ok());
         assert_eq!(*calls.borrow(), 3, "two busy refusals then success");
@@ -8041,6 +8099,7 @@ mod tests {
                 Err("herdr agent start x exited 1: unknown kind".to_string())
             },
             &mut |_d| {},
+            &mut || {},
         );
         assert!(out.is_err());
         assert_eq!(*calls.borrow(), 1, "a non-busy error fails immediately");
@@ -8051,12 +8110,98 @@ mod tests {
         let out = start_with_retry(
             &mut || Err("agent_pane_busy: still booting".to_string()),
             &mut |_d| {},
+            &mut || {},
         );
         let err = out.unwrap_err();
         assert!(err.contains("start attempts"), "{err}");
         // the caller's existing failure arm closes the pane — proven by the
         // pre-existing spawn_failure_closes_the_pane_it_just_split test,
         // which now flows through start_with_retry with a non-busy error.
+    }
+
+    #[test]
+    fn a_pinned_dispatch_pane_holds_every_spawn_while_the_focus_moves() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut fake = FakeHerdr::new();
+        fake.own_pane = "w1:p7";
+        fake.layout = None;
+        for job in ["job-1", "job-2"] {
+            let mut opts = test_options(tmp.path(), false);
+            opts.job_id = job.to_string();
+            opts.nickname = job.to_string();
+            opts.dispatch_pane = Some("w1:p1".to_string());
+            seeded_result_dir(&tmp.path().join(".bee"), job);
+            let result = execute(&opts, &fake);
+            assert!(matches!(result.outcome, RunOutcome::Result(_)), "got {:?}", result.outcome);
+        }
+        let parents: Vec<String> = fake.split_calls.borrow().iter().map(|c| c.0.clone()).collect();
+        assert_eq!(parents, ["w1:p1", "w1:p1"]);
+        assert_eq!(*fake.pane_current_calls.borrow(), 0);
+    }
+
+    #[test]
+    fn dispatch_pane_parses_and_rides_the_detached_runner_args() {
+        let opts = parse_options(&["--task", "t", "--main-root", ".", "--dispatch-pane", "w1:p1"]).unwrap();
+        assert_eq!(opts.dispatch_pane.as_deref(), Some("w1:p1"));
+        let bare = parse_options(&["--task", "t", "--main-root", "."]).unwrap();
+        assert_eq!(bare.dispatch_pane, None);
+        let (args, _) = runner_args(&["--task", "t", "--main-root", "."], "job-9", Some("w1:p1"));
+        let reparsed: Vec<&str> = args.iter().skip(2).map(String::as_str).collect();
+        assert_eq!(parse_options(&reparsed).unwrap().dispatch_pane.as_deref(), Some("w1:p1"));
+        let (args, _) = runner_args(&["--task", "t", "--main-root", "."], "job-9", None);
+        assert!(!args.iter().any(|a| a == "--dispatch-pane"), "{args:?}");
+    }
+
+    #[test]
+    fn start_retry_clears_the_input_between_busy_refusals_and_never_after_the_last() {
+        let busy = "agent_pane_busy: still booting";
+        let log = std::cell::RefCell::new(Vec::<&str>::new());
+        let calls = std::cell::RefCell::new(0u32);
+        let out = start_with_retry(
+            &mut || {
+                log.borrow_mut().push("start");
+                *calls.borrow_mut() += 1;
+                if *calls.borrow() <= 2 { Err(busy.to_string()) } else { Ok(()) }
+            },
+            &mut |_d| {},
+            &mut || log.borrow_mut().push("clear"),
+        );
+        assert!(out.is_ok());
+        assert_eq!(*log.borrow(), ["start", "clear", "start", "clear", "start"]);
+
+        log.borrow_mut().clear();
+        let out = start_with_retry(
+            &mut || {
+                log.borrow_mut().push("start");
+                Err(busy.to_string())
+            },
+            &mut |_d| {},
+            &mut || log.borrow_mut().push("clear"),
+        );
+        assert!(out.is_err());
+        let log = log.borrow();
+        assert_eq!(log.iter().filter(|e| **e == "start").count(), START_RETRY_ATTEMPTS as usize);
+        assert_eq!(log.iter().filter(|e| **e == "clear").count(), START_RETRY_ATTEMPTS as usize - 1);
+        assert_eq!(log.last(), Some(&"start"));
+    }
+
+    #[test]
+    fn a_busy_first_start_clears_the_new_panes_input_before_the_second_start() {
+        let tmp = tempfile::tempdir().unwrap();
+        let opts = test_options(tmp.path(), false);
+        let fake = FakeHerdr::new();
+        fake.start_results.borrow_mut().push(Err("agent_pane_busy: still booting".to_string()));
+        seeded_result_dir(&tmp.path().join(".bee"), &opts.job_id);
+
+        let result = execute(&opts, &fake);
+
+        assert!(matches!(result.outcome, RunOutcome::Result(_)), "got {:?}", result.outcome);
+        let log = fake.call_log.borrow();
+        let starts: Vec<usize> = log.iter().enumerate().filter(|(_, c)| **c == "agent_start").map(|(i, _)| i).collect();
+        assert_eq!(starts.len(), 2, "{log:?}");
+        let clear = log.iter().position(|c| *c == "pane_send_key").expect("a clear before the retry");
+        assert!(starts[0] < clear && clear < starts[1], "{log:?}");
+        assert_eq!(fake.send_key_calls()[0], ("w1:p2".to_string(), "ctrl+u".to_string()));
     }
 
     #[test]

@@ -4577,6 +4577,13 @@ pub(crate) fn wave_skip_reason(message: &str) -> &'static str {
     }
 }
 
+pub(crate) fn wave_rebuild_command(runtime: &str, cell_id: &str) -> String {
+    format!(
+        ".bee/bin/bee dispatch prepare --runtime {runtime} --kind cell --cell {cell_id} --worker {} --json",
+        auto_wave_worker_name(cell_id)
+    )
+}
+
 fn wave_skip(id: &str, reason: &'static str, detail: String) -> Value {
     let mut s = Map::new();
     s.insert("id".into(), Value::String(id.to_string()));
@@ -4995,6 +5002,7 @@ fn claim_wave_cell(
                         }
                     };
                     m.insert("claimed".into(), Value::Bool(true));
+                    m.insert("rebuild".into(), Value::String(wave_rebuild_command(runtime, id)));
                     m.insert("reserved".into(), Value::Array(reserved));
                     m.insert("worker_registered".into(), Value::Bool(worker_registered));
                     if let Some(err) = &registration_error {

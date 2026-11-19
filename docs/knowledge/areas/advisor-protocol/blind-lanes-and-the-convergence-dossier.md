@@ -48,6 +48,12 @@ does not certify neutrality. A word list cannot certify neutrality, and
 calling it a neutrality proof would turn "unlinted" into "certified" — false
 confidence at the one door the feature rests on (slp-blind-lanes D2).
 
+The refusals teach the rewrite (plan-conflicts-and-briefs D4). A bulleted line
+under Question ending in `?` is a sub-question and is carried; any other bullet
+still refuses as an enumerated answer. A stem refusal shows how to state a
+format constraint without the stem. The four-section set stays closed, because a
+fifth section is where leaning context hides.
+
 **B4 — The convergence record is one document plus one decision entry.**
 Nothing new is stored anywhere else. The document holds every lane's proposal
 verbatim, the cross-critiques, the chosen answer, the rejected set with its

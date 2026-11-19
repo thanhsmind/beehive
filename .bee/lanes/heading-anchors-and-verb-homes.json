@@ -11,9 +11,9 @@
     "uat": false
   },
   "summary": "Feature \"heading-anchors-and-verb-homes\" started at phase \"exploring\" (lane).",
-  "next_action": "bee close finished \"heading-anchors-and-verb-homes\" — feature is closed.",
+  "next_action": "Merged into main at 5a6ab5c; capture what settled, then bee close --feature heading-anchors-and-verb-homes.",
   "created_at": "2026-11-19T10:28:32.014Z",
-  "run_state": "awaiting-approval",
+  "run_state": null,
   "waiting_on": null,
   "route": {
     "class": "bugfix",
@@ -23,12 +23,5 @@
     "rationale": "D1 only: shared heading-line helper, two callers, one hijack test",
     "updated_at": "2026-11-19T10:28:35.273Z",
     "feature": "heading-anchors-and-verb-homes"
-  },
-  "merge_ready": {
-    "since": "2026-11-19T11:06:36.434Z",
-    "branch": "wt/heading-anchors-and-verb-homes",
-    "worktree_id": "beehive--wt--heading-anchors-and-verb-homes",
-    "uat": "pending",
-    "blocked_by": []
   }
 }

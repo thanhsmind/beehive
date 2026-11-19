@@ -2039,6 +2039,21 @@ use std::process::ExitCode;
     }
 
     #[test]
+    fn worker_outward_reads_cli_slots_from_team_and_models_together() {
+        let lx = build_linked(true);
+        write_main_config(
+            &lx,
+            &json!({
+                "team":{"claude":{"cli-a":{"kind":"cli","command":"opencode run --a"}}},
+                "models":{"claude":{"cli-b":{"kind":"cli","command":"opencode run --b"}}}
+            }),
+        );
+        outward_allow(&lx, "opencode run --a x");
+        outward_allow(&lx, "opencode run --b x");
+        outward_deny(&lx, "opencode run --c x");
+    }
+
+    #[test]
     fn worker_outward_opt_out_is_read_from_the_main_checkout_only() {
         let lx = build_linked(true);
         write_main_config(&lx, &json!({"guards":{"worker_outward":false}}));
@@ -2079,6 +2094,43 @@ use std::process::ExitCode;
         let push = expect_done(bash("git push origin other"), &idle.root);
         assert_eq!(push.code, 2, "{}", push.stderr);
         assert!(push.stderr.contains("never exempted"), "{}", push.stderr);
+    }
+
+    fn bash_as(cmd: &str, session: &str) -> Value {
+        json!({ "tool_name": "Bash", "tool_input": { "command": cmd }, "session_id": session })
+    }
+
+    #[test]
+    fn worker_outward_lets_the_grant_holder_without_a_claim_start_an_agent() {
+        let wtf = build_worktree_first("swarming", "standard", false);
+        for cmd in ["pi -p hi", "claude -p hi", "codex exec hi"] {
+            let e = expect_done(bash_as(cmd, "leader"), &wtf.wt_root);
+            assert_eq!(e.code, 0, "{cmd}: {}", e.stderr);
+        }
+        let push = expect_done(bash_as("git push origin main", "leader"), &wtf.wt_root);
+        assert_eq!(push.code, 2, "{}", push.stderr);
+        let gh = expect_done(bash_as("gh pr create --fill", "leader"), &wtf.wt_root);
+        assert_eq!(gh.code, 2, "{}", gh.stderr);
+    }
+
+    #[test]
+    fn worker_outward_still_refuses_a_grant_holder_with_a_claimed_cell() {
+        let wtf = build_worktree_first("swarming", "standard", false);
+        write_claim(&wtf.wt_root, "cell-1", "worker");
+        write_cell_record(&wtf.wt_root, "cell-1", "demo");
+        let e = expect_done(bash_as("claude -p hi", "worker"), &wtf.wt_root);
+        assert_eq!(e.code, 2, "{}", e.stderr);
+        assert!(e.stderr.contains("bee worker-outward guard denied"), "{}", e.stderr);
+        let other = expect_done(bash_as("claude -p hi", "leader"), &wtf.wt_root);
+        assert_eq!(other.code, 0, "{}", other.stderr);
+    }
+
+    #[test]
+    fn worker_outward_still_refuses_a_session_without_the_grant() {
+        let lx = build_linked(true);
+        let e = expect_done(bash_as("claude -p hi", "leader"), &lx.work_root);
+        assert_eq!(e.code, 2, "{}", e.stderr);
+        assert!(e.stderr.contains("bee worker-outward guard denied"), "{}", e.stderr);
     }
 
     #[test]
@@ -6614,6 +6666,39 @@ use std::process::ExitCode;
         assert_eq!(e.code, 2, "{}", e.stderr);
         assert!(e.stderr.contains("z.rs:added line 2"), "{}", e.stderr);
         assert!(e.stderr.contains("(\"// why z exists\")"), "{}", e.stderr);
+    }
+
+    fn research_fixture(class: &str) -> Fx {
+        let fx = build_fixture("swarming", true);
+        let mut st = swarming_state(true);
+        st["route"] = json!({ "class": class, "lane": "standard" });
+        write_state(&fx.root, &st);
+        fx
+    }
+
+    #[test]
+    fn research_class_refuses_a_source_edit_naming_the_class_and_remedy() {
+        let fx = research_fixture("research");
+        let e = expect_done(edit("src/app.rs"), &fx.root);
+        assert_eq!(e.code, 2, "{}", e.stderr);
+        assert!(e.stderr.contains("research"), "{}", e.stderr);
+        assert!(e.stderr.contains("bee state route --set --class <c> --lane <lane>"), "{}", e.stderr);
+    }
+
+    #[test]
+    fn research_class_still_allows_docs_and_bee_writes() {
+        let fx = research_fixture("research");
+        for path in ["docs/history/demo/notes.md", "docs/knowledge/x.md", ".bee/tmp/demo/a.txt"] {
+            let e = expect_done(edit(path), &fx.root);
+            assert_eq!(e.code, 0, "{path}: {}", e.stderr);
+        }
+    }
+
+    #[test]
+    fn a_writing_class_still_allows_a_source_edit() {
+        let fx = research_fixture("feature");
+        let e = expect_done(edit("src/app.rs"), &fx.root);
+        assert_eq!(e.code, 0, "{}", e.stderr);
     }
 
     fn pi_lock_fixture(lane: &str, harness_workflow: Option<bool>) -> Fx {

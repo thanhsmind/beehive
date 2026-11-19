@@ -45,6 +45,26 @@ use std::time::Instant;
         root
     }
 
+    struct TempCwd {
+        _lock: std::sync::MutexGuard<'static, ()>,
+        orig: PathBuf,
+    }
+
+    impl TempCwd {
+        fn enter(path: &Path) -> Self {
+            let lock = crate::verbs::drivers::TEST_CWD_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+            let orig = std::env::current_dir().unwrap();
+            std::env::set_current_dir(path).unwrap();
+            Self { _lock: lock, orig }
+        }
+    }
+
+    impl Drop for TempCwd {
+        fn drop(&mut self) {
+            let _ = std::env::set_current_dir(&self.orig);
+        }
+    }
+
     // ── CUTOVER: corrupt JSON on a read path ───────────────────────────────
 
     /// `rj` (readJson(file, null)) used to answer Delegate on a corrupt file,
@@ -9329,6 +9349,46 @@ advance_on — falling to another model there hides the defect (D11)"
         assert!(lint_brief(&diet).is_ok(), "a read diet is a list by nature: {diet}");
     }
 
+    #[test]
+    fn brief_bulleted_sub_question_under_question_is_carried_and_a_bulleted_statement_is_refused() {
+        let ok = shaped_brief("Where does the dossier live?\n\n- Who writes it?\n* 1. Who reads it?");
+        assert!(lint_brief(&ok).is_ok(), "a bullet ending in ? is a sub-question: {ok}");
+
+        let ok = shaped_brief("Where does the dossier live?\n\n1. Who writes it?\n2. Who reads it?");
+        assert!(lint_brief(&ok).is_ok(), "numbered sub-questions are carried: {ok}");
+
+        let r = refusal_of(&shaped_brief("Where does the dossier live?\n\n- Who writes it?\n- keep it in docs/"));
+        assert_eq!(r.get("reason"), Some(&json!("brief_question_enumerates_answers")), "{r}");
+        assert_eq!(r.get("line"), Some(&json!("- keep it in docs/")), "{r}");
+        let fix = r.get("fix").and_then(Value::as_str).unwrap_or_default();
+        assert!(fix.contains("sub-question"), "the refusal names the sub-question rule: {fix}");
+        assert!(fix.contains('?'), "the refusal says a sub-question ends with ?: {fix}");
+    }
+
+    #[test]
+    fn brief_leaning_refusal_names_how_to_rewrite_a_format_constraint() {
+        let brief = shaped_brief("Where does the dossier live?")
+            .replace("The answer stays inside the existing dispatch door.", "We should use digests with file:line anchors.");
+        let r = refusal_of(&brief);
+        assert_eq!(r.get("reason"), Some(&json!("brief_leaning_language")), "{r}");
+        let fix = r.get("fix").and_then(Value::as_str).unwrap_or_default();
+        assert!(
+            fix.contains("Answer as digests with file:line anchors"),
+            "the refusal shows a format constraint written without the stem: {fix}"
+        );
+    }
+
+    #[test]
+    fn brief_section_refusal_names_the_closed_set_and_why_it_is_closed() {
+        let extra = format!("{}\n## Recommendation\n\nUse the second reader.\n", shaped_brief("Where?"));
+        let r = refusal_of(&extra);
+        assert_eq!(r.get("reason"), Some(&json!("brief_section_unexpected")), "{r}");
+        let fix = r.get("fix").and_then(Value::as_str).unwrap_or_default();
+        assert!(fix.contains("Question, Constraints, Read diet, Digest contract"), "{fix}");
+        assert!(fix.contains("closed"), "the refusal says the set is closed: {fix}");
+        assert!(fix.contains("leaning context hides"), "the refusal says why: {fix}");
+    }
+
     /// THE SCOPE PROPERTY, and the highest-risk property of this feature: the
     /// guard reads the BRIEF and nothing else. A false fire on `--purpose` or
     /// `--expertise` would refuse the advisor consult Gate 3 itself requires
@@ -10842,9 +10902,9 @@ advance_on — falling to another model there hides the defect (D11)"
             "worker-details.md never names the {ADVISOR_NUDGE_KIND:?} record that triggers the consult"
         );
 
-        // Only the three poor-work signals earn a nudge; the other four are
+        // Only the poor-work signals earn a nudge; the other four are
         // observations, and the prose must not advertise them as triggers.
-        for signal in ["struggling-loop", "budget-overrun", "same-region-resubmit"] {
+        for signal in ["struggling-loop", "same-region-resubmit"] {
             assert!(
                 KNOWN_SIGNALS.contains(&signal),
                 "{signal:?} is documented as a nudge trigger but is not a signal the verb knows"
@@ -12497,6 +12557,8 @@ Finish with: .bee/bin/bee cells finish --id c-golden --outcome "<one line>" --fi
     #[test]
     fn test_deploy_authorization_cli_routing() {
         let t0 = Instant::now();
+        let tmp = tempfile::tempdir().unwrap();
+        let _cwd = TempCwd::enter(&repo(&tmp, "{}"));
         let os = |v: &[&str]| -> Vec<OsString> { v.iter().map(OsString::from).collect() };
 
         // dispatch prepare accepts --release-version
@@ -12510,6 +12572,20 @@ Finish with: .bee/bin/bee cells finish --id c-golden --outcome "<one line>" --fi
             &os(&["dispatch", "authorize", "--id", "disp-1", "--release-version", "2.38.0"]),
             t0
         ).is_some());
+    }
+
+    #[test]
+    fn dispatch_authorize_timings_land_under_the_temp_root_not_the_crate_dir() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, "{}");
+        let crate_log = Path::new(env!("CARGO_MANIFEST_DIR")).join(".bee").join("logs").join("timings.jsonl");
+        let before = std::fs::read_to_string(&crate_log).ok();
+        let _cwd = TempCwd::enter(&root);
+        let os = |v: &[&str]| -> Vec<OsString> { v.iter().map(OsString::from).collect() };
+        assert!(try_native(&os(&["dispatch", "authorize", "--id", "disp-1", "--release-version", "2.38.0"]), Instant::now()).is_some());
+        let log = std::fs::read_to_string(root.join(".bee").join("logs").join("timings.jsonl")).unwrap();
+        assert!(log.contains("\"cmd\":\"dispatch authorize\""), "{log}");
+        assert_eq!(std::fs::read_to_string(&crate_log).ok(), before);
     }
 
     #[test]
@@ -13618,4 +13694,71 @@ Finish with: .bee/bin/bee cells finish --id c-golden --outcome "<one line>" --fi
             assert!(!prompt.contains(LEARNED_HEADER), "{kind}: {prompt}");
             assert_eq!(record.get("knowledge_arm"), None, "{kind}");
         }
+    }
+
+    #[test]
+    fn wave_entry_rebuild_command_names_the_cell_and_its_worker() {
+        assert_eq!(
+            wave_rebuild_command("claude", "dlr-2"),
+            ".bee/bin/bee dispatch prepare --runtime claude --kind cell --cell dlr-2 --worker w-dlr-2 --json"
+        );
+    }
+
+    const DISPATCH_WAVE_REBUILD_CHILD: &str = "verbs::drivers::tests::dispatch_wave_rebuild_child";
+
+    #[test]
+    #[ignore = "spawned by dispatch_wave_entry_carries_the_command_that_rebuilds_its_payload"]
+    fn dispatch_wave_rebuild_child() {
+        let (flags, use_json) = parse_flags(&["--runtime", "claude", "--json", "--feature", "f"])
+            .expect("well-formed fixture argv");
+        run_dispatch_wave(flags, use_json, Instant::now());
+    }
+
+    #[test]
+    fn dispatch_wave_entry_carries_the_command_that_rebuilds_its_payload() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, r#"{"models":{"claude":{"generation":"sonnet"}}}"#);
+        dpr1_lane_with_route(&root, "f");
+        for id in ["wr-1", "wr-2"] {
+            w(
+                &root,
+                &format!(".bee/cells/{id}.json"),
+                &format!(
+                    r#"{{"id":"{id}","title":"t","status":"open","lane":"tiny","feature":"f","deps":[],"files":["docs/{id}.md"],"tier":"generation","role":"code"}}"#
+                ),
+            );
+        }
+
+        let exe = std::env::current_exe().expect("test binary path");
+        let out = Command::new(&exe)
+            .args(["--exact", DISPATCH_WAVE_REBUILD_CHILD, "--ignored", "--test-threads", "1", "--nocapture"])
+            .env_remove("PI_SESSION_ID")
+            .current_dir(&root)
+            .output()
+            .expect("spawn the test binary");
+        let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
+        assert!(
+            out.status.success(),
+            "child failed:\nstdout:\n{stdout}\nstderr:\n{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        let start = stdout.find('{').unwrap_or_else(|| panic!("no JSON payload in child stdout:\n{stdout}"));
+        let end = stdout.rfind('}').map(|i| i + 1).unwrap_or_else(|| panic!("no JSON payload in child stdout:\n{stdout}"));
+        let payload: Value = serde_json::from_str(&stdout[start..end])
+            .unwrap_or_else(|e| panic!("child stdout was not valid JSON ({e}):\n{stdout}"));
+
+        let wave = payload["wave"].as_array().unwrap_or_else(|| panic!("payload: {payload}"));
+        let mut rebuilds: Vec<&str> = wave
+            .iter()
+            .map(|item| item["rebuild"].as_str().unwrap_or_else(|| panic!("an entry has no rebuild: {payload}")))
+            .collect();
+        rebuilds.sort();
+        assert_eq!(
+            rebuilds,
+            vec![
+                ".bee/bin/bee dispatch prepare --runtime claude --kind cell --cell wr-1 --worker w-wr-1 --json",
+                ".bee/bin/bee dispatch prepare --runtime claude --kind cell --cell wr-2 --worker w-wr-2 --json",
+            ],
+            "payload: {payload}"
+        );
     }

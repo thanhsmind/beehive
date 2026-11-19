@@ -1097,6 +1097,46 @@ use std::time::Instant;
     }
 
     #[test]
+    fn prune_keep_set_keeps_a_capped_row_whose_cell_file_is_missing_or_corrupt() {
+        let tmp = tmp_root();
+        write_state_file(
+            tmp.path(),
+            r#"{"workers":[{"nickname":"w-gone","cell":"gone","status":"capped"},{"nickname":"w-bad","cell":"bad","status":"capped"}]}"#,
+        );
+        let cells = tmp.path().join(".bee").join("cells");
+        std::fs::create_dir_all(&cells).unwrap();
+        std::fs::write(cells.join("bad.json"), "{nope").unwrap();
+        let keep = ok(read_prune_keep_set(tmp.path()));
+        assert!(keep.contains(&"gone".to_string()));
+        assert!(keep.contains(&"bad".to_string()));
+    }
+
+    #[test]
+    fn prune_keep_set_drops_a_cell_capped_through_the_cap_verb() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        write_none_test_config(root);
+        write_state_file(
+            root,
+            r#"{"workers":[{"nickname":"w-c1","cell":"c1","status":"running"},{"nickname":"w-c2","cell":"c2","status":"running"}]}"#,
+        );
+        write_claimed_cell(root, "c1");
+        write_claimed_cell(root, "c2");
+
+        let before = ok(read_prune_keep_set(root));
+        assert!(before.contains(&"c1".to_string()));
+
+        assert!(crate::verbs::cells::cap_cell_from_flags(root, &cap_flags_for("c1"), false).is_ok());
+
+        let state = read_state_strict(root).unwrap();
+        let workers = state.get("workers").and_then(Value::as_array).unwrap();
+        assert_eq!(workers[0].get("status"), Some(&json!("capped")));
+        let after = ok(read_prune_keep_set(root));
+        assert!(!after.contains(&"c1".to_string()));
+        assert!(after.contains(&"c2".to_string()));
+    }
+
+    #[test]
     fn prune_refuses_malformed_workers() {
         let tmp = tmp_root();
         write_state_file(tmp.path(), r#"{"workers":"not-an-array"}"#);
@@ -1126,6 +1166,103 @@ use std::time::Instant;
         assert_eq!(workers[0].get("nickname"), Some(&json!("w1")));
         assert_eq!(workers[0].get("cell"), Some(&json!("c1")));
         assert_eq!(workers[0].get("status"), Some(&json!("capped")));
+    }
+
+    fn cap_flags_for(id: &str) -> crate::verbs::cells::CapFlags {
+        crate::verbs::cells::CapFlags {
+            id: id.to_string(),
+            outcome: None,
+            friction: None,
+            files_changed: Vec::new(),
+            deviations: Vec::new(),
+            deviation: None,
+            override_reason: String::new(),
+            mistake: None,
+            fix_at: None,
+            no_mistakes: false,
+            knowledge_used: None,
+            knowledge_wrong: None,
+            no_knowledge_used: false,
+            principle_used: None,
+            no_principle_used: false,
+            session_flag: None,
+            force_ownership: false,
+            commit_pending: None,
+            inline_reason: None,
+            report: Some(
+                r#"{"outcome":"o","commit":"c","files":[],"tests":"none — green:static — fixture","deviations":[]}"#
+                    .to_string(),
+            ),
+            sync_ack: None,
+            from_job: None,
+            proof_result: None,
+            proof_reason: None,
+        }
+    }
+
+    fn write_claimed_cell(root: &Path, id: &str) {
+        let cells = root.join(".bee").join("cells");
+        std::fs::create_dir_all(&cells).unwrap();
+        let body = json!({
+            "id": id, "feature": "f", "title": "t", "action": "a",
+            "verify": "none", "lane": "tiny", "status": "claimed",
+            "deps": [], "files": [], "trace": {},
+        });
+        std::fs::write(cells.join(format!("{id}.json")), body.to_string()).unwrap();
+    }
+
+    fn write_none_test_config(root: &Path) {
+        std::fs::create_dir_all(root.join(".bee")).unwrap();
+        std::fs::write(root.join(".bee").join("config.json"), r#"{"commands":{"test":"none"}}"#).unwrap();
+    }
+
+    #[test]
+    fn cap_marks_the_capped_cells_worker_row_capped() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        write_none_test_config(root);
+        write_state_file(
+            root,
+            r#"{"workers":[{"nickname":"w-c1","cell":"c1","status":"running"},{"nickname":"w-c2","cell":"c2","status":"running"}]}"#,
+        );
+        write_claimed_cell(root, "c1");
+
+        let capped = crate::verbs::cells::cap_cell_from_flags(root, &cap_flags_for("c1"), false);
+        assert!(capped.is_ok());
+
+        let state = read_state_strict(root).unwrap();
+        let workers = state.get("workers").and_then(Value::as_array).unwrap();
+        assert_eq!(workers.len(), 2);
+        assert_eq!(workers[0].get("status"), Some(&json!("capped")));
+        assert_eq!(workers[1].get("status"), Some(&json!("running")));
+    }
+
+    #[test]
+    fn cap_of_a_cell_with_no_worker_row_leaves_the_ledger_alone() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        write_none_test_config(root);
+        write_state_file(root, r#"{"workers":[{"nickname":"w-c2","cell":"c2","status":"running"}]}"#);
+        write_claimed_cell(root, "c1");
+
+        assert!(crate::verbs::cells::cap_cell_from_flags(root, &cap_flags_for("c1"), false).is_ok());
+
+        let state = read_state_strict(root).unwrap();
+        let workers = state.get("workers").and_then(Value::as_array).unwrap();
+        assert_eq!(workers.len(), 1);
+        assert_eq!(workers[0].get("status"), Some(&json!("running")));
+    }
+
+    #[test]
+    fn cap_stays_green_when_the_worker_ledger_is_malformed() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        write_none_test_config(root);
+        write_state_file(root, r#"{"workers":"not-an-array"}"#);
+        write_claimed_cell(root, "c1");
+
+        let capped = crate::verbs::cells::cap_cell_from_flags(root, &cap_flags_for("c1"), false);
+        assert_eq!(capped.ok().unwrap()["status"], json!("capped"));
     }
 
     #[test]
@@ -3007,7 +3144,7 @@ use std::time::Instant;
 
         let candidates = ok(derive_candidates(root, "f1"));
         let mut review = build_conflict_review(json!(1), candidates, "2026-08-22T00:00:00.000Z");
-        apply_conflict_verdict(&mut review, "dec-match", "retires-prior", Some("supersedes dec-old"))
+        apply_conflict_verdict(&mut review, &["dec-match"], "retires-prior", Some("supersedes dec-old"))
             .expect("a derived id must be settable");
 
         let rows = review["candidates"].as_array().unwrap();
@@ -3032,8 +3169,8 @@ use std::time::Instant;
             ok(derive_candidates(root, "f1")),
             "2026-08-22T00:00:00.000Z",
         );
-        apply_conflict_verdict(&mut review, "dec-match", "compatible", None).unwrap();
-        apply_conflict_verdict(&mut review, "koh-plan-conflicts", "conflicts", None).unwrap();
+        apply_conflict_verdict(&mut review, &["dec-match"], "compatible", None).unwrap();
+        apply_conflict_verdict(&mut review, &["koh-plan-conflicts"], "conflicts", None).unwrap();
         assert!(review["candidates"]
             .as_array()
             .unwrap()
@@ -3067,11 +3204,52 @@ use std::time::Instant;
             "2026-08-22T00:00:00.000Z",
         );
         let before = jsjson::stringify(&review);
-        let message = apply_conflict_verdict(&mut review, "not-a-candidate", "compatible", None)
+        let message = apply_conflict_verdict(&mut review, &["not-a-candidate"], "compatible", None)
             .expect_err("an unknown id must refuse");
         assert!(message.contains("not-a-candidate"), "message: {message}");
         assert!(message.contains("dec-match"), "the refusal lists what IS known: {message}");
         assert_eq!(jsjson::stringify(&review), before, "a refusal writes nothing");
+    }
+
+    #[test]
+    fn plan_conflicts_batch_of_ids_records_one_verdict_per_id() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        write_matching_cell(root);
+        write_decisions_fixture(root);
+        write_rule_home_fixture(root);
+
+        let mut review = build_conflict_review(
+            json!(1),
+            ok(derive_candidates(root, "f1")),
+            "2026-08-22T00:00:00.000Z",
+        );
+        apply_conflict_verdict(&mut review, &["dec-match", "koh-plan-conflicts"], "compatible", Some("n"))
+            .expect("every id is a candidate");
+        for row in review["candidates"].as_array().unwrap() {
+            assert_eq!(row["verdict"], json!("compatible"), "{}", jsjson::stringify(row));
+            assert_eq!(row["note"], json!("n"));
+        }
+    }
+
+    #[test]
+    fn plan_conflicts_unknown_id_in_a_batch_refuses_the_whole_batch() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        write_matching_cell(root);
+        write_decisions_fixture(root);
+        write_rule_home_fixture(root);
+
+        let mut review = build_conflict_review(
+            json!(1),
+            ok(derive_candidates(root, "f1")),
+            "2026-08-22T00:00:00.000Z",
+        );
+        let before = jsjson::stringify(&review);
+        let message = apply_conflict_verdict(&mut review, &["dec-match", "nope"], "compatible", None)
+            .expect_err("one unknown id must refuse the batch");
+        assert!(message.contains("nope"), "message: {message}");
+        assert_eq!(jsjson::stringify(&review), before, "a refused batch writes nothing");
     }
 
     /// The verdict vocabulary is closed — the registry's own enum and the
@@ -3234,6 +3412,23 @@ use std::time::Instant;
             ids.contains(&"dec-needle".to_string()),
             "the real conflict must survive the narrowing: {ids:?}"
         );
+    }
+
+    #[test]
+    fn plan_conflicts_derive_without_cells_draws_terms_from_plan_and_context() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        write_decisions_fixture(root);
+        let dir = root.join("docs").join("history").join("f1");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("plan.md"), "# Plan\n\nDerive conflict candidates early.\n").unwrap();
+        std::fs::write(dir.join("CONTEXT.md"), "Candidates arrive at plan time.\n").unwrap();
+
+        let candidates = ok(derive_candidates(root, "f1"));
+        let ids: Vec<String> = candidates.iter().map(|c| js_disp_opt(jget(c, "id"))).collect();
+        assert_eq!(ids, vec!["dec-match".to_string()], "{ids:?}");
+
+        assert!(ok(derive_candidates(root, "no-docs")).is_empty());
     }
 
     /// D3's floor, from the other side: with the two-decision fixture the

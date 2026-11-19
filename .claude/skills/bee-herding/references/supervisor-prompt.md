@@ -82,10 +82,6 @@ the same region with no progress, a cell whose budget is draining against a
 flat result, retries of a step that already failed the same way, a worker
 alive but producing nothing across ticks.
 
-**budget-overrun** — a cell is running far past what it was estimated to
-cost: the recorded estimate is behind, the spend keeps climbing, and the
-result is not moving with it.
-
 **same-region-resubmit** — the same region of the same files is being
 submitted again and again, each pass rewriting the last rather than adding
 to it.
@@ -165,7 +161,7 @@ The command line, in full:
 
 ```
 .bee/bin/bee supervisor record --kind {observation|silence} \
-                               --signal {struggling-loop|budget-overrun|same-region-resubmit|big-decision|danger-op|dead-lead|self-correction|boundary-approach|test-on-unstable-contract|budget-80|none} \
+                               --signal {struggling-loop|same-region-resubmit|big-decision|danger-op|dead-lead|self-correction|boundary-approach|test-on-unstable-contract|budget-80|none} \
                                --note "<one or two sentences>" \
                                [--target-session <session-id>] [--tick <n>] [--events <id,...>]
 ```
@@ -176,7 +172,7 @@ an addressee and a point key:
 
 ```
 .bee/bin/bee supervisor record --kind advisor-nudge \
-                               --signal {struggling-loop|budget-overrun|same-region-resubmit} \
+                               --signal {struggling-loop|same-region-resubmit} \
                                --target-session <session-id> \
                                --point-key <stable-slug> \
                                --question "<one open question>" [--tick <n>] [--events <id,...>]
@@ -197,8 +193,8 @@ else:**
   the rules below. A `dead-lead` note is the one that ends in a statement
   rather than a question — the lane, how long it has been quiet, and the
   resume line — because there is no live session left to ask.
-- You found one of the three POOR-WORK signals — `struggling-loop`,
-  `budget-overrun`, `same-region-resubmit` — and the evidence supports the
+- You found one of the two POOR-WORK signals — `struggling-loop`,
+  `same-region-resubmit` — and the evidence supports the
   view that a stronger read of the work would help → `--kind advisor-nudge`,
   `--signal` set to that one signal name, `--target-session` naming the
   session it is about, `--point-key` the stable slug of the point, and

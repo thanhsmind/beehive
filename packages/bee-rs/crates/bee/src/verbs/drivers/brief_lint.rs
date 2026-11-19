@@ -335,7 +335,7 @@ fn leaning_refusal(stem: &str) -> Value {
         "brief_leaning_language",
         &[("phrase", Value::String(stem.to_string()))],
         format!(
-            "the brief carries leaning language — the phrase \"{stem}\" states a verdict, and a lane handed a verdict returns it back. Cut that phrase and let the question stand on its own, then re-run the dispatch."
+            "the brief carries leaning language — the phrase \"{stem}\" states a verdict, and a lane handed a verdict returns it back. Cut that phrase and let the question stand on its own. A format constraint needs no stem: write it as an instruction, for example \"Answer as digests with file:line anchors\". Then re-run the dispatch."
         ),
     )
 }
@@ -383,7 +383,7 @@ fn lint_brief_shape(lines: &[&str], fences: &Fences) -> Result<(), Value> {
             "brief_section_unexpected",
             &[("section", Value::String((*found).to_string()))],
             format!(
-                "the brief must carry exactly four level-2 sections, in this order: {expected}. Here {why}. Remove that section, or fold its content into the one of the four it belongs to."
+                "the brief must carry exactly four level-2 sections, in this order: {expected}. Here {why}. The four-section set is closed, because a fifth section is where leaning context hides. Remove that section, or fold its content into the one of the four it belongs to."
             ),
         ));
     }
@@ -423,7 +423,7 @@ fn lint_brief_shape(lines: &[&str], fences: &Fences) -> Result<(), Value> {
             in_question = head.eq_ignore_ascii_case(BRIEF_SECTIONS[0]);
             continue;
         }
-        if in_question && is_enumerated(line) {
+        if in_question && is_enumerated(line) && !line.trim_end().ends_with('?') {
             let quoted = line.trim();
             return Err(brief_refusal(
                 "brief_question_enumerates_answers",
@@ -432,7 +432,7 @@ fn lint_brief_shape(lines: &[&str], fences: &Fences) -> Result<(), Value> {
                     ("line", Value::String(quoted.to_string())),
                 ],
                 format!(
-                    "the Question section enumerates candidate answers — the line \"{quoted}\" starts a list, and a brief that lists the options has already led the witness. Lanes exist to GENERATE the options: state the question as prose, and move any material the lane needs into \"## Constraints\" or \"## Read diet\"."
+                    "the Question section enumerates candidate answers — the line \"{quoted}\" starts a list, and a brief that lists the options has already led the witness. A bulleted line is carried only as a sub-question, so it must end with ?. Lanes exist to GENERATE the options: state the question as prose, and move any material the lane needs into \"## Constraints\" or \"## Read diet\"."
                 ),
             ));
         }

@@ -1511,6 +1511,36 @@ mod tests {
     }
 
     #[test]
+    fn cancel_on_an_alive_pane_process_asks_the_tree_to_kill_it() {
+        let tmp = tempfile::tempdir().unwrap();
+        let bee_dir = tmp.path().join(".bee");
+        seed_job(&bee_dir, "job-alive-tree", "p1");
+
+        let dead_pid = 999_999_999u32;
+        let transport = TestTransport::new("herdr");
+        transport.process_info_results.borrow_mut().push(Liveness::Alive { pid: dead_pid });
+        let tree = FakeTree {
+            rows: vec![(dead_pid, 1, dead_pid)],
+            signals: RefCell::new(Vec::new()),
+        };
+
+        let res = cancel_with_backends_and_timeout(
+            tmp.path(),
+            "job-alive-tree",
+            false,
+            Some(&transport),
+            None,
+            &tree,
+            DEFAULT_POLL_TIMEOUT,
+            DEFAULT_POLL_INTERVAL,
+        );
+        assert!(res.is_ok(), "{res:?}");
+        let signals = tree.signals.borrow();
+        assert!(signals.contains(&(dead_pid, TreeSignal::Term)), "cancel must term the pane pid: {signals:?}");
+        assert!(signals.contains(&(dead_pid, TreeSignal::Kill)), "cancel must kill the pane pid: {signals:?}");
+    }
+
+    #[test]
     fn unknown_job_refuses_with_a_fix_line() {
         let tmp = tempfile::tempdir().unwrap();
         let transport = TestTransport::new("herdr");
