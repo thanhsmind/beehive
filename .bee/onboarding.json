@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "bee_version": "2.112.0",
   "managed": {
-    "agents_block": "3cf65fa743041756f7f1f972f2eec5ff349fc2acb01bf33237aeb551ba22f944",
+    "agents_block": "7bdead6da9fe529d47a441d7c0b14499f2358558a1d5e38813c38ac410c7550d",
     "gitignore_block": "f30cb5dd174055c18a3b067f5cb22b6ef6662c4c27357f3347ab26529cc4d117",
     "gitattributes_block": "bf8af2a075bfc5b44b2679bf03258aadcb6b3d40424ffa31427f00e7e971369b",
     "helpers": {},
@@ -26,7 +26,7 @@
       "planning.md": "1e19f1daab82d2cda72934ca1729692921db9380bbd351a66ceaa4a85122c921",
       "review.md": "8f81efce730d2996c7c8222c5511d46d9791287ed14586b572c24999b37e114e",
       "security.md": "c39709516b888a41ae620fa7b070f8c2b28623c8f1d8f4639267385de4edeed8",
-      "static-rules.md": "d2cf6c697c4cdcb6205ea51324981bd9469d3edcbf6652c4574c4a1633382b9e",
+      "static-rules.md": "61cffeee4b35ccef35f38546a6881a69a18e4b674b2b9e89e4db336ccca6a4c9",
       "tests.md": "44e8293dd39ef80e19c75e0f061c0e7f79f5f9cf8d6213f7f25300456781ac6a",
       "tests/patterns/asserting-on-generated-output.md": "4f7c229210b0c8ee952d21881b3a616259f0ac3cfc6c7719efbe473521065626",
       "tests/patterns/comparing-structured-data.md": "708d72115b3c9c0e5dfad84ac27c8ef153dc36620a4d1c5ce7050e005da363e7",
@@ -44,7 +44,7 @@
       "worker-cell.md": "76689598df4a49d9fedb0273fddabcb8474c4f6722fab38499d5050f9cc08b5f"
     },
     "leader": {
-      "LEADER.md": "b3141963ea0b9747bc816c5c1f35dceb91503d60e113c24cd3363beecee614c2"
+      "LEADER.md": "ed9807470efaaf18d79a307b53e052f57af879736566e1f72d5b4ef0312e6a9c"
     },
     "playbooks": {
       "bee-defects.md": "128820aaccc3644492f753d10cfba5231bfd7939624aba943da7ab74340a5dc5",
@@ -191,5 +191,5 @@
   },
   "design_role_offered": true,
   "created_at": "2026-07-24T03:53:44.750Z",
-  "updated_at": "2026-11-17T12:19:55.860Z"
+  "updated_at": "2026-11-19T09:05:15.006Z"
 }

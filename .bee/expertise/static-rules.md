@@ -74,7 +74,7 @@ Record both runs, with the command and what each showed.
 
 3. Close the fix-at row the rule guards. Once the rule is green, file one
    row with the exact finding title:
-   `bee backlog add --type backlog-closed --title "<exact finding title>" --layer <same fix-at layer> --severity P3 --detail "guard: <rule> (<commit>)"`.
+   `bee backlog fix-at close --layer <l> --title <t> --guard <what> --guard-cmd <command> --red-proof <red output> --commit <sha>`.
    The row retires the finding in `bee feedback rank`. A newer finding with
    the same title reopens it there.
 
