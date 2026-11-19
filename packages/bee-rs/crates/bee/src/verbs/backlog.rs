@@ -3619,4 +3619,82 @@ mod tests {
         takeup();
         assert_eq!(guard_pbis(&root), 1);
     }
+
+    #[test]
+    fn fix_at_verbs_upgrade_a_hand_close_with_no_guard_cmd_becomes_a_proven_close_verify_runs() {
+        let (_tmp, root, _) = brief_repo();
+        let mut seed = finding_line("2026-01-01T00:00:00.000Z", "strip prefix");
+        seed.push_str("{\"ts\":\"2026-01-02T00:00:00.000Z\",\"type\":\"backlog-closed\",\"title\":\"strip prefix\",\"layer\":\"fix-at:check\",\"feature\":\"f\",\"detail\":\"closed by hand\"}\n");
+        std::fs::write(root.join(".bee/backlog.jsonl"), &seed).unwrap();
+        let (code, out) = bee_in(&root, &["backlog", "fix-at", "verify"]);
+        assert_eq!(code, exit_of(ExitCode::SUCCESS), "{out}");
+        assert!(out.contains("unverifiable: strip prefix"), "{out}");
+        let rows_before = backlog_rows(&root).len();
+
+        let (code, out) = bee_in(&root, &close_args("true"));
+        assert_eq!(code, exit_of(ExitCode::SUCCESS), "{out}");
+        let rows = backlog_rows(&root);
+        assert_eq!(rows.len(), rows_before + 1, "{out}");
+        let close = rows.last().unwrap();
+        assert_eq!(close["type"], "backlog-closed");
+        assert_eq!(close["title"], "strip prefix");
+        assert_eq!(close["guard_cmd"], "true");
+        assert_eq!(close["red_proof"], "red once");
+        let group = ledger_of(&root);
+        let group = group.find("fix-at:check", "strip prefix").unwrap();
+        assert_eq!(group.state, fix_at::GroupState::Closed);
+        assert_eq!(group.guard_cmd(), Some("true"));
+
+        let rows_before = backlog_rows(&root).len();
+        let (code, out) = bee_in(&root, &["backlog", "fix-at", "verify"]);
+        assert_eq!(code, exit_of(ExitCode::SUCCESS), "{out}");
+        assert!(out.contains("1 guard(s) green, 0 red, 0 unverifiable"), "{out}");
+        assert!(!out.contains("unverifiable: "), "{out}");
+        assert_eq!(backlog_rows(&root).len(), rows_before, "{out}");
+    }
+
+    #[test]
+    fn fix_at_verbs_upgrade_refuses_a_group_whose_latest_close_already_has_a_guard_cmd() {
+        let (_tmp, root, _) = brief_repo();
+        let mut seed = finding_line("2026-01-01T00:00:00.000Z", "strip prefix");
+        seed.push_str(&close_line("2026-01-02T00:00:00.000Z", "strip prefix", "fix-at:check", ""));
+        seed.push_str(&close_line("2026-01-03T00:00:00.000Z", "strip prefix", "fix-at:check", "true"));
+        std::fs::write(root.join(".bee/backlog.jsonl"), &seed).unwrap();
+        let before = std::fs::read(root.join(".bee/backlog.jsonl")).unwrap();
+
+        let (code, out) = bee_in(&root, &close_args("true"));
+        assert_eq!(code, exit_of(ExitCode::FAILURE), "{out}");
+        assert!(out.contains("already Closed"), "{out}");
+        assert_eq!(std::fs::read(root.join(".bee/backlog.jsonl")).unwrap(), before, "{out}");
+    }
+
+    #[test]
+    fn fix_at_verbs_upgrade_a_kept_rejudge_becomes_a_proven_close_verify_runs() {
+        let (_tmp, root, _) = brief_repo();
+        let row = finding_line("2026-01-01T00:00:00.000Z", "soft label").replace("fix-at:check", "fix-at:rejudge");
+        std::fs::write(root.join(".bee/backlog.jsonl"), row).unwrap();
+        let (code, out) = bee_in(&root, &["backlog", "fix-at", "close", "--layer", "fix-at:rejudge", "--title", "soft label", "--kept", "doctrine stands"]);
+        assert_eq!(code, exit_of(ExitCode::SUCCESS), "{out}");
+        assert_eq!(ledger_of(&root).find("fix-at:rejudge", "soft label").unwrap().guard_cmd(), None);
+
+        let (code, out) = bee_in(
+            &root,
+            &["backlog", "fix-at", "close", "--layer", "fix-at:rejudge", "--title", "soft label", "--guard", "a lint", "--guard-cmd", "true", "--red-proof", "red once"],
+        );
+        assert_eq!(code, exit_of(ExitCode::SUCCESS), "{out}");
+        let close = backlog_rows(&root).last().unwrap().clone();
+        assert_eq!(close["type"], "backlog-closed");
+        assert_eq!(close["layer"], "fix-at:rejudge");
+        assert_eq!(close["guard_cmd"], "true");
+        assert_eq!(close["guard"], "a lint");
+        let group = ledger_of(&root);
+        let group = group.find("fix-at:rejudge", "soft label").unwrap();
+        assert_eq!(group.state, fix_at::GroupState::Closed);
+        assert_eq!(group.guard_cmd(), Some("true"));
+
+        let (code, out) = bee_in(&root, &["backlog", "fix-at", "verify"]);
+        assert_eq!(code, exit_of(ExitCode::SUCCESS), "{out}");
+        assert!(out.contains("1 guard(s) green, 0 red, 0 unverifiable"), "{out}");
+        assert!(!out.contains("unverifiable: "), "{out}");
+    }
 }
