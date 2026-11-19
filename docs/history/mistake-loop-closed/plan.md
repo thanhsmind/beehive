@@ -163,6 +163,8 @@ SMALLER PATH: doctrine only (tell agents to close rows with proof) keeps the fix
 | mlc-7c | Check the doctrine edit | docs/history/mistake-loop-closed/reports/mlc-7c.md | mlc-7 | review | `cargo test … --test pointer_integrity` |
 | mlc-8 | Sync the concepts and write the delivery note | docs/knowledge/areas/human-mailbox/overview.md, docs/knowledge/areas/feedback-digest/ranking-and-self-improvement.md, docs/knowledge/areas/okf-profile/conformance-check.md, docs/knowledge/areas/hook-runtime/token-economy-of-injected-context.md, docs/history/mistake-loop-closed/delivery.md, docs/briefs/mistake-loop-closed.md | mlc-7c | writer | `/mnt/data/Projects/goglbe/beehive/.bee/bin/bee knowledge check` |
 | mlc-9 | Check the doctrine and concept sync on the test role | docs/history/mistake-loop-closed/reports/mlc-9.md | mlc-7, mlc-7c, mlc-8 | test | `cargo test … --test instruction_laws` |
+| mlc-10 | Let fix-at close upgrade a guardless close to a proven one | verbs/backlog.rs, docs/knowledge/areas/feedback-digest/ranking-and-self-improvement.md | mlc-9 | code | `cargo test … --bin bee -- fix_at` |
+| mlc-10t | Test the guardless close upgrade | verbs/backlog.rs | mlc-10 | test | `cargo test … --bin bee -- fix_at_verbs_upgrade` |
 
 ```json
 [
@@ -1229,6 +1231,130 @@ SMALLER PATH: doctrine only (tell agents to close rows with proof) keeps the fix
       "why": "The merge door needs a test-role checker behind each docs cell.",
       "out_of_scope": [
         "every file except its report"
+      ]
+    },
+    "trace": {
+      "worker": null,
+      "outcome": null,
+      "files_changed": [],
+      "deviations": [],
+      "friction": null,
+      "capped_at": null,
+      "behavior_change": false
+    }
+  },
+  {
+    "id": "mlc-10",
+    "feature": "mistake-loop-closed",
+    "title": "Let fix-at close upgrade a guardless close to a proven one",
+    "lane": "standard",
+    "role": "code",
+    "status": "open",
+    "deps": [
+      "mlc-9"
+    ],
+    "decisions": [
+      "d5a0012c-6452-4b1f-9ca1-4b3cc9423b02",
+      "d4eeb160-64e1-4605-86aa-da3ac8dc9d6c",
+      "a7f3fbd2-ee19-4d08-adb0-c1b4c33d445a"
+    ],
+    "files": [
+      "packages/bee-rs/crates/bee/src/verbs/backlog.rs",
+      "docs/knowledge/areas/feedback-digest/ranking-and-self-improvement.md"
+    ],
+    "read_first": [
+      "docs/history/mistake-loop-closed/CONTEXT.md",
+      "packages/bee-rs/crates/bee/src/verbs/backlog.rs",
+      "packages/bee-rs/crates/bee/src/verbs/fix_at.rs"
+    ],
+    "affects_skills": [],
+    "affects_specs": [
+      "docs/knowledge/areas/feedback-digest/"
+    ],
+    "action": "Implement CONTEXT.md D13 in verbs/backlog.rs, the fix-at close verb: today it refuses any Closed group. Accept a Closed group whose latest_close row has no non-empty guard_cmd (a legacy hand close or a kept rejudge) with the same proof flags and the same guard-cmd run; the appended backlog-closed row then makes the group a proven close that fix-at verify re-runs. A Closed group whose latest close already carries a guard_cmd stays refused with the existing message. Edit only the existing test the change forces (the one asserting an already Closed group is refused, if it builds a guardless close), and add one sentence to the fix-at close paragraph of docs/knowledge/areas/feedback-digest/ranking-and-self-improvement.md citing mistake-loop-closed D13. Write no code comment of any kind. Never edit .bee/*.json or .bee/*.jsonl by hand. Run only the cell's verify filter, never the full suite. Allowed commands: cargo build, cargo test with a filter, cargo clippy, /mnt/data/Projects/goglbe/beehive/.bee/bin/bee dev regen, /mnt/data/Projects/goglbe/beehive/.bee/bin/bee knowledge check. Quote the count of tests the filter matched in the cap report.",
+    "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- fix_at",
+    "must_haves": {
+      "truths": [
+        "fix-at close accepts a Closed group whose latest close has no guard_cmd",
+        "fix-at close still refuses a Closed group whose latest close has a guard_cmd",
+        "after the upgrade, fix-at verify runs the new guard_cmd instead of listing the group unverifiable"
+      ],
+      "artifacts": [
+        {
+          "path": "packages/bee-rs/crates/bee/src/verbs/backlog.rs",
+          "substantive": "the guardless-close upgrade path"
+        }
+      ],
+      "key_links": [
+        "run_fix_at_close reads latest_close guard_cmd"
+      ],
+      "prohibitions": [
+        "No code comments",
+        "Never rewrite .bee/backlog.jsonl"
+      ],
+      "why": "The live run showed a legacy hand-closed group can never join the proven loop (D13).",
+      "out_of_scope": [
+        "fix-at verify",
+        "the ledger",
+        "any other verb"
+      ]
+    },
+    "trace": {
+      "worker": null,
+      "outcome": null,
+      "files_changed": [],
+      "deviations": [],
+      "friction": null,
+      "capped_at": null,
+      "behavior_change": true
+    }
+  },
+  {
+    "id": "mlc-10t",
+    "feature": "mistake-loop-closed",
+    "title": "Test the guardless close upgrade",
+    "lane": "standard",
+    "role": "test",
+    "status": "open",
+    "deps": [
+      "mlc-10"
+    ],
+    "decisions": [
+      "d5a0012c-6452-4b1f-9ca1-4b3cc9423b02",
+      "a7f3fbd2-ee19-4d08-adb0-c1b4c33d445a"
+    ],
+    "files": [
+      "packages/bee-rs/crates/bee/src/verbs/backlog.rs"
+    ],
+    "read_first": [
+      "docs/history/mistake-loop-closed/CONTEXT.md",
+      "packages/bee-rs/crates/bee/src/verbs/backlog.rs"
+    ],
+    "affects_skills": [],
+    "affects_specs": [],
+    "action": "Add tests whose names contain fix_at_verbs_upgrade, per contract fix-at-verbs: (1) a group closed by a hand backlog-closed row with no guard_cmd is accepted by fix-at close with guard-cmd 'true', the new row carries guard_cmd, and fix-at verify then runs it and lists nothing unverifiable; (2) a group whose latest close has a guard_cmd is still refused; (3) a kept rejudge can be upgraded the same way. Do not change non-test code; report any bug. Before capping, prove each new test can fail: break the guarded line of non-test code locally, run the filter, quote the red output, restore the line exactly (git diff of non-test files must be empty), then run the filter green and quote the count. Write no code comment of any kind. Never edit .bee/*.json or .bee/*.jsonl by hand. Run only the cell's verify filter, never the full suite. Allowed commands: cargo build, cargo test with a filter, cargo clippy, /mnt/data/Projects/goglbe/beehive/.bee/bin/bee dev regen, /mnt/data/Projects/goglbe/beehive/.bee/bin/bee knowledge check. Quote the count of tests the filter matched in the cap report.",
+    "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- fix_at_verbs_upgrade",
+    "must_haves": {
+      "truths": [
+        "three fix_at_verbs_upgrade tests pass and each was shown red once",
+        "no non-test code changed"
+      ],
+      "artifacts": [
+        {
+          "path": "packages/bee-rs/crates/bee/src/verbs/backlog.rs",
+          "substantive": "the fix_at_verbs_upgrade tests"
+        }
+      ],
+      "key_links": [
+        "the tests drive fix-at close and verify"
+      ],
+      "prohibitions": [
+        "No code comments",
+        "Never rewrite .bee/backlog.jsonl"
+      ],
+      "why": "A tester apart from the implementer pins the D13 upgrade path.",
+      "out_of_scope": [
+        "non-test code"
       ]
     },
     "trace": {
