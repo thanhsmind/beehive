@@ -9,6 +9,7 @@
 
 use crate::wave::WorkerSpec;
 
+#[cfg(any(test, feature = "test-support"))]
 pub mod fake;
 /// The herdr implementation of `WorkerBackend` — the first, and so far
 /// only, backend that actually shells out to an external process (D16 —
