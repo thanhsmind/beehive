@@ -439,7 +439,10 @@ a malformed record has earned none.
   kinds against it: every ACTIVE decision the `decisions log` conflict-hint
   scorer picks, widened to every decision scoring two or more term hits, and
   every homed knowledge rule whose home or `applied_at` patterns intersect
-  those same paths. The verb is lane-targeted and takes the same two locks in
+  those same paths. A feature with no open or capped cells yet takes its terms
+  from `docs/history/<feature>/plan.md` and `CONTEXT.md` instead (plan-conflicts-and-briefs
+  D1), so derive is meaningful before the execution gate; no paths exist then, so
+  only decisions are candidates. The verb is lane-targeted and takes the same two locks in
   the same order `plan-rev bump` takes; resolution landing on the default
   (non-lane) record is refused, because `conflict_review` is as
   lane-scoped as `plan_rev` itself. The field is seeded ABSENT: a record that

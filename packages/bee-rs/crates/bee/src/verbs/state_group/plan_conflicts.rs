@@ -221,6 +221,24 @@ pub(crate) fn plan_terms(cells: &[Value]) -> Vec<String> {
     out
 }
 
+fn document_terms(root: &Path, feature: &str) -> Vec<String> {
+    let dir = root.join("docs").join("history").join(feature);
+    let mut out: Vec<String> = Vec::new();
+    for name in ["plan.md", "CONTEXT.md"] {
+        let Ok(text) = std::fs::read_to_string(dir.join(name)) else {
+            continue;
+        };
+        for word in text.split_whitespace() {
+            if let Some(t) = normalize_term(word)
+                && !out.contains(&t)
+            {
+                out.push(t);
+            }
+        }
+    }
+    out
+}
+
 /// D2/D3: drops every term the active decision store carries in more than
 /// `TERM_DF_MAX_PERCENT` of its rows, and only from `TERM_DF_MIN_DECISIONS`
 /// active decisions up -- under the floor the input is returned untouched.
@@ -320,7 +338,11 @@ pub(crate) fn derive_candidates_reported(
     feature: &str,
 ) -> Result<(Vec<Value>, usize), Err2> {
     let cells = plan_cells(root, feature)?;
-    let terms = plan_terms(&cells);
+    let terms = if cells.is_empty() {
+        document_terms(root, feature)
+    } else {
+        plan_terms(&cells)
+    };
     let paths = plan_paths(&cells);
     let mut out: Vec<Value> = Vec::new();
     let mut seen: Vec<String> = Vec::new();

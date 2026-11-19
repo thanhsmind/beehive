@@ -3236,6 +3236,23 @@ use std::time::Instant;
         );
     }
 
+    #[test]
+    fn plan_conflicts_derive_without_cells_draws_terms_from_plan_and_context() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        write_decisions_fixture(root);
+        let dir = root.join("docs").join("history").join("f1");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("plan.md"), "# Plan\n\nDerive conflict candidates early.\n").unwrap();
+        std::fs::write(dir.join("CONTEXT.md"), "Candidates arrive at plan time.\n").unwrap();
+
+        let candidates = ok(derive_candidates(root, "f1"));
+        let ids: Vec<String> = candidates.iter().map(|c| js_disp_opt(jget(c, "id"))).collect();
+        assert_eq!(ids, vec!["dec-match".to_string()], "{ids:?}");
+
+        assert!(ok(derive_candidates(root, "no-docs")).is_empty());
+    }
+
     /// D3's floor, from the other side: with the two-decision fixture the
     /// older rows already use, derive returns exactly what it returns today.
     /// Document frequency is noise at that size — one hit in two decisions is
