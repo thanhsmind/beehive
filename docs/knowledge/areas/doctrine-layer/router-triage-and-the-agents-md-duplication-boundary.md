@@ -13,8 +13,8 @@ bee:
   sources: [docs/history/router-cost/CONTEXT.md, "docs/history/router-cost/ (cells rc-3, rc-4, capped)"]
   authoritative_for: "doctrine-layer: router triage and the duplication boundary"
   anchors: [packages/bee-rs/crates/bee/src/verbs/status_full/orient.rs, packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs, packages/bee-rs/crates/bee/src/principles.rs, packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs, packages/bee-rs/crates/bee/tests/rule_index_parity.rs, packages/bee/AGENTS.block.md, plans/cutover-readiness.md, packages/bee/LEADER.md, packages/bee/playbooks/, skills/bee-hive/references/gates-and-delegation.md, skills/bee-planning/SKILL.md, skills/bee-planning/references/cells.md, skills/bee-shaping/references/mini-brief-template.md, skills/bee-shaping/references/implement-plan-template.md, skills/bee-swarming/references/swarming-reference.md, skills/bee-hive/SKILL.md, skills/bee-swarming/SKILL.md, skills/bee-hive/references/routing-and-contracts.md, skills/bee-hive/references/scout-and-ticks.md, skills/bee-capturing/SKILL.md, skills/bee-hive/references/go-mode.md, skills/bee-swarming/references/worker-details.md, skills/bee-herding/README.md, skills/bee-herding/references/role-dispatch.md, packages/bee/prompts/worker-cell.md, skills/bee-evolving/SKILL.md, expertise/, skills/, skills/bee-principle-red-before-green/SKILL.md, skills/bee-principle-chestertons-fence/SKILL.md, skills/bee-principle-smallest-honest-shape/SKILL.md, skills/bee-principle-split-never-shrink/SKILL.md, skills/bee-principle-the-deletion-test/SKILL.md, skills/bee-principle-single-source-of-truth/SKILL.md, skills/bee-principle-record-at-the-moment-of-settlement/SKILL.md, skills/bee-principle-test-behavior-not-structure/SKILL.md, skills/bee-principle-verify-before-reporting/SKILL.md, skills/bee-principle-the-rebuild-test/SKILL.md, skills/bee-principle-one-fact-one-home/SKILL.md, skills/bee-principle-reproduce-first/SKILL.md, skills/bee-principle-crash-site-versus-fault-site/SKILL.md, skills/bee-principle-never-invent-behavior-neither-side-has/SKILL.md, skills/bee-principle-attack-the-premise/SKILL.md, skills/bee-principle-build-the-lever/SKILL.md, skills/bee-principle-lock-the-contract/SKILL.md, skills/bee-principle-split-on-a-real-dependency/SKILL.md, skills/bee-principle-encode-lessons-in-structure/SKILL.md, skills/bee-principle-subtract-before-you-add/SKILL.md, skills/bee-principle-migrate-callers-then-delete/SKILL.md, skills/bee-principle-boundary-discipline/SKILL.md, skills/bee-principle-make-illegal-states-unrepresentable/SKILL.md, skills/bee-principle-separate-before-serializing-shared-state/SKILL.md, skills/bee-principle-foundational-thinking/SKILL.md, skills/bee-principle-redesign-from-first-principles/SKILL.md, skills/bee-principle-outcome-oriented-execution/SKILL.md, skills/bee-principle-laziness-protocol/SKILL.md, skills/bee-principle-minimize-reader-load/SKILL.md, skills/bee-principle-model-the-domain/SKILL.md, skills/bee-principle-explain-the-number/SKILL.md, packages/bee-rs/crates/bee/tests/pointer_integrity.rs]
-  verified_at: 2026-11-15
-  verified_commit: a963c71a41249647b5aa15a64118f007f39c4c67
+  verified_at: 2026-11-19
+  verified_commit: 361ed678d884e4d94cd8449352ae48b1a62210b1
 ---
 
 ## Purpose
@@ -120,6 +120,11 @@ rule never disappears — only its elaboration moves.
   reads any line opening with a dash as a new rule row, so a sibling bullet would report one rule
   as two. `packages/bee-rs/crates/bee/tests/rule_index_parity.rs` pins the three copies — the markers in `AGENTS.md`,
   the markers in `packages/bee/AGENTS.block.md`, and the rows here — plus the spoken line's presence.
+  Both the parser and that test find the `## AGENTS.md rule homes` section through one helper,
+  `packages/bee-rs/crates/bee/src/verbs/knowledge/heading_section.rs`, which matches only a line
+  equal to the heading (trailing CR or spaces trimmed). A paragraph that quotes the heading text, or
+  a longer line that starts with it, no longer moves the section; the section ends at the next line
+  opening with `## ` (heading-anchors-and-verb-homes D1, cells hav-1 and hav-2, 2026-11-19).
   Every spoken line also carries its reason, placed last after an em dash, and every numbered step in
   the nine class playbooks (`skills/bee-planning/playbooks/<class>.md`) states why it holds or points
   at the home that does (pstack-0-15-port D1, cell p15-2, 2026-10-16): a rule with its reason lets an
