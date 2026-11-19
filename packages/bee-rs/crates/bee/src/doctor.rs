@@ -1889,3 +1889,46 @@ mod protocol_row_tests {
         assert_ne!(payload["overall_status"], "blocked", "{payload}");
     }
 }
+
+#[cfg(test)]
+mod fix_at_debt_advisory_tests {
+    use super::design_skill_tests::repo;
+    use super::*;
+
+    fn write_stale_rows(root: &Path, count: usize) {
+        let body: String = (0..count)
+            .map(|i| {
+                format!(
+                    "{}\n",
+                    json!({"ts": "2020-01-01T00:00:00Z", "type": "finding", "title": format!("stale guard {i}"), "layer": "fix-at:check"})
+                )
+            })
+            .collect();
+        std::fs::write(root.join(".bee/backlog.jsonl"), body).unwrap();
+    }
+
+    fn fix_at_row(payload: &Value) -> Option<&Value> {
+        payload["rows"].as_array().unwrap().iter().find(|r| r["row"] == "fix_at_debt")
+    }
+
+    #[test]
+    fn fix_at_debt_advisory_warns_at_21_stale_rows_not_20_and_never_moves_overall_status() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(tmp.path(), "{}", false);
+        let (clean, _) = doctor_report(&root, Runtime::Claude, &|_| None);
+
+        write_stale_rows(&root, 20);
+        let (twenty, twenty_lines) = doctor_report(&root, Runtime::Claude, &|_| None);
+        assert!(fix_at_row(&twenty).is_none(), "{twenty}");
+        assert!(!twenty_lines.iter().any(|l| l.contains("fix_at_debt")), "{twenty_lines:?}");
+        assert_eq!(twenty["overall_status"], clean["overall_status"]);
+
+        write_stale_rows(&root, 21);
+        let (over, over_lines) = doctor_report(&root, Runtime::Claude, &|_| None);
+        let row = fix_at_row(&over).expect("21 stale rows raise the advisory");
+        assert_eq!(row["status"], "note");
+        assert!(row["detail"].as_str().unwrap().starts_with("21 open fix-at finding row(s) are older than 30 days"), "{row}");
+        assert!(over_lines.iter().any(|l| l.contains("fix_at_debt") && l.contains("bee backlog fix-at next")), "{over_lines:?}");
+        assert_eq!(over["overall_status"], clean["overall_status"]);
+    }
+}

@@ -1010,3 +1010,45 @@ mod parked_orient_tests {
         assert!(line.contains("bee cells answer --id <cell> --answer \"<text>\""), "{line}");
     }
 }
+
+#[cfg(test)]
+mod fix_at_debt_orient_tests {
+    use super::*;
+
+    fn fixture() -> tempfile::TempDir {
+        let tmp = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(tmp.path().join(".bee")).unwrap();
+        std::fs::write(tmp.path().join(".bee/onboarding.json"), format!(r#"{{"bee_version":"{BEE_VERSION}"}}"#)).unwrap();
+        std::fs::write(tmp.path().join(".bee/state.json"), r#"{"phase":"idle"}"#).unwrap();
+        tmp
+    }
+
+    fn fix_at_blockers(root: &Path) -> Vec<String> {
+        let mut ctx = Ctx { root: root.to_path_buf(), cwd: root.to_path_buf(), linked: None, stderr: RefCell::new(Vec::new()) };
+        let packet = build_orient(&mut ctx).unwrap();
+        packet["work"]["blockers"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(Value::as_str)
+            .filter(|l| l.starts_with("fix-at debt:"))
+            .map(str::to_string)
+            .collect()
+    }
+
+    #[test]
+    fn fix_at_debt_orient_blockers_carry_the_line_only_with_debt() {
+        let tmp = fixture();
+        assert!(fix_at_blockers(tmp.path()).is_empty());
+        let row = json!({"ts": "2026-01-01T00:00:00Z", "type": "finding", "title": "alpha one", "layer": "fix-at:check"});
+        std::fs::write(tmp.path().join(".bee/backlog.jsonl"), format!("{row}\n")).unwrap();
+        let debt = crate::verbs::fix_at::debt(tmp.path(), chrono::Utc::now()).unwrap();
+        assert_eq!(
+            fix_at_blockers(tmp.path()),
+            vec![format!(
+                "fix-at debt: {} — run `bee backlog fix-at next`, then `bee backlog fix-at promote`",
+                debt.describe()
+            )]
+        );
+    }
+}

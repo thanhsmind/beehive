@@ -516,3 +516,30 @@ pub(crate) fn build_status_with_state(ctx: &mut Ctx, lanes_full: bool, state: JM
     }
     Ok(status)
 }
+
+#[cfg(test)]
+mod fix_at_debt_status_tests {
+    use super::*;
+
+    #[test]
+    fn fix_at_debt_status_json_equals_the_ledger_debt() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        std::fs::create_dir_all(root.join(".bee")).unwrap();
+        std::fs::write(root.join(".bee/onboarding.json"), format!(r#"{{"bee_version":"{BEE_VERSION}"}}"#)).unwrap();
+        std::fs::write(root.join(".bee/state.json"), r#"{"phase":"idle"}"#).unwrap();
+        let rows = [
+            json!({"ts": "2020-01-01T00:00:00Z", "type": "finding", "title": "alpha one", "layer": "fix-at:check"}),
+            json!({"ts": "2020-01-02T00:00:00Z", "type": "finding", "title": "beta two", "layer": "fix-at:rejudge"}),
+        ];
+        let body: String = rows.iter().map(|r| format!("{r}\n")).collect();
+        std::fs::write(root.join(".bee/backlog.jsonl"), body).unwrap();
+        let mut ctx = Ctx { root: root.to_path_buf(), cwd: root.to_path_buf(), linked: None, stderr: RefCell::new(Vec::new()) };
+        let status = build_status(&mut ctx, false).unwrap();
+        let expected = crate::verbs::fix_at::debt(root, chrono::Utc::now()).unwrap().json();
+        assert_eq!(status["fix_at_debt"], expected);
+        assert_eq!(status["fix_at_debt"]["check_open"], 1);
+        assert_eq!(status["fix_at_debt"]["rejudge_open"], 1);
+        assert_eq!(status["fix_at_debt"]["stale_open_rows"], 2);
+    }
+}

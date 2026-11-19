@@ -971,3 +971,69 @@ pub fn build_session_preamble_within(
     lines.push(TRAILER_LINE.to_string());
     fit_blocks(&lines, &blocks, split_at, budget_bytes)
 }
+
+#[cfg(test)]
+mod fix_at_debt_tests {
+    use super::*;
+
+    fn repo() -> tempfile::TempDir {
+        let tmp = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(tmp.path().join(".bee")).unwrap();
+        std::fs::write(
+            tmp.path().join(".bee/onboarding.json"),
+            format!(r#"{{"bee_version":"{}"}}"#, crate::version::BEE_VERSION),
+        )
+        .unwrap();
+        std::fs::write(tmp.path().join(".bee/state.json"), r#"{"phase":"idle"}"#).unwrap();
+        tmp
+    }
+
+    fn write_backlog(root: &Path, rows: &[serde_json::Value]) {
+        let body: String = rows.iter().map(|r| format!("{r}\n")).collect();
+        std::fs::write(root.join(".bee/backlog.jsonl"), body).unwrap();
+    }
+
+    fn debt_rows() -> Vec<serde_json::Value> {
+        vec![
+            serde_json::json!({"ts": "2026-01-01T00:00:00Z", "type": "finding", "title": "alpha one", "layer": "fix-at:check"}),
+            serde_json::json!({"ts": "2026-01-02T00:00:00Z", "type": "finding", "title": "beta two", "layer": "fix-at:architecture"}),
+        ]
+    }
+
+    #[test]
+    fn fix_at_debt_preamble_carries_the_block_with_the_ledger_numbers() {
+        let tmp = repo();
+        write_backlog(tmp.path(), &debt_rows());
+        let debt = crate::verbs::fix_at::debt(tmp.path(), chrono::Utc::now()).unwrap();
+        let text = build_session_preamble_within(tmp.path(), None, None, "claude", usize::MAX);
+        assert!(text.contains(&format!("### Fix-at debt: {}", debt.describe())), "{text}");
+        assert!(text.contains("2 open (check 1, architecture 1, rejudge 0; 0 recurred), oldest "), "{text}");
+        assert!(text.contains("- next: bee backlog fix-at next, then bee backlog fix-at promote"), "{text}");
+    }
+
+    #[test]
+    fn fix_at_debt_preamble_has_no_block_on_an_empty_store() {
+        let tmp = repo();
+        let missing = build_session_preamble_within(tmp.path(), None, None, "claude", usize::MAX);
+        assert!(!missing.contains("Fix-at debt"), "{missing}");
+        write_backlog(
+            tmp.path(),
+            &[
+                debt_rows()[0].clone(),
+                serde_json::json!({"ts": "2026-01-03T00:00:00Z", "type": "backlog-closed", "title": "alpha one", "layer": "fix-at:check"}),
+            ],
+        );
+        let closed = build_session_preamble_within(tmp.path(), None, None, "claude", usize::MAX);
+        assert!(!closed.contains("Fix-at debt"), "{closed}");
+    }
+
+    #[test]
+    fn fix_at_debt_block_drops_under_a_small_budget_and_names_fix_at_next() {
+        let tmp = repo();
+        write_backlog(tmp.path(), &debt_rows());
+        let text = build_session_preamble_within(tmp.path(), None, None, "claude", 0);
+        assert!(!text.contains("### Fix-at debt"), "{text}");
+        let omitted = text.lines().find(|l| l.starts_with("### Omitted to fit the host limit:")).expect("an Omitted line");
+        assert!(omitted.contains("Fix-at debt → bee backlog fix-at next"), "{omitted}");
+    }
+}

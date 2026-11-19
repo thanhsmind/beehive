@@ -836,4 +836,48 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         assert!(debt(&dir.path().join("missing"), chrono::Utc::now()).is_none());
     }
+
+    fn write_store(root: &Path, rows: &[Value]) {
+        std::fs::create_dir_all(root.join(".bee")).unwrap();
+        let body: String = rows.iter().map(|r| format!("{r}\n")).collect();
+        std::fs::write(root.join(SRC_BACKLOG), body).unwrap();
+    }
+
+    #[test]
+    fn fix_at_debt_from_a_fixture_backlog_counts_layers_recurred_and_oldest_days() {
+        let dir = tempfile::tempdir().unwrap();
+        write_store(
+            dir.path(),
+            &[
+                finding("2026-03-01T00:00:00Z", CHECK, "alpha one", "a"),
+                finding("2026-03-03T00:00:00Z", CHECK, "beta two", "a"),
+                finding("2026-03-02T00:00:00Z", ARCH, "gamma three", "a"),
+                finding("2026-03-04T00:00:00Z", REJUDGE, "delta four", "a"),
+                typed_close("2026-03-05T00:00:00Z", Some(REJUDGE), "delta four"),
+                finding("2026-03-06T00:00:00Z", REJUDGE, "delta four", "b"),
+                finding("2026-03-07T00:00:00Z", ARCH, "epsilon five", "a"),
+                typed_close("2026-03-08T00:00:00Z", Some(ARCH), "epsilon five"),
+            ],
+        );
+        let debt = debt(dir.path(), at("2026-03-21T00:00:00Z")).expect("a store reads");
+        assert_eq!((debt.check_open, debt.architecture_open, debt.rejudge_open), (2, 1, 1));
+        assert_eq!(debt.recurred, 1);
+        assert_eq!(debt.oldest_open_days, Some(20));
+        assert_eq!(debt.stale_open_rows, 0);
+    }
+
+    #[test]
+    fn fix_at_debt_a_row_31_days_old_is_stale_and_29_days_old_is_not() {
+        let now = at("2026-05-01T00:00:00Z");
+        let aged = |days: i64, title: &str| {
+            let ts = (now - chrono::Duration::days(days)).to_rfc3339_opts(chrono::SecondsFormat::Secs, true);
+            finding(&ts, CHECK, title, "a")
+        };
+        let old = Ledger::from_rows(&[aged(31, "alpha one")]).debt(now);
+        assert_eq!(old.stale_open_rows, 1);
+        assert_eq!(old.oldest_open_days, Some(31));
+        let young = Ledger::from_rows(&[aged(29, "alpha one")]).debt(now);
+        assert_eq!(young.stale_open_rows, 0);
+        assert_eq!(young.oldest_open_days, Some(29));
+    }
 }
