@@ -1097,6 +1097,46 @@ use std::time::Instant;
     }
 
     #[test]
+    fn prune_keep_set_keeps_a_capped_row_whose_cell_file_is_missing_or_corrupt() {
+        let tmp = tmp_root();
+        write_state_file(
+            tmp.path(),
+            r#"{"workers":[{"nickname":"w-gone","cell":"gone","status":"capped"},{"nickname":"w-bad","cell":"bad","status":"capped"}]}"#,
+        );
+        let cells = tmp.path().join(".bee").join("cells");
+        std::fs::create_dir_all(&cells).unwrap();
+        std::fs::write(cells.join("bad.json"), "{nope").unwrap();
+        let keep = ok(read_prune_keep_set(tmp.path()));
+        assert!(keep.contains(&"gone".to_string()));
+        assert!(keep.contains(&"bad".to_string()));
+    }
+
+    #[test]
+    fn prune_keep_set_drops_a_cell_capped_through_the_cap_verb() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        write_none_test_config(root);
+        write_state_file(
+            root,
+            r#"{"workers":[{"nickname":"w-c1","cell":"c1","status":"running"},{"nickname":"w-c2","cell":"c2","status":"running"}]}"#,
+        );
+        write_claimed_cell(root, "c1");
+        write_claimed_cell(root, "c2");
+
+        let before = ok(read_prune_keep_set(root));
+        assert!(before.contains(&"c1".to_string()));
+
+        assert!(crate::verbs::cells::cap_cell_from_flags(root, &cap_flags_for("c1"), false).is_ok());
+
+        let state = read_state_strict(root).unwrap();
+        let workers = state.get("workers").and_then(Value::as_array).unwrap();
+        assert_eq!(workers[0].get("status"), Some(&json!("capped")));
+        let after = ok(read_prune_keep_set(root));
+        assert!(!after.contains(&"c1".to_string()));
+        assert!(after.contains(&"c2".to_string()));
+    }
+
+    #[test]
     fn prune_refuses_malformed_workers() {
         let tmp = tmp_root();
         write_state_file(tmp.path(), r#"{"workers":"not-an-array"}"#);
