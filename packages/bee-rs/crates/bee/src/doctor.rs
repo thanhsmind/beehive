@@ -610,6 +610,21 @@ pub(crate) fn team_config_advisory(root: &Path) -> Option<(Value, String)> {
     ))
 }
 
+const FIX_AT_STALE_ROWS_WARN: usize = 20;
+
+pub(crate) fn fix_at_debt_advisory(root: &Path) -> Option<(Value, String)> {
+    let debt = crate::verbs::fix_at::debt(root, chrono::Utc::now())?;
+    if debt.stale_open_rows <= FIX_AT_STALE_ROWS_WARN {
+        return None;
+    }
+    let detail = format!(
+        "{} open fix-at finding row(s) are older than 30 days ({}) — run: bee backlog fix-at next",
+        debt.stale_open_rows,
+        debt.describe()
+    );
+    Some((json!({"row": "fix_at_debt", "status": "note", "detail": detail.clone()}), detail))
+}
+
 pub(crate) fn owner_briefs_advisory(root: &Path) -> Option<(Value, String)> {
     let problems = crate::verbs::brief::owner_view(root, root)["problems"].as_u64().unwrap_or(0);
     if problems == 0 {
@@ -1543,6 +1558,10 @@ fn doctor_report(root: &Path, runtime: Runtime, env: &dyn Fn(&str) -> Option<Str
     if let Some((row, _)) = &briefs_advisory {
         all.push(row.clone());
     }
+    let fix_at_advisory = fix_at_debt_advisory(root);
+    if let Some((row, _)) = &fix_at_advisory {
+        all.push(row.clone());
+    }
     let (protocol_row, protocol_detail) = workspace_protocol_row(root);
     all.push(protocol_row.clone());
     let runtime_checks = runtime_checks_with_env(root, env);
@@ -1587,6 +1606,9 @@ fn doctor_report(root: &Path, runtime: Runtime, env: &dyn Fn(&str) -> Option<Str
     }
     if let Some((_, detail)) = &briefs_advisory {
         lines.push(format!("  note {:<22} {}", "owner_briefs", detail));
+    }
+    if let Some((_, detail)) = &fix_at_advisory {
+        lines.push(format!("  note {:<22} {}", "fix_at_debt", detail));
     }
     let protocol_mark = if protocol_row["status"] == "ok" { "ok  " } else { "note" };
     lines.push(format!("  {protocol_mark} {:<22} {protocol_detail}", "workspace-protocol"));
@@ -1865,5 +1887,48 @@ mod protocol_row_tests {
         let (payload, _) = doctor_report(&root, Runtime::Claude, &|_| None);
         assert_eq!(row(&payload)["status"], "advisory");
         assert_ne!(payload["overall_status"], "blocked", "{payload}");
+    }
+}
+
+#[cfg(test)]
+mod fix_at_debt_advisory_tests {
+    use super::design_skill_tests::repo;
+    use super::*;
+
+    fn write_stale_rows(root: &Path, count: usize) {
+        let body: String = (0..count)
+            .map(|i| {
+                format!(
+                    "{}\n",
+                    json!({"ts": "2020-01-01T00:00:00Z", "type": "finding", "title": format!("stale guard {i}"), "layer": "fix-at:check"})
+                )
+            })
+            .collect();
+        std::fs::write(root.join(".bee/backlog.jsonl"), body).unwrap();
+    }
+
+    fn fix_at_row(payload: &Value) -> Option<&Value> {
+        payload["rows"].as_array().unwrap().iter().find(|r| r["row"] == "fix_at_debt")
+    }
+
+    #[test]
+    fn fix_at_debt_advisory_warns_at_21_stale_rows_not_20_and_never_moves_overall_status() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(tmp.path(), "{}", false);
+        let (clean, _) = doctor_report(&root, Runtime::Claude, &|_| None);
+
+        write_stale_rows(&root, 20);
+        let (twenty, twenty_lines) = doctor_report(&root, Runtime::Claude, &|_| None);
+        assert!(fix_at_row(&twenty).is_none(), "{twenty}");
+        assert!(!twenty_lines.iter().any(|l| l.contains("fix_at_debt")), "{twenty_lines:?}");
+        assert_eq!(twenty["overall_status"], clean["overall_status"]);
+
+        write_stale_rows(&root, 21);
+        let (over, over_lines) = doctor_report(&root, Runtime::Claude, &|_| None);
+        let row = fix_at_row(&over).expect("21 stale rows raise the advisory");
+        assert_eq!(row["status"], "note");
+        assert!(row["detail"].as_str().unwrap().starts_with("21 open fix-at finding row(s) are older than 30 days"), "{row}");
+        assert!(over_lines.iter().any(|l| l.contains("fix_at_debt") && l.contains("bee backlog fix-at next")), "{over_lines:?}");
+        assert_eq!(over["overall_status"], clean["overall_status"]);
     }
 }

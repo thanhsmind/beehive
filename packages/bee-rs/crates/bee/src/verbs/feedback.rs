@@ -714,7 +714,7 @@ const SRC_DECISIONS: &str = ".bee/decisions.jsonl";
 const SRC_CELLS: &str = ".bee/cells";
 const SRC_LEARNINGS: &str = "docs/history/learnings";
 
-enum Scope {
+pub(crate) enum Scope {
     Absent,
     Ok(PathBuf),
     /// Node would console.warn / throw (realpath error text, containment
@@ -724,7 +724,7 @@ enum Scope {
 
 /// resolveInScope (lib/feedback.mjs): realpath the target and require it
 /// under realpath(root)/.bee/ or /docs/history/.
-fn resolve_in_scope(real_root: &Path, rel: &str) -> Scope {
+pub(crate) fn resolve_in_scope(real_root: &Path, rel: &str) -> Scope {
     let mut target = real_root.to_path_buf();
     for part in rel.split('/') {
         target.push(part);
@@ -1732,7 +1732,6 @@ fn fix_at_load(root: &Path) -> Option<FixAtLoad> {
         return None;
     };
     let rows = read_jsonl(&path).rows;
-    let closes = close_stamps(&rows);
     let mut load = FixAtLoad {
         check_rows: 0,
         architecture_rows: 0,
@@ -1740,38 +1739,19 @@ fn fix_at_load(root: &Path) -> Option<FixAtLoad> {
         architecture_open: 0,
         closed: 0,
     };
-    let mut newest: std::collections::HashMap<(&str, String), &str> =
-        std::collections::HashMap::new();
     for row in &rows {
-        let layer = match row.get("layer").and_then(Value::as_str) {
-            Some(l @ "fix-at:check") => {
-                load.check_rows += 1;
-                l
-            }
-            Some(l @ "fix-at:architecture") => {
-                load.architecture_rows += 1;
-                l
-            }
-            _ => continue,
-        };
-        if row.get("type").and_then(Value::as_str) == Some("backlog-closed") {
-            continue;
-        }
-        let ts = ts_str(row.get("ts").unwrap_or(&Value::Null));
-        let seen = newest
-            .entry((layer, normalize_title(row.get("title").unwrap_or(&Value::Null))))
-            .or_insert(ts);
-        if ts > *seen {
-            *seen = ts;
+        match row.get("layer").and_then(Value::as_str) {
+            Some("fix-at:check") => load.check_rows += 1,
+            Some("fix-at:architecture") => load.architecture_rows += 1,
+            _ => {}
         }
     }
-    for ((layer, title), ts) in newest {
-        if closes.iter().any(|(t, c)| *t == title && c.as_str() > ts) {
-            load.closed += 1;
-        } else if layer == "fix-at:check" {
-            load.check_open += 1;
-        } else {
-            load.architecture_open += 1;
+    for group in super::fix_at::Ledger::from_rows(&rows).groups {
+        match (group.state, group.layer.as_str()) {
+            (super::fix_at::GroupState::Closed, _) => load.closed += 1,
+            (_, "fix-at:check") => load.check_open += 1,
+            (_, "fix-at:architecture") => load.architecture_open += 1,
+            _ => {}
         }
     }
     Some(load)

@@ -125,7 +125,10 @@ the root cause, the check that would have caught it earlier).
    learnings file, done. File the check as a tiny/small cell if it
    cannot ship in-feature. `.bee/expertise/static-rules.md` says which
    home to pick and how to prove the rule red, then green. It also says
-   how to close the fix-at row the rule guards.
+   how to close the fix-at row the rule guards with
+   `bee backlog fix-at close --layer <l> --title <t> --guard <what> --guard-cmd <command> --red-proof <red output> --commit <sha>`;
+   use `bee backlog fix-at next` and `bee backlog fix-at promote` to
+   pick and queue the next group.
 3. Not mechanizable (judgment, taste, product intent) → promote as
    prose per the format below, routed to where it will be read:
    prose lands in a skill the run ACTUALLY OPENED (judged from the

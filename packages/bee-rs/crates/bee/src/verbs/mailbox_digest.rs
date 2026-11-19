@@ -629,7 +629,7 @@ pub(crate) const SHAPE_TOKEN_PREFIX: &str = "shape:";
 const SHAPE_TOKEN_HEX: usize = 12;
 
 /// A shape must be at least this many words. See the "FOUR WORDS" brake above.
-const MIN_SHAPE_WORDS: usize = 4;
+pub(crate) const MIN_SHAPE_WORDS: usize = 4;
 
 /// The layer a reflection filed before `fix_at` existed keys under —
 /// `mailbox::FIX_AT_VALUES`' own word for "no layer worth naming"
@@ -675,7 +675,7 @@ fn one_line(s: &str) -> String {
 /// Nothing else. No stemming, no stop-word removal, no fuzzy distance: a match
 /// a human cannot reproduce by reading the two lines is a match they cannot
 /// argue with, and this row gets logged without their approval.
-fn normalize_shape(line: &str) -> String {
+pub(crate) fn normalize_shape(line: &str) -> String {
     let flat = one_line(line).to_lowercase();
     let mut out = String::with_capacity(flat.len());
     let mut in_digits = false;

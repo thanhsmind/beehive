@@ -1409,11 +1409,18 @@ fn block_between(text: &str, start: &str, stop: &str) -> Option<String> {
     Some(std::iter::once(first).chain(rest).collect::<Vec<_>>().join("\n"))
 }
 
-fn fix_at_close_missing(static_rules: &str, promotion: &str) -> (usize, Vec<String>) {
+fn fix_at_close_missing(
+    static_rules: &str,
+    promotion: &str,
+    agents_block: &str,
+) -> (usize, Vec<String>) {
     let checks = [
-        (static_rules, "## Show it red, then green", "## ", "--type backlog-closed"),
+        (static_rules, "## Show it red, then green", "## ", "bee backlog fix-at close"),
+        (static_rules, "## Show it red, then green", "## ", "--guard-cmd"),
+        (static_rules, "## Show it red, then green", "## ", "--red-proof"),
         (static_rules, "## Show it red, then green", "## ", "--layer"),
         (promotion, "2. Mechanizable?", "3.", "close the fix-at row"),
+        (agents_block, "# Instructions for Coding Agents", "## ", "reflect --cell"),
     ];
     let mut matched = 0;
     let mut missing = Vec::new();
@@ -1433,8 +1440,10 @@ fn fix_at_close_doctrine_names_the_closing_row() {
     let static_rules = std::fs::read_to_string(root.join("expertise/static-rules.md")).unwrap();
     let promotion =
         std::fs::read_to_string(root.join("skills/bee-capturing/references/promotion.md")).unwrap();
-    let (matched, missing) = fix_at_close_missing(&static_rules, &promotion);
+    let agents_block =
+        std::fs::read_to_string(root.join("packages/bee/AGENTS.block.md")).unwrap();
+    let (matched, missing) = fix_at_close_missing(&static_rules, &promotion, &agents_block);
     println!("fix_at_close_doctrine matched {matched}");
     assert!(missing.is_empty(), "fix-at closing step missing from doctrine: {missing:?}");
-    assert_eq!(matched, 3);
+    assert_eq!(matched, 6);
 }

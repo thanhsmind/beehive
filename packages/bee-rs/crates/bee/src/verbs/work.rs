@@ -309,6 +309,8 @@ fn run_set(
     // digest is owed to an unarmed checkout just the same (D2 files a letter at
     // every close, attended or not).
     compose_digests_for_finished_periods(&ctx.root);
+    super::fix_at::sweep_unfiled(&ctx.root);
+    super::backlog::promote_guard(&crate::hooks::session_init::control_root_for(&ctx.root));
 
     let mut result = Map::new();
     result.insert("target".into(), Value::String(sink.label()));
@@ -486,6 +488,7 @@ mod tests {
             better: None,
             fix_at: None,
             source: None,
+            cells: Vec::new(),
         }
     }
 

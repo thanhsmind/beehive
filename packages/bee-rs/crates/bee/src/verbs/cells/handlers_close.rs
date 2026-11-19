@@ -1428,6 +1428,7 @@ fn record_cap_in_mailbox(
         better: None,
         fix_at: None,
         source: None,
+        cells: Vec::new(),
     };
     mailbox::record_stop(root, &run, &entry);
 
@@ -2105,6 +2106,7 @@ fn record_block_in_mailbox(root: &Path, blocked: &Value, reason: &str, session_f
         better: None,
         fix_at: None,
         source: None,
+        cells: Vec::new(),
     };
     mailbox::record_stop(root, &run, &entry);
 }

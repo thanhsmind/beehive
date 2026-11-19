@@ -164,6 +164,38 @@ pub(crate) fn read_when_line(body: &str) -> Option<&str> {
         .find(|line| line.starts_with(READ_WHEN_PREFIX))
 }
 
+fn evidence_ref_path_tokens(reference: &str) -> Vec<String> {
+    reference
+        .split(|c: char| c.is_whitespace() || matches!(c, ';' | '(' | ')'))
+        .map(|raw| {
+            let trimmed = raw.trim_matches(|c| matches!(c, '"' | '\'' | '`'));
+            let trimmed = trimmed.split('#').next().unwrap_or("");
+            trimmed
+                .trim_end_matches([':', ','])
+                .trim_matches(|c| matches!(c, '"' | '\'' | '`'))
+                .to_string()
+        })
+        .filter(|token| {
+            token.contains('/')
+                && token
+                    .rsplit('/')
+                    .next()
+                    .and_then(|name| name.rsplit_once('.'))
+                    .is_some_and(|(_, ext)| !ext.is_empty() && ext.chars().all(|c| c.is_ascii_alphanumeric()))
+        })
+        .collect()
+}
+
+fn evidence_path_exists(root: &Path, token: &str) -> bool {
+    [
+        root.to_path_buf(),
+        root.join("packages/bee-rs/crates/bee/src"),
+        root.join("packages/bee-rs/crates/bee"),
+    ]
+    .iter()
+    .any(|base| base.join(token).exists())
+}
+
 fn anchor_names_a_directory(anchor: &str, repo_root: Option<&Path>) -> bool {
     anchor.trim().ends_with('/') || repo_root.is_some_and(|root| root.join(anchor.trim()).is_dir())
 }
@@ -757,6 +789,30 @@ pub(crate) fn check_bundle(dir: &Path, strict: bool) -> Option<CheckReport> {
                         jsjson::js_to_string(value)
                     ),
                 ));
+            }
+        }
+
+        if let Some(root) = repo_root {
+            let wired = matches!(bee.get("evidence"), Some(Value::String(s)) if s == "wired" || s == "exercised");
+            let reference = match bee.get("evidence_ref") {
+                Some(Value::String(s)) => s.trim().to_string(),
+                _ => String::new(),
+            };
+            if wired && reference.is_empty() {
+                warnings.push(finding(
+                    rel,
+                    "evidence_without_ref",
+                    "bee.evidence is wired or exercised but bee.evidence_ref names nothing".to_string(),
+                ));
+            }
+            for token in evidence_ref_path_tokens(&reference) {
+                if !evidence_path_exists(root, &token) {
+                    warnings.push(finding(
+                        rel,
+                        "evidence_ref_missing_path",
+                        format!("bee.evidence_ref names \"{token}\", which exists under no checkout base"),
+                    ));
+                }
             }
         }
 

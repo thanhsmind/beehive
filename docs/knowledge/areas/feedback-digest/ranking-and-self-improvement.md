@@ -11,7 +11,7 @@ bee:
   decisions: [0022, c75fed88]
   sources: ["docs/history/evolving-loop/ (cells evolving-1 … evolving-11, capped)", docs/history/evolving-loop/reports/review-slice-a.md, docs/history/evolving-loop/reports/review-slice-b.md, "docs/history/cli-mutations/ (cell cli-mutations-2, capped; walkthrough.md)", "docs/specs/feedback-digest.md#R12", "docs/specs/feedback-digest.md#R13", "docs/specs/feedback-digest.md#R14", "docs/specs/feedback-digest.md#R15", "docs/specs/feedback-digest.md#P3"]
   authoritative_for: "feedback-digest: ranking and self-improvement"
-  anchors: [packages/bee-rs/crates/bee/src/verbs/feedback.rs]
+  anchors: [packages/bee-rs/crates/bee/src/verbs/feedback.rs, packages/bee-rs/crates/bee/src/verbs/fix_at.rs, packages/bee-rs/crates/bee/src/verbs/backlog.rs, packages/bee-rs/crates/bee/src/verbs/upkeep_group.rs]
 ---
 
 # Feedback Digest — Ranking and the Self-Improvement Process
@@ -136,3 +136,30 @@ previous change never counts as approval of the next publication.
 - **P3** — The self-improvement process: `docs/handbook/evolving.md`; contract in
   `docs/07-contracts.md`; decision record `docs/decisions/0022-evolving-loop.md`
 - **Fix-at fold and load** — Read when: the digest shows one entry for many filed copies, or `prose_load` reports open and closed counts. Backlog finding and friction rows with the same type, layer, normalized title and close epoch (the count of older `backlog-closed` rows with that title) fold into one entry at read time, earliest `ts` kept, pain not summed; a post-close copy stays its own entry so rank still says `recurred`. `prose_load` counts distinct (layer, title) keys as open or closed and renders the SessionStart preamble size; find them in `verbs/feedback.rs` (`close_epoch`, `fix_at_load`, `preamble_load`). Decisions: fix-at-loop D2, D6, D8, D10 (`docs/history/fix-at-loop/CONTEXT.md`).
+
+## The fix-at ledger has one home
+
+Read when: you need to know whether a fix-at group is open, closed or recurred.
+
+`verbs/fix_at.rs` `Ledger::from_rows` is the only place that decides it (mistake-loop-closed D1); `fix_at_load` in the
+digest and the close dedupe (`current_epoch_finding_feature`) both call it. Two copies of the rule
+had drifted: the digest matched closes by title across layers, the dedupe read `kind` as well as
+`type`. A close that names a fix-at layer matches only that layer; a close with none matches every
+layer by normalized title. Recurred counts as open in the prose_load keys. Find the group fields
+in the `Group` struct rather than copying them here.
+
+## A fix-at close carries proof, and a puller drains the debt
+
+Read when: you are closing a fix-at group, a closed guard went red, or you wonder what pulls the next group.
+
+A free-text `backlog-closed` row proved nothing, so `bee backlog add` refuses that type on a fix-at
+layer and `bee backlog fix-at close` is the only door (mistake-loop-closed D7): it runs the guard command itself and refuses
+on a non-zero exit, which is why the proof is a command and not a sentence. A rejudge group may
+close with `--kept <reason>` and no command; such a close, like a legacy hand close, has no
+`guard_cmd`, so `bee backlog fix-at verify` lists it as unverifiable instead of reopening it. `bee backlog fix-at verify` re-runs every
+closed guard, appends a finding row on a red one (turning the group Recurred through the same
+fold), exits non-zero, and records a `fix-at-upkeep` audit row (mistake-loop-closed D8, D9). `bee backlog fix-at next` orders Recurred, then findings, then age, and `bee backlog fix-at promote` files one `Guard: ` PBI at a
+time so the existing dispatch flow picks it up; session takeup promotes silently when open debt exists and no fix-at PBI is open (mistake-loop-closed D9). `bee upkeep due` gains kind `fix-at`, due when a Closed group exists and no `fix-at-upkeep` audit row is younger than 7 days. Rejected: a
+`fix-at` upkeep skill, because a verb pair needs none (the upkeep item has skill null). The guard
+timeout is a constant in `verbs/backlog.rs`; find it there. Guesses, not facts: a PBI filed by
+takeup has no owner brief, so doctor's brief check may name it while none is written.

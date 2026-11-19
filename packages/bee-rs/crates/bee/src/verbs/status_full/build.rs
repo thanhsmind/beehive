@@ -421,6 +421,10 @@ pub(crate) fn build_status_with_state(ctx: &mut Ctx, lanes_full: bool, state: JM
         status.insert("scribing_debt".into(), Value::Object(sd));
     }
     status.insert("capture_queue".into(), Value::Object(capture_queue_summary(ctx)));
+    status.insert(
+        "fix_at_debt".into(),
+        crate::verbs::fix_at::debt(&ctx.root, chrono::Utc::now()).map_or(Value::Null, |d| d.json()),
+    );
     // D4 (wayfinding-flow): open discovery maps under docs/discovery/ —
     // resume must be un-missable. `scan_discovery` (verbs/discovery.rs) is
     // the ONE scan; the session preamble (hooks/session_preamble/budget.rs)
@@ -511,4 +515,31 @@ pub(crate) fn build_status_with_state(ctx: &mut Ctx, lanes_full: bool, state: JM
         status.insert("contention".into(), Value::Object(contention));
     }
     Ok(status)
+}
+
+#[cfg(test)]
+mod fix_at_debt_status_tests {
+    use super::*;
+
+    #[test]
+    fn fix_at_debt_status_json_equals_the_ledger_debt() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        std::fs::create_dir_all(root.join(".bee")).unwrap();
+        std::fs::write(root.join(".bee/onboarding.json"), format!(r#"{{"bee_version":"{BEE_VERSION}"}}"#)).unwrap();
+        std::fs::write(root.join(".bee/state.json"), r#"{"phase":"idle"}"#).unwrap();
+        let rows = [
+            json!({"ts": "2020-01-01T00:00:00Z", "type": "finding", "title": "alpha one", "layer": "fix-at:check"}),
+            json!({"ts": "2020-01-02T00:00:00Z", "type": "finding", "title": "beta two", "layer": "fix-at:rejudge"}),
+        ];
+        let body: String = rows.iter().map(|r| format!("{r}\n")).collect();
+        std::fs::write(root.join(".bee/backlog.jsonl"), body).unwrap();
+        let mut ctx = Ctx { root: root.to_path_buf(), cwd: root.to_path_buf(), linked: None, stderr: RefCell::new(Vec::new()) };
+        let status = build_status(&mut ctx, false).unwrap();
+        let expected = crate::verbs::fix_at::debt(root, chrono::Utc::now()).unwrap().json();
+        assert_eq!(status["fix_at_debt"], expected);
+        assert_eq!(status["fix_at_debt"]["check_open"], 1);
+        assert_eq!(status["fix_at_debt"]["rejudge_open"], 1);
+        assert_eq!(status["fix_at_debt"]["stale_open_rows"], 2);
+    }
 }
