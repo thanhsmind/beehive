@@ -11,9 +11,9 @@
     "uat": false
   },
   "summary": "Feature \"herding-run-hardening\" started at phase \"planning\" (lane).",
-  "next_action": "D3-D5 belong to sibling PBIs; the feature closes when they land.",
+  "next_action": "Merged into main at 91c2fd7; capture what settled, then bee close --feature herding-run-hardening.",
   "created_at": "2026-11-19T10:20:44.497Z",
-  "run_state": "awaiting-approval",
+  "run_state": null,
   "waiting_on": null,
   "route": {
     "class": "bugfix",
@@ -39,12 +39,5 @@
       "bee-herding"
     ],
     "next_action": "Run compounding."
-  },
-  "merge_ready": {
-    "since": "2026-11-19T15:51:39.770Z",
-    "branch": "wt/herding-run-hardening",
-    "worktree_id": "beehive--wt--herding-run-hardening",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
