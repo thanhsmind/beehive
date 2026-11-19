@@ -1,0 +1,27 @@
+{
+  "schema_version": "1.0",
+  "feature": "guard-config-and-class",
+  "mode": null,
+  "phase": "exploring",
+  "approved_gates": {
+    "context": false,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"guard-config-and-class\" started at phase \"exploring\" (lane).",
+  "next_action": "Continue bee-exploring for \"guard-config-and-class\" (lane).",
+  "created_at": "2026-11-19T14:52:37.514Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null,
+  "route": {
+    "class": "bugfix",
+    "lane": "small",
+    "flags": [],
+    "product_files": 6,
+    "rationale": null,
+    "updated_at": "2026-11-19T14:52:32.400Z",
+    "feature": "guard-config-and-class"
+  }
+}
