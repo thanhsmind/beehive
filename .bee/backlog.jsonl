@@ -2067,3 +2067,7 @@
 {"ts":"2026-11-19T16:05:09.922Z","type":"harness-issue","title":"bee herding run returns timed_out_idle or timed_out_ceiling but leaves the paseo agent running; the orphan keeps editing the worktree beside the re-dispatched worker","detail":"2026-11-19 oox-t: job job-1795100596841-3329102-1 ended timed_out_ceiling, yet its agent still ran /tmp/oox-t/all.sh and mutated verbs/knowledge/report.rs while the re-dispatched oox-t ran in the same worktree; both shared /tmp/oox-t scratch. herding cancel stopped five such orphans. A timeout outcome should stop the agent (or the wave should refuse a re-dispatch while the old job lives).","severity":"P1","layer":"herding","feature":""}
 {"ts":"2026-11-19T16:09:29.668Z","kind":"pbi","event":"status","id":"p-9b2e8ee4","status":"done"}
 {"ts":"2026-11-19T16:09:29.689Z","kind":"pbi","event":"status","id":"p-814029a8","status":"done"}
+{"ts":"2026-11-19T16:17:47.176Z","kind":"pbi","event":"status","id":"p-2858afbb","status":"done"}
+{"ts":"2026-11-19T16:17:47.186Z","kind":"pbi","event":"status","id":"p-5614f047","status":"done"}
+{"ts":"2026-11-19T16:17:47.197Z","kind":"pbi","event":"status","id":"p-7cc2ebe1","status":"done"}
+{"ts":"2026-11-19T16:17:47.208Z","kind":"pbi","event":"status","id":"p-6b237338","status":"done"}
