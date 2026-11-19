@@ -7964,6 +7964,28 @@ mod tests {
     }
 
     #[test]
+    fn run_refuses_at_the_depth_limit_before_any_side_effect() {
+        let tmp = tempfile::tempdir().unwrap();
+        let bee_dir = tmp.path().join(".bee");
+        std::fs::create_dir_all(&bee_dir).unwrap();
+        std::fs::write(bee_dir.join("config.json"), r#"{"herding":{"limits":{"depth":0}}}"#).unwrap();
+        let root = tmp.path().display().to_string();
+        let exit = run(&[
+            "--task", "do the thing",
+            "--job-id", "job-limits-1",
+            "--main-root", &root,
+            "--no-pane",
+            "--dry-run",
+            "--json",
+        ]);
+        assert_eq!(exit, ExitCode::FAILURE, "a depth limit of 0 must refuse a fresh run");
+        assert!(
+            !mailbox::job_path(&bee_dir, "job-limits-1").exists(),
+            "the limits refusal must not write job.json"
+        );
+    }
+
+    #[test]
     fn spawn_failure_closes_the_pane_it_just_split() {
         let tmp = tempfile::tempdir().unwrap();
         let opts = test_options(tmp.path(), false);
