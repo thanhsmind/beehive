@@ -1029,7 +1029,7 @@ fn run_fix_at_close(parsed: ParsedArgs, t0: Instant) -> Option<ExitCode> {
              and title from bee backlog fix-at next."
         ));
     };
-    if group.state == fix_at::GroupState::Closed {
+    if group.state == fix_at::GroupState::Closed && group.guard_cmd().is_some() {
         return refuse(format!(
             "bee {CMD}: the group \"{}\" on {layer} is already Closed. Nothing was written. FIX: bee backlog \
              fix-at verify re-runs its guard; a recurrence reopens it.",
@@ -3262,6 +3262,21 @@ mod tests {
         assert_eq!(close["guard_cmd"], "true");
         assert_eq!(close["red_proof"], "red once");
         assert_eq!(close["commit"], "abc123");
+        let (ok, out) = brief_run(&root, &close_args("true"));
+        assert!(!ok && out.contains("already Closed"), "{out}");
+    }
+
+    #[test]
+    fn backlog_fix_at_close_upgrades_a_guardless_close_to_a_proven_one() {
+        let (_tmp, root, _) = brief_repo();
+        let mut seed = finding_line("2026-01-01T00:00:00.000Z", "strip prefix");
+        seed.push_str(&close_line("2026-01-02T00:00:00.000Z", "strip prefix", "fix-at:check", ""));
+        std::fs::write(root.join(".bee/backlog.jsonl"), &seed).unwrap();
+        let (ok, out) = brief_run(&root, &close_args("true"));
+        assert!(ok, "{out}");
+        let rows = backlog_rows(&root);
+        assert_eq!(rows.last().unwrap()["guard_cmd"], "true");
+        assert_eq!(ledger_of(&root).find("fix-at:check", "strip prefix").unwrap().guard_cmd(), Some("true"));
         let (ok, out) = brief_run(&root, &close_args("true"));
         assert!(!ok && out.contains("already Closed"), "{out}");
     }
