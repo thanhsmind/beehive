@@ -11,9 +11,9 @@
     "uat": false
   },
   "summary": "Feature \"plan-conflicts-and-briefs\" started at phase \"exploring\" (lane).",
-  "next_action": "Continue bee-exploring for \"plan-conflicts-and-briefs\" (lane).",
+  "next_action": "Merged into main at e0f5cb2; capture what settled, then bee close --feature plan-conflicts-and-briefs.",
   "created_at": "2026-11-19T14:52:44.466Z",
-  "run_state": "awaiting-approval",
+  "run_state": null,
   "waiting_on": null,
   "route": {
     "class": "bugfix",
@@ -23,12 +23,5 @@
     "rationale": null,
     "updated_at": "2026-11-19T14:52:37.769Z",
     "feature": "plan-conflicts-and-briefs"
-  },
-  "merge_ready": {
-    "since": "2026-11-19T16:30:56.114Z",
-    "branch": "wt/plan-conflicts-and-briefs",
-    "worktree_id": "beehive--wt--plan-conflicts-and-briefs",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
