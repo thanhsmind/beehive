@@ -1511,26 +1511,26 @@ client}) => ({"tool.execute.before": ...})`, which is the 1.x shape. On
 2.x the loader rejects it, so no bee guard runs at all. A `case "shell"`
 or `case "patch"` in `mapToolCall` would change nothing on 2.x, so this
 cell does not add one. Real 2.x coverage needs a port of the belt to the
-`{id, setup}` API with the `path` field names. That port is follow-up
-work, not this cell.
+`{id, setup}` API with the `path` field names. That port shipped as
+opencode-2x-guard-port: one default export `{id, server, setup}`.
 
 The registry gate (`derive_opencode_tool_registry` in
 `opencode_plugin_contracts.rs`) now reads both `Set` literals. On 2.x it
 never classifies a tool as safe from a `filePath` scan, because 2.x
 tools use `path`. So every unmapped 2.x id must have its own line here:
 
-- `shell` — NAMED GAP on opencode 2.x: the 1.x belt does not load, so this shell tool runs unguarded.
-- `patch` — NAMED GAP on opencode 2.x: the 1.x belt does not load, so this file-writing tool runs unguarded.
-- `subagent` — NAMED GAP on opencode 2.x: the 1.x belt does not load, so model-guard never sees this dispatch.
-- `execute` — NAMED GAP on opencode 2.x: code mode calls other tools from a script, and the 1.x belt does not load.
-- `artifact_create` — NAMED GAP on opencode 2.x (experimental flag): writes a file map to an artifact provider, unguarded.
-- `artifact_update` — NAMED GAP on opencode 2.x (experimental flag): replaces an artifact's file map, unguarded.
-- `schedule_create` — NAMED GAP on opencode 2.x (experimental flag): an `if`/`until` check can run a shell command, unguarded.
+- `shell` — MAPPED on opencode 2.x by opencode-2x-guard-port: the belt's `setup` folds it onto `bash` for write-guard.
+- `patch` — MAPPED on opencode 2.x by opencode-2x-guard-port: the belt's `setup` folds it onto `apply_patch` for write-guard.
+- `subagent` — MAPPED on opencode 2.x by opencode-2x-guard-port: the belt's `setup` folds it onto `task`, so model-guard sees this dispatch.
+- `execute` — NAMED GAP on opencode 2.x: code mode calls other tools from a script, and the belt maps no id for it.
+- `artifact_create` — NAMED GAP on opencode 2.x (experimental flag): writes a file map to an artifact provider, and the belt maps no id for it.
+- `artifact_update` — NAMED GAP on opencode 2.x (experimental flag): replaces an artifact's file map, and the belt maps no id for it.
+- `schedule_create` — NAMED GAP on opencode 2.x (experimental flag): an `if`/`until` check can run a shell command, and the belt maps no id for it.
 - `webfetch` — NAMED EXCLUSION on opencode 2.x: reads a URL, takes no file path and runs no shell.
 - `websearch` — NAMED EXCLUSION on opencode 2.x: runs a web query, takes no file path and runs no shell.
 - `todowrite` — NAMED EXCLUSION on opencode 2.x: edits the session todo list only.
 - `skill` — NAMED EXCLUSION on opencode 2.x: loads a skill by id, takes no file path.
 
 The mapped ids `write`, `edit`, `read`, `grep`, `glob` and `question`
-pass the gate by name only. On 2.x they are uncovered for the same
-reason: the belt does not load.
+pass the gate by name. On 2.x the belt's `setup` reads `path` as
+`filePath` for `write`, `edit` and `read` (opencode-2x-guard-port).
