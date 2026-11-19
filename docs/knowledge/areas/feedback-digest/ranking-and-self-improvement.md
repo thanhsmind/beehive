@@ -156,7 +156,7 @@ A free-text `backlog-closed` row proved nothing, so `bee backlog add` refuses th
 layer and `bee backlog fix-at close` is the only door (mistake-loop-closed D7): it runs the guard command itself and refuses
 on a non-zero exit, which is why the proof is a command and not a sentence. A rejudge group may
 close with `--kept <reason>` and no command; such a close, like a legacy hand close, has no
-`guard_cmd`, so `bee backlog fix-at verify` lists it as unverifiable instead of reopening it. `bee backlog fix-at verify` re-runs every
+`guard_cmd`, so `bee backlog fix-at verify` lists it as unverifiable instead of reopening it; `bee backlog fix-at close` accepts such a guardless Closed group with the same proof flags, and the new close makes it a proven close that verify re-runs, while a close that already carries a `guard_cmd` stays refused (mistake-loop-closed D13). `bee backlog fix-at verify` re-runs every
 closed guard, appends a finding row on a red one (turning the group Recurred through the same
 fold), exits non-zero, and records a `fix-at-upkeep` audit row (mistake-loop-closed D8, D9). `bee backlog fix-at next` orders Recurred, then findings, then age, and `bee backlog fix-at promote` files one `Guard: ` PBI at a
 time so the existing dispatch flow picks it up; session takeup promotes silently when open debt exists and no fix-at PBI is open (mistake-loop-closed D9). `bee upkeep due` gains kind `fix-at`, due when a Closed group exists and no `fix-at-upkeep` audit row is younger than 7 days. Rejected: a
