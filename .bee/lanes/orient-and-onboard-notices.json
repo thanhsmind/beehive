@@ -23,5 +23,12 @@
     "rationale": null,
     "updated_at": "2026-11-19T14:52:28.592Z",
     "feature": "orient-and-onboard-notices"
+  },
+  "merge_ready": {
+    "since": "2026-11-19T16:50:43.802Z",
+    "branch": "wt/orient-and-onboard-notices",
+    "worktree_id": "beehive--wt--orient-and-onboard-notices",
+    "uat": "pending",
+    "blocked_by": []
   }
 }

@@ -2075,3 +2075,7 @@
 {"ts":"2026-11-19T16:23:36.919Z","kind":"pbi","event":"status","id":"p-69bee217","status":"done"}
 {"ts":"2026-11-19T16:23:36.941Z","kind":"pbi","event":"status","id":"p-b9e2a334","status":"done"}
 {"ts":"2026-11-19T16:31:41.905Z","kind":"pbi","event":"add","id":"p-2ce14340","title":"Test bee state plan-conflicts verdict --id a,b end to end so the comma split is guarded","status":"proposed","cos":"A test in packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs runs the verdict verb with --id a,b and asserts two verdict rows; replacing the comma split in run_plan_conflicts_verdict with a single id turns it red. Found by pcx-t, 2026-11-19."}
+{"ts":"2026-11-19T16:36:01.449Z","kind":"pbi","event":"status","id":"p-34ce8a88","status":"done"}
+{"ts":"2026-11-19T16:36:01.459Z","kind":"pbi","event":"status","id":"p-4251c625","status":"done"}
+{"ts":"2026-11-19T16:36:01.468Z","kind":"pbi","event":"status","id":"p-64f29f32","status":"done"}
+{"ts":"2026-11-19T16:36:01.478Z","kind":"pbi","event":"status","id":"p-0b2812f8","status":"done"}
