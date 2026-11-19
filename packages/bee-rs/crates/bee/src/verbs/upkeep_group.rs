@@ -1,5 +1,6 @@
 use crate::audit;
 use crate::jsjson;
+use crate::verbs::fix_at;
 use crate::verbs::knowledge::{
     build_knowledge_used, build_knowledge_wrong, check_bundle, g_prelude_at, pre_json_scan, GPre, ORPHAN, SUSPECT,
 };
@@ -16,11 +17,14 @@ pub(crate) const SUSPECT_LOAD_MIN: usize = 5;
 const PATHS_NAMED: usize = 3;
 const SCHEMA: &str = "bee-upkeep-due/v1";
 const EXIT_DUE: u8 = 10;
+const FIX_AT_RUN: &str = "bee backlog fix-at verify, then bee backlog fix-at promote";
+const FIX_AT_FRESH_SECS: i64 = 7 * 24 * 60 * 60;
 
 #[derive(Clone, Copy, PartialEq)]
 enum Kind {
     Knowledge,
     Verify,
+    FixAt,
 }
 
 impl Kind {
@@ -28,13 +32,22 @@ impl Kind {
         match self {
             Kind::Knowledge => "knowledge",
             Kind::Verify => "verify",
+            Kind::FixAt => "fix-at",
         }
     }
 
-    fn skill(self) -> &'static str {
+    fn skill(self) -> Option<&'static str> {
         match self {
-            Kind::Knowledge => "bee-knowledge-upkeep",
-            Kind::Verify => "bee-verify-upkeep",
+            Kind::Knowledge => Some("bee-knowledge-upkeep"),
+            Kind::Verify => Some("bee-verify-upkeep"),
+            Kind::FixAt => None,
+        }
+    }
+
+    fn invoke(self) -> String {
+        match self.skill() {
+            Some(skill) => format!("/{skill}"),
+            None => FIX_AT_RUN.to_string(),
         }
     }
 
@@ -42,6 +55,7 @@ impl Kind {
         match self {
             Kind::Knowledge => "knowledge-upkeep",
             Kind::Verify => "verify-upkeep",
+            Kind::FixAt => "fix-at-upkeep",
         }
     }
 }
@@ -197,6 +211,20 @@ fn knowledge_signals(root: &Path, last: &Option<LastRun>, reasons: &mut Vec<Entr
     }
 }
 
+fn fix_at_signals(ledger: Option<&fix_at::Ledger>, last: &Option<LastRun>, reasons: &mut Vec<Entry>) {
+    let closed = ledger.map_or(0, |l| l.groups.iter().filter(|g| g.state == fix_at::GroupState::Closed).count());
+    if closed == 0 {
+        return;
+    }
+    let fresh = last
+        .as_ref()
+        .and_then(|run| epoch(&run.at))
+        .is_some_and(|at| chrono::Utc::now().timestamp() - at < FIX_AT_FRESH_SECS);
+    if !fresh {
+        reasons.push(("guards_unverified", format!("{closed} closed guard(s) not re-run in the last 7 days")));
+    }
+}
+
 struct Item {
     kind: Kind,
     present: bool,
@@ -214,7 +242,7 @@ impl Item {
         json!({
             "kind": self.kind.name(),
             "skill": self.kind.skill(),
-            "invoke": format!("/{}", self.kind.skill()),
+            "invoke": self.kind.invoke(),
             "present": self.present,
             "due": self.due(),
             "reasons": entries_json(&self.reasons),
@@ -233,20 +261,24 @@ impl Item {
         let codes: Vec<&str> = self.reasons.iter().map(|(c, _)| *c).collect();
         vec![
             format!("{}: due — {}", self.kind.name(), codes.join(", ")),
-            format!("  run: /{}", self.kind.skill()),
+            format!("  run: {}", self.kind.invoke()),
         ]
     }
 }
 
 fn assess(root: &Path, kind: Kind) -> Item {
     let last = last_run(root, kind);
+    let ledger = (kind == Kind::FixAt).then(|| fix_at::Ledger::load(root)).flatten();
     let present = match kind {
         Kind::Knowledge => root.join("docs").join("knowledge").join("index.md").is_file(),
         Kind::Verify => root.join(".bee").join("verify").join("verify-app").join("SKILL.md").is_file(),
+        Kind::FixAt => ledger.as_ref().is_some_and(|l| !l.groups.is_empty()),
     };
     let mut reasons = Vec::new();
     let mut info = Vec::new();
-    if present {
+    if present && kind == Kind::FixAt {
+        fix_at_signals(ledger.as_ref(), &last, &mut reasons);
+    } else if present {
         release_and_never_run(root, &last, &mut reasons);
         if kind == Kind::Knowledge {
             knowledge_signals(root, &last, &mut reasons, &mut info);
@@ -295,11 +327,15 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
         GPre::Emitted(code) => return Some(code),
     };
     let kinds: Vec<Kind> = match kind_flag.as_deref() {
-        None => vec![Kind::Knowledge, Kind::Verify],
+        None => vec![Kind::Knowledge, Kind::Verify, Kind::FixAt],
         Some("knowledge") => vec![Kind::Knowledge],
         Some("verify") => vec![Kind::Verify],
+        Some("fix-at") => vec![Kind::FixAt],
         Some(other) => {
-            return Some(refuse(json, &format!("upkeep due: unknown --kind \"{other}\" — must be knowledge or verify.")));
+            return Some(refuse(
+                json,
+                &format!("upkeep due: unknown --kind \"{other}\" — must be knowledge, verify or fix-at."),
+            ));
         }
     };
 
@@ -483,7 +519,7 @@ mod tests {
         let tmp = store();
         let (code, _, text) = due(tmp.path(), &["--kind", "vibes"]);
         assert_eq!(code, Some(1), "{text}");
-        assert!(text.contains("knowledge") && text.contains("verify") && text.contains("vibes"), "{text}");
+        assert!(text.contains("knowledge") && text.contains("verify") && text.contains("fix-at") && text.contains("vibes"), "{text}");
     }
 
     #[test]
@@ -511,5 +547,47 @@ mod tests {
         assert_eq!(item(&v, "verify")["present"], true);
         assert!(snapshot(target.path()) == before_target, "the target store changed");
         assert!(snapshot(elsewhere.path()) == before_elsewhere, "the cwd store changed");
+    }
+
+    fn write_ledger(root: &Path, closed: bool) {
+        let finding = r#"{"ts":"2026-01-01T00:00:00.000Z","type":"finding","title":"t","layer":"fix-at:check","feature":"f"}"#;
+        let close = r#"{"ts":"2026-01-02T00:00:00.000Z","type":"backlog-closed","title":"t","layer":"fix-at:check","guard_cmd":"true"}"#;
+        let text = if closed { format!("{finding}\n{close}\n") } else { format!("{finding}\n") };
+        std::fs::write(root.join(".bee/backlog.jsonl"), text).unwrap();
+    }
+
+    #[test]
+    fn upkeep_fix_at_is_absent_without_a_ledger_and_present_but_not_due_without_a_closed_group() {
+        let tmp = store();
+        let (code, v, text) = due(tmp.path(), &["--kind", "fix-at", "--json"]);
+        assert_eq!(code, Some(0), "{text}");
+        assert_eq!(item(&v, "fix-at")["present"], false);
+        write_ledger(tmp.path(), false);
+        let (code, v, text) = due(tmp.path(), &["--kind", "fix-at", "--json"]);
+        assert_eq!(code, Some(0), "{text}");
+        assert_eq!(item(&v, "fix-at")["present"], true);
+        assert_eq!(item(&v, "fix-at")["due"], false);
+    }
+
+    #[test]
+    fn upkeep_fix_at_is_due_for_a_closed_group_until_a_fresh_audit_row_exists() {
+        let tmp = store();
+        write_ledger(tmp.path(), true);
+        let (code, v, text) = due(tmp.path(), &["--json"]);
+        assert_eq!(code, Some(10), "{text}");
+        let i = item(&v, "fix-at");
+        assert_eq!(i["due"], true);
+        assert!(i["skill"].is_null());
+        assert_eq!(i["invoke"], FIX_AT_RUN);
+        let (_, _, plain) = due(tmp.path(), &[]);
+        assert!(plain.contains(&format!("run: {FIX_AT_RUN}")), "{plain}");
+        let stale = (chrono::Utc::now() - chrono::Duration::days(8)).to_rfc3339();
+        log_row(tmp.path(), "fix-at-upkeep", &stale, "clean — old");
+        assert_eq!(due(tmp.path(), &["--kind", "fix-at", "--json"]).0, Some(10));
+        let fresh = (chrono::Utc::now() - chrono::Duration::days(1)).to_rfc3339();
+        log_row(tmp.path(), "fix-at-upkeep", &fresh, "clean — fresh");
+        let (code, v, text) = due(tmp.path(), &["--kind", "fix-at", "--json"]);
+        assert_eq!(code, Some(0), "{text}");
+        assert_eq!(item(&v, "fix-at")["last_run"]["outcome"], "clean");
     }
 }

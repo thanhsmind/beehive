@@ -60,9 +60,11 @@ use crate::verbs::{emit_no_root_error, emit_unsupported_root};
 use serde_json::{Map, Value};
 use std::collections::HashMap;
 use std::ffi::OsString;
+use std::io::Read;
 use std::path::{Path, PathBuf};
-use std::process::ExitCode;
-use std::time::Instant;
+use std::process::{Command, ExitCode, Stdio};
+use std::time::{Duration, Instant};
+use super::fix_at;
 
 const PBI_STATUSES: [&str; 5] = ["proposed", "in-flight", "parked", "done", "declined"];
 const BACKLOG_STATUSES: [&str; 3] = ["proposed", "in-flight", "done"];
@@ -683,6 +685,20 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
                 _ => None,
             }
         }
+        "fix-at" => {
+            let sub = args.get(2)?.to_str()?;
+            let rest = &args[3..];
+            match sub {
+                "close" => run_fix_at_close(
+                    parse_shape(rest, &["layer", "title", "guard", "guard-cmd", "red-proof", "commit", "kept"])?,
+                    t0,
+                ),
+                "verify" => run_fix_at_verify(parse_shape(rest, &[])?, t0),
+                "next" => run_fix_at_next(parse_shape(rest, &[])?, t0),
+                "promote" => run_fix_at_promote(parse_shape(rest, &[])?, t0),
+                _ => None,
+            }
+        }
         "rank" => run_rank(&args[2..], t0),
         "badges" => run_badges(&args[2..], t0),
         "render" => run_render(&args[2..], t0),
@@ -826,6 +842,14 @@ fn add_refusal(parsed: &ParsedArgs) -> Option<String> {
              FIX: {HELP}"
         ));
     }
+    if ty == "backlog-closed" && layer.starts_with("fix-at:") {
+        return Some(
+            "bee backlog add: --type backlog-closed is not accepted on a fix-at layer: a close \
+             needs proof. Nothing was written. FIX: bee backlog fix-at close --layer <layer> \
+             --title <title> --guard <what stops it> --guard-cmd <command> --red-proof <text>."
+                .to_string(),
+        );
+    }
     if !BACKLOG_SEVERITIES.contains(&severity) {
         return Some(format!(
             "bee backlog add: --severity \"{severity}\" is not one of P1|P2|P3. Nothing was \
@@ -909,6 +933,301 @@ fn run_add(parsed: ParsedArgs, queue_submit: bool, t0: Instant) -> Option<ExitCo
         &text,
         t0,
     ))
+}
+
+const GUARD_TIMEOUT: Duration = Duration::from_secs(600);
+const GUARD_PREFIX: &str = "Guard: ";
+const FIX_AT_LAYERS_HELP: &str = "fix-at:check, fix-at:architecture or fix-at:rejudge";
+
+fn drain<R: Read + Send + 'static>(pipe: Option<R>) -> std::thread::JoinHandle<Vec<u8>> {
+    std::thread::spawn(move || {
+        let mut buf = Vec::new();
+        if let Some(mut p) = pipe {
+            let _ = p.read_to_end(&mut buf);
+        }
+        buf
+    })
+}
+
+fn output_tail(text: &str) -> String {
+    let lines: Vec<&str> = text.trim().lines().collect();
+    let joined = lines[lines.len().saturating_sub(8)..].join("\n");
+    let chars: Vec<char> = joined.chars().collect();
+    chars[chars.len().saturating_sub(800)..].iter().collect()
+}
+
+fn run_guard(cmd: &str, cwd: &Path) -> Result<(), String> {
+    let mut child = Command::new("sh")
+        .arg("-c")
+        .arg(cmd)
+        .current_dir(cwd)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|e| format!("could not start: {e}"))?;
+    let out = drain(child.stdout.take());
+    let err = drain(child.stderr.take());
+    let deadline = Instant::now() + GUARD_TIMEOUT;
+    let status = loop {
+        match child.try_wait() {
+            Ok(Some(status)) => break status,
+            Ok(None) if Instant::now() >= deadline => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return Err(format!("timed out after {} s", GUARD_TIMEOUT.as_secs()));
+            }
+            Ok(None) => std::thread::sleep(Duration::from_millis(50)),
+            Err(e) => return Err(format!("could not be waited on: {e}")),
+        }
+    };
+    if status.success() {
+        return Ok(());
+    }
+    let mut text = String::from_utf8_lossy(&out.join().unwrap_or_default()).into_owned();
+    text.push_str(&String::from_utf8_lossy(&err.join().unwrap_or_default()));
+    let code = status.code().map(|c| c.to_string()).unwrap_or_else(|| "a signal".to_string());
+    Err(format!("exited with {code}\n{}", output_tail(&text)))
+}
+
+fn backlog_closed_row(title: &str, layer: &str, feature: &str, guard: &str, guard_cmd: &str, red_proof: &str, commit: &str) -> Map<String, Value> {
+    let mut row = backlog_finding_row("backlog-closed", title, guard, "P3", layer, feature);
+    row.insert("guard".into(), Value::String(guard.to_string()));
+    row.insert("guard_cmd".into(), Value::String(guard_cmd.to_string()));
+    row.insert("red_proof".into(), Value::String(red_proof.to_string()));
+    row.insert("commit".into(), Value::String(commit.to_string()));
+    row
+}
+
+fn run_fix_at_close(parsed: ParsedArgs, t0: Instant) -> Option<ExitCode> {
+    const CMD: &str = "backlog fix-at close";
+    let ctx = match preamble(CMD, parsed.pre_json, t0) {
+        Err(code) => return Some(code),
+        Ok(c) => c?,
+    };
+    let refuse = |msg: String| Some(emit_error(&ctx.root, CMD, parsed.json, &msg, t0));
+    let flag = |name: &str| parsed.flags.get(name).map(|v| v.trim()).unwrap_or("");
+    let layer = flag("layer");
+    let title = flag("title");
+    if layer.is_empty() || title.is_empty() {
+        return refuse(format!(
+            "bee {CMD}: --layer and --title are required. Nothing was written. FIX: name the group, \
+             --layer one of {FIX_AT_LAYERS_HELP} and --title its title."
+        ));
+    }
+    if !fix_at::LAYERS.contains(&layer) {
+        return refuse(format!(
+            "bee {CMD}: --layer \"{layer}\" is not a fix-at layer. Nothing was written. FIX: use {FIX_AT_LAYERS_HELP}."
+        ));
+    }
+    let Some(ledger) = fix_at::Ledger::load(&ctx.root) else {
+        return refuse(format!("bee {CMD}: .bee/backlog.jsonl could not be read. Nothing was written."));
+    };
+    let Some(group) = ledger.find(layer, title) else {
+        return refuse(format!(
+            "bee {CMD}: no fix-at group named \"{title}\" on {layer}. Nothing was written. FIX: copy the layer \
+             and title from bee backlog fix-at next."
+        ));
+    };
+    if group.state == fix_at::GroupState::Closed {
+        return refuse(format!(
+            "bee {CMD}: the group \"{}\" on {layer} is already Closed. Nothing was written. FIX: bee backlog \
+             fix-at verify re-runs its guard; a recurrence reopens it.",
+            group.title
+        ));
+    }
+    let kept = flag("kept");
+    let (guard, guard_cmd, red_proof) = if parsed.flags.contains_key("kept") {
+        if layer != fix_at::REJUDGE {
+            return refuse(format!(
+                "bee {CMD}: --kept only closes a {} group. Nothing was written. FIX: pass --guard, \
+                 --guard-cmd and --red-proof.",
+                fix_at::REJUDGE
+            ));
+        }
+        if kept.is_empty() {
+            return refuse(format!("bee {CMD}: --kept needs the reason the soft label stands. Nothing was written."));
+        }
+        if ["guard", "guard-cmd", "red-proof"].iter().any(|n| parsed.flags.contains_key(*n)) {
+            return refuse(format!(
+                "bee {CMD}: --kept replaces --guard, --guard-cmd and --red-proof; pass one set, not both. Nothing was written."
+            ));
+        }
+        (format!("kept: {kept}"), "", "")
+    } else {
+        let missing: Vec<String> = ["guard", "guard-cmd", "red-proof"]
+            .iter()
+            .filter(|n| flag(n).is_empty())
+            .map(|n| format!("--{n}"))
+            .collect();
+        if !missing.is_empty() {
+            return refuse(format!(
+                "bee {CMD}: {} must not be empty. A close without proof is the free text this verb replaces. \
+                 Nothing was written. FIX: name the guard, the command that runs it and the red proof.",
+                missing.join(", ")
+            ));
+        }
+        (flag("guard").to_string(), flag("guard-cmd"), flag("red-proof"))
+    };
+    if !guard_cmd.is_empty()
+        && let Err(why) = run_guard(guard_cmd, &ctx.docs)
+    {
+        return refuse(format!(
+            "bee {CMD}: --guard-cmd `{guard_cmd}` {why}\nNothing was written. FIX: make the guard pass from the repo root, then re-run."
+        ));
+    }
+    let feature = group.features.first().map(String::as_str).unwrap_or(fix_at::UNATTRIBUTED);
+    let row = backlog_closed_row(&group.title, layer, feature, &guard, guard_cmd, red_proof, flag("commit"));
+    let path = backlog_jsonl_path(&ctx.root);
+    if append_jsonl(&path, &Value::Object(row.clone())).is_err() {
+        return refuse(format!("bee {CMD}: could not write the row to {}.", path.display()));
+    }
+    let text = format!("Closed fix-at group \"{}\" on {layer}: {guard}", group.title);
+    Some(emit_success(&ctx.root, CMD, parsed.json, &ctx.drift, &Value::Object(row), &text, t0))
+}
+
+fn run_fix_at_verify(parsed: ParsedArgs, t0: Instant) -> Option<ExitCode> {
+    const CMD: &str = "backlog fix-at verify";
+    let ctx = match preamble(CMD, parsed.pre_json, t0) {
+        Err(code) => return Some(code),
+        Ok(c) => c?,
+    };
+    let ledger = fix_at::Ledger::load(&ctx.root).unwrap_or_default();
+    let path = backlog_jsonl_path(&ctx.root);
+    let mut green = 0usize;
+    let mut unverifiable: Vec<Value> = Vec::new();
+    let mut red: Vec<Value> = Vec::new();
+    for group in ledger.groups.iter().filter(|g| g.state == fix_at::GroupState::Closed) {
+        let entry = |extra: Option<&str>| {
+            let mut m = Map::new();
+            m.insert("layer".into(), Value::String(group.layer.clone()));
+            m.insert("title".into(), Value::String(group.title.clone()));
+            if let Some(why) = extra {
+                m.insert("detail".into(), Value::String(why.to_string()));
+            }
+            Value::Object(m)
+        };
+        let Some(cmd) = group.guard_cmd() else {
+            unverifiable.push(entry(None));
+            continue;
+        };
+        match run_guard(cmd, &ctx.docs) {
+            Ok(()) => green += 1,
+            Err(why) => {
+                let detail = format!("guard went red: {cmd}");
+                let row = backlog_finding_row("finding", &group.title, &detail, "P3", &group.layer, &group.owner());
+                let _ = append_jsonl(&path, &Value::Object(row));
+                red.push(entry(Some(&why)));
+            }
+        }
+    }
+    let outcome = if red.is_empty() { "clean" } else { "red" };
+    let note = format!(
+        "{outcome} — {green} guard(s) green, {} red, {} unverifiable",
+        red.len(),
+        unverifiable.len()
+    );
+    let _ = crate::audit::append(&ctx.root, "fix-at-upkeep", "upkeep", None, &note, "bee backlog fix-at verify", None);
+    let mut lines = vec![note.clone()];
+    for r in &red {
+        lines.push(format!("  red: {} — {}", r["title"].as_str().unwrap_or(""), r["layer"].as_str().unwrap_or("")));
+    }
+    for u in &unverifiable {
+        lines.push(format!("  unverifiable: {} — {}", u["title"].as_str().unwrap_or(""), u["layer"].as_str().unwrap_or("")));
+    }
+    let mut result = Map::new();
+    result.insert("green".into(), Value::from(green));
+    result.insert("red".into(), Value::Array(red.clone()));
+    result.insert("unverifiable".into(), Value::Array(unverifiable));
+    let code = emit_success(&ctx.root, CMD, parsed.json, &ctx.drift, &Value::Object(result), &lines.join("\n"), t0);
+    Some(if red.is_empty() { code } else { ExitCode::FAILURE })
+}
+
+fn run_fix_at_next(parsed: ParsedArgs, t0: Instant) -> Option<ExitCode> {
+    const CMD: &str = "backlog fix-at next";
+    let ctx = match preamble(CMD, parsed.pre_json, t0) {
+        Err(code) => return Some(code),
+        Ok(c) => c?,
+    };
+    let ledger = fix_at::Ledger::load(&ctx.root).unwrap_or_default();
+    let (group, text) = match ledger.top() {
+        None => (Value::Null, "No open fix-at group.".to_string()),
+        Some(g) => (
+            serde_json::json!({
+                "layer": g.layer,
+                "title": g.title,
+                "state": g.state.name(),
+                "findings": g.findings,
+                "oldest_open_ts": g.oldest_open_ts,
+            }),
+            format!("[{}] {} — {} ({} finding(s))", g.state.name(), g.layer, g.title, g.findings),
+        ),
+    };
+    let mut result = Map::new();
+    result.insert("group".into(), group);
+    Some(emit_success(&ctx.root, CMD, parsed.json, &ctx.drift, &Value::Object(result), &text, t0))
+}
+
+pub(crate) enum Promoted {
+    Filed(Value),
+    Pending(String),
+    NoDebt,
+    Failed(String),
+}
+
+pub(crate) fn promote_guard(root: &Path) -> Promoted {
+    let Some(ledger) = fix_at::Ledger::load(root) else { return Promoted::NoDebt };
+    let Some(top) = ledger.top() else { return Promoted::NoDebt };
+    let fold = fold_pbis(root);
+    let open = fold.order.iter().filter_map(|id| fold.items.get(id)).find(|p| {
+        p.title.starts_with(GUARD_PREFIX) && matches!(p.status.as_str(), "proposed" | "in-flight")
+    });
+    if let Some(p) = open {
+        return Promoted::Pending(format!("{} ({}, {})", p.title, p.id, p.status));
+    }
+    let title = format!("{GUARD_PREFIX}{}", top.title);
+    let cos = format!(
+        "Build the guard that stops this {} {} mistake ({} finding(s)): a lint, helper, test, hook or doctor row. \
+         Close it with: bee backlog fix-at close --layer {} --title \"{}\" --guard <what stops it> \
+         --guard-cmd <command> --red-proof <text>",
+        top.state.name(),
+        top.layer,
+        top.findings,
+        top.layer,
+        top.title
+    );
+    match add_pbi(root, None, &title, &cos, "proposed", None) {
+        PbiAdd::Ok(item) => Promoted::Filed(pbi_value(&item)),
+        PbiAdd::Delegate => Promoted::Failed("the PBI could not be written".to_string()),
+        PbiAdd::Busy(holder) => Promoted::Failed(lock_busy_message(&holder)),
+    }
+}
+
+fn run_fix_at_promote(parsed: ParsedArgs, t0: Instant) -> Option<ExitCode> {
+    const CMD: &str = "backlog fix-at promote";
+    let ctx = match preamble(CMD, parsed.pre_json, t0) {
+        Err(code) => return Some(code),
+        Ok(c) => c?,
+    };
+    match promote_guard(&ctx.root) {
+        Promoted::Filed(item) => {
+            let text = format!("Proposed {}: \"{}\"", item["id"].as_str().unwrap_or(""), item["title"].as_str().unwrap_or(""));
+            Some(emit_success(&ctx.root, CMD, parsed.json, &ctx.drift, &item, &text, t0))
+        }
+        Promoted::Pending(open) => {
+            let msg = format!(
+                "bee {CMD}: the Guard PBI {open} is still proposed or in flight; one at a time. Nothing was written. \
+                 FIX: finish it with bee backlog fix-at close, then promote again."
+            );
+            Some(emit_error(&ctx.root, CMD, parsed.json, &msg, t0))
+        }
+        Promoted::NoDebt => {
+            let mut result = Map::new();
+            result.insert("promoted".into(), Value::Bool(false));
+            Some(emit_success(&ctx.root, CMD, parsed.json, &ctx.drift, &Value::Object(result), "No open fix-at group to promote.", t0))
+        }
+        Promoted::Failed(why) => Some(emit_error(&ctx.root, CMD, parsed.json, &format!("bee {CMD}: {why}."), t0)),
+    }
 }
 
 fn run_propose(parsed: ParsedArgs, t0: Instant) -> Option<ExitCode> {
@@ -2886,5 +3205,130 @@ mod tests {
         let (ok, out) = brief_run(&root, &["backlog", "briefs", "--json"]);
         assert!(ok, "{out}");
         assert_eq!(json_out(&out)["problems"], 0, "{out}");
+    }
+
+    fn finding_line(ts: &str, title: &str) -> String {
+        format!("{{\"ts\":\"{ts}\",\"type\":\"finding\",\"title\":\"{title}\",\"detail\":\"d\",\"severity\":\"P3\",\"layer\":\"fix-at:check\",\"feature\":\"f\"}}\n")
+    }
+
+    fn backlog_rows(root: &Path) -> Vec<Value> {
+        std::fs::read_to_string(root.join(".bee/backlog.jsonl"))
+            .unwrap_or_default()
+            .lines()
+            .map(|l| serde_json::from_str(l).unwrap())
+            .collect()
+    }
+
+    fn close_args(cmd: &str) -> Vec<&str> {
+        vec![
+            "backlog", "fix-at", "close", "--layer", "fix-at:check", "--title", "strip prefix", "--guard", "a rule",
+            "--guard-cmd", cmd, "--red-proof", "red once", "--commit", "abc123",
+        ]
+    }
+
+    #[test]
+    fn backlog_add_refuses_backlog_closed_on_a_fix_at_layer_and_names_the_verb() {
+        let msg = add_refusal(&add_args(&[
+            "--type", "backlog-closed", "--title", "t", "--severity", "P3", "--layer", "fix-at:check",
+        ]))
+        .expect("a refusal");
+        assert!(msg.contains("bee backlog fix-at close"), "{msg}");
+        assert_eq!(
+            add_refusal(&add_args(&["--type", "backlog-closed", "--title", "t", "--severity", "P3", "--layer", "cli"])),
+            None
+        );
+    }
+
+    #[test]
+    fn backlog_fix_at_close_refuses_without_proof_or_on_a_red_guard_and_appends_the_proof_keys() {
+        let (_tmp, root, _) = brief_repo();
+        std::fs::write(root.join(".bee/backlog.jsonl"), finding_line("2026-01-01T00:00:00.000Z", "strip prefix")).unwrap();
+        let before = std::fs::read(root.join(".bee/backlog.jsonl")).unwrap();
+
+        let (ok, out) = brief_run(&root, &["backlog", "fix-at", "close", "--layer", "fix-at:check", "--title", "strip prefix", "--guard", "a rule", "--guard-cmd", "true", "--red-proof", ""]);
+        assert!(!ok && out.contains("--red-proof must not be empty"), "{out}");
+        let (ok, out) = brief_run(&root, &close_args("echo boom-line; exit 3"));
+        assert!(!ok && out.contains("exited with 3") && out.contains("boom-line"), "{out}");
+        let (ok, out) = brief_run(&root, &["backlog", "fix-at", "close", "--layer", "fix-at:check", "--title", "nope", "--guard", "g", "--guard-cmd", "true", "--red-proof", "r"]);
+        assert!(!ok && out.contains("no fix-at group"), "{out}");
+        assert_eq!(std::fs::read(root.join(".bee/backlog.jsonl")).unwrap(), before);
+
+        let (ok, out) = brief_run(&root, &close_args("true"));
+        assert!(ok, "{out}");
+        let rows = backlog_rows(&root);
+        let close = rows.last().unwrap();
+        assert_eq!(close["type"], "backlog-closed");
+        assert_eq!(close["layer"], "fix-at:check");
+        assert_eq!(close["guard_cmd"], "true");
+        assert_eq!(close["red_proof"], "red once");
+        assert_eq!(close["commit"], "abc123");
+        let (ok, out) = brief_run(&root, &close_args("true"));
+        assert!(!ok && out.contains("already Closed"), "{out}");
+    }
+
+    #[test]
+    fn backlog_fix_at_close_keeps_a_rejudge_group_only_with_a_reason() {
+        let (_tmp, root, _) = brief_repo();
+        let row = finding_line("2026-01-01T00:00:00.000Z", "soft label").replace("fix-at:check", "fix-at:rejudge");
+        std::fs::write(root.join(".bee/backlog.jsonl"), row).unwrap();
+        let (ok, out) = brief_run(&root, &["backlog", "fix-at", "close", "--layer", "fix-at:rejudge", "--title", "soft label", "--kept", "doctrine stands"]);
+        assert!(ok, "{out}");
+        assert_eq!(backlog_rows(&root).last().unwrap()["guard_cmd"], "");
+        let (ok, out) = brief_run(&root, &["backlog", "fix-at", "verify"]);
+        assert!(ok && out.contains("unverifiable: soft label"), "{out}");
+    }
+
+    #[test]
+    fn backlog_fix_at_verify_reopens_a_red_guard_as_recurred_and_logs_an_audit_row() {
+        let (_tmp, root, _) = brief_repo();
+        std::fs::write(root.join(".bee/backlog.jsonl"), finding_line("2026-01-01T00:00:00.000Z", "strip prefix")).unwrap();
+        let (ok, out) = brief_run(&root, &close_args("test -f guard.flag"));
+        assert!(!ok, "{out}");
+        std::fs::write(root.join("guard.flag"), "").unwrap();
+        let (ok, out) = brief_run(&root, &close_args("test -f guard.flag"));
+        assert!(ok, "{out}");
+        let (ok, out) = brief_run(&root, &["backlog", "fix-at", "verify"]);
+        assert!(ok && out.contains("clean — 1 guard(s) green"), "{out}");
+        std::fs::remove_file(root.join("guard.flag")).unwrap();
+        let (ok, out) = brief_run(&root, &["backlog", "fix-at", "verify", "--json"]);
+        assert!(!ok, "{out}");
+        let rows = backlog_rows(&root);
+        let reopened = rows.last().unwrap();
+        assert_eq!(reopened["type"], "finding");
+        assert_eq!(reopened["title"], "strip prefix");
+        assert_eq!(reopened["detail"], "guard went red: test -f guard.flag");
+        let ledger = fix_at::Ledger::from_rows(&rows);
+        assert_eq!(ledger.groups[0].state, fix_at::GroupState::Recurred);
+        let audit = std::fs::read_to_string(root.join(".bee/audit.jsonl")).unwrap();
+        let kinds: Vec<Value> = audit.lines().map(|l| serde_json::from_str::<Value>(l).unwrap()["kind"].clone()).collect();
+        assert_eq!(kinds, vec![Value::from("fix-at-upkeep"), Value::from("fix-at-upkeep")]);
+    }
+
+    #[test]
+    fn backlog_fix_at_next_names_the_recurred_group_before_a_bigger_open_one() {
+        let (_tmp, root, _) = brief_repo();
+        let mut rows = finding_line("2026-01-01T00:00:00.000Z", "big open");
+        rows.push_str(&finding_line("2026-01-02T00:00:00.000Z", "big open"));
+        rows.push_str(&finding_line("2026-01-03T00:00:00.000Z", "was closed"));
+        rows.push_str("{\"ts\":\"2026-01-04T00:00:00.000Z\",\"type\":\"backlog-closed\",\"title\":\"was closed\",\"layer\":\"fix-at:check\"}\n");
+        rows.push_str(&finding_line("2026-01-05T00:00:00.000Z", "was closed"));
+        std::fs::write(root.join(".bee/backlog.jsonl"), rows).unwrap();
+        let (ok, out) = brief_run(&root, &["backlog", "fix-at", "next", "--json"]);
+        assert!(ok, "{out}");
+        let group = &json_out(&out)["group"];
+        assert_eq!(group["title"], "was closed", "{out}");
+        assert_eq!(group["state"], "recurred", "{out}");
+    }
+
+    #[test]
+    fn backlog_fix_at_promote_keeps_at_most_one_guard_pbi_open() {
+        let (_tmp, root, _) = brief_repo();
+        std::fs::write(root.join(".bee/backlog.jsonl"), finding_line("2026-01-01T00:00:00.000Z", "strip prefix")).unwrap();
+        let (ok, out) = brief_run(&root, &["backlog", "fix-at", "promote"]);
+        assert!(ok && out.contains("Guard: strip prefix"), "{out}");
+        let (ok, out) = brief_run(&root, &["backlog", "fix-at", "promote"]);
+        assert!(!ok && out.contains("still proposed or in flight"), "{out}");
+        let guards = backlog_rows(&root).iter().filter(|r| r["kind"] == "pbi" && r["title"] == "Guard: strip prefix").count();
+        assert_eq!(guards, 1);
     }
 }

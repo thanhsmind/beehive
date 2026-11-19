@@ -310,6 +310,7 @@ fn run_set(
     // every close, attended or not).
     compose_digests_for_finished_periods(&ctx.root);
     super::fix_at::sweep_unfiled(&ctx.root);
+    super::backlog::promote_guard(&crate::hooks::session_init::control_root_for(&ctx.root));
 
     let mut result = Map::new();
     result.insert("target".into(), Value::String(sink.label()));

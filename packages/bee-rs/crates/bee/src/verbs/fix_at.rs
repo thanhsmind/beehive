@@ -12,14 +12,24 @@ pub(crate) const LAYERS: [&str; 3] = ["fix-at:check", "fix-at:architecture", "fi
 
 const SRC_BACKLOG: &str = ".bee/backlog.jsonl";
 
-const UNATTRIBUTED: &str = "unattributed";
-const REJUDGE: &str = "fix-at:rejudge";
+pub(crate) const UNATTRIBUTED: &str = "unattributed";
+pub(crate) const REJUDGE: &str = "fix-at:rejudge";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum GroupState {
     Open,
     Closed,
     Recurred,
+}
+
+impl GroupState {
+    pub(crate) fn name(self) -> &'static str {
+        match self {
+            GroupState::Open => "open",
+            GroupState::Closed => "closed",
+            GroupState::Recurred => "recurred",
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -142,6 +152,33 @@ impl Ledger {
             .iter()
             .find(|g| g.layer == layer && g.key == key)
             .and_then(|g| g.features.first().cloned())
+    }
+
+    pub(crate) fn find(&self, layer: &str, title: &str) -> Option<&Group> {
+        let key = normalize_title(&Value::String(title.to_string()));
+        self.groups.iter().find(|g| g.layer == layer && g.key == key)
+    }
+
+    pub(crate) fn top(&self) -> Option<&Group> {
+        self.groups.iter().filter(|g| g.state != GroupState::Closed).min_by_key(|g| {
+            (
+                g.state != GroupState::Recurred,
+                std::cmp::Reverse(g.findings),
+                g.oldest_open_ts.clone().unwrap_or_default(),
+            )
+        })
+    }
+}
+
+impl Group {
+    pub(crate) fn owner(&self) -> String {
+        let feature = self.latest_close.as_ref().map(|c| field(c, "feature")).unwrap_or("");
+        if feature.is_empty() { UNATTRIBUTED.to_string() } else { feature.to_string() }
+    }
+
+    pub(crate) fn guard_cmd(&self) -> Option<&str> {
+        let cmd = self.latest_close.as_ref().map(|c| field(c, "guard_cmd").trim())?;
+        (!cmd.is_empty()).then_some(cmd)
     }
 }
 
