@@ -1271,6 +1271,7 @@ fn run_propose(parsed: ParsedArgs, t0: Instant) -> Option<ExitCode> {
     row.insert("cos".into(), Value::String(item.cos.clone()));
     row.insert("feature".into(), Value::String(feature_out.clone()));
     let warning = store_brief(&ctx.docs, &item.id, draft.as_deref(), &mut row);
+    let warning = format!("{warning}{}", cos_warning(&item.cos, &mut row));
     let text = format!("Proposed {}: \"{}\" (feature: {feature_out}){warning}", item.id, item.title);
     Some(emit_success(
         &ctx.root,
@@ -1316,6 +1317,10 @@ fn run_pbi_add(parsed: ParsedArgs, t0: Instant) -> Option<ExitCode> {
         Some(m) => store_brief(&ctx.docs, &item.id, draft.as_deref(), m),
         None => String::new(),
     };
+    let warning = match value.as_object_mut() {
+        Some(m) => format!("{warning}{}", cos_warning(&item.cos, m)),
+        None => warning,
+    };
     let text = format!("Added PBI {}: \"{}\"{warning}", item.id, item.title);
     Some(emit_success(&ctx.root, "backlog pbi add", parsed.json, &ctx.drift, &value, &text, t0))
 }
@@ -1342,6 +1347,34 @@ fn read_brief_draft(
         )));
     }
     Ok(Some(bytes))
+}
+
+fn cos_names_something_checkable(cos: &str) -> bool {
+    if cos.matches('`').count() >= 2 {
+        return true;
+    }
+    cos.split_whitespace().any(|w| {
+        let w = w.trim_matches(|c: char| matches!(c, '(' | ')' | ',' | ';' | '"' | '\'' | '.'));
+        let file_line = w.rsplit_once(':').is_some_and(|(f, n)| {
+            !f.is_empty() && !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()) && f.contains('.')
+        });
+        let path = w.contains('/')
+            && w.rsplit('/').next().is_some_and(|name| {
+                name.rsplit_once('.').is_some_and(|(stem, ext)| {
+                    !stem.is_empty() && !ext.is_empty() && ext.bytes().all(|b| b.is_ascii_alphanumeric())
+                })
+            });
+        file_line || path
+    })
+}
+
+fn cos_warning(cos: &str, out: &mut Map<String, Value>) -> String {
+    if cos_names_something_checkable(cos) {
+        return String::new();
+    }
+    let msg = "cos is not checkable: it names no command, path, or state an agent can evaluate — dispatch skips an item like this";
+    out.insert("cos_warning".into(), Value::String(msg.into()));
+    format!("\nwarning: {msg}")
 }
 
 fn store_brief(root: &Path, id: &str, draft: Option<&[u8]>, out: &mut Map<String, Value>) -> String {
@@ -3123,6 +3156,35 @@ mod tests {
             std::fs::read(root.join("docs/briefs/p-0000abcd.md")).unwrap(),
             std::fs::read(&draft).unwrap()
         );
+    }
+
+    #[test]
+    fn a_vague_cos_warns_on_add_and_propose_and_the_row_is_still_added() {
+        let (_tmp, root, _drafts) = brief_repo();
+        for argv in [
+            vec!["backlog", "pbi", "add", "--title", "t", "--cos", "make the parser better", "--json"],
+            vec!["backlog", "propose", "--story", "s", "--cos", "make it nicer", "--json"],
+        ] {
+            let (ok, out) = brief_run(&root, &argv);
+            assert!(ok, "{out}");
+            assert!(out.contains("cos is not checkable"), "{out}");
+        }
+        let rows = std::fs::read_to_string(backlog_jsonl_path(&root)).unwrap();
+        assert_eq!(rows.lines().count(), 2, "{rows}");
+    }
+
+    #[test]
+    fn a_cos_naming_a_command_or_a_path_prints_no_warning() {
+        let (_tmp, root, _drafts) = brief_repo();
+        for cos in [
+            "`cargo test` passes",
+            "packages/bee-rs/src/main.rs has no unwrap",
+            "see src/lib.rs:42 is gone",
+        ] {
+            let (ok, out) = brief_run(&root, &["backlog", "pbi", "add", "--title", "t", "--cos", cos, "--json"]);
+            assert!(ok, "{out}");
+            assert!(!out.contains("cos is not checkable"), "{cos}: {out}");
+        }
     }
 
     #[test]
