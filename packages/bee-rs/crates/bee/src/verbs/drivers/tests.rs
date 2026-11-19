@@ -9349,6 +9349,46 @@ advance_on — falling to another model there hides the defect (D11)"
         assert!(lint_brief(&diet).is_ok(), "a read diet is a list by nature: {diet}");
     }
 
+    #[test]
+    fn brief_bulleted_sub_question_under_question_is_carried_and_a_bulleted_statement_is_refused() {
+        let ok = shaped_brief("Where does the dossier live?\n\n- Who writes it?\n* 1. Who reads it?");
+        assert!(lint_brief(&ok).is_ok(), "a bullet ending in ? is a sub-question: {ok}");
+
+        let ok = shaped_brief("Where does the dossier live?\n\n1. Who writes it?\n2. Who reads it?");
+        assert!(lint_brief(&ok).is_ok(), "numbered sub-questions are carried: {ok}");
+
+        let r = refusal_of(&shaped_brief("Where does the dossier live?\n\n- Who writes it?\n- keep it in docs/"));
+        assert_eq!(r.get("reason"), Some(&json!("brief_question_enumerates_answers")), "{r}");
+        assert_eq!(r.get("line"), Some(&json!("- keep it in docs/")), "{r}");
+        let fix = r.get("fix").and_then(Value::as_str).unwrap_or_default();
+        assert!(fix.contains("sub-question"), "the refusal names the sub-question rule: {fix}");
+        assert!(fix.contains('?'), "the refusal says a sub-question ends with ?: {fix}");
+    }
+
+    #[test]
+    fn brief_leaning_refusal_names_how_to_rewrite_a_format_constraint() {
+        let brief = shaped_brief("Where does the dossier live?")
+            .replace("The answer stays inside the existing dispatch door.", "We should use digests with file:line anchors.");
+        let r = refusal_of(&brief);
+        assert_eq!(r.get("reason"), Some(&json!("brief_leaning_language")), "{r}");
+        let fix = r.get("fix").and_then(Value::as_str).unwrap_or_default();
+        assert!(
+            fix.contains("Answer as digests with file:line anchors"),
+            "the refusal shows a format constraint written without the stem: {fix}"
+        );
+    }
+
+    #[test]
+    fn brief_section_refusal_names_the_closed_set_and_why_it_is_closed() {
+        let extra = format!("{}\n## Recommendation\n\nUse the second reader.\n", shaped_brief("Where?"));
+        let r = refusal_of(&extra);
+        assert_eq!(r.get("reason"), Some(&json!("brief_section_unexpected")), "{r}");
+        let fix = r.get("fix").and_then(Value::as_str).unwrap_or_default();
+        assert!(fix.contains("Question, Constraints, Read diet, Digest contract"), "{fix}");
+        assert!(fix.contains("closed"), "the refusal says the set is closed: {fix}");
+        assert!(fix.contains("leaning context hides"), "the refusal says why: {fix}");
+    }
+
     /// THE SCOPE PROPERTY, and the highest-risk property of this feature: the
     /// guard reads the BRIEF and nothing else. A false fire on `--purpose` or
     /// `--expertise` would refuse the advisor consult Gate 3 itself requires

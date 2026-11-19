@@ -203,6 +203,33 @@ fn the_json_refusal_carries_a_machine_readable_kind() {
     }
 }
 
+#[test]
+fn the_blind_check_registry_example_is_refused_as_an_unlogged_dispatch() {
+    let p = payload();
+    let example = p["commands"]
+        .as_array()
+        .expect("commands array")
+        .iter()
+        .find(|c| c["name"] == "blind.check")
+        .expect("blind.check is in the registry")["examples"][0]
+        .as_str()
+        .expect("string example")
+        .to_string();
+    let argv = split_example(&example);
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../..");
+    let out = Command::new(binary())
+        .args(&argv[1..])
+        .env_remove("PI_SESSION_ID")
+        .current_dir(&root)
+        .output()
+        .unwrap();
+    assert_ne!(out.status.code(), Some(0), "the registry example must be refused");
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let v: serde_json::Value = serde_json::from_str(stdout.trim())
+        .unwrap_or_else(|e| panic!("blind check did not print JSON: {stdout:?} ({e})"));
+    assert_eq!(v["reason"], "dossier_dispatch_unlogged", "{v}");
+}
+
 /// The two namespaces, end to end against the built binary.
 ///
 /// The porcelain/plumbing split used to be a help FILTER: `bee --help` showed

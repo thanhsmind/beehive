@@ -7,6 +7,13 @@ convergence: the ids are placeholders. It is checked by
 `verbs::blind::tests::the_shipped_example_dossier_passes_this_door`, so the
 shape taught here can never drift from the shape the door accepts.
 
+The registry example runs this file against the real repo and is REFUSED with
+`dossier_dispatch_unlogged`, on purpose: its dispatch_ids are placeholders, so
+no line in .bee/logs/dispatch.jsonl carries them. A checked-in dossier can never
+pass the door, because passing needs a dispatch log written by a real run, and
+a document cannot carry that log. The refusal is asserted by
+`registry_dispatch.rs`.
+
 Two rules the layout carries, both load-bearing:
   * the brief and every proposal ride in FENCED blocks, because a proposal is
     arbitrary prose and may quote a heading — outside a fence, a lane's own
