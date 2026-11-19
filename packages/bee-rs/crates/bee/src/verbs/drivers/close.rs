@@ -425,7 +425,17 @@ fn file_fix_at_rows(root: &Path, feature: &str) -> FixAtRows {
             }
             continue;
         }
-        let detail = format!("{} (from {})", m.better, m.source);
+        let ledger = crate::verbs::fix_at::Ledger::load(root).unwrap_or_default();
+        let filing = crate::verbs::fix_at::alias_title(&ledger, &layer, &title);
+        let title = match &filing {
+            crate::verbs::fix_at::Filing::Skip => {
+                rows.skipped += 1;
+                continue;
+            }
+            crate::verbs::fix_at::Filing::UnderClosed(closed) => closed.clone(),
+            crate::verbs::fix_at::Filing::New => title,
+        };
+        let detail = crate::verbs::fix_at::filing_detail(&m.better, &m.source, &m.wrong, &filing);
         let row = backlog::backlog_finding_row("finding", &title, &detail, "P3", &layer, feature);
         match append_jsonl(&path, &Value::Object(row)) {
             Ok(()) => rows.filed += 1,

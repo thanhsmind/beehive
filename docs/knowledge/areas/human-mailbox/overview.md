@@ -12,7 +12,7 @@ bee:
   sources: [docs/history/human-mailbox/CONTEXT.md (the locked decisions), "docs/history/human-mailbox/plan.md (four phases, strictly ordered)", docs/discovery/human-mailbox/MAP.md (the discovery map and its 14 tickets), "cells hm-1..hm-10 (four slices, merged 2026-08-25/26)"]
   authoritative_for: "human-mailbox: the letter record, when it is filed, and the one command a consumer may call"
   owns.code: [packages/bee-rs/crates/bee/src/verbs/mailbox.rs]
-  anchors: [packages/bee-rs/crates/bee/src/verbs/mailbox.rs, packages/bee-rs/crates/bee/src/verbs/mailbox_digest.rs, packages/bee-rs/crates/bee/src/verbs/work.rs, packages/bee-rs/crates/bee/src/verbs/cells/audit.rs, packages/bee-rs/crates/bee/src/verbs/feedback.rs, packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs, packages/bee-rs/crates/bee/src/verbs/drivers/close.rs, packages/bee-rs/crates/bee/src/verbs/backlog.rs]
+  anchors: [packages/bee-rs/crates/bee/src/verbs/mailbox.rs, packages/bee-rs/crates/bee/src/verbs/mailbox_digest.rs, packages/bee-rs/crates/bee/src/verbs/work.rs, packages/bee-rs/crates/bee/src/verbs/cells/audit.rs, packages/bee-rs/crates/bee/src/verbs/feedback.rs, packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs, packages/bee-rs/crates/bee/src/verbs/drivers/close.rs, packages/bee-rs/crates/bee/src/verbs/backlog.rs, packages/bee-rs/crates/bee/src/verbs/fix_at.rs]
   verified_at: 2026-10-16
   verified_commit: bce76a97d58a512b181a260c6f4a6461148ebd58
 ---
@@ -196,7 +196,21 @@ scheduler being introduced to watch for this.
     `Filed for "<feature>": N fix-at row(s) to .bee/backlog.jsonl (M already
     there) — bee backlog findings --feature <feature> to read them.`, and
     stays silent when there is no news. A backlog that cannot be written
-    warns and never refuses the close.
+    warns and never refuses the close. Wording drift is caught on both
+    filing paths (MLC D5): a mistake whose first four normalized words match
+    a group in the same layer is skipped when that group is Open or
+    Recurred, and files under the Closed group's exact title (original
+    wording kept in the detail) so the group turns Recurred. Session
+    takeup runs `fix_at::sweep_unfiled` after the digest pass, through the
+    control root (MLC D3, D4): it files a check or architecture reflection
+    no close ever saw under the feature `unattributed` (only when the entry
+    is newer than the group's latest close), and files one
+    `fix-at:rejudge` row when a doctrine or none key appears in two runs
+    newer than that key's latest close with no open fix-at group of any
+    layer on it. A rejudge group closed with `--kept` therefore holds until
+    two newer runs repeat the key. Find the rules in `fix_at.rs`
+    (`alias_title`, `sweep_unfiled`); the sweep is idempotent through the
+    ledger and fails open.
 18. **The clean-run answer is excluded structurally, never by its wording**
     (RBL D2/D3). It is the one mistakes-answer entry that carries no
     `better`, and that absence is what keeps it out of the miner — the same
