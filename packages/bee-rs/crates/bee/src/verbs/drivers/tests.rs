@@ -10842,9 +10842,9 @@ advance_on — falling to another model there hides the defect (D11)"
             "worker-details.md never names the {ADVISOR_NUDGE_KIND:?} record that triggers the consult"
         );
 
-        // Only the three poor-work signals earn a nudge; the other four are
+        // Only the poor-work signals earn a nudge; the other four are
         // observations, and the prose must not advertise them as triggers.
-        for signal in ["struggling-loop", "budget-overrun", "same-region-resubmit"] {
+        for signal in ["struggling-loop", "same-region-resubmit"] {
             assert!(
                 KNOWN_SIGNALS.contains(&signal),
                 "{signal:?} is documented as a nudge trigger but is not a signal the verb knows"

@@ -290,9 +290,9 @@ pub(crate) fn needs_human_decision(kind: &str) -> bool {
     HUMAN_DECISION_KINDS.contains(&kind)
 }
 
-/// The poor-work vocabulary. `budget-overrun` and `same-region-resubmit` are
-/// the two 3cfd9980 names beside `struggling-loop`; the telemetry that
-/// produces them landed with a8f4b8ab, so the word is what was missing.
+/// The poor-work vocabulary. `same-region-resubmit` is the 3cfd9980 name
+/// beside `struggling-loop`; the telemetry that produces it landed with
+/// a8f4b8ab, so the word is what was missing.
 ///
 /// `dead-lead` is the one signal the tick does not infer from a pane: it reads
 /// `bee status --json` → `recovery.candidates`, which the recovery sweep
@@ -300,11 +300,10 @@ pub(crate) fn needs_human_decision(kind: &str) -> bool {
 /// starts a successor — the note it writes carries the facts and a resume line,
 /// and the human's keystroke is the spawn. The automatic half of the ported
 /// idea was refused at its plan check (`docs/history/slp-lead-recovery/`).
-pub(crate) const KNOWN_SIGNALS: [&str; 11] = [
+pub(crate) const KNOWN_SIGNALS: [&str; 10] = [
     "struggling-loop",
     "big-decision",
     "danger-op",
-    "budget-overrun",
     "same-region-resubmit",
     "dead-lead",
     "self-correction",
@@ -314,11 +313,10 @@ pub(crate) const KNOWN_SIGNALS: [&str; 11] = [
     "none",
 ];
 
-pub(crate) const INTERVENTION_SIGNALS: [&str; 12] = [
+pub(crate) const INTERVENTION_SIGNALS: [&str; 11] = [
     "struggling-loop",
     "big-decision",
     "danger-op",
-    "budget-overrun",
     "same-region-resubmit",
     "dead-lead",
     "self-correction",
@@ -2597,14 +2595,6 @@ fn notify_report(control: &Path, rep: &WakeReport) -> Option<Vec<String>> {
 // catch. Every counter therefore carries its SAMPLE COUNT too, so a band
 // verdict on 2 samples never reads like one on 200.
 //
-// SKIP-UNTIL-PRESENT (decision ea02cb68). a8f4b8ab's "work exceeding 2× its
-// recorded estimate" needs an estimate, and bee's cell schema carries none —
-// whoever would fill the field is the agent, and a self-reported estimate is
-// the one input a8f4b8ab forbids. So the overrun counter READS the field and
-// reports the literal state `no estimate recorded` where it is absent. Never
-// zero, never a guess: a gap that is named can be closed, a gap rendered as
-// zero cannot.
-//
 // The verb:
 //   supervisor metrics [--window <id>] [--json]
 //
@@ -2660,26 +2650,12 @@ const BAND_STREAK_LOW: f64 = 40.0;
 /// permission for this code to take.
 const BAND_STREAK_HIGH: f64 = 60.0;
 
-/// Overrun rate, LOW. Zero cells past 2× their estimate is the good end.
-const BAND_OVERRUN_LOW: f64 = 0.0;
-/// Overrun rate, HIGH. Zero as well: a8f4b8ab makes ONE piece of work past
-/// twice its estimate the signal, so any overrun at all is out of band.
-const BAND_OVERRUN_HIGH: f64 = 0.0;
-
 /// Same-region repeat, LOW. Zero repeats is the good end.
 const BAND_SAME_REGION_LOW: f64 = 0.0;
 /// Same-region repeat, HIGH. Zero as well: a8f4b8ab makes TWO consecutive
 /// submissions in the same region the signal, so the first such pair is
 /// already out of band.
 const BAND_SAME_REGION_HIGH: f64 = 0.0;
-
-/// a8f4b8ab's multiplier: work past TWICE its recorded estimate is the signal.
-const OVERRUN_FACTOR: f64 = 2.0;
-
-/// The estimate field the overrun counter reads. NOTHING in bee writes it
-/// today and this cell adds nothing that does (ea02cb68): the field is named
-/// here so the counter can say precisely what it is missing.
-const ESTIMATE_FIELD: &str = "estimate_minutes";
 
 /// Auto-proceeded asks, LOW — and the HIGH bound is the same number. Zero is
 /// both ends on purpose: silence-is-consent is an opt-in exception (c706053e),
@@ -2689,12 +2665,9 @@ const BAND_AUTO_PROCEEDED_LOW: f64 = 0.0;
 /// Auto-proceeded asks, HIGH. See the low bound — deliberately identical.
 const BAND_AUTO_PROCEEDED_HIGH: f64 = 0.0;
 
-/// The literal state ea02cb68 asks for where a cell records no estimate.
-const NO_ESTIMATE_STATE: &str = "no estimate recorded";
-
 /// The literal state where no ask ever queued behind the window. An empty pool
 /// is not "zero went ahead without you" — it is nothing to count, and the same
-/// first-class `not-measurable` rule the seven counters beside it obey.
+/// first-class `not-measurable` rule the six counters beside it obey.
 const NO_QUEUED_ASK_STATE: &str = "no queued asks in this window";
 
 /// The report's metrics line when every counter is healthy.
@@ -2753,9 +2726,8 @@ pub(crate) struct Counter {
     pub(crate) low: f64,
     pub(crate) high: f64,
     pub(crate) verdict: Verdict,
-    /// The named literal state when there is no usable input — today only
-    /// `no estimate recorded` (ea02cb68). `None` means the ordinary
-    /// no-samples case, which the sample count already explains.
+    /// The named literal state when there is no usable input. `None` means
+    /// the ordinary no-samples case, which the sample count already explains.
     pub(crate) state: Option<&'static str>,
 }
 
@@ -2979,26 +2951,8 @@ fn files_changed_set(cell: &Value) -> Vec<String> {
     files
 }
 
-/// The estimate a cell WOULD record. Nothing writes this field (ea02cb68), so
-/// this read is the skip-until-present half of a8f4b8ab and returns `None`
-/// for every cell bee writes today — on purpose.
-fn cell_estimate_minutes(cell: &Value) -> Option<f64> {
-    cell.get(ESTIMATE_FIELD)
-        .or_else(|| cell.get("trace").and_then(|t| t.get(ESTIMATE_FIELD)))
-        .and_then(Value::as_f64)
-        .filter(|m| m.is_finite() && *m > 0.0)
-}
-
 fn parse_iso_ms(iso: &str) -> Option<f64> {
     rsv::date_parse_val(Some(&Value::String(iso.to_string()))).ok().flatten()
-}
-
-/// How long the cell actually took, measured by the harness from the two
-/// stamps the store already holds — never from anything a worker said.
-fn cell_elapsed_minutes(cell: &Value) -> Option<f64> {
-    let from = parse_iso_ms(trace_str(cell, "claimed_at")?)?;
-    let to = parse_iso_ms(trace_str(cell, "capped_at")?)?;
-    (to >= from).then_some((to - from) / 60_000.0)
 }
 
 /// Every `(superseded id, date of the event that retired it)` pair in the
@@ -3173,30 +3127,7 @@ pub(crate) fn health_metrics(control: &Path, win: &PresenceWindow) -> HealthMetr
         None,
     );
 
-    // (6) Overrun — 2× the recorded estimate (a8f4b8ab), SKIP-UNTIL-PRESENT
-    // (ea02cb68). Only a cell that ALREADY records an estimate is a sample, so
-    // today this counter is not measurable and says exactly why.
-    let estimated: Vec<&&Value> =
-        capped.iter().filter(|c| cell_estimate_minutes(c).is_some()).collect();
-    let overran = estimated
-        .iter()
-        .filter(|c| match (cell_estimate_minutes(c), cell_elapsed_minutes(c)) {
-            (Some(estimate), Some(actual)) => actual > OVERRUN_FACTOR * estimate,
-            _ => false,
-        })
-        .count();
-    let c_overrun = counter(
-        "overrun-2x-estimate",
-        "overrun",
-        Unit::Rate,
-        BAND_OVERRUN_LOW,
-        BAND_OVERRUN_HIGH,
-        (!estimated.is_empty()).then(|| overran as f64 / estimated.len() as f64),
-        estimated.len(),
-        Some(NO_ESTIMATE_STATE),
-    );
-
-    // (7) Same-region repeat — consecutive capped cells whose recorded
+    // (6) Same-region repeat — consecutive capped cells whose recorded
     // `files_changed` sets are identical. That is the derivable form of
     // a8f4b8ab's "two submissions differing only in the same region": bee holds
     // the region each cap touched, and two caps over the same region in a row
@@ -3216,11 +3147,11 @@ pub(crate) fn health_metrics(control: &Path, win: &PresenceWindow) -> HealthMetr
         None,
     );
 
-    // (8) Auto-proceeded without you (c706053e). The POOL is every ask that
+    // (7) Auto-proceeded without you (c706053e). The POOL is every ask that
     // queued behind this window; the value is how many of them the consent
     // sweep proceeded inside it. An empty pool is not-measurable and says so —
     // rendering "0 went ahead" over a window where nothing could have is the
-    // same comforting lie the seven counters above already refuse.
+    // same comforting lie the six counters above already refuse.
     let pool: Vec<&Intervention> = mailbox.rows.iter().filter(|r| queued_behind(r, win)).collect();
     let auto_proceeded = pool.iter().filter(|r| auto_proceeded_in(r, win)).count();
     let c_auto_proceeded = counter(
@@ -3242,7 +3173,6 @@ pub(crate) fn health_metrics(control: &Path, win: &PresenceWindow) -> HealthMetr
             c_assumptions,
             c_self_answered,
             c_streak,
-            c_overrun,
             c_same_region,
             c_auto_proceeded,
         ],
@@ -3251,7 +3181,7 @@ pub(crate) fn health_metrics(control: &Path, win: &PresenceWindow) -> HealthMetr
 
 /// The REPORT's half of the counter set: exactly ONE line (66c4c251). It lists
 /// only what is worth saying — every counter that is out of band or not
-/// measurable — and says `metrics in band` when all seven are healthy. An
+/// measurable — and says `metrics in band` when all six are healthy. An
 /// `in-band` counter is deliberately unnamed here: the ten-line ceiling is the
 /// whole budget, and `bee supervisor metrics` is the full surface.
 pub(crate) fn metrics_report_line(m: &HealthMetrics) -> String {
@@ -3272,16 +3202,15 @@ pub(crate) fn metrics_report_line(m: &HealthMetrics) -> String {
         .copied()
         .filter(|c| c.verdict == Verdict::NotMeasurable)
         .collect();
-    // A counter carrying a NAMED state (`no estimate recorded`) says more than
+    // A counter carrying a NAMED state says more than
     // a bare label, so it leads the list: this line is clipped to one readable
     // width, and what is clipped away must be the least informative end of it.
     unmeasured.sort_by_key(|c| c.state.is_none());
-    // The whole set silent: say that once, plainly, instead of listing seven
-    // names — and still name the one state ea02cb68 asks for in its own words.
+    // The whole set silent: say that once, plainly, instead of listing them all
+    // names.
     if flagged.is_empty() && unmeasured.len() == m.counters.len() {
         return clip(
-            "- metrics: not measurable — no cells, observations or decisions in this window; \
-             overrun: no estimate recorded",
+            "- metrics: not measurable — no cells, observations or decisions in this window",
         );
     }
     let mut parts: Vec<String> = flagged.iter().map(|c| c.short()).collect();
@@ -4302,7 +4231,7 @@ mod tests {
         let cmd = "supervisor record";
         let q = Some("Would an advisor read help here?");
 
-        for signal in ["budget-overrun", "same-region-resubmit"] {
+        for signal in ["same-region-resubmit"] {
             assert!(KNOWN_SIGNALS.contains(&signal), "{signal} must be a known signal");
             record_intervention_into(
                 control, cmd, "advisor-nudge", Some(signal), Some("sess-1"), Some(signal), q, None, None,
@@ -5780,8 +5709,8 @@ mod tests {
         // Nothing outside the window leaked in.
         let json = m.to_value();
         assert_eq!(json["window"]["id"], "w-fixed");
-        // Seven counters from sup-10 plus the auto-proceed count sup-11 adds.
-        assert_eq!(json["counters"].as_array().unwrap().len(), 8);
+        // Six counters from sup-10 plus the auto-proceed count sup-11 adds.
+        assert_eq!(json["counters"].as_array().unwrap().len(), 7);
     }
 
     #[test]
@@ -5829,7 +5758,7 @@ mod tests {
     fn a_zero_sample_counter_reports_not_measurable_never_in_band() {
         let tmp = tempfile::tempdir().unwrap();
         let m = health_metrics(tmp.path(), &fixed_window());
-        assert_eq!(m.counters.len(), 8);
+        assert_eq!(m.counters.len(), 7);
         for c in &m.counters {
             assert_eq!(c.samples, 0, "{} had no records to read", c.name);
             assert_eq!(c.verdict, Verdict::NotMeasurable, "{}", c.name);
@@ -5838,7 +5767,7 @@ mod tests {
         }
         let json = m.to_value();
         assert_eq!(json["out_of_band"].as_array().unwrap().len(), 0);
-        assert_eq!(json["not_measurable"].as_array().unwrap().len(), 8);
+        assert_eq!(json["not_measurable"].as_array().unwrap().len(), 7);
         for c in json["counters"].as_array().unwrap() {
             assert_eq!(c["value"], Value::Null, "{c}");
             assert_ne!(c["verdict"], "in-band", "silence is never rendered as health: {c}");
@@ -5848,61 +5777,6 @@ mod tests {
         assert_ne!(line, METRICS_IN_BAND_LINE, "nothing measured is not 'in band'");
         assert!(line.contains("not measurable"), "{line}");
         assert!(line.chars().count() <= MAX_ITEM_CHARS, "still one readable line: {line}");
-    }
-
-    #[test]
-    fn a_cell_with_no_recorded_estimate_reports_the_literal_state() {
-        let tmp = tempfile::tempdir().unwrap();
-        let control = tmp.path();
-        let win = fixed_window();
-        // A capped cell exactly as bee writes one today: no estimate anywhere.
-        plant_capped(control, "c1", &at(1), &at(2), &["a.rs"]);
-
-        let overrun = counter_named(&health_metrics(control, &win), "overrun-2x-estimate").clone();
-        assert_eq!(overrun.verdict, Verdict::NotMeasurable);
-        assert_eq!(overrun.value, None, "never zero and never a guess");
-        assert_eq!(overrun.samples, 0, "a cell with no estimate is not a sample");
-        assert_eq!(overrun.state, Some(NO_ESTIMATE_STATE));
-        assert!(overrun.line().contains("no estimate recorded"), "{}", overrun.line());
-        assert!(
-            metrics_report_line(&health_metrics(control, &win)).contains("no estimate recorded"),
-            "the report says the words too"
-        );
-
-        // And the counter is real: give a cell an estimate and it measures.
-        let over = tempfile::tempdir().unwrap();
-        plant_cell(
-            over.path(),
-            "c1",
-            "capped",
-            json!({
-                "claimed_at": at(1),
-                "capped_at": at(2),          // sixty minutes of work
-                "files_changed": ["a.rs"],
-                ESTIMATE_FIELD: 10,          // against a ten-minute estimate
-            }),
-        );
-        let measured = counter_named(&health_metrics(over.path(), &win), "overrun-2x-estimate").clone();
-        assert_eq!(measured.samples, 1);
-        assert_eq!(measured.value, Some(1.0), "six times the estimate is past 2x");
-        assert_eq!(measured.verdict, Verdict::AboveBand);
-        assert_eq!(measured.state, None, "a measurable counter carries no literal state");
-
-        let under = tempfile::tempdir().unwrap();
-        plant_cell(
-            under.path(),
-            "c1",
-            "capped",
-            json!({
-                "claimed_at": at(1),
-                "capped_at": at(2),
-                "files_changed": ["a.rs"],
-                ESTIMATE_FIELD: 240,
-            }),
-        );
-        let ok = counter_named(&health_metrics(under.path(), &win), "overrun-2x-estimate").clone();
-        assert_eq!(ok.value, Some(0.0));
-        assert_eq!(ok.verdict, Verdict::InBand);
     }
 
     #[test]

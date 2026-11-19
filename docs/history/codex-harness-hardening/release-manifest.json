@@ -142,7 +142,7 @@
     },
     {
       "path": ".claude-plugin/skills/.bee-render.json",
-      "sha256": "f73d190b5c07418f5e13cfc0974e30fba77f42c99d90722b597dec04d36e8f5c",
+      "sha256": "e7703cbd6eeab3766f4ea4ca3fe96ae52cf91a20f3d28720835988a5a1d33b72",
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/.bee-render.json"
@@ -478,7 +478,7 @@
     },
     {
       "path": ".claude-plugin/skills/bee-herding/references/supervisor-prompt.md",
-      "sha256": "47d08b707351d66d008be20780c918551b4302be0b875531a0ccc88151c080dd",
+      "sha256": "f120bbe5fae52a149f617ec0710d1a0859ea3658773d2de5d1820d39bceb8a34",
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/bee-herding/references/supervisor-prompt.md"
@@ -1878,7 +1878,7 @@
     },
     {
       "path": ".codex-plugin/skills/.bee-render.json",
-      "sha256": "a407c5a4de4107bbcd24e47d00aaefb10633c4a7ddd9064406d619efa278aa05",
+      "sha256": "90961be34ad209d61c277b8d02603f3ce483d7f51099f30696bdeafdfdd9bdfe",
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/.bee-render.json"
@@ -2214,7 +2214,7 @@
     },
     {
       "path": ".codex-plugin/skills/bee-herding/references/supervisor-prompt.md",
-      "sha256": "47d08b707351d66d008be20780c918551b4302be0b875531a0ccc88151c080dd",
+      "sha256": "f120bbe5fae52a149f617ec0710d1a0859ea3658773d2de5d1820d39bceb8a34",
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/bee-herding/references/supervisor-prompt.md"
@@ -5455,7 +5455,7 @@
     },
     {
       "path": "skills/bee-herding/references/supervisor-prompt.md",
-      "sha256": "47d08b707351d66d008be20780c918551b4302be0b875531a0ccc88151c080dd",
+      "sha256": "f120bbe5fae52a149f617ec0710d1a0859ea3658773d2de5d1820d39bceb8a34",
       "mode": "644",
       "role": "plugin_skill",
       "packagePath": "skills/bee-herding/references/supervisor-prompt.md"
