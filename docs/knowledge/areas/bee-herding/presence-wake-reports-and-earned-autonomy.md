@@ -89,10 +89,9 @@ Two counters carry rules worth stating outright:
   cells blocked in the window. A cell swept into blocked has no claim stamp at
   all, so blocked-over-claimed can exceed one — a "rate" above 100% is a broken
   denominator, not a bad week.
-- The **2x-estimate** counter is **skip-until-present** (ea02cb68). Cells carry
-  no estimate field and bee adds none for this. The counter computes overrun
-  only where an estimate already exists and otherwise reports the literal state
-  *no estimate recorded* — never a zero, which would read as "nothing overran".
+- The **2x-estimate** counter and its `budget-overrun` signal were removed
+  (dispatch-ledger-retire D5): cells carry no estimate field, so neither could
+  ever fire. A later estimate input is a new PBI.
 
 ## Silence-is-consent fails closed
 

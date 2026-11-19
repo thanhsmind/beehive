@@ -68,8 +68,11 @@ From two cells up, state the one-line concurrency plan before dispatching.
    (`bee cells escalate --id <id>`; rubric:
    `references/swarming-reference.md`).
 3. Spawn with exactly that payload — a whole wave goes out in ONE message,
-   one tool call per cell. Never paste session history; never hand a
-   worker two cells.
+   one tool call per cell. A herding payload carries `transport_ready` and
+   `transport_reason`: read them before you spawn. The payload's `fallback`
+   model applies only when it says `transport_ready: false`; `bee herding
+   status` reports the calling session's own pane, never worker availability.
+   Never paste session history; never hand a worker two cells.
 4. Tend: learn a running worker's progress only from
    `bee herding status --job <id>` — one line — and never read a worker's
    transcript, pane log, log.txt or activity stream for progress. Read each worker's Result form
