@@ -3607,7 +3607,7 @@
     },
     {
       "path": ".opencode/plugins/bee-guard.ts",
-      "sha256": "4dc537fb90ade83a5762c8c3d70c3b1bcc01ed4d9f74d178c0a8eacb25163be8",
+      "sha256": "1b8d6191c4d644cd69fe99d8f5001e51d37cd14c33febf4e48fff1e2926890aa",
       "mode": "644",
       "role": "opencode_plugin",
       "packagePath": ".opencode/plugins/bee-guard.ts"

@@ -289,6 +289,19 @@ recovery.
   `{id, effect}` or `{id, setup}`, so it does not load the 1.x belt at all
   (opencode-2x-tool-ids, oc2x-1).
 
+- R43 — `.opencode/plugins/bee-guard.ts` default-exports ONE object
+  `{id, server, setup}`. opencode 1.18 calls `server` and logs an ERROR for
+  an object without it; opencode 2.2 calls `setup` and logs a WARN for a
+  1.x function export. Probed 2026-11-19: neither runtime fails to start,
+  and a three-key object loads on both. So one file, one rule core: the 2.x
+  `setup` subscribes `api.tool.hook("execute.before")`, folds `shell`,
+  `patch`, `subagent` onto `bash`, `apply_patch`, `task` and `path` onto
+  `filePath` for write, edit and read, then calls the same `mapToolCall`
+  and `runBlockingHook`. A rejected option was a second 2.x file: it would
+  need its own onboard install entry and a shared module opencode does not
+  load. The coverage gate counts the alias ids as mapped. Advisory hooks
+  stay 1.x only on 2.x (opencode-2x-guard-port oc2-1).
+
 ## Edge Cases Settled
 
 - Explicitly disabling checkpoints produces no project lifecycle execution;
@@ -307,12 +320,6 @@ recovery.
 
 ## Open Gaps
 
-- OpenCode 2.x runs with no bee guard. Its plugin loader rejects the 1.x
-  shape of `.opencode/plugins/bee-guard.ts`, hands hook arguments in
-  `input`, and names the file argument `path`, not `filePath`. CI still
-  pins `opencode-ai@1.18.16`, so CI does not see this gap. The fix is a
-  port of the belt to the 2.x `{id, setup}` plugin API (opencode-2x-tool-ids,
-  oc2x-1; backlog p-627c4c0f).
 - The pre-spawn dispatch guard's explicit-model-choice check still only
   recognizes the models configured for Claude Code and Codex. OpenCode's
   own dispatch tool carries no model argument at all today, so this gap has

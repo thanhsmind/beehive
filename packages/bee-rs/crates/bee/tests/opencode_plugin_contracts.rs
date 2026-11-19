@@ -460,6 +460,19 @@ fn opencode_tool_hook_pairs() -> Vec<(String, String)> {
     pairs
 }
 
+fn two_x_alias_ids() -> BTreeSet<String> {
+    let start = PLUGIN_SOURCE
+        .find("const TOOL_ID_2X")
+        .expect("bee-guard.ts: TOOL_ID_2X not found — has the 2.x alias table been renamed?");
+    let line = PLUGIN_SOURCE[start..].lines().next().unwrap();
+    let body = &line[line.find('{').unwrap() + 1..line.rfind('}').unwrap()];
+    body.split(',')
+        .filter_map(|pair| pair.split(':').next())
+        .map(|id| id.trim().to_string())
+        .filter(|id| !id.is_empty())
+        .collect()
+}
+
 /// Parses every `runAdvisoryHook(directory, "<name>", ...)` call site —
 /// the ADVISORY hooks the plugin actually wires (session-init,
 /// prompt-context, state-sync, session-close, tools-logger today).
@@ -715,9 +728,15 @@ const payload = JSON.parse(await readStdin());
 const mod = await import(pathToFileURL(pluginPath).href);
 const toasts = [];
 const client = { tui: { showToast: async (arg) => { toasts.push(arg); return true; } } };
-const hooks = await mod.default({ directory, worktree: directory, client, $: {}, project: {}, app: {} });
-
-const fn = hooks[surface];
+let fn;
+if (surface === "2x.execute.before") {
+  let registered;
+  await mod.default.setup({ location: { directory }, tool: { hook: (name, handler) => { if (name === "execute.before") registered = handler; return () => {}; } } });
+  fn = registered;
+} else {
+  const hooks = await mod.default.server({ directory, worktree: directory, client, $: {}, project: {}, app: {} });
+  fn = hooks[surface];
+}
 if (typeof fn !== "function") {
   console.log(JSON.stringify({ threw: false, message: null, output: null, note: `surface ${surface} not registered` }));
   process.exit(0);
@@ -730,6 +749,10 @@ try {
     const output = { parts: [], message: { id: payload.messageID ?? "msg1" } };
     await fn(input, output);
     result = { threw: false, message: null, output };
+  } else if (surface === "2x.execute.before") {
+    const input = payload.args ?? {};
+    await fn({ tool: payload.tool, sessionID: payload.sessionID ?? "sess1", agent: "build", messageID: "msg1", id: "call1", input });
+    result = { threw: false, message: null, output: { args: input } };
   } else if (surface === "event") {
     const input = { event: payload.event };
     await fn(input);
@@ -1150,6 +1173,159 @@ fn every_blocking_mapped_row_denies_allows_crashes_and_reports_a_missing_binary(
         "one or more BLOCKING mapped rows failed their deny/allow/crash/missing fixtures:\n{}",
         failures.join("\n")
     );
+}
+
+fn two_x_call_fixture(tool: &str) -> (Value, Value, &'static str, &'static str) {
+    match tool {
+        "write" => (
+            json!({"path": "/tmp/oc-fixture/target.txt", "content": "hello"}),
+            json!({"file_path": "/tmp/oc-fixture/target.txt", "content": "hello"}),
+            "Write",
+            "write-guard",
+        ),
+        "edit" => (
+            json!({"path": "/tmp/oc-fixture/target.txt", "oldString": "a", "newString": "b"}),
+            json!({"file_path": "/tmp/oc-fixture/target.txt", "old_string": "a", "new_string": "b"}),
+            "Edit",
+            "write-guard",
+        ),
+        "shell" => (json!({"command": "ls -la /tmp"}), json!({"command": "ls -la /tmp"}), "Bash", "write-guard"),
+        "patch" => (
+            json!({"patchText": "*** Begin Patch\n*** Add File: x.txt\n+hi\n*** End Patch"}),
+            json!({"patch": "*** Begin Patch\n*** Add File: x.txt\n+hi\n*** End Patch"}),
+            "apply_patch",
+            "write-guard",
+        ),
+        "read" => (
+            json!({"path": "/tmp/oc-fixture/target.txt", "offset": 5, "limit": 100}),
+            json!({"file_path": "/tmp/oc-fixture/target.txt", "offset": 5, "limit": 100}),
+            "Read",
+            "write-guard",
+        ),
+        "grep" => (
+            json!({"path": "/tmp/oc-fixture", "pattern": "needle", "include": "*.rs"}),
+            json!({"path": "/tmp/oc-fixture", "pattern": "needle", "include": "*.rs"}),
+            "Grep",
+            "write-guard",
+        ),
+        "glob" => (
+            json!({"path": "/tmp/oc-fixture", "pattern": "*.rs"}),
+            json!({"path": "/tmp/oc-fixture", "pattern": "*.rs"}),
+            "Glob",
+            "write-guard",
+        ),
+        "question" => {
+            let q = json!({
+                "questions": [{
+                    "question": "Pick one",
+                    "header": "Choice",
+                    "options": [{"label": "A", "description": "desc a"}],
+                    "multiple": false,
+                }]
+            });
+            (q.clone(), q, "AskUserQuestion", "write-guard")
+        }
+        "subagent" => {
+            let t = json!({
+                "description": "probe dispatch",
+                "prompt": "[bee-tier: generation] probe",
+                "subagent_type": "bee-worker",
+            });
+            (t.clone(), t, "Task", "model-guard")
+        }
+        other => panic!("no 2.x payload fixture for tool \"{other}\""),
+    }
+}
+
+const TWO_X_BLOCKING_TOOLS: &[&str] =
+    &["shell", "patch", "subagent", "write", "edit", "read", "grep", "glob", "question"];
+
+#[cfg(unix)]
+#[test]
+fn every_blocking_row_denies_allows_crashes_and_reports_a_missing_binary_through_the_2x_entry() {
+    node_or_skip!("every_blocking_row_denies_allows_crashes_and_reports_a_missing_binary_through_the_2x_entry");
+
+    let harness_dir = tempfile::tempdir().expect("tempdir for the harness script");
+    let harness = write_harness(harness_dir.path());
+    let plugin = repo_root().join(".opencode/plugins/bee-guard.ts");
+    let surface = "2x.execute.before";
+    let mut failures: Vec<String> = Vec::new();
+
+    for tool in TWO_X_BLOCKING_TOOLS {
+        let (input, expected_tool_input, expected_tool_name, hook) = two_x_call_fixture(tool);
+        let session_id = format!("sess-{tool}");
+        let call_payload = json!({"tool": tool, "sessionID": session_id, "args": input});
+
+        {
+            let fx = tempfile::tempdir().expect("tempdir");
+            let reason = format!("stub-deny for {hook} via {tool}");
+            write_stub_bee(fx.path(), &StubBehavior::Deny(reason.clone()));
+            let r = run_harness(&harness, &plugin, fx.path(), surface, &call_payload);
+            if !(r.threw && r.message.as_deref().is_some_and(|m| m.contains(&reason))) {
+                failures.push(format!("{tool}: DENY did not throw the reason (threw={}, message={:?})", r.threw, r.message));
+            }
+        }
+
+        {
+            let fx = tempfile::tempdir().expect("tempdir");
+            write_stub_bee(fx.path(), &StubBehavior::Allow);
+            let r = run_harness(&harness, &plugin, fx.path(), surface, &call_payload);
+            let args_after = r.output.as_ref().and_then(|o| o.get("args")).cloned();
+            if r.threw || args_after.as_ref() != Some(&input) {
+                failures.push(format!("{tool}: ALLOW must pass without throwing or changing input (threw={}, after={:?})", r.threw, args_after));
+            }
+            let captured = read_captured_stdin(fx.path());
+            let expected = expected_opencode_payload(&session_id, fx.path(), expected_tool_name, &expected_tool_input);
+            if captured != expected {
+                failures.push(format!("{tool}: payload bee received differs — expected {expected}, got {captured}"));
+            }
+        }
+
+        {
+            let fx = tempfile::tempdir().expect("tempdir");
+            write_stub_bee(fx.path(), &StubBehavior::Crash);
+            let r = run_harness(&harness, &plugin, fx.path(), surface, &call_payload);
+            if !(r.threw && r.message.as_deref().is_some_and(|m| m.contains("did not return a verdict"))) {
+                failures.push(format!("{tool}: CRASH must throw (threw={}, message={:?})", r.threw, r.message));
+            }
+        }
+
+        {
+            let fx = tempfile::tempdir().expect("tempdir");
+            write_stub_bee(fx.path(), &StubBehavior::Missing);
+            let r = run_harness(&harness, &plugin, fx.path(), surface, &call_payload);
+            if !(r.threw && r.message.as_deref().is_some_and(|m| m.contains("could not find the bee binary"))) {
+                failures.push(format!("{tool}: MISSING BINARY must throw (threw={}, message={:?})", r.threw, r.message));
+            }
+        }
+
+        {
+            let fx = tempfile::tempdir().expect("tempdir");
+            write_stub_bee(fx.path(), &StubBehavior::Repair);
+            let r = run_harness(&harness, &plugin, fx.path(), surface, &call_payload);
+            let repaired = r
+                .output
+                .as_ref()
+                .and_then(|o| o.get("args"))
+                .and_then(|a| a.get("repairedField"))
+                .and_then(Value::as_str)
+                == Some("repaired-value");
+            if r.threw || !repaired {
+                failures.push(format!("{tool}: repair must assign onto call.input (threw={}, output={:?})", r.threw, r.output));
+            }
+        }
+    }
+
+    assert!(failures.is_empty(), "2.x entry failures:\n{}", failures.join("\n"));
+}
+
+#[test]
+fn the_2x_entry_reuses_the_one_rule_core_without_a_second_mapping_table() {
+    assert!(PLUGIN_SOURCE.contains("export default { id: \"bee-guard\", server, setup }"));
+    assert!(PLUGIN_SOURCE.contains("api.tool.hook(\"execute.before\""));
+    assert_eq!(PLUGIN_SOURCE.matches("function mapToolCall").count(), 1);
+    assert_eq!(PLUGIN_SOURCE.matches("function runBlockingHook").count(), 1);
+    assert_eq!(PLUGIN_SOURCE.matches("tool_name: \"").count(), opencode_tool_hook_pairs().len());
 }
 
 #[cfg(unix)]
@@ -2230,7 +2406,8 @@ fn every_registered_write_or_read_capable_opencode_tool_is_mapped_or_named_as_a_
     let registry = derive_opencode_tool_registry(&text)
         .unwrap_or_else(|reason| panic!("opencode tool-registry derivation broke: {reason}"));
 
-    let mapped: BTreeSet<String> = opencode_tool_hook_pairs().into_iter().map(|(tool, _)| tool).collect();
+    let mut mapped: BTreeSet<String> = opencode_tool_hook_pairs().into_iter().map(|(tool, _)| tool).collect();
+    mapped.extend(two_x_alias_ids());
 
     // Tool ids this derivation positively confirmed do NOT touch an
     // arbitrary caller-supplied file path (no `filePath` found within their
