@@ -937,6 +937,15 @@
     "contract:evidence-ref-check",
     "contract:doctrine-names-loop",
     "lesson",
-    "contract:vendored-prompt-parity"
+    "contract:vendored-prompt-parity",
+    "contract:opencode-2x-belt",
+    "dispatch-ledger",
+    "contract:run-pane-pin-and-start-retry",
+    "contract:heading-anchored-section",
+    "fleet",
+    "contract:ledger-retire",
+    "contract:wave-flags",
+    "contract:supervisor-signals",
+    "contract:preview-id-clash"
   ]
 }
