@@ -27,6 +27,13 @@ path.
 
 ## Read set
 
+### Knowledge
+
+| Concept | Grade at read | Why it matters |
+|---------|---------------|----------------|
+| docs/knowledge/areas/decision-memory/owner-brief-contract.md | suspect | D3 changes its row 5. |
+| docs/knowledge/areas/doctrine-layer/lane-and-working-discipline.md | suspect | It points at trace-and-provenance (D5). |
+
 ### Code
 
 | Path | What it decides |
