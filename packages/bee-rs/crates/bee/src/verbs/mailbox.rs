@@ -694,6 +694,7 @@ pub(crate) struct Entry {
     /// the entry cannot hold.
     pub fix_at: Option<String>,
     pub source: Option<String>,
+    pub cells: Vec<String>,
 }
 
 impl Entry {
@@ -712,6 +713,9 @@ impl Entry {
         });
         if let Some(source) = &self.source {
             value["source"] = json!(source);
+        }
+        if !self.cells.is_empty() {
+            value["cells"] = json!(self.cells);
         }
         value
     }
@@ -739,6 +743,7 @@ impl Entry {
             better: Some(one_line(better)),
             fix_at: Some(fix_at.trim().to_string()),
             source: None,
+            cells: Vec::new(),
         }
     }
 
@@ -767,6 +772,7 @@ impl Entry {
             // question instead of being one.
             fix_at: None,
             source: None,
+            cells: Vec::new(),
         }
     }
 
@@ -797,6 +803,7 @@ impl Entry {
             // way by close and by the lesson miner.
             fix_at: opt_string(m, "fix_at"),
             source: opt_string(m, "source"),
+            cells: string_list(m, "cells"),
         })
     }
 
@@ -2915,7 +2922,7 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
             // belongs to a single verb.
             let (rest, no_mistakes) = lift_bare_flag(rest, "no-mistakes");
             run_reflect(
-                parse_shape(&rest, &["wrong", "better", "fix-at", "source", "session-id"])?,
+                parse_shape(&rest, &["wrong", "better", "fix-at", "source", "session-id", "cell"])?,
                 no_mistakes,
                 t0,
             )
@@ -3020,6 +3027,16 @@ fn run_mark(parsed: ParsedArgs, t0: Instant) -> Option<ExitCode> {
 //     door and never defaulted: a layer nobody named is the empty field D1
 //     exists to end.
 
+fn read_cells(raw: Option<&str>) -> Vec<String> {
+    let mut cells: Vec<String> = Vec::new();
+    for id in raw.unwrap_or("").split(',').map(str::trim).filter(|id| !id.is_empty()) {
+        if !cells.iter().any(|c| c == id) {
+            cells.push(id.to_string());
+        }
+    }
+    cells
+}
+
 fn no_mistakes_clash(parsed: &ParsedArgs) -> bool {
     mark_flag(parsed, "wrong").is_some()
         || mark_flag(parsed, "better").is_some()
@@ -3052,7 +3069,8 @@ fn run_reflect(parsed: ParsedArgs, no_mistakes: bool, t0: Instant) -> Option<Exi
         let session =
             crate::verbs::cells::resolve_session_flag_env(mark_flag(&parsed, "session-id"));
         let run = run_id(session.as_deref());
-        let entry = Entry::no_mistakes(&now_iso());
+        let mut entry = Entry::no_mistakes(&now_iso());
+        entry.cells = read_cells(mark_flag(&parsed, "cell"));
         record_stop(&root, &run, &entry);
         let result = json!({
             "run": run,
@@ -3090,6 +3108,7 @@ fn run_reflect(parsed: ParsedArgs, no_mistakes: bool, t0: Instant) -> Option<Exi
     let run = run_id(session.as_deref());
     let mut entry = Entry::reflection(&now_iso(), wrong, better, fix_at);
     entry.source = source;
+    entry.cells = read_cells(mark_flag(&parsed, "cell"));
     record_stop(&root, &run, &entry);
 
     let mut result = json!({
@@ -3170,6 +3189,7 @@ mod tests {
             better: None,
             fix_at: None,
             source: None,
+            cells: Vec::new(),
         }
     }
 
@@ -5192,6 +5212,7 @@ nested:
             better: None,
             fix_at: None,
             source: None,
+            cells: Vec::new(),
         }
     }
 
@@ -5550,5 +5571,16 @@ nested:
         };
         assert!(why.contains("remedy"), "a refusal names what to fix: {why}");
         assert_eq!(list_letter_files(root).len(), 1, "nothing was written beside it");
+    }
+
+    #[test]
+    fn mistakes_answer_cells_round_trip_and_absent_cells_stay_unwritten() {
+        let mut entry = Entry::no_mistakes("2026-08-31T01:00:00.000Z");
+        assert!(entry.to_value().get("cells").is_none());
+        assert!(Entry::from_value(&entry.to_value()).unwrap().cells.is_empty());
+        entry.cells = vec!["a-1".to_string(), "a-2".to_string()];
+        let back = Entry::from_value(&entry.to_value()).unwrap();
+        assert_eq!(back.cells, vec!["a-1".to_string(), "a-2".to_string()]);
+        assert_eq!(read_cells(Some(" a-1, ,a-2,a-1")), back.cells);
     }
 }

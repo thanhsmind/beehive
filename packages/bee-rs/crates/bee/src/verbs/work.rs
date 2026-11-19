@@ -486,6 +486,7 @@ mod tests {
             better: None,
             fix_at: None,
             source: None,
+            cells: Vec::new(),
         }
     }
 

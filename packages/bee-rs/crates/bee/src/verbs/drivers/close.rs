@@ -288,22 +288,37 @@ pub(crate) fn mistakes_debt(root: &Path, feature: &str) -> D<DebtSummary> {
     Ok(DebtSummary { count: ids.len(), ids })
 }
 
-/// Did the closing session itself answer the mistakes question?
+/// The debt cells the closing session's own answers do not name.
 ///
 /// This is the REMEDY path, never the debt count: the refusal below tells the
 /// acting agent to write the mistakes down with `bee mailbox reflect` (or to
-/// state the clean run with `--no-mistakes`), and that verb writes into the
-/// closing session's own run. Reading that run HERE is what makes the remedy
-/// true — and it can only ever let a close through, so it never turns into
-/// the refuse-every-close hazard a run-scoped debt COUNT would be.
-///
-/// Same run and same root the close's own entry and letter use, so "the run
-/// whose letter this close files" is one idea with one resolution.
-fn closing_run_answered_mistakes(root: &Path) -> bool {
+/// state the clean run with `--no-mistakes`), each naming its cells with
+/// `--cell`, and that verb writes into the closing session's own run. Reading
+/// that run HERE is what makes the remedy true — and it can only ever let a
+/// close through, so it never turns into the refuse-every-close hazard a
+/// run-scoped debt COUNT would be.
+fn unanswered_mistake_ids(root: &Path, debt: &DebtSummary) -> Vec<String> {
     use crate::verbs::mailbox;
     let control = crate::hooks::session_init::control_root_for(root);
     let run = mailbox::run_id(crate::verbs::cells::resolve_session_flag_env(None).as_deref());
-    mailbox::read_entries(&control, &run).iter().any(mailbox::Entry::is_mistakes_answer)
+    let named: std::collections::HashSet<String> = mailbox::read_entries(&control, &run)
+        .into_iter()
+        .filter(mailbox::Entry::is_mistakes_answer)
+        .flat_map(|entry| entry.cells)
+        .collect();
+    debt.ids
+        .iter()
+        .filter_map(Value::as_str)
+        .filter(|id| !named.contains(*id))
+        .map(str::to_string)
+        .collect()
+}
+
+fn mistakes_remedy_commands(ids: &[String]) -> String {
+    let cells = ids.join(",");
+    format!(
+        "`bee mailbox reflect --wrong \"<what went wrong>\" --better \"<what would have been better>\" --fix-at <architecture|check|doctrine|none> --cell {cells}` — or, if those cells truly hit none, say so: `{MISTAKES_CLEAN_RUN_COMMAND} --cell {cells}`"
+    )
 }
 
 // ── mistake-fix-at D2: one backlog row per mechanizable mistake ───────────
@@ -340,7 +355,7 @@ struct Mechanizable {
 ///    [`mistakes_debt`] walks, archive included, so a cell an earlier close
 ///    already retired still counts;
 ///  * the closing run's own reflection entries — the same run and control
-///    root [`closing_run_answered_mistakes`] resolves, which is where
+///    root [`unanswered_mistake_ids`] resolves, which is where
 ///    `bee mailbox reflect` writes.
 ///
 /// `doctrine`, `none` and a missing `fix_at` yield nothing: D4 forbids
@@ -1602,8 +1617,9 @@ pub(crate) fn build_close_report_doors(root: &Path, feature: &str) -> D<Vec<Door
     // attended sessions included, so a close may always demand the answer
     // that letter is supposed to carry.
     let mistakes = mistakes_debt(root, feature)?;
-    let answered_here = mistakes.count > 0 && closing_run_answered_mistakes(root);
-    let mistakes_blocking = mistakes.count > 0 && !answered_here;
+    let unanswered = unanswered_mistake_ids(root, &mistakes);
+    let answered_here = mistakes.count > 0 && unanswered.is_empty();
+    let mistakes_blocking = !unanswered.is_empty();
     doors.push(Door {
         door: "mistakes",
         blocking: mistakes_blocking,
@@ -1617,9 +1633,10 @@ pub(crate) fn build_close_report_doors(root: &Path, feature: &str) -> D<Vec<Door
             )
         } else {
             format!(
-                "pending — {} capped cell(s) recorded no reflection and no clean-run statement ({}); write each mistake with bee mailbox reflect, or state the clean run with {MISTAKES_CLEAN_RUN_COMMAND}",
-                mistakes.count,
-                js_join(&mistakes.ids, ", ")
+                "pending — {} capped cell(s) recorded no reflection and no clean-run statement ({}); answer with {}",
+                unanswered.len(),
+                unanswered.join(", "),
+                mistakes_remedy_commands(&unanswered)
             )
         },
         command: if mistakes_blocking { Some("bee mailbox reflect") } else { None },
@@ -2945,18 +2962,17 @@ fn close_handler_core(
     // wrong.
     if doors.iter().any(|d| d.door == "mistakes" && d.blocking) {
         let debt = mistakes_debt(root, feature)?;
+        let unanswered = unanswered_mistake_ids(root, &debt);
         let mut result = Map::new();
         result.insert("feature".into(), Value::String(feature.to_string()));
         result.insert("doors".into(), Value::Array(doors.iter().map(Door::value).collect()));
         result.insert("ran_tests".into(), Value::Bool(false));
         result.insert("tests".into(), Value::Null);
         let lines = [format!(
-                "{CLOSE_MISTAKES_PREFIX} \"{feature}\" — close stops at the mistakes door: this run's letter cannot say whether anything went wrong, because cell(s) {} recorded no reflection and no clean-run statement.",
-                js_join(&debt.ids, ", ")
+                "{CLOSE_MISTAKES_PREFIX} \"{feature}\" — close stops at the mistakes door: this run's letter cannot say whether anything went wrong, because cell(s) {} have no reflection or clean-run statement naming them.",
+                unanswered.join(", ")
             ),
-            format!(
-                "remedy: record each mistake with `bee mailbox reflect --wrong \"<what went wrong>\" --better \"<what would have been better>\"` — or, if those cells truly hit none, say so: {MISTAKES_CLEAN_RUN_COMMAND}."
-            ),
+            format!("remedy: record each mistake with {}.", mistakes_remedy_commands(&unanswered)),
             format!("next: answer, then re-run bee close --feature {feature}")];
         return Ok(Out::Emit(Value::Object(result), lines.join("\n"), 1));
     }
@@ -3532,6 +3548,7 @@ fn record_feature_close_in_mailbox(root: &Path, feature: &str, usage_line: Optio
         better: None,
         fix_at: None,
         source: None,
+        cells: Vec::new(),
     };
     mailbox::record_close_stop(
         &control,
@@ -5716,20 +5733,73 @@ mod tests {
         let run = crate::verbs::mailbox::run_id(
             crate::verbs::cells::resolve_session_flag_env(None).as_deref(),
         );
-        crate::verbs::mailbox::record_stop(
-            root,
-            &run,
-            &crate::verbs::mailbox::Entry::reflection(
-                "2026-08-31T01:00:00.000Z",
-                "Capped demo-1 without saying what went wrong",
-                "Answer the mistakes question at the cap, when it is still in hand",
-                "none",
-            ),
+        let mut entry = crate::verbs::mailbox::Entry::reflection(
+            "2026-08-31T01:00:00.000Z",
+            "Capped demo-1 without saying what went wrong",
+            "Answer the mistakes question at the cap, when it is still in hand",
+            "none",
         );
+        entry.cells = vec!["demo-1".to_string()];
+        crate::verbs::mailbox::record_stop(root, &run, &entry);
 
         let out = close_handler(root, "demo", false, None, None, &HashMap::new()).unwrap();
         let Out::Emit(_result, text, code) = out else { panic!("expected Emit") };
         assert_eq!(code, 0, "the recorded reflection must clear the door: {text}");
+    }
+
+    #[test]
+    fn an_answer_naming_no_cell_clears_no_mistakes_debt() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        init_bee_repo(root);
+        unanswered_cell(root);
+
+        let run = crate::verbs::mailbox::run_id(
+            crate::verbs::cells::resolve_session_flag_env(None).as_deref(),
+        );
+        crate::verbs::mailbox::record_stop(
+            root,
+            &run,
+            &crate::verbs::mailbox::Entry::no_mistakes("2026-08-31T01:00:00.000Z"),
+        );
+
+        let out = close_handler(root, "demo", false, None, None, &HashMap::new()).unwrap();
+        let Out::Emit(_result, text, code) = out else { panic!("expected Emit") };
+        assert_eq!(code, 1, "an answer with no --cell must clear nothing: {text}");
+        assert!(
+            text.contains("bee mailbox reflect --no-mistakes --cell demo-1"),
+            "the refusal must print the ready command with the id: {text}"
+        );
+        assert!(
+            text.contains("--fix-at <architecture|check|doctrine|none> --cell demo-1"),
+            "text: {text}"
+        );
+    }
+
+    #[test]
+    fn a_mistakes_answer_naming_one_cell_clears_that_cell_only() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        init_bee_repo(root);
+        unanswered_cell(root);
+        w(
+            root,
+            ".bee/cells/demo-2.json",
+            r#"{"id":"demo-2","feature":"demo","status":"capped","trace":{"report":{"outcome":"o","commit":"c","files":[],"tests":"cargo test — green — the touched module","deviations":[]}}}"#,
+        );
+
+        let run = crate::verbs::mailbox::run_id(
+            crate::verbs::cells::resolve_session_flag_env(None).as_deref(),
+        );
+        let mut entry = crate::verbs::mailbox::Entry::no_mistakes("2026-08-31T01:00:00.000Z");
+        entry.cells = vec!["demo-1".to_string()];
+        crate::verbs::mailbox::record_stop(root, &run, &entry);
+
+        let out = close_handler(root, "demo", false, None, None, &HashMap::new()).unwrap();
+        let Out::Emit(_result, text, code) = out else { panic!("expected Emit") };
+        assert_eq!(code, 1, "demo-2 is still unanswered: {text}");
+        assert!(text.contains("--cell demo-2"), "text: {text}");
+        assert!(!text.contains("--cell demo-1"), "demo-1 was answered: {text}");
     }
 
     #[test]
