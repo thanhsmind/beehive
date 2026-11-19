@@ -287,6 +287,11 @@ fn assess(root: &Path, kind: Kind) -> Item {
     Item { kind, present, reasons, info, last }
 }
 
+pub(crate) fn knowledge_due_codes(root: &Path) -> Option<Vec<&'static str>> {
+    let item = assess(root, Kind::Knowledge);
+    item.due().then(|| item.reasons.iter().map(|(code, _)| *code).collect())
+}
+
 fn refuse(json: bool, message: &str) -> ExitCode {
     if json {
         println!("{}", jsjson::stringify(&json!({ "error": message })));

@@ -522,6 +522,9 @@ does run a POSIX shell."
         for n in notices::stale_advisor_notices(&repo_root) {
             out.push(json!(n));
         }
+        for n in notices::knowledge_notices(&repo_root) {
+            out.push(json!(n));
+        }
         for n in notices::tracked_paths_notices(&repo_root) {
             out.push(json!(n));
         }

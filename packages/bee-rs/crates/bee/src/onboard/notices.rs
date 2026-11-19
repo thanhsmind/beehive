@@ -439,6 +439,20 @@ pub fn commands_notices(repo_root: &Path, first_onboard: bool) -> Vec<String> {
     notices
 }
 
+pub const KNOWLEDGE_SETUP_OFFER: &str = "This project has no knowledge bundle yet (docs/knowledge/index.md is absent). The bee-knowledge-setup skill builds one: a short, anchored record of what the code does and why, which agents read before they work. Offer it, and let the user decide whether to run it.";
+
+pub const KNOWLEDGE_UPKEEP_POINTER: &str = "This project's knowledge bundle is due for upkeep. The bee-knowledge-upkeep skill re-reads it against the code, repairs what has drifted and reports what it cannot fix. Run bee upkeep due --kind knowledge to see why.";
+
+pub fn knowledge_notices(repo_root: &Path) -> Vec<String> {
+    if !exists(&repo_root.join("docs").join("knowledge").join("index.md")) {
+        return vec![KNOWLEDGE_SETUP_OFFER.to_string()];
+    }
+    if crate::verbs::upkeep_group::knowledge_due_codes(repo_root).is_some() {
+        return vec![KNOWLEDGE_UPKEEP_POINTER.to_string()];
+    }
+    Vec::new()
+}
+
 /// staleAdvisorNotices (l. 2645): warn, never error.
 ///
 /// Also carries the `commands.verify` retirement notice (2.1.0). Same shape,
@@ -1416,5 +1430,39 @@ mod tests {
         )
         .unwrap();
         assert!(has_repo_hooks_recorded(dir.path()));
+    }
+
+    fn knowledge_repo(index: bool, audit_ts: Option<&str>) -> tempfile::TempDir {
+        let dir = tempfile::tempdir().unwrap();
+        if index {
+            std::fs::create_dir_all(dir.path().join("docs").join("knowledge")).unwrap();
+            std::fs::write(dir.path().join("docs").join("knowledge").join("index.md"), "# Index\n").unwrap();
+        }
+        if let Some(ts) = audit_ts {
+            std::fs::create_dir_all(dir.path().join(".bee")).unwrap();
+            let row = json!({"id": "x", "ts": ts, "kind": "knowledge-upkeep", "feature": "upkeep", "note": "clean — ok", "source": "test"});
+            std::fs::write(dir.path().join(".bee").join("audit.jsonl"), format!("{row}\n")).unwrap();
+        }
+        dir
+    }
+
+    #[test]
+    fn knowledge_notice_offers_setup_when_the_bundle_is_absent() {
+        let dir = knowledge_repo(false, None);
+        assert_eq!(knowledge_notices(dir.path()), vec![KNOWLEDGE_SETUP_OFFER.to_string()]);
+        assert!(KNOWLEDGE_SETUP_OFFER.contains("bee-knowledge-setup"));
+    }
+
+    #[test]
+    fn knowledge_notice_points_at_upkeep_when_due() {
+        let dir = knowledge_repo(true, None);
+        assert_eq!(knowledge_notices(dir.path()), vec![KNOWLEDGE_UPKEEP_POINTER.to_string()]);
+        assert!(KNOWLEDGE_UPKEEP_POINTER.contains("bee-knowledge-upkeep"));
+    }
+
+    #[test]
+    fn knowledge_notice_is_silent_when_the_bundle_is_present_and_current() {
+        let dir = knowledge_repo(true, Some("2999-01-01T00:00:00.000Z"));
+        assert!(knowledge_notices(dir.path()).is_empty());
     }
 }
