@@ -542,6 +542,12 @@ pub(crate) fn build_orient(ctx: &mut Ctx) -> R<JMap> {
                 .join("; ")
         )));
     }
+    if let Some(debt) = crate::verbs::fix_at::debt(&ctx.root, chrono::Utc::now()).filter(|d| d.open() > 0) {
+        blockers.push(json!(format!(
+            "fix-at debt: {} — run `bee backlog fix-at next`, then `bee backlog fix-at promote`",
+            debt.describe()
+        )));
+    }
     // D4 (D4a): a granted worktree `bee worktree merge` never reached and
     // nobody pruned — same report-only voice as the promote proposal just
     // above, reading the ONE scan (`reclaimable_worktree_ids`) the session

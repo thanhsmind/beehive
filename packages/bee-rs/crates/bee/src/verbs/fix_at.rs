@@ -31,6 +31,7 @@ pub(crate) struct Group {
     pub state: GroupState,
     pub findings: usize,
     pub oldest_open_ts: Option<String>,
+    pub open_row_ts: Vec<String>,
     pub newest_finding_ts: String,
     pub latest_close: Option<Value>,
     pub features: Vec<String>,
@@ -117,6 +118,7 @@ impl Ledger {
                     state,
                     findings: slot.findings.len(),
                     oldest_open_ts: epoch.iter().map(|r| field(r, "ts")).min().map(str::to_string),
+                    open_row_ts: epoch.iter().map(|r| field(r, "ts").to_string()).collect(),
                     newest_finding_ts,
                     latest_close,
                     features,
@@ -141,6 +143,82 @@ impl Ledger {
             .find(|g| g.layer == layer && g.key == key)
             .and_then(|g| g.features.first().cloned())
     }
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) struct Debt {
+    pub check_open: usize,
+    pub architecture_open: usize,
+    pub rejudge_open: usize,
+    pub recurred: usize,
+    pub oldest_open_days: Option<u64>,
+    pub stale_open_rows: usize,
+}
+
+const STALE_OPEN_DAYS: i64 = 30;
+
+impl Debt {
+    pub(crate) fn open(&self) -> usize {
+        self.check_open + self.architecture_open + self.rejudge_open
+    }
+
+    pub(crate) fn describe(&self) -> String {
+        let oldest = self.oldest_open_days.map(|d| format!(", oldest {d} days")).unwrap_or_default();
+        format!(
+            "{} open (check {}, architecture {}, rejudge {}; {} recurred){oldest}",
+            self.open(),
+            self.check_open,
+            self.architecture_open,
+            self.rejudge_open,
+            self.recurred
+        )
+    }
+
+    pub(crate) fn json(&self) -> Value {
+        serde_json::json!({
+            "check_open": self.check_open,
+            "architecture_open": self.architecture_open,
+            "rejudge_open": self.rejudge_open,
+            "recurred": self.recurred,
+            "oldest_open_days": self.oldest_open_days,
+            "stale_open_rows": self.stale_open_rows,
+        })
+    }
+}
+
+fn parse_ts(ts: &str) -> Option<chrono::DateTime<chrono::Utc>> {
+    chrono::DateTime::parse_from_rfc3339(ts).ok().map(|t| t.with_timezone(&chrono::Utc))
+}
+
+impl Ledger {
+    pub(crate) fn debt(&self, now: chrono::DateTime<chrono::Utc>) -> Debt {
+        let mut debt = Debt::default();
+        let mut oldest: Option<chrono::DateTime<chrono::Utc>> = None;
+        let cutoff = now - chrono::Duration::days(STALE_OPEN_DAYS);
+        for g in self.groups.iter().filter(|g| g.state != GroupState::Closed) {
+            match g.layer.as_str() {
+                "fix-at:check" => debt.check_open += 1,
+                "fix-at:architecture" => debt.architecture_open += 1,
+                _ => debt.rejudge_open += 1,
+            }
+            if g.state == GroupState::Recurred {
+                debt.recurred += 1;
+            }
+            let group_oldest = g.oldest_open_ts.as_deref().and_then(parse_ts);
+            oldest = match (oldest, group_oldest) {
+                (Some(a), Some(b)) => Some(a.min(b)),
+                (a, b) => a.or(b),
+            };
+            debt.stale_open_rows += g.open_row_ts.iter().filter_map(|t| parse_ts(t)).filter(|t| *t < cutoff).count();
+        }
+        debt.oldest_open_days = oldest.map(|t| (now - t).num_days().max(0) as u64);
+        debt
+    }
+}
+
+pub(crate) fn debt(root: &Path, now: chrono::DateTime<chrono::Utc>) -> Option<Debt> {
+    let control = crate::hooks::session_init::control_root_for(root);
+    Ledger::load(&control).map(|ledger| ledger.debt(now))
 }
 
 pub(crate) fn shape_key(text: &str) -> Option<String> {
@@ -697,5 +775,65 @@ mod tests {
         assert_eq!(field(filed, "feature"), "unattributed");
         assert!(field(filed, "detail").contains(&format!("reworded from: {reworded}")));
         assert_eq!(group(&Ledger::from_rows(&rows), ARCH).state, GroupState::Recurred);
+    }
+
+    fn at(ts: &str) -> chrono::DateTime<chrono::Utc> {
+        chrono::DateTime::parse_from_rfc3339(ts).unwrap().with_timezone(&chrono::Utc)
+    }
+
+    #[test]
+    fn fix_at_debt_counts_open_groups_per_layer_recurred_and_oldest_age() {
+        let rows = vec![
+            finding("2026-01-01T00:00:00Z", CHECK, "alpha one", "a"),
+            finding("2026-01-05T00:00:00Z", ARCH, "beta two", "a"),
+            finding("2026-01-02T00:00:00Z", REJUDGE, "gamma three", "a"),
+            finding("2026-01-03T00:00:00Z", CHECK, "delta four", "a"),
+            typed_close("2026-01-04T00:00:00Z", Some(CHECK), "delta four"),
+            finding("2026-01-06T00:00:00Z", CHECK, "epsilon five", "a"),
+            typed_close("2026-01-07T00:00:00Z", Some(CHECK), "epsilon five"),
+            finding("2026-01-08T00:00:00Z", CHECK, "epsilon five", "b"),
+            finding("2026-01-09T00:00:00Z", CHECK, "zeta six", "a"),
+            typed_close("2026-01-10T00:00:00Z", Some(CHECK), "zeta six"),
+        ];
+        let debt = Ledger::from_rows(&rows).debt(at("2026-01-11T00:00:00Z"));
+        assert_eq!((debt.check_open, debt.architecture_open, debt.rejudge_open), (2, 1, 1));
+        assert_eq!(debt.recurred, 1);
+        assert_eq!(debt.oldest_open_days, Some(10));
+        assert_eq!(debt.open(), 4);
+        assert_eq!(
+            debt.describe(),
+            "4 open (check 2, architecture 1, rejudge 1; 1 recurred), oldest 10 days"
+        );
+    }
+
+    #[test]
+    fn fix_at_debt_stale_rows_count_each_row_older_than_thirty_days() {
+        let rows = vec![
+            finding("2026-01-01T00:00:00Z", CHECK, "alpha one", "a"),
+            finding("2026-01-02T00:00:00Z", CHECK, "alpha one", "b"),
+            finding("2026-02-10T00:00:00Z", CHECK, "alpha one", "c"),
+            finding("2026-01-03T00:00:00Z", ARCH, "beta two", "a"),
+        ];
+        let debt = Ledger::from_rows(&rows).debt(at("2026-02-12T00:00:00Z"));
+        assert_eq!(debt.stale_open_rows, 3);
+        let fresh = Ledger::from_rows(&rows).debt(at("2026-01-20T00:00:00Z"));
+        assert_eq!(fresh.stale_open_rows, 0);
+    }
+
+    #[test]
+    fn fix_at_debt_is_empty_when_every_group_is_closed() {
+        let rows = vec![
+            finding("2026-01-01T00:00:00Z", CHECK, "alpha one", "a"),
+            typed_close("2026-01-02T00:00:00Z", Some(CHECK), "alpha one"),
+        ];
+        let debt = Ledger::from_rows(&rows).debt(at("2026-03-01T00:00:00Z"));
+        assert_eq!(debt, Debt::default());
+        assert_eq!(debt.json()["oldest_open_days"], Value::Null);
+    }
+
+    #[test]
+    fn fix_at_debt_reads_none_without_a_store() {
+        let dir = tempfile::tempdir().unwrap();
+        assert!(debt(&dir.path().join("missing"), chrono::Utc::now()).is_none());
     }
 }

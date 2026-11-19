@@ -610,6 +610,21 @@ pub(crate) fn team_config_advisory(root: &Path) -> Option<(Value, String)> {
     ))
 }
 
+const FIX_AT_STALE_ROWS_WARN: usize = 20;
+
+pub(crate) fn fix_at_debt_advisory(root: &Path) -> Option<(Value, String)> {
+    let debt = crate::verbs::fix_at::debt(root, chrono::Utc::now())?;
+    if debt.stale_open_rows <= FIX_AT_STALE_ROWS_WARN {
+        return None;
+    }
+    let detail = format!(
+        "{} open fix-at finding row(s) are older than 30 days ({}) — run: bee backlog fix-at next",
+        debt.stale_open_rows,
+        debt.describe()
+    );
+    Some((json!({"row": "fix_at_debt", "status": "note", "detail": detail.clone()}), detail))
+}
+
 pub(crate) fn owner_briefs_advisory(root: &Path) -> Option<(Value, String)> {
     let problems = crate::verbs::brief::owner_view(root, root)["problems"].as_u64().unwrap_or(0);
     if problems == 0 {
@@ -1543,6 +1558,10 @@ fn doctor_report(root: &Path, runtime: Runtime, env: &dyn Fn(&str) -> Option<Str
     if let Some((row, _)) = &briefs_advisory {
         all.push(row.clone());
     }
+    let fix_at_advisory = fix_at_debt_advisory(root);
+    if let Some((row, _)) = &fix_at_advisory {
+        all.push(row.clone());
+    }
     let (protocol_row, protocol_detail) = workspace_protocol_row(root);
     all.push(protocol_row.clone());
     let runtime_checks = runtime_checks_with_env(root, env);
@@ -1587,6 +1606,9 @@ fn doctor_report(root: &Path, runtime: Runtime, env: &dyn Fn(&str) -> Option<Str
     }
     if let Some((_, detail)) = &briefs_advisory {
         lines.push(format!("  note {:<22} {}", "owner_briefs", detail));
+    }
+    if let Some((_, detail)) = &fix_at_advisory {
+        lines.push(format!("  note {:<22} {}", "fix_at_debt", detail));
     }
     let protocol_mark = if protocol_row["status"] == "ok" { "ok  " } else { "note" };
     lines.push(format!("  {protocol_mark} {:<22} {protocol_detail}", "workspace-protocol"));

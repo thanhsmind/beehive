@@ -421,6 +421,10 @@ pub(crate) fn build_status_with_state(ctx: &mut Ctx, lanes_full: bool, state: JM
         status.insert("scribing_debt".into(), Value::Object(sd));
     }
     status.insert("capture_queue".into(), Value::Object(capture_queue_summary(ctx)));
+    status.insert(
+        "fix_at_debt".into(),
+        crate::verbs::fix_at::debt(&ctx.root, chrono::Utc::now()).map_or(Value::Null, |d| d.json()),
+    );
     // D4 (wayfinding-flow): open discovery maps under docs/discovery/ —
     // resume must be un-missable. `scan_discovery` (verbs/discovery.rs) is
     // the ONE scan; the session preamble (hooks/session_preamble/budget.rs)

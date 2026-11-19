@@ -520,11 +520,12 @@ const TRAILER_LINE: &str = "Everything above is already read — do not re-fetch
 
 const LEADER_DOCTRINE_LINE: &str = "Leader doctrine: read .bee/LEADER.md in full now, then LEADER.md if it exists; open a .bee/playbooks/ file only when its read-when line matches.";
 
-const DROPPABLE: [(&str, &str); 4] = [
+const DROPPABLE: [(&str, &str); 5] = [
     ("Recent decisions", ".bee/bin/bee status --json"),
     ("Critical patterns (digest)", "docs/knowledge/index.md"),
     ("Command surface", ".bee/bin/bee --help --names"),
     ("Project map", "docs/knowledge/index.md"),
+    ("Fix-at debt", "bee backlog fix-at next"),
 ];
 
 fn fit_blocks(
@@ -873,6 +874,14 @@ pub fn build_session_preamble_within(
         lines.push(
             "- Settlements were stubbed mid-flow (decision 0017) — offer the flush now before new work: bee-capturing drains the queue oldest-first and merges each stub into its area spec.".to_string(),
         );
+    }
+
+    if let Some(debt) = crate::verbs::fix_at::debt(root, chrono::Utc::now()).filter(|d| d.open() > 0) {
+        let fix_at_start = lines.len();
+        lines.push(String::new());
+        lines.push(format!("### Fix-at debt: {}", debt.describe()));
+        lines.push("- next: bee backlog fix-at next, then bee backlog fix-at promote".to_string());
+        blocks.push(("Fix-at debt", fix_at_start, lines.len()));
     }
 
     // D3 (kf-2): a promote proposal `bee close` wrote and nobody applied.
