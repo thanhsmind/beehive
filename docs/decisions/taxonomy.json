@@ -946,6 +946,9 @@
     "contract:ledger-retire",
     "contract:wave-flags",
     "contract:supervisor-signals",
-    "contract:preview-id-clash"
+    "contract:preview-id-clash",
+    "contract:fake-backend-gated",
+    "wayfinding",
+    "contract:docs-sweep-parity"
   ]
 }

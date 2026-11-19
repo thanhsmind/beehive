@@ -431,5 +431,14 @@
     "rationale": "Gate one module behind a feature across three files",
     "updated_at": "2026-11-19T10:37:27.739Z",
     "feature": "test-ci-hygiene"
+  },
+  "merge_ready": {
+    "since": "2026-11-19T10:54:15.927Z",
+    "branch": "wt/test-ci-hygiene",
+    "worktree_id": "beehive--wt--test-ci-hygiene",
+    "uat": "pending",
+    "blocked_by": [
+      "routing"
+    ]
   }
 }

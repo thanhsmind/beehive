@@ -429,5 +429,12 @@
         }
       ]
     }
+  },
+  "merge_ready": {
+    "since": "2026-11-19T11:09:49.509Z",
+    "branch": "wt/preview-id-clash",
+    "worktree_id": "beehive--wt--preview-id-clash",
+    "uat": "pending",
+    "blocked_by": []
   }
 }
