@@ -139,6 +139,18 @@ file and a rename, with the executable bit set. It skips the item when
 the running binary is the target file, and when the target is a symlink
 into another checkout.
 
+## The vendored tree is pinned file for file (vendored-prompt-parity-guard D1, 2026-11-19)
+
+In the bee repo, the test `vendored_prompts_match_source_file_for_file` in
+`packages/bee-rs/crates/bee/src/devtools/prompts.rs` reads the
+`packages/bee/prompts/` directory and fails when any `.md` there has no twin
+in `.bee/bin/prompts/` with equal text (CRLF folded to LF), or when the
+vendored tree holds a file the source lacks. The file set comes from the
+directory, so no name list exists for a worker to narrow. It replaced the
+reliance on per-feature checks that loop over hand lists, one of which a
+worker narrowed so a stale vendored prompt passed; `peer-boot.md` had no
+vendored check before it.
+
 ## Open Gaps
 
 - Rule 2's "area concepts whose `areas` overlap the feature's touched areas when
