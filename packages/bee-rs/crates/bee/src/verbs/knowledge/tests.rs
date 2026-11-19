@@ -1526,8 +1526,8 @@ use std::time::Instant;
     fn evidence_states_and_absence_are_silent() {
         let (_tmp, dir) = bundle();
         put(&dir, "patterns/present.md", Cx::new("present-one").bee("evidence", json!("present")));
-        put(&dir, "patterns/wired.md", Cx::new("wired-one").bee("evidence", json!("wired")));
-        put(&dir, "patterns/exercised.md", Cx::new("exercised-one").bee("evidence", json!("exercised")));
+        put(&dir, "patterns/wired.md", Cx::new("wired-one").bee("evidence", json!("wired")).bee("evidence_ref", json!("the guard test")));
+        put(&dir, "patterns/exercised.md", Cx::new("exercised-one").bee("evidence", json!("exercised")).bee("evidence_ref", json!("the guard test")));
         put(&dir, "patterns/absent.md", Cx::new("absent-one")); // no bee.evidence at all
         let report = check_bundle(&dir, false).unwrap();
         assert!(
