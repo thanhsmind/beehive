@@ -11,10 +11,15 @@
     "uat": false
   },
   "summary": "Feature \"mistake-loop-closed\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at 578e9ce; reload the product and test \"mistake-loop-closed\", then either approve uat (\"bee gate --name uat --approved true --lane mistake-loop-closed\") or fix it in the worktree and merge again.",
+  "next_action": "Merged into main at 7e5d547; reload the product and test \"mistake-loop-closed\", then either approve uat (\"bee gate --name uat --approved true --lane mistake-loop-closed\") or fix it in the worktree and merge again.",
   "created_at": "2026-11-19T06:58:10.303Z",
   "run_state": "awaiting-approval",
-  "waiting_on": null,
+  "waiting_on": {
+    "kind": "gate",
+    "subject": "uat: mistake-loop-closed",
+    "asked_at": "2026-11-19T09:32:37.593Z",
+    "session": "bee-worktree-merge-sessionless"
+  },
   "route": {
     "class": "feature",
     "lane": "standard",
@@ -2704,12 +2709,5 @@
   },
   "gate_revoked_at": {
     "execution": "2026-11-19T09:22:06.014Z"
-  },
-  "merge_ready": {
-    "since": "2026-11-19T09:30:47.277Z",
-    "branch": "wt/mistake-loop-closed",
-    "worktree_id": "beehive--wt--mistake-loop-closed",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
