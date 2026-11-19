@@ -5679,6 +5679,68 @@ mod tests {
         assert_eq!(backlog_rows(root).len(), 1, "{:?}", backlog_rows(root));
     }
 
+    #[test]
+    fn fix_at_intake_a_reworded_mistake_matching_a_closed_group_files_under_the_closed_title() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        init_bee_repo(root);
+        seed_fix_at_backlog(
+            root,
+            &[
+                ("2026-01-01T00:00:00.000Z", "finding", FIX_AT_T, "alpha"),
+                ("2026-01-02T00:00:00.000Z", "backlog-closed", FIX_AT_T, "alpha"),
+            ],
+        );
+        let reworded = "Reserved a file after editing it twice";
+
+        let rows = fix_at_identity_close_b(root, reworded);
+        assert_eq!((rows.filed, rows.skipped), (1, 0));
+        let all = backlog_rows(root);
+        assert_eq!(all.len(), 3, "{all:?}");
+        assert_eq!(all[2]["title"], json!(FIX_AT_T));
+        assert_eq!(all[2]["feature"], json!("beta"));
+        assert!(all[2]["detail"].as_str().unwrap().contains(&format!("reworded from: {reworded}")), "{all:?}");
+        let ledger = crate::verbs::fix_at::Ledger::from_rows(&all);
+        assert_eq!(ledger.groups.len(), 1, "{all:?}");
+        assert_eq!(ledger.groups[0].state, crate::verbs::fix_at::GroupState::Recurred);
+    }
+
+    #[test]
+    fn fix_at_intake_a_reworded_mistake_matching_an_open_group_counts_as_skipped() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        init_bee_repo(root);
+        seed_fix_at_backlog(root, &[("2026-01-01T00:00:00.000Z", "finding", FIX_AT_T, "alpha")]);
+
+        let rows = fix_at_identity_close_b(root, "Reserved a file after editing it twice");
+        assert_eq!((rows.filed, rows.skipped), (0, 1));
+        assert_eq!(backlog_rows(root).len(), 1, "{:?}", backlog_rows(root));
+    }
+
+    #[test]
+    fn fix_at_intake_a_mistake_longer_than_the_title_cap_filed_at_close_is_not_refiled_by_the_sweep() {
+        use crate::verbs::backlog::BACKLOG_MAX_TITLE;
+        use crate::verbs::mailbox::{self, Entry};
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        init_bee_repo(root);
+        let wrong = format!("Hardcoded {} path", "x".repeat(BACKLOG_MAX_TITLE));
+        assert!(wrong.chars().count() > BACKLOG_MAX_TITLE);
+
+        let rows = fix_at_identity_close_b(root, &wrong);
+        assert_eq!((rows.filed, rows.skipped), (1, 0));
+        let filed = backlog_rows(root);
+        assert_eq!(filed.len(), 1, "{filed:?}");
+        assert_eq!(filed[0]["title"].as_str().unwrap().chars().count(), BACKLOG_MAX_TITLE);
+
+        let control = crate::hooks::session_init::control_root_for(root);
+        let entry = Entry::reflection("2099-01-01T00:00:00.000Z", &wrong, "read the path from config", "check");
+        mailbox::append_entry(&control, "run-beta", &entry).unwrap();
+        let report = crate::verbs::fix_at::sweep_unfiled(root);
+        assert_eq!((report.filed, report.rejudged), (0, 0));
+        assert_eq!(backlog_rows(root).len(), 1, "{:?}", backlog_rows(root));
+    }
+
     /// TRUTH (the fail-open rule): a backlog file that cannot be written
     /// warns and NEVER changes the close's exit code. Losing a backlog row
     /// must not cost a feature its close.

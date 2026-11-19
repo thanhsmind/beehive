@@ -592,4 +592,110 @@ mod tests {
         assert_eq!(sweep_unfiled(root), SweepReport::default());
         assert_eq!(backlog_rows(root).len(), 1);
     }
+
+    const LINT: &str = "Pushed before running the clippy lint";
+
+    #[test]
+    fn fix_at_intake_a_check_reflection_with_no_close_files_once_as_unattributed() {
+        let tmp = sandbox();
+        let root = tmp.path();
+        reflect(root, "run-solo", "2026-02-01T00:00:00Z", LINT, "check");
+        assert_eq!(sweep_unfiled(root), SweepReport { filed: 1, rejudged: 0 });
+        let rows = backlog_rows(root);
+        assert_eq!(rows.len(), 1);
+        assert_eq!(field(&rows[0], "type"), "finding");
+        assert_eq!(field(&rows[0], "severity"), "P3");
+        assert_eq!(field(&rows[0], "layer"), CHECK);
+        assert_eq!(field(&rows[0], "feature"), "unattributed");
+        assert_eq!(field(&rows[0], "title"), LINT);
+        assert_eq!(sweep_unfiled(root), SweepReport::default());
+        assert_eq!(backlog_rows(root).len(), 1);
+    }
+
+    #[test]
+    fn fix_at_intake_a_check_reflection_older_than_the_latest_close_is_not_filed() {
+        let tmp = sandbox();
+        let root = tmp.path();
+        seed_rows(
+            root,
+            &[
+                finding("2026-02-01T00:00:00Z", CHECK, LINT, "demo"),
+                typed_close("2026-02-03T00:00:00Z", Some(CHECK), LINT),
+            ],
+        );
+        reflect(root, "run-before", "2026-02-02T00:00:00Z", LINT, "check");
+        assert_eq!(sweep_unfiled(root), SweepReport::default());
+        assert_eq!(backlog_rows(root).len(), 2);
+        assert_eq!(group(&Ledger::from_rows(&backlog_rows(root)), CHECK).state, GroupState::Closed);
+    }
+
+    #[test]
+    fn fix_at_intake_a_doctrine_key_in_two_runs_files_one_rejudge_row_and_one_run_files_none() {
+        let tmp = sandbox();
+        let root = tmp.path();
+        let twice = "Answered the user before reading the log";
+        let once = "Guessed the config path without looking";
+        reflect(root, "run-a", "2026-02-01T00:00:00Z", twice, "doctrine");
+        reflect(root, "run-a", "2026-02-01T01:00:00Z", once, "doctrine");
+        reflect(root, "run-b", "2026-02-02T00:00:00Z", "Answered the user before reading anything", "none");
+        assert_eq!(sweep_unfiled(root), SweepReport { filed: 0, rejudged: 1 });
+        let rows = backlog_rows(root);
+        assert_eq!(rows.len(), 1);
+        assert_eq!(field(&rows[0], "layer"), REJUDGE);
+        assert_eq!(field(&rows[0], "title"), twice);
+        assert!(rows.iter().all(|r| field(r, "title") != once));
+    }
+
+    #[test]
+    fn fix_at_intake_a_rejudge_group_closed_with_a_kept_row_survives_a_second_sweep() {
+        let tmp = sandbox();
+        let root = tmp.path();
+        let wrong = "Answered the user before reading the log";
+        reflect(root, "run-a", "2026-02-01T00:00:00Z", wrong, "doctrine");
+        reflect(root, "run-b", "2026-02-02T00:00:00Z", wrong, "none");
+        assert_eq!(sweep_unfiled(root), SweepReport { filed: 0, rejudged: 1 });
+        seed_rows(
+            root,
+            &[json!({"ts": "2099-01-01T00:00:00Z", "type": "backlog-closed", "title": wrong, "layer": REJUDGE, "kept": "a doctrine line is the right home"})],
+        );
+        assert_eq!(group(&Ledger::from_rows(&backlog_rows(root)), REJUDGE).state, GroupState::Closed);
+        assert_eq!(sweep_unfiled(root), SweepReport::default());
+        assert_eq!(backlog_rows(root).len(), 2);
+    }
+
+    #[test]
+    fn fix_at_intake_an_open_check_finding_with_the_same_key_suppresses_the_rejudge_row() {
+        let tmp = sandbox();
+        let root = tmp.path();
+        seed_rows(root, &[finding("2026-01-15T00:00:00Z", CHECK, "Answered the user before checking CI", "a")]);
+        reflect(root, "run-a", "2026-02-01T00:00:00Z", "Answered the user before reading the log", "doctrine");
+        reflect(root, "run-b", "2026-02-02T00:00:00Z", "Answered the user before reading anything", "none");
+        assert_eq!(sweep_unfiled(root), SweepReport::default());
+        assert_eq!(backlog_rows(root).len(), 1);
+    }
+
+    #[test]
+    fn fix_at_intake_the_sweep_files_a_reworded_mistake_under_the_closed_title_keeping_the_wording() {
+        let tmp = sandbox();
+        let root = tmp.path();
+        let closed = "Shared the cache between two workers";
+        let reworded = "Shared the cache between all workers again";
+        seed_rows(
+            root,
+            &[
+                finding("2026-02-01T00:00:00Z", ARCH, closed, "demo"),
+                typed_close("2026-02-02T00:00:00Z", Some(ARCH), closed),
+            ],
+        );
+        reflect(root, "run-late", "2026-02-03T00:00:00Z", reworded, "architecture");
+        assert_eq!(sweep_unfiled(root), SweepReport { filed: 1, rejudged: 0 });
+        let rows = backlog_rows(root);
+        assert_eq!(rows.len(), 3);
+        let filed = &rows[2];
+        assert_eq!(field(filed, "title"), closed);
+        assert_eq!(field(filed, "layer"), ARCH);
+        assert_eq!(field(filed, "feature"), "unattributed");
+        assert!(field(filed, "detail").contains(&format!("reworded from: {reworded}")));
+        assert_eq!(group(&Ledger::from_rows(&rows), ARCH).state, GroupState::Recurred);
+    }
 }
