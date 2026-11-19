@@ -1,0 +1,119 @@
+{
+  "id": "vpg-1",
+  "feature": "vendored-prompt-parity-guard",
+  "title": "Pin vendored prompts to their source files",
+  "lane": "tiny",
+  "role": "code",
+  "deps": [],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- vendored_prompts",
+  "must_haves": {
+    "truths": [
+      "a test named vendored_prompts_match_source_file_for_file exists in the tests module of packages/bee-rs/crates/bee/src/devtools/prompts.rs",
+      "the test takes its file set from reading the packages/bee/prompts directory, with no hand-written name list",
+      "the test fails when .bee/bin/prompts holds a file the source tree lacks",
+      "the verify command runs the new test and it passes"
+    ]
+  },
+  "decisions": [
+    "39cbf005-f763-408f-9456-81a8c8acf5fb",
+    "a9aedf60-73d2-4b4e-9ed6-baef61e458ad"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/devtools/prompts.rs"
+  ],
+  "read_first": [
+    "docs/history/vendored-prompt-parity-guard/CONTEXT.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Implement CONTEXT.md D1. In the tests module of packages/bee-rs/crates/bee/src/devtools/prompts.rs, beside c4_embedded_prompts_match_disk (line 256), add #[test] fn vendored_prompts_match_source_file_for_file. Use the module's repo_root(). Read every *.md under packages/bee/prompts with std::fs::read_dir; for each, read .bee/bin/prompts/<same name>, fail with a message naming the missing or differing vendored path and the remedy `bee dev regen`; compare text after replacing \\r\\n with \\n on both sides. Then read_dir .bee/bin/prompts and fail on any *.md with no source twin, naming it. Assert at least one file was compared. No hand-written list of names, no code comment, no production code change. Commit once (cell trailer). Proof: the verify command; quote the line that shows the new test ran and passed.",
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "vpg-impl",
+    "outcome": "Added directory-driven vendored_prompts_match_source_file_for_file test; commit 289bb6f4c",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/devtools/prompts.rs"
+    ],
+    "deviations": [
+      "sync-ack: test-only change; no skill text describes vendored prompt parity"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-19T09:45:00.105Z",
+    "behavior_change": false,
+    "verification_evidence": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- vendored_prompts — green:unit — output 'test devtools::prompts::tests::vendored_prompts_match_source_file_for_file ... ok'; extra vendored file made it fail; clippy -D warnings clean",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "d63a1e23-e8b8-482f-ae73-5e4e50e0c2aa",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- vendored_prompts",
+    "claimed_at": "2026-11-19T09:42:57.155Z",
+    "knowledge_delta": [],
+    "sync_ack": "test-only change; no skill text describes vendored prompt parity",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Added directory-driven vendored_prompts_match_source_file_for_file test; commit 289bb6f4c",
+      "commit": "289bb6f4cdb3faf3dccde3e767bbd02fc64ecd6e",
+      "files": [
+        "packages/bee-rs/crates/bee/src/devtools/prompts.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- vendored_prompts — green:unit — cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- vendored_prompts — green:unit — output 'test devtools::prompts::tests::vendored_prompts_match_source_file_for_file ... ok'; extra vendored file made it fail; clippy -D warnings clean",
+      "deviations": [],
+      "skipped": [
+        "full cargo test --no-fail-fast — only the narrow verify ran",
+        "knowledge delta — none written, thin test-only change"
+      ],
+      "patch_id": "76b021fbf4b3070f75b9b5f6a8b457ed6c08ce36"
+    },
+    "skipped": [
+      "full cargo test --no-fail-fast — only the narrow verify ran",
+      "knowledge delta — none written, thin test-only change"
+    ],
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "a test named vendored_prompts_match_source_file_for_file exists in the tests module of packages/bee-rs/crates/bee/src/devtools/prompts.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/devtools/prompts.rs"
+          },
+          {
+            "requirement": "the test takes its file set from reading the packages/bee/prompts directory, with no hand-written name list",
+            "artifact": "packages/bee-rs/crates/bee/src/devtools/prompts.rs"
+          },
+          {
+            "requirement": "the test fails when .bee/bin/prompts holds a file the source tree lacks",
+            "artifact": "docs/history/vendored-prompt-parity-guard/reports/vpg-2.md"
+          },
+          {
+            "requirement": "the verify command runs the new test and it passes",
+            "artifact": "docs/history/vendored-prompt-parity-guard/reports/vpg-2.md"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/devtools/prompts.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/devtools/prompts.rs"
+          }
+        ],
+        "recorded_at": "2026-11-19T09:48:46.694Z",
+        "recorded_by": "d63a1e23-e8b8-482f-ae73-5e4e50e0c2aa",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": {
+    "new": 26669,
+    "cached": 118360,
+    "total": 145029,
+    "models": {
+      "claude-sonnet-5-5": {
+        "new": 26669,
+        "cached": 118360,
+        "total": 145029
+      }
+    },
+    "jobs": [
+      "job-1795081385803-1266659-1"
+    ]
+  }
+}

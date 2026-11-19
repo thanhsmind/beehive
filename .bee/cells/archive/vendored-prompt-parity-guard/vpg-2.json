@@ -1,0 +1,122 @@
+{
+  "id": "vpg-2",
+  "feature": "vendored-prompt-parity-guard",
+  "title": "Prove the vendored prompt parity test red then green",
+  "lane": "tiny",
+  "role": "test",
+  "deps": [
+    "vpg-1"
+  ],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- vendored_prompts",
+  "must_haves": {
+    "truths": [
+      "with one line appended to .bee/bin/prompts/peer-boot.md the test fails and its message names peer-boot.md",
+      "with an extra file .bee/bin/prompts/stray.md the test fails and its message names stray.md",
+      "after restoring the tree the test passes and git status shows .bee/bin/prompts clean",
+      "the report under docs/history/vendored-prompt-parity-guard/reports/ quotes each run's result line"
+    ]
+  },
+  "decisions": [
+    "a9aedf60-73d2-4b4e-9ed6-baef61e458ad",
+    "39cbf005-f763-408f-9456-81a8c8acf5fb"
+  ],
+  "files": [
+    "docs/history/vendored-prompt-parity-guard/reports/vpg-2.md"
+  ],
+  "read_first": [
+    "docs/history/vendored-prompt-parity-guard/CONTEXT.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Check contract vendored-prompt-parity (decision a9aedf60) on the vpg-1 commit. Run 1: append one line to .bee/bin/prompts/peer-boot.md, run the verify, expect FAILED naming peer-boot.md, then restore the file with a checkout of HEAD. Run 2: create .bee/bin/prompts/stray.md, run the verify, expect FAILED naming stray.md, then delete it. Run 3: run the verify on the clean tree, expect pass. Confirm .bee/bin/prompts is clean in git status. Edit no source. Write docs/history/vendored-prompt-parity-guard/reports/vpg-2.md with each run, its command and its result line verbatim. If a check fails, return BLOCKED with the evidence. Commit only the report (cell trailer).",
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "vpg-test",
+    "outcome": "Parity test failed naming peer-boot.md and stray.md, passed on clean tree; report committed db2c6d7a2",
+    "files_changed": [
+      "docs/history/vendored-prompt-parity-guard/reports/vpg-2.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-11-19T09:45:33.132Z",
+    "behavior_change": false,
+    "verification_evidence": "runs 1/2 FAILED naming the file, run 3 ok 1 passed; prompts dir clean",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "d63a1e23-e8b8-482f-ae73-5e4e50e0c2aa",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- vendored_prompts",
+    "claimed_at": "2026-11-19T09:45:05.653Z",
+    "knowledge_delta": [],
+    "no_mistakes": true,
+    "no_knowledge_used": true,
+    "no_principles_used": true,
+    "report": {
+      "outcome": "Parity test failed naming peer-boot.md and stray.md, passed on clean tree; report committed db2c6d7a2",
+      "commit": "db2c6d7a2262b8cac663f4ad47283b026df27c0d",
+      "files": [
+        "docs/history/vendored-prompt-parity-guard/reports/vpg-2.md"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- vendored_prompts — green:unit — runs 1/2 FAILED naming the file, run 3 ok 1 passed; prompts dir clean",
+      "deviations": [],
+      "knowledge_used": [],
+      "principles_used": [],
+      "reaction": "confirm",
+      "skipped": [
+        "full clippy+test proof command — cell is a report-only change, ran the cell verify three times instead"
+      ],
+      "patch_id": "c48b9e479e2ebb848fe5471c140dacd3a679dd26"
+    },
+    "reaction": "confirm",
+    "skipped": [
+      "full clippy+test proof command — cell is a report-only change, ran the cell verify three times instead"
+    ],
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "with one line appended to .bee/bin/prompts/peer-boot.md the test fails and its message names peer-boot.md",
+            "artifact": "docs/history/vendored-prompt-parity-guard/reports/vpg-2.md"
+          },
+          {
+            "requirement": "with an extra file .bee/bin/prompts/stray.md the test fails and its message names stray.md",
+            "artifact": "docs/history/vendored-prompt-parity-guard/reports/vpg-2.md"
+          },
+          {
+            "requirement": "after restoring the tree the test passes and git status shows .bee/bin/prompts clean",
+            "artifact": "docs/history/vendored-prompt-parity-guard/reports/vpg-2.md"
+          },
+          {
+            "requirement": "the report under docs/history/vendored-prompt-parity-guard/reports/ quotes each run's result line",
+            "artifact": "docs/history/vendored-prompt-parity-guard/reports/vpg-2.md"
+          },
+          {
+            "requirement": "docs/history/vendored-prompt-parity-guard/reports/vpg-2.md",
+            "artifact": "docs/history/vendored-prompt-parity-guard/reports/vpg-2.md"
+          }
+        ],
+        "recorded_at": "2026-11-19T09:48:46.703Z",
+        "recorded_by": "d63a1e23-e8b8-482f-ae73-5e4e50e0c2aa",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": {
+    "new": 22270,
+    "cached": 55387,
+    "total": 77657,
+    "models": {
+      "claude-opus-5-5": {
+        "new": 22270,
+        "cached": 55387,
+        "total": 77657
+      }
+    },
+    "jobs": [
+      "job-1795081510277-1273118-1"
+    ]
+  }
+}
