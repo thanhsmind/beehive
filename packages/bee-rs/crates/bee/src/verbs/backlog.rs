@@ -3331,4 +3331,277 @@ mod tests {
         let guards = backlog_rows(&root).iter().filter(|r| r["kind"] == "pbi" && r["title"] == "Guard: strip prefix").count();
         assert_eq!(guards, 1);
     }
+
+    const ROUTER_CHILD: &str = "verbs::backlog::tests::backlog_router_child";
+
+    #[test]
+    #[ignore = "spawned by the fix-at verb tests"]
+    fn backlog_router_child() {
+        let raw = std::env::var("BEE_TEST_ROUTER_ARGV").expect("BEE_TEST_ROUTER_ARGV");
+        let args: Vec<OsString> = raw.split('\u{1f}').map(OsString::from).collect();
+        let code = crate::router::try_native(&args, Instant::now()).expect("served natively");
+        println!("child-exit: {code:?}");
+    }
+
+    fn bee_in(cwd: &Path, args: &[&str]) -> (String, String) {
+        let exe = std::env::current_exe().expect("test binary path");
+        let out = std::process::Command::new(&exe)
+            .args(["--exact", ROUTER_CHILD, "--ignored", "--test-threads", "1", "--nocapture"])
+            .current_dir(cwd)
+            .env("BEE_TEST_ROUTER_ARGV", args.join("\u{1f}"))
+            .env_remove("BEE_HERDING_WORKER")
+            .env_remove("BEE_HERDING_JOB_ID")
+            .output()
+            .expect("spawn the test binary");
+        let text = format!("{}{}", String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
+        let code = text
+            .split("child-exit: ")
+            .nth(1)
+            .and_then(|rest| rest.lines().next())
+            .unwrap_or_else(|| panic!("no child exit in {text}"))
+            .to_string();
+        (code, text)
+    }
+
+    fn exit_of(code: ExitCode) -> String {
+        format!("{code:?}")
+    }
+
+    fn close_line(ts: &str, title: &str, layer: &str, guard_cmd: &str) -> String {
+        format!(
+            "{{\"ts\":\"{ts}\",\"type\":\"backlog-closed\",\"title\":\"{title}\",\"layer\":\"{layer}\",\"feature\":\"f\",\"guard\":\"g\",\"guard_cmd\":\"{guard_cmd}\"}}\n"
+        )
+    }
+
+    fn ledger_of(root: &Path) -> fix_at::Ledger {
+        fix_at::Ledger::from_rows(&backlog_rows(root))
+    }
+
+    fn guard_pbis(root: &Path) -> usize {
+        backlog_rows(root)
+            .iter()
+            .filter(|r| r["kind"] == "pbi" && r["event"] == "add" && r["title"].as_str().is_some_and(|t| t.starts_with("Guard: ")))
+            .count()
+    }
+
+    #[test]
+    fn fix_at_verbs_close_refuses_every_unproven_or_wrong_group_and_writes_nothing() {
+        let (_tmp, root, _) = brief_repo();
+        let mut seed = finding_line("2026-01-01T00:00:00.000Z", "strip prefix");
+        seed.push_str(&finding_line("2026-01-02T00:00:00.000Z", "done before"));
+        seed.push_str(&close_line("2026-01-03T00:00:00.000Z", "done before", "fix-at:check", "true"));
+        std::fs::write(root.join(".bee/backlog.jsonl"), &seed).unwrap();
+        let before = std::fs::read(root.join(".bee/backlog.jsonl")).unwrap();
+        let base = ["backlog", "fix-at", "close", "--layer", "fix-at:check", "--title", "strip prefix"];
+        let with = |extra: &[&'static str]| -> Vec<&'static str> {
+            let mut v: Vec<&str> = base.to_vec();
+            v.extend_from_slice(extra);
+            v
+        };
+        let cases: Vec<(Vec<&str>, &str)> = vec![
+            (with(&["--guard", "", "--guard-cmd", "true", "--red-proof", "r"]), "--guard must not be empty"),
+            (with(&["--guard", "g", "--red-proof", "r"]), "--guard-cmd must not be empty"),
+            (with(&["--guard", "g", "--guard-cmd", "true", "--red-proof", ""]), "--red-proof must not be empty"),
+            (with(&["--guard", "g", "--guard-cmd", "false", "--red-proof", "r"]), "exited with 1"),
+            (
+                vec!["backlog", "fix-at", "close", "--layer", "fix-at:check", "--title", "never filed", "--guard", "g", "--guard-cmd", "true", "--red-proof", "r"],
+                "no fix-at group",
+            ),
+            (
+                vec!["backlog", "fix-at", "close", "--layer", "fix-at:check", "--title", "done before", "--guard", "g", "--guard-cmd", "true", "--red-proof", "r"],
+                "already Closed",
+            ),
+            (with(&["--kept", "doctrine stands"]), "--kept only closes a fix-at:rejudge group"),
+        ];
+        for (args, why) in cases {
+            let (code, out) = bee_in(&root, &args);
+            assert_eq!(code, exit_of(ExitCode::FAILURE), "{args:?}: {out}");
+            assert!(out.contains(why), "{args:?} did not say {why:?}: {out}");
+            assert_eq!(std::fs::read(root.join(".bee/backlog.jsonl")).unwrap(), before, "{args:?} wrote a row");
+        }
+    }
+
+    #[test]
+    fn fix_at_verbs_close_runs_the_guard_from_the_repo_root_and_appends_one_proven_close() {
+        let (_tmp, root, _) = brief_repo();
+        let mut seed = finding_line("2026-01-01T00:00:00.000Z", "strip prefix");
+        seed.push_str(&finding_line("2026-01-02T00:00:00.000Z", "came back"));
+        seed.push_str(&close_line("2026-01-03T00:00:00.000Z", "came back", "fix-at:check", "true"));
+        seed.push_str(&finding_line("2026-01-04T00:00:00.000Z", "came back"));
+        std::fs::write(root.join(".bee/backlog.jsonl"), &seed).unwrap();
+        let sub = root.join("deep").join("er");
+        std::fs::create_dir_all(&sub).unwrap();
+        let rows_before = backlog_rows(&root).len();
+
+        let (code, out) = bee_in(&sub, &close_args("test -f .bee/backlog.jsonl"));
+        assert_eq!(code, exit_of(ExitCode::SUCCESS), "{out}");
+        let rows = backlog_rows(&root);
+        assert_eq!(rows.len(), rows_before + 1, "{out}");
+        let close = rows.last().unwrap();
+        assert_eq!(close["type"], "backlog-closed");
+        assert_eq!(close["layer"], "fix-at:check");
+        assert_eq!(close["title"], "strip prefix");
+        assert_eq!(close["guard"], "a rule");
+        assert_eq!(close["guard_cmd"], "test -f .bee/backlog.jsonl");
+        assert_eq!(close["red_proof"], "red once");
+        assert_eq!(close["commit"], "abc123");
+        assert_eq!(ledger_of(&root).find("fix-at:check", "strip prefix").unwrap().state, fix_at::GroupState::Closed);
+
+        assert_eq!(ledger_of(&root).find("fix-at:check", "came back").unwrap().state, fix_at::GroupState::Recurred);
+        let (code, out) = bee_in(
+            &root,
+            &["backlog", "fix-at", "close", "--layer", "fix-at:check", "--title", "came back", "--guard", "g2", "--guard-cmd", "true", "--red-proof", "r2"],
+        );
+        assert_eq!(code, exit_of(ExitCode::SUCCESS), "{out}");
+        assert_eq!(ledger_of(&root).find("fix-at:check", "came back").unwrap().state, fix_at::GroupState::Closed);
+    }
+
+    #[test]
+    fn fix_at_verbs_close_keeps_a_rejudge_group_with_a_reason_and_no_command() {
+        let (_tmp, root, _) = brief_repo();
+        let row = finding_line("2026-01-01T00:00:00.000Z", "soft label").replace("fix-at:check", "fix-at:rejudge");
+        std::fs::write(root.join(".bee/backlog.jsonl"), row).unwrap();
+        let (code, out) = bee_in(&root, &["backlog", "fix-at", "close", "--layer", "fix-at:rejudge", "--title", "soft label", "--kept", "doctrine stands"]);
+        assert_eq!(code, exit_of(ExitCode::SUCCESS), "{out}");
+        let rows = backlog_rows(&root);
+        assert_eq!(rows.len(), 2, "{out}");
+        let close = rows.last().unwrap();
+        assert_eq!(close["type"], "backlog-closed");
+        assert_eq!(close["layer"], "fix-at:rejudge");
+        assert_eq!(close["guard_cmd"], "");
+        assert!(close["guard"].as_str().unwrap().contains("doctrine stands"), "{close}");
+        assert_eq!(ledger_of(&root).find("fix-at:rejudge", "soft label").unwrap().state, fix_at::GroupState::Closed);
+    }
+
+    #[test]
+    fn fix_at_verbs_backlog_add_refuses_a_hand_close_on_a_fix_at_layer_and_names_fix_at_close() {
+        let (_tmp, root, _) = brief_repo();
+        std::fs::write(root.join(".bee/backlog.jsonl"), finding_line("2026-01-01T00:00:00.000Z", "strip prefix")).unwrap();
+        let before = std::fs::read(root.join(".bee/backlog.jsonl")).unwrap();
+        let (code, out) = bee_in(
+            &root,
+            &["backlog", "add", "--type", "backlog-closed", "--title", "strip prefix", "--severity", "P3", "--layer", "fix-at:check"],
+        );
+        assert_eq!(code, exit_of(ExitCode::FAILURE), "{out}");
+        assert!(out.contains("bee backlog fix-at close"), "{out}");
+        assert_eq!(std::fs::read(root.join(".bee/backlog.jsonl")).unwrap(), before);
+        assert_eq!(ledger_of(&root).find("fix-at:check", "strip prefix").unwrap().state, fix_at::GroupState::Open);
+    }
+
+    #[test]
+    fn fix_at_verbs_verify_reopens_a_red_guard_and_lists_a_kept_group_unverifiable() {
+        let (_tmp, root, _) = brief_repo();
+        let mut seed = finding_line("2026-01-01T00:00:00.000Z", "broke later");
+        seed.push_str(&close_line("2026-01-02T00:00:00.000Z", "broke later", "fix-at:check", "false"));
+        seed.push_str(&finding_line("2026-01-01T00:00:00.000Z", "soft label").replace("fix-at:check", "fix-at:rejudge"));
+        seed.push_str(&close_line("2026-01-02T00:00:00.000Z", "soft label", "fix-at:rejudge", ""));
+        std::fs::write(root.join(".bee/backlog.jsonl"), &seed).unwrap();
+        let rows_before = backlog_rows(&root).len();
+
+        let (code, out) = bee_in(&root, &["backlog", "fix-at", "verify"]);
+        assert_eq!(code, exit_of(ExitCode::FAILURE), "{out}");
+        assert!(out.contains("unverifiable: soft label"), "{out}");
+        let rows = backlog_rows(&root);
+        assert_eq!(rows.len(), rows_before + 1, "{out}");
+        let filed = rows.last().unwrap();
+        assert_eq!(filed["type"], "finding");
+        assert_eq!(filed["layer"], "fix-at:check");
+        assert_eq!(filed["title"], "broke later");
+        let ledger = ledger_of(&root);
+        assert_eq!(ledger.find("fix-at:check", "broke later").unwrap().state, fix_at::GroupState::Recurred);
+        assert_eq!(ledger.find("fix-at:rejudge", "soft label").unwrap().state, fix_at::GroupState::Closed);
+        let audit = std::fs::read_to_string(root.join(".bee/audit.jsonl")).unwrap();
+        let upkeep = audit.lines().filter(|l| serde_json::from_str::<Value>(l).unwrap()["kind"] == "fix-at-upkeep").count();
+        assert_eq!(upkeep, 1, "{audit}");
+    }
+
+    #[test]
+    fn fix_at_verbs_next_puts_recurred_first_then_more_findings_then_older() {
+        let (_tmp, root, _) = brief_repo();
+        let next_title = |seed: &str| -> String {
+            std::fs::write(root.join(".bee/backlog.jsonl"), seed).unwrap();
+            let (code, out) = bee_in(&root, &["backlog", "fix-at", "next", "--json"]);
+            assert_eq!(code, exit_of(ExitCode::SUCCESS), "{out}");
+            json_out(&out)["group"]["title"].as_str().unwrap_or("").to_string()
+        };
+        let mut many = finding_line("2026-01-05T00:00:00.000Z", "many");
+        many.push_str(&finding_line("2026-01-06T00:00:00.000Z", "many"));
+        many.push_str(&finding_line("2026-01-07T00:00:00.000Z", "many"));
+        let older = finding_line("2026-01-01T00:00:00.000Z", "older");
+        let newer = finding_line("2026-01-09T00:00:00.000Z", "newer");
+        let mut recurred = finding_line("2026-01-02T00:00:00.000Z", "recurred");
+        recurred.push_str(&close_line("2026-01-03T00:00:00.000Z", "recurred", "fix-at:check", "true"));
+        recurred.push_str(&finding_line("2026-01-10T00:00:00.000Z", "recurred"));
+
+        assert_eq!(next_title(&format!("{many}{older}{newer}{recurred}")), "recurred");
+        assert_eq!(next_title(&format!("{newer}{older}{many}")), "many");
+        assert_eq!(next_title(&format!("{newer}{older}")), "older");
+    }
+
+    #[test]
+    fn fix_at_verbs_promote_files_one_guard_pbi_and_holds_while_it_is_open() {
+        let (_tmp, root, _) = brief_repo();
+        let (code, out) = bee_in(&root, &["backlog", "fix-at", "promote"]);
+        assert_eq!(code, exit_of(ExitCode::SUCCESS), "{out}");
+        assert_eq!(guard_pbis(&root), 0, "{out}");
+
+        std::fs::write(root.join(".bee/backlog.jsonl"), finding_line("2026-01-01T00:00:00.000Z", "strip prefix")).unwrap();
+        let (code, out) = bee_in(&root, &["backlog", "fix-at", "promote", "--json"]);
+        assert_eq!(code, exit_of(ExitCode::SUCCESS), "{out}");
+        assert_eq!(guard_pbis(&root), 1, "{out}");
+        let id = json_out(&out)["id"].as_str().expect("the PBI id").to_string();
+
+        let (code, out) = bee_in(&root, &["backlog", "fix-at", "promote"]);
+        assert_eq!(code, exit_of(ExitCode::FAILURE), "{out}");
+        assert!(out.contains("still proposed or in flight"), "{out}");
+        assert_eq!(guard_pbis(&root), 1, "{out}");
+
+        let (code, out) = bee_in(&root, &["backlog", "pbi", "status", "--id", &id, "--to", "in-flight"]);
+        assert_eq!(code, exit_of(ExitCode::SUCCESS), "{out}");
+        let (code, out) = bee_in(&root, &["backlog", "fix-at", "promote"]);
+        assert_eq!(code, exit_of(ExitCode::FAILURE), "{out}");
+        assert!(out.contains("still proposed or in flight"), "{out}");
+        assert_eq!(guard_pbis(&root), 1, "{out}");
+    }
+
+    #[test]
+    fn fix_at_verbs_upkeep_fix_at_is_due_for_a_closed_group_until_verify_logs_a_run() {
+        let (_tmp, root, _) = brief_repo();
+        let mut seed = finding_line("2026-01-01T00:00:00.000Z", "strip prefix");
+        seed.push_str(&close_line("2026-01-02T00:00:00.000Z", "strip prefix", "fix-at:check", "true"));
+        std::fs::write(root.join(".bee/backlog.jsonl"), &seed).unwrap();
+        let fix_at_item = |out: &str| -> Value {
+            json_out(out)["items"].as_array().unwrap().iter().find(|i| i["kind"] == "fix-at").cloned().expect("a fix-at item")
+        };
+
+        let (code, out) = bee_in(&root, &["upkeep", "due", "--kind", "fix-at", "--json"]);
+        assert_eq!(code, exit_of(ExitCode::from(10)), "{out}");
+        assert_eq!(fix_at_item(&out)["due"], true, "{out}");
+
+        let (code, out) = bee_in(&root, &["backlog", "fix-at", "verify"]);
+        assert_eq!(code, exit_of(ExitCode::SUCCESS), "{out}");
+        let (code, out) = bee_in(&root, &["upkeep", "due", "--kind", "fix-at", "--json"]);
+        assert_eq!(code, exit_of(ExitCode::SUCCESS), "{out}");
+        assert_eq!(fix_at_item(&out)["due"], false, "{out}");
+    }
+
+    #[test]
+    fn fix_at_verbs_session_takeup_promotes_one_guard_pbi_only_when_debt_is_open() {
+        let (_tmp, root, _) = brief_repo();
+        std::fs::create_dir_all(root.join(".bee/sessions")).unwrap();
+        std::fs::write(root.join(".bee/sessions/s1.json"), r#"{"id":"s1","work":{"ask":"a","status":"open"}}"#).unwrap();
+        let takeup = || {
+            let (code, out) = bee_in(&root, &["work", "set", "--session", "s1", "--status", "active"]);
+            assert_eq!(code, exit_of(ExitCode::SUCCESS), "{out}");
+        };
+
+        takeup();
+        assert_eq!(guard_pbis(&root), 0);
+
+        std::fs::write(root.join(".bee/backlog.jsonl"), finding_line("2026-01-01T00:00:00.000Z", "strip prefix")).unwrap();
+        takeup();
+        assert_eq!(guard_pbis(&root), 1);
+        takeup();
+        assert_eq!(guard_pbis(&root), 1);
+    }
 }
