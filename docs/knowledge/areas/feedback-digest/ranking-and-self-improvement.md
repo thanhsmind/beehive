@@ -141,7 +141,7 @@ previous change never counts as approval of the next publication.
 
 Read when: you need to know whether a fix-at group is open, closed or recurred.
 
-`verbs/fix_at.rs` `Ledger::from_rows` is the only place that decides it; `fix_at_load` in the
+`verbs/fix_at.rs` `Ledger::from_rows` is the only place that decides it (mistake-loop-closed D1); `fix_at_load` in the
 digest and the close dedupe (`current_epoch_finding_feature`) both call it. Two copies of the rule
 had drifted: the digest matched closes by title across layers, the dedupe read `kind` as well as
 `type`. A close that names a fix-at layer matches only that layer; a close with none matches every
@@ -153,13 +153,13 @@ in the `Group` struct rather than copying them here.
 Read when: you are closing a fix-at group, a closed guard went red, or you wonder what pulls the next group.
 
 A free-text `backlog-closed` row proved nothing, so `bee backlog add` refuses that type on a fix-at
-layer and `bee backlog fix-at close` is the only door: it runs the guard command itself and refuses
+layer and `bee backlog fix-at close` is the only door (mistake-loop-closed D7): it runs the guard command itself and refuses
 on a non-zero exit, which is why the proof is a command and not a sentence. A rejudge group may
 close with `--kept <reason>` and no command; such a close, like a legacy hand close, has no
-`guard_cmd`, so `verify` lists it as unverifiable instead of reopening it. `verify` re-runs every
-closed guard and appends a finding row on a red one, which turns the group Recurred through the same
-fold. `next` orders Recurred, then findings, then age, and `promote` files one `Guard: ` PBI at a
-time so the existing dispatch flow picks it up; session takeup promotes silently. Rejected: a
+`guard_cmd`, so `bee backlog fix-at verify` lists it as unverifiable instead of reopening it. `bee backlog fix-at verify` re-runs every
+closed guard, appends a finding row on a red one (turning the group Recurred through the same
+fold), exits non-zero, and records a `fix-at-upkeep` audit row (mistake-loop-closed D8, D9). `bee backlog fix-at next` orders Recurred, then findings, then age, and `bee backlog fix-at promote` files one `Guard: ` PBI at a
+time so the existing dispatch flow picks it up; session takeup promotes silently when open debt exists and no fix-at PBI is open (mistake-loop-closed D9). `bee upkeep due` gains kind `fix-at`, due when a Closed group exists and no `fix-at-upkeep` audit row is younger than 7 days. Rejected: a
 `fix-at` upkeep skill, because a verb pair needs none (the upkeep item has skill null). The guard
 timeout is a constant in `verbs/backlog.rs`; find it there. Guesses, not facts: a PBI filed by
-takeup has no owner brief, so doctor's brief check may name it until someone writes one.
+takeup has no owner brief, so doctor's brief check may name it while none is written.

@@ -54,10 +54,10 @@ whole section, in this order:
 2. Critical patterns (digest)
 3. Command surface
 4. Project map
-5. Fix-at debt
+5. Fix-at debt (`### Fix-at debt`, registered in `DROPPABLE` in `budget.rs`, mistake-loop-closed D6)
 
 A dropped section takes its heading and its blank separator line with it. The
-header, the gates, HANDOFF, the debt counts, the dispatch door, the knowledge
+header, the gates, HANDOFF, the capture-queue counts, the dispatch door, the knowledge
 context and the discovery maps never drop. When the five drops are not
 sufficient, the builder stops and returns the text that remains. It never
 cuts a section in the middle.
@@ -71,10 +71,18 @@ its own fetch path, because one command does not carry all of them:
 - Critical patterns (digest) → `docs/knowledge/index.md`
 - Command surface → `.bee/bin/bee --help --names`
 - Project map → `docs/knowledge/index.md`
-- Fix-at debt → `bee backlog fix-at next`
+- Fix-at debt → `bee backlog fix-at next` (mistake-loop-closed D6)
 
 `bee status --json` carries the recent decisions, but not the pattern digest
 or the project map. A quiet repo that fits renders no Omitted line.
+
+**The Fix-at debt block summarizes open fix-at groups when any exist (mistake-loop-closed D6).**
+Inserted after the capture queue, `### Fix-at debt` shows the total open count,
+per-layer counts (`check`, `architecture`, `rejudge`), recurred count, oldest
+open age in days, and a `next` / `promote` pointer. It is registered in
+`DROPPABLE` in `packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs`
+with fetch target `bee backlog fix-at next` so it drops before core gates if
+the preamble approaches `PREAMBLE_BUDGET_BYTES`.
 
 **Discovery maps with no frontier ticket fold into one line.** A map with
 frontier tickets keeps its own line. All maps with zero frontier tickets fold
