@@ -11,9 +11,9 @@
     "uat": false
   },
   "summary": "Feature \"herding-run-hardening\" started at phase \"planning\" (lane).",
-  "next_action": "D3-D5 belong to sibling PBIs; the feature closes when they land.",
+  "next_action": "Merged into main at 91c2fd7; capture what settled, then bee close --feature herding-run-hardening.",
   "created_at": "2026-11-19T10:20:44.497Z",
-  "run_state": "awaiting-approval",
+  "run_state": null,
   "waiting_on": null,
   "route": {
     "class": "bugfix",
@@ -24,15 +24,12 @@
     "updated_at": "2026-11-19T10:20:44.568Z",
     "feature": "herding-run-hardening"
   },
-  "merge_ready": {
-    "since": "2026-11-19T11:01:42.845Z",
-    "branch": "wt/herding-run-hardening",
-    "worktree_id": "beehive--wt--herding-run-hardening",
-    "uat": "pending",
-    "blocked_by": [
-      "routing",
-      "doc-deferral"
-    ]
+  "last_compounding_run": {
+    "feature": "herding-run-hardening",
+    "date": "2026-11-19",
+    "at": "2026-11-19T11:02:52.532Z",
+    "learnings": "docs/history/herding-run-hardening/learnings.md",
+    "next_action": "Close the feature once D3-D5 ship."
   },
   "last_scribing_run": {
     "feature": "herding-run-hardening",
@@ -42,12 +39,5 @@
       "bee-herding"
     ],
     "next_action": "Run compounding."
-  },
-  "last_compounding_run": {
-    "feature": "herding-run-hardening",
-    "date": "2026-11-19",
-    "at": "2026-11-19T11:02:52.532Z",
-    "learnings": "docs/history/herding-run-hardening/learnings.md",
-    "next_action": "Close the feature once D3-D5 ship."
   }
 }

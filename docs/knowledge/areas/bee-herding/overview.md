@@ -257,6 +257,11 @@ helper `stall_word` in `herding.rs`.
 - **A control pane narrowed too far** stalls silently every interval — the exact failure the whole
   cockpit exists to end. This is why the control surface is enumerated against measured actions, and
   why it is documented to grow when a role gains a command, rather than being set to "read-only".
+- **`bee herding status --json` with no `--job` is bounded by default** (herding-run-hardening D5): it
+  prints one trimmed row per job under a fixed byte cap and names the file under `.bee/tmp/output/`
+  that holds the full form; `--full` prints the full form inline. Inline, the full form reached
+  hundreds of KB with many jobs, which a leader reads every poll. The generic output spill never
+  covers this: it skips `--json` by design. Read the cap and the kept row keys in `herding.rs`.
 - **A worktree finished by bee but never merged** is the merge gesture's normal input; nothing
   retires it automatically, by design.
 

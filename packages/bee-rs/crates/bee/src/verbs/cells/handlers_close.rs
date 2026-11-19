@@ -926,6 +926,15 @@ pub(crate) fn cap_cell_from_flags(root: &Path, f: &CapFlags, finish: bool) -> MR
     })();
     guard.release();
     let mut saved = saved?;
+    if let Err(reason) = crate::verbs::state_group::reconcile_capped_workers(root) {
+        let reason_disp = match &reason {
+            crate::verbs::reservations::Err2::Msg(m) => m.as_str(),
+            crate::verbs::reservations::Err2::Ex => "internal error",
+        };
+        eprintln!(
+            "bee cells cap: could not reconcile worker receipts ({reason_disp}) — worker statuses may be stale until the next merge."
+        );
+    }
     release_claim_file_best_effort(root, id, seen_claim.as_deref());
     if !finish {
         release_reservations_for_unclaimed_cell(root, id);

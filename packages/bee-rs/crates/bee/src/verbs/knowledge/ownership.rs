@@ -2,6 +2,9 @@
 #![allow(unused_imports)]
 
 use super::*;
+
+#[path = "heading_section.rs"]
+mod heading_section;
 use serde_json::Value;
 use std::collections::HashMap;
 use std::path::Path;
@@ -127,7 +130,7 @@ pub(crate) fn load_ownership(repo_root: &Path) -> Ownership {
         }
 
         // 3. AGENTS.md rule homes section
-        if body.contains("## AGENTS.md rule homes") {
+        if heading_section::section_after_heading(body, "## AGENTS.md rule homes").is_some() {
             let parsed_agents = parse_agents_rule_homes(body, &file_areas);
             agents_homes.extend(parsed_agents);
         }
@@ -149,14 +152,10 @@ pub(crate) fn load_ownership(repo_root: &Path) -> Ownership {
 
 fn parse_agents_rule_homes(body: &str, default_areas: &[String]) -> Vec<RuleHome> {
     let mut out = Vec::new();
-    let Some(start_pos) = body.find("## AGENTS.md rule homes") else {
+    let Some(section_text) =
+        heading_section::section_after_heading(body, "## AGENTS.md rule homes")
+    else {
         return out;
-    };
-    let rest = &body[start_pos + "## AGENTS.md rule homes".len()..];
-    let section_text = if let Some(end_pos) = rest.find("\n## ") {
-        &rest[..end_pos]
-    } else {
-        rest
     };
 
     let mut current_rule: Option<String> = None;
@@ -305,4 +304,24 @@ fn glob_match_segs(pat_segs: &[&str], path_segs: &[&str]) -> bool {
         return glob_match_segs(&pat_segs[1..], &path_segs[1..]);
     }
     false
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn heading_section_quoted_earlier_does_not_move_parse_agents_rule_homes() {
+        let body = "# Concept\n\nThe index lives under `## AGENTS.md rule homes` below.\n\n- `decoy-rule` (packages/bee/decoy.md)\n\n## AGENTS.md rule homes\n\n- `real-rule` (packages/bee/LEADER.md)\n  spoken: say it\n  applied_at:\n    - skills/a/SKILL.md\n\n## After\n\n- `late-rule` (packages/bee/late.md)\n";
+        let areas = vec!["doctrine-layer".to_string()];
+        assert_eq!(
+            parse_agents_rule_homes(body, &areas),
+            vec![RuleHome {
+                rule: "real-rule".to_string(),
+                home: "packages/bee/LEADER.md".to_string(),
+                areas,
+                applied_at: vec!["skills/a/SKILL.md".to_string()],
+            }]
+        );
+    }
 }

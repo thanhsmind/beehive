@@ -2970,6 +2970,18 @@ mod tests {
     }
 
     #[test]
+    fn a_fresh_run_at_the_default_cap_is_refused_with_limits_concurrency() {
+        let root = Path::new(".");
+        let cap = default_concurrency(16);
+        let v = check_limits_from(root, &Value::Null, 16, None, 0, || wave_ledger::Occupancy::Live(cap as usize))
+            .expect("a run at the default cap must refuse");
+        assert_eq!(v["reason"], "limits.concurrency");
+        assert_eq!(v["retryable"], true);
+        assert_eq!(v["limit"], cap);
+        assert_eq!(v["live"], cap);
+    }
+
+    #[test]
     fn default_concurrency_with_fallback_occupancy_does_not_refuse() {
         let root = Path::new(".");
         let res = check_limits_from(root, &Value::Null, 16, None, 0, || wave_ledger::Occupancy::Fallback(0));
