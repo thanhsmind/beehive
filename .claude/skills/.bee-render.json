@@ -12,11 +12,11 @@
     },
     {
       "name": "bee-blast-radius",
-      "sha256": "67fba6ee379719675e65d270d1393b076db94f74ac84f674bb816b68e342e559"
+      "sha256": "8e98b10254b0ccb88aa968c812fed7ff1bdd7a6139c250863fe1ddd12c676954"
     },
     {
       "name": "bee-capturing",
-      "sha256": "852a715c85429ec8046df49a970f297a8c239b5c165f46ebb20d109bdf0efc11"
+      "sha256": "1741816ff8d2160d809f6090dfeb9431d83bc59721b201e489340ab2df1eeb94"
     },
     {
       "name": "bee-comment-review",
@@ -52,7 +52,7 @@
     },
     {
       "name": "bee-herding",
-      "sha256": "3d510e41cc39a4b07791b35c2bf972bfefd25025c7f2f2a63e30be02ff11b41f"
+      "sha256": "28df162afd528cafda85c70bb2556881ccba8c4c66d7caae490fbfb22f712974"
     },
     {
       "name": "bee-herdr",
@@ -60,11 +60,11 @@
     },
     {
       "name": "bee-hive",
-      "sha256": "d1129521efec3be38ff606fd37b372f888a0b0a9ed26bebb6ccc170054307ddc"
+      "sha256": "c90ba067ef4d0b79e136cf6bcf23b4ec19bbc2d5557f82dbfdfd755ab0b1d4ff"
     },
     {
       "name": "bee-how",
-      "sha256": "5314188edc5534fb6ab0ad25672f3f661ecf321ffba88e670568ea7115572248"
+      "sha256": "647550e300199992f9b1377d1f1775f1178f6e88bc4ff85446a7ec7a56926088"
     },
     {
       "name": "bee-interrogate",
@@ -80,7 +80,7 @@
     },
     {
       "name": "bee-planning",
-      "sha256": "704909841c5d419072bfd471c798b484ee736e40c57feb37f376669010472e70"
+      "sha256": "84783a648ac06c3415e5217d7bd161f13110525dcd48b27a601bd147f1870e8e"
     },
     {
       "name": "bee-principle-attack-the-premise",
@@ -236,7 +236,7 @@
     },
     {
       "name": "bee-recall",
-      "sha256": "1bc345baee0b1c3030677efefd83ab801964fbda69998347cfc7d37ab64633a4"
+      "sha256": "f0e80cb0f235d946ae369d4a55f61ff6ab4be3d73f3be87c89daa5a763a329ea"
     },
     {
       "name": "bee-reflect",
@@ -244,7 +244,7 @@
     },
     {
       "name": "bee-researching",
-      "sha256": "5bb5203e9c9253b39b9b882d31dcd1e96b85512ef98b2805080105949688b53b"
+      "sha256": "46794b65696efa10d2960924d5954a05c55549ae8408fd74f69713f67f15cc24"
     },
     {
       "name": "bee-reviewing",
@@ -252,7 +252,7 @@
     },
     {
       "name": "bee-shaping",
-      "sha256": "702baf068e253b340742f81a2b94d16a04bca90f88e623b3d3f4ea793bd14427"
+      "sha256": "e7349b3378cf9b8ebfeecf469f56fcb44350206f25d0006e2cb636dcc5ca7be5"
     },
     {
       "name": "bee-show-me-your-work",
@@ -268,7 +268,7 @@
     },
     {
       "name": "bee-teach",
-      "sha256": "fa09466e3f41dab4680618e2ee04b1c0f83989c5c2f65bd7ce541e3b7aa915e7"
+      "sha256": "cbc67caa6ffe42baf5877f6a7935c36232e15269098d0d2a9afa05cb31e84f29"
     },
     {
       "name": "bee-technical-writing",
@@ -288,11 +288,11 @@
     },
     {
       "name": "bee-wayfinding",
-      "sha256": "a69ec0e6e8733236c3ad0722b5e2141d7af04219c9305161ef5051b1f33622ed"
+      "sha256": "9f05048268926737df308865129865de7bfa9a0508786d258367cc8d9f018691"
     },
     {
       "name": "bee-why",
-      "sha256": "3c9bfe57d96e0a3d2d9703b9e90c3fc53aeff7b41cec5439c94a899e30dd9ebf"
+      "sha256": "2da4d164dc8da278a3c1dbc8b7eceda322ab1bcfe3719e68e5ee00741d80ba0d"
     },
     {
       "name": "bee-writing-skills",

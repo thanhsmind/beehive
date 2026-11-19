@@ -280,14 +280,31 @@ recovery.
 
 - R42 — The OpenCode coverage gate reads the tool-id registry of both
   OpenCode lines: the 1.x set and the 2.x set (`shell`, `patch`,
-  `subagent`, `execute`, and the rest). Every 2.x id that the belt does not
-  map carries its own NAMED GAP or NAMED EXCLUSION line in
-  `docs/history/opencode-support/discovery.md`, section oc2x-1. On 2.x the
-  gate never counts a tool as safe from a `filePath` scan, because 2.x
-  tools take `path`. Adding a `shell` or `patch` case to the 1.x belt
-  changes nothing on 2.x: the 2.x loader accepts only a default export
-  `{id, effect}` or `{id, setup}`, so it does not load the 1.x belt at all
-  (opencode-2x-tool-ids, oc2x-1).
+  `subagent`, `execute`, and the rest). The belt maps the 2.x ids `shell`,
+  `patch` and `subagent` onto the 1.x ids `bash`, `apply_patch` and `task`,
+  and reads `path` as `filePath` for `write`, `edit` and `read`; `grep` and
+  `glob` already take `path`. Every other 2.x id that the belt does not map
+  (`execute`, `artifact_create`, `artifact_update`, `schedule_create`)
+  carries its own NAMED GAP line, and each read-only id its own NAMED
+  EXCLUSION line, in `docs/history/opencode-support/discovery.md`, section
+  oc2x-1. On 2.x the gate never counts a tool as safe from a `filePath`
+  scan, because 2.x tools take `path`. The 2.x loader accepts only a default
+  export `{id, effect}` or `{id, setup}`, which is why the belt's one
+  default export carries a `setup` key (opencode-2x-guard-port D1;
+  opencode-2x-tool-ids, oc2x-1).
+
+- R43 — `.opencode/plugins/bee-guard.ts` default-exports ONE object
+  `{id, server, setup}`. opencode 1.18 calls `server` and logs an ERROR for
+  an object without it; opencode 2.2 calls `setup` and logs a WARN for a
+  1.x function export. Probed 2026-11-19: neither runtime fails to start,
+  and a three-key object loads on both. So one file, one rule core: the 2.x
+  `setup` subscribes `api.tool.hook("execute.before")`, folds `shell`,
+  `patch`, `subagent` onto `bash`, `apply_patch`, `task` and `path` onto
+  `filePath` for write, edit and read, then calls the same `mapToolCall`
+  and `runBlockingHook`. A rejected option was a second 2.x file: it would
+  need its own onboard install entry and a shared module opencode does not
+  load. The coverage gate counts the alias ids as mapped. Advisory hooks
+  stay 1.x only on 2.x (opencode-2x-guard-port oc2-1).
 
 ## Edge Cases Settled
 
@@ -307,12 +324,14 @@ recovery.
 
 ## Open Gaps
 
-- OpenCode 2.x runs with no bee guard. Its plugin loader rejects the 1.x
-  shape of `.opencode/plugins/bee-guard.ts`, hands hook arguments in
-  `input`, and names the file argument `path`, not `filePath`. CI still
-  pins `opencode-ai@1.18.16`, so CI does not see this gap. The fix is a
-  port of the belt to the 2.x `{id, setup}` plugin API (opencode-2x-tool-ids,
-  oc2x-1; backlog p-627c4c0f).
+- OpenCode 2.x runs the blocking belt for `shell`, `patch`, `subagent`,
+  `write`, `edit` and `read`, but four 2.x tools still reach no bee guard:
+  `execute` (code mode calls other tools from a script), and the
+  experimental-flag tools `artifact_create`, `artifact_update` and
+  `schedule_create`. The advisory hooks (`tool.execute.after`, `shell.env`)
+  run on 1.x only. Each gap has its own line in
+  `docs/history/opencode-support/discovery.md`, section oc2x-1
+  (opencode-2x-guard-port D1, D2).
 - The pre-spawn dispatch guard's explicit-model-choice check still only
   recognizes the models configured for Claude Code and Codex. OpenCode's
   own dispatch tool carries no model argument at all today, so this gap has

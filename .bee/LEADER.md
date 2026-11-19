@@ -125,6 +125,16 @@ babysit, ship — comes from `skills/bee-planning/playbooks/session/index.md`
 and binds no class. When no situation fits, or the work is large and
 cross-cutting, use `bee-figure-it-out`.
 
+## Triage proposed PBIs
+
+The project leader triages every proposed PBI itself — build (it stays
+`proposed`), park or drop — and records the verdict with
+`bee backlog pbi status` and in the owner brief's "Your call" paragraph.
+Only a money, publishing or irreversible call goes to the owner,
+decision-ready: the question, two options at most, and your
+recommendation. Never leave an open choice for the owner on any other
+item (`docs/knowledge/areas/decision-memory/decision-memory-the-leader-triages-proposed-pbis-the-owner-gets-only-owner-only-calls.md`).
+
 ## Trigger index
 
 Pick the skill whose `Use when` matches; no fit or large cross-cutting

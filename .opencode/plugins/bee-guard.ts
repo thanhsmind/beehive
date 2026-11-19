@@ -389,25 +389,12 @@ function mapToolCall(tool: string, args: any): MappedCall | null {
  * ADOPT_SOURCES-gated adoption). */
 const sessionInitRun = new Set<string>()
 
-export default (async ({ directory, client }) => {
+const server = (async ({ directory, client }) => {
   return {
     // ── BLOCKING: write-guard (write/edit/bash/apply_patch/read/grep/glob/
     // question) + model-guard (task) — throw on deny, fail CLOSED. ─────────
     "tool.execute.before": async (input, output) => {
-      const mapped = mapToolCall(input.tool, output.args)
-      if (!mapped) return
-      runBlockingHook(
-        directory,
-        mapped.hook,
-        {
-          hook_event_name: "PreToolUse",
-          session_id: input.sessionID,
-          cwd: directory,
-          tool_name: mapped.tool_name,
-          tool_input: mapped.tool_input,
-        },
-        output,
-      )
+      guardToolCall(directory, input.sessionID, input.tool, output.args, output)
     },
 
     // ── ADVISORY: session-init (once per session) + prompt-context (every
@@ -579,3 +566,44 @@ export default (async ({ directory, client }) => {
   }
 }) satisfies Plugin
 
+const TOOL_ID_2X: Record<string, string> = { shell: "bash", patch: "apply_patch", subagent: "task" }
+
+const PATH_FIELD_2X = new Set(["write", "edit", "read"])
+
+function guardToolCall(
+  directory: string,
+  sessionID: string,
+  tool: string,
+  args: any,
+  output: { args: Record<string, unknown> },
+): void {
+  const mapped = mapToolCall(tool, args)
+  if (!mapped) return
+  runBlockingHook(
+    directory,
+    mapped.hook,
+    {
+      hook_event_name: "PreToolUse",
+      session_id: sessionID,
+      cwd: directory,
+      tool_name: mapped.tool_name,
+      tool_input: mapped.tool_input,
+    },
+    output,
+  )
+}
+
+function setup(api: any) {
+  const directory: string = api.location.directory
+  return api.tool.hook("execute.before", async (call: any) => {
+    const input = call.input ?? {}
+    const args = { ...input }
+    if (PATH_FIELD_2X.has(call.tool) && "path" in args) {
+      args.filePath = args.path
+      delete args.path
+    }
+    guardToolCall(directory, call.sessionID, TOOL_ID_2X[call.tool] ?? call.tool, args, { args: input })
+  })
+}
+
+export default { id: "bee-guard", server, setup }

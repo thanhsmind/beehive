@@ -1,0 +1,125 @@
+{
+  "id": "hav-1",
+  "feature": "heading-anchors-and-verb-homes",
+  "title": "Anchor rule-homes section lookup on a heading line",
+  "lane": "small",
+  "role": "code",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "D1",
+    "4b590a43-3bd9-4eac-bea8-1b05c539a2b9"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/heading_section.rs",
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/ownership.rs",
+    "packages/bee-rs/crates/bee/tests/rule_index_parity.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/ownership.rs",
+    "packages/bee-rs/crates/bee/tests/rule_index_parity.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Create packages/bee-rs/crates/bee/src/verbs/knowledge/heading_section.rs holding one dependency-free pub fn section_after_heading(text: &str, heading: &str) -> Option<&str> that finds the first LINE whose content equals heading exactly (trailing \\r or spaces trimmed, nothing else), and returns the text after that line up to the next line starting with '## ' (the same end the callers use today: the next '\\n## '), or to end of text. A heading quoted inside a paragraph, or as a prefix of a longer line, never matches. In ownership.rs declare it with #[path = \"heading_section.rs\"] mod heading_section; and use it in parse_agents_rule_homes (replace the first-occurrence find at the line that reads body.find(\"## AGENTS.md rule homes\")) and in the body.contains check that gates the call, so both use the same anchored lookup. In tests/rule_index_parity.rs include the same file with #[path = \"../src/verbs/knowledge/heading_section.rs\"] mod heading_section; and make rule_homes_section call it, keeping its panic message. Write no code comments. Add no tests: the tester cell owns them. Keep every existing test green.",
+  "must_haves": {
+    "why": "A paragraph that quotes the heading text earlier in a file silently redirects both the parser and the parity fence to the wrong section.",
+    "out_of_scope": [
+      "situations.rs, principles.rs, principle_index_parity.rs, class_playbook_parity.rs heading lookups",
+      "the verb-home test (p-6061cd5f)"
+    ],
+    "truths": [
+      "Both callers locate the section only on a line equal to the heading",
+      "One helper file serves both callers"
+    ]
+  },
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test rule_index_parity",
+  "tester_rule": true,
+  "trace": {
+    "worker": "hav-impl",
+    "outcome": "Anchored rule-homes section lookup on a heading line via shared heading_section.rs, commit 0e7d1031e",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/knowledge/heading_section.rs",
+      "packages/bee-rs/crates/bee/src/verbs/knowledge/ownership.rs",
+      "packages/bee-rs/crates/bee/tests/rule_index_parity.rs"
+    ],
+    "deviations": [
+      "sync-ack: only the doctrine-layer router concept describes parse_agents_rule_homes; it is updated in the capture step of this feature, the other nine anchors are file-level matches the change does not alter"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-19T10:36:21.390Z",
+    "behavior_change": false,
+    "verification_evidence": "cargo clippy -- -D warnings && cargo test --release --no-fail-fast — green:unit — clippy clean, rule_index_parity 5/5; only opencode_plugin_contracts fails (opencode binary missing, environmental)",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "9acad07d-7ec0-4839-9315-0677d9801946",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test rule_index_parity",
+    "claimed_at": "2026-11-19T10:30:06.695Z",
+    "knowledge_delta": [],
+    "sync_ack": "only the doctrine-layer router concept describes parse_agents_rule_homes; it is updated in the capture step of this feature, the other nine anchors are file-level matches the change does not alter",
+    "plan_followed": true,
+    "no_mistakes": true,
+    "principles_used": [
+      {
+        "slug": "bee-principle-single-source-of-truth",
+        "changed": "one helper file serves parser and parity test instead of two copies of the heading lookup",
+        "off_route": true
+      }
+    ],
+    "report": {
+      "outcome": "Anchored rule-homes section lookup on a heading line via shared heading_section.rs, commit 0e7d1031e",
+      "commit": "0e7d1031ebe5f20067fc33c3143b54947d449a88",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/knowledge/heading_section.rs",
+        "packages/bee-rs/crates/bee/src/verbs/knowledge/ownership.rs",
+        "packages/bee-rs/crates/bee/tests/rule_index_parity.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test rule_index_parity — green:unit — cargo clippy -- -D warnings && cargo test --release --no-fail-fast — green:unit — clippy clean, rule_index_parity 5/5; only opencode_plugin_contracts fails (opencode binary missing, environmental)",
+      "deviations": [],
+      "skipped": [
+        "knowledge delta — not written",
+        "full suite green — opencode_plugin_contracts fails on missing real opencode binary"
+      ],
+      "patch_id": "4287d4f04196904bd53468b3ae51b5b649c4145b"
+    },
+    "skipped": [
+      "knowledge delta — not written",
+      "full suite green — opencode_plugin_contracts fails on missing real opencode binary"
+    ],
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "Both callers locate the section only on a line equal to the heading",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/knowledge/heading_section.rs"
+          },
+          {
+            "requirement": "One helper file serves both callers",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/knowledge/ownership.rs"
+          }
+        ],
+        "recorded_at": "2026-11-19T11:12:06.685Z",
+        "recorded_by": "9acad07d-7ec0-4839-9315-0677d9801946",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": {
+    "new": 34724,
+    "cached": 231298,
+    "total": 266022,
+    "models": {
+      "claude-sonnet-5-5": {
+        "new": 34724,
+        "cached": 231298,
+        "total": 266022
+      }
+    },
+    "jobs": [
+      "job-1795084216871-1600775-1"
+    ]
+  }
+}

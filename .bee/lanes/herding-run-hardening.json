@@ -1,0 +1,50 @@
+{
+  "schema_version": "1.0",
+  "feature": "herding-run-hardening",
+  "mode": null,
+  "phase": "compounding-complete",
+  "approved_gates": {
+    "context": true,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"herding-run-hardening\" started at phase \"planning\" (lane).",
+  "next_action": "D3-D5 belong to sibling PBIs; the feature closes when they land.",
+  "created_at": "2026-11-19T10:20:44.497Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null,
+  "route": {
+    "class": "bugfix",
+    "lane": "small",
+    "flags": [],
+    "product_files": 1,
+    "rationale": "run.rs only: pin dispatch pane at run start, idempotent start retry; D1 D2 of herding-run-hardening",
+    "updated_at": "2026-11-19T10:20:44.568Z",
+    "feature": "herding-run-hardening"
+  },
+  "last_compounding_run": {
+    "feature": "herding-run-hardening",
+    "date": "2026-11-19",
+    "at": "2026-11-19T11:02:52.532Z",
+    "learnings": "docs/history/herding-run-hardening/learnings.md",
+    "next_action": "Close the feature once D3-D5 ship."
+  },
+  "last_scribing_run": {
+    "feature": "herding-run-hardening",
+    "date": "2026-11-19",
+    "at": "2026-11-19T11:02:52.431Z",
+    "areas_synced": [
+      "bee-herding"
+    ],
+    "next_action": "Run compounding."
+  },
+  "merge_ready": {
+    "since": "2026-11-19T15:51:39.770Z",
+    "branch": "wt/herding-run-hardening",
+    "worktree_id": "beehive--wt--herding-run-hardening",
+    "uat": "pending",
+    "blocked_by": []
+  }
+}

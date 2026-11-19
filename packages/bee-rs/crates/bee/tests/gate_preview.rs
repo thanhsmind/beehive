@@ -445,3 +445,67 @@ fn cli_default_record_preview_preserves_existing_true_approvals() {
         "status reader gates.execution must stay true"
     );
 }
+
+fn seed_cell(repo: &Path, archived: bool, id: &str, feature: &str) {
+    let mut dir = repo.join(".bee").join("cells");
+    if archived {
+        dir = dir.join("archive").join(feature);
+    }
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(
+        dir.join(format!("{id}.json")),
+        serde_json::json!({"id": id, "feature": feature, "status": "done"}).to_string(),
+    )
+    .unwrap();
+}
+
+fn preview_clash(archived: bool, holder: &str) -> (std::process::Output, Value) {
+    let tmp = tempfile::tempdir().unwrap();
+    let feature = "preview-feat";
+    let repo = fixture(tmp.path(), feature);
+    seed_cell(&repo, archived, "c-1", holder);
+    let out = Command::cargo_bin("bee")
+        .unwrap()
+        .args(["gate", "--preview", "--lane", feature])
+        .current_dir(&repo)
+        .output()
+        .unwrap();
+    let lane: Value = serde_json::from_str(
+        &std::fs::read_to_string(repo.join(".bee/lanes").join(format!("{feature}.json"))).unwrap(),
+    )
+    .unwrap();
+    (out, lane)
+}
+
+fn assert_refused(archived: bool, holder: &str) {
+    let (out, lane) = preview_clash(archived, holder);
+    let all = format!(
+        "{}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(!out.status.success(), "{all}");
+    let kind = if archived { "archived" } else { "live" };
+    assert!(all.contains("\"c-1\""), "{all}");
+    assert!(all.contains(&format!("{kind} cell")), "{all}");
+    assert!(all.contains(&format!("\"{holder}\"")), "{all}");
+    assert!(all.contains("rename the id in plan.md"), "{all}");
+    assert!(lane.get("gate_preview").is_none(), "{lane}");
+}
+
+#[test]
+fn preview_refuses_id_held_by_archived_cell_of_other_feature() {
+    assert_refused(true, "old-feat");
+}
+
+#[test]
+fn preview_refuses_id_held_by_live_cell_of_other_feature() {
+    assert_refused(false, "other-feat");
+}
+
+#[test]
+fn preview_passes_id_held_by_cell_of_same_feature() {
+    let (out, lane) = preview_clash(false, "preview-feat");
+    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    assert!(lane.get("gate_preview").is_some(), "{lane}");
+}

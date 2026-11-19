@@ -8,7 +8,7 @@
     "helpers": {},
     "lib": {},
     "expertise": {
-      "INDEX.md": "dbb0bb767c29e8640f9047c304fb6ed74017306462c02a85e798f7b23150d887",
+      "INDEX.md": "b786d1fdf06e85c49e27594471d08d46278549251e8344b9e5049736f1d5cace",
       "README.md": "3f9ad922145df53981bce91ae306dd96b7e48283918e7cd2da0074b2ce930e7d",
       "apis.md": "b7350c145f4442d4d0cf0f58a4e21e118ab4bb96654256a6837e10ccd5a070a8",
       "architecture.md": "acace3dc7a8d839e3058607df4bd4816ea125807e3c0f20d7b30d6da3f212ca6",
@@ -24,7 +24,8 @@
       "operations.md": "3ed0389975c84cfb6276ca01aa7cbb9fe6646b84ab3b4096d7f7e09ab545ef05",
       "performance.md": "2c209581857a02b49e43cc6552beb581408058cb859859d7274371b7051a0ab8",
       "planning.md": "1e19f1daab82d2cda72934ca1729692921db9380bbd351a66ceaa4a85122c921",
-      "review.md": "8f81efce730d2996c7c8222c5511d46d9791287ed14586b572c24999b37e114e",
+      "review-author.md": "4af04796719780264c7df35ac3e884090ec6262329a581f4f1e2e68d40665bd1",
+      "review.md": "89fcdd7f460cc35e44dfae123e6572a5b16b521cc95da36ad2ebe75cbd065033",
       "security.md": "c39709516b888a41ae620fa7b070f8c2b28623c8f1d8f4639267385de4edeed8",
       "static-rules.md": "61cffeee4b35ccef35f38546a6881a69a18e4b674b2b9e89e4db336ccca6a4c9",
       "tests.md": "44e8293dd39ef80e19c75e0f061c0e7f79f5f9cf8d6213f7f25300456781ac6a",
@@ -44,7 +45,7 @@
       "worker-cell.md": "76689598df4a49d9fedb0273fddabcb8474c4f6722fab38499d5050f9cc08b5f"
     },
     "leader": {
-      "LEADER.md": "ed9807470efaaf18d79a307b53e052f57af879736566e1f72d5b4ef0312e6a9c"
+      "LEADER.md": "8f4f2c3d2420659024d8465ff74a8c14760b5e226cad05868001282858b7d09c"
     },
     "playbooks": {
       "bee-defects.md": "128820aaccc3644492f753d10cfba5231bfd7939624aba943da7ab74340a5dc5",
@@ -191,5 +192,5 @@
   },
   "design_role_offered": true,
   "created_at": "2026-07-24T03:53:44.750Z",
-  "updated_at": "2026-11-19T09:05:15.006Z"
+  "updated_at": "2026-11-19T11:13:01.037Z"
 }
