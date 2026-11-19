@@ -11,9 +11,9 @@
     "uat": false
   },
   "summary": "Feature \"guard-config-and-class\" started at phase \"exploring\" (lane).",
-  "next_action": "Continue bee-exploring for \"guard-config-and-class\" (lane).",
+  "next_action": "Merged into main at 7a759c8; capture what settled, then bee close --feature guard-config-and-class.",
   "created_at": "2026-11-19T14:52:37.514Z",
-  "run_state": "awaiting-approval",
+  "run_state": null,
   "waiting_on": null,
   "route": {
     "class": "bugfix",
@@ -23,12 +23,5 @@
     "rationale": null,
     "updated_at": "2026-11-19T14:52:32.400Z",
     "feature": "guard-config-and-class"
-  },
-  "merge_ready": {
-    "since": "2026-11-19T16:12:34.789Z",
-    "branch": "wt/guard-config-and-class",
-    "worktree_id": "beehive--wt--guard-config-and-class",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
