@@ -548,6 +548,20 @@ between the two checkouts at merge time.",
         _ => Value::String("idle".into()),
     };
 
+    let research_route = record
+        .get("route")
+        .and_then(|r| r.get("class"))
+        .and_then(Value::as_str)
+        == Some("research");
+    if research_route && !normalized.starts_with("docs/") && !normalized.starts_with(".bee/") {
+        return Ok(WV::Deny(format!(
+            "bee research-class guard: the bound lane's route class is \"research\" and research is read-only — \
+writing \"{}\" is refused. Only docs/ and .bee/ accept writes. \
+FIX: re-route with `bee orient --class <c>` to a writing class (feature, bugfix, refactor, ...) before editing source.",
+            normalized
+        )));
+    }
+
     // Workspace-ownership deny (msn-21, class (c)).
     if let Some(sid) = session_id.map(js_trim).filter(|s| !s.is_empty()) {
         // sfg-1/sfg-3: `"claim"` is grouped with `"default"` because neither

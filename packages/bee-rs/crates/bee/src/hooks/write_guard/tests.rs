@@ -6631,6 +6631,39 @@ use std::process::ExitCode;
         assert!(e.stderr.contains("(\"// why z exists\")"), "{}", e.stderr);
     }
 
+    fn research_fixture(class: &str) -> Fx {
+        let fx = build_fixture("swarming", true);
+        let mut st = swarming_state(true);
+        st["route"] = json!({ "class": class, "lane": "standard" });
+        write_state(&fx.root, &st);
+        fx
+    }
+
+    #[test]
+    fn research_class_refuses_a_source_edit_naming_the_class_and_remedy() {
+        let fx = research_fixture("research");
+        let e = expect_done(edit("src/app.rs"), &fx.root);
+        assert_eq!(e.code, 2, "{}", e.stderr);
+        assert!(e.stderr.contains("research"), "{}", e.stderr);
+        assert!(e.stderr.contains("bee orient --class <c>"), "{}", e.stderr);
+    }
+
+    #[test]
+    fn research_class_still_allows_docs_and_bee_writes() {
+        let fx = research_fixture("research");
+        for path in ["docs/history/demo/notes.md", "docs/knowledge/x.md", ".bee/tmp/demo/a.txt"] {
+            let e = expect_done(edit(path), &fx.root);
+            assert_eq!(e.code, 0, "{path}: {}", e.stderr);
+        }
+    }
+
+    #[test]
+    fn a_writing_class_still_allows_a_source_edit() {
+        let fx = research_fixture("feature");
+        let e = expect_done(edit("src/app.rs"), &fx.root);
+        assert_eq!(e.code, 0, "{}", e.stderr);
+    }
+
     fn pi_lock_fixture(lane: &str, harness_workflow: Option<bool>) -> Fx {
         let fx = build_fixture("swarming", true);
         let mut st = swarming_state(true);
