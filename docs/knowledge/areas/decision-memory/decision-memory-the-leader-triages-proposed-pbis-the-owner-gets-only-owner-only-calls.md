@@ -8,6 +8,7 @@ bee:
   id: decision-memory-decision-memory-the-leader-triages-proposed-pbis-the-owner-gets-only-owner-only-calls
   lifecycle: active
   areas: [decision-memory]
+  decisions: ["7942f87c (2026-11-17 — the project leader triages every proposed PBI; only an owner-only call goes to the owner)"]
 ---
 
 # Decision Memory — The Leader Triages Proposed PBIs
