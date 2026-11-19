@@ -4256,6 +4256,116 @@ mod tests {
         assert!(err.contains("--kind must be one of"), "a near-miss kind is still refused: {err}");
     }
 
+    const OBSERVATION_SIGNALS_AFTER_BUDGET_OVERRUN: [&str; 10] = [
+        "struggling-loop",
+        "big-decision",
+        "danger-op",
+        "same-region-resubmit",
+        "dead-lead",
+        "self-correction",
+        "boundary-approach",
+        "test-on-unstable-contract",
+        "budget-80",
+        "none",
+    ];
+
+    #[test]
+    fn a_budget_overrun_signal_is_refused_by_both_record_seams_with_the_closed_set_message() {
+        let tmp = tempfile::tempdir().unwrap();
+        let control = tmp.path();
+        let cmd = "supervisor record";
+
+        let err = record_into(
+            control, cmd, Some("observation"), Some("budget-overrun"), Some("Over."), None, None, None,
+        )
+        .unwrap_err();
+        assert_eq!(err, closed_set_error(cmd, "signal", "budget-overrun", &KNOWN_SIGNALS));
+        assert!(!err.contains("budget-overrun,"), "the allowed list no longer names it: {err}");
+
+        let err = record_intervention_into(
+            control,
+            cmd,
+            "intervention",
+            Some("budget-overrun"),
+            Some("sess-1"),
+            Some("overrun"),
+            Some("Is this past its estimate?"),
+            None,
+            None,
+        )
+        .unwrap_err();
+        assert_eq!(err, closed_set_error(cmd, "signal", "budget-overrun", &INTERVENTION_SIGNALS));
+        assert!(!err.contains("budget-overrun,"), "the allowed list no longer names it: {err}");
+
+        assert!(!observations_path(control).exists(), "a refused observation writes nothing");
+        assert!(!interventions_path(control).exists(), "a refused intervention writes nothing");
+    }
+
+    #[test]
+    fn every_signal_left_in_the_closed_sets_still_records() {
+        let tmp = tempfile::tempdir().unwrap();
+        let control = tmp.path();
+        let cmd = "supervisor record";
+
+        for signal in OBSERVATION_SIGNALS_AFTER_BUDGET_OVERRUN {
+            record_into(control, cmd, Some("observation"), Some(signal), Some("Seen."), None, None, None)
+                .unwrap_or_else(|e| panic!("{signal} must record as an observation: {e}"));
+        }
+        let read: Vec<String> = read_observations(control).rows.into_iter().map(|r| r.signal).collect();
+        assert_eq!(read, OBSERVATION_SIGNALS_AFTER_BUDGET_OVERRUN.map(str::to_string).to_vec());
+
+        let intervention_signals: Vec<&str> =
+            OBSERVATION_SIGNALS_AFTER_BUDGET_OVERRUN.into_iter().chain(["worker-question"]).collect();
+        for signal in &intervention_signals {
+            record_intervention_into(
+                control,
+                cmd,
+                "intervention",
+                Some(signal),
+                Some("sess-1"),
+                Some(&format!("point-{signal}")),
+                Some("What tells you this will end?"),
+                None,
+                None,
+            )
+            .unwrap_or_else(|e| panic!("{signal} must record as an intervention: {e}"));
+        }
+        let read: Vec<String> = read_interventions(control).rows.into_iter().map(|r| r.signal).collect();
+        assert_eq!(read, intervention_signals.iter().map(|s| s.to_string()).collect::<Vec<_>>());
+    }
+
+    #[test]
+    fn an_old_budget_overrun_row_on_disk_is_skipped_on_read_never_a_crash() {
+        let tmp = tempfile::tempdir().unwrap();
+        let control = tmp.path();
+        record_into(control, "c", Some("observation"), Some("danger-op"), Some("kept"), None, None, None).unwrap();
+        let mut text = std::fs::read_to_string(observations_path(control)).unwrap();
+        text.push_str(
+            "{\"ts\":\"2026-08-27T00:00:01.000Z\",\"kind\":\"observation\",\"signal\":\"budget-overrun\",\"note\":\"old\"}\n",
+        );
+        std::fs::write(observations_path(control), text).unwrap();
+
+        let store = read_observations(control);
+        assert_eq!(store.rows.len(), 1);
+        assert_eq!(store.rows[0].note, "kept");
+        assert_eq!(store.unreadable, vec![2]);
+
+        ask(control, "intervention", "sess-1", "kept", "What tells you the retry will end?").unwrap();
+        append_jsonl(
+            &interventions_path(control),
+            &json!({"event": "record", "id": "old-1", "ts": now_iso(), "kind": "intervention",
+                    "signal": "budget-overrun", "point_key": "overrun", "question": "Past its estimate?",
+                    "target_session": "sess-1"}),
+        )
+        .unwrap();
+
+        let mailbox = read_interventions(control);
+        assert_eq!(mailbox.rows.len(), 1);
+        assert_eq!(mailbox.rows[0].point_key, "kept");
+        assert_eq!(mailbox.unreadable, vec![2]);
+        assert!(pending_for(&mailbox, "sess-1").iter().all(|r| r.id != "old-1"));
+    }
+
     // ─── the advisor-nudge debt (9e5eda5b) ──────────────────────────────
 
     /// Append one decision event, the shape `bee decisions log` writes. The
