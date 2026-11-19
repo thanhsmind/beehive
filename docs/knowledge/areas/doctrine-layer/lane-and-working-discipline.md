@@ -114,7 +114,7 @@ govern the working residue of a cell rather than its content.
   invisible filter asks the human to trust the lead's judgment; a shown one
   lets them reverse it.
 - **R21** — The `research` class's two questions have named procedures, homed
-  once in `bee-researching/references/trace-and-provenance.md` (pstack-gaps D1,
+  once in `bee-researching/references/trace.md` and `provenance.md` (pstack-gaps D1,
   D2, D3; cells pg-1, pg-4, pg-5, 2026-09-01). R18 gave `research` a four-step playbook whose
   steps 2 and 3 — trace the runtime, name the empty sources — were duties with
   no method behind them. **Trace** answers "how does this run?": the outcome is
