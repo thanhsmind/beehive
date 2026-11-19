@@ -11,10 +11,15 @@
     "uat": false
   },
   "summary": "Feature \"doctrine-docs-sweep\" started at phase \"exploring\" (lane).",
-  "next_action": "Continue bee-exploring for \"doctrine-docs-sweep\" (lane).",
+  "next_action": "Merged into main at 6e2ccbf; reload the product and test \"doctrine-docs-sweep\", then either approve uat (\"bee gate --name uat --approved true --lane doctrine-docs-sweep\") or fix it in the worktree and merge again.",
   "created_at": "2026-11-19T10:48:57.367Z",
   "run_state": "awaiting-approval",
-  "waiting_on": null,
+  "waiting_on": {
+    "kind": "gate",
+    "subject": "uat: doctrine-docs-sweep",
+    "asked_at": "2026-11-19T14:48:52.719Z",
+    "session": "bee-worktree-merge-sessionless"
+  },
   "route": {
     "class": "docs",
     "lane": "standard",
@@ -972,12 +977,5 @@
   },
   "gate_revoked_at": {
     "execution": "2026-11-19T10:50:56.951Z"
-  },
-  "merge_ready": {
-    "since": "2026-11-19T11:15:05.787Z",
-    "branch": "wt/doctrine-docs-sweep",
-    "worktree_id": "beehive--wt--doctrine-docs-sweep",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
