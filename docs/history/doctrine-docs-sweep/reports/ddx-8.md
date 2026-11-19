@@ -1,56 +1,41 @@
 # ddx-8 — parity and pointer check of the doctrine and docs sweep
 
-Checked at HEAD `04f8e7bed` (ddx-1 to ddx-7 committed: d0552054b, 880a3e724,
-5399ad719, 3584d45b9, 26b518542, fca3a0f5e, 428ed2d79, 04f8e7bed). The truths
-come from the cell list in `plan.md`; the files were read directly, no cap
-report was read.
+Checked at HEAD `ad6300be6`, after the ddx-1 to ddx-7 commits (d0552054b,
+880a3e724, 5399ad719, 3584d45b9, 26b518542, fca3a0f5e, 428ed2d79, 04f8e7bed),
+the two follow-ups (1604e1cbf ddx-1, 6570fff86 ddx-6) and the wave-close regen
+(ad6300be6). The truths come from the cell list in `plan.md`. The files were
+read directly. No cap report was read.
 
-**Verdict: BLOCKED.** The verify fails in two places: `class_playbook_parity`
-refuses `steer-recipes.md` (ddx-1), and `release-manifest --check` fails
-because the wave-close `bee dev regen` has not run yet.
+**Verdict: BLOCKED on one truth.** The verify passes. The ddx-1 truth that
+names `skills/bee-planning/playbooks/session/steer-recipes.md` does not hold
+as written: 1604e1cbf moved the page to
+`skills/bee-planning/references/steer-recipes.md`, away from the path D1 locks.
+Every other truth holds.
 
 ## Verify
 
-The cell verify, run as written:
+The cell verify, run as written, exits 0:
 
 ```
 PATH="${CARGO_HOME:-$HOME/.cargo}/bin:$PATH" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pointer_integrity --test agents_block_render_parity --test rule_index_parity --test class_playbook_parity && .bee/bin/bee knowledge check && .bee/bin/bee dev release-manifest --check
 ```
 
-cargo stops at the first failing test binary, so the four tests were re-run
-with `--no-fail-fast` to get a result for each, and the two `bee` commands
-were run on their own:
+Result line per command:
 
 | Command | Result line |
 |---|---|
 | `cargo test … --test agents_block_render_parity` | `test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out` |
-| `cargo test … --test class_playbook_parity` | `test result: FAILED. 8 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out` |
+| `cargo test … --test class_playbook_parity` | `test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out` |
 | `cargo test … --test pointer_integrity` | `test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out` |
 | `cargo test … --test rule_index_parity` | `test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out` |
 | `.bee/bin/bee knowledge check` | `knowledge check: 330 concept(s) in 351 file(s), 0 OKF error(s), 0 profile error(s), 605 profile warning(s) — OK` |
-| `.bee/bin/bee dev release-manifest --check` | `release_manifest --check: FAIL (1 missing, 4 added, 23 changed)` |
+| `.bee/bin/bee dev release-manifest --check` | `release_manifest --check: 990 file(s) match stored manifest, 1 unhashed artifact(s) present` |
 
-The failing test, `every_situation_file_matches_its_index`:
-
-```
-session: …/skills/bee-planning/playbooks/session/steer-recipes.md is not listed in …/skills/bee-planning/playbooks/session/index.md, so no router can reach it
-```
-
-The fence treats every file in `playbooks/session/` other than `index.md` as a
-situation and wants a `- \`<name>\` — <triggers> — delivers: <deliverable>`
-line under `## Situations`. ddx-1 linked the page with a prose line under the
-list instead, and the page calls itself "a lookup for the owner, not a
-situation".
-
-The manifest mismatch is the expected state before the wave-close regen: the
-one missing entry is `skills/bee-researching/references/trace-and-provenance.md`
-(deleted by ddx-5), the four added are `.bee/expertise/review-author.md`,
-`skills/bee-planning/playbooks/session/steer-recipes.md`,
-`skills/bee-researching/references/provenance.md` and
-`skills/bee-researching/references/trace.md`, and the 23 changed are files the
-wave edited. The plan orders the regen at wave close but also puts this check
-in ddx-8, which depends only on ddx-1 to ddx-7, so ddx-8 cannot pass until
-after the regen.
+The first attempt at this cell (commit ace4c3aeb) was red in two places:
+`class_playbook_parity` refused `playbooks/session/steer-recipes.md` as an
+unlisted situation, and `release-manifest --check` was waiting on the regen.
+1604e1cbf cleared the first by moving the page out of `playbooks/session/`.
+ad6300be6 cleared the second.
 
 ## Truths
 
@@ -59,8 +44,8 @@ after the regen.
 | Truth | Held? | Evidence |
 |---|---|---|
 | feature.md has a numbered step that writes the caller's tutorial first for a package or API other code calls and checks the result against it | held | `skills/bee-planning/playbooks/feature/feature.md:34` step 4: "write the caller's tutorial first … Check the design against that tutorial before any delegate writes code, and again at verify" |
-| steer-recipes.md maps one-line steer prompts to bee situations and principles | held | 22-row table "Say \| Routes to"; every situation file it names exists (`session/*.md`, `bugfix/bug-fix.md`, `perf/perf-issue.md`) |
-| session/index.md links steer-recipes.md | held as written, but it fails the fence | `index.md:18` "see `steer-recipes.md`" is a prose line; `class_playbook_parity` needs a `## Situations` entry (see Verify) |
+| skills/bee-planning/playbooks/session/steer-recipes.md maps one-line steer prompts to bee situations and principles | **not held as written** | `playbooks/session/` holds no `steer-recipes.md`; 1604e1cbf renamed it unchanged (similarity 100%) to `skills/bee-planning/references/steer-recipes.md`. The content holds there: a 22-row "Say \| Routes to" table, and every situation file it names exists. The truth and CONTEXT.md D1 both name the old path |
+| session/index.md links steer-recipes.md | held | `index.md:18` "see `bee-planning/references/steer-recipes.md`"; pointer_integrity passes |
 
 ### ddx-2
 
@@ -93,17 +78,22 @@ finds nothing), so leaving it unchanged matches the cell action.
 |---|---|---|
 | trace-and-provenance.md is gone; trace.md and provenance.md hold its halves | held | `skills/bee-researching/references/` lists `trace.md`, `provenance.md`, no `trace-and-provenance.md` |
 | bee-how loads only trace.md; bee-why only provenance.md | held | `bee-how/SKILL.md:18` loads `trace.md`; `bee-why/SKILL.md:18` loads `provenance.md` |
-| no file outside docs/history and CREATION-LOG.md names trace-and-provenance.md | held in the source trees | `rg trace-and-provenance skills packages docs .bee/expertise` (excluding docs/history and CREATION-LOG.md) finds only `docs/backlog.md:31`, the PBI title in the generated backlog view. The rendered copies (`.claude/`, `.agents/`, `.opencode/`, `.codex-plugin/`, `.claude-plugin/`) still name it until the regen; `.bee/` state records keep it as history |
+| no file outside docs/history and CREATION-LOG.md names trace-and-provenance.md | held | `rg -l trace-and-provenance --hidden` (excluding docs/history, CREATION-LOG.md, .git) finds only `.bee/` state records (decisions, backlog, archived cells, ledgers) and `docs/backlog.md`, the generated backlog view naming the PBI. After the regen no rendered skill tree names it |
 | pointer_integrity passes | held | `test result: ok. 10 passed` |
 
 ### ddx-6
 
 | Truth | Held? | Evidence |
 |---|---|---|
-| review.md holds only the reviewer side | held | headings: Where to look, What a finding is, Severity calibration, Severity is a spent signal, Adversarial reading, The 5-Layer rubric, Truth Table Test, CRUD Lifecycle check, Claims-table audit, Verify before reporting, Label uncertainty exactly, Evidence standards, Scope discipline, Style versus substance, Reader load |
+| .bee/expertise/review.md holds only the reviewer side | held | headings: Where to look, What a finding is, Severity calibration, Severity is a spent signal, Adversarial reading, The 5-Layer rubric, Truth Table Test, CRUD Lifecycle check, Claims-table audit, Verify before reporting, Label uncertainty exactly, Evidence standards, Scope discipline, Style versus substance, Reader load |
 | review-author.md holds the author side | held | headings: Asking for a review, Receiving a finding, Reviewing your own work; listed in `.bee/expertise/INDEX.md:21` |
 | every referrer that cites an author-side section points to review-author.md | held | every `expertise/review.md` referrer in skills, docs and prepare.rs cites a reviewer section (Claims-table audit, CRUD, Reader load, Verify before reporting, finding quality); none cites an author section |
 | pointer_integrity passes | held | `test result: ok. 10 passed` |
+
+`expertise/review.md`, `expertise/review-author.md` and `expertise/INDEX.md`
+match their `.bee/expertise/` copies byte for byte (`diff` is empty), since 6570fff86
+made the same split in the source. `review-author.md` also opens with a
+`## Where to look` section aimed at the author.
 
 ### ddx-7
 
@@ -114,11 +104,14 @@ finds nothing), so leaving it unchanged matches the cell action.
 
 ## What would unblock
 
-1. ddx-1 follow-up: make the fence and the page agree. D1 locks the path
-   `playbooks/session/steer-recipes.md`, so the fix that keeps D1 is to add a
-   `- \`steer-recipes\` — <triggers> — delivers: <deliverable>` line under
-   `## Situations` in `session/index.md`, replacing the prose line, and drop
-   "not a situation" from the page. Moving the page out of `playbooks/session/`
-   would reopen D1.
-2. Run `bee dev regen` at wave close, then re-run this verify. Until then
-   `release-manifest --check` fails by design.
+One choice for the leader, both keep the verify green:
+
+1. Keep the page at `skills/bee-planning/references/steer-recipes.md` and
+   amend D1 and the ddx-1 truth to that path (record the amendment with
+   `bee decisions log`). The page calls itself "a lookup for the owner, not a
+   situation", so references/ fits it better than `playbooks/session/`.
+2. Move it back to `playbooks/session/` and list it under `## Situations`
+   in `session/index.md`, which keeps D1 as written but files a lookup page as
+   a situation.
+
+Leaning: option 1.
