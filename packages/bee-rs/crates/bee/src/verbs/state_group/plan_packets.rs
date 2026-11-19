@@ -496,6 +496,23 @@ pub(crate) fn run_gate_preview(flags: Flags, use_json: bool, t0: Instant) -> Opt
     finish(&ctx, out)
 }
 
+fn held_by_other_feature(root: &Path, id: &str, feature: &str) -> Option<String> {
+    let file = crate::verbs::cells::resolve_cell_file(root, id)?;
+    let held: Value = serde_json::from_slice(&std::fs::read(&file).ok()?).ok()?;
+    let holder = held.get("feature").and_then(Value::as_str)?;
+    if holder == feature {
+        return None;
+    }
+    let kind = if file == crate::verbs::cells::cell_file(root, id) {
+        "live"
+    } else {
+        "archived"
+    };
+    Some(format!(
+        "gate preview: cell id \"{id}\" is already held by the {kind} cell of feature \"{holder}\". FIX: rename the id in plan.md, then re-run bee gate --preview."
+    ))
+}
+
 /// Root-parameterized body for tests and CLI.
 pub(crate) fn run_gate_preview_body(root: &Path, flags: &Flags, _use_json: bool) -> R2<Out> {
     let (lane_feature, no_lane) = match mutation_lane_selector(flags, "gate preview") {
@@ -542,6 +559,14 @@ pub(crate) fn run_gate_preview_body(root: &Path, flags: &Flags, _use_json: bool)
         Ok(c) => c,
         Err(e) => return Ok(Out::Thrown(format!("gate preview: {e}"))),
     };
+    let clashes: Vec<String> = cells
+        .iter()
+        .filter_map(|c| c.get("id").and_then(Value::as_str))
+        .filter_map(|id| held_by_other_feature(root, id, &feature))
+        .collect();
+    if !clashes.is_empty() {
+        return Ok(Out::Thrown(clashes.join("\n")));
+    }
     let role_plan = match parse_role_plan(root, &text) {
         Ok(rp) => rp,
         Err(e) => return Ok(Out::Thrown(format!("gate preview: {e}"))),
