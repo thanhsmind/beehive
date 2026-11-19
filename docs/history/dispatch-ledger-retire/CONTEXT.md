@@ -26,6 +26,14 @@ supervisor signal is removed.
 
 ## Read set
 
+### Concepts
+
+| Concept | What it decides |
+|---------|-----------------|
+| docs/knowledge/areas/workflow-state/cells-completion-judge-and-archive.md | D1: the cap path. |
+| docs/knowledge/areas/bee-herding/the-supervisor-observer-and-its-interventions.md | D5: the signal set. |
+| docs/knowledge/areas/bee-herding/claude-session-transport.md | D4: the transport check. |
+
 ### Code
 
 | Path | What it decides |
