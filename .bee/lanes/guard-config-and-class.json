@@ -23,12 +23,5 @@
     "rationale": null,
     "updated_at": "2026-11-19T14:52:32.400Z",
     "feature": "guard-config-and-class"
-  },
-  "merge_ready": {
-    "since": "2026-11-19T15:58:16.623Z",
-    "branch": "wt/guard-config-and-class",
-    "worktree_id": "beehive--wt--guard-config-and-class",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
