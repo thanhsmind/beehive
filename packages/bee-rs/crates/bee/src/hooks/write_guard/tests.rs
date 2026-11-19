@@ -2039,6 +2039,21 @@ use std::process::ExitCode;
     }
 
     #[test]
+    fn worker_outward_reads_cli_slots_from_team_and_models_together() {
+        let lx = build_linked(true);
+        write_main_config(
+            &lx,
+            &json!({
+                "team":{"claude":{"cli-a":{"kind":"cli","command":"opencode run --a"}}},
+                "models":{"claude":{"cli-b":{"kind":"cli","command":"opencode run --b"}}}
+            }),
+        );
+        outward_allow(&lx, "opencode run --a x");
+        outward_allow(&lx, "opencode run --b x");
+        outward_deny(&lx, "opencode run --c x");
+    }
+
+    #[test]
     fn worker_outward_opt_out_is_read_from_the_main_checkout_only() {
         let lx = build_linked(true);
         write_main_config(&lx, &json!({"guards":{"worker_outward":false}}));

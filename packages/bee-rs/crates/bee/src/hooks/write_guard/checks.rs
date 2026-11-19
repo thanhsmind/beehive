@@ -844,7 +844,10 @@ A genuinely path-scoped `git commit -- <your paths>` is allowed too.",
         return Ok(None);
     }
 
-    let config = read_config(Path::new(&topo.control_root))?;
+    let config = crate::config_layers::read_merged(
+            Path::new(&topo.control_root),
+            crate::config_layers::CorruptPolicy::Strict,
+        );
     let idle_gate_on = !matches!(
         config.get("guards"),
         Some(g) if truthy(g) && g.get("idle_gate") == Some(&Value::Bool(false))
@@ -1084,7 +1087,10 @@ fn outward_guard_on(
 ) -> R<bool> {
     if slot.is_none() {
         let topo = resolve_write_topology(root, control_root_override)?;
-        let config = read_config(Path::new(&topo.control_root))?;
+        let config = crate::config_layers::read_merged(
+            Path::new(&topo.control_root),
+            crate::config_layers::CorruptPolicy::Strict,
+        );
         if matches!(
             config.get("guards"),
             Some(g) if truthy(g) && g.get("worker_outward") == Some(&Value::Bool(false))
@@ -1167,11 +1173,10 @@ pub(crate) fn codex_read_only_exec(head: &str, rest: &[String]) -> bool {
 
 fn configured_cli_command(config: &Map<String, Value>, segment: &[String]) -> bool {
     let line = segment.join(" ");
-    let Some(Value::Object(models)) = config.get("team").or_else(|| config.get("models")) else {
-        return false;
-    };
-    models
-        .values()
+    ["team", "models"]
+        .iter()
+        .filter_map(|key| config.get(*key).and_then(Value::as_object))
+        .flat_map(|slots| slots.values())
         .filter_map(Value::as_object)
         .flat_map(|runtime| runtime.values())
         .any(|slot| {
