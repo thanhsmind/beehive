@@ -935,6 +935,7 @@
     "contract:fix-at-debt",
     "contract:fix-at-verbs",
     "contract:evidence-ref-check",
-    "contract:doctrine-names-loop"
+    "contract:doctrine-names-loop",
+    "lesson"
   ]
 }
