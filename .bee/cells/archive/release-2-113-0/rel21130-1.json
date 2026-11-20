@@ -1,0 +1,104 @@
+{
+  "id": "rel21130-1",
+  "feature": "release-2-113-0",
+  "title": "Publish release 2.113.0 through the sanctioned script",
+  "lane": "small",
+  "role": "deploy",
+  "deps": [],
+  "decisions": [
+    "cef8956c-50e7-4b42-be03-de8b23a01990"
+  ],
+  "files": [
+    ".claude-plugin/plugin.json",
+    ".codex-plugin/plugin.json",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/release-2-113-0/CONTEXT.md",
+    "scripts/release.sh"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Run `scripts/release.sh 2.113.0` with BEE_DISPATCH_ID set to an authorized deployment dispatch and the CI-pinned opencode 1.18.16 (/mnt/data/Projects/goglbe/beehive/.bee/tmp/oc11816/bin) first on PATH and CARGO_TARGET_DIR=/home/thanhsmind/.cache/cargo-target-rel21130, so the opencode contract tests run green. The script bumps both plugin manifests, runs the regen chain (render-skill-trees, onboard --apply, release-manifest --write), runs the declared test suite before tagging, makes the release commit, tags v2.113.0, pushes main and the tag, waits for the release-binaries workflow and verifies the published assets. Never walk those steps by hand. Re-running at a version already committed is idempotent — it resumes the tail. The regen obligation on .claude-plugin/plugin.json is discharged INSIDE the script's own regen chain, which is why the release manifest rides this cell's files.",
+  "verify": "bash scripts/release.sh 2.113.0 && bee dev release-manifest --check",
+  "must_haves": {
+    "truths": [
+      "both plugin manifests report 2.113.0",
+      "tag v2.113.0 exists locally and on the remote",
+      "the GitHub release for v2.113.0 carries the binaries and SHA256SUMS",
+      "the script printed its final OK line"
+    ],
+    "artifacts": [
+      {
+        "path": ".claude-plugin/plugin.json",
+        "substantive": "version 2.113.0"
+      },
+      {
+        "path": ".codex-plugin/plugin.json",
+        "substantive": "version 2.113.0"
+      }
+    ],
+    "key_links": [
+      "the pushed tag is what triggers release-binaries.yml"
+    ],
+    "prohibitions": [
+      "Do not hand-walk bump, tag or push",
+      "Do not skip the test gate"
+    ]
+  },
+  "behavior_change": false,
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "rel-deploy",
+    "outcome": null,
+    "files_changed": [
+      ".claude-plugin/plugin.json",
+      ".codex-plugin/plugin.json",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [
+      "run by the issuer session: the herded deploy worker hit deploy_authorization_wrong_session (issue #173) — hit an unforeseen obstacle",
+      "run by the issuer session instead of the herded deploy worker: the worker could not consume the permit (deploy_authorization_wrong_session, issue https://github.com/thanhsmind/beehive/issues/173); the first permit was wasted because the claim file was left uncommitted",
+      "sync-ack: release bump and regen only"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-20T01:19:00.475Z",
+    "behavior_change": false,
+    "verification_evidence": "release.sh printed 'release  OK       bee 2.113.0 is live — installers now serve v2.113.0' after the declared suite and the live smoke (9 steps ok); release-binaries run https://github.com/thanhsmind/beehive/actions/runs/44652123974 green; assets bee-aarch64-apple-darwin bee-aarch64-unknown-linux-gnu bee-x86_64-apple-darwin bee-x86_64-pc-windows-msvc.exe bee-x86_64-unknown-linux-gnu SHA256SUMS",
+    "verify_output": "green:live",
+    "verify_passed": true,
+    "claim_session": "d63a1e23-e8b8-482f-ae73-5e4e50e0c2aa",
+    "verify_command": "bash scripts/release.sh 2.113.0 && bee dev release-manifest --check",
+    "claimed_at": "2026-11-20T01:06:46.982Z",
+    "knowledge_delta": [],
+    "sync_ack": "release bump and regen only",
+    "mistakes": [
+      {
+        "wrong": "claimed the release cell after committing the lane, so the untracked claim file dirtied main and the first permit was wasted",
+        "better": "claim first, commit the claim with the lane, then prepare",
+        "fix_at": "doctrine"
+      }
+    ],
+    "no_principles_used": true,
+    "commit_pending": "the release.sh commit carries no cell trailer",
+    "report": {
+      "outcome": "done",
+      "commit": "115db3b32",
+      "files": [
+        ".claude-plugin/plugin.json",
+        ".codex-plugin/plugin.json",
+        "docs/history/codex-harness-hardening/release-manifest.json"
+      ],
+      "tests": "bash scripts/release.sh 2.113.0 && bee dev release-manifest --check — green:live — release.sh printed 'release  OK       bee 2.113.0 is live — installers now serve v2.113.0' after the declared suite and the live smoke (9 steps ok); release-binaries run https://github.com/thanhsmind/beehive/actions/runs/44652123974 green; assets bee-aarch64-apple-darwin bee-aarch64-unknown-linux-gnu bee-x86_64-apple-darwin bee-x86_64-pc-windows-msvc.exe bee-x86_64-unknown-linux-gnu SHA256SUMS",
+      "deviations": [
+        "run by the issuer session instead of the herded deploy worker: the worker could not consume the permit (deploy_authorization_wrong_session, issue https://github.com/thanhsmind/beehive/issues/173); the first permit was wasted because the claim file was left uncommitted"
+      ],
+      "patch_id": "7aef43c0c332e0ecfa4a4723bace74b03fe2d35f"
+    },
+    "warnings": [],
+    "tests": "boundary"
+  },
+  "usage": null,
+  "usage_reason": "no herding job names this cell: no session is attributable to it"
+}

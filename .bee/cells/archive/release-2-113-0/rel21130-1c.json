@@ -1,0 +1,130 @@
+{
+  "id": "rel21130-1c",
+  "feature": "release-2-113-0",
+  "title": "Check the published 2.113.0 release",
+  "lane": "small",
+  "role": "test",
+  "deps": [
+    "rel21130-1"
+  ],
+  "decisions": [
+    "cef8956c-50e7-4b42-be03-de8b23a01990",
+    "fab0bd4c-56cc-49df-b861-bafe847371fa"
+  ],
+  "files": [
+    "docs/history/release-2-113-0/reports/rel21130-1c.md"
+  ],
+  "read_first": [
+    "docs/history/release-2-113-0/CONTEXT.md",
+    "docs/history/release-2-113-0/plan.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Check the release independently, read-only: both plugin manifests on main report 2.113.0; tag v2.113.0 exists locally and on origin (git ls-remote --tags origin v2.113.0); the GitHub release v2.113.0 lists the five binaries and SHA256SUMS (gh release view v2.113.0 --json assets); the release-binaries run for v2.113.0 concluded success. Write each check with its command and output to docs/history/release-2-113-0/reports/rel21130-1c.md and commit it with the trailer cell: rel21130-1c. Bee commands you may run: bee herding notify; never bee dispatch.",
+  "verify": "gh release view v2.113.0 --json assets --jq '.assets | length'",
+  "must_haves": {
+    "truths": [
+      "the report shows each of the four checks with its command and output"
+    ],
+    "prohibitions": [
+      "No edit outside the report file"
+    ]
+  },
+  "behavior_change": false,
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "rel-check",
+    "outcome": "All four read-only checks of v2.113.0 pass (manifests, local+origin tag, 5 binaries + SHA256SUMS, release-binaries run success); report committed 4fb8933a3",
+    "files_changed": [
+      "docs/history/release-2-113-0/reports/rel21130-1c.md"
+    ],
+    "deviations": [
+      "followed the plan",
+      "sync-ack: report only"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-20T01:21:06.981Z",
+    "behavior_change": false,
+    "verification_evidence": "gh release view v2.113.0 --json assets --jq '.assets | length' -> 6 — green:live — reads the published release directly; no code changed so cargo proof not applicable",
+    "verify_output": "green:static",
+    "verify_passed": true,
+    "claim_session": "d63a1e23-e8b8-482f-ae73-5e4e50e0c2aa",
+    "verify_command": "gh release view v2.113.0 --json assets --jq '.assets | length'",
+    "claimed_at": "2026-11-20T01:19:26.665Z",
+    "knowledge_delta": [],
+    "sync_ack": "report only",
+    "no_mistakes": true,
+    "no_knowledge_used": true,
+    "principles_used": [
+      {
+        "slug": "bee-principle-prove-it-works",
+        "changed": "read the remote tag, assets and CI run directly instead of trusting the upstream report"
+      },
+      {
+        "slug": "bee-principle-explain-the-number",
+        "changed": "showed that the asset count 6 is 5 binaries plus SHA256SUMS, each listed by name"
+      }
+    ],
+    "report": {
+      "outcome": "All four read-only checks of v2.113.0 pass (manifests, local+origin tag, 5 binaries + SHA256SUMS, release-binaries run success); report committed 4fb8933a3",
+      "commit": "4fb8933a3d26d5669357190a4fbd180e1648c63d",
+      "files": [
+        "docs/history/release-2-113-0/reports/rel21130-1c.md"
+      ],
+      "tests": "gh release view v2.113.0 --json assets --jq '.assets | length' — green:static — gh release view v2.113.0 --json assets --jq '.assets | length' -> 6 — green:live — reads the published release directly; no code changed so cargo proof not applicable",
+      "deviations": [],
+      "knowledge_used": [],
+      "principles_used": [
+        "bee-principle-prove-it-works — read the remote tag, assets and CI run directly instead of trusting the upstream report",
+        "bee-principle-explain-the-number — showed that the asset count 6 is 5 binaries plus SHA256SUMS, each listed by name"
+      ],
+      "reaction": "confirm",
+      "skipped": [
+        "cargo clippy/test proof — cell changes only a markdown report",
+        "hashing downloaded binaries against SHA256SUMS — cell asks only for the asset listing"
+      ],
+      "patch_id": "1ba3c6e50510de6f1f2aa7a74f8cbdcb7b59d7c3"
+    },
+    "reaction": "confirm",
+    "skipped": [
+      "cargo clippy/test proof — cell changes only a markdown report",
+      "hashing downloaded binaries against SHA256SUMS — cell asks only for the asset listing"
+    ],
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "the report shows each of the four checks with its command and output",
+            "artifact": "docs/history/release-2-113-0/reports/rel21130-1c.md"
+          },
+          {
+            "requirement": "docs/history/release-2-113-0/reports/rel21130-1c.md",
+            "artifact": "docs/history/release-2-113-0/reports/rel21130-1c.md"
+          }
+        ],
+        "recorded_at": "2026-11-20T01:21:19.078Z",
+        "recorded_by": "d63a1e23-e8b8-482f-ae73-5e4e50e0c2aa",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": {
+    "new": 30638,
+    "cached": 154332,
+    "total": 184970,
+    "models": {
+      "claude-opus-5-5": {
+        "new": 30638,
+        "cached": 154332,
+        "total": 184970
+      }
+    },
+    "jobs": [
+      "job-1795137571855-1505796-1"
+    ]
+  }
+}

@@ -14,7 +14,12 @@
   "next_action": "Continue bee-exploring for \"release-2-113-0\" (lane).",
   "created_at": "2026-11-20T01:05:29.977Z",
   "run_state": "awaiting-approval",
-  "waiting_on": null,
+  "waiting_on": {
+    "kind": "turn-end",
+    "subject": "Dòng audit vừa ghi làm bẩn `.bee/audit.jsonl`. Làm lại đúng thứ tự: commit, xin quyền mới, rồi chạy script ngay, không xen lệnh bee nào ở gi",
+    "asked_at": "2026-11-20T01:10:55.425Z",
+    "session": "d63a1e23-e8b8-482f-ae73-5e4e50e0c2aa"
+  },
   "gate_preview": {
     "feature": "release-2-113-0",
     "plan_sha256": "c705599a24d8844926c76021ae9365f2accaf00bed3cede903992770a05805fd",
@@ -462,5 +467,14 @@
         }
       ]
     }
+  },
+  "route": {
+    "class": "release",
+    "lane": "small",
+    "flags": [],
+    "product_files": 3,
+    "rationale": null,
+    "updated_at": "2026-11-20T01:19:25.851Z",
+    "feature": "release-2-113-0"
   }
 }
