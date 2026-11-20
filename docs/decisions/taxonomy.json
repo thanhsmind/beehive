@@ -957,6 +957,7 @@
     "contract:guard-config-and-class",
     "contract:plan-conflicts-and-briefs",
     "blind",
-    "contract:shared-target-warning"
+    "contract:shared-target-warning",
+    "contract:release-2-113-0"
   ]
 }
