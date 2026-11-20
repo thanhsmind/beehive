@@ -11,9 +11,9 @@
     "uat": false
   },
   "summary": "Feature \"shared-target-warning\" started at phase \"exploring\" (lane).",
-  "next_action": "Continue bee-exploring for \"shared-target-warning\" (lane).",
+  "next_action": "Merged into main at f3408bd; capture what settled, then bee close --feature shared-target-warning.",
   "created_at": "2026-11-20T00:49:48.931Z",
-  "run_state": "awaiting-approval",
+  "run_state": null,
   "waiting_on": null,
   "route": {
     "class": "bugfix",
@@ -437,12 +437,5 @@
         }
       ]
     }
-  },
-  "merge_ready": {
-    "since": "2026-11-20T00:59:14.777Z",
-    "branch": "wt/shared-target-warning",
-    "worktree_id": "beehive--wt--shared-target-warning",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
