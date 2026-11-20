@@ -1,0 +1,156 @@
+{
+  "id": "stw-2",
+  "feature": "shared-target-warning",
+  "title": "Prove the shared target warning red then green",
+  "lane": "small",
+  "role": "test",
+  "deps": [
+    "stw-1"
+  ],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- shared_target",
+  "must_haves": {
+    "truths": [
+      "a test shows shared_target_warning returns a line naming the dir and the other checkout when the target is outside the checkout and a live worker is elsewhere",
+      "tests show None for an unset value, a blank value, a target inside the checkout, and live workers only in the same checkout",
+      "a test shows live_worker_worktrees lists unresolved workers of a fresh wave and skips resolved workers and waves older than the stale window",
+      "every new test name contains shared_target",
+      "a test was run against the stw-1 parent commit and failed or did not compile there, and the report quotes it",
+      "the report under docs/history/shared-target-warning/reports/ quotes each run's result line"
+    ]
+  },
+  "decisions": [
+    "6fd09277-23f5-4d22-a97a-02e14bc0738d",
+    "881a704e-f4a2-4756-ad74-75de5ad7178e"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/test_runner.rs",
+    "packages/bee-rs/crates/bee/src/herding/wave_ledger.rs",
+    "docs/history/shared-target-warning/reports/stw-2.md"
+  ],
+  "read_first": [
+    "docs/history/shared-target-warning/CONTEXT.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Check contract shared-target-warning (decision 6fd09277) on the stw-1 commit. Add tests to the existing tests modules: test_runner.rs (mod tests near line 423) for shared_target_warning, all five cases, using tempdirs for real paths; wave_ledger.rs tests for live_worker_worktrees with a fixture .bee/wave-ledger.jsonl (fresh unresolved, fresh resolved, stale unresolved). Every test name contains shared_target. Red proof: run the verify with the production files at the stw-1 parent (git show <parent>:<path> into the tree), record the failure or compile error, restore both files to HEAD, confirm git status shows them clean apart from your test edits. Then run the verify green. Edit no production code outside the tests modules. Write docs/history/shared-target-warning/reports/stw-2.md with each run and its result line. Commit once (cell trailer).",
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "stw-test",
+    "outcome": "Added 6 shared_target tests (5 for shared_target_warning, 1 for live_worker_worktrees); red at stw-1 parent (6 E0425), green after restore; commit 332af019652c74a02ea70a0fe0d6cc1f288b9135",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/test_runner.rs",
+      "packages/bee-rs/crates/bee/src/herding/wave_ledger.rs",
+      "docs/history/shared-target-warning/reports/stw-2.md"
+    ],
+    "deviations": [
+      "followed the plan",
+      "sync-ack: tests and report only"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-20T00:59:14.734Z",
+    "behavior_change": false,
+    "verification_evidence": "cargo clippy -- -D warnings && cargo test --release --no-fail-fast (packages/bee-rs) — green:unit — exit 0, bee bin 5534 passed 0 failed; cell verify `-- shared_target`: 6 passed, red run at parent: 6 compile errors",
+    "verify_output": "green:red-first",
+    "verify_passed": true,
+    "claim_session": "d63a1e23-e8b8-482f-ae73-5e4e50e0c2aa",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- shared_target",
+    "claimed_at": "2026-11-20T00:54:07.703Z",
+    "knowledge_delta": [],
+    "sync_ack": "tests and report only",
+    "no_mistakes": true,
+    "no_knowledge_used": true,
+    "principles_used": [
+      {
+        "slug": "bee-principle-red-before-green",
+        "changed": "ran the verify against the stw-1 parent production code before the green run"
+      },
+      {
+        "slug": "bee-principle-test-behavior-not-structure",
+        "changed": "asserted on the returned warning text/None and the listed worktrees only"
+      }
+    ],
+    "report": {
+      "outcome": "Added 6 shared_target tests (5 for shared_target_warning, 1 for live_worker_worktrees); red at stw-1 parent (6 E0425), green after restore; commit 332af019652c74a02ea70a0fe0d6cc1f288b9135",
+      "commit": "332af019652c74a02ea70a0fe0d6cc1f288b9135",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/test_runner.rs",
+        "packages/bee-rs/crates/bee/src/herding/wave_ledger.rs",
+        "docs/history/shared-target-warning/reports/stw-2.md"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- shared_target — green:red-first — cargo clippy -- -D warnings && cargo test --release --no-fail-fast (packages/bee-rs) — green:unit — exit 0, bee bin 5534 passed 0 failed; cell verify `-- shared_target`: 6 passed, red run at parent: 6 compile errors",
+      "deviations": [],
+      "knowledge_used": [],
+      "principles_used": [
+        "bee-principle-red-before-green — ran the verify against the stw-1 parent production code before the green run",
+        "bee-principle-test-behavior-not-structure — asserted on the returned warning text/None and the listed worktrees only"
+      ],
+      "reaction": "confirm",
+      "patch_id": "36d7f168fcd4463ec875d59d99b30397b91432d2"
+    },
+    "reaction": "confirm",
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "a test shows shared_target_warning returns a line naming the dir and the other checkout when the target is outside the checkout and a live worker is elsewhere",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/test_runner.rs"
+          },
+          {
+            "requirement": "tests show None for an unset value, a blank value, a target inside the checkout, and live workers only in the same checkout",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/test_runner.rs"
+          },
+          {
+            "requirement": "a test shows live_worker_worktrees lists unresolved workers of a fresh wave and skips resolved workers and waves older than the stale window",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/wave_ledger.rs"
+          },
+          {
+            "requirement": "every new test name contains shared_target",
+            "artifact": "docs/history/shared-target-warning/reports/stw-2.md"
+          },
+          {
+            "requirement": "a test was run against the stw-1 parent commit and failed or did not compile there, and the report quotes it",
+            "artifact": "docs/history/shared-target-warning/reports/stw-2.md"
+          },
+          {
+            "requirement": "the report under docs/history/shared-target-warning/reports/ quotes each run's result line",
+            "artifact": "docs/history/shared-target-warning/reports/stw-2.md"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/test_runner.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/test_runner.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/herding/wave_ledger.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/wave_ledger.rs"
+          },
+          {
+            "requirement": "docs/history/shared-target-warning/reports/stw-2.md",
+            "artifact": "docs/history/shared-target-warning/reports/stw-2.md"
+          }
+        ],
+        "recorded_at": "2026-11-20T01:02:18.353Z",
+        "recorded_by": "d63a1e23-e8b8-482f-ae73-5e4e50e0c2aa",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": {
+    "new": 65024,
+    "cached": 727516,
+    "total": 792540,
+    "models": {
+      "claude-opus-5-5": {
+        "new": 65024,
+        "cached": 727516,
+        "total": 792540
+      }
+    },
+    "jobs": [
+      "job-1795136052016-1278382-1"
+    ]
+  }
+}

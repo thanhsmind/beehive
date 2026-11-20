@@ -1,0 +1,145 @@
+{
+  "id": "stw-1",
+  "feature": "shared-target-warning",
+  "title": "Warn in bee test when a shared cargo target meets a live worker elsewhere",
+  "lane": "small",
+  "role": "code",
+  "deps": [],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- verbs::test_runner herding::wave_ledger",
+  "must_haves": {
+    "truths": [
+      "a pure function in test_runner.rs takes the CARGO_TARGET_DIR value, the tested checkout path and the live workers' checkout paths and returns the warning text or None",
+      "it returns None when the value is unset or empty, when the target resolves inside the checkout, or when every live worker checkout is the tested checkout",
+      "the warning names the target dir and each other checkout and says a red may be false",
+      "run() prints the warning to stderr before the suite runs, adds shared_target_warning to the --json result, and still runs and records the suite",
+      "a pub(crate) helper in wave_ledger.rs lists the worktree of every unresolved worker in waves younger than DEFAULT_STALE_AFTER_MS, read from the control root"
+    ]
+  },
+  "decisions": [
+    "881a704e-f4a2-4756-ad74-75de5ad7178e"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/test_runner.rs",
+    "packages/bee-rs/crates/bee/src/herding/wave_ledger.rs"
+  ],
+  "read_first": [
+    "docs/history/shared-target-warning/CONTEXT.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Implement CONTEXT.md D1. In packages/bee-rs/crates/bee/src/herding/wave_ledger.rs add pub(crate) fn live_worker_worktrees(root: &Path, now_ms: i64, stale_after_ms: i64) -> Vec<String> over fold_waves_by_wave_id (line 227) and is_live (line 208): the worktree of each worker with outcome None in a live row. In packages/bee-rs/crates/bee/src/verbs/test_runner.rs add a pure fn shared_target_warning(target_dir: Option<&str>, checkout: &Path, live_worktrees: &[String]) -> Option<String>: None when target_dir is None or blank, when the target (canonicalized when it exists, else lexical) is inside the canonical checkout, or when no live worktree differs from the checkout after canonicalizing both; otherwise one line shaped: warning: CARGO_TARGET_DIR <dir> is shared, and the wave ledger counts a live worker in <checkout list>; a build there can replace binaries under this suite, so a red here may be false. FIX: wait for those workers, or re-run with a private CARGO_TARGET_DIR. In run() (line 80), when commands are declared and before run_declared_tests, read CARGO_TARGET_DIR from the environment, read the live worktrees from the control root (resolve it the way bee herding occupancy finds the ledger; a linked worktree reads main's .bee/wave-ledger.jsonl), print the warning to stderr if Some, and insert shared_target_warning into the result map. The suite still runs. Write no tests (stw-2 owns them) and no code comment. Commit once (cell trailer). Proof: the verify command.",
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "stw-impl",
+    "outcome": "bee test now warns on a shared CARGO_TARGET_DIR with a live worker elsewhere; commit aaa06810e",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/test_runner.rs",
+      "packages/bee-rs/crates/bee/src/herding/wave_ledger.rs",
+      "packages/bee-rs/crates/bee/src/herding.rs"
+    ],
+    "deviations": [
+      "made herding::wave_ledger pub(crate) in herding.rs:75 so test_runner can call the helper — the plan was wrong about a fact",
+      "sync-ack: warning in test_runner.rs; the suite concept was updated by the leader in 46f16bb7f"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-20T00:54:01.751Z",
+    "behavior_change": false,
+    "verification_evidence": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- verbs::test_runner herding::wave_ledger — green:unit — 36 passed; clippy -D warnings clean; full suite not run",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "d63a1e23-e8b8-482f-ae73-5e4e50e0c2aa",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- verbs::test_runner herding::wave_ledger",
+    "claimed_at": "2026-11-20T00:51:24.019Z",
+    "knowledge_delta": [],
+    "sync_ack": "warning in test_runner.rs; the suite concept was updated by the leader in 46f16bb7f",
+    "no_mistakes": true,
+    "no_principles_used": true,
+    "report": {
+      "outcome": "bee test now warns on a shared CARGO_TARGET_DIR with a live worker elsewhere; commit aaa06810e",
+      "commit": "aaa06810ef7913ae965c357443cc9ce58c6ccb30",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/test_runner.rs",
+        "packages/bee-rs/crates/bee/src/herding/wave_ledger.rs",
+        "packages/bee-rs/crates/bee/src/herding.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- verbs::test_runner herding::wave_ledger — green:unit — cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- verbs::test_runner herding::wave_ledger — green:unit — 36 passed; clippy -D warnings clean; full suite not run",
+      "deviations": [],
+      "principles_used": [],
+      "skipped": [
+        "full cargo test --release --no-fail-fast — only the cell verify ran",
+        "knowledge delta — not written"
+      ],
+      "found": [
+        "herding.rs:75 changed to pub(crate) mod wave_ledger, outside the two listed files"
+      ],
+      "patch_id": "f005b2a8dc1b8e28ddff2cf416612bf2d31998d4"
+    },
+    "skipped": [
+      "full cargo test --release --no-fail-fast — only the cell verify ran",
+      "knowledge delta — not written"
+    ],
+    "found": [
+      "herding.rs:75 changed to pub(crate) mod wave_ledger, outside the two listed files"
+    ],
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "a pure function in test_runner.rs takes the CARGO_TARGET_DIR value, the tested checkout path and the live workers' checkout paths and returns the warning text or None",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/test_runner.rs"
+          },
+          {
+            "requirement": "it returns None when the value is unset or empty, when the target resolves inside the checkout, or when every live worker checkout is the tested checkout",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/test_runner.rs"
+          },
+          {
+            "requirement": "the warning names the target dir and each other checkout and says a red may be false",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/test_runner.rs"
+          },
+          {
+            "requirement": "run() prints the warning to stderr before the suite runs, adds shared_target_warning to the --json result, and still runs and records the suite",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/test_runner.rs"
+          },
+          {
+            "requirement": "a pub(crate) helper in wave_ledger.rs lists the worktree of every unresolved worker in waves younger than DEFAULT_STALE_AFTER_MS, read from the control root",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/wave_ledger.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/test_runner.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/test_runner.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/herding/wave_ledger.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/wave_ledger.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/herding.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/herding.rs"
+          }
+        ],
+        "recorded_at": "2026-11-20T01:02:18.343Z",
+        "recorded_by": "d63a1e23-e8b8-482f-ae73-5e4e50e0c2aa",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": {
+    "new": 53176,
+    "cached": 360045,
+    "total": 413221,
+    "models": {
+      "claude-sonnet-5-5": {
+        "new": 53176,
+        "cached": 360045,
+        "total": 413221
+      }
+    },
+    "jobs": [
+      "job-1795135891103-1266354-1"
+    ]
+  }
+}
