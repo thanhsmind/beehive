@@ -597,6 +597,37 @@ mod tests {
     }
 
     #[test]
+    fn shared_target_live_worker_worktrees_lists_only_unresolved_workers_of_fresh_waves() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        append_wave(
+            root,
+            &WaveRow {
+                wave_id: "fresh".to_string(),
+                started_at: iso(0),
+                workers: vec![worker("pending", None), worker("resolved", Some("success"))],
+            },
+        )
+        .unwrap();
+        append_wave(
+            root,
+            &WaveRow {
+                wave_id: "stale".to_string(),
+                started_at: iso(DEFAULT_STALE_AFTER_MS + 60_000),
+                workers: vec![worker("orphan", None)],
+            },
+        )
+        .unwrap();
+        assert!(wave_ledger_path(root).ends_with(".bee/wave-ledger.jsonl"));
+
+        let now = chrono::Utc::now().timestamp_millis();
+        assert_eq!(
+            live_worker_worktrees(root, now, DEFAULT_STALE_AFTER_MS),
+            vec!["/tmp/wt-pending".to_string()],
+        );
+    }
+
+    #[test]
     fn an_absent_ledger_reads_as_empty_and_zero_occupancy() {
         let tmp = tmp_root();
         let root = tmp.path();

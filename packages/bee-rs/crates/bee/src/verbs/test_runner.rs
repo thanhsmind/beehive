@@ -704,4 +704,57 @@ mod tests {
     fn js_trim_covers_the_ecma_whitespace_set() {
         assert_eq!(js_trim("\u{FEFF}\u{00A0} boom \n\t"), "boom");
     }
+
+    fn shared_target_dirs() -> (tempfile::TempDir, std::path::PathBuf, std::path::PathBuf, std::path::PathBuf) {
+        let tmp = tempfile::tempdir().unwrap();
+        let checkout = tmp.path().join("checkout");
+        let other = tmp.path().join("other");
+        let target = tmp.path().join("cargo-target");
+        for d in [&checkout, &other, &target] {
+            std::fs::create_dir_all(d).unwrap();
+        }
+        (tmp, checkout, other, target)
+    }
+
+    #[test]
+    fn shared_target_outside_the_checkout_with_a_live_worker_elsewhere_warns() {
+        let (_tmp, checkout, other, target) = shared_target_dirs();
+        let dir = target.to_string_lossy().into_owned();
+        let other_s = other.to_string_lossy().into_owned();
+        let warning = shared_target_warning(Some(&dir), &checkout, &[other_s.clone()])
+            .expect("a shared target with a live worker elsewhere must warn");
+        assert!(warning.contains(&dir), "the warning names the dir: {warning}");
+        assert!(warning.contains(&other_s), "the warning names the other checkout: {warning}");
+        assert!(warning.contains("may be false"), "the warning says a red may be false: {warning}");
+    }
+
+    #[test]
+    fn shared_target_unset_gives_no_warning() {
+        let (_tmp, checkout, other, _target) = shared_target_dirs();
+        let others = [other.to_string_lossy().into_owned()];
+        assert_eq!(shared_target_warning(None, &checkout, &others), None);
+    }
+
+    #[test]
+    fn shared_target_blank_gives_no_warning() {
+        let (_tmp, checkout, other, _target) = shared_target_dirs();
+        let others = [other.to_string_lossy().into_owned()];
+        assert_eq!(shared_target_warning(Some("  "), &checkout, &others), None);
+    }
+
+    #[test]
+    fn shared_target_inside_the_checkout_gives_no_warning() {
+        let (_tmp, checkout, other, _target) = shared_target_dirs();
+        let inside = checkout.join("target");
+        std::fs::create_dir_all(&inside).unwrap();
+        let others = [other.to_string_lossy().into_owned()];
+        assert_eq!(shared_target_warning(Some(&inside.to_string_lossy()), &checkout, &others), None);
+    }
+
+    #[test]
+    fn shared_target_with_live_workers_only_in_this_checkout_gives_no_warning() {
+        let (_tmp, checkout, _other, target) = shared_target_dirs();
+        let same = [checkout.to_string_lossy().into_owned()];
+        assert_eq!(shared_target_warning(Some(&target.to_string_lossy()), &checkout, &same), None);
+    }
 }
