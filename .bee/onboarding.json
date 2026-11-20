@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "bee_version": "2.112.0",
+  "bee_version": "2.113.0",
   "managed": {
     "agents_block": "7bdead6da9fe529d47a441d7c0b14499f2358558a1d5e38813c38ac410c7550d",
     "gitignore_block": "f30cb5dd174055c18a3b067f5cb22b6ef6662c4c27357f3347ab26529cc4d117",
@@ -154,7 +154,7 @@
     }
   },
   "agents_sync": {
-    "bee_version": "2.112.0",
+    "bee_version": "2.113.0",
     "files": [
       ".claude/agents/bee-comb.md",
       ".claude/agents/bee-forager.md",
@@ -192,5 +192,5 @@
   },
   "design_role_offered": true,
   "created_at": "2026-07-24T03:53:44.750Z",
-  "updated_at": "2026-11-19T16:51:22.195Z"
+  "updated_at": "2026-11-20T01:10:52.659Z"
 }
