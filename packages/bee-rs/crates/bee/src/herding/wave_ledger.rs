@@ -232,6 +232,16 @@ fn fold_waves_by_wave_id(root: &Path) -> Vec<WaveRow> {
     by_wave_id.into_values().collect()
 }
 
+pub(crate) fn live_worker_worktrees(root: &Path, now_ms: i64, stale_after_ms: i64) -> Vec<String> {
+    fold_waves_by_wave_id(root)
+        .into_iter()
+        .filter(|row| is_live(row, now_ms, stale_after_ms))
+        .flat_map(|row| row.workers.into_iter())
+        .filter(|w| w.outcome.is_none())
+        .map(|w| w.worktree)
+        .collect()
+}
+
 /// Occupancy's answer, tagged with how it was reached — never hidden behind
 /// a bare number, so a caller (and a test) can tell a real cross-check from
 /// the degraded fallback apart.

@@ -119,6 +119,14 @@ fn run(use_json: bool, t0: Instant) -> Option<ExitCode> {
             (result, text, 0u8)
         }
         Some(commands) => {
+            let warning = shared_target_warning(
+                std::env::var("CARGO_TARGET_DIR").ok().as_deref(),
+                &root,
+                &live_worktrees_for(&root),
+            );
+            if let Some(w) = &warning {
+                eprintln!("{w}");
+            }
             let run = run_declared_tests(&root, &commands, shell?);
             if let Some(msg) = &run.write_error {
                 // Node: writeJsonAtomic throws -> main's catch -> emitError.
@@ -138,6 +146,9 @@ fn run(use_json: bool, t0: Instant) -> Option<ExitCode> {
                 Value::Array(run.commands.iter().map(command_result_value).collect()),
             );
             result.insert("results".into(), Value::from(TEST_RESULTS_RELATIVE));
+            if let Some(w) = warning {
+                result.insert("shared_target_warning".into(), Value::from(w));
+            }
             if green {
                 lines.push(format!(
                     "next: green (record: {TEST_RESULTS_RELATIVE}) — back to what you were doing"
@@ -163,6 +174,44 @@ fn run(use_json: bool, t0: Instant) -> Option<ExitCode> {
     }
     record_timing(&root, "test", t0, exit_code == 0);
     Some(ExitCode::from(exit_code))
+}
+
+fn live_worktrees_for(root: &Path) -> Vec<String> {
+    let control = crate::herding::resolve_main_root(None).unwrap_or_else(|| root.to_path_buf());
+    crate::herding::wave_ledger::live_worker_worktrees(
+        &control,
+        chrono::Utc::now().timestamp_millis(),
+        crate::herding::wave_ledger::DEFAULT_STALE_AFTER_MS,
+    )
+}
+
+fn shared_target_warning(
+    target_dir: Option<&str>,
+    checkout: &Path,
+    live_worktrees: &[String],
+) -> Option<String> {
+    let dir = target_dir.map(str::trim).filter(|d| !d.is_empty())?;
+    let canon_checkout = checkout.canonicalize().unwrap_or_else(|_| checkout.to_path_buf());
+    let target = Path::new(dir);
+    let target = target.canonicalize().unwrap_or_else(|_| target.to_path_buf());
+    if target.starts_with(&canon_checkout) {
+        return None;
+    }
+    let mut others: Vec<String> = Vec::new();
+    for w in live_worktrees {
+        let p = Path::new(w);
+        let canon = p.canonicalize().unwrap_or_else(|_| p.to_path_buf());
+        if canon != canon_checkout && !others.contains(w) {
+            others.push(w.clone());
+        }
+    }
+    if others.is_empty() {
+        return None;
+    }
+    Some(format!(
+        "warning: CARGO_TARGET_DIR {dir} is shared, and the wave ledger counts a live worker in {}; a build there can replace binaries under this suite, so a red here may be false. FIX: wait for those workers, or re-run with a private CARGO_TARGET_DIR.",
+        others.join(", ")
+    ))
 }
 
 /// emitError (bee.mjs ~8385): JSON -> stdout {"error": msg} compact; text ->
