@@ -72,7 +72,7 @@ use run::PaneTransport;
 // The append-only wave ledger (D10): one row per wave, read side (occupancy)
 // and write side (append_wave). `wave` below is the CLI verb that drives a
 // real wave and appends to it; `occupancy` is the CLI verb that reads it.
-mod wave_ledger;
+pub(crate) mod wave_ledger;
 
 // `bee herding wave` (D17) and `bee herding occupancy` — the caller that
 // turns `herding.agent_command` into a running wave, and the CLI bridge to

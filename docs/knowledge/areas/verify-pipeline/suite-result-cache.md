@@ -71,6 +71,7 @@ A test suite whose entire dependency closure is byte-identical to the last green
 - Mixed run: cached and executed suites coexist in one invocation; counts reported.
 - Introducing the cache broke three pre-existing selection tests that asserted real execution; settled rule above (hermetic tests opt out) rather than weakening assertions.
 - **The cap-time coverage advisory judges path shape, never the commit's content.** Tests written inside the changed source file itself — the ordinary layout for this repo's compiled runtime — touch no separately named test path, so a large cap earns the advisory while its new tests sit in the same diff. It stays a nudge: the exit code and the cap outcome are untouched. Read it as "no test FILE was touched", never as "no tests were added", because the line is recorded on the cap's own warnings where a later reader can mistake it for missing coverage.
+- **A shared cargo target is warned about, never changed** (shared-target-warning D1). When `CARGO_TARGET_DIR` resolves outside the checkout `bee test` runs in, and the wave ledger counts a live worker in a different checkout, `bee test` prints one stderr warning before the suite and carries `shared_target_warning` in its `--json` result, then runs and records the suite as usual. A build in that other checkout can replace binaries under the running suite, so a red there may be false. The owner keeps one shared target for build speed; per-worktree target dirs were offered and declined.
 
 ## Open Gaps
 

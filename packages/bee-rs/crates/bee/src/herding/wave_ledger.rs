@@ -232,6 +232,16 @@ fn fold_waves_by_wave_id(root: &Path) -> Vec<WaveRow> {
     by_wave_id.into_values().collect()
 }
 
+pub(crate) fn live_worker_worktrees(root: &Path, now_ms: i64, stale_after_ms: i64) -> Vec<String> {
+    fold_waves_by_wave_id(root)
+        .into_iter()
+        .filter(|row| is_live(row, now_ms, stale_after_ms))
+        .flat_map(|row| row.workers.into_iter())
+        .filter(|w| w.outcome.is_none())
+        .map(|w| w.worktree)
+        .collect()
+}
+
 /// Occupancy's answer, tagged with how it was reached — never hidden behind
 /// a bare number, so a caller (and a test) can tell a real cross-check from
 /// the degraded fallback apart.
@@ -584,6 +594,37 @@ mod tests {
         .unwrap();
         let now = chrono::Utc::now().timestamp_millis();
         assert_eq!(live_worker_count(root, None, now, DEFAULT_STALE_AFTER_MS).count(), 0);
+    }
+
+    #[test]
+    fn shared_target_live_worker_worktrees_lists_only_unresolved_workers_of_fresh_waves() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        append_wave(
+            root,
+            &WaveRow {
+                wave_id: "fresh".to_string(),
+                started_at: iso(0),
+                workers: vec![worker("pending", None), worker("resolved", Some("success"))],
+            },
+        )
+        .unwrap();
+        append_wave(
+            root,
+            &WaveRow {
+                wave_id: "stale".to_string(),
+                started_at: iso(DEFAULT_STALE_AFTER_MS + 60_000),
+                workers: vec![worker("orphan", None)],
+            },
+        )
+        .unwrap();
+        assert!(wave_ledger_path(root).ends_with(".bee/wave-ledger.jsonl"));
+
+        let now = chrono::Utc::now().timestamp_millis();
+        assert_eq!(
+            live_worker_worktrees(root, now, DEFAULT_STALE_AFTER_MS),
+            vec!["/tmp/wt-pending".to_string()],
+        );
     }
 
     #[test]
