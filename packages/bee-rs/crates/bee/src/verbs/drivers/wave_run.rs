@@ -71,7 +71,76 @@ fn save_row(root: &Path, id: &str, spawn: &Spawn) -> Value {
         let _ = std::fs::create_dir_all(parent);
     }
     let _ = std::fs::write(&path, spawn.stdout.as_bytes());
-    row(id, spawn, &path)
+    let mut value = row(id, spawn, &path);
+    let (judged, errors) = record_judge_blocks(root, id, &value);
+    let capped = crate::verbs::cells::read_cell(root, id)
+        .ok()
+        .flatten()
+        .is_some_and(|cell| cell.get("status").and_then(Value::as_str) == Some("capped"));
+    if let Value::Object(m) = &mut value {
+        m.insert("capped".into(), Value::Bool(capped));
+        m.insert("judged".into(), Value::from(judged));
+        if !errors.is_empty() {
+            m.insert("judge_errors".into(), Value::from(errors));
+        }
+    }
+    value
+}
+
+fn record_judge_blocks(root: &Path, id: &str, row: &Value) -> (Vec<String>, Vec<String>) {
+    let mut judged = Vec::new();
+    let mut errors = Vec::new();
+    let Ok(Some(cell)) = crate::verbs::cells::read_cell(root, id) else {
+        return (judged, errors);
+    };
+    if cell.get("role").and_then(Value::as_str) != Some("test") {
+        return (judged, errors);
+    }
+    let deps: Vec<&str> = cell
+        .get("deps")
+        .and_then(Value::as_array)
+        .map(|list| list.iter().filter_map(Value::as_str).collect())
+        .unwrap_or_default();
+    let Some(report) = row.get("report_path").and_then(Value::as_str) else {
+        return (judged, errors);
+    };
+    let Ok(text) = std::fs::read_to_string(root.join(report)) else {
+        return (judged, errors);
+    };
+    let blocks = match crate::verbs::cells::extract_fenced_verdicts(&text) {
+        Ok(blocks) => blocks,
+        Err(e) => {
+            if !e.starts_with("no json") {
+                errors.push(e);
+            }
+            return (judged, errors);
+        }
+    };
+    for (block_id, body) in blocks {
+        if !deps.contains(&block_id.as_str()) {
+            continue;
+        }
+        let body = match body {
+            Value::String(raw) => raw,
+            other => other.to_string(),
+        };
+        let one = format!("```json {block_id}\n{body}\n```\n");
+        match crate::verbs::cells::process_judge_from_text(
+            root,
+            &one,
+            Some(&block_id),
+            None,
+            None,
+            None,
+            false,
+        ) {
+            Ok(crate::verbs::reservations::Out::Emit(_, _, 0)) => judged.push(block_id),
+            Ok(crate::verbs::reservations::Out::Emit(_, line, _)) => errors.push(line),
+            Ok(crate::verbs::reservations::Out::Thrown(msg)) => errors.push(msg),
+            Err(_) => errors.push(format!("{block_id}: judge record failed")),
+        }
+    }
+    (judged, errors)
 }
 
 fn is_silent(spawn: &Spawn) -> bool {
