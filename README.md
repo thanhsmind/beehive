@@ -523,7 +523,7 @@ you approve GATE 3      →   (P1 findings block merge)
                             bee-shaping writes walkthrough     docs/history/X/walkthrough.md
 ```
 
-A long session keeps working until your task is done; bee shows the context size but never stops for it. When you ask for a switch, bee writes `.bee/HANDOFF.json`; the next session surfaces the handoff and **waits** — it never auto-resumes.
+A leader runs one session per feature. Once its context reaches the mark (`handoff_context_tokens`, default 300000), and after every green worktree merge, it writes `.bee/HANDOFF.json` at the next clean stop and continues in a fresh leader session; it never stops mid-cell. A pause handoff (one you ask for) is surfaced by the next session, which **waits** — it never auto-resumes.
 
 ---
 
