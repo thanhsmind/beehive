@@ -1036,4 +1036,37 @@ mod fix_at_debt_tests {
         let omitted = text.lines().find(|l| l.starts_with("### Omitted to fit the host limit:")).expect("an Omitted line");
         assert!(omitted.contains("Fix-at debt → bee backlog fix-at next"), "{omitted}");
     }
+
+    fn surface_block(text: &str) -> String {
+        let start = text.find("### Command surface").expect("a Command surface block");
+        let rest = &text[start + 3..];
+        let end = rest.find("\n### ").map(|n| start + 3 + n).unwrap_or(text.len());
+        text[start..end].to_string()
+    }
+
+    #[test]
+    fn preamble_command_surface_block_has_no_help_first_line_and_names_help_brief() {
+        let tmp = repo();
+        let text = build_session_preamble_within(tmp.path(), None, None, "claude", usize::MAX);
+        let block = surface_block(&text);
+        assert!(!block.contains("FIRST use"), "{block}");
+        assert!(block.contains("--help --brief"), "{block}");
+    }
+
+    #[test]
+    fn preamble_command_surface_full_render_stays_inside_the_byte_budget() {
+        let tmp = repo();
+        write_backlog(tmp.path(), &debt_rows());
+        let text = build_session_preamble_within(tmp.path(), None, None, "claude", PREAMBLE_BUDGET_BYTES);
+        assert!(text.contains("### Command surface"), "{text}");
+        assert!(text.len() <= PREAMBLE_BUDGET_BYTES, "{} bytes over {PREAMBLE_BUDGET_BYTES}", text.len());
+    }
+
+    #[test]
+    fn preamble_command_surface_leader_doc_holds_the_batching_bullet() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../..");
+        let doc = std::fs::read_to_string(root.join(".bee/LEADER.md")).expect("LEADER.md at the repo root");
+        assert!(doc.contains("Every tool call re-reads the whole session"));
+        assert!(doc.contains("with its `--claim` flag"));
+    }
 }
