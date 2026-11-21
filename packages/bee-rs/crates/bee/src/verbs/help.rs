@@ -258,7 +258,10 @@ fn group_scoped(argv: &[&str], t0: Instant) -> Option<ExitCode> {
     }
     // Proven-shape gate: Node ignores extra rest tokens in this branch, but
     // only the documented flag pair is served natively.
-    if !rest.iter().all(|t| *t == "--help" || *t == "--json") {
+    if !rest
+        .iter()
+        .all(|t| *t == "--help" || *t == "--json" || *t == "--brief")
+    {
         return None;
     }
 
@@ -312,6 +315,9 @@ fn group_scoped(argv: &[&str], t0: Instant) -> Option<ExitCode> {
         manifest.insert("schema_version".into(), reg.schema_version.clone());
         manifest.insert("commands".into(), Value::Array(entries));
         println!("{}", jsjson::stringify_pretty(&Value::Object(manifest)));
+    } else if rest.contains(&"--brief") {
+        let cards: Vec<String> = entries.iter().map(|e| brief_card(e).join("\n")).collect();
+        println!("{}", cards.join("\n\n"));
     } else {
         print!("{}", render_help_text(&entries, &[], &reg.schema_version));
     }
@@ -592,6 +598,43 @@ fn flags_detail_lines(entry: &Value) -> Option<Vec<String>> {
     } else {
         Some(flags)
     }
+}
+
+const BRIEF_DESC_MAX: usize = 80;
+
+pub(crate) fn brief_card(entry: &Value) -> Vec<String> {
+    let get = |k: &str| entry.as_object().and_then(|m| m.get(k));
+    let (sentence, _) = split_description(&js_display(get("description")));
+    let summary = sentence.split(" — ").next().unwrap_or(&sentence).to_string();
+    let mut lines = vec![js_display(get("invoke")), format!("    {summary}")];
+    let properties = entry
+        .get("parameters")
+        .and_then(|p| p.get("properties"))
+        .and_then(Value::as_object);
+    let required: HashSet<&str> = entry
+        .get("parameters")
+        .and_then(|p| p.get("required"))
+        .and_then(Value::as_array)
+        .map(|r| r.iter().filter_map(Value::as_str).collect())
+        .unwrap_or_default();
+    for (k, v) in properties.into_iter().flatten().filter(|(k, _)| k.as_str() != "json") {
+        let star = if required.contains(k.as_str()) { "*" } else { "" };
+        let abbrev = type_abbrev(v.get("type").and_then(Value::as_str).unwrap_or("value"));
+        let desc = v
+            .get("description")
+            .and_then(Value::as_str)
+            .map(|d| d.split_whitespace().collect::<Vec<_>>().join(" "))
+            .unwrap_or_default();
+        if desc.is_empty() {
+            lines.push(format!("  --{k}{star} ({abbrev})"));
+        } else if desc.chars().count() > BRIEF_DESC_MAX {
+            let cut: String = desc.chars().take(BRIEF_DESC_MAX - 1).collect();
+            lines.push(format!("  --{k}{star} ({abbrev}) — {cut}…"));
+        } else {
+            lines.push(format!("  --{k}{star} ({abbrev}) — {desc}"));
+        }
+    }
+    lines
 }
 
 /// True when at least one rendered entry declares a `json` property — the

@@ -12,7 +12,7 @@ bee:
   decisions: [pi-slp-next-ops D1-D4 (orient reads the session record; one runnable next operation; the per-turn run line; no open-your-session text), harness-refocus-P2, 412e9b3a, harness-refocus-P4]
   sources: [docs/specs/porcelain.md, docs/handbook/register.md, packages/bee-rs/crates/bee/src/router.rs, packages/bee-rs/crates/bee/src/generated/registry_payload.json]
   authoritative_for: "rust-runtime: the porcelain/plumbing command surface and the teach-at-point-of-contact contract"
-  anchors: [packages/bee-rs/crates/bee/src/router.rs, packages/bee-rs/crates/bee/src/verbs/config.rs]
+  anchors: [packages/bee-rs/crates/bee/src/router.rs, packages/bee-rs/crates/bee/src/verbs/config.rs, packages/bee-rs/crates/bee/src/verbs/help.rs]
   verified_at: 2026-11-10
   verified_commit: 471430df16c5b9bc6af2a3f891ee1180729d1916
 ---
@@ -251,6 +251,21 @@ unchanged. The fix is one list entry, not a parser change.
   understand — a missing title, an out-of-enum status, a duplicate row — so each
   still answers its caller with the dispatcher's guess instead of the real
   problem (backlog-add-honest-refusal bah-1, 2026-08-21).
+
+## Brief help card
+
+Read when: you want the flags of one verb without paying for the full help
+(about 2.9k chars each, 109 reads in six leader sessions).
+
+`bee <verb|group> --help --brief` prints per entry the usage line, a clause
+summary and one line per flag, each description cut at 80 chars. No details
+paragraph, no header note. Without `--brief` the help bytes are unchanged and
+`--json` wins over `--brief`. Only the group-scoped path takes `--brief`; the
+top-level `--help` still refuses it. The card is `brief_card` in
+`verbs/help.rs` so refusals can reuse it. The summary stops at the first
+` — ` because the first sentence alone pushed `cells finish` past the 2500
+byte budget. The CLI-shape guard needs no change: a parsed `help` key already
+ends validation, so `--brief` rides through like `--json`.
 
 ## Pointers
 
