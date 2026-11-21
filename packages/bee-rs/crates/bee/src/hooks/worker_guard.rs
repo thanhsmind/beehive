@@ -732,6 +732,110 @@ mod tests {
         assert!(bash(&home_move).is_some(), "expected deny: {home_move}");
     }
 
+    fn worker_full_suite_fixture(root: &Path, job: &str, cell_id: Option<&str>, full_suite_reason: Option<&str>) {
+        std::fs::create_dir_all(root.join(".bee").join("cells")).unwrap();
+        std::fs::write(root.join(".bee").join("onboarding.json"), "{}").unwrap();
+        std::fs::write(
+            root.join(".bee").join("config.json"),
+            serde_json::json!({"commands": {"test": "cargo test --release"}}).to_string(),
+        )
+        .unwrap();
+        let mut cell = serde_json::json!({
+            "id": "wf-1", "title": "t", "status": "claimed", "lane": "tiny", "feature": "f",
+            "verify": "cargo test --release wf_filter"
+        });
+        if let Some(reason) = full_suite_reason {
+            cell["full_suite_reason"] = serde_json::json!(reason);
+        }
+        std::fs::write(root.join(".bee").join("cells").join("wf-1.json"), cell.to_string()).unwrap();
+        let mailbox = root.join(".bee").join("mailbox").join(job);
+        std::fs::create_dir_all(&mailbox).unwrap();
+        let spec = match cell_id {
+            Some(id) => serde_json::json!({"job_id": job, "cell_id": id}),
+            None => serde_json::json!({"job_id": job}),
+        };
+        std::fs::write(mailbox.join("job.json"), spec.to_string()).unwrap();
+    }
+
+    #[test]
+    fn worker_full_suite_refuses_the_declared_suite_bee_test_and_env_prefixed_suite() {
+        let tmp = tempfile::tempdir().unwrap();
+        let cwd = tmp.path();
+        worker_full_suite_fixture(cwd, "job-1", Some("wf-1"), None);
+        for command in [
+            "cargo test --release",
+            "bee test",
+            ".bee/bin/bee test",
+            "RUST_LOG=debug cargo test --release",
+            "cd packages && cargo test --release",
+        ] {
+            let reason = evaluate_full_suite(command, cwd, "job-1")
+                .unwrap_or_else(|| panic!("expected refusal: {command}"));
+            assert!(reason.contains("starts the full suite"), "{reason}");
+            assert!(reason.contains("cargo test --release wf_filter"), "the refusal names the cell verify: {reason}");
+        }
+    }
+
+    #[test]
+    fn worker_full_suite_allows_a_filtered_test_and_a_cell_with_a_full_suite_reason() {
+        let tmp = tempfile::tempdir().unwrap();
+        let cwd = tmp.path();
+        worker_full_suite_fixture(cwd, "job-1", Some("wf-1"), None);
+        for command in ["cargo test --release wf_filter", "cargo test --release -- --exact a::b", "rg -n foo src"] {
+            assert!(evaluate_full_suite(command, cwd, "job-1").is_none(), "expected allow: {command}");
+        }
+        worker_full_suite_fixture(cwd, "job-1", Some("wf-1"), Some("cross-cutting rename"));
+        for command in ["cargo test --release", "bee test"] {
+            assert!(evaluate_full_suite(command, cwd, "job-1").is_none(), "full_suite_reason allows: {command}");
+        }
+    }
+
+    #[test]
+    fn worker_full_suite_does_not_refuse_a_job_with_no_cell_id() {
+        let tmp = tempfile::tempdir().unwrap();
+        let cwd = tmp.path();
+        worker_full_suite_fixture(cwd, "job-1", None, None);
+        assert!(evaluate_full_suite("cargo test --release", cwd, "job-1").is_none());
+        assert!(evaluate_full_suite("bee test", cwd, "job-1").is_none());
+    }
+
+    #[test]
+    fn worker_full_suite_exits_two_through_the_hook_only_for_a_herded_job() {
+        let _guard = crate::hooks::herding_env_lock();
+        let keys = ["BEE_HERDING_WORKER", "PASEO_AGENT_ID", "BEE_SUPERVISOR_ALLOWED", "BEE_HERDING_READ_ONLY", "BEE_HERDING_JOB_ID"];
+        let prior: Vec<_> = keys.iter().map(|k| std::env::var_os(k)).collect();
+        let tmp = tempfile::tempdir().unwrap();
+        worker_full_suite_fixture(tmp.path(), "job-1", Some("wf-1"), None);
+        let run_bash = |command: &str| {
+            let payload = serde_json::json!({
+                "tool_name": "Bash",
+                "cwd": tmp.path().display().to_string(),
+                "tool_input": { "command": command }
+            });
+            match run(&[], &payload.to_string()) {
+                Outcome::Done(code) => format!("{code:?}"),
+                Outcome::Delegate => "delegate".to_string(),
+            }
+        };
+        for k in keys {
+            unsafe { std::env::remove_var(k) };
+        }
+        let outside_a_herd = run_bash("cargo test --release");
+        unsafe { std::env::set_var("BEE_HERDING_WORKER", "1") };
+        unsafe { std::env::set_var("BEE_HERDING_JOB_ID", "job-1") };
+        let refused = run_bash("cargo test --release");
+        let filtered = run_bash("cargo test --release wf_filter");
+        for (k, v) in keys.iter().zip(prior) {
+            match v {
+                Some(v) => unsafe { std::env::set_var(k, v) },
+                None => unsafe { std::env::remove_var(k) },
+            }
+        }
+        assert_ne!(outside_a_herd, "ExitCode(unix_exit_status(2))");
+        assert_eq!(refused, "ExitCode(unix_exit_status(2))");
+        assert_ne!(filtered, "ExitCode(unix_exit_status(2))");
+    }
+
     #[test]
     fn read_only_env_gates_non_bash_tools() {
         let _guard = crate::hooks::herding_env_lock();

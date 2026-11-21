@@ -12691,6 +12691,113 @@ mod tests {
         assert!(cell_val["trace"]["capped_at"].as_str().is_some_and(|s| !s.is_empty()));
     }
 
+    fn auto_settle_answers_fixture(tmp: &Path, cell_id: &str, job_id: &str) -> (PathBuf, PathBuf) {
+        let (main, wt) = setup_cap_test_fixture(tmp, "feat-cap", cell_id, job_id);
+        let area = main.join("docs/knowledge/areas/demo");
+        std::fs::create_dir_all(&area).unwrap();
+        std::fs::write(
+            area.join("overview.md"),
+            "---\ntype: bee.area\ntitle: demo\ntags: []\nbee:\n  id: area-demo\n  areas: [demo]\n  owns.code: [file.txt]\n  owns.skills: [skills/demo/SKILL.md]\n  owns.tests: []\n---\ndemo overview.\n",
+        )
+        .unwrap();
+        std::fs::create_dir_all(main.join(".bee/logs")).unwrap();
+        std::fs::write(
+            main.join(".bee/logs/dispatch.jsonl"),
+            format!("{{\"cell\":\"{cell_id}\",\"principles_arm\":\"principles\"}}\n"),
+        )
+        .unwrap();
+        (main, wt)
+    }
+
+    fn auto_settle_answers_outcome(proof: &str, principles_used: Option<Vec<String>>, sync_ack: Option<&str>) -> RunOutcome {
+        RunOutcome::Result(Box::new(MailboxResult {
+            round: 1,
+            status: MailboxStatus::Done,
+            summary: "completed work".to_string(),
+            files_changed: vec!["file.txt".to_string()],
+            proof: proof.to_string(),
+            knowledge_used: None,
+            principles_used,
+            sync_ack: sync_ack.map(str::to_string),
+            knowledge_wrong: None,
+            options: vec![],
+            leaning: None,
+            dissent: None,
+            handback: Default::default(),
+            report_path: None,
+            report_note: None,
+            question: None,
+        }))
+    }
+
+    #[test]
+    fn auto_settle_answers_cap_a_principles_arm_cell_the_sync_door_would_refuse() {
+        let tmp = tempfile::tempdir().unwrap();
+        let cell_id = "cell-ans-1";
+        let job_id = "job-ans-1";
+        let (main, wt) = auto_settle_answers_fixture(tmp.path(), cell_id, job_id);
+        let proof = "cargo test — green:unit — test reason";
+        let job_dir = main.join(".bee").join("mailbox").join(job_id);
+        std::fs::write(
+            job_dir.join("result-1.json"),
+            serde_json::json!({
+                "round": 1, "status": "done", "summary": "completed work",
+                "files_changed": ["file.txt"], "proof": proof, "report_path": "report-1.md",
+                "principles_used": ["bee-principle-red-before-green — wrote the test first"],
+                "sync_ack": "skill update deferred"
+            })
+            .to_string(),
+        )
+        .unwrap();
+        let mut opts = test_options(&main, false);
+        opts.job_id = job_id.to_string();
+        opts.cell_id = Some(cell_id.to_string());
+        opts.cwd = wt;
+
+        let outcome = auto_settle_answers_outcome(
+            proof,
+            Some(vec!["bee-principle-red-before-green — wrote the test first".to_string()]),
+            Some("skill update deferred"),
+        );
+        assert_eq!(try_cap_finished_cell(&opts, cell_id, &outcome), PostflightCapResult::Capped);
+        let cell: Value =
+            serde_json::from_str(&std::fs::read_to_string(main.join(".bee/cells").join(format!("{cell_id}.json"))).unwrap()).unwrap();
+        assert_eq!(cell["status"], "capped");
+        assert_eq!(cell["trace"]["sync_ack"], "skill update deferred");
+        assert_eq!(cell["trace"]["principles_used"][0]["slug"], "bee-principle-red-before-green");
+    }
+
+    #[test]
+    fn auto_settle_answers_missing_are_refused_with_a_finish_command_naming_both_flags() {
+        let tmp = tempfile::tempdir().unwrap();
+        let cell_id = "cell-ans-2";
+        let job_id = "job-ans-2";
+        let (main, wt) = auto_settle_answers_fixture(tmp.path(), cell_id, job_id);
+        let proof = "cargo test — green:unit — test reason";
+        write_cap_test_result(&main, job_id, proof);
+        let mut opts = test_options(&main, false);
+        opts.job_id = job_id.to_string();
+        opts.cell_id = Some(cell_id.to_string());
+        opts.cwd = wt;
+
+        let PostflightCapResult::Refused(refusal) =
+            try_cap_finished_cell(&opts, cell_id, &auto_settle_answers_outcome(proof, None, None))
+        else {
+            panic!("expected the cap to refuse");
+        };
+        assert!(refusal.contains("--principle-used") && refusal.contains("--sync-ack"), "{refusal}");
+        let cell: Value =
+            serde_json::from_str(&std::fs::read_to_string(main.join(".bee/cells").join(format!("{cell_id}.json"))).unwrap()).unwrap();
+        assert_eq!(cell["status"], "claimed");
+
+        let command = settle_command(cell_id, job_id, "green:unit", &refusal);
+        assert!(command.starts_with(&format!("bee cells finish --id {cell_id} --from-job {job_id}")), "{command}");
+        assert!(command.contains("--principle-used \"<slug> — <the decision it changed>\""), "{command}");
+        assert!(command.contains("--sync-ack \"<reason>\""), "{command}");
+        let plain = settle_command(cell_id, job_id, "green:unit", "");
+        assert!(!plain.contains("--principle-used") && !plain.contains("--sync-ack"), "{plain}");
+    }
+
     #[test]
     fn red_or_missing_proof_or_no_commit_leaves_cell_uncapped() {
         let tmp = tempfile::tempdir().unwrap();
