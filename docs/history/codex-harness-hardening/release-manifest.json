@@ -5098,7 +5098,7 @@
     },
     {
       "path": "packages/bee/playbooks/handoff.md",
-      "sha256": "84315cd62968ed50257254d5d97005176c1832e44754e33ea387a61bc2a96454",
+      "sha256": "5dfdfa9b9be770c9a717c00a841869ab31adec640d2aa5cd7b664786e93e772b",
       "mode": "644",
       "role": "package_payload",
       "packagePath": "packages/bee/playbooks/handoff.md"
