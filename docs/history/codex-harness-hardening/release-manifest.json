@@ -5070,7 +5070,7 @@
     },
     {
       "path": "packages/bee/LEADER.md",
-      "sha256": "8f4f2c3d2420659024d8465ff74a8c14760b5e226cad05868001282858b7d09c",
+      "sha256": "865f3fb3215034d5af8e1963bb2341fdc00511f37c18f5b3578473f85ace5907",
       "mode": "644",
       "role": "package_payload",
       "packagePath": "packages/bee/LEADER.md"
@@ -5102,6 +5102,13 @@
       "mode": "644",
       "role": "package_payload",
       "packagePath": "packages/bee/playbooks/handoff.md"
+    },
+    {
+      "path": "packages/bee/playbooks/leader-detail.md",
+      "sha256": "55712f011d23bb231e3ce1649a1d8e0d1f20e64bf54c900cceb68b3c4d0d9c76",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/playbooks/leader-detail.md"
     },
     {
       "path": "packages/bee/playbooks/multi-session.md",
