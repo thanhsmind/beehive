@@ -3313,6 +3313,42 @@ mod tests {
         assert!(matches!(outcome, Outcome::Done(_)));
     }
 
+    fn handoff_mark_warning(config: Option<&str>, cache_read: u64) -> Option<String> {
+        let tmp = tempfile::tempdir().unwrap();
+        bee_repo(tmp.path());
+        if let Some(body) = config {
+            write(tmp.path(), ".bee/config.json", body);
+        }
+        let transcript = write_transcript_with_usage(tmp.path(), "transcript.jsonl", 10_000, cache_read, 50_000);
+        let payload_val = json!({
+            "cwd": tmp.path().to_string_lossy(),
+            "transcript_path": transcript,
+            "session_id": "sess-mark",
+        });
+        let payload = parse_payload(&payload_val.to_string());
+        plan(tmp.path(), &payload).ok().flatten().unwrap().handoff_warning
+    }
+
+    #[test]
+    fn handoff_mark_absent_key_at_exactly_300000_tokens_adds_the_directive_line() {
+        assert_eq!(
+            handoff_mark_warning(None, 240_000).as_deref(),
+            Some("context 300k tokens (mark 300k): hand off at the next clean stop (a capped cell or a merged worktree), then continue in a fresh leader session")
+        );
+    }
+
+    #[test]
+    fn handoff_mark_absent_key_at_299999_tokens_adds_no_line() {
+        assert_eq!(handoff_mark_warning(None, 239_999), None);
+    }
+
+    #[test]
+    fn handoff_mark_key_zero_adds_no_line_at_any_size() {
+        for cache_read in [0, 239_999, 240_000, 940_000] {
+            assert_eq!(handoff_mark_warning(Some(r#"{"handoff_context_tokens": 0}"#), cache_read), None);
+        }
+    }
+
     #[test]
     fn missing_or_unreadable_transcript_adds_no_line_and_exits_zero() {
         let tmp = tempfile::tempdir().unwrap();

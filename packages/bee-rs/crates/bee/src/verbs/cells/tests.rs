@@ -3080,6 +3080,38 @@ use std::time::Instant;
         assert_eq!(crate::verbs::drivers::feature_route(root, "demo").unwrap(), Some("high-risk".to_string()));
     }
 
+    fn judge_small_diff_debt(lane: &str, changed_lines: Option<u64>) -> usize {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_lane_record_routed(root, "demo", "execution", Some(lane), true);
+        let mut cell = capped_behavior_change_cell("demo", "demo-1", false);
+        if let Some(n) = changed_lines {
+            cell["trace"]["changed_lines"] = json!(n);
+        }
+        write_cell_fixture(root, "demo-1", &cell);
+        crate::verbs::drivers::judge_debt(root, "demo", lane).unwrap().count
+    }
+
+    #[test]
+    fn judge_small_diff_standard_lane_skips_a_cell_with_29_changed_lines() {
+        assert_eq!(judge_small_diff_debt("standard", Some(29)), 0);
+    }
+
+    #[test]
+    fn judge_small_diff_standard_lane_counts_a_cell_with_30_changed_lines() {
+        assert_eq!(judge_small_diff_debt("standard", Some(30)), 1);
+    }
+
+    #[test]
+    fn judge_small_diff_standard_lane_counts_a_cell_with_no_changed_lines() {
+        assert_eq!(judge_small_diff_debt("standard", None), 1);
+    }
+
+    #[test]
+    fn judge_small_diff_high_risk_counts_a_cell_with_5_changed_lines() {
+        assert_eq!(judge_small_diff_debt("high-risk", Some(5)), 1);
+    }
+
     /// A cell capped BEFORE `JUDGE_DOOR_INTRODUCED_AT` predates the door
     /// entirely and is never debt, judged or not — the grandfather clause.
     #[test]
@@ -5898,6 +5930,36 @@ use std::time::Instant;
         assert_eq!(capped["status"], json!("capped"));
         let expected = crate::verbs::worktree::commit_patch_id(root, &commit).unwrap();
         assert_eq!(capped["trace"]["report"]["patch_id"], json!(expected));
+    }
+
+    #[test]
+    fn judge_small_diff_a_real_cap_over_a_git_commit_stores_changed_lines() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        commit_history_repo(root);
+        commit_with_message(root, "a\nb\nc\n", "three lines");
+        write_bee_config(root, &json!({"commands": {"test": "none"}}));
+        write_cell_fixture(
+            root,
+            "cl-1",
+            &json!({
+                "id": "cl-1", "feature": "f", "title": "t", "action": "a",
+                "verify": "none", "lane": "tiny", "status": "claimed",
+                "deps": [], "files": [], "trace": {},
+            }),
+        );
+        let commit = crate::verbs::worktree::run_git(root, &["rev-parse", "HEAD"])
+            .stdout
+            .unwrap()
+            .trim()
+            .to_string();
+        let report = format!(
+            r#"{{"outcome":"o","commit":"{commit}","files":[],"tests":"none — green:static — fixture","deviations":[]}}"#
+        );
+        let flags = CapFlags { report: Some(report), ..cap_flags_frd("cl-1", Vec::new(), None) };
+        let capped = cap_cell_from_flags(root, &flags, false).unwrap();
+        assert_eq!(capped["status"], json!("capped"));
+        assert_eq!(capped["trace"]["changed_lines"], json!(4));
     }
 
     #[test]

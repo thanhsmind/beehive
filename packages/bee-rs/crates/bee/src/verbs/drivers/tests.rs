@@ -5142,6 +5142,26 @@ exit 0
     }
 
     #[test]
+    fn knowledge_pack_lane_budget_holds_the_five_d4_values() {
+        let budgets: Vec<f64> = [Some(json!("tiny")), Some(json!("small")), Some(json!("standard")), Some(json!("high-risk")), None]
+            .iter()
+            .map(|lane| lane_budget(lane.as_ref()))
+            .collect();
+        assert_eq!(budgets, vec![4000.0, 6000.0, 10000.0, 15000.0, 10000.0]);
+    }
+
+    #[test]
+    fn knowledge_pack_empty_manifest_with_an_index_on_disk_yields_no_learned_context_line() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, "{}");
+        bundle_fixture(&root);
+        assert!(root.join("docs/knowledge/index.md").exists());
+        let cell = json!({"id": "c-1", "feature": "not-a-work-item", "lane": "standard"});
+        let lines = learned_context_lines(&root, &cell).unwrap();
+        assert!(lines.is_empty(), "{lines:?}");
+    }
+
+    #[test]
     fn lane_budget_scales_and_defaults() {
         assert_eq!(lane_budget(Some(&json!("tiny"))), 4000.0);
         assert_eq!(lane_budget(Some(&json!("small"))), 6000.0);
