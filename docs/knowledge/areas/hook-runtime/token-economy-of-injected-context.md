@@ -313,7 +313,7 @@ names all five roles (`dispatch`, `merge`, `route`, `supervisor`, `broker`).
   `packages/bee-rs/crates/bee/src/verbs/report_context.rs`. Find the contract tests with
   `rg -n "handoff-record-fields|leader-read-cap|dispatch-prompt-out|report-context"` in the crate.
 - Tool call thrift: the multi-file `cat` in `leader_read_refusal` in
-  `packages/bee-rs/crates/bee/src/hooks/write_guard/leader_read.rs`; the batching and one-call-start rules in `packages/bee/LEADER.md` (Token efficiency block) and `packages/bee/playbooks/leader-detail.md`. Find the contract tests with `rg -n leader_read_multi_cat` in the crate.
+  `packages/bee-rs/crates/bee/src/hooks/write_guard/leader_read.rs`; the batching rule in `packages/bee/LEADER.md` (Token efficiency block) and `packages/bee/playbooks/leader-detail.md`; the one-call-start rule in `packages/bee/LEADER.md` (Work in parallel block) only. Find the contract tests with `rg -n leader_read_multi_cat` in the crate.
 - Locked decisions: `docs/history/token-thrift/CONTEXT.md`,
   `docs/history/lean-context/CONTEXT.md` (D1),
   `docs/history/semantic-token-diet/CONTEXT.md` (D7–D9),
