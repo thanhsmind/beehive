@@ -972,6 +972,7 @@
     "contract:handoff-after-merge-door",
     "contract:herding-result-job-digest",
     "contract:cell-brief-search-rule-and-size",
-    "contract:leader-doctrine-rules-kept"
+    "contract:leader-doctrine-rules-kept",
+    "contract:published-release-2-114-0"
   ]
 }
