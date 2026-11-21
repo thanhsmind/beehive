@@ -232,6 +232,11 @@ concurrency-safe and hermetic is `concurrency-and-hermetic-runs.md`.
 - **R9** — Tests find the built `bee` binary through `CARGO_BIN_EXE_bee` (integration tests) or
   `test_support::built_bee` (unit tests), never by popping directories from `current_exe()`, because Cargo 1.100
   moved test executables to `build/<pkg>/<hash>/out` while the binary stays at `<profile>/bee` (cargo-build-dir-tests D1).
+- **R10** — No test writes `packages/bee-rs/crates/bee/.bee/`. A test that runs a verb which appends
+  timings (`.bee/logs/timings.jsonl`) runs inside a temp root, never with the crate folder as its working
+  directory, and the timings log is not tracked in git. The pin is
+  `dispatch_authorize_timings_land_under_the_temp_root_not_the_crate_dir` in
+  `src/verbs/drivers/tests.rs`: it fails when the timings land in the crate folder (test-ci-hygiene D1).
 
 ## Edge Cases Settled
 

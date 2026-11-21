@@ -306,6 +306,15 @@ recovery.
   load. The coverage gate counts the alias ids as mapped. Advisory hooks
   stay 1.x only on 2.x (opencode-2x-guard-port oc2-1).
 
+- R44 — The coverage gate anchors on tool ids and registration values,
+  never on a minified identifier. The leading registration helper is `V(` in
+  opencode-ai 1.18.16 and `j(` in 1.18.21, so the anchors start after it and
+  match both builds. `the_registry_derivation_reads_both_the_1_18_and_the_2_x_set_literal`
+  is the regression pin for both shapes. CI runs the suite on every opencode
+  version a developer installs: `ci.yml` pins `opencode-ai@1.18.16` and
+  `@opencode/cli@2.2.5` as a matrix, and `windows.yml` pins 1.18.16
+  (test-ci-hygiene D2).
+
 ## Edge Cases Settled
 
 - Explicitly disabling checkpoints produces no project lifecycle execution;
