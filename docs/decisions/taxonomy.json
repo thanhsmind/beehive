@@ -973,6 +973,10 @@
     "contract:herding-result-job-digest",
     "contract:cell-brief-search-rule-and-size",
     "contract:leader-doctrine-rules-kept",
-    "contract:published-release-2-114-0"
+    "contract:published-release-2-114-0",
+    "contract:handoff-record-fields",
+    "contract:leader-read-cap",
+    "contract:dispatch-prompt-out",
+    "contract:report-context"
   ]
 }
