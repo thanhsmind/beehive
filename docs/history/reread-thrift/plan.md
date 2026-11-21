@@ -32,7 +32,7 @@ cell that also judges, one writer cell.
 |---|-------|-------|--------|-------------------|
 | 1 | One const holds the thin worker env | read | packages/bee-rs/crates/bee/src/herding/run.rs:2960 | `pub(crate) const THIN_PEER_CLAUDE_ENV: [(&str, &str); 5] = [` |
 | 2 | One function builds the claude-session argv | read | packages/bee-rs/crates/bee/src/herding/claude_session.rs:122 | `pub(crate) fn spawn_argv(` |
-| 3 | The merge already prints the handoff directive | read | packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs:5651 | `"then write the handoff and continue in a fresh leader session (one leader session per feature)."` |
+| 3 | The merge already prints the handoff directive | read | packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs:5710 | `"then write the handoff and continue in a fresh leader session (one leader session per feature)."` |
 | 4 | Feature start has one entry | read | packages/bee-rs/crates/bee/src/verbs/feature_group.rs:118 | `fn run_start(tokens: &[OsString], t0: Instant) -> Option<ExitCode> {` |
 | 5 | The herding result verb has one entry | read | packages/bee-rs/crates/bee/src/herding.rs:1805 | `pub(crate) fn envelope_result(flags: &[&str]) -> ExitCode {` |
 | 6 | One function renders the brief | read | packages/bee-rs/crates/bee/src/herding/mailbox.rs:287 | `pub(crate) fn render_brief(spec: &BriefSpec) -> String {` |
