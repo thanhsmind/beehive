@@ -351,8 +351,8 @@ fn plan(root: &Path, payload: &Map<String, Value>) -> Pf<Option<Plan>> {
 
 fn compute_handoff_warning(config: &Map<String, Value>, payload: &Map<String, Value>) -> Option<String> {
     let threshold = match config.get("handoff_context_tokens") {
-        Some(Value::Number(n)) => n.as_u64().unwrap_or(300_000),
-        _ => 300_000,
+        Some(Value::Number(n)) => n.as_u64().unwrap_or(200_000),
+        _ => 200_000,
     };
     if threshold == 0 {
         return None;
@@ -3248,7 +3248,7 @@ mod tests {
         });
         let payload = parse_payload(&payload_val.to_string());
         let p = plan(tmp.path(), &payload).ok().flatten().unwrap();
-        let expected_line = "context 310k tokens (mark 300k): hand off at the next clean stop (a capped cell or a merged worktree), then continue in a fresh leader session";
+        let expected_line = "context 310k tokens (mark 200k): hand off at the next clean stop (a capped cell or a merged worktree), then continue in a fresh leader session";
         assert_eq!(p.handoff_warning.as_deref(), Some(expected_line));
 
         let ctx = read_hook_context(HOOK_NAME, &[], &payload_val.to_string());
@@ -3330,21 +3330,21 @@ mod tests {
     }
 
     #[test]
-    fn handoff_mark_absent_key_at_exactly_300000_tokens_adds_the_directive_line() {
+    fn handoff_mark_absent_key_at_exactly_200000_tokens_adds_the_directive_line() {
         assert_eq!(
-            handoff_mark_warning(None, 240_000).as_deref(),
-            Some("context 300k tokens (mark 300k): hand off at the next clean stop (a capped cell or a merged worktree), then continue in a fresh leader session")
+            handoff_mark_warning(None, 140_000).as_deref(),
+            Some("context 200k tokens (mark 200k): hand off at the next clean stop (a capped cell or a merged worktree), then continue in a fresh leader session")
         );
     }
 
     #[test]
-    fn handoff_mark_absent_key_at_299999_tokens_adds_no_line() {
-        assert_eq!(handoff_mark_warning(None, 239_999), None);
+    fn handoff_mark_absent_key_at_199999_tokens_adds_no_line() {
+        assert_eq!(handoff_mark_warning(None, 139_999), None);
     }
 
     #[test]
     fn handoff_mark_key_zero_adds_no_line_at_any_size() {
-        for cache_read in [0, 239_999, 240_000, 940_000] {
+        for cache_read in [0, 139_999, 140_000, 940_000] {
             assert_eq!(handoff_mark_warning(Some(r#"{"handoff_context_tokens": 0}"#), cache_read), None);
         }
     }

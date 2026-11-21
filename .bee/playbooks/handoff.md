@@ -14,7 +14,7 @@ pause:
   adopts, it surfaces and waits.
 
 <!-- rule: agents-context-handoff-65 -->
-- The default context mark is 300000 (`handoff_context_tokens`; 0 turns
+- The default context mark is 200000 (`handoff_context_tokens`; 0 turns
   it off). At or past it the leader hands off at the next clean stop (a
   capped cell or a merged worktree). After every green worktree merge the
   leader writes `.bee/HANDOFF.json` and continues in a fresh leader session
