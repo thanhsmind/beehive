@@ -299,3 +299,12 @@ Read when: `limits.concurrency live N limit N` refuses a wave while no worker ru
   agent counted, and trusting ledger rows alone, whose outcome stays null until a
   merge records it.
 - Find the exclusion in `live_count_excluding_finished` in `herding/wave.rs`.
+
+## A wave run records the tester's verdict itself (wave-chain-thrift D1)
+
+Read when: a `dispatch wave --run` row shows `judged` or `judge_errors`, or a test cell ends a run still uncapped.
+
+- After a herded item ends, `save_row` reads the cell; only a test-role cell has its report read, and only blocks whose id is one of its deps are recorded. A block for any other id is skipped, an invalid block lands in `judge_errors` on that row.
+- Why: the leader paid several calls per cell between the implementer result and the cap. Rejected: passing the whole report text with the test cell as expected id, because one foreign block fails the whole text.
+- Rows carry `capped`, read from the store after the run, so the leader needs no follow-up read.
+- Find it in `record_judge_blocks` in `verbs/drivers/wave_run.rs`.
