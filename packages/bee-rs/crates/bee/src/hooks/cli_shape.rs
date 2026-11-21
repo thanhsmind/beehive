@@ -642,9 +642,11 @@ fn render_denial(command: &str, entry: &Entry, problems: &[Problem]) -> String {
         Some(f) => format!(" (field: {f})"),
         None => String::new(),
     };
+    let card = crate::verbs::help::brief_card_text(&entry.name);
+    let card = if card.is_empty() { card } else { format!("\nflags:\n{card}") };
     format!(
         "bee CLI-shape guard: \"{}\" does not match {}'s schema — {detail}{field_clause}. \
-Correction: run `{}` with the required parameters (see `{} --help --json`).",
+Correction: run `{}` with the required parameters (see `{} --help --brief`).{card}",
         js_trim(command),
         entry.name,
         entry.invoke,
@@ -724,11 +726,14 @@ mod tests {
     #[test]
     fn a_malformed_call_missing_a_required_flag_is_denied() {
         let reason = deny("node .bee/bin/bee_cells.mjs show");
+        let card = crate::verbs::help::brief_card_text("cells.show");
         assert_eq!(
             reason,
-            "bee CLI-shape guard: \"node .bee/bin/bee_cells.mjs show\" does not match cells.show's \
+            format!(
+                "bee CLI-shape guard: \"node .bee/bin/bee_cells.mjs show\" does not match cells.show's \
 schema — required, missing (--id) (field: id). Correction: run `bee cells show` with the required \
-parameters (see `bee cells show --help --json`)."
+parameters (see `bee cells show --help --brief`).\nflags:\n{card}"
+            )
         );
     }
 

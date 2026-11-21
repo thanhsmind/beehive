@@ -637,6 +637,17 @@ pub(crate) fn brief_card(entry: &Value) -> Vec<String> {
     lines
 }
 
+pub(crate) fn brief_card_text(name: &str) -> String {
+    let Some(reg) = registry() else {
+        return String::new();
+    };
+    reg.commands
+        .iter()
+        .find(|e| e.get("name").and_then(Value::as_str) == Some(name))
+        .map(|e| brief_card(&Value::Object(manifest_entry(e))).join("\n"))
+        .unwrap_or_default()
+}
+
 /// True when at least one rendered entry declares a `json` property — the
 /// trigger for the one, render-wide header note that states its omission
 /// instead of repeating it on every flags line.
