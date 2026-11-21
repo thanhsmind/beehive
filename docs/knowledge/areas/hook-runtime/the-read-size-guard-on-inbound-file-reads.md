@@ -140,7 +140,7 @@ switch, because there is no case where a repository wants the other file guards 
 
 Read when: a leader's unranged Read or bare `cat` of a long file is refused with "bee leader read guard".
 
-- A second, stricter cap sits before the general one and applies to leaders only: a Read with no offset and no limit, or a Bash command whose whole text is one `cat <file>` (optionally after `cd <dir> &&`), on a file over `leader_read_max_lines` lines is refused. The general `guards.max_read_lines` cap stays as it was.
+- A second, stricter cap sits before the general one and applies to leaders only: a Read with no offset and no limit, or a Bash command whose whole text is one `cat` of one or more plain files (optionally after `cd <dir> &&`), whose summed line count passes `leader_read_max_lines` is refused. The general `guards.max_read_lines` cap stays as it was.
 - Why leaders only: a long file read by a leader is re-read on every later call as cached context; a worker's context ends with its job. The prose rule to read ranges did not hold, so the guard enforces it.
 - The key is top-level in `.bee/config.json`, default 400, `0` turns it off. Workers (the herding marker or a set `PASEO_AGENT_ID`) pass.
 - Every other shape passes: pipes, redirects, globs, extra arguments, missing files, binary files. Guess: a command chain the parser does not recognise passes rather than being refused, because a wrong refusal blocks work and a miss only costs context.

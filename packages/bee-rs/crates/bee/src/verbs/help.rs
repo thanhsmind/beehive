@@ -258,7 +258,10 @@ fn group_scoped(argv: &[&str], t0: Instant) -> Option<ExitCode> {
     }
     // Proven-shape gate: Node ignores extra rest tokens in this branch, but
     // only the documented flag pair is served natively.
-    if !rest.iter().all(|t| *t == "--help" || *t == "--json") {
+    if !rest
+        .iter()
+        .all(|t| *t == "--help" || *t == "--json" || *t == "--brief")
+    {
         return None;
     }
 
@@ -312,6 +315,9 @@ fn group_scoped(argv: &[&str], t0: Instant) -> Option<ExitCode> {
         manifest.insert("schema_version".into(), reg.schema_version.clone());
         manifest.insert("commands".into(), Value::Array(entries));
         println!("{}", jsjson::stringify_pretty(&Value::Object(manifest)));
+    } else if rest.contains(&"--brief") {
+        let cards: Vec<String> = entries.iter().map(|e| brief_card(e).join("\n")).collect();
+        println!("{}", cards.join("\n\n"));
     } else {
         print!("{}", render_help_text(&entries, &[], &reg.schema_version));
     }
@@ -592,6 +598,54 @@ fn flags_detail_lines(entry: &Value) -> Option<Vec<String>> {
     } else {
         Some(flags)
     }
+}
+
+const BRIEF_DESC_MAX: usize = 80;
+
+pub(crate) fn brief_card(entry: &Value) -> Vec<String> {
+    let get = |k: &str| entry.as_object().and_then(|m| m.get(k));
+    let (sentence, _) = split_description(&js_display(get("description")));
+    let summary = sentence.split(" — ").next().unwrap_or(&sentence).to_string();
+    let mut lines = vec![js_display(get("invoke")), format!("    {summary}")];
+    let properties = entry
+        .get("parameters")
+        .and_then(|p| p.get("properties"))
+        .and_then(Value::as_object);
+    let required: HashSet<&str> = entry
+        .get("parameters")
+        .and_then(|p| p.get("required"))
+        .and_then(Value::as_array)
+        .map(|r| r.iter().filter_map(Value::as_str).collect())
+        .unwrap_or_default();
+    for (k, v) in properties.into_iter().flatten().filter(|(k, _)| k.as_str() != "json") {
+        let star = if required.contains(k.as_str()) { "*" } else { "" };
+        let abbrev = type_abbrev(v.get("type").and_then(Value::as_str).unwrap_or("value"));
+        let desc = v
+            .get("description")
+            .and_then(Value::as_str)
+            .map(|d| d.split_whitespace().collect::<Vec<_>>().join(" "))
+            .unwrap_or_default();
+        if desc.is_empty() {
+            lines.push(format!("  --{k}{star} ({abbrev})"));
+        } else if desc.chars().count() > BRIEF_DESC_MAX {
+            let cut: String = desc.chars().take(BRIEF_DESC_MAX - 1).collect();
+            lines.push(format!("  --{k}{star} ({abbrev}) — {cut}…"));
+        } else {
+            lines.push(format!("  --{k}{star} ({abbrev}) — {desc}"));
+        }
+    }
+    lines
+}
+
+pub(crate) fn brief_card_text(name: &str) -> String {
+    let Some(reg) = registry() else {
+        return String::new();
+    };
+    reg.commands
+        .iter()
+        .find(|e| e.get("name").and_then(Value::as_str) == Some(name))
+        .map(|e| brief_card(&Value::Object(manifest_entry(e))).join("\n"))
+        .unwrap_or_default()
 }
 
 /// True when at least one rendered entry declares a `json` property — the
@@ -965,5 +1019,135 @@ mod tests {
         let all_have_six_keys =
             reg.commands.iter().all(|e| core.iter().all(|k| e.contains_key(*k)));
         assert!(all_have_six_keys, "registry entries carry the six manifest keys");
+    }
+
+    fn registry_entry(name: &str) -> Value {
+        let reg = registry().expect("embedded payload parses");
+        let entry = reg
+            .commands
+            .iter()
+            .find(|e| e.get("name").and_then(Value::as_str) == Some(name))
+            .unwrap_or_else(|| panic!("{name} is registered"));
+        Value::Object(manifest_entry(entry))
+    }
+
+    fn finish_flags() -> Vec<String> {
+        registry_entry("cells.finish")["parameters"]["properties"]
+            .as_object()
+            .expect("cells.finish declares properties")
+            .keys()
+            .filter(|k| k.as_str() != "json")
+            .cloned()
+            .collect()
+    }
+
+    fn finish_card() -> String {
+        brief_card(&registry_entry("cells.finish")).join("\n")
+    }
+
+    #[test]
+    fn help_brief_names_every_cells_finish_flag_once_on_its_own_line() {
+        let card = finish_card();
+        let flags = finish_flags();
+        assert!(!flags.is_empty());
+        for flag in &flags {
+            let prefix = format!("  --{flag}");
+            let hits = card
+                .lines()
+                .filter(|l| {
+                    l.strip_prefix(prefix.as_str())
+                        .is_some_and(|r| r.starts_with(['*', ' ']))
+                })
+                .count();
+            assert_eq!(hits, 1, "--{flag} appears on {hits} lines\n{card}");
+        }
+        let flag_lines = card.lines().filter(|l| l.starts_with("  --")).count();
+        assert_eq!(flag_lines, flags.len(), "{card}");
+    }
+
+    #[test]
+    fn help_brief_has_no_details_line() {
+        let card = finish_card();
+        assert!(!card.lines().any(|l| l.trim() == "details:"), "{card}");
+    }
+
+    #[test]
+    fn help_brief_stays_under_2500_bytes() {
+        let card = finish_card();
+        assert!(card.len() < 2500, "{} bytes\n{card}", card.len());
+    }
+
+    #[test]
+    fn help_brief_ends_a_long_description_in_an_ellipsis() {
+        let entry = Value::Object(obj(&format!(
+            r#"{{"name":"cmd.a","invoke":"bee cmd a","description":"Run a.",
+                "parameters":{{"type":"object","properties":{{"long":{{"type":"string","description":"{}"}},"short":{{"type":"string","description":"Short text"}}}},"required":[]}},
+                "examples":[],"deprecated":null}}"#,
+            "word ".repeat(30)
+        )));
+        let card = brief_card(&entry);
+        let long = card.iter().find(|l| l.starts_with("  --long")).expect("long flag line");
+        assert!(long.ends_with('…'), "{long}");
+        let desc = long.split(" — ").nth(1).expect("description part");
+        assert!(desc.chars().count() <= 80, "{long}");
+        let short = card.iter().find(|l| l.starts_with("  --short")).expect("short flag line");
+        assert!(short.ends_with("Short text"), "{short}");
+    }
+
+    #[test]
+    fn help_brief_leaves_every_real_long_description_cut_or_whole() {
+        let entry = registry_entry("cells.finish");
+        let props = entry["parameters"]["properties"].as_object().unwrap();
+        for line in brief_card(&entry).iter().filter(|l| l.starts_with("  --")) {
+            let name = line[4..].split(['*', ' ']).next().unwrap();
+            let full = props[name]["description"].as_str().unwrap_or("");
+            let flat = full.split_whitespace().collect::<Vec<_>>().join(" ");
+            if flat.chars().count() > 80 {
+                assert!(line.ends_with('…'), "{line}");
+            } else if !flat.is_empty() {
+                assert!(line.ends_with(flat.as_str()), "{line}");
+            }
+        }
+    }
+
+    #[test]
+    fn help_brief_leaves_the_one_verb_help_of_cells_finish_unchanged() {
+        let entry = registry_entry("cells.finish");
+        let text = render_help_text(&[entry.clone()], &[], &json!("1.0"));
+        assert!(text.contains("\n    flags:\n      --"), "{text}");
+        for flag in finish_flags() {
+            assert!(text.contains(&format!("      --{flag}")), "--{flag}\n{text}");
+        }
+        let full = entry["description"].as_str().unwrap_or("");
+        if split_description(full).1.is_empty() {
+            assert!(!text.contains("    details:"), "{text}");
+        } else {
+            assert!(text.contains("    details:"), "{text}");
+        }
+        assert!(text.len() > finish_card().len(), "{text}");
+    }
+
+    #[test]
+    fn help_brief_leaves_the_group_help_unchanged() {
+        let reg = registry().expect("embedded payload parses");
+        let entries: Vec<Value> = reg
+            .commands
+            .iter()
+            .filter(|e| {
+                e.get("name")
+                    .and_then(Value::as_str)
+                    .is_some_and(|n| n == "cells" || n.starts_with("cells."))
+            })
+            .map(|e| Value::Object(manifest_entry(e)))
+            .collect();
+        assert!(entries.len() > 1);
+        let text = render_help_text(&entries, &[], &json!("1.0"));
+        assert!(!text.contains("    details:"), "{text}");
+        assert!(text.contains("    flags: "), "{text}");
+        assert!(!text.contains("\n    flags:\n"), "{text}");
+        for e in &entries {
+            let invoke = e["invoke"].as_str().unwrap();
+            assert!(text.contains(&format!("\n{invoke}\n")), "{invoke}");
+        }
     }
 }

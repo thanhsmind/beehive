@@ -183,6 +183,9 @@ before you route work; workers never read it. Detail: leader-detail § WORKSPACE
   it first, then run exactly the tool and payload it returns. Never
   hand-pick `subagent_type`, a `model` param, or a `[bee-tier: …]`
   marker; the model-guard hook refuses or rewrites them.
+- Start a cell with one call: dispatch prepare with its `--claim` flag for
+  one cell, dispatch wave for a wave — never a separate claim and reserve
+  first.
 - Dispatches follow the cell or stage role in the approved plan; changed
   work takes a `role-reroute` decision and `bee cells reroute`.
 - The internal consult is ONE thing: the plan-step **hat wave**, once
@@ -257,6 +260,9 @@ belong there. Detail: leader-detail § Pre-send check.
 
 ## Token efficiency
 
+- Every tool call re-reads the whole session. Put independent commands in
+  one Bash call, or send independent calls together in one message; run
+  a short command alone only when its output decides the next command.
 - Never re-run a command to "verify" unless the outcome was uncertain;
   a done/green claim still needs its fresh output.
 

@@ -455,8 +455,10 @@ fn classify(shown: &[String]) -> (&'static str, serde_json::Value, String) {
             "missing_required_argument",
             serde_json::Value::String(entry.name.clone()),
             format!(
-                "bee: missing required argument(s) for `{}`: {named}. USAGE: {} {flags}.{example}",
-                entry.invoke, entry.invoke
+                "bee: missing required argument(s) for `{}`: {named}. USAGE: {} {flags}.{example}{}",
+                entry.invoke,
+                entry.invoke,
+                flag_card(&entry.name)
             ),
         );
     }
@@ -485,8 +487,10 @@ fn classify(shown: &[String]) -> (&'static str, serde_json::Value, String) {
             serde_json::Value::String(entry.name.clone()),
             format!(
                 "bee: unsupported argument shape for `{}`: `bee {attempted}` names unknown {word} \
-                 {named}. FIX: `{} --help` for every accepted flag and its type.",
-                entry.invoke, entry.invoke
+                 {named}. FIX: `{} --help --brief` for every accepted flag and its type.{}",
+                entry.invoke,
+                entry.invoke,
+                flag_card(&entry.name)
             ),
         );
     }
@@ -499,10 +503,21 @@ fn classify(shown: &[String]) -> (&'static str, serde_json::Value, String) {
         format!(
             "bee: unsupported argument shape for `{}`: `bee {attempted}`. Its required arguments \
              are all present, so what it refused is an optional flag, a flag value, or a target \
-             that does not exist. FIX: `{} --help` for every accepted flag and its type.",
-            entry.invoke, entry.invoke
+             that does not exist. FIX: `{} --help --brief` for every accepted flag and its type.{}",
+            entry.invoke,
+            entry.invoke,
+            flag_card(&entry.name)
         ),
     )
+}
+
+fn flag_card(name: &str) -> String {
+    let card = crate::verbs::help::brief_card_text(name);
+    if card.is_empty() {
+        String::new()
+    } else {
+        format!("\nflags:\n{card}")
+    }
 }
 
 /// The `--flag` names actually typed, in order, values stripped: `--lane
@@ -578,6 +593,23 @@ mod tests {
         let shown: Vec<String> = argv.iter().map(|s| s.to_string()).collect();
         let (kind, _, msg) = classify(&shown);
         (kind, msg)
+    }
+
+    #[test]
+    fn refusal_card_missing_id_prints_the_id_line_under_flags() {
+        let (kind, msg) = classify_argv(&["cells", "finish"]);
+        assert_eq!(kind, "missing_required_argument");
+        let (_, card) = msg.split_once("\nflags:\n").unwrap_or_else(|| panic!("no flags: line: {msg}"));
+        assert!(card.lines().any(|l| l.trim_start().starts_with("--id")), "{msg}");
+    }
+
+    #[test]
+    fn refusal_card_unknown_flag_prints_the_card_and_names_help_brief() {
+        let (kind, msg) = classify_argv(&["cells", "finish", "--id", "x", "--bogus", "1"]);
+        assert_eq!(kind, "unsupported_argument_shape");
+        assert!(msg.contains("--help --brief"), "{msg}");
+        let (_, card) = msg.split_once("\nflags:\n").unwrap_or_else(|| panic!("no flags: line: {msg}"));
+        assert!(card.lines().any(|l| l.trim_start().starts_with("--id")), "{msg}");
     }
 
     /// The regression this taxonomy exists for: the old message said the
@@ -677,7 +709,8 @@ mod tests {
         let (kind, msg) = classify_argv(&["shape"]);
         assert_eq!(kind, "missing_required_argument");
         assert!(msg.contains("`bee shape`"), "{msg}");
-        assert!(!msg.contains("intent set"), "the caller never typed that: {msg}");
+        let refusal = msg.split("\nflags:").next().unwrap_or(&msg);
+        assert!(!refusal.contains("intent set"), "the caller never typed that: {msg}");
     }
 
     #[test]

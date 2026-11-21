@@ -642,9 +642,11 @@ fn render_denial(command: &str, entry: &Entry, problems: &[Problem]) -> String {
         Some(f) => format!(" (field: {f})"),
         None => String::new(),
     };
+    let card = crate::verbs::help::brief_card_text(&entry.name);
+    let card = if card.is_empty() { card } else { format!("\nflags:\n{card}") };
     format!(
         "bee CLI-shape guard: \"{}\" does not match {}'s schema — {detail}{field_clause}. \
-Correction: run `{}` with the required parameters (see `{} --help --json`).",
+Correction: run `{}` with the required parameters (see `{} --help --brief`).{card}",
         js_trim(command),
         entry.name,
         entry.invoke,
@@ -666,6 +668,11 @@ mod tests {
         if let Some(r) = check_cli_shape(command) {
             panic!("expected fail-open for {command}, got: {r}");
         }
+    }
+
+    #[test]
+    fn help_brief_passes_the_shape_guard() {
+        allow("bee cells finish --help --brief");
     }
 
     // ── the registry is really there ───────────────────────────────────────
@@ -717,13 +724,25 @@ mod tests {
     // ── check (a): required-flag denial ─────────────────────────────────────
 
     #[test]
+    fn refusal_card_shape_denial_carries_the_card_and_names_help_brief() {
+        let reason = deny("bee cells finish --bogus 1");
+        assert!(reason.contains("--help --brief"), "{reason}");
+        assert!(!reason.contains("--help --json"), "{reason}");
+        let (_, card) = reason.split_once("\nflags:\n").unwrap_or_else(|| panic!("no flags: line: {reason}"));
+        assert!(card.lines().any(|l| l.trim_start().starts_with("--id")), "{reason}");
+    }
+
+    #[test]
     fn a_malformed_call_missing_a_required_flag_is_denied() {
         let reason = deny("node .bee/bin/bee_cells.mjs show");
+        let card = crate::verbs::help::brief_card_text("cells.show");
         assert_eq!(
             reason,
-            "bee CLI-shape guard: \"node .bee/bin/bee_cells.mjs show\" does not match cells.show's \
+            format!(
+                "bee CLI-shape guard: \"node .bee/bin/bee_cells.mjs show\" does not match cells.show's \
 schema — required, missing (--id) (field: id). Correction: run `bee cells show` with the required \
-parameters (see `bee cells show --help --json`)."
+parameters (see `bee cells show --help --brief`).\nflags:\n{card}"
+            )
         );
     }
 
