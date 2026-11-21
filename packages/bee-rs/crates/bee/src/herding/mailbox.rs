@@ -473,6 +473,9 @@ concept as \"<docs/knowledge path> — <the decision it changed>\", or an empty 
 array when no concept changed a decision. Omitting the key states nothing at all; \
 it is never required, and no shape of it is ever refused (knowledge-in-the-flow \
 D1 forbids a mandatory knowledge-ref check).\n\n\
+Cap answers (OPTIONAL result fields — fill them so the cap does not bounce back to the leader):\n\
+- \"principles_used\": [\"<slug> — <the decision it changed>\", \"...\"] lists the principles that changed a decision, [] when none did.\n\
+- \"sync_ack\": \"<reason>\" only when the cap's sync door asks for one.\n\n\
 Knowledge wrong (OPTIONAL): `knowledge_wrong` — a loaded concept that misled \
 this cell and that you did not fix in this commit, one entry per concept as \
 \"<docs/knowledge path> — <what was wrong>\"; omit the key when there is none. \
@@ -557,6 +560,7 @@ pub(crate) struct MailboxResult {
     pub proof: String,
     pub knowledge_used: Option<Vec<String>>,
     pub principles_used: Option<Vec<String>>,
+    pub sync_ack: Option<String>,
     pub knowledge_wrong: Option<Vec<String>>,
     /// StopAndAsk (a2affcba): the ways forward the worker offers instead of
     /// guessing — one self-contained sentence each. OPTIONAL at parse and
@@ -858,6 +862,13 @@ pub(crate) fn parse_result_text(round: u32, text: &str) -> Result<MailboxResult,
         arr.iter().map(|v| v.as_str().unwrap_or_default().to_string()).collect()
     });
 
+    let sync_ack = obj
+        .get("sync_ack")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(str::to_string);
+
     let knowledge_wrong = obj.get("knowledge_wrong").and_then(Value::as_array).map(|arr| {
         arr.iter().map(|v| v.as_str().unwrap_or_default().to_string()).collect()
     });
@@ -870,6 +881,7 @@ pub(crate) fn parse_result_text(round: u32, text: &str) -> Result<MailboxResult,
         proof,
         knowledge_used,
         principles_used,
+        sync_ack,
         knowledge_wrong,
         options,
         leaning,

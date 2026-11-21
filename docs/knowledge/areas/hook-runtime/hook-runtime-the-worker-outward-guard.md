@@ -8,9 +8,9 @@ bee:
   id: hook-runtime-hook-runtime-the-worker-outward-guard
   lifecycle: active
   areas: [hook-runtime]
-  decisions: [worker-outward-guard D1-D11, guard-config-and-class D3, paseo-pi-hardening D5 be1699f8, paseo-pi-hardening D9 e2af1dab, "contract:worker-guard 9659395e"]
+  decisions: [leader-call-thrift D3, worker-outward-guard D1-D11, guard-config-and-class D3, paseo-pi-hardening D5 be1699f8, paseo-pi-hardening D9 e2af1dab, "contract:worker-guard 9659395e"]
   sources: [docs/history/worker-outward-guard/CONTEXT.md, docs/history/paseo-pi-hardening/CONTEXT.md, docs/history/paseo-pi-hardening/plan.md]
-  anchors: [.pi/extensions/bee-guard/events.ts, .pi/extensions/bee-guard/index.ts, packages/bee-rs/crates/bee/src/hooks/write_guard/checks.rs, packages/bee-rs/crates/bee/src/hooks/write_guard/paths.rs, packages/bee-rs/crates/bee/src/hooks/write_guard/main.rs, packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs, packages/bee-rs/crates/bee/src/hooks/worker_guard.rs, packages/bee-rs/crates/bee/src/hooks/mod.rs, packages/bee-rs/crates/bee/tests/pi_worker_guard_contracts.rs]
+  anchors: [.pi/extensions/bee-guard/events.ts, .pi/extensions/bee-guard/index.ts, packages/bee-rs/crates/bee/src/hooks/write_guard/checks.rs, packages/bee-rs/crates/bee/src/hooks/write_guard/paths.rs, packages/bee-rs/crates/bee/src/hooks/write_guard/main.rs, packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs, packages/bee-rs/crates/bee/src/hooks/worker_guard.rs, packages/bee-rs/crates/bee/src/verbs/cells/validate.rs, packages/bee-rs/crates/bee/src/hooks/mod.rs, packages/bee-rs/crates/bee/tests/pi_worker_guard_contracts.rs]
   verified_at: 2026-10-06
   verified_commit: 72ddcb2e9aba91116cd6fa59f03645d05b773b78
 ---
@@ -87,6 +87,12 @@ Leading prefixes `bee`, `./.bee/bin/bee`, or paths ending in `/.bee/bin/bee` nor
 The hook refuses any command segment that matches no allowed prefix.
 The hook also refuses commands with command substitutions (`$(...)`, backticks) or file redirections (`>`).
 
+### Full-suite refusal for herded cell jobs
+
+Read when: a herded cell worker's shell command is denied with "it starts the full suite".
+
+When `BEE_HERDING_WORKER` and `BEE_HERDING_JOB_ID` are set and the job's `job.json` carries a cell id, the hook refuses a command with a full-suite segment (a `commands.test` entry after env stripping, `bee test`, `.bee/bin/bee test`) and names the cell verify as the fix (leader-call-thrift D3). The cell's non-blank `full_suite_reason` is the escape, the same field the verify check honours. A job with no cell id is unchanged. The segment test is shared with the cell verify check in `validate.rs`, so the two cannot disagree on what counts as the suite. The full suite runs once per feature through `bee test`, not inside a cell.
+
 ### Belt integration
 
 When neither variable is set, `worker-guard` exits 0 without output.
@@ -122,6 +128,7 @@ For a Paseo worker, the extension also omits registration of `bee_dispatch`, `be
 - `packages/bee-rs/crates/bee/src/hooks/write_guard/main.rs` — the one-argument change at the shell call site.
 - `packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs` — the nine `worker_outward_*` tests.
 - `packages/bee-rs/crates/bee/src/hooks/worker_guard.rs` — the `worker-guard` hook implementation (paseo-pi-hardening D5, D9).
+- `packages/bee-rs/crates/bee/src/verbs/cells/validate.rs` — `full_suite_hit`, the segment test `evaluate_full_suite` in `worker_guard.rs` shares (leader-call-thrift D3).
 - `packages/bee-rs/crates/bee/src/hooks/mod.rs` — hook dispatch and marker short-circuit routing.
 - `.pi/extensions/bee-guard/events.ts` — Pi belt worker-guard hook call.
 - `.pi/extensions/bee-guard/index.ts` — suppression of dispatch tools for Paseo workers.

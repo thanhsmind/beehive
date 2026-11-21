@@ -7721,7 +7721,8 @@ use std::time::Instant;
             true, // finish
         ));
         assert!(
-            refusal.starts_with("capCell: cell \"bh-6a\" refused — one commit per cell"),
+            refusal.starts_with("capCell: cell \"bh-6a\" needs ")
+                && refusal.contains("\n- one commit per cell"),
             "{refusal}"
         );
         let after = read_cell_norm(root, "bh-6a").ok().unwrap().unwrap();
@@ -10559,6 +10560,72 @@ use std::time::Instant;
             capped["trace"]["deviations"],
             json!(["sync-ack: skill update deferred to a follow-up cell"])
         );
+    }
+
+    fn cap_one_refusal_fixture(root: &Path, id: &str) {
+        write_bee_config(root, &json!({"commands": {"test": "none"}}));
+        write_area_overview(root, "demo", &["src/demo/*"], &["skills/demo/SKILL.md"]);
+        std::fs::create_dir_all(root.join(".bee/logs")).unwrap();
+        std::fs::write(
+            root.join(".bee/logs/dispatch.jsonl"),
+            format!("{{\"cell\":\"{id}\",\"principles_arm\":\"principles\"}}\n"),
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn cap_one_refusal_names_the_mistakes_principles_and_sync_fixes_together_and_writes_nothing() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        cap_one_refusal_fixture(root, "co-1");
+        let mut body = cell("co-1", "claimed", "f", json!([]));
+        body["role"] = json!("code");
+        write_cell_fixture(root, "co-1", &body);
+        let before = std::fs::read_to_string(cell_file(root, "co-1")).unwrap();
+
+        let mut flags = cap_flags_sync("co-1", vec!["src/demo/thing.rs"], None);
+        flags.mistake = Some("the wrong part with no better part".to_string());
+        let refusal = thrown(cap_cell_from_flags(root, &flags, false));
+        assert!(refusal.starts_with("capCell: cell \"co-1\" needs 3 answer(s) before it caps:"), "{refusal}");
+        assert!(refusal.contains("a recorded mistake is incomplete"), "{refusal}");
+        assert!(refusal.contains("--principle-used") && refusal.contains("--no-principle-used"), "{refusal}");
+        assert!(refusal.contains("SYNC_DOOR") && refusal.contains("--sync-ack"), "{refusal}");
+        assert_eq!(std::fs::read_to_string(cell_file(root, "co-1")).unwrap(), before, "a refused cap writes nothing");
+
+        let mut answered = cap_flags_sync("co-1", vec!["src/demo/thing.rs"], Some("skill update deferred"));
+        answered.no_mistakes = true;
+        answered.no_principle_used = true;
+        let capped = cap_cell_from_flags(root, &answered, false).unwrap();
+        assert_eq!(capped["status"], json!("capped"));
+        assert_eq!(capped["trace"]["no_principles_used"], json!(true));
+        assert_eq!(capped["trace"]["sync_ack"], json!("skill update deferred"));
+    }
+
+    #[test]
+    fn cap_one_refusal_does_not_log_the_judge_override_when_a_later_check_refuses() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_bee_config(root, &json!({"commands": {"test": "none"}}));
+        write_area_overview(root, "demo", &["src/demo/*"], &["skills/demo/SKILL.md"]);
+        let mut body = cell("co-2", "claimed", "f", json!([]));
+        body["trace"] = json!({"semantic_judge": [{"verdict": "NEEDS_REVISION"}]});
+        write_cell_fixture(root, "co-2", &body);
+        let before = std::fs::read_to_string(cell_file(root, "co-2")).unwrap();
+
+        let mut flags = cap_flags_sync("co-2", vec!["src/demo/thing.rs"], None);
+        flags.override_reason = "judge is wrong here".to_string();
+        let refusal = thrown(cap_cell_from_flags(root, &flags, false));
+        assert!(refusal.contains("SYNC_DOOR"), "{refusal}");
+        assert_eq!(std::fs::read_to_string(cell_file(root, "co-2")).unwrap(), before);
+        let logged = std::fs::read_to_string(decisions_path(root)).unwrap_or_default();
+        assert!(!logged.contains("judge override"), "refused cap must not log the override: {logged}");
+
+        let mut passing = cap_flags_sync("co-2", vec!["src/demo/thing.rs"], Some("skill update deferred"));
+        passing.override_reason = "judge is wrong here".to_string();
+        let capped = cap_cell_from_flags(root, &passing, false).unwrap();
+        assert_eq!(capped["trace"]["judge_overrides"][0]["reason"], json!("judge is wrong here"));
+        let logged = std::fs::read_to_string(decisions_path(root)).unwrap();
+        assert!(logged.contains("judge override"), "{logged}");
     }
 
     #[test]

@@ -376,3 +376,11 @@ red.
   as unknown and warns. Red-first per hook-teeth D7: the classification test
   landed before the refusal wired in. Evidence: trace `.bee/cells/archive/hook-teeth/bh-2.json`,
   commit 7ef3a1f7 (cells slice 81 passed, 2026-08-04).
+
+## One refusal for every missing cap answer
+
+Read when: a cap refuses and you wonder why one retry did not surface every problem, or you add a new missing-answer check to `cap_cell_from_flags`.
+
+The cap door collects the missing-answer refusals (malformed mistakes answer, malformed principles answer, finish commit trailer, proof floor, principles arm, sync door) and refuses once with `needs N answer(s) before it caps:` plus one line per problem and its fix flag. Refusing at the first cost about 20 refuse-then-retry leader calls in token-spend-cuts (leader-call-thrift D1).
+
+State refusals (not found, capped, dropped, claim ownership, report shape, verify mismatch, NEEDS_REVISION, inline and lane checks) stay first-and-alone, so collected problems can still be pre-empted by one of them. The judge-override decision is logged only after the combined refusal point, so a refused cap writes nothing. A new missing-answer check joins the collected list; a new state check returns at once.
