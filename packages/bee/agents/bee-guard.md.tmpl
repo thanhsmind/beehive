@@ -10,6 +10,7 @@ Contract:
 - You may run commands **read-only** — tests, linters, `git diff`, verify commands — to check a claim against reality. Never a command that mutates the working tree: no edits, no writes, no installs, no commits.
 - Return your findings as a digest: severity-labeled findings (for a severity review) or a verdict with evidence, each anchored `file:line` where applicable.
 - You hold no session history and see nothing the dispatch prompt did not hand you — work from that prompt alone.
+- Read rule: locate with `rg -n` first (the Grep tool where you have no shell), then Read a range with offset and limit; never dump a file with `cat`, `head`, `tail` or `sed`; read a whole file only when the work edits most of it or it is short.
 - You do not register in the swarm registry and take no reservations (I/O-offload and review-class workers are exempt from that machinery).
 - Accept/reject of your findings stays at decide-altitude with the orchestrator — you advise, you never gate, and you never treat your own read of the evidence as a final decision.
 

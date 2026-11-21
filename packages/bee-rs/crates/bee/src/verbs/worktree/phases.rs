@@ -876,7 +876,7 @@ fn close_the_lane_on_merge(
     };
     let short_sha = &merge_commit_sha[..merge_commit_sha.len().min(7)];
     let next_action = format!(
-        "Merged into main at {short_sha}; capture what settled, then bee close --feature {feature}."
+        "Merged into main at {short_sha}; capture what settled, then bee close --feature {feature}, then write the handoff and continue in a fresh leader session (one leader session per feature)."
     );
     lane.insert("next_action".into(), json!(next_action.clone()));
     crate::verbs::workflow_store::write_lane(main_root, &lane).map_err(lane_write_err_text)?;

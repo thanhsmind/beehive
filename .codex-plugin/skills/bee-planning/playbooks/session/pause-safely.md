@@ -5,8 +5,10 @@ You own a clean stop. Leave a checkpoint a cold-start agent can resume from.
 This is explicit only: the owner's word starts it. On "keep going", "going to
 bed, keep going" or "don't stop", do not pause; those mean continue, and
 `autonomous-run` already checkpoints per iteration. Context filling up is not
-the owner's word either: a context mark never stops work, so when compaction
-is the only trigger, write the note in step 4 to a file and keep working.
+the owner's word either: at or past the context mark the leader hands off at
+the next clean stop (a capped cell or a merged worktree), per rule
+agents-context-handoff-65. Compaction alone is not the owner word to pause, so
+when it is the only trigger, write the note in step 4 to a file and keep working.
 
 1. Stop at a safe boundary. Finish the current atomic step or back out of it.
    Never stop mid-edit in a known-broken state: a cold-start agent cannot tell
@@ -25,8 +27,8 @@ is the only trigger, write the note in step 4 to a file and keep working.
    doing, progress and what is verified, current state, key files and gotchas.
    For the compaction trigger write the note to a file like
    `/tmp/<slug>-resume.md` instead and write no handoff, because the in-context
-   plan will not survive summarization and a handoff happens only on the
-   owner's word or at feature close. If the feature keeps a decision trail
+   plan will not survive summarization, and the handoff is written at the
+   context mark per rule agents-context-handoff-65 or on the owner's word. If the feature keeps a decision trail
    (`bee-show-me-your-work`) under `docs/history/<feature>/`, point at it instead of duplicating it, so
    one fact keeps one home.
 

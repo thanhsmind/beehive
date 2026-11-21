@@ -5630,6 +5630,32 @@ use std::time::Instant;
         );
     }
 
+    #[test]
+    fn handoff_mark_a_green_merge_next_action_names_the_fresh_leader_session() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        std::fs::write(main.join(".bee").join("config.json"), r#"{"uat_stop": "merge"}"#).unwrap();
+        let created = worktree_with_a_real_commit(&main, "demo");
+        write_stranded_lane(&main, "demo", "scribing");
+
+        let cleanup = resolve_cleanup_on_merge(&main, false, true).unwrap();
+        let answer = merge_feature_worktree(&main, &created.id, cleanup, None, true, None)
+            .unwrap_or_else(|e| match e {
+                MErr::Thrown(m) => panic!("merge threw: {m}"),
+                MErr::Ex => panic!("merge delegated"),
+            });
+        assert!(answer.ok, "{:?}", answer.result);
+        let next_action = answer.result["next_action"].as_str().unwrap_or_default().to_string();
+        assert!(
+            next_action.ends_with(
+                "then write the handoff and continue in a fresh leader session (one leader session per feature)."
+            ),
+            "{next_action}"
+        );
+        let lane = crate::verbs::workflow_store::read_lane_strict(&main, "demo").unwrap().unwrap();
+        assert_eq!(lane.get("next_action"), Some(&json!(next_action)));
+    }
+
     /// Edge: an already-up-to-date merge writes no lane change at all — the
     /// `ALREADY_UP_TO_DATE` arm returns before `merge_finish`'s commit
     /// sequence (and this cell's lane write inside it) is ever reached.

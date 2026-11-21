@@ -8,10 +8,10 @@ bee:
   lifecycle: active
   areas: [hook-runtime]
   required_context: [areas/hook-runtime/overview.md]
-  decisions: ["token-thrift D1 (PREAMBLE_BUDGET_BYTES is 9500, below HOST_INLINE_LIMIT_CHARS 10,000)", token-thrift D2 (fixed drop order and one Omitted line that names each fetch path), token-thrift D3 (zero-frontier discovery maps fold into one count line), "token-thrift D4 (dispatch door prints one line per rendered target, roles in full)", "token-thrift D5 (orient promote blocker names at most 3 features, then +N more)", "691fcac4-14a8-40b1-8600-d720ebc47e6f (token-thrift D7: the preamble promote proposal line names at most 3 clear commands, then +N more)", token-thrift D6 (this concept), "8f63adb4-de70-424e-b082-1f4c5ec4b693 (budget-fence-removal D1: budgets bind generated payloads only, never authored instruction text)", lean-context D1 (prompt-context warns at handoff_context_tokens), "semantic-token-diet D7 (preamble trailer names bee orient for routing and bee status --json only for missing detail; Proof-per-change-type line removed)", "semantic-token-diet D8 (herding brief renders # Proof command only for cell jobs)", "semantic-token-diet D9 (single-command help prints first sentence, flags, then remaining text under details:; heaviest descriptions drop decision ids and history narration)"]
-  sources: [docs/history/token-thrift/CONTEXT.md, docs/history/token-thrift/reports/hat-wave-synthesis.md, "cell tt-1 (commit 3ca8a49fe, 2026-10-21)", "cell tt-2 (commit 646c14cff, 2026-10-21)", "cell tt-3 (commit 81f81b039, 2026-10-21)", "measured 2026-10-21: the session preamble on this repo was 11,041 to 11,161 bytes before tt-1", docs/history/lean-context/CONTEXT.md, cell lnc-1, docs/history/semantic-token-diet/CONTEXT.md, "semantic-token-diet cells stdi-1..stdi-6 (commits b519417c6, 66ca1f554, 73d8810d5, be207c310, c611721a7, 2026-11-16)"]
+  decisions: ["token-thrift D1 (PREAMBLE_BUDGET_BYTES is 9500, below HOST_INLINE_LIMIT_CHARS 10,000)", token-thrift D2 (fixed drop order and one Omitted line that names each fetch path), token-thrift D3 (zero-frontier discovery maps fold into one count line), "token-thrift D4 (dispatch door prints one line per rendered target, roles in full)", "token-thrift D5 (orient promote blocker names at most 3 features, then +N more)", "691fcac4-14a8-40b1-8600-d720ebc47e6f (token-thrift D7: the preamble promote proposal line names at most 3 clear commands, then +N more)", token-thrift D6 (this concept), "8f63adb4-de70-424e-b082-1f4c5ec4b693 (budget-fence-removal D1: budgets bind generated payloads only, never authored instruction text)", "lean-context D1 (prompt-context warns at handoff_context_tokens; token-spend-cuts D1 turned the line into a handoff directive with a 300000 default)", "token-spend-cuts D1 (handoff_context_tokens defaults to 300000; at or past it the prompt-context line tells the leader to hand off at the next clean stop; a green worktree merge ends its next action with the fresh-leader-session handoff)", "token-spend-cuts D4 (lane_budget halves to tiny 4000, small 6000, standard 10000, high-risk 15000, default 10000; no docs/knowledge/index.md fallback in the learned-context block)", "token-spend-cuts D3 (every worker agent template in packages/bee/agents carries the read rule: rg -n first, then a Read range with offset and limit)", "semantic-token-diet D7 (preamble trailer names bee orient for routing and bee status --json only for missing detail; Proof-per-change-type line removed)", "semantic-token-diet D8 (herding brief renders # Proof command only for cell jobs)", "semantic-token-diet D9 (single-command help prints first sentence, flags, then remaining text under details:; heaviest descriptions drop decision ids and history narration)"]
+  sources: [docs/history/token-thrift/CONTEXT.md, docs/history/token-thrift/reports/hat-wave-synthesis.md, "cell tt-1 (commit 3ca8a49fe, 2026-10-21)", "cell tt-2 (commit 646c14cff, 2026-10-21)", "cell tt-3 (commit 81f81b039, 2026-10-21)", "measured 2026-10-21: the session preamble on this repo was 11,041 to 11,161 bytes before tt-1", docs/history/lean-context/CONTEXT.md, cell lnc-1, docs/history/token-spend-cuts/CONTEXT.md, "token-spend-cuts cells tsc-1, tsc-2, tsc-4 (commits 5a9dae308, c4e633e93, 7674b3f4f, 2026-11-21)", docs/history/semantic-token-diet/CONTEXT.md, "semantic-token-diet cells stdi-1..stdi-6 (commits b519417c6, 66ca1f554, 73d8810d5, be207c310, c611721a7, 2026-11-16)"]
   authoritative_for: "hook-runtime: the size limits on injected session context and why they exist"
-  anchors: [packages/bee-rs/crates/bee/src/hooks/prompt_context.rs, packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs, packages/bee-rs/crates/bee/src/hooks/session_init.rs, packages/bee-rs/crates/bee/src/hooks/session_preamble/tests.rs, packages/bee-rs/crates/bee/src/hooks/model_guard.rs, packages/bee-rs/crates/bee/src/verbs/status_full/orient.rs, packages/bee-rs/crates/bee/src/verbs/fix_at.rs, packages/bee-rs/crates/bee/src/hooks/session_preamble/render.rs, packages/bee-rs/crates/bee/src/herding/mailbox.rs, packages/bee-rs/crates/bee/src/verbs/help.rs, packages/bee-rs/crates/bee/src/generated/registry_payload.json]
+  anchors: [packages/bee-rs/crates/bee/src/hooks/prompt_context.rs, packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs, packages/bee-rs/crates/bee/src/hooks/session_init.rs, packages/bee-rs/crates/bee/src/hooks/session_preamble/tests.rs, packages/bee-rs/crates/bee/src/hooks/model_guard.rs, packages/bee-rs/crates/bee/src/verbs/status_full/orient.rs, packages/bee-rs/crates/bee/src/verbs/fix_at.rs, packages/bee-rs/crates/bee/src/hooks/session_preamble/render.rs, packages/bee-rs/crates/bee/src/herding/mailbox.rs, packages/bee-rs/crates/bee/src/verbs/help.rs, packages/bee-rs/crates/bee/src/generated/registry_payload.json, packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs, packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs]
   verified_at: 2026-11-16
   verified_commit: d2ac1ce50e94b747d59335242b9ce380c5f1eebb
 ---
@@ -119,16 +119,30 @@ clear commands, then `; +N more` (token-thrift D7).
 - Each cell runs in a fresh dispatched worker. A worker starts with the brief
   of its cell, not with the history of the session that dispatched it.
 
-**The prompt-context hook shows the context size once it passes the mark; the line is advice, not a stop.**
+**The prompt-context hook tells the leader to hand off once the context passes the mark (token-spend-cuts D1).**
 On UserPromptSubmit, the prompt-context hook reads the payload's `transcript_path`
 and takes the latest request context (input + cache read + cache creation tokens,
 as statusline `context_and_turns` computes it). When that value is at or above
-`handoff_context_tokens` from `.bee/config.json` (integer; absent means 150000;
-0 turns the check off), the injected context carries exactly one extra line:
-`context <N>k tokens (mark <T>k): keep working; hand off only on the user's word or at feature close`.
-The agent keeps working; the user decides when to switch (docs/history/context-mark-advisory D1, D2).
+`handoff_context_tokens` from `.bee/config.json` (integer; absent or not a number
+means 300000; 0 turns the check off), the injected context carries exactly one extra line:
+`context <N>k tokens (mark <T>k): hand off at the next clean stop (a capped cell or a merged worktree), then continue in a fresh leader session`.
+The line is a directive, not advice: the leader stops at the next clean stop, never mid-cell.
+It replaced the context-mark-advisory line `keep working; hand off only on the user's word or at feature close`
+and the 150000 default, because two survey-platform leader sessions ran about 4.5 hours with
+12 merges each and peaked at 556k and 425k tokens, and 65 percent of spend was cache read.
+A green `bee worktree merge` ends its next action with the same handoff:
+`Merged into main at <sha>; capture what settled, then bee close --feature <feature>, then write the handoff and continue in a fresh leader session (one leader session per feature).`
+The uat merge variant is unchanged.
 Below the mark, with no `transcript_path`, or with an unreadable or usage-free
 transcript, nothing is added and the hook never fails or slows the turn.
+
+**The worker brief's learned-context block is smaller and never falls back to the knowledge index (token-spend-cuts D4).**
+`lane_budget` in `verbs/drivers/prepare.rs` caps the knowledge pack by lane:
+tiny 4000, small 6000, standard 10000, high-risk 15000, and 10000 for any other or absent lane.
+These halved the old 8000 to 30000 range. When the manifest ranks no concept for the
+cell, `bundle_learned_lines` returns an empty list; it no longer lists `docs/knowledge/index.md`,
+which survey-platform workers were handed 31 times and read 0 times. Workers still
+reach knowledge through `bee knowledge search`. The knowledge A/B holdout is unchanged.
 
 **The preamble trailer points routing at `bee orient` (semantic-token-diet D7).**
 The closing `TRAILER_LINE` reads: `Everything above is already read — do not
@@ -144,6 +158,15 @@ already owns that rule.
 `# Proof command` only when `spec.cell_id` is `Some`. A non-cell job such as a
 reviewer or advisor has no cell verify to prove, so printing the project test
 command added noise to its brief.
+
+**Every worker agent template carries one read rule (token-spend-cuts D3).**
+Each template in `packages/bee/agents` (`bee-worker`, `bee-comb`, `bee-guard`,
+`bee-forager`, `bee-scout`, `bee-elder`) tells its agent to locate with `rg -n`
+first, then Read a range with offset and limit, never to dump a file with
+`cat`, `head`, `tail` or `sed`, and to read a whole file only when the work
+edits most of it or it is short. The rule sits in the template because a
+template reaches every project that installs bee. Find the rule with
+`rg -n "Read rule"` in that directory.
 
 **Single-command help prints flags before details (semantic-token-diet D9).**
 For a single command, `render_help_text` in
@@ -219,6 +242,12 @@ names all five roles (`dispatch`, `merge`, `route`, `supervisor`, `broker`).
   `transcript_below_handoff_mark_adds_no_line`,
   `handoff_context_tokens_zero_adds_no_line_at_any_size`,
   `missing_or_unreadable_transcript_adds_no_line_and_exits_zero`.
+  The green merge next action lives in
+  `packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs`. Find the contract
+  tests with `rg -n handoff_mark` in the crate.
+- Knowledge pack budget: `lane_budget` and `bundle_learned_lines` in
+  `packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs`. Find the contract
+  tests with `rg -n knowledge_pack` in the crate.
 - Preamble trailer: `TRAILER_LINE` in
   `packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs`
   (semantic-token-diet D7).
@@ -229,6 +258,9 @@ names all five roles (`dispatch`, `merge`, `route`, `supervisor`, `broker`).
   `packages/bee-rs/crates/bee/src/verbs/help.rs` and command descriptions in
   `packages/bee-rs/crates/bee/src/generated/registry_payload.json`
   (semantic-token-diet D9).
+- Worker read rule: `packages/bee/agents/bee-worker.md.tmpl` and its five
+  sibling templates in `packages/bee/agents` (token-spend-cuts D3).
 - Locked decisions: `docs/history/token-thrift/CONTEXT.md`,
   `docs/history/lean-context/CONTEXT.md` (D1),
-  `docs/history/semantic-token-diet/CONTEXT.md` (D7–D9).
+  `docs/history/semantic-token-diet/CONTEXT.md` (D7–D9),
+  `docs/history/token-spend-cuts/CONTEXT.md` (D1, D3–D5).

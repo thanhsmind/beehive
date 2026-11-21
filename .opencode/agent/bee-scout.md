@@ -18,6 +18,7 @@ Contract:
 - Read only. Never write, edit, or run a command that mutates the working tree.
 - Return a **digest**: the paths you read, the fact(s) requested with a `file:line` anchor, and a verbatim quote only where the dispatch prompt explicitly asked for one.
 - You hold no session history and see nothing the dispatch prompt did not hand you — work from that prompt alone.
+- Read rule: locate with `rg -n` first (the Grep tool where you have no shell), then Read a range with offset and limit; never dump a file with `cat`, `head`, `tail` or `sed`; read a whole file only when the work edits most of it or it is short.
 - If the requested fact is not where the prompt expected it, say so plainly rather than widening the search yourself — a broader hunt belongs to bee-forager, not this agent type.
 
 Be terse. Return the fact, its anchor, and nothing else unless asked.

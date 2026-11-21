@@ -92,7 +92,11 @@ From two cells up, state the one-line concurrency plan before dispatching.
    A recorded proof is never re-run; `bee cells judge` for undeclared-file hits. At
    `standard`/`high-risk`, every `behavior_change` cell owes a
    `bee cells judge-record` verdict or `bee close` refuses (`judge-debt`) —
-   run the slice judge before you reach for close.
+   except at `standard`, where a cell whose cap commit changed fewer than 30
+   lines owes none. A code cell's tester returns the judge block for the cell
+   it tested, and you record it with `bee cells judge-record`; the tier table
+   is `bee-hive/references/gates-and-delegation.md`. Run the slice judge
+   before you reach for close.
 6. Slice clean: `bee close --feature <slug> --dry-run` names every
    remaining door with the command that settles it; the final slice lands
    through `bee feature finish` (Completion, below), whose `bee close`
@@ -158,7 +162,7 @@ later, at the owner's pace).
 Before declaring done: no active reservations, no in-flight workers
 recorded.
 
-A context mark never stops a wave: keep working until the user's task is done (rule: agents-context-handoff-65). A handoff happens only when the user asks for a switch, or at feature close, and follows `.bee/playbooks/handoff.md`. When a unit finishes and approved work remains, continue
+A context mark never stops a cell: at or past it, hand off at the next clean stop, and after every green worktree merge write the handoff and continue in a fresh leader session (rule: agents-context-handoff-65; see `.bee/playbooks/handoff.md`). Below the mark, when a unit finishes and approved work remains, continue
 in-session; finishing a unit is never a reason to stop.
 
 **Reply:** capped cells over total, the proof line per cell, the merge or
