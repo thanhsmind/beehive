@@ -967,6 +967,11 @@
     "contract:cap-one-refusal",
     "contract:wave-judge-record",
     "contract:conflict-verdict-carry",
-    "contract:read-only-shell-rules"
+    "contract:read-only-shell-rules",
+    "contract:thin-worker-listings-off",
+    "contract:handoff-after-merge-door",
+    "contract:herding-result-job-digest",
+    "contract:cell-brief-search-rule-and-size",
+    "contract:leader-doctrine-rules-kept"
   ]
 }

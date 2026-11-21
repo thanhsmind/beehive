@@ -11,14 +11,14 @@
     "uat": false
   },
   "summary": "Feature \"wave-chain-thrift\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at 7cd562e; reload the product and test \"wave-chain-thrift\", then either approve uat (\"bee gate --name uat --approved true --lane wave-chain-thrift\") or fix it in the worktree and merge again.",
+  "next_action": "Continue bee-exploring for \"wave-chain-thrift\" (lane).",
   "created_at": "2026-11-21T06:49:50.080Z",
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "gate",
-    "subject": "uat: wave-chain-thrift",
-    "asked_at": "2026-11-21T07:15:34.037Z",
-    "session": "bee-worktree-merge-sessionless"
+    "subject": "uat for token-spend-cuts, leader-call-thrift, wave-chain-thrift on main",
+    "asked_at": "2026-11-21T07:16:47.995Z",
+    "session": "b1703487-ee6f-492e-be6e-be5177baece2"
   },
   "gate_preview": {
     "feature": "wave-chain-thrift",
