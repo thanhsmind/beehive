@@ -2649,6 +2649,7 @@ fn execute_new(opts: &Options, herdr: &dyn PaneTransport) -> ExecResult {
         nickname: &opts.nickname,
         cell_id: opts.cell_id.as_deref(),
         allow_question: opts.allow_question,
+        read_only: opts.read_only,
     };
     let brief = mailbox::render_brief(&spec);
 
@@ -3282,6 +3283,7 @@ pub(super) fn execute_no_pane(opts: &Options) -> ExecResult {
         nickname: &opts.nickname,
         cell_id: opts.cell_id.as_deref(),
         allow_question: opts.allow_question,
+        read_only: opts.read_only,
     };
     let brief = mailbox::render_brief(&spec);
 
@@ -3632,6 +3634,7 @@ fn execute_paseo_steered(
         nickname: &opts.nickname,
         cell_id: opts.cell_id.as_deref(),
         allow_question: opts.allow_question,
+        read_only: opts.read_only,
     };
     let brief = mailbox::render_brief(&brief_spec);
 
@@ -3973,6 +3976,7 @@ fn execute_claude_session_paced(
         nickname: &opts.nickname,
         cell_id: opts.cell_id.as_deref(),
         allow_question: opts.allow_question,
+        read_only: opts.read_only,
     };
     let brief = mailbox::render_brief(&brief_spec);
 
@@ -4395,6 +4399,7 @@ pub(super) fn execute_continue_paseo(opts: &Options, cli: &dyn PaseoCli) -> Exec
         nickname: &opts.nickname,
         cell_id: opts.cell_id.as_deref(),
         allow_question: opts.allow_question,
+        read_only: opts.read_only,
     };
     let brief = mailbox::render_brief(&spec);
 
@@ -5346,6 +5351,7 @@ fn execute_continue(opts: &Options, herdr: &dyn PaneTransport) -> ExecResult {
         nickname: &opts.nickname,
         cell_id: opts.cell_id.as_deref(),
         allow_question: opts.allow_question,
+        read_only: opts.read_only,
     };
     let brief = mailbox::render_brief(&spec);
 
