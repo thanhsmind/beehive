@@ -1,0 +1,182 @@
+{
+  "id": "hm2-1",
+  "feature": "handoff-mark-200k",
+  "title": "Lower the default handoff mark to 200000 tokens",
+  "lane": "small",
+  "role": "code",
+  "deps": [],
+  "decisions": [
+    "7bc2853d-0196-4d43-bd90-3ff09210f266"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/hooks/prompt_context.rs",
+    "packages/bee/playbooks/handoff.md",
+    ".bee/playbooks/handoff.md",
+    "docs/knowledge/areas/hook-runtime/token-economy-of-injected-context.md",
+    "docs/history/codex-harness-hardening/release-manifest.json",
+    ".bee/onboarding.json"
+  ],
+  "read_first": [
+    "docs/history/handoff-mark-200k/CONTEXT.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/hook-runtime/token-economy-of-injected-context.md"
+  ],
+  "action": "Per D1: in packages/bee-rs/crates/bee/src/hooks/prompt_context.rs, function compute_handoff_warning, the default of handoff_context_tokens becomes 200000 in both match arms (today: `Some(Value::Number(n)) => n.as_u64().unwrap_or(300_000),` and `_ => 300_000,`). Nothing else in that function changes. Move the existing tests that pin the old default to the new mark, with the same shape: find them with rg -n 'handoff_mark|mark 300k|300000' on that one file (today: transcript_past_handoff_mark_carries_warning_line expects 'context 310k tokens (mark 300k)'; handoff_mark_absent_key_at_exactly_300000_tokens_adds_the_directive_line; handoff_mark_absent_key_at_299999_tokens_adds_no_line; the zero-key loop). A test name that holds 300000 or 299999 takes the new number. Add no new test; hm2-2 owns new tests. In packages/bee/playbooks/handoff.md change 'The default context mark is 300000' to 200000 and nothing else. In docs/knowledge/areas/hook-runtime/token-economy-of-injected-context.md, find the 300000 mentions with rg -n, state the 200000 default in the handoff paragraph, and add 'handoff-mark-200k D1 (handoff_context_tokens defaults to 200000)' to the frontmatter decisions list; cite D-numbers, never raw decision ids; avoid the words deferred, until and later. Build with CARGO_TARGET_DIR=/home/thanhsmind/.cache/cargo-target-rrt cargo build --release --manifest-path packages/bee-rs/Cargo.toml and run that binary's dev regen (/home/thanhsmind/.cache/cargo-target-rrt/release/bee dev regen); never ./.bee/bin/bee for regen. Restore .claude/skills changes you did not cause. Workspace protocol: .bee/playbooks/handoff.md, .bee/onboarding.json and docs/history/codex-harness-hardening/release-manifest.json change only through bee dev regen; never edit them by hand. Then run the verify, and only the verify, never the full suite. Write no code comments. The only bee commands you may run are the ones this brief names.",
+  "verify": "/home/thanhsmind/.cache/cargo-target-rrt/release/bee dev release-manifest --check && /home/thanhsmind/.cache/cargo-target-rrt/release/bee onboard --repo-root . --json && ./.bee/bin/bee knowledge check && CARGO_TARGET_DIR=/home/thanhsmind/.cache/cargo-target-rrt PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- handoff_mark",
+  "must_haves": {
+    "why": "The leader context is re-read on every call; a reset at 200k cuts about 41 percent of leader tokens in the measured session (D1).",
+    "out_of_scope": [
+      "the directive line text",
+      "the clean-stop rule",
+      "new tests",
+      "project config files"
+    ],
+    "truths": [
+      "with handoff_context_tokens absent, a transcript at 200000 context tokens gets the directive line with the text 'mark 200k'",
+      "with handoff_context_tokens absent, a transcript at 199999 context tokens gets no line",
+      "handoff_context_tokens 0 gives no line at any size, and a configured number is used as before",
+      "packages/bee/playbooks/handoff.md and its rendered copy .bee/playbooks/handoff.md name 200000 as the default mark",
+      "the token economy concept states the 200000 default and cites handoff-mark-200k D1"
+    ],
+    "prohibitions": [
+      "No change to the directive line wording other than the mark number it prints"
+    ]
+  },
+  "judge_obligation_ack": "One default value changes in a hook; the tester cell hm2-2 runs in a separate dispatched worker and reads the change with no shared context.",
+  "behavior_change": true,
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "hm2-w1",
+    "outcome": "Default handoff mark lowered to 200000 with tests, playbook and concept moved; fa67740ee",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/hooks/prompt_context.rs",
+      "packages/bee/playbooks/handoff.md",
+      ".bee/playbooks/handoff.md",
+      "docs/knowledge/areas/hook-runtime/token-economy-of-injected-context.md",
+      "docs/history/codex-harness-hardening/release-manifest.json",
+      ".bee/onboarding.json"
+    ],
+    "deviations": [
+      "sync-ack: One number changes in the handoff playbook; no skill names the default mark"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-21T10:08:44.220Z",
+    "behavior_change": true,
+    "verification_evidence": "bee dev release-manifest --check && bee onboard --json && bee knowledge check && cargo test --release --bin bee -- handoff_mark — green:unit — touched the default and its pinning tests",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "838f06b2-d5b0-46f1-946e-a420b06a2c48",
+    "verify_command": "/home/thanhsmind/.cache/cargo-target-rrt/release/bee dev release-manifest --check && /home/thanhsmind/.cache/cargo-target-rrt/release/bee onboard --repo-root . --json && ./.bee/bin/bee knowledge check && CARGO_TARGET_DIR=/home/thanhsmind/.cache/cargo-target-rrt PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- handoff_mark",
+    "claimed_at": "2026-11-21T10:06:19.527Z",
+    "knowledge_delta": [
+      "docs/knowledge/areas/hook-runtime/token-economy-of-injected-context.md"
+    ],
+    "sync_ack": "One number changes in the handoff playbook; no skill names the default mark",
+    "no_mistakes": true,
+    "principles_used": [
+      {
+        "slug": "bee-principle-prove-it-works",
+        "changed": "ran the real verify and read the 6 passing test names"
+      }
+    ],
+    "changed_lines": 32,
+    "report": {
+      "outcome": "Default handoff mark lowered to 200000 with tests, playbook and concept moved; fa67740ee",
+      "commit": "fa67740ee7193277f1619933cb4d5cf96f77f830",
+      "files": [
+        "packages/bee-rs/crates/bee/src/hooks/prompt_context.rs",
+        "packages/bee/playbooks/handoff.md",
+        ".bee/playbooks/handoff.md",
+        "docs/knowledge/areas/hook-runtime/token-economy-of-injected-context.md",
+        "docs/history/codex-harness-hardening/release-manifest.json",
+        ".bee/onboarding.json"
+      ],
+      "tests": "/home/thanhsmind/.cache/cargo-target-rrt/release/bee dev release-manifest --check && /home/thanhsmind/.cache/cargo-target-rrt/release/bee onboard --repo-root . --json && ./.bee/bin/bee knowledge check && CARGO_TARGET_DIR=/home/thanhsmind/.cache/cargo-target-rrt PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- handoff_mark — green:unit — bee dev release-manifest --check && bee onboard --json && bee knowledge check && cargo test --release --bin bee -- handoff_mark — green:unit — touched the default and its pinning tests",
+      "deviations": [],
+      "principles_used": [
+        "bee-principle-prove-it-works — ran the real verify and read the 6 passing test names"
+      ],
+      "skipped": [
+        "clippy and full cargo test — brief said run only the verify"
+      ],
+      "patch_id": "b3018f0c94718e0ae551543e89823967c408a63d"
+    },
+    "skipped": [
+      "clippy and full cargo test — brief said run only the verify"
+    ],
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "with handoff_context_tokens absent, a transcript at 200000 context tokens gets the directive line with the text 'mark 200k'",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/prompt_context.rs"
+          },
+          {
+            "requirement": "with handoff_context_tokens absent, a transcript at 199999 context tokens gets no line",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/prompt_context.rs"
+          },
+          {
+            "requirement": "handoff_context_tokens 0 gives no line at any size, and a configured number is used as before",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/prompt_context.rs"
+          },
+          {
+            "requirement": "packages/bee/playbooks/handoff.md and its rendered copy .bee/playbooks/handoff.md name 200000 as the default mark",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/prompt_context.rs"
+          },
+          {
+            "requirement": "the token economy concept states the 200000 default and cites handoff-mark-200k D1",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/prompt_context.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/hooks/prompt_context.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/prompt_context.rs"
+          },
+          {
+            "requirement": "packages/bee/playbooks/handoff.md",
+            "artifact": "packages/bee/playbooks/handoff.md"
+          },
+          {
+            "requirement": ".bee/playbooks/handoff.md",
+            "artifact": ".bee/playbooks/handoff.md"
+          },
+          {
+            "requirement": "docs/knowledge/areas/hook-runtime/token-economy-of-injected-context.md",
+            "artifact": "docs/knowledge/areas/hook-runtime/token-economy-of-injected-context.md"
+          },
+          {
+            "requirement": "docs/history/codex-harness-hardening/release-manifest.json",
+            "artifact": "docs/history/codex-harness-hardening/release-manifest.json"
+          },
+          {
+            "requirement": ".bee/onboarding.json",
+            "artifact": ".bee/onboarding.json"
+          }
+        ],
+        "recorded_at": "2026-11-21T10:12:35.041Z",
+        "recorded_by": "838f06b2-d5b0-46f1-946e-a420b06a2c48",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": {
+    "new": 27993,
+    "cached": 186283,
+    "total": 214276,
+    "models": {
+      "claude-sonnet-5-5": {
+        "new": 27993,
+        "cached": 186283,
+        "total": 214276
+      }
+    },
+    "jobs": [
+      "job-1795255584031-2771832-1"
+    ]
+  }
+}

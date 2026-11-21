@@ -1,0 +1,117 @@
+{
+  "id": "hm2-2",
+  "feature": "handoff-mark-200k",
+  "title": "Test the handoff mark contract at 200000 tokens",
+  "lane": "small",
+  "role": "test",
+  "deps": [
+    "hm2-1"
+  ],
+  "decisions": [
+    "03ca8fc1-695c-4f58-9560-7f951797da70"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/hooks/prompt_context.rs"
+  ],
+  "read_first": [
+    "docs/history/handoff-mark-200k/CONTEXT.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Tester for hm2-1, contract C1. Coverage judgment first: in the test module of packages/bee-rs/crates/bee/src/hooks/prompt_context.rs, find the mark tests with rg -n 'handoff_mark' on that one file and cite, by test name, which C1 clause each one proves (at 200000 adds the line with 'mark 200k'; 199999 adds none; 0 adds none at any size). Then author only the gap. The expected gap is the clause 'a configured number wins over the default': with the helper handoff_mark_warning, a config of 300000 at 250000 context tokens adds no line, and a config of 150000 at 160000 context tokens adds the line with 'mark 150k'. Name each new test so the name holds handoff_mark. Check that compute_handoff_warning holds no 300_000 literal. A red on an hm2-1 truth is a finding to report, not a fix to make in non-test code. Run the verify, and only the verify, never the full suite. Write no code comments. The only bee commands you may run are the ones this brief names.",
+  "verify": "CARGO_TARGET_DIR=/home/thanhsmind/.cache/cargo-target-rrt PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- handoff_mark",
+  "must_haves": {
+    "why": "A code cell never certifies itself; the clause that a configured mark wins has no test at the new default (C1).",
+    "out_of_scope": [
+      "non-test code",
+      "tests outside the mark contract"
+    ],
+    "truths": [
+      "every clause of contract handoff-mark-directive is proven by a named test in prompt_context.rs",
+      "a test shows a configured mark above the default silences the line between the two, and a configured mark below the default fires the line with its own number"
+    ],
+    "prohibitions": [
+      "No edit outside the test module"
+    ]
+  },
+  "judge_obligation_ack": "One default value changes in a hook; the tester cell hm2-2 runs in a separate dispatched worker and reads the change with no shared context.",
+  "behavior_change": false,
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "hm2-w2",
+    "outcome": "Added two handoff_mark tests for configured-mark-wins clause; 8 handoff_mark tests green; commit 29729a311",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/hooks/prompt_context.rs"
+    ],
+    "deviations": [
+      "sync-ack: Tests only; no skill names the default mark"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-21T10:10:19.578Z",
+    "behavior_change": false,
+    "verification_evidence": "cargo test --release --bin bee -- handoff_mark — green:unit — touched prompt_context.rs mark tests",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "838f06b2-d5b0-46f1-946e-a420b06a2c48",
+    "verify_command": "CARGO_TARGET_DIR=/home/thanhsmind/.cache/cargo-target-rrt PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- handoff_mark",
+    "claimed_at": "2026-11-21T10:08:48.060Z",
+    "knowledge_delta": [],
+    "sync_ack": "Tests only; no skill names the default mark",
+    "no_mistakes": true,
+    "no_knowledge_used": true,
+    "no_principles_used": true,
+    "changed_lines": 15,
+    "report": {
+      "outcome": "Added two handoff_mark tests for configured-mark-wins clause; 8 handoff_mark tests green; commit 29729a311",
+      "commit": "29729a311415735b1472166a8887a475c38e3a84",
+      "files": [
+        "packages/bee-rs/crates/bee/src/hooks/prompt_context.rs"
+      ],
+      "tests": "CARGO_TARGET_DIR=/home/thanhsmind/.cache/cargo-target-rrt PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- handoff_mark — green:unit — cargo test --release --bin bee -- handoff_mark — green:unit — touched prompt_context.rs mark tests",
+      "deviations": [],
+      "knowledge_used": [],
+      "principles_used": [],
+      "patch_id": "8d2438054d114facb04eea7de4aad273dc2cdb57"
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "every clause of contract handoff-mark-directive is proven by a named test in prompt_context.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/prompt_context.rs"
+          },
+          {
+            "requirement": "a test shows a configured mark above the default silences the line between the two, and a configured mark below the default fires the line with its own number",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/prompt_context.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/hooks/prompt_context.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/prompt_context.rs"
+          }
+        ],
+        "recorded_at": "2026-11-21T10:12:35.050Z",
+        "recorded_by": "838f06b2-d5b0-46f1-946e-a420b06a2c48",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": {
+    "new": 20560,
+    "cached": 93186,
+    "total": 113746,
+    "models": {
+      "claude-sonnet-5-5": {
+        "new": 20560,
+        "cached": 93186,
+        "total": 113746
+      }
+    },
+    "jobs": [
+      "job-1795255731444-2778048-1"
+    ]
+  }
+}
