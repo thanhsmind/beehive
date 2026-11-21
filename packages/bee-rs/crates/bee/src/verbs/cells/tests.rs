@@ -3091,7 +3091,7 @@ use std::time::Instant;
         cell["trace"]["capped_at"] = json!("2026-08-05T00:00:00.000Z"); // predates the door
         write_cell_fixture(root, "demo-1", &cell);
 
-        let debt = crate::verbs::drivers::judge_debt(root, "demo").unwrap();
+        let debt = crate::verbs::drivers::judge_debt(root, "demo", "standard").unwrap();
         assert_eq!(debt.count, 0, "a pre-door cap is grandfathered, never debt");
         let doors = crate::verbs::drivers::build_close_report_doors(root, "demo").unwrap();
         let judge_door = doors.iter().find(|d| d.door == "judge-debt").unwrap();
@@ -3108,7 +3108,7 @@ use std::time::Instant;
         cell["trace"].as_object_mut().unwrap().remove("capped_at");
         write_cell_fixture(root, "demo-1", &cell);
 
-        let debt = crate::verbs::drivers::judge_debt(root, "demo").unwrap();
+        let debt = crate::verbs::drivers::judge_debt(root, "demo", "standard").unwrap();
         assert_eq!(debt.count, 0, "no capped_at at all counts as pre-door");
     }
 
@@ -3124,7 +3124,7 @@ use std::time::Instant;
         cell["trace"]["capped_at"] = json!(crate::verbs::drivers::JUDGE_DOOR_INTRODUCED_AT);
         write_cell_fixture(root, "demo-1", &cell);
 
-        let debt = crate::verbs::drivers::judge_debt(root, "demo").unwrap();
+        let debt = crate::verbs::drivers::judge_debt(root, "demo", "standard").unwrap();
         assert_eq!(debt.count, 1, "capped exactly at the door's own stamp is debt (>=)");
     }
 

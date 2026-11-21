@@ -798,6 +798,9 @@ pub(crate) fn cap_cell_from_flags(root: &Path, f: &CapFlags, finish: bool) -> MR
                     && let Value::Object(map) = &mut stored_report {
                         map.insert("patch_id".into(), Value::String(pid));
                     }
+            if let Some(lines) = commit_changed_lines(root, commit) {
+                trace.insert("changed_lines".into(), Value::from(lines));
+            }
         }
         trace.insert("report".into(), stored_report);
         let outcome_value = match &f.outcome {
@@ -3279,4 +3282,19 @@ mod escalate_v2_off_tests {
         assert!(cleared.get(ESCALATE_FIELD).is_none(), "{cleared}");
         assert!(!crate::verbs::cells::cell_is_escalated(&cleared));
     }
+}
+
+fn commit_changed_lines(root: &Path, commit: &str) -> Option<u64> {
+    let parent = format!("{commit}^");
+    let out = crate::verbs::worktree::run_git(root, &["diff", "--numstat", &parent, commit]);
+    if out.status != Some(0) {
+        return None;
+    }
+    let mut total = 0u64;
+    for row in out.stdout.unwrap_or_default().lines() {
+        let mut cols = row.split('\t');
+        let (added, removed) = (cols.next()?, cols.next()?);
+        total += added.parse::<u64>().unwrap_or(0) + removed.parse::<u64>().unwrap_or(0);
+    }
+    Some(total)
 }

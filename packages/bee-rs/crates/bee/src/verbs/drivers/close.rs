@@ -652,7 +652,7 @@ pub(crate) const JUDGE_DOOR_INTRODUCED_AT: &str = "2026-08-11T00:00:00.000Z";
 /// hpf-1: grandfathered by `JUDGE_DOOR_INTRODUCED_AT` — a cell whose
 /// `trace.capped_at` is missing, unparseable, or earlier than that stamp
 /// predates the door and is never counted as debt, judged or not.
-pub(crate) fn judge_debt(root: &Path, feature: &str) -> D<DebtSummary> {
+pub(crate) fn judge_debt(root: &Path, feature: &str, lane: &str) -> D<DebtSummary> {
     let cutoff = date_parse(Some(&Value::String(JUDGE_DOOR_INTRODUCED_AT.to_string())));
     let mut ids = Vec::new();
     for cell in list_cells_including_archive(root, feature, Some("capped"))? {
@@ -663,6 +663,11 @@ pub(crate) fn judge_debt(root: &Path, feature: &str) -> D<DebtSummary> {
         let capped_at = date_parse(vget(&trace, "capped_at"));
         if !(capped_at.is_finite() && capped_at >= cutoff) {
             continue; // pre-door (or no capped_at at all): grandfathered, not debt
+        }
+        let small_diff = lane == "standard"
+            && vget(&trace, "changed_lines").and_then(Value::as_u64).is_some_and(|n| n < 30);
+        if small_diff {
+            continue;
         }
         let judged = matches!(vget(&trace, "semantic_judge"), Some(Value::Array(a)) if !a.is_empty());
         if !judged {
@@ -1657,8 +1662,9 @@ pub(crate) fn build_close_report_doors(root: &Path, feature: &str) -> D<Vec<Door
     // (AGENTS.md's own judge-on-smell carve-out for those lanes), not
     // merely a non-blocking one, so `doors.iter().find(|d| d.door ==
     // "judge-debt")` returns `None` below `standard`.
-    if matches!(feature_route(root, feature)?.as_deref(), Some("standard") | Some("high-risk")) {
-        let judge = judge_debt(root, feature)?;
+    let closing_lane = feature_route(root, feature)?.unwrap_or_default();
+    if matches!(closing_lane.as_str(), "standard" | "high-risk") {
+        let judge = judge_debt(root, feature, &closing_lane)?;
         // hpf-1: mirrors the scribing-debt escape above — a logged
         // `judge-deferral` decision naming this feature clears the door
         // without touching the count.
@@ -2856,7 +2862,7 @@ fn close_handler_core(
     // lanes. Same "reads the door's own verdict, never recomputes it"
     // discipline the scribing-debt refusal above already established.
     if doors.iter().any(|d| d.door == "judge-debt" && d.blocking) {
-        let debt = judge_debt(root, feature)?;
+        let debt = judge_debt(root, feature, &feature_route(root, feature)?.unwrap_or_default())?;
         let mut result = Map::new();
         result.insert("feature".into(), Value::String(feature.to_string()));
         result.insert("doors".into(), Value::Array(doors.iter().map(Door::value).collect()));
