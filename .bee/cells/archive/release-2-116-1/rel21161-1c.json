@@ -1,0 +1,113 @@
+{
+  "id": "rel21161-1c",
+  "feature": "release-2-116-1",
+  "title": "Check the published 2.116.1 release",
+  "lane": "small",
+  "role": "test",
+  "deps": [
+    "rel21161-1"
+  ],
+  "decisions": [
+    "e208dd54-89f1-4dd7-abc2-5cc402da080f",
+    "9f810c64-4f4c-4f90-a93c-c6497ef52938"
+  ],
+  "files": [
+    "docs/history/release-2-116-1/reports/rel21161-1c.md"
+  ],
+  "read_first": [
+    "docs/history/release-2-116-1/CONTEXT.md",
+    "docs/history/release-2-116-1/plan.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Check the release independently, read-only: both plugin manifests on main report 2.116.1; tag v2.116.1 exists locally and on origin (git ls-remote --tags origin v2.116.1); the GitHub release v2.116.1 lists the five binaries and SHA256SUMS (gh release view v2.116.1 --json assets); the release-binaries run for v2.116.1 concluded success. Write each check with its command and output to docs/history/release-2-116-1/reports/rel21161-1c.md and commit it with the trailer cell: rel21161-1c. Bee commands you may run: bee herding notify; never bee dispatch.",
+  "verify": "gh release view v2.116.1 --json assets --jq '.assets | length'",
+  "must_haves": {
+    "truths": [
+      "the report shows each of the four checks with its command and output"
+    ],
+    "prohibitions": [
+      "No edit outside the report file"
+    ]
+  },
+  "behavior_change": false,
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "checker-21161",
+    "outcome": "All four checks of the published 2.116.1 release passed; report committed as 971ab341d",
+    "files_changed": [
+      "docs/history/release-2-116-1/reports/rel21161-1c.md"
+    ],
+    "deviations": [
+      "sync-ack: checker report committed as 971ab341d by the herded worker"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-21T23:59:05.180Z",
+    "behavior_change": false,
+    "verification_evidence": "read-only check of the published release https://github.com/thanhsmind/beehive/releases/tag/v2.116.1",
+    "verify_output": "green:live",
+    "verify_passed": true,
+    "claim_session": "f0d84b66-6b7d-4a8d-ba22-39b303a9eb55",
+    "verify_command": "gh release view v2.116.1 --json assets --jq '.assets | length'",
+    "claimed_at": "2026-11-21T23:58:06.782Z",
+    "knowledge_delta": [],
+    "sync_ack": "checker report committed as 971ab341d by the herded worker",
+    "no_mistakes": true,
+    "no_knowledge_used": true,
+    "principles_used": [
+      {
+        "slug": "bee-principle-prove-it-works",
+        "changed": "checked the live GitHub release, the remote tag and the run result rather than the earlier cell's report"
+      }
+    ],
+    "changed_lines": 46,
+    "report": {
+      "outcome": "All four checks of the published 2.116.1 release passed; report committed as 971ab341d",
+      "commit": "971ab341dca077e4c2130482747a1db110179a04",
+      "files": [
+        "docs/history/release-2-116-1/reports/rel21161-1c.md"
+      ],
+      "tests": "gh release view v2.116.1 --json assets --jq '.assets | length' — green:live — read-only check of the published release https://github.com/thanhsmind/beehive/releases/tag/v2.116.1",
+      "deviations": [],
+      "knowledge_used": [],
+      "principles_used": [
+        "bee-principle-prove-it-works — checked the live GitHub release, the remote tag and the run result rather than the earlier cell's report"
+      ],
+      "reaction": "confirm",
+      "skipped": [
+        "the cell's proof command (cargo clippy and test) — not run: the cell is a read-only release check and touches no Rust"
+      ],
+      "found": [
+        "the workflow is named 'Release binaries', so 'gh run list --workflow release-binaries' finds nothing; the run for v2.116.1 is databaseId 44963992635, success",
+        "CI and Windows runs for v2.116.1 were still in progress at check time"
+      ],
+      "patch_id": "dd94406cdfed72bc62f5eec023daabbb7841dc1f"
+    },
+    "reaction": "confirm",
+    "skipped": [
+      "the cell's proof command (cargo clippy and test) — not run: the cell is a read-only release check and touches no Rust"
+    ],
+    "found": [
+      "the workflow is named 'Release binaries', so 'gh run list --workflow release-binaries' finds nothing; the run for v2.116.1 is databaseId 44963992635, success",
+      "CI and Windows runs for v2.116.1 were still in progress at check time"
+    ],
+    "warnings": [],
+    "tests": "boundary"
+  },
+  "usage": {
+    "new": 29767,
+    "cached": 128150,
+    "total": 157917,
+    "models": {
+      "claude-sonnet-5-5": {
+        "new": 29767,
+        "cached": 128150,
+        "total": 157917
+      }
+    },
+    "jobs": [
+      "job-1795305491000-1004744-1"
+    ]
+  }
+}

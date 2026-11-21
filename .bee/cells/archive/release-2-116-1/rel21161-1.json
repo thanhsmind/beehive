@@ -1,0 +1,110 @@
+{
+  "id": "rel21161-1",
+  "feature": "release-2-116-1",
+  "title": "Publish release 2.116.1 through the sanctioned script",
+  "lane": "small",
+  "role": "deploy",
+  "deps": [],
+  "decisions": [
+    "e208dd54-89f1-4dd7-abc2-5cc402da080f"
+  ],
+  "files": [
+    ".claude-plugin/plugin.json",
+    ".codex-plugin/plugin.json",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/release-2-116-1/CONTEXT.md",
+    "scripts/release.sh"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Run `scripts/release.sh 2.116.1` with BEE_DISPATCH_ID set to an authorized deployment dispatch and the CI-pinned opencode 1.18.16 (/mnt/data/Projects/goglbe/beehive/.bee/tmp/oc11816/bin) first on PATH and CARGO_TARGET_DIR=/home/thanhsmind/.cache/cargo-target-rel21161, so the opencode contract tests run green. The script bumps both plugin manifests, runs the regen chain (render-skill-trees, onboard --apply, release-manifest --write), runs the declared test suite before tagging, makes the release commit, tags v2.116.1, pushes main and the tag, waits for the release-binaries workflow and verifies the published assets. Never walk those steps by hand. Re-running at a version already committed is idempotent — it resumes the tail. The regen obligation on .claude-plugin/plugin.json is discharged INSIDE the script's own regen chain, which is why the release manifest rides this cell's files.",
+  "verify": "bash scripts/release.sh 2.116.1 && bee dev release-manifest --check",
+  "must_haves": {
+    "truths": [
+      "both plugin manifests report 2.116.1",
+      "tag v2.116.1 exists locally and on the remote",
+      "the GitHub release for v2.116.1 carries the binaries and SHA256SUMS",
+      "the script printed its final OK line"
+    ],
+    "artifacts": [
+      {
+        "path": ".claude-plugin/plugin.json",
+        "substantive": "version 2.116.1"
+      },
+      {
+        "path": ".codex-plugin/plugin.json",
+        "substantive": "version 2.116.1"
+      }
+    ],
+    "key_links": [
+      "the pushed tag is what triggers release-binaries.yml"
+    ],
+    "prohibitions": [
+      "Do not hand-walk bump, tag or push",
+      "Do not skip the test gate"
+    ]
+  },
+  "behavior_change": false,
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "deploy-21161",
+    "outcome": null,
+    "files_changed": [
+      ".claude-plugin/plugin.json",
+      ".codex-plugin/plugin.json",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [
+      "First run (job-1795304689641-832211-1) went red on absent_probe_record_classifies_budget_only_without_a_subprocess, a 2 s probe-stub timeout under the loaded parallel suite; it passed 5 of 5 alone and the re-run with a fresh permit was green",
+      "sync-ack: release commit made by scripts/release.sh, verified on origin and GitHub"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-21T23:58:01.977Z",
+    "behavior_change": false,
+    "verification_evidence": "https://github.com/thanhsmind/beehive/actions/runs/44963992635 release-binaries success; final line 'bee 2.116.1 is live — installers now serve v2.116.1'; release https://github.com/thanhsmind/beehive/releases/tag/v2.116.1 carries 5 binaries and SHA256SUMS",
+    "verify_output": "green:live",
+    "verify_passed": true,
+    "claim_session": "f0d84b66-6b7d-4a8d-ba22-39b303a9eb55",
+    "verify_command": "bash scripts/release.sh 2.116.1 && bee dev release-manifest --check",
+    "claimed_at": "2026-11-21T23:44:28.673Z",
+    "knowledge_delta": [],
+    "sync_ack": "release commit made by scripts/release.sh, verified on origin and GitHub",
+    "mistakes": [
+      {
+        "wrong": "First release run went red on a 2 s probe-stub timeout under load",
+        "better": "the probe fixture timeout should tolerate a loaded parallel suite",
+        "fix_at": "check"
+      }
+    ],
+    "no_knowledge_used": true,
+    "principles_used": [
+      {
+        "slug": "bee-principle-verify-before-reporting",
+        "changed": "traced the red to the 2 s stub timeout and ran the test alone 5 times before re-running instead of filing a code defect"
+      }
+    ],
+    "commit_pending": "release.sh makes the release commit with no cell trailer",
+    "changed_lines": 20,
+    "report": {
+      "outcome": "Released 2.116.1 through scripts/release.sh; second run green after a timing flake in the first run's suite",
+      "commit": "3d3a648a4e26e482fe7fda64d9b5f9836ccb126f",
+      "files": [
+        ".claude-plugin/plugin.json",
+        ".codex-plugin/plugin.json",
+        "docs/history/codex-harness-hardening/release-manifest.json"
+      ],
+      "tests": "bash scripts/release.sh 2.116.1 && bee dev release-manifest --check — green:live — https://github.com/thanhsmind/beehive/actions/runs/44963992635 release-binaries success; final line 'bee 2.116.1 is live — installers now serve v2.116.1'; release https://github.com/thanhsmind/beehive/releases/tag/v2.116.1 carries 5 binaries and SHA256SUMS",
+      "deviations": [
+        "First run (job-1795304689641-832211-1) went red on absent_probe_record_classifies_budget_only_without_a_subprocess, a 2 s probe-stub timeout under the loaded parallel suite; it passed 5 of 5 alone and the re-run with a fresh permit was green"
+      ],
+      "patch_id": "457871eefbe6dc53caabb6e4ad09a831e34b85a2"
+    },
+    "warnings": [],
+    "tests": "boundary"
+  },
+  "usage": null,
+  "usage_reason": "no herding job names this cell: no session is attributable to it"
+}
