@@ -740,6 +740,42 @@ mod tests {
     }
 
     #[test]
+    fn handoff_after_merge_door_audit_log_accepts_the_handoff_waived_kind() {
+        let tmp = tempfile::tempdir().unwrap();
+        let repo = init_repo(tmp.path());
+        let _guard = CwdGuard::enter(&repo);
+        let argv: Vec<OsString> = ["audit", "log", "--kind", "handoff-waived", "--feature", "second-feat", "--note", "owner asked"]
+            .iter()
+            .map(OsString::from)
+            .collect();
+
+        let code = crate::verbs::audit::try_native(&argv, Instant::now());
+
+        assert_eq!(code, Some(ExitCode::SUCCESS));
+        let rows = audit_rows(&repo);
+        assert_eq!(rows.len(), 1, "{rows:?}");
+        assert_eq!(rows[0]["kind"], "handoff-waived");
+    }
+
+    #[test]
+    fn handoff_after_merge_door_a_failed_start_with_same_session_writes_no_audit_row() {
+        let tmp = tempfile::tempdir().unwrap();
+        let repo = init_repo(tmp.path());
+        let _guard = CwdGuard::enter(&repo);
+        let _env = SessionEnv::set(Some("sess-merged-3"));
+        crate::integration_queue::record_merger(&repo, "sess-merged-3", "first-feat");
+        let blocker = tmp.path().join("testrepo--wt--second-feat");
+        std::fs::create_dir_all(&blocker).unwrap();
+        std::fs::write(blocker.join("keep.txt"), "occupied\n").unwrap();
+
+        let code = try_native(&start_argv("second-feat", Some("owner asked for a back to back run")), Instant::now());
+
+        assert_ne!(code, Some(ExitCode::SUCCESS));
+        assert!(audit_rows(&repo).is_empty(), "{:?}", audit_rows(&repo));
+        assert!(!repo.join(".bee").join("lanes").join("second-feat.json").exists());
+    }
+
+    #[test]
     fn handoff_after_merge_door_lets_a_first_start_and_a_sessionless_start_through() {
         let tmp = tempfile::tempdir().unwrap();
         let repo = init_repo(tmp.path());
