@@ -1,0 +1,101 @@
+{
+  "id": "rel21160-1",
+  "feature": "release-2-116-0",
+  "title": "Publish release 2.116.0 through the sanctioned script",
+  "lane": "small",
+  "role": "deploy",
+  "deps": [],
+  "decisions": [
+    "81d7ecde-3335-4800-8a9e-f75bdd46a775"
+  ],
+  "files": [
+    ".claude-plugin/plugin.json",
+    ".codex-plugin/plugin.json",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/release-2-116-0/CONTEXT.md",
+    "scripts/release.sh"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Run `scripts/release.sh 2.116.0` with BEE_DISPATCH_ID set to an authorized deployment dispatch and the CI-pinned opencode 1.18.16 (/mnt/data/Projects/goglbe/beehive/.bee/tmp/oc11816/bin) first on PATH and CARGO_TARGET_DIR=/home/thanhsmind/.cache/cargo-target-rel21160, so the opencode contract tests run green. The script bumps both plugin manifests, runs the regen chain (render-skill-trees, onboard --apply, release-manifest --write), runs the declared test suite before tagging, makes the release commit, tags v2.116.0, pushes main and the tag, waits for the release-binaries workflow and verifies the published assets. Never walk those steps by hand. Re-running at a version already committed is idempotent — it resumes the tail. The regen obligation on .claude-plugin/plugin.json is discharged INSIDE the script's own regen chain, which is why the release manifest rides this cell's files.",
+  "verify": "bash scripts/release.sh 2.116.0 && bee dev release-manifest --check",
+  "must_haves": {
+    "truths": [
+      "both plugin manifests report 2.116.0",
+      "tag v2.116.0 exists locally and on the remote",
+      "the GitHub release for v2.116.0 carries the binaries and SHA256SUMS",
+      "the script printed its final OK line"
+    ],
+    "artifacts": [
+      {
+        "path": ".claude-plugin/plugin.json",
+        "substantive": "version 2.116.0"
+      },
+      {
+        "path": ".codex-plugin/plugin.json",
+        "substantive": "version 2.116.0"
+      }
+    ],
+    "key_links": [
+      "the pushed tag is what triggers release-binaries.yml"
+    ],
+    "prohibitions": [
+      "Do not hand-walk bump, tag or push",
+      "Do not skip the test gate"
+    ]
+  },
+  "behavior_change": false,
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "deployer-2116",
+    "outcome": null,
+    "files_changed": [
+      ".claude-plugin/plugin.json",
+      ".codex-plugin/plugin.json",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [
+      "sync-ack: release cell: regen ran inside release.sh"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-21T16:15:30.755Z",
+    "behavior_change": false,
+    "verification_evidence": "final line 'release  OK  bee 2.116.0 is live — installers now serve v2.116.0'; CI run https://github.com/thanhsmind/beehive/actions/runs/44922959478 success",
+    "verify_output": "green:live",
+    "verify_passed": true,
+    "claim_session": "bf9dec73-1a5a-4f1d-b8f8-0438f87e2ba9",
+    "verify_command": "bash scripts/release.sh 2.116.0 && bee dev release-manifest --check",
+    "claimed_at": "2026-11-21T16:05:10.560Z",
+    "knowledge_delta": [],
+    "sync_ack": "release cell: regen ran inside release.sh",
+    "no_mistakes": true,
+    "no_knowledge_used": true,
+    "principles_used": [
+      {
+        "slug": "bee-principle-prove-it-works",
+        "changed": "the cap cites the script's OK line, the pushed tag and the CI run, not the worker's word"
+      }
+    ],
+    "commit_pending": "release.sh makes the release commit with no cell trailer",
+    "changed_lines": 20,
+    "report": {
+      "outcome": "Released 2.116.0: release.sh printed its final OK line; tag v2.116.0 on origin; release CI green; 6 assets published",
+      "commit": "77f8672d6db31d4e8f4bc23a9f3e9e437a52fc10",
+      "files": [
+        ".claude-plugin/plugin.json",
+        ".codex-plugin/plugin.json",
+        "docs/history/codex-harness-hardening/release-manifest.json"
+      ],
+      "tests": "bash scripts/release.sh 2.116.0 && bee dev release-manifest --check — green:live — final line 'release  OK  bee 2.116.0 is live — installers now serve v2.116.0'; CI run https://github.com/thanhsmind/beehive/actions/runs/44922959478 success",
+      "deviations": [],
+      "patch_id": "2f14252409d6498a44fa906cc58c8b5a73b9cba0"
+    },
+    "warnings": [],
+    "tests": "boundary"
+  },
+  "usage": null,
+  "usage_reason": "no herding job names this cell: no session is attributable to it"
+}

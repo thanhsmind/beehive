@@ -1,0 +1,108 @@
+{
+  "id": "rel21160-1c",
+  "feature": "release-2-116-0",
+  "title": "Check the published 2.116.0 release",
+  "lane": "small",
+  "role": "test",
+  "deps": [
+    "rel21160-1"
+  ],
+  "decisions": [
+    "81d7ecde-3335-4800-8a9e-f75bdd46a775",
+    "42453671-e9c9-437d-9375-5478b4b6b2ca"
+  ],
+  "files": [
+    "docs/history/release-2-116-0/reports/rel21160-1c.md"
+  ],
+  "read_first": [
+    "docs/history/release-2-116-0/CONTEXT.md",
+    "docs/history/release-2-116-0/plan.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Check the release independently, read-only: both plugin manifests on main report 2.116.0; tag v2.116.0 exists locally and on origin (git ls-remote --tags origin v2.116.0); the GitHub release v2.116.0 lists the five binaries and SHA256SUMS (gh release view v2.116.0 --json assets); the release-binaries run for v2.116.0 concluded success. Write each check with its command and output to docs/history/release-2-116-0/reports/rel21160-1c.md and commit it with the trailer cell: rel21160-1c. Bee commands you may run: bee herding notify; never bee dispatch.",
+  "verify": "gh release view v2.116.0 --json assets --jq '.assets | length'",
+  "must_haves": {
+    "truths": [
+      "the report shows each of the four checks with its command and output"
+    ],
+    "prohibitions": [
+      "No edit outside the report file"
+    ]
+  },
+  "behavior_change": false,
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "checker-2116",
+    "outcome": "All four release checks pass; report committed 73bc67386",
+    "files_changed": [
+      "docs/history/release-2-116-0/reports/rel21160-1c.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-11-21T16:16:12.257Z",
+    "behavior_change": false,
+    "verification_evidence": "printed 6 assets; https://github.com/thanhsmind/beehive/releases/tag/v2.116.0",
+    "verify_output": "green:live",
+    "verify_passed": true,
+    "claim_session": "bf9dec73-1a5a-4f1d-b8f8-0438f87e2ba9",
+    "verify_command": "gh release view v2.116.0 --json assets --jq '.assets | length'",
+    "claimed_at": "2026-11-21T16:15:35.354Z",
+    "knowledge_delta": [],
+    "no_mistakes": true,
+    "principles_used": [
+      {
+        "slug": "bee-principle-prove-it-works",
+        "changed": "checked the live tag, release and run rather than the upstream cell's report"
+      }
+    ],
+    "changed_lines": 57,
+    "report": {
+      "outcome": "All four release checks pass; report committed 73bc67386",
+      "commit": "73bc6738669e1a10b7e1926c8de63c91ff488c0c",
+      "files": [
+        "docs/history/release-2-116-0/reports/rel21160-1c.md"
+      ],
+      "tests": "gh release view v2.116.0 --json assets --jq '.assets | length' — green:live — printed 6 assets; https://github.com/thanhsmind/beehive/releases/tag/v2.116.0",
+      "deviations": [],
+      "principles_used": [
+        "bee-principle-prove-it-works — checked the live tag, release and run rather than the upstream cell's report"
+      ],
+      "reaction": "confirm",
+      "skipped": [
+        "cargo clippy/test proof command — read-only release check touches no Rust code"
+      ],
+      "found": [
+        "CI and Windows runs for v2.116.0 and main were still in_progress at check time; not covered by the four checks",
+        "gh run list --workflow release-binaries finds nothing; workflow name is 'Release binaries'"
+      ],
+      "patch_id": "71a3192369e651cd8679f00e9edc159e15b3c6fc"
+    },
+    "reaction": "confirm",
+    "skipped": [
+      "cargo clippy/test proof command — read-only release check touches no Rust code"
+    ],
+    "found": [
+      "CI and Windows runs for v2.116.0 and main were still in_progress at check time; not covered by the four checks",
+      "gh run list --workflow release-binaries finds nothing; workflow name is 'Release binaries'"
+    ],
+    "warnings": [],
+    "tests": "boundary"
+  },
+  "usage": {
+    "new": 18620,
+    "cached": 89679,
+    "total": 108299,
+    "models": {
+      "claude-sonnet-5-5": {
+        "new": 18620,
+        "cached": 89679,
+        "total": 108299
+      }
+    },
+    "jobs": [
+      "job-1795277739670-210930-1"
+    ]
+  }
+}
