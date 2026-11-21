@@ -164,7 +164,7 @@ later, at the owner's pace).
 Before declaring done: no active reservations, no in-flight workers
 recorded.
 
-A context mark never stops a cell: at or past it, hand off at the next clean stop, and after every green worktree merge write the handoff and continue in a fresh leader session (rule: agents-context-handoff-65, `.bee/playbooks/handoff.md`). Below the mark, when a unit finishes and approved work remains, continue
+A context mark never stops a cell: at or past it, hand off at the next clean stop, and after every green worktree merge write the handoff and continue in a fresh leader session (rule: agents-context-handoff-65; see `.bee/playbooks/handoff.md`). Below the mark, when a unit finishes and approved work remains, continue
 in-session; finishing a unit is never a reason to stop.
 
 **Reply:** capped cells over total, the proof line per cell, the merge or
