@@ -9,10 +9,10 @@ bee:
   lifecycle: active
   areas: [rust-runtime]
   required_context: [areas/rust-runtime/overview.md]
-  decisions: [pi-slp-next-ops D1-D4 (orient reads the session record; one runnable next operation; the per-turn run line; no open-your-session text), harness-refocus-P2, 412e9b3a, harness-refocus-P4]
+  decisions: [pi-slp-next-ops D1-D4 (orient reads the session record; one runnable next operation; the per-turn run line; no open-your-session text), harness-refocus-P2, 412e9b3a, harness-refocus-P4, tool-call-thrift D2-D4 (brief help card, refusals carry the card, preamble line)]
   sources: [docs/specs/porcelain.md, docs/handbook/register.md, packages/bee-rs/crates/bee/src/router.rs, packages/bee-rs/crates/bee/src/generated/registry_payload.json]
   authoritative_for: "rust-runtime: the porcelain/plumbing command surface and the teach-at-point-of-contact contract"
-  anchors: [packages/bee-rs/crates/bee/src/router.rs, packages/bee-rs/crates/bee/src/verbs/config.rs, packages/bee-rs/crates/bee/src/verbs/help.rs]
+  anchors: [packages/bee-rs/crates/bee/src/router.rs, packages/bee-rs/crates/bee/src/verbs/config.rs, packages/bee-rs/crates/bee/src/verbs/help.rs, packages/bee-rs/crates/bee/src/hooks/cli_shape.rs, packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs]
   verified_at: 2026-11-10
   verified_commit: 471430df16c5b9bc6af2a3f891ee1180729d1916
 ---
@@ -50,7 +50,8 @@ name. What changes is only which ones a bare `bee --help` puts in front of you.
   re-read. The always-loaded instruction layer does NOT carry the rule today:
   D2's other half was written into the rendered instruction file instead of
   the managed source it is generated from, and the next regeneration undid
-  it — an Open Gap, tracked in the backlog.
+  it — an Open Gap, tracked in the backlog. The preamble half of this rule
+  was later reversed: see Brief help card (tool-call-thrift D4).
 - `bee internal <group> <verb>` — the explicit plumbing namespace.
 
 ## Data Dictionary
@@ -267,10 +268,36 @@ top-level `--help` still refuses it. The card is `brief_card` in
 byte budget. The CLI-shape guard needs no change: a parsed `help` key already
 ends validation, so `--brief` rides through like `--json`.
 
+The card is the help surface's answer to a wrong call (tool-call-thrift D2 to
+D4). The flag card is D2; the full help of a verb and a group stays
+byte-identical, which a test pins.
+
+- Refusals carry the card (D3). The router's missing-required and unknown-flag
+  refusals and the CLI-shape guard denial append the verb's card from
+  `brief_card_text`, the same renderer `--brief` uses, and the correction line
+  points at `--help --brief`, no longer at `--help --json`. A caller reads the
+  flags in the refusal and needs no second call. Both doors call one function,
+  so the card cannot differ between them.
+- The preamble stops asking for a help read (D4). The Command surface line
+  tells the agent to run the verb: a wrong shape is refused before it runs,
+  with the flags listed, and `bee <verb> --help --brief` shows them up front.
+  The first-use read-help instruction is gone, which replaces the read-once
+  rule in Entry Points above. A skill that says to read help before use
+  follows the same line. The line stays in `budget.rs` and inside the
+  preamble byte budget.
+- Why a refusal and not a pre-read: 109 help reads cost 313.7k chars in six
+  leader sessions. A refusal with the card charges only the wrong call. That
+  this is cheaper than a read before every first use assumes most calls are
+  right the first time; it was not measured.
+
 ## Pointers
 
 - The alias table and the per-register detail: `docs/handbook/register.md`.
 - The dispatcher and its alias rewriting: `packages/bee-rs/crates/bee/src/router.rs`.
+- The card, the refusals and the preamble line: `brief_card` and `brief_card_text` in
+  `verbs/help.rs`, `flag_card` in `router.rs`, `render_denial` in `hooks/cli_shape.rs`,
+  and the Command surface line in `hooks/session_preamble/budget.rs`.
+- Locked decisions: `docs/history/tool-call-thrift/CONTEXT.md` (D2 to D4).
 - Per-command contracts: `bee --help --all --json`.
 
 ## Sources and provenance
