@@ -1,7 +1,7 @@
 use crate::jsjson;
 use crate::session_identity::locate_caller;
 use crate::verbs::record_timing;
-use crate::verbs::reservations::{keys_known, parse_flags, Flags};
+use crate::verbs::reservations::{keys_known, parse_flags, FlagV, Flags};
 use crate::verbs::state_group::{
     acquire_state_lock, ensure_workflow_record_for_feature, start_lane, validate_route_set_flags,
 };
@@ -17,6 +17,7 @@ use crate::verbs::worktree::{
 use serde_json::{json, Map, Value};
 use std::collections::HashSet;
 use std::ffi::OsString;
+use std::path::Path;
 use std::process::ExitCode;
 use std::time::Instant;
 
@@ -117,7 +118,7 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
 fn run_start(tokens: &[OsString], t0: Instant) -> Option<ExitCode> {
     let strs: Vec<&str> = tokens.iter().map(|a| a.to_str()).collect::<Option<Vec<_>>>()?;
     let (flags, use_json) = parse_flags(&strs)?;
-    if !keys_known(&flags, &["feature", "class", "lane", "flags", "files"]) {
+    if !keys_known(&flags, &["feature", "class", "lane", "flags", "files", "same-session"]) {
         return None;
     }
 
@@ -190,6 +191,40 @@ fn run_start(tokens: &[OsString], t0: Instant) -> Option<ExitCode> {
     let main_root_s = p(&main_root);
     if let Ok(ctrl_root) = crate::verbs::reservations::control_root_for(&main_root_s) {
         let session_id = crate::verbs::reservations::resolve_session_id(None, &ctrl_root).ok().flatten();
+        if let Some(sid) = session_id.as_deref()
+            && let Some(merged) = crate::integration_queue::merged_feature_of(Path::new(&ctrl_root), sid)
+            && merged != feature
+        {
+            match flags.get("same-session") {
+                None => {
+                    return Some(ctx.fail(&format!(
+                        "[handoff_due] this session already merged \"{merged}\"; write the handoff and start \"{feature}\" in a fresh leader session (playbook: .bee/playbooks/handoff.md), or pass --same-session \"<reason>\" to open it here anyway."
+                    )));
+                }
+                Some(v) => {
+                    let reason = match v {
+                        FlagV::S(r) => r.trim().to_string(),
+                        FlagV::Present => String::new(),
+                    };
+                    if reason.is_empty() {
+                        return Some(ctx.fail(
+                            "[handoff_due] --same-session needs a non-empty reason: --same-session \"<reason>\".",
+                        ));
+                    }
+                    if let Err(e) = crate::audit::append(
+                        &main_root,
+                        "handoff-waived",
+                        &feature,
+                        None,
+                        &reason,
+                        "feature start",
+                        None,
+                    ) {
+                        return Some(ctx.fail(&format!("could not write the handoff-waived audit row: {e}")));
+                    }
+                }
+            }
+        }
         match crate::nested_checkout::has_any_shared_nested_checkout(
             &main_root,
             &ctrl_root,

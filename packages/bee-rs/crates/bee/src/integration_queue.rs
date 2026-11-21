@@ -627,6 +627,31 @@ fn process_as_owner<T>(
     }
 }
 
+fn merger_record_path(control_root: &Path, session_id: &str) -> PathBuf {
+    let safe: String = session_id
+        .chars()
+        .map(|c| if c.is_ascii_alphanumeric() || c == '-' || c == '_' { c } else { '_' })
+        .collect();
+    control_root.join(".bee").join("runtime").join("merged-by").join(format!("{safe}.json"))
+}
+
+pub(crate) fn record_merger(control_root: &Path, session_id: &str, feature: &str) {
+    let path = merger_record_path(control_root, session_id);
+    if let Some(dir) = path.parent() {
+        let _ = std::fs::create_dir_all(dir);
+    }
+    let _ = write_json_atomic(
+        &path,
+        &json!({"session_id": session_id, "feature": feature, "merged_at": now_iso()}),
+    );
+}
+
+pub(crate) fn merged_feature_of(control_root: &Path, session_id: &str) -> Option<String> {
+    let text = std::fs::read_to_string(merger_record_path(control_root, session_id)).ok()?;
+    let record: Value = serde_json::from_str(&text).ok()?;
+    record.get("feature").and_then(Value::as_str).map(str::to_string)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
