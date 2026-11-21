@@ -8,10 +8,10 @@ bee:
   lifecycle: active
   areas: [doctrine-layer]
   required_context: [areas/doctrine-layer/overview.md]
-  decisions: [model-role-split D1/D2/D3/D4/D5/D6/D8/D9/D10/D11/D12, escalate-off-disarm D1/D2, role-surface-cleanup D1, role-edge-hardening D1, semantic-role-routing D1/D2/D3/D4/D5/D6/D7/D9, deploy-stage-execution D1, effort-at-the-door D2/D4/D4a/D5/D7/D10]
+  decisions: [model-role-split D1/D2/D3/D4/D5/D6/D8/D9/D10/D11/D12, escalate-off-disarm D1/D2, role-surface-cleanup D1, role-edge-hardening D1, semantic-role-routing D1/D2/D3/D4/D5/D6/D7/D9, deploy-stage-execution D1, effort-at-the-door D2/D4/D4a/D5/D7/D10, token-spend-cuts D2]
   sources: ["model-role-split (docs/history/model-role-split/CONTEXT.md, 34 cells, merged 2026-08-25)", docs/discovery/model-role-split/MAP.md, docs/history/research/oh-my-pi-model-roles-distill.md, docs/history/model-role-split/reports/review-r2.md, "role-slot-description cell rsd-1 (capture stub c1952702, flushed 2026-08-26)", "models-show-verb cells ms-1..ms-3 (capture stub feeed5df, flushed 2026-08-26)", "agent-model-unpin cells amu-1/amu-2 (capture stub 003a23fc, flushed 2026-08-26)"]
   authoritative_for: "doctrine-layer: how a unit of work selects the model that runs it"
-  anchors: [scripts/release.sh, packages/bee-rs/crates/bee/src/verbs/drivers/models.rs, packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs, packages/bee-rs/crates/bee/src/verbs/drivers/guard.rs, packages/bee-rs/crates/bee/src/hooks/model_guard.rs, packages/bee-rs/crates/bee/src/verbs/models_group.rs]
+  anchors: [scripts/release.sh, packages/bee-rs/crates/bee/src/verbs/drivers/models.rs, packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs, packages/bee-rs/crates/bee/src/verbs/drivers/guard.rs, packages/bee-rs/crates/bee/src/hooks/model_guard.rs, packages/bee-rs/crates/bee/src/verbs/models_group.rs, packages/bee-rs/crates/bee/src/onboard/templates.rs, skills/bee-planning/SKILL.md]
   verified_at: 2026-11-10
   verified_commit: 2f0495d24e30048da79fa3d5dcc287605cf6869c
 ---
@@ -375,6 +375,19 @@ and denies a mismatch as before; no `[bee-kind:]` token is allowed unchanged.
 log: `rg '"effort":"max"' .bee/logs/dispatch.jsonl` (or any other value). The
 herding arm carries no effort until `bee herding run` gains a per-run thinking
 flag (Open Gaps).
+
+**B25 — Test and design cells run on their role model; the plan escalates the hard ones** (token-spend-cuts D2).
+The shipped team template (`onboard/templates.rs`) gives `test` and `design` the
+`sonnet` model, so a test cell or a small design cell, such as polish or a tiny UI
+fix, costs a sonnet call without any flag. A hard test cell or a substantial design
+cell is marked with `bee cells escalate` at plan time, and the escalation ration
+(B5) charges it like any other escalated cell. The rule is in
+`skills/bee-planning/SKILL.md`. The shipped role descriptions name no stack, because
+every project that refreshes receives them. The owner's user-global `team.<runtime>`
+keys are user-edited, so a bee change never rewrites them; the feature hands the owner the
+exact edit instead. Why: in the survey-platform transcripts of 2026-11-20 and 2026-11-21
+opus was 77 percent of spend, and test work did not need it. Rejected: a separate
+design-light role, because escalation already carries the cost lever (B5).
 
 ## Pi has fan-out paths bee does not use — and that stays a choice, not an oversight
 
