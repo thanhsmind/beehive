@@ -117,15 +117,28 @@ pub(crate) fn settings_json(env: &BTreeMap<String, String>) -> String {
     settings.to_string()
 }
 
-pub(crate) fn spawn_argv(name: &str, model: &str, effort: Option<&str>, settings: &str, prompt: &str) -> Vec<String> {
+pub(crate) const THIN_CLAUDE_FLAGS: [&str; 3] = ["--disable-slash-commands", "--disallowedTools", "Agent"];
+
+pub(crate) fn spawn_argv(
+    name: &str,
+    model: &str,
+    effort: Option<&str>,
+    settings: &str,
+    thin: bool,
+    prompt: &str,
+) -> Vec<String> {
     let mut argv: Vec<String> = ["--bg", "--name", name, "--model", model].iter().map(|s| s.to_string()).collect();
     if let Some(effort) = effort {
         argv.push("--effort".to_string());
         argv.push(effort.to_string());
     }
-    for part in ["--permission-mode", "bypassPermissions", "--settings", settings, prompt] {
+    for part in ["--permission-mode", "bypassPermissions", "--settings", settings] {
         argv.push(part.to_string());
     }
+    if thin {
+        argv.extend(THIN_CLAUDE_FLAGS.iter().map(|s| s.to_string()));
+    }
+    argv.push(prompt.to_string());
     argv
 }
 
@@ -294,7 +307,7 @@ mod tests {
     fn claude_session_spawn_argv_pins_model_mode_and_isolation() {
         let settings = settings_json(&BTreeMap::new());
         assert_eq!(settings, r#"{"worktree":{"bgIsolation":"none"}}"#);
-        let argv = spawn_argv("bee-x-1", "haiku", None, &settings, "go");
+        let argv = spawn_argv("bee-x-1", "haiku", None, &settings, false, "go");
         assert_eq!(
             argv,
             vec![
@@ -302,7 +315,7 @@ mod tests {
                 r#"{"worktree":{"bgIsolation":"none"}}"#, "go"
             ]
         );
-        let with_effort = spawn_argv("bee-x-1", "fable", Some("high"), &settings, "go");
+        let with_effort = spawn_argv("bee-x-1", "fable", Some("high"), &settings, false, "go");
         let at = with_effort.iter().position(|a| a == "--effort").unwrap();
         assert_eq!(with_effort[at + 1], "high");
         assert_eq!(with_effort.last().unwrap(), "go");

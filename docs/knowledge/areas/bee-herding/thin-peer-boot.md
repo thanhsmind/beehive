@@ -31,7 +31,7 @@ It has two layers (thin-worker-boot D8), and both read one switch.
 
 ## The env layer
 
-`bee herding run` adds four variables to the environment of every Claude worker it starts
+`bee herding run` adds five variables to the environment of every Claude worker it starts
 (thin-worker-boot D10):
 
 | Variable | Value | What it drops |
@@ -40,9 +40,10 @@ It has two layers (thin-worker-boot D8), and both read one switch.
 | `CLAUDE_CODE_DISABLE_AUTO_MEMORY` | `1` | The user's auto memory |
 | `ENABLE_CLAUDEAI_MCP_SERVERS` | `false` | The claude.ai connector MCP servers |
 | `CLAUDE_CODE_DISABLE_BUNDLED_SKILLS` | `1` | The skills Claude Code ships with |
+| `SLASH_COMMAND_TOOL_CHAR_BUDGET` | `1` | The skill listing in the first-call context (reread-thrift D3) |
 
 The layer covers a Paseo claude agent, a herdr or tmux pane whose command is `claude`, and a
-claude-session worker. A Pi, Codex or other agent gets nothing new. A value the agent's own `env`
+claude-session worker. A Pi, Codex or other agent gets nothing new. Where bee builds the claude argv itself (claude-session spawn, a herding pane running `claude`), a thin launch also carries `--disable-slash-commands --disallowedTools Agent`, which drops the slash-command and agent listings; a non-thin launch has neither (reread-thrift D3). A value the agent's own `env`
 block sets for one of these names wins over the default.
 
 ## The peer preamble

@@ -2764,6 +2764,10 @@ fn execute_new(opts: &Options, herdr: &dyn PaneTransport) -> ExecResult {
         };
     }
 
+    let mut args = args;
+    if is_claude_command(&kind) && crate::hooks::thin_peer_switch_on(&cfg) {
+        args.extend(cs::THIN_CLAUDE_FLAGS.iter().map(|s| s.to_string()));
+    }
     let start_result = start_with_retry(
         &mut || herdr.agent_start(&opts.job_id, &kind, &new_pane, &args),
         &mut |d| std::thread::sleep(d),
@@ -2953,11 +2957,12 @@ pub(crate) fn resolve_paseo_workspace(
     })
 }
 
-pub(crate) const THIN_PEER_CLAUDE_ENV: [(&str, &str); 4] = [
+pub(crate) const THIN_PEER_CLAUDE_ENV: [(&str, &str); 5] = [
     ("CLAUDE_CODE_DISABLE_CLAUDE_MDS", "1"),
     ("CLAUDE_CODE_DISABLE_AUTO_MEMORY", "1"),
     ("ENABLE_CLAUDEAI_MCP_SERVERS", "false"),
     ("CLAUDE_CODE_DISABLE_BUNDLED_SKILLS", "1"),
+    ("SLASH_COMMAND_TOOL_CHAR_BUDGET", "1"),
 ];
 
 fn is_claude_command(kind: &str) -> bool {
@@ -4025,7 +4030,8 @@ fn execute_claude_session_paced(
     }
     let pointer = mailbox::pointer_prompt(&brief_file);
 
-    let session_env = thin_peer_env(&read_main_config(&opts.main_root), true, &BTreeMap::new());
+    let main_cfg = read_main_config(&opts.main_root);
+    let session_env = thin_peer_env(&main_cfg, true, &BTreeMap::new());
     let mut child_env = build_child_env(std::env::vars(), &session_env, &opts.pane_env_passthrough, &opts.job_id);
     if opts.read_only {
         child_env.insert("BEE_HERDING_READ_ONLY".to_string(), "1".to_string());
@@ -4043,6 +4049,7 @@ fn execute_claude_session_paced(
         &session.model,
         session.effort.as_deref(),
         &cs::settings_json(&settings_env),
+        crate::hooks::thin_peer_switch_on(&main_cfg),
         &pointer,
     );
     let (session_id, listed_name) = match cli.spawn(&argv, &opts.cwd, &spawn_env).and_then(|out| cs::parse_backgrounded(&out)) {
