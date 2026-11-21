@@ -23,7 +23,16 @@ pause:
   `--task-file` or stdin; the MCP fallback follows rule
   `agents-other-project-to-its-leader`), keeps the
   successor in the same run family; task text names what is done,
-  what is next, and the user's standing orders. Release the
+  what is next, and the user's standing orders; the record itself carries
+  the proof lines, the tree state, the first-read files, the traps, the
+  standing orders and the ruled-out paths through the write flags
+  `--verified`, `--tree`, `--key-files`, `--gotchas`, `--standing-orders`
+  and `--ruled-out`. After the write and before the release, probe the
+  record once with a cold read: one dispatch through
+  `bee dispatch prepare --runtime claude --kind gather --role read --json`
+  whose brief holds only the `bee state handoff show` output and asks for
+  the next action and the ruled-out paths. A miss means rewrite the
+  record and probe once more. Release the
   session after the handoff. Never tell the user to open a new session, never wait for a
   `/clear`, and never spawn the leader yourself (no `paseo
   create_agent`). Show the handoff to the user and wait only when a

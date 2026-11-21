@@ -51,7 +51,7 @@
       "bee-defects.md": "128820aaccc3644492f753d10cfba5231bfd7939624aba943da7ab74340a5dc5",
       "cli-before-mcp.md": "4fcf1fbe97f9b91306fb344121d7ffcb5fa3511c916fcd446de07a817d920492",
       "cross-project.md": "6d9d6b23eb73ea4de7f426e1eeca0ecedaeb7d2ded592f7d998dbe9fce379836",
-      "handoff.md": "9847b5c47a6c1b8a4e7299902208b7f9dbce1ab23f45e855a96bd21739978629",
+      "handoff.md": "939329347e1bb9653ded92bc4d370f666a02191a473f390fe83c9f64370cff22",
       "leader-detail.md": "55712f011d23bb231e3ce1649a1d8e0d1f20e64bf54c900cceb68b3c4d0d9c76",
       "multi-session.md": "1e820395d0daabd521c5d3b7d3a46fcbc8d24f3ce893ca43e6636693a44b6ea8"
     },
@@ -193,5 +193,5 @@
   },
   "design_role_offered": true,
   "created_at": "2026-07-24T03:53:44.750Z",
-  "updated_at": "2026-11-21T14:07:41.862Z"
+  "updated_at": "2026-11-21T14:09:12.369Z"
 }
