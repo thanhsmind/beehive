@@ -75,7 +75,7 @@ the owner asked for all six. PASS.
       "stage": "test-and-live-proof",
       "classification": "required",
       "role": "test",
-      "reason": "lcx-2, 4, 7, 9 and 11 test each code cell with no shared context."
+      "reason": "lcx-2, 4, 7, 9 and 11 test each code cell with no shared context; lcx-13 checks the lcx-5 and lcx-12 docs."
     },
     {
       "stage": "documentation-and-capture",
@@ -701,6 +701,51 @@ the owner asked for all six. PASS.
       ]
     },
     "behavior_change": true
+  },
+  {
+    "id": "lcx-13",
+    "feature": "leader-context-thrift",
+    "title": "Check the handoff playbook and token economy concept against the shipped code",
+    "lane": "standard",
+    "role": "test",
+    "deps": [
+      "lcx-5",
+      "lcx-12"
+    ],
+    "decisions": [
+      "985cc944-c77e-4ba0-80b2-ccd8470d87c3",
+      "6d462761-ae60-4ec1-98ed-1c949cc5dbd7",
+      "4945350f-2de3-4e6d-bca6-5c514ca1b92d",
+      "c1d2947a-779a-4975-92aa-ff4299875d49",
+      "1fef0cf9-7feb-46ed-9f58-1d376cdaea44",
+      "2d8d37a5-92b4-42b1-9a0f-d874ac97e8ee"
+    ],
+    "files": [
+      "packages/bee/playbooks/handoff.md",
+      "skills/bee-swarming/references/swarming-reference.md",
+      "docs/knowledge/areas/hook-runtime/token-economy-of-injected-context.md"
+    ],
+    "read_first": [
+      "docs/history/leader-context-thrift/CONTEXT.md"
+    ],
+    "affects_skills": [],
+    "affects_specs": [],
+    "action": "Checker for lcx-5 and lcx-12, with no shared context. Read packages/bee/playbooks/handoff.md, skills/bee-swarming/references/swarming-reference.md and docs/knowledge/areas/hook-runtime/token-economy-of-injected-context.md, then check each claim they make about this feature against the code: the 120000 default mark and its one home in hooks/prompt_context.rs, the six handoff write flags in verbs/state_group/sessions.rs and verbs/workflow_store/handoff.rs, the leader_read_max_lines key in hooks/write_guard/leader_read.rs, --prompt-out in verbs/drivers/prepare.rs, and the report context verb in verbs/report_context.rs. Every command spelling must be a valid one. Fix any wrong claim in the three files; when the source file is under packages/bee/playbooks or skills, rebuild with CARGO_TARGET_DIR=/home/thanhsmind/.cache/cargo-target-lcx cargo build --release --manifest-path packages/bee-rs/Cargo.toml and run /home/thanhsmind/.cache/cargo-target-lcx/release/bee dev regen, then commit the regenerated files too. Report each checked claim and its verdict. Write no code comments. Run the verify, and only the verify, never the full suite. The only bee commands you may run are the ones this brief names.",
+    "verify": "./.bee/bin/bee knowledge check && CARGO_TARGET_DIR=/home/thanhsmind/.cache/cargo-target-lcx PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- no_shipped_command_spelling_is_refused_by_the_widened_guard skill_tree generated_skill",
+    "must_haves": {
+      "why": "lcx-5 and lcx-12 change docs a leader acts on; a doc that lags the code misleads the next session, and no doc cell certifies itself.",
+      "out_of_scope": [
+        "code behavior"
+      ],
+      "truths": [
+        "every claim the three files make about this feature matches the code",
+        "the verify passes"
+      ],
+      "prohibitions": [
+        "No raw decision ids in the concept"
+      ]
+    },
+    "behavior_change": false
   }
 ]
 ```
