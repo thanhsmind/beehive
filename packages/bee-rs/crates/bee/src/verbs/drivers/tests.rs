@@ -5072,18 +5072,12 @@ exit 0
     }
 
     #[test]
-    fn learned_context_falls_back_to_the_index_pointer_then_to_nothing() {
+    fn learned_context_is_empty_when_the_manifest_yields_no_line_even_with_an_index() {
         let tmp = tempfile::tempdir().unwrap();
         let root = repo(&tmp, "{}");
         bundle_fixture(&root);
-        // A cell whose feature names no work item: the manifest throws
-        // unknown_work (caught) and the index pointer answers instead.
         let cell = json!({"id": "c-1", "feature": "not-a-work-item"});
-        assert_eq!(
-            learned_context_lines(&root, &cell).unwrap(),
-            vec!["- docs/knowledge/index.md — Knowledge bundle index (see \"Critical patterns\")"]
-        );
-        // …unless read_first already names it.
+        assert!(learned_context_lines(&root, &cell).unwrap().is_empty());
         let cell =
             json!({"id": "c-1", "feature": "nope", "read_first": ["docs/knowledge/index.md"]});
         assert!(learned_context_lines(&root, &cell).unwrap().is_empty());
@@ -5149,12 +5143,12 @@ exit 0
 
     #[test]
     fn lane_budget_scales_and_defaults() {
-        assert_eq!(lane_budget(Some(&json!("tiny"))), 8000.0);
-        assert_eq!(lane_budget(Some(&json!("small"))), 12000.0);
-        assert_eq!(lane_budget(Some(&json!("standard"))), 20000.0);
-        assert_eq!(lane_budget(Some(&json!("high-risk"))), 30000.0);
-        assert_eq!(lane_budget(None), 20000.0);
-        assert_eq!(lane_budget(Some(&json!("banana"))), 20000.0);
+        assert_eq!(lane_budget(Some(&json!("tiny"))), 4000.0);
+        assert_eq!(lane_budget(Some(&json!("small"))), 6000.0);
+        assert_eq!(lane_budget(Some(&json!("standard"))), 10000.0);
+        assert_eq!(lane_budget(Some(&json!("high-risk"))), 15000.0);
+        assert_eq!(lane_budget(None), 10000.0);
+        assert_eq!(lane_budget(Some(&json!("banana"))), 10000.0);
     }
 
     // ── close ──────────────────────────────────────────────────────────────

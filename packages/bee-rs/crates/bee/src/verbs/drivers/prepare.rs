@@ -942,13 +942,13 @@ pub(crate) fn prior_round_event_lines(cell: &Value) -> Vec<String> {
 pub(crate) fn lane_budget(lane: Option<&Value>) -> f64 {
     match lane {
         Some(Value::String(l)) => match l.as_str() {
-            "tiny" => 8000.0,
-            "small" => 12000.0,
-            "standard" => 20000.0,
-            "high-risk" => 30000.0,
-            _ => 20000.0,
+            "tiny" => 4000.0,
+            "small" => 6000.0,
+            "standard" => 10000.0,
+            "high-risk" => 15000.0,
+            _ => 10000.0,
         },
-        _ => 20000.0,
+        _ => 10000.0,
     }
 }
 
@@ -1031,12 +1031,6 @@ pub(crate) fn bundle_learned_lines(
         if !lines.is_empty() {
             return Ok(lines);
         }
-    }
-    if dir.join("index.md").exists() && !read_first.contains("docs/knowledge/index.md") {
-        return Ok(vec![
-            "- docs/knowledge/index.md — Knowledge bundle index (see \"Critical patterns\")"
-                .to_string(),
-        ]);
     }
     Ok(Vec::new())
 }
