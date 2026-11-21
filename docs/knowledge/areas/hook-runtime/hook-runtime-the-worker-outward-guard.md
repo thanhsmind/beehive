@@ -8,9 +8,9 @@ bee:
   id: hook-runtime-hook-runtime-the-worker-outward-guard
   lifecycle: active
   areas: [hook-runtime]
-  decisions: [leader-call-thrift D3, worker-outward-guard D1-D11, guard-config-and-class D3, paseo-pi-hardening D5 be1699f8, paseo-pi-hardening D9 e2af1dab, "contract:worker-guard 9659395e"]
-  sources: [docs/history/worker-outward-guard/CONTEXT.md, docs/history/paseo-pi-hardening/CONTEXT.md, docs/history/paseo-pi-hardening/plan.md]
-  anchors: [.pi/extensions/bee-guard/events.ts, .pi/extensions/bee-guard/index.ts, packages/bee-rs/crates/bee/src/hooks/write_guard/checks.rs, packages/bee-rs/crates/bee/src/hooks/write_guard/paths.rs, packages/bee-rs/crates/bee/src/hooks/write_guard/main.rs, packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs, packages/bee-rs/crates/bee/src/hooks/worker_guard.rs, packages/bee-rs/crates/bee/src/verbs/cells/validate.rs, packages/bee-rs/crates/bee/src/hooks/mod.rs, packages/bee-rs/crates/bee/tests/pi_worker_guard_contracts.rs]
+  decisions: [leader-call-thrift D3, worker-outward-guard D1-D11, guard-config-and-class D3, paseo-pi-hardening D5 be1699f8, paseo-pi-hardening D9 e2af1dab, "contract:worker-guard 9659395e", wave-chain-thrift D3]
+  sources: [docs/history/worker-outward-guard/CONTEXT.md, docs/history/paseo-pi-hardening/CONTEXT.md, docs/history/paseo-pi-hardening/plan.md, docs/history/wave-chain-thrift/CONTEXT.md]
+  anchors: [.pi/extensions/bee-guard/events.ts, .pi/extensions/bee-guard/index.ts, packages/bee-rs/crates/bee/src/hooks/write_guard/checks.rs, packages/bee-rs/crates/bee/src/hooks/write_guard/paths.rs, packages/bee-rs/crates/bee/src/hooks/write_guard/main.rs, packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs, packages/bee-rs/crates/bee/src/hooks/worker_guard.rs, packages/bee-rs/crates/bee/src/verbs/cells/validate.rs, packages/bee-rs/crates/bee/src/hooks/mod.rs, packages/bee-rs/crates/bee/src/herding/mailbox.rs, packages/bee-rs/crates/bee/tests/pi_worker_guard_contracts.rs]
   verified_at: 2026-10-06
   verified_commit: 72ddcb2e9aba91116cd6fa59f03645d05b773b78
 ---
@@ -102,6 +102,14 @@ The belt blocks execution on a deny exit (code 2), a crash, a missing binary, or
 
 For a Paseo worker, the extension also omits registration of `bee_dispatch`, `bee_advisor`, and `bee_steer` tools (`.pi/extensions/bee-guard/index.ts`).
 
+## A read-only brief lists the shell rules it will be held to (wave-chain-thrift D3)
+
+Read when: a read-only gather or advisor job burned calls on Bash forms the guard refuses, or the brief's shell rules and the guard disagree.
+
+- A read-only job's brief carries a `# Shell rules` block: the allowed commands, then the refused forms. The allowed commands come from `READ_ONLY_ALLOWED` through `read_only_commands`, the one source the guard itself judges against, so the brief cannot drift from the guard.
+- The refused forms are prose in the brief builder and are not derived from the guard, so a new refused form needs a line there too. Find them in `herding/mailbox.rs` beside `shell_rules_block`.
+- The read-only ack step needs no command substitution: the worker runs `date` alone as its own command and pastes the output. Rejected: telling the worker to substitute the timestamp inline, because the guard refuses `$(...)`.
+
 ## Business Rules
 
 - One arm inside the existing git bash check, after the git invocations are found and before the empty-invocation return, so one fence and one tokenize pass serve both checks (hat wave, alternatives seat).
@@ -129,6 +137,7 @@ For a Paseo worker, the extension also omits registration of `bee_dispatch`, `be
 - `packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs` — the nine `worker_outward_*` tests.
 - `packages/bee-rs/crates/bee/src/hooks/worker_guard.rs` — the `worker-guard` hook implementation (paseo-pi-hardening D5, D9).
 - `packages/bee-rs/crates/bee/src/verbs/cells/validate.rs` — `full_suite_hit`, the segment test `evaluate_full_suite` in `worker_guard.rs` shares (leader-call-thrift D3).
+- `packages/bee-rs/crates/bee/src/herding/mailbox.rs` — `shell_rules_block`, the brief block built from `read_only_commands` in `worker_guard.rs` (wave-chain-thrift D3).
 - `packages/bee-rs/crates/bee/src/hooks/mod.rs` — hook dispatch and marker short-circuit routing.
 - `.pi/extensions/bee-guard/events.ts` — Pi belt worker-guard hook call.
 - `.pi/extensions/bee-guard/index.ts` — suppression of dispatch tools for Paseo workers.

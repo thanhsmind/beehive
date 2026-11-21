@@ -55,7 +55,11 @@ From two cells up, state the one-line concurrency plan before dispatching.
    caps a herding cell itself when its worker reports done with a
    `cell: <id>` commit and a green proof line; any other done row stays
    uncapped — settle it with `bee cells finish --id <cell> --from-job
-   <job_id>`. One cell, or a cell
+   <job_id>`. The default loop is `bee dispatch wave --rolling --run`:
+   code cells, their testers, the judge record and the caps run without a
+   leader call between them. A tester's judge blocks are recorded by the
+   run itself, and each row shows `capped` and `judged`. You review the
+   diffs and run `bee cells leader-check` once per wave. One cell, or a cell
    needing its own worker name, takes
    `bee dispatch prepare --cell <id> --worker <name> --runtime <rt> --claim`
    instead. The dispatcher may compose an Expertise section for the worker leader-style via `--expertise` (one entry per line, `<path> :: <purpose> :: <read-to>`), choosing from bee's own skill references and knowledge files; optional and judgment-driven, never auto-derived. A user-facing cell carries its mapped feature file that way — `.bee/verify/verify-app/features/<feature>.md` with its last-modified date, so the worker can judge a stale map. The cell already declares the job that
