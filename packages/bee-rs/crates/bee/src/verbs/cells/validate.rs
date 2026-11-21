@@ -180,8 +180,13 @@ fn verify_segments(verify: &str) -> Vec<String> {
         .collect()
 }
 
-pub(crate) fn full_suite_verify_problem(root: &Path, verb: &str, cell: &Map<String, Value>) -> MR<Option<String>> {
-    let Some(Value::String(verify)) = cell.get("verify") else { return Ok(None) };
+pub(crate) fn command_runs_full_suite(command: &str, declared: &[String]) -> bool {
+    verify_segments(command).into_iter().any(|segment| {
+        declared.iter().any(|d| strip_env_assignments(d) == segment) || segment == "bee test" || segment == ".bee/bin/bee test"
+    })
+}
+
+pub(crate) fn full_suite_hit(root: &Path, cell: &Map<String, Value>, command: &str) -> MR<Option<String>> {
     if nonblank_string(cell.get("full_suite_reason")) {
         return Ok(None);
     }
@@ -189,14 +194,15 @@ pub(crate) fn full_suite_verify_problem(root: &Path, verb: &str, cell: &Map<Stri
     let Some(declared) = commands.test.as_ref().filter(|_| !is_no_test_repo(&commands)) else {
         return Ok(None);
     };
-    let declared: Vec<String> = declared.iter().map(|c| strip_env_assignments(c)).collect();
-    let bare = verify_segments(verify).into_iter().any(|segment| {
-        declared.contains(&segment) || segment == "bee test" || segment == ".bee/bin/bee test"
-    });
-    if !bare {
+    if !command_runs_full_suite(command, declared) {
         return Ok(None);
     }
-    let suite = &declared[0];
+    Ok(Some(strip_env_assignments(&declared[0])))
+}
+
+pub(crate) fn full_suite_verify_problem(root: &Path, verb: &str, cell: &Map<String, Value>) -> MR<Option<String>> {
+    let Some(Value::String(verify)) = cell.get("verify") else { return Ok(None) };
+    let Some(suite) = full_suite_hit(root, cell, verify)? else { return Ok(None) };
     let id = js_string_or_undefined(cell.get("id"));
     Ok(Some(format!(
         "{verb}: verify runs the full suite — cell \"{id}\" proves itself with its related tests; the full suite runs once per feature, at its end, as `bee test` before the merge. FIX: scope the verify, e.g. `{suite} --test <name>` or `{suite} <filter>`; for a cross-cutting change that truly needs the whole suite, set \"full_suite_reason\" on the cell to say why."

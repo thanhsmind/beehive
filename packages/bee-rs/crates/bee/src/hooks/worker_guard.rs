@@ -18,11 +18,12 @@ pub fn run(_argv: &[String], stdin: &str) -> Outcome {
     let paseo_agent_id = std::env::var("PASEO_AGENT_ID").unwrap_or_default();
     let supervisor_allowed = std::env::var("BEE_SUPERVISOR_ALLOWED").unwrap_or_default();
     let read_only_job = read_only_job();
+    let herded_job = herded_job(&herding_worker);
 
     let mode_a = !herding_worker.is_empty() && !paseo_agent_id.is_empty();
     let mode_b = !supervisor_allowed.is_empty();
 
-    if !mode_a && !mode_b && read_only_job.is_none() {
+    if !mode_a && !mode_b && read_only_job.is_none() && herded_job.is_none() {
         return Outcome::Done(ExitCode::SUCCESS);
     }
 
@@ -65,6 +66,20 @@ pub fn run(_argv: &[String], stdin: &str) -> Outcome {
 
     if command.is_empty() {
         return Outcome::Done(ExitCode::SUCCESS);
+    }
+
+    if let Some(job) = &herded_job {
+        let cwd = payload
+            .get("cwd")
+            .and_then(Value::as_str)
+            .filter(|c| !c.is_empty())
+            .map(PathBuf::from)
+            .or_else(|| std::env::current_dir().ok())
+            .unwrap_or_default();
+        if let Some(reason) = evaluate_full_suite(command, &cwd, job) {
+            eprintln!("{reason}");
+            return Outcome::Done(ExitCode::from(2));
+        }
     }
 
     if mode_a
@@ -249,6 +264,27 @@ fn read_only_job() -> Option<String> {
     let job = std::env::var("BEE_HERDING_JOB_ID").unwrap_or_default();
     let job = job.trim();
     (!flag.trim().is_empty() && !job.is_empty()).then(|| job.to_string())
+}
+
+fn herded_job(herding_worker: &str) -> Option<String> {
+    let job = std::env::var("BEE_HERDING_JOB_ID").unwrap_or_default();
+    let job = job.trim();
+    (!herding_worker.is_empty() && !job.is_empty()).then(|| job.to_string())
+}
+
+fn evaluate_full_suite(command: &str, cwd: &Path, job: &str) -> Option<String> {
+    let mailbox = job_mailbox(cwd, job)?;
+    let spec = crate::fsutil::read_json(&mailbox.join("job.json"));
+    let crate::fsutil::ReadJson::Parsed(Value::Object(spec)) = spec else { return None };
+    let cell_id = spec.get("cell_id").and_then(Value::as_str).filter(|id| !id.trim().is_empty())?;
+    let root = mailbox.parent()?.parent()?.parent()?;
+    let cell = crate::verbs::cells::read_cell(root, cell_id).ok().flatten()?;
+    let Value::Object(cell) = cell else { return None };
+    let suite = crate::verbs::cells::full_suite_hit(root, &cell, command).ok().flatten()?;
+    let verify = cell.get("verify").and_then(Value::as_str).unwrap_or("the cell verify");
+    Some(format!(
+        "bee worker-guard denied this shell command: it starts the full suite (`{suite}`). The full suite runs once per feature through `bee test`, not inside a cell. FIX: run the cell verify instead: {verify}"
+    ))
 }
 
 fn job_mailbox(cwd: &Path, job: &str) -> Option<PathBuf> {
