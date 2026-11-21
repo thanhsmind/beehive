@@ -328,7 +328,7 @@ the owner asked for all six. PASS.
         "new C2 tests (lcx-4)"
       ],
       "truths": [
-        "bee state handoff write accepts --verified, --tree, --key-files, --gotchas, --standing-orders and --ruled-out on both kinds",
+        "the handoff write verb accepts --verified, --tree, --key-files, --gotchas, --standing-orders and --ruled-out on both kinds",
         "each present flag is stored under its snake_case key, split as D2 says, and an absent flag stores no key",
         "the preamble HANDOFF block and bee state handoff show print each present field on its own line, at most 300 characters"
       ],
@@ -609,7 +609,7 @@ the owner asked for all six. PASS.
         "cost weighting by model price"
       ],
       "truths": [
-        "bee report context prints sessions, calls, mean and p90 context, the above-mark share and the handoff rework count, and --json emits the same numbers",
+        "the report context verb prints sessions, calls, mean and p90 context, the above-mark share and the handoff rework count, and --json emits the same numbers",
         "a transcript named by a mailbox job is not counted as a leader"
       ],
       "prohibitions": [
