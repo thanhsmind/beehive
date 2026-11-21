@@ -442,7 +442,7 @@ a malformed record has earned none.
   those same paths. A feature with no open or capped cells yet takes its terms
   from `docs/history/<feature>/plan.md` and `CONTEXT.md` instead (plan-conflicts-and-briefs
   D1), so derive is meaningful before the execution gate; no paths exist then, so
-  only decisions are candidates. The verb is lane-targeted and takes the same two locks in
+  only decisions are candidates. A re-derive carries a prior verdict and note (row gains `carried_from` = the previous plan_rev) onto a candidate whose id is unchanged unless the cells new or changed since the stored `cell_digests` also derive it (wave-chain-thrift D2); a review stored before digests existed carries nothing. The verb is lane-targeted and takes the same two locks in
   the same order `plan-rev bump` takes; resolution landing on the default
   (non-lane) record is refused, because `conflict_review` is as
   lane-scoped as `plan_rev` itself. The field is seeded ABSENT: a record that
