@@ -63,7 +63,7 @@ the owner asked for all six. PASS.
 {
   "schema_version": "1.0",
   "runtime": "claude",
-  "roster_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+  "roster_sha256": "cd477eb57b66a0cef7310533c504a43a20e8b19e131431e73112bda9a9f114c8",
   "stages": [
     {
       "stage": "implementation",
