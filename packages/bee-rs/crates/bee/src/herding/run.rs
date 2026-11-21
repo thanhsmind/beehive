@@ -13942,6 +13942,76 @@ mod tests {
         }
     }
 
+    #[test]
+    fn thin_worker_listings_off_env_list_holds_the_slash_command_budget() {
+        assert!(THIN_PEER_CLAUDE_ENV.contains(&("SLASH_COMMAND_TOOL_CHAR_BUDGET", "1")));
+        let on = serde_json::json!({"dispatch": {"thin_peer_boot": true}});
+        let off = serde_json::json!({"dispatch": {"thin_peer_boot": false}});
+        let thin = thin_peer_env(&on, true, &BTreeMap::new());
+        assert_eq!(thin.get("SLASH_COMMAND_TOOL_CHAR_BUDGET").map(String::as_str), Some("1"));
+        assert!(!thin_peer_env(&off, true, &BTreeMap::new()).contains_key("SLASH_COMMAND_TOOL_CHAR_BUDGET"));
+        assert!(!thin_peer_env(&on, false, &BTreeMap::new()).contains_key("SLASH_COMMAND_TOOL_CHAR_BUDGET"));
+    }
+
+    #[test]
+    fn thin_worker_listings_off_claude_session_argv_follows_the_thin_switch() {
+        let _env = crate::hooks::UnherdedEnv::new();
+        for (config, thin) in [(None, true), (Some(r#"{"dispatch":{"thin_peer_boot":false}}"#), false)] {
+            let tmp = tempfile::tempdir().unwrap();
+            std::fs::create_dir_all(tmp.path().join(".bee")).unwrap();
+            if let Some(c) = config {
+                std::fs::write(tmp.path().join(".bee").join("config.json"), c).unwrap();
+            }
+            let opts = test_options(tmp.path(), false);
+            seed_done_result(tmp.path(), &opts.job_id);
+            let fake = FakeClaudeCli::new(FakeClaudeCli::listing("working", "busy"));
+
+            let res = run_claude_session(&opts, &fake);
+
+            assert!(matches!(res.outcome, RunOutcome::Result(_)));
+            let spawns = fake.spawns.lock().unwrap();
+            let argv = &spawns[0].0;
+            let at = argv.iter().position(|a| a == "--disable-slash-commands");
+            assert_eq!(at.is_some(), thin, "{argv:?}");
+            assert_eq!(argv.iter().any(|a| a == "--disallowedTools"), thin, "{argv:?}");
+            if let Some(at) = at {
+                assert_eq!(argv[at + 1], "--disallowedTools");
+                assert_eq!(argv[at + 2], "Agent");
+                assert!(!argv.last().unwrap().starts_with("--"));
+            }
+        }
+    }
+
+    #[test]
+    fn thin_worker_listings_off_built_in_claude_pane_argv_follows_the_thin_switch() {
+        for (config, thin) in [(None, true), (Some(r#"{"dispatch":{"thin_peer_boot":false}}"#), false)] {
+            let tmp = tempfile::tempdir().unwrap();
+            let main_root = tmp.path();
+            std::fs::create_dir_all(main_root.join(".bee")).unwrap();
+            if let Some(c) = config {
+                std::fs::write(main_root.join(".bee").join("config.json"), c).unwrap();
+            }
+            let mut opts = test_options(main_root, false);
+            opts.agent = Some("claude-sonnet".to_string());
+            seeded_result_dir(&main_root.join(".bee"), &opts.job_id);
+            let fake = FakeHerdr::new();
+
+            let result = execute(&opts, &fake);
+
+            assert!(matches!(result.outcome, RunOutcome::Result(_)), "got {:?}", result.outcome);
+            assert_eq!(fake.started_kind.borrow().as_deref(), Some("claude"));
+            let args = fake.started_args.borrow().clone().unwrap();
+            let flags: Vec<String> = ["--disable-slash-commands", "--disallowedTools", "Agent"].iter().map(|s| s.to_string()).collect();
+            if thin {
+                assert!(args.ends_with(&flags), "{args:?}");
+            } else {
+                for f in &flags {
+                    assert!(!args.contains(f), "{args:?}");
+                }
+            }
+        }
+    }
+
     #[cfg(unix)]
     #[test]
     fn claude_session_read_only_refuses_before_spawn_without_the_worker_guard() {

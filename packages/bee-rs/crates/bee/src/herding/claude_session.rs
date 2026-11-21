@@ -290,6 +290,19 @@ mod tests {
     }
 
     #[test]
+    fn thin_worker_listings_off_spawn_argv_appends_the_flags_before_the_prompt() {
+        let settings = settings_json(&BTreeMap::new());
+        let thin = spawn_argv("bee-x-1", "haiku", None, &settings, true, "go");
+        let at = thin.iter().position(|a| a == "--disable-slash-commands").unwrap();
+        assert_eq!(&thin[at..at + 3], &THIN_CLAUDE_FLAGS);
+        assert_eq!(thin.last().unwrap(), "go");
+        let plain = spawn_argv("bee-x-1", "haiku", None, &settings, false, "go");
+        for f in THIN_CLAUDE_FLAGS {
+            assert!(!plain.iter().any(|a| a == f), "{plain:?}");
+        }
+    }
+
+    #[test]
     fn claude_session_command_defaults_and_reads_config() {
         assert_eq!(claude_command(&json!({})), "claude");
         assert_eq!(claude_command(&json!({"herding":{"claude_command":"  /opt/claude "}})), "/opt/claude");

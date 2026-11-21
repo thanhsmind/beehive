@@ -2091,6 +2091,83 @@ mod tests {
         assert!(lines[0].contains("steer_to=bee-cssd-1-abc"), "{}", lines[0]);
     }
 
+    fn digest_result_json(summary: &str) -> String {
+        serde_json::json!({
+            "status": "done",
+            "summary": summary,
+            "files_changed": ["a.rs", "b.rs"],
+            "proof": "cargo test — green:unit — scope",
+            "report_path": "/m/.bee/mailbox/job-d/report-1.md",
+            "found": ["f1"],
+            "unknowns": ["u1"],
+            "skipped": ["s1"]
+        })
+        .to_string()
+    }
+
+    fn digest_of(summary: &str, json: bool) -> String {
+        let res = mailbox::parse_result_text(1, &digest_result_json(summary)).unwrap();
+        let fields = bounded_digest(digest_fields(&res), RESULT_DIGEST_LIMIT);
+        render_digest(&fields, json)
+    }
+
+    fn seed_digest_job(root: &std::path::Path, job: &str, text: &str) {
+        let dir = root.join(".bee").join("mailbox").join(job);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("result-1.json"), text).unwrap();
+    }
+
+    #[test]
+    fn herding_result_job_digest_prints_every_field_in_text_and_json() {
+        let text = digest_of("short summary", false);
+        for key in ["status: done", "summary: short summary", "proof: cargo test", "files_changed: a.rs, b.rs", "found: f1", "unknowns: u1", "skipped: s1", "report_path: /m/.bee/mailbox/job-d/report-1.md"] {
+            assert!(text.contains(key), "{key} missing: {text}");
+        }
+        let json: Value = serde_json::from_str(&digest_of("short summary", true)).unwrap();
+        for key in ["status", "summary", "proof", "files_changed", "found", "unknowns", "skipped", "report_path"] {
+            assert!(json.get(key).is_some(), "{key} missing: {json}");
+        }
+    }
+
+    #[test]
+    fn herding_result_job_digest_cuts_a_long_result_and_names_the_count() {
+        let long = "x".repeat(6000);
+        let text = digest_of(&long, false);
+        assert!(text.chars().count() <= RESULT_DIGEST_LIMIT, "{}", text.chars().count());
+        assert!(text.contains(" cut]"), "{text}");
+        assert!(text.contains("report_path: /m/.bee/mailbox/job-d/report-1.md"), "{text}");
+        let as_json = digest_of(&long, true);
+        assert!(as_json.chars().count() <= RESULT_DIGEST_LIMIT);
+        let cut = cut_to(&long, 100);
+        assert_eq!(cut.chars().count(), 100);
+        let suffix = &cut[cut.rfind(" [+").unwrap()..];
+        let kept = cut.chars().count() - suffix.chars().count();
+        assert_eq!(suffix, format!(" [+{} cut]", 6000 - kept));
+    }
+
+    #[test]
+    fn herding_result_job_digest_refuses_an_unknown_job_and_reads_a_known_one() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path().to_str().unwrap();
+        seed_digest_job(tmp.path(), "job-d", &digest_result_json("ok"));
+        assert_eq!(job_result_digest("job-missing", false, Some(root)), ExitCode::FAILURE);
+        assert_eq!(job_result_digest("../escape", false, Some(root)), ExitCode::FAILURE);
+        assert_eq!(job_result_digest("", false, Some(root)), ExitCode::FAILURE);
+        assert_eq!(job_result_digest("job-d", true, Some(root)), ExitCode::SUCCESS);
+        seed_digest_job(tmp.path(), "job-bad", "not json");
+        assert_eq!(job_result_digest("job-bad", false, Some(root)), ExitCode::FAILURE);
+    }
+
+    #[test]
+    fn herding_result_job_digest_leaves_the_stdin_form_alone() {
+        assert!(job_digest_args(&["status"]).is_none());
+        assert!(job_digest_args(&["summary", "--context", "x"]).is_none());
+        assert_eq!(job_digest_args(&["--job", "job-d", "--json"]), Some(("job-d", true, None)));
+        assert_eq!(job_digest_args(&["--job=job-d", "--main-root", "/r"]), Some(("job-d", false, Some("/r"))));
+        let envelope = serde_json::json!({"result": {"a": {"b": "v"}}});
+        assert_eq!(walk_result_path(&envelope, "a.b"), Value::String("v".to_string()));
+    }
+
     fn labels_for(text: &str) -> Vec<&'static str> {
         let lowered = text.to_lowercase();
         FLAG_RULES.iter().filter(|r| (r.matcher)(&lowered)).map(|r| r.label).collect()

@@ -175,6 +175,25 @@ use std::time::Instant;
     /// A first-dispatch cell with neither machine block renders byte-identically
     /// to the unconditional template — the invariant the C4 pin protects.
     #[test]
+    fn cell_brief_search_rule_and_size_rendered_prompt_holds_the_search_rule_once() {
+        let template = load_prompt("worker-cell").unwrap();
+        let rendered = render(
+            &template,
+            &[
+                ("worker", "w"),
+                ("cell_id", "c-1"),
+                ("feature", "f"),
+                ("cell_json", "{}"),
+                ("learned_context", ""),
+                ("prior_rounds", ""),
+            ],
+        )
+        .unwrap();
+        assert_eq!(rendered.matches("Search rule:").count(), 1, "{rendered}");
+        assert_eq!(rendered.matches("`rg -l`").count(), 1, "{rendered}");
+    }
+
+    #[test]
     fn worker_cell_without_machine_blocks_matches_the_plain_template() {
         let template = load_prompt("worker-cell").unwrap();
         let rendered = render(

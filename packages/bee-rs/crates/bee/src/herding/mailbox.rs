@@ -1735,6 +1735,46 @@ the report file's exact final name"),
     }
 
     #[test]
+    fn cell_brief_search_rule_and_size_keeps_the_fixed_text_under_the_cut() {
+        let tmp = tempfile::tempdir().unwrap();
+        let bee_dir = tmp.path().join(".bee");
+        let files = Vec::<String>::new();
+        let mut spec = sample_spec(Path::new("/w"), &bee_dir, &files, 1);
+        spec.task = "";
+        spec.cell_id = Some("c-1");
+        let brief = render_brief(&spec);
+        let template = std::fs::read_to_string(
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../bee/prompts/worker-cell.md"),
+        )
+        .unwrap();
+        let fixed = brief.len() - bee_dir.to_string_lossy().len() * brief.matches(bee_dir.to_string_lossy().as_ref()).count() + template.len();
+        eprintln!("fixed brief bytes {fixed} (brief {} template {})", brief.len(), template.len());
+        assert!(fixed <= 11420, "fixed brief bytes {fixed} exceed 75 percent of 15227");
+    }
+
+    #[test]
+    fn cell_brief_search_rule_and_size_names_every_result_field_and_status() {
+        let tmp = tempfile::tempdir().unwrap();
+        let bee_dir = tmp.path().join(".bee");
+        let files = sample_files();
+        let spec = sample_spec(tmp.path(), &bee_dir, &files, 1);
+        let brief = render_brief(&spec);
+        for field in [
+            "status", "summary", "files_changed", "proof", "report_path", "knowledge_used", "principles_used",
+            "sync_ack", "knowledge_wrong", "options", "leaning", "dissent", "reaction", "skipped", "unknowns",
+            "found", "stopped", "question",
+        ] {
+            assert!(brief.contains(&format!("\"{field}\"")) || brief.contains(&format!("`{field}`")), "field {field} missing:\n{brief}");
+        }
+        for status in ["done", "blocked", "question"] {
+            assert!(brief.contains(&format!("\"{status}\"")) || brief.contains(&format!("status {status}")), "status {status} missing");
+        }
+        for reaction in ["confirm", "partial", "challenge", "blocked"] {
+            assert!(brief.contains(&format!("\"{reaction}\"")), "reaction {reaction} missing");
+        }
+    }
+
+    #[test]
     fn parse_result_text_treats_empty_dissent_claim_as_no_dissent() {
         // prf-5: an empty-string dissent claim parses as no dissent
         let text = r#"{"status":"blocked","summary":"stuck","files_changed":[],"proof":"n/a","dissent":{"claim":"","alternative":"a","severity":"blocker"}}"#;

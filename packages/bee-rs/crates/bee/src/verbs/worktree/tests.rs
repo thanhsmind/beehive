@@ -912,6 +912,65 @@ use std::time::Instant;
         assert_eq!(answer.result["verify"], json!("proven (1 cell(s))"));
     }
 
+    fn merge_from_main_as(main: &Path, id: &str, session: Option<&str>) -> Option<ExitCode> {
+        let _lock = crate::verbs::drivers::TEST_CWD_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let orig = std::env::current_dir().unwrap();
+        let vars = crate::session_identity::SESSION_ENV_VARS;
+        let prior: Vec<_> = vars.iter().map(|k| (*k, std::env::var_os(k))).collect();
+        unsafe {
+            for k in vars {
+                std::env::remove_var(k);
+            }
+            if let Some(sid) = session {
+                std::env::set_var("BEE_SESSION_ID", sid);
+            }
+        }
+        std::env::set_current_dir(main).unwrap();
+        let (flags, use_json) = parse_flags(&["--id", id, "--detached=true", "--no-cleanup=true", "--json"]).unwrap();
+        let code = run_merge_with_caller(flags, use_json, Instant::now(), None);
+        std::env::set_current_dir(orig).unwrap();
+        unsafe {
+            for (k, v) in prior {
+                match v {
+                    Some(v) => std::env::set_var(k, v),
+                    None => std::env::remove_var(k),
+                }
+            }
+        }
+        code
+    }
+
+    fn committed_feature_worktree(main: &Path, feature: &str) -> String {
+        let mut lock_busy = None;
+        let created =
+            create_feature_worktree(main, feature, None, CompanionSpec::default(), &mut lock_busy)
+                .unwrap_or_else(|_| panic!("plain worktree creation must succeed"));
+        let wt = created.worktree_root.clone();
+        std::fs::write(wt.join(format!("{feature}.txt")), "y").unwrap();
+        git_ok(&wt, &["config", "user.email", "a@b.c"]);
+        git_ok(&wt, &["config", "user.name", "t"]);
+        git_ok(&wt, &["add", "-A"]);
+        git_ok(&wt, &["commit", "-qm", "work"]);
+        write_capped_cell(main, &format!("{feature}-1"), feature, Some(valid_proof_report()));
+        created.id
+    }
+
+    #[test]
+    fn handoff_after_merge_door_a_session_merge_records_the_merger_and_a_sessionless_one_does_not() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let by_session = committed_feature_worktree(&main, "alpha");
+        let sessionless = committed_feature_worktree(&main, "beta");
+        let record = |sid: &str| crate::integration_queue::merged_feature_of(&main, sid);
+
+        assert_eq!(merge_from_main_as(&main, &sessionless, None), Some(ExitCode::SUCCESS));
+        assert!(!main.join(".bee").join("runtime").join("merged-by").exists());
+
+        assert_eq!(merge_from_main_as(&main, &by_session, Some("sess-merger-1")), Some(ExitCode::SUCCESS));
+        assert_eq!(record("sess-merger-1").as_deref(), Some("alpha"));
+        assert_eq!(record("sess-someone-else"), None);
+    }
+
     /// D4 (docs/history/proof-strength-and-expiry/CONTEXT.md): a cap whose
     /// recorded proof was taken before the merge base — main moved and the
     /// branch took it in afterwards — is NAMED by the `proof-stale`
