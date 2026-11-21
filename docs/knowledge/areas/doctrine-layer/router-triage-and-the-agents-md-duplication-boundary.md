@@ -675,6 +675,7 @@ Slice 4 (pstack-playbook-port D5, cell ppb-29): classes follow each pstack
   `packages/bee/LEADER.md` and `packages/bee/playbooks/*.md` hold the leader doctrine and every rule marker;
   onboarding vendors them to `.bee/LEADER.md` and `.bee/playbooks/` (`onboard/plan.rs`, `onboard/apply.rs`),
   and `verbs/knowledge/check.rs` resolves `(rule: id)` references against them.
+  `packages/bee/playbooks/leader-detail.md` holds the full text of each `LEADER.md` block that was condensed (reread-thrift D5).
 - `skills/bee-hive/references/routing-and-contracts.md` — where deferred detail lands.
 - scripts/tests/test_gate_bypass_doctrine.mjs (retired with the Node runtime, 2026-08-02), packages/bee/tests/test_misc.mjs (retired with the Node runtime, 2026-08-02) — the
   suites enforcing the pinned wording.

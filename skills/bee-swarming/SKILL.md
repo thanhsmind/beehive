@@ -88,7 +88,9 @@ From two cells up, state the one-line concurrency plan before dispatching.
    pilot for a same-pattern wave, and the user's stop word:
    `references/swarming-reference.md` ("Operating Contract in full",
    steps 3 and 6).
-5. On `[DONE]`: the worker's word is never the evidence. Run the leader
+5. On `[DONE]`: read `bee herding result --job <id>` for the digest. Open
+   the report only on a red, a question or a blocked status. Start a diff
+   review with the stat view. The worker's word is never the evidence. Run the leader
    completeness check before accepting (`bee cells leader-check`) — the cap
    is not the end of the cell; the recorded mark is. Compare every approved
    requirement (the cell's `must_haves`, the plan's acceptance criteria)
