@@ -1,0 +1,495 @@
+{
+  "schema_version": "1.0",
+  "feature": "handoff-mark-200k",
+  "mode": null,
+  "phase": "exploring",
+  "approved_gates": {
+    "context": true,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"handoff-mark-200k\" started at phase \"exploring\" (lane).",
+  "next_action": "Continue bee-exploring for \"handoff-mark-200k\" (lane).",
+  "created_at": "2026-11-21T10:04:15.084Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null,
+  "route": {
+    "class": "perf",
+    "lane": "small",
+    "flags": [
+      "covered-contract-change"
+    ],
+    "product_files": 2,
+    "rationale": null,
+    "updated_at": "2026-11-21T10:04:11.591Z",
+    "feature": "handoff-mark-200k"
+  },
+  "gate_preview": {
+    "feature": "handoff-mark-200k",
+    "plan_sha256": "bb5b2f3d921c58a428aaa52c36645f19708d56cfcd2312e58e647bbdb9265fcd",
+    "previewed_at": "2026-11-21T10:06:10.029Z",
+    "cells": [
+      {
+        "id": "hm2-1",
+        "feature": "handoff-mark-200k",
+        "title": "Lower the default handoff mark to 200000 tokens",
+        "lane": "small",
+        "role": "code",
+        "deps": [],
+        "decisions": [
+          "7bc2853d-0196-4d43-bd90-3ff09210f266"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/hooks/prompt_context.rs",
+          "packages/bee/playbooks/handoff.md",
+          ".bee/playbooks/handoff.md",
+          "docs/knowledge/areas/hook-runtime/token-economy-of-injected-context.md",
+          "docs/history/codex-harness-hardening/release-manifest.json",
+          ".bee/onboarding.json"
+        ],
+        "read_first": [
+          "docs/history/handoff-mark-200k/CONTEXT.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [
+          "docs/knowledge/areas/hook-runtime/token-economy-of-injected-context.md"
+        ],
+        "action": "Per D1: in packages/bee-rs/crates/bee/src/hooks/prompt_context.rs, function compute_handoff_warning, the default of handoff_context_tokens becomes 200000 in both match arms (today: `Some(Value::Number(n)) => n.as_u64().unwrap_or(300_000),` and `_ => 300_000,`). Nothing else in that function changes. Move the existing tests that pin the old default to the new mark, with the same shape: find them with rg -n 'handoff_mark|mark 300k|300000' on that one file (today: transcript_past_handoff_mark_carries_warning_line expects 'context 310k tokens (mark 300k)'; handoff_mark_absent_key_at_exactly_300000_tokens_adds_the_directive_line; handoff_mark_absent_key_at_299999_tokens_adds_no_line; the zero-key loop). A test name that holds 300000 or 299999 takes the new number. Add no new test; hm2-2 owns new tests. In packages/bee/playbooks/handoff.md change 'The default context mark is 300000' to 200000 and nothing else. In docs/knowledge/areas/hook-runtime/token-economy-of-injected-context.md, find the 300000 mentions with rg -n, state the 200000 default in the handoff paragraph, and add 'handoff-mark-200k D1 (handoff_context_tokens defaults to 200000)' to the frontmatter decisions list; cite D-numbers, never raw decision ids; avoid the words deferred, until and later. Build with CARGO_TARGET_DIR=/home/thanhsmind/.cache/cargo-target-rrt cargo build --release --manifest-path packages/bee-rs/Cargo.toml and run that binary's dev regen (/home/thanhsmind/.cache/cargo-target-rrt/release/bee dev regen); never ./.bee/bin/bee for regen. Restore .claude/skills changes you did not cause. Workspace protocol: .bee/playbooks/handoff.md, .bee/onboarding.json and docs/history/codex-harness-hardening/release-manifest.json change only through bee dev regen; never edit them by hand. Then run the verify, and only the verify, never the full suite. Write no code comments. The only bee commands you may run are the ones this brief names.",
+        "verify": "/home/thanhsmind/.cache/cargo-target-rrt/release/bee dev release-manifest --check && /home/thanhsmind/.cache/cargo-target-rrt/release/bee onboard --repo-root . --json && ./.bee/bin/bee knowledge check && CARGO_TARGET_DIR=/home/thanhsmind/.cache/cargo-target-rrt PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- handoff_mark",
+        "must_haves": {
+          "why": "The leader context is re-read on every call; a reset at 200k cuts about 41 percent of leader tokens in the measured session (D1).",
+          "out_of_scope": [
+            "the directive line text",
+            "the clean-stop rule",
+            "new tests",
+            "project config files"
+          ],
+          "truths": [
+            "with handoff_context_tokens absent, a transcript at 200000 context tokens gets the directive line with the text 'mark 200k'",
+            "with handoff_context_tokens absent, a transcript at 199999 context tokens gets no line",
+            "handoff_context_tokens 0 gives no line at any size, and a configured number is used as before",
+            "packages/bee/playbooks/handoff.md and its rendered copy .bee/playbooks/handoff.md name 200000 as the default mark",
+            "the token economy concept states the 200000 default and cites handoff-mark-200k D1"
+          ],
+          "prohibitions": [
+            "No change to the directive line wording other than the mark number it prints"
+          ]
+        },
+        "judge_obligation_ack": "One default value changes in a hook; the tester cell hm2-2 runs in a separate dispatched worker and reads the change with no shared context.",
+        "behavior_change": true
+      },
+      {
+        "id": "hm2-2",
+        "feature": "handoff-mark-200k",
+        "title": "Test the handoff mark contract at 200000 tokens",
+        "lane": "small",
+        "role": "test",
+        "deps": [
+          "hm2-1"
+        ],
+        "decisions": [
+          "03ca8fc1-695c-4f58-9560-7f951797da70"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/hooks/prompt_context.rs"
+        ],
+        "read_first": [
+          "docs/history/handoff-mark-200k/CONTEXT.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Tester for hm2-1, contract C1. Coverage judgment first: in the test module of packages/bee-rs/crates/bee/src/hooks/prompt_context.rs, find the mark tests with rg -n 'handoff_mark' on that one file and cite, by test name, which C1 clause each one proves (at 200000 adds the line with 'mark 200k'; 199999 adds none; 0 adds none at any size). Then author only the gap. The expected gap is the clause 'a configured number wins over the default': with the helper handoff_mark_warning, a config of 300000 at 250000 context tokens adds no line, and a config of 150000 at 160000 context tokens adds the line with 'mark 150k'. Name each new test so the name holds handoff_mark. Check that compute_handoff_warning holds no 300_000 literal. A red on an hm2-1 truth is a finding to report, not a fix to make in non-test code. Run the verify, and only the verify, never the full suite. Write no code comments. The only bee commands you may run are the ones this brief names.",
+        "verify": "CARGO_TARGET_DIR=/home/thanhsmind/.cache/cargo-target-rrt PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- handoff_mark",
+        "must_haves": {
+          "why": "A code cell never certifies itself; the clause that a configured mark wins has no test at the new default (C1).",
+          "out_of_scope": [
+            "non-test code",
+            "tests outside the mark contract"
+          ],
+          "truths": [
+            "every clause of contract handoff-mark-directive is proven by a named test in prompt_context.rs",
+            "a test shows a configured mark above the default silences the line between the two, and a configured mark below the default fires the line with its own number"
+          ],
+          "prohibitions": [
+            "No edit outside the test module"
+          ]
+        },
+        "judge_obligation_ack": "One default value changes in a hook; the tester cell hm2-2 runs in a separate dispatched worker and reads the change with no shared context.",
+        "behavior_change": false
+      }
+    ],
+    "role_plan": {
+      "schema_version": "1.0",
+      "runtime": "claude",
+      "roster_sha256": "cd477eb57b66a0cef7310533c504a43a20e8b19e131431e73112bda9a9f114c8",
+      "stages": [
+        {
+          "stage": "implementation",
+          "classification": "required",
+          "role": "code",
+          "reason": "hm2-1 changes the default and its pins."
+        },
+        {
+          "stage": "test-and-live-proof",
+          "classification": "required",
+          "role": "test",
+          "reason": "hm2-2 checks the contract and adds the missing case."
+        },
+        {
+          "stage": "documentation-and-capture",
+          "classification": "not-applicable",
+          "role": "docs",
+          "reason": "hm2-1 carries the two doc sentences."
+        },
+        {
+          "stage": "consolidation",
+          "classification": "not-applicable",
+          "role": "writer",
+          "reason": "Small lane: no consolidation cell."
+        },
+        {
+          "stage": "read-only-gather",
+          "classification": "not-applicable",
+          "role": "read",
+          "reason": "The leader already read every anchor."
+        },
+        {
+          "stage": "hat-facts-gaps",
+          "classification": "not-applicable",
+          "role": "hat-facts-gaps",
+          "reason": "Small lane: no hat wave."
+        },
+        {
+          "stage": "hat-alternatives",
+          "classification": "not-applicable",
+          "role": "hat-alternatives",
+          "reason": "Small lane: no hat wave."
+        },
+        {
+          "stage": "hat-user-impact",
+          "classification": "not-applicable",
+          "role": "hat-user-impact",
+          "reason": "Small lane: no hat wave."
+        },
+        {
+          "stage": "hat-risks",
+          "classification": "not-applicable",
+          "role": "hat-risks",
+          "reason": "Small lane."
+        },
+        {
+          "stage": "hat-value",
+          "classification": "not-applicable",
+          "role": "hat-value",
+          "reason": "Small lane."
+        },
+        {
+          "stage": "planning",
+          "classification": "not-applicable",
+          "role": "plan",
+          "reason": "The leader writes this plan."
+        },
+        {
+          "stage": "deployment",
+          "classification": "not-applicable",
+          "role": "deploy",
+          "reason": "The next release publishes it."
+        },
+        {
+          "stage": "fact-extraction",
+          "classification": "not-applicable",
+          "role": "extraction",
+          "reason": "No extraction."
+        },
+        {
+          "stage": "generation-fallback",
+          "classification": "not-applicable",
+          "role": "generation",
+          "reason": "Every job has a specific role."
+        },
+        {
+          "stage": "independent-review",
+          "classification": "not-applicable",
+          "role": "review",
+          "reason": "Independent review stays user-invoked."
+        },
+        {
+          "stage": "generic-advisor",
+          "classification": "not-applicable",
+          "role": "advisor",
+          "reason": "No consult needed."
+        },
+        {
+          "stage": "supervision",
+          "classification": "not-applicable",
+          "role": "supervisor",
+          "reason": "No unattended loop."
+        },
+        {
+          "stage": "blind-lane-1",
+          "classification": "not-applicable",
+          "role": "lane-1",
+          "reason": "One clear design."
+        },
+        {
+          "stage": "blind-lane-2",
+          "classification": "not-applicable",
+          "role": "lane-2",
+          "reason": "One clear design."
+        },
+        {
+          "stage": "blind-lane-3",
+          "classification": "not-applicable",
+          "role": "lane-3",
+          "reason": "One clear design."
+        },
+        {
+          "stage": "design-ui",
+          "classification": "not-applicable",
+          "role": "design",
+          "reason": "No rendered UI."
+        }
+      ]
+    }
+  },
+  "approved_cell_packet": {
+    "feature": "handoff-mark-200k",
+    "plan_sha256": "bb5b2f3d921c58a428aaa52c36645f19708d56cfcd2312e58e647bbdb9265fcd",
+    "previewed_at": "2026-11-21T10:06:10.029Z",
+    "cells": [
+      {
+        "id": "hm2-1",
+        "feature": "handoff-mark-200k",
+        "title": "Lower the default handoff mark to 200000 tokens",
+        "lane": "small",
+        "role": "code",
+        "deps": [],
+        "decisions": [
+          "7bc2853d-0196-4d43-bd90-3ff09210f266"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/hooks/prompt_context.rs",
+          "packages/bee/playbooks/handoff.md",
+          ".bee/playbooks/handoff.md",
+          "docs/knowledge/areas/hook-runtime/token-economy-of-injected-context.md",
+          "docs/history/codex-harness-hardening/release-manifest.json",
+          ".bee/onboarding.json"
+        ],
+        "read_first": [
+          "docs/history/handoff-mark-200k/CONTEXT.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [
+          "docs/knowledge/areas/hook-runtime/token-economy-of-injected-context.md"
+        ],
+        "action": "Per D1: in packages/bee-rs/crates/bee/src/hooks/prompt_context.rs, function compute_handoff_warning, the default of handoff_context_tokens becomes 200000 in both match arms (today: `Some(Value::Number(n)) => n.as_u64().unwrap_or(300_000),` and `_ => 300_000,`). Nothing else in that function changes. Move the existing tests that pin the old default to the new mark, with the same shape: find them with rg -n 'handoff_mark|mark 300k|300000' on that one file (today: transcript_past_handoff_mark_carries_warning_line expects 'context 310k tokens (mark 300k)'; handoff_mark_absent_key_at_exactly_300000_tokens_adds_the_directive_line; handoff_mark_absent_key_at_299999_tokens_adds_no_line; the zero-key loop). A test name that holds 300000 or 299999 takes the new number. Add no new test; hm2-2 owns new tests. In packages/bee/playbooks/handoff.md change 'The default context mark is 300000' to 200000 and nothing else. In docs/knowledge/areas/hook-runtime/token-economy-of-injected-context.md, find the 300000 mentions with rg -n, state the 200000 default in the handoff paragraph, and add 'handoff-mark-200k D1 (handoff_context_tokens defaults to 200000)' to the frontmatter decisions list; cite D-numbers, never raw decision ids; avoid the words deferred, until and later. Build with CARGO_TARGET_DIR=/home/thanhsmind/.cache/cargo-target-rrt cargo build --release --manifest-path packages/bee-rs/Cargo.toml and run that binary's dev regen (/home/thanhsmind/.cache/cargo-target-rrt/release/bee dev regen); never ./.bee/bin/bee for regen. Restore .claude/skills changes you did not cause. Workspace protocol: .bee/playbooks/handoff.md, .bee/onboarding.json and docs/history/codex-harness-hardening/release-manifest.json change only through bee dev regen; never edit them by hand. Then run the verify, and only the verify, never the full suite. Write no code comments. The only bee commands you may run are the ones this brief names.",
+        "verify": "/home/thanhsmind/.cache/cargo-target-rrt/release/bee dev release-manifest --check && /home/thanhsmind/.cache/cargo-target-rrt/release/bee onboard --repo-root . --json && ./.bee/bin/bee knowledge check && CARGO_TARGET_DIR=/home/thanhsmind/.cache/cargo-target-rrt PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- handoff_mark",
+        "must_haves": {
+          "why": "The leader context is re-read on every call; a reset at 200k cuts about 41 percent of leader tokens in the measured session (D1).",
+          "out_of_scope": [
+            "the directive line text",
+            "the clean-stop rule",
+            "new tests",
+            "project config files"
+          ],
+          "truths": [
+            "with handoff_context_tokens absent, a transcript at 200000 context tokens gets the directive line with the text 'mark 200k'",
+            "with handoff_context_tokens absent, a transcript at 199999 context tokens gets no line",
+            "handoff_context_tokens 0 gives no line at any size, and a configured number is used as before",
+            "packages/bee/playbooks/handoff.md and its rendered copy .bee/playbooks/handoff.md name 200000 as the default mark",
+            "the token economy concept states the 200000 default and cites handoff-mark-200k D1"
+          ],
+          "prohibitions": [
+            "No change to the directive line wording other than the mark number it prints"
+          ]
+        },
+        "judge_obligation_ack": "One default value changes in a hook; the tester cell hm2-2 runs in a separate dispatched worker and reads the change with no shared context.",
+        "behavior_change": true
+      },
+      {
+        "id": "hm2-2",
+        "feature": "handoff-mark-200k",
+        "title": "Test the handoff mark contract at 200000 tokens",
+        "lane": "small",
+        "role": "test",
+        "deps": [
+          "hm2-1"
+        ],
+        "decisions": [
+          "03ca8fc1-695c-4f58-9560-7f951797da70"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/hooks/prompt_context.rs"
+        ],
+        "read_first": [
+          "docs/history/handoff-mark-200k/CONTEXT.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Tester for hm2-1, contract C1. Coverage judgment first: in the test module of packages/bee-rs/crates/bee/src/hooks/prompt_context.rs, find the mark tests with rg -n 'handoff_mark' on that one file and cite, by test name, which C1 clause each one proves (at 200000 adds the line with 'mark 200k'; 199999 adds none; 0 adds none at any size). Then author only the gap. The expected gap is the clause 'a configured number wins over the default': with the helper handoff_mark_warning, a config of 300000 at 250000 context tokens adds no line, and a config of 150000 at 160000 context tokens adds the line with 'mark 150k'. Name each new test so the name holds handoff_mark. Check that compute_handoff_warning holds no 300_000 literal. A red on an hm2-1 truth is a finding to report, not a fix to make in non-test code. Run the verify, and only the verify, never the full suite. Write no code comments. The only bee commands you may run are the ones this brief names.",
+        "verify": "CARGO_TARGET_DIR=/home/thanhsmind/.cache/cargo-target-rrt PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- handoff_mark",
+        "must_haves": {
+          "why": "A code cell never certifies itself; the clause that a configured mark wins has no test at the new default (C1).",
+          "out_of_scope": [
+            "non-test code",
+            "tests outside the mark contract"
+          ],
+          "truths": [
+            "every clause of contract handoff-mark-directive is proven by a named test in prompt_context.rs",
+            "a test shows a configured mark above the default silences the line between the two, and a configured mark below the default fires the line with its own number"
+          ],
+          "prohibitions": [
+            "No edit outside the test module"
+          ]
+        },
+        "judge_obligation_ack": "One default value changes in a hook; the tester cell hm2-2 runs in a separate dispatched worker and reads the change with no shared context.",
+        "behavior_change": false
+      }
+    ],
+    "role_plan": {
+      "schema_version": "1.0",
+      "runtime": "claude",
+      "roster_sha256": "cd477eb57b66a0cef7310533c504a43a20e8b19e131431e73112bda9a9f114c8",
+      "stages": [
+        {
+          "stage": "implementation",
+          "classification": "required",
+          "role": "code",
+          "reason": "hm2-1 changes the default and its pins."
+        },
+        {
+          "stage": "test-and-live-proof",
+          "classification": "required",
+          "role": "test",
+          "reason": "hm2-2 checks the contract and adds the missing case."
+        },
+        {
+          "stage": "documentation-and-capture",
+          "classification": "not-applicable",
+          "role": "docs",
+          "reason": "hm2-1 carries the two doc sentences."
+        },
+        {
+          "stage": "consolidation",
+          "classification": "not-applicable",
+          "role": "writer",
+          "reason": "Small lane: no consolidation cell."
+        },
+        {
+          "stage": "read-only-gather",
+          "classification": "not-applicable",
+          "role": "read",
+          "reason": "The leader already read every anchor."
+        },
+        {
+          "stage": "hat-facts-gaps",
+          "classification": "not-applicable",
+          "role": "hat-facts-gaps",
+          "reason": "Small lane: no hat wave."
+        },
+        {
+          "stage": "hat-alternatives",
+          "classification": "not-applicable",
+          "role": "hat-alternatives",
+          "reason": "Small lane: no hat wave."
+        },
+        {
+          "stage": "hat-user-impact",
+          "classification": "not-applicable",
+          "role": "hat-user-impact",
+          "reason": "Small lane: no hat wave."
+        },
+        {
+          "stage": "hat-risks",
+          "classification": "not-applicable",
+          "role": "hat-risks",
+          "reason": "Small lane."
+        },
+        {
+          "stage": "hat-value",
+          "classification": "not-applicable",
+          "role": "hat-value",
+          "reason": "Small lane."
+        },
+        {
+          "stage": "planning",
+          "classification": "not-applicable",
+          "role": "plan",
+          "reason": "The leader writes this plan."
+        },
+        {
+          "stage": "deployment",
+          "classification": "not-applicable",
+          "role": "deploy",
+          "reason": "The next release publishes it."
+        },
+        {
+          "stage": "fact-extraction",
+          "classification": "not-applicable",
+          "role": "extraction",
+          "reason": "No extraction."
+        },
+        {
+          "stage": "generation-fallback",
+          "classification": "not-applicable",
+          "role": "generation",
+          "reason": "Every job has a specific role."
+        },
+        {
+          "stage": "independent-review",
+          "classification": "not-applicable",
+          "role": "review",
+          "reason": "Independent review stays user-invoked."
+        },
+        {
+          "stage": "generic-advisor",
+          "classification": "not-applicable",
+          "role": "advisor",
+          "reason": "No consult needed."
+        },
+        {
+          "stage": "supervision",
+          "classification": "not-applicable",
+          "role": "supervisor",
+          "reason": "No unattended loop."
+        },
+        {
+          "stage": "blind-lane-1",
+          "classification": "not-applicable",
+          "role": "lane-1",
+          "reason": "One clear design."
+        },
+        {
+          "stage": "blind-lane-2",
+          "classification": "not-applicable",
+          "role": "lane-2",
+          "reason": "One clear design."
+        },
+        {
+          "stage": "blind-lane-3",
+          "classification": "not-applicable",
+          "role": "lane-3",
+          "reason": "One clear design."
+        },
+        {
+          "stage": "design-ui",
+          "classification": "not-applicable",
+          "role": "design",
+          "reason": "No rendered UI."
+        }
+      ]
+    }
+  },
+  "gate_revoked_at": {
+    "execution": "2026-11-21T10:06:05.004Z"
+  },
+  "merge_ready": {
+    "since": "2026-11-21T10:10:19.627Z",
+    "branch": "wt/handoff-mark-200k",
+    "worktree_id": "beehive--wt--handoff-mark-200k",
+    "uat": "pending",
+    "blocked_by": []
+  }
+}

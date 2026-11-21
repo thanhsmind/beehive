@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "reread-thrift",
   "mode": null,
-  "phase": "exploring",
+  "phase": "compounding",
   "approved_gates": {
     "context": true,
     "shape": true,
@@ -11,14 +11,14 @@
     "uat": false
   },
   "summary": "Feature \"reread-thrift\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at c209358; reload the product and test \"reread-thrift\", then either approve uat (\"bee gate --name uat --approved true --lane reread-thrift\") or fix it in the worktree and merge again.",
+  "next_action": "close",
   "created_at": "2026-11-21T08:13:30.705Z",
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "gate",
     "subject": "uat: reread-thrift",
-    "asked_at": "2026-11-21T09:54:26.981Z",
-    "session": "bee-worktree-merge-sessionless"
+    "asked_at": "2026-11-21T09:55:48.958Z",
+    "session": "01699838-44a5-4885-8eb4-f4e7a575a8c5"
   },
   "route": {
     "class": "perf",
@@ -1221,5 +1221,17 @@
   },
   "gate_revoked_at": {
     "execution": "2026-11-21T09:47:41.973Z"
+  },
+  "last_scribing_run": {
+    "feature": "reread-thrift",
+    "date": "2026-11-21",
+    "at": "2026-11-21T09:54:27.232Z",
+    "areas_synced": [
+      "hook-runtime",
+      "bee-herding",
+      "doctrine-layer",
+      "workflow-state"
+    ],
+    "next_action": "close"
   }
 }
