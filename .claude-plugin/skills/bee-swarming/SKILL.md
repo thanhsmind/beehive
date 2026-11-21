@@ -62,7 +62,7 @@ From two cells up, state the one-line concurrency plan before dispatching.
    diffs and run `bee cells leader-check` once per wave. One cell, or a cell
    needing its own worker name, takes
    `bee dispatch prepare --cell <id> --worker <name> --runtime <rt> --claim`
-   instead. The dispatcher may compose an Expertise section for the worker leader-style via `--expertise` (one entry per line, `<path> :: <purpose> :: <read-to>`), choosing from bee's own skill references and knowledge files; optional and judgment-driven, never auto-derived. A user-facing cell carries its mapped feature file that way — `.bee/verify/verify-app/features/<feature>.md` with its last-modified date, so the worker can judge a stale map. The cell already declares the job that
+   instead. On herding dispatches pass `--prompt-out .bee/tmp/prompts/<dispatch>.txt`: the prompt lands in that file and the returned command reads it with `--task-file`, so the prompt stays out of your context. The dispatcher may compose an Expertise section for the worker leader-style via `--expertise` (one entry per line, `<path> :: <purpose> :: <read-to>`), choosing from bee's own skill references and knowledge files; optional and judgment-driven, never auto-derived. A user-facing cell carries its mapped feature file that way — `.bee/verify/verify-app/features/<feature>.md` with its last-modified date, so the worker can judge a stale map. The cell already declares the job that
    selects its model (`role`, required at `cells add`) — escalate onto the
    session model only where the work earns it
    (`bee cells escalate --id <id>`; rubric:

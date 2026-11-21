@@ -743,6 +743,33 @@ fn shell_token(token: &str) -> String {
     }
 }
 
+fn place_prompt(
+    payload: &mut Map<String, Value>,
+    command: String,
+    pane_prompt: &str,
+    prompt_out: Option<&str>,
+    written: &mut bool,
+) {
+    let routed = prompt_out.filter(|_| command.contains("--task-file - ")).and_then(|path| {
+        let target = Path::new(path);
+        if let Some(parent) = target.parent().filter(|p| !p.as_os_str().is_empty()) {
+            std::fs::create_dir_all(parent).ok()?;
+        }
+        std::fs::write(target, pane_prompt).ok()?;
+        Some(command.replacen("--task-file - ", &format!("--task-file {} ", shell_token(path)), 1))
+    });
+    match routed {
+        Some(rewritten) => {
+            payload.insert("command".into(), Value::String(rewritten));
+            *written = true;
+        }
+        None => {
+            payload.insert("command".into(), Value::String(command));
+            payload.insert("stdin".into(), Value::String(pane_prompt.to_string()));
+        }
+    }
+}
+
 fn claude_session_command(
     cwd: Option<&str>,
     cell_id: Option<&str>,
@@ -1885,6 +1912,46 @@ pub(crate) fn prepare_dispatch_wire(
     session_id: Option<&str>,
     release_version: Option<&str>,
 ) -> D<Prepared> {
+    prepare_dispatch_wire_out(
+        root,
+        runtime,
+        kind,
+        role,
+        cell_id,
+        worker,
+        force_ownership,
+        classification,
+        purpose,
+        record_it,
+        expertise,
+        brief,
+        feature,
+        stage,
+        session_id,
+        release_version,
+        None,
+    )
+}
+
+pub(crate) fn prepare_dispatch_wire_out(
+    root: &Path,
+    runtime: &str,
+    kind: &str,
+    role: Option<&str>,
+    cell_id: Option<&str>,
+    worker: Option<&str>,
+    force_ownership: bool,
+    classification: Option<&str>,
+    purpose: Option<&str>,
+    record_it: bool,
+    expertise: Option<&str>,
+    brief: Option<&str>,
+    feature: Option<&str>,
+    stage: Option<&str>,
+    session_id: Option<&str>,
+    release_version: Option<&str>,
+    prompt_out: Option<&str>,
+) -> D<Prepared> {
     // The runtime/kind gates already fired in the probe (validate() owns those
     // bytes), so both are known-good here.
     debug_assert!(RUNTIMES.contains(&runtime) && DISPATCH_KINDS.contains(&kind));
@@ -2828,6 +2895,7 @@ pub(crate) fn prepare_dispatch_wire(
         }
     };
 
+    let mut prompt_written = false;
     let pane_prompt = if is_deployment {
         let ver = v2_info
             .as_ref()
@@ -2941,8 +3009,7 @@ pub(crate) fn prepare_dispatch_wire(
                 // native-fallback Bash arm above; this is the same recorded
                 // limit, not an oversight.
                 tool = "Bash".into();
-                payload.insert("command".into(), Value::String(command.clone()));
-                payload.insert("stdin".into(), Value::String(pane_prompt.clone()));
+                place_prompt(&mut payload, command.clone(), &pane_prompt, prompt_out, &mut prompt_written);
                 channel = "cli-exec".into();
             }
             Resolved::Herding { agent, fallback } => {
@@ -3026,8 +3093,7 @@ pub(crate) fn prepare_dispatch_wire(
                     command.push_str(" --ceiling ");
                     command.push_str(&seconds.to_string());
                 }
-                payload.insert("command".into(), Value::String(command));
-                payload.insert("stdin".into(), Value::String(pane_prompt.clone()));
+                place_prompt(&mut payload, command, &pane_prompt, prompt_out, &mut prompt_written);
                 // herding-reach D1: dispatch prepare reports herding transport
                 // reachability. Probes the caller's environment and writes
                 // transport_ready and transport_reason into the payload.
@@ -3171,8 +3237,7 @@ pub(crate) fn prepare_dispatch_wire(
                     // "What this does not do"), not an oversight: no field exists
                     // on an external CLI-executor call to carry a subject.
                     tool = "Bash".into();
-                    payload.insert("command".into(), Value::String(command.clone()));
-                    payload.insert("stdin".into(), Value::String(pane_prompt.clone()));
+                    place_prompt(&mut payload, command.clone(), &pane_prompt, prompt_out, &mut prompt_written);
                     channel = "cli-exec".into();
                     extra_fallback_reason = Some("native_unavailable");
                 } else {
@@ -3448,10 +3513,14 @@ pub(crate) fn prepare_dispatch_wire(
     // envelope — stays byte-identical to before this key existed.
     let brief_sha256 = brief.map(crate::verbs::reservations::sha256_hex);
 
-    let prompt_sha256 = ["prompt", "stdin", "message"]
-        .iter()
-        .find_map(|key| payload.get(*key).and_then(Value::as_str))
-        .map(crate::verbs::reservations::sha256_hex);
+    let prompt_sha256 = if prompt_written {
+        Some(crate::verbs::reservations::sha256_hex(&pane_prompt))
+    } else {
+        ["prompt", "stdin", "message"]
+            .iter()
+            .find_map(|key| payload.get(*key).and_then(Value::as_str))
+            .map(crate::verbs::reservations::sha256_hex)
+    };
     let protocol_sha256 = crate::verbs::protocol::protocol_sha256(root);
     let digest_value = |digest: &Option<String>| digest.clone().map_or(Value::Null, Value::String);
 
@@ -4087,6 +4156,7 @@ pub(crate) fn run_dispatch_prepare(flags: Flags, use_json: bool, t0: Instant) ->
             "expertise",
             "role",
             "brief-file",
+            "prompt-out",
             "feature",
             "stage",
             "release-version",
@@ -4170,6 +4240,7 @@ pub(crate) fn run_dispatch_prepare(flags: Flags, use_json: bool, t0: Instant) ->
     // deleted at the R6 cutover, so it resolves to the empty path and earns
     // `brief_file_unreadable`, a refusal that names its own remedy. An
     // argument shape this door cannot honour is refused, never shrugged at.
+    let prompt_out_flag = flags.truthy_str("prompt-out").map(|s| js_trim(s).to_string()).filter(|s| !s.is_empty());
     let brief_flag: Option<String> = match flags.get("brief-file") {
         None => None,
         Some(FlagV::S(s)) => Some(s.clone()),
@@ -4398,7 +4469,7 @@ pub(crate) fn run_dispatch_prepare(flags: Flags, use_json: bool, t0: Instant) ->
         _ => {
             // Re-run for real so the prepare-time record is appended exactly
             // once, with a freshly minted dispatch_id/ts like Node's.
-            match prepare_dispatch_wire(
+            match prepare_dispatch_wire_out(
                 &ctx.root,
                 &runtime,
                 &kind,
@@ -4415,6 +4486,7 @@ pub(crate) fn run_dispatch_prepare(flags: Flags, use_json: bool, t0: Instant) ->
                 stage_flag.as_deref(),
                 session_flag.as_deref(),
                 release_version_flag.as_deref(),
+                prompt_out_flag.as_deref(),
             ) {
                 Ok(Prepared::Value(result)) => {
                     // `claimOutcome ? {...out, claimed:true, reserved} : out`
