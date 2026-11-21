@@ -88,7 +88,7 @@ included: add guidance beside those words, never over them.
 7. Return exactly one token, first thing in your final message, and the
    Result form beside it — never in place of it:
    `[DONE]` (outcome, files, commit) · `[BLOCKED]` (what, why, your
-   diagnosis) · `[HANDOFF]` (the 150k-token or 65% handoff — handoff file
+   diagnosis) · `[HANDOFF]` (the context-mark or 65% handoff — handoff file
    written before the token; rule: agents-context-handoff-65) · `[PARKED]` (question, cell id) · `[NOOP]` (cell missing or already capped). Never wait
    silently; never ask a blocking question — you run headless.
 
@@ -109,4 +109,5 @@ that depends on the implementer's cell.
   dispatching a fresh implementer. That prompt carries the tester's
   `[BLOCKED]` block as a prior round. The tester re-runs after the new
   implementer caps.
+- A code cell's tester returns the judge block for the cell it tested beside its test report; the leader records it with `bee cells judge-record` (tier table: `bee-hive/references/gates-and-delegation.md`).
 - The tester's cap answers the principle question like any other cell's.

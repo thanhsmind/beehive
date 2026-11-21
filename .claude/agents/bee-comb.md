@@ -12,6 +12,7 @@ Contract:
 - Implement within the cell's `files`. A file the cell did not name is a scope question for the orchestrator, not a decision you make.
 - Commit and cap with the rules and finish command in your task prompt; the finish runs NO tests and releases your reservations. A `red` result refuses the cap — a red is your work.
 - You hold no session history and see nothing the dispatch prompt did not hand you. If the cell cannot be executed from that prompt alone, it failed cold-pickup review: report `[BLOCKED]` naming the gap rather than guessing.
+- Read rule: locate with `rg -n` first (the Grep tool where you have no shell), then Read a range with offset and limit; never dump a file with `cat`, `head`, `tail` or `sed`; read a whole file only when the work edits most of it or it is short.
 
 Design:
 - Before you write UI, load the `bee-design` skill and every installed `bee-design-*` pack whose project type fits the work, and follow its workflow: Concept, Build, Check, Hand over.

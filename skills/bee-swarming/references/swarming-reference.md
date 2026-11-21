@@ -709,7 +709,7 @@ A `[BLOCKED]` whose worker recorded a dissent owes its `.bee/bin/bee cells disse
 
 ## Handoff JSON
 
-When the user asks for a session switch, or at feature close, write `.bee/HANDOFF.json` (rule: agents-context-handoff-65; a context mark alone never triggers it) — this is the record's schema, the one site that keeps it: `{ phase, feature, mode, cells_in_flight, done, remaining, next_action, verified, tree, key_files, gotchas, written_at }`. The four newer fields let the next session trust what it reads:
+At the next clean stop past the context mark, after every green worktree merge, or when the user asks for a switch, write `.bee/HANDOFF.json` (rule: agents-context-handoff-65) — this is the record's schema, the one site that keeps it: `{ phase, feature, mode, cells_in_flight, done, remaining, next_action, verified, tree, key_files, gotchas, written_at }`. The four newer fields let the next session trust what it reads:
 
 - `verified` — the proof lines run so far, each `<command> — <result> — <scope reason>`; work with no line here is unproven.
 - `tree` — `clean`, or `dirty:<paths>` naming each uncommitted path.
@@ -738,8 +738,8 @@ execution-approved work remains — this lane or another Gate-3-approved one —
 continue with the next unit in this session: finishing a unit is never a
 reason to stop, ask, or wait. The planned-next handoff is a session-exit
 artifact, not an offer: only when this session is
-actually ending (the user asked for a switch, or the feature closed;
-a context mark alone never ends it), claim the next unit (`bee cells claim-next`), write the
+actually ending (past the context mark at a clean stop, after a green
+worktree merge, or the user asked for a switch), claim the next unit (`bee cells claim-next`), write the
 handoff (`bee state handoff write --kind planned-next --writer-session <id>
 --previous-cell <capped-id> --next-cell <claimed-id>`), and hand the
 remaining work to a fresh leader through the host's leader door when one

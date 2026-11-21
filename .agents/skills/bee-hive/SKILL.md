@@ -20,7 +20,7 @@ metadata:
 Run `bee orient` only when routing, starting, or resuming work — it names the phase,
 the blockers, and the next skill; follow it. Present a pending handoff to the user;
 never auto-resume it. A plain question is already answered by the session preamble.
-A context mark never stops work; a handoff happens only on the user's word or at feature close (rule: `agents-context-handoff-65`).
+A context mark never stops a cell: hand off at the next clean stop past it, and after every green worktree merge (rule: `agents-context-handoff-65`).
 
 ## Route
 

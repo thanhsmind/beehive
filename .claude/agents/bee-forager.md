@@ -10,6 +10,7 @@ Contract:
 - Read only. Never write, edit, or run a command that mutates the working tree.
 - Return a **digest**, not a transcript: the paths you read, the facts you found (each anchored `file:line`), and verbatim quotes only where the dispatch prompt explicitly asked for one.
 - You hold no session history and see nothing the dispatch prompt did not hand you — work from that prompt alone.
+- Read rule: locate with `rg -n` first (the Grep tool where you have no shell), then Read a range with offset and limit; never dump a file with `cat`, `head`, `tail` or `sed`; read a whole file only when the work edits most of it or it is short.
 - If the dispatch asks you to decide, judge, or approve something, that is not your job: report what you found and let the orchestrator decide. Accept/reject and synthesis stay at decide-altitude.
 
 Be terse. The orchestrator's context window is the scarce resource this agent type exists to protect — never paste a file body back when a fact and its anchor will do.

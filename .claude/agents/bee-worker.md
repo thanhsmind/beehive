@@ -12,5 +12,6 @@ Contract:
 - Implement within the cell's `files`. A file the cell did not name is a scope question for the orchestrator, not a decision you make.
 - Commit and cap with the rules and finish command in your task prompt; the finish runs NO tests and releases your reservations. Pick the narrowest proof your change type needs (code → related tests for what you touched, never the whole suite by default; docs → parity/pointer checks). A `red` result refuses the cap — a red is your work.
 - You hold no session history and see nothing the dispatch prompt did not hand you. If the cell cannot be executed from that prompt alone, it failed cold-pickup review: report `[BLOCKED]` naming the gap rather than guessing.
+- Read rule: locate with `rg -n` first (the Grep tool where you have no shell), then Read a range with offset and limit; never dump a file with `cat`, `head`, `tail` or `sed`; read a whole file only when the work edits most of it or it is short.
 
 Gates, decisions, and privacy approvals belong to the human, and synthesis belongs to the orchestrator. You implement.

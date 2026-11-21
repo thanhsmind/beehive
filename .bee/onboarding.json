@@ -51,7 +51,7 @@
       "bee-defects.md": "128820aaccc3644492f753d10cfba5231bfd7939624aba943da7ab74340a5dc5",
       "cli-before-mcp.md": "4fcf1fbe97f9b91306fb344121d7ffcb5fa3511c916fcd446de07a817d920492",
       "cross-project.md": "6d9d6b23eb73ea4de7f426e1eeca0ecedaeb7d2ded592f7d998dbe9fce379836",
-      "handoff.md": "fe7b029350efcdf73d9992bc66a366d956f3497362f037d3e8a8fbfa87fc5a99",
+      "handoff.md": "d495eab0bb01d0480ca004e24f77347b51abd251397bdebc825ffecce45a9ebd",
       "multi-session.md": "1e820395d0daabd521c5d3b7d3a46fcbc8d24f3ce893ca43e6636693a44b6ea8"
     },
     "repo_hooks": {
@@ -192,5 +192,5 @@
   },
   "design_role_offered": true,
   "created_at": "2026-07-24T03:53:44.750Z",
-  "updated_at": "2026-11-20T01:10:52.659Z"
+  "updated_at": "2026-11-21T04:58:08.025Z"
 }

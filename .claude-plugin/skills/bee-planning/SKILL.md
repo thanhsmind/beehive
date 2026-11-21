@@ -170,7 +170,10 @@ coverage judgment first: cite existing tests by file and case, author only
 the gap (`.bee/expertise/tests.md`). No lane skips the pair, `tiny`
 included. A docs-only cell gets a second cell for its parity and pointer
 checks instead of a tester. The agent owns test scope (rule: agents-proof-at-cap) —
-scoping detail in `references/cells.md` ("Test scoping"). Then
+scoping detail in `references/cells.md` ("Test scoping"). Test and design cells
+run on their role model. Small design, such as polish and tiny UI fixes, stays
+on the design role. A hard test cell or a substantial design cell is marked with
+`bee cells escalate` at plan time. Then
 `bee state set --owner planning --phase swarming --next-action "Invoke bee-swarming."`
 
 ## Scope integrity
