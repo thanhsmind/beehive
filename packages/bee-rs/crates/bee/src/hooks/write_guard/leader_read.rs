@@ -131,3 +131,96 @@ FIX: read a range with offset and limit; or dispatch a read gather: .bee/bin/bee
         target.display()
     ))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    fn input(value: Value) -> Map<String, Value> {
+        value.as_object().cloned().unwrap()
+    }
+
+    fn file_with(dir: &Path, name: &str, lines: usize) {
+        std::fs::write(dir.join(name), "x\n".repeat(lines)).unwrap();
+    }
+
+    fn refusal(tool: &str, value: Value, dir: &Path, worker: bool, limit: u64) -> Option<String> {
+        leader_read_refusal(tool, &input(value), dir, worker, count_lines, limit)
+    }
+
+    #[test]
+    fn leader_read_cap_refuses_unranged_read_of_401_lines_naming_both_remedies() {
+        let dir = tempfile::tempdir().unwrap();
+        file_with(dir.path(), "long.txt", 401);
+        let text = refusal("Read", json!({"file_path": "long.txt"}), dir.path(), false, 400)
+            .expect("401 lines must be refused");
+        assert!(text.contains("offset and limit"), "{text}");
+        assert!(text.contains("bee dispatch prepare"), "{text}");
+    }
+
+    #[test]
+    fn leader_read_cap_passes_400_lines() {
+        let dir = tempfile::tempdir().unwrap();
+        file_with(dir.path(), "edge.txt", 400);
+        assert!(refusal("Read", json!({"file_path": "edge.txt"}), dir.path(), false, 400).is_none());
+    }
+
+    #[test]
+    fn leader_read_cap_passes_ranged_read() {
+        let dir = tempfile::tempdir().unwrap();
+        file_with(dir.path(), "long.txt", 401);
+        for ranged in [
+            json!({"file_path": "long.txt", "offset": 1, "limit": 50}),
+            json!({"file_path": "long.txt", "limit": 50}),
+            json!({"file_path": "long.txt", "offset": 10}),
+        ] {
+            assert!(refusal("Read", ranged, dir.path(), false, 400).is_none());
+        }
+    }
+
+    #[test]
+    fn leader_read_cap_passes_worker_session() {
+        let dir = tempfile::tempdir().unwrap();
+        file_with(dir.path(), "long.txt", 401);
+        assert!(refusal("Read", json!({"file_path": "long.txt"}), dir.path(), true, 400).is_none());
+        assert!(refusal("Bash", json!({"command": "cat long.txt"}), dir.path(), true, 400).is_none());
+    }
+
+    #[test]
+    fn leader_read_cap_limit_zero_passes_every_size() {
+        let dir = tempfile::tempdir().unwrap();
+        file_with(dir.path(), "huge.txt", 5000);
+        assert!(refusal("Read", json!({"file_path": "huge.txt"}), dir.path(), false, 0).is_none());
+        assert!(refusal("Bash", json!({"command": "cat huge.txt"}), dir.path(), false, 0).is_none());
+    }
+
+    #[test]
+    fn leader_read_cap_refuses_bare_cat_of_401_lines() {
+        let dir = tempfile::tempdir().unwrap();
+        file_with(dir.path(), "long.txt", 401);
+        let text = refusal("Bash", json!({"command": "cat long.txt"}), dir.path(), false, 400)
+            .expect("bare cat must be refused");
+        assert!(text.contains("offset and limit"), "{text}");
+        assert!(text.contains("bee dispatch prepare"), "{text}");
+    }
+
+    #[test]
+    fn leader_read_cap_passes_piped_or_ranged_cat() {
+        let dir = tempfile::tempdir().unwrap();
+        file_with(dir.path(), "long.txt", 401);
+        for command in ["cat long.txt | head", "cat long.txt | head -n 20", "head -n 20 long.txt"] {
+            assert!(
+                refusal("Bash", json!({"command": command}), dir.path(), false, 400).is_none(),
+                "{command}"
+            );
+        }
+    }
+
+    #[test]
+    fn leader_read_cap_config_default_and_override() {
+        assert_eq!(resolve_leader_read_max_lines(&Map::new()), 400);
+        assert_eq!(resolve_leader_read_max_lines(&input(json!({"leader_read_max_lines": 0}))), 0);
+        assert_eq!(resolve_leader_read_max_lines(&input(json!({"leader_read_max_lines": 50}))), 50);
+    }
+}
