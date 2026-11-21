@@ -344,4 +344,4 @@ docs/specs/
 
 ## Helper CLI Quick Reference
 
-`bee` = `.bee/bin/bee` (run from the session's cwd, never via PATH or a Node script); `bee <cmd> --help` (`--all` / `--json` / `--names`) is the command reference.
+`bee` = `.bee/bin/bee` (run from the session's cwd, never via PATH or a Node script); `bee <cmd> --help` (`--brief` / `--all` / `--json` / `--names`) is the command reference.

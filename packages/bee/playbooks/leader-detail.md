@@ -338,8 +338,12 @@ one type per file, linked where types meet.
 
 ## Token efficiency
 
-Read when: you consider re-running a command.
+Read when: you consider re-running a command, or about to make a tool call.
 
+- Every tool call re-reads the whole session, so each call costs the
+  session's full length. Independent commands go in one Bash call, or
+  independent calls go together in one message; a short command runs
+  alone only when its output decides the next command.
 - Never re-run a command to "verify" unless the outcome was uncertain
   ("Prove, then say so" still holds: a done/green claim still needs its
   fresh output — test and verify runs ARE the uncertain outcome).
