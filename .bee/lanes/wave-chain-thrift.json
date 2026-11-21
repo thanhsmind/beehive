@@ -11,10 +11,15 @@
     "uat": false
   },
   "summary": "Feature \"wave-chain-thrift\" started at phase \"exploring\" (lane).",
-  "next_action": "Continue bee-exploring for \"wave-chain-thrift\" (lane).",
+  "next_action": "Merged into main at 7cd562e; reload the product and test \"wave-chain-thrift\", then either approve uat (\"bee gate --name uat --approved true --lane wave-chain-thrift\") or fix it in the worktree and merge again.",
   "created_at": "2026-11-21T06:49:50.080Z",
   "run_state": "awaiting-approval",
-  "waiting_on": null,
+  "waiting_on": {
+    "kind": "gate",
+    "subject": "uat: wave-chain-thrift",
+    "asked_at": "2026-11-21T07:15:34.037Z",
+    "session": "bee-worktree-merge-sessionless"
+  },
   "gate_preview": {
     "feature": "wave-chain-thrift",
     "plan_sha256": "1f038a8928ca762fbf6bbdc91abf22e849bf48a2863c3eb60c45d893365f4b9f",
@@ -715,14 +720,5 @@
         }
       ]
     }
-  },
-  "merge_ready": {
-    "since": "2026-11-21T07:12:37.722Z",
-    "branch": "wt/wave-chain-thrift",
-    "worktree_id": "beehive--wt--wave-chain-thrift",
-    "uat": "pending",
-    "blocked_by": [
-      "doc-deferral"
-    ]
   }
 }
