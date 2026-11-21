@@ -595,6 +595,23 @@ mod tests {
         (kind, msg)
     }
 
+    #[test]
+    fn refusal_card_missing_id_prints_the_id_line_under_flags() {
+        let (kind, msg) = classify_argv(&["cells", "finish"]);
+        assert_eq!(kind, "missing_required_argument");
+        let (_, card) = msg.split_once("\nflags:\n").unwrap_or_else(|| panic!("no flags: line: {msg}"));
+        assert!(card.lines().any(|l| l.trim_start().starts_with("--id")), "{msg}");
+    }
+
+    #[test]
+    fn refusal_card_unknown_flag_prints_the_card_and_names_help_brief() {
+        let (kind, msg) = classify_argv(&["cells", "finish", "--id", "x", "--bogus", "1"]);
+        assert_eq!(kind, "unsupported_argument_shape");
+        assert!(msg.contains("--help --brief"), "{msg}");
+        let (_, card) = msg.split_once("\nflags:\n").unwrap_or_else(|| panic!("no flags: line: {msg}"));
+        assert!(card.lines().any(|l| l.trim_start().starts_with("--id")), "{msg}");
+    }
+
     /// The regression this taxonomy exists for: the old message said the
     /// command was unsupported and then listed it as valid.
     #[test]

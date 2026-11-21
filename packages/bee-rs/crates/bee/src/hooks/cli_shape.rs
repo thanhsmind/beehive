@@ -724,6 +724,15 @@ mod tests {
     // ── check (a): required-flag denial ─────────────────────────────────────
 
     #[test]
+    fn refusal_card_shape_denial_carries_the_card_and_names_help_brief() {
+        let reason = deny("bee cells finish --bogus 1");
+        assert!(reason.contains("--help --brief"), "{reason}");
+        assert!(!reason.contains("--help --json"), "{reason}");
+        let (_, card) = reason.split_once("\nflags:\n").unwrap_or_else(|| panic!("no flags: line: {reason}"));
+        assert!(card.lines().any(|l| l.trim_start().starts_with("--id")), "{reason}");
+    }
+
+    #[test]
     fn a_malformed_call_missing_a_required_flag_is_denied() {
         let reason = deny("node .bee/bin/bee_cells.mjs show");
         let card = crate::verbs::help::brief_card_text("cells.show");
