@@ -8,7 +8,7 @@ bee:
   lifecycle: active
   areas: [hook-runtime]
   required_context: [areas/hook-runtime/overview.md]
-  decisions: ["token-thrift D1 (PREAMBLE_BUDGET_BYTES is 9500, below HOST_INLINE_LIMIT_CHARS 10,000)", token-thrift D2 (fixed drop order and one Omitted line that names each fetch path), token-thrift D3 (zero-frontier discovery maps fold into one count line), "token-thrift D4 (dispatch door prints one line per rendered target, roles in full)", "token-thrift D5 (orient promote blocker names at most 3 features, then +N more)", "691fcac4-14a8-40b1-8600-d720ebc47e6f (token-thrift D7: the preamble promote proposal line names at most 3 clear commands, then +N more)", token-thrift D6 (this concept), "8f63adb4-de70-424e-b082-1f4c5ec4b693 (budget-fence-removal D1: budgets bind generated payloads only, never authored instruction text)", "lean-context D1 (prompt-context warns at handoff_context_tokens; token-spend-cuts D1 turned the line into a handoff directive with a 300000 default)", "token-spend-cuts D1 (handoff_context_tokens defaults to 300000; at or past it the prompt-context line tells the leader to hand off at the next clean stop; a green worktree merge ends its next action with the fresh-leader-session handoff)", "token-spend-cuts D4 (lane_budget halves to tiny 4000, small 6000, standard 10000, high-risk 15000, default 10000; no docs/knowledge/index.md fallback in the learned-context block)", "semantic-token-diet D7 (preamble trailer names bee orient for routing and bee status --json only for missing detail; Proof-per-change-type line removed)", "semantic-token-diet D8 (herding brief renders # Proof command only for cell jobs)", "semantic-token-diet D9 (single-command help prints first sentence, flags, then remaining text under details:; heaviest descriptions drop decision ids and history narration)"]
+  decisions: ["token-thrift D1 (PREAMBLE_BUDGET_BYTES is 9500, below HOST_INLINE_LIMIT_CHARS 10,000)", token-thrift D2 (fixed drop order and one Omitted line that names each fetch path), token-thrift D3 (zero-frontier discovery maps fold into one count line), "token-thrift D4 (dispatch door prints one line per rendered target, roles in full)", "token-thrift D5 (orient promote blocker names at most 3 features, then +N more)", "691fcac4-14a8-40b1-8600-d720ebc47e6f (token-thrift D7: the preamble promote proposal line names at most 3 clear commands, then +N more)", token-thrift D6 (this concept), "8f63adb4-de70-424e-b082-1f4c5ec4b693 (budget-fence-removal D1: budgets bind generated payloads only, never authored instruction text)", "lean-context D1 (prompt-context warns at handoff_context_tokens; token-spend-cuts D1 turned the line into a handoff directive with a 300000 default)", "token-spend-cuts D1 (handoff_context_tokens defaults to 300000; at or past it the prompt-context line tells the leader to hand off at the next clean stop; a green worktree merge ends its next action with the fresh-leader-session handoff)", "token-spend-cuts D4 (lane_budget halves to tiny 4000, small 6000, standard 10000, high-risk 15000, default 10000; no docs/knowledge/index.md fallback in the learned-context block)", "token-spend-cuts D3 (every worker agent template in packages/bee/agents carries the read rule: rg -n first, then a Read range with offset and limit)", "semantic-token-diet D7 (preamble trailer names bee orient for routing and bee status --json only for missing detail; Proof-per-change-type line removed)", "semantic-token-diet D8 (herding brief renders # Proof command only for cell jobs)", "semantic-token-diet D9 (single-command help prints first sentence, flags, then remaining text under details:; heaviest descriptions drop decision ids and history narration)"]
   sources: [docs/history/token-thrift/CONTEXT.md, docs/history/token-thrift/reports/hat-wave-synthesis.md, "cell tt-1 (commit 3ca8a49fe, 2026-10-21)", "cell tt-2 (commit 646c14cff, 2026-10-21)", "cell tt-3 (commit 81f81b039, 2026-10-21)", "measured 2026-10-21: the session preamble on this repo was 11,041 to 11,161 bytes before tt-1", docs/history/lean-context/CONTEXT.md, cell lnc-1, docs/history/token-spend-cuts/CONTEXT.md, "token-spend-cuts cells tsc-1, tsc-2, tsc-4 (commits 5a9dae308, c4e633e93, 7674b3f4f, 2026-11-21)", docs/history/semantic-token-diet/CONTEXT.md, "semantic-token-diet cells stdi-1..stdi-6 (commits b519417c6, 66ca1f554, 73d8810d5, be207c310, c611721a7, 2026-11-16)"]
   authoritative_for: "hook-runtime: the size limits on injected session context and why they exist"
   anchors: [packages/bee-rs/crates/bee/src/hooks/prompt_context.rs, packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs, packages/bee-rs/crates/bee/src/hooks/session_init.rs, packages/bee-rs/crates/bee/src/hooks/session_preamble/tests.rs, packages/bee-rs/crates/bee/src/hooks/model_guard.rs, packages/bee-rs/crates/bee/src/verbs/status_full/orient.rs, packages/bee-rs/crates/bee/src/verbs/fix_at.rs, packages/bee-rs/crates/bee/src/hooks/session_preamble/render.rs, packages/bee-rs/crates/bee/src/herding/mailbox.rs, packages/bee-rs/crates/bee/src/verbs/help.rs, packages/bee-rs/crates/bee/src/generated/registry_payload.json, packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs, packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs]
@@ -159,6 +159,15 @@ already owns that rule.
 reviewer or advisor has no cell verify to prove, so printing the project test
 command added noise to its brief.
 
+**Every worker agent template carries one read rule (token-spend-cuts D3).**
+Each template in `packages/bee/agents` (`bee-worker`, `bee-comb`, `bee-guard`,
+`bee-forager`, `bee-scout`, `bee-elder`) tells its agent to locate with `rg -n`
+first, then Read a range with offset and limit, never to dump a file with
+`cat`, `head`, `tail` or `sed`, and to read a whole file only when the work
+edits most of it or it is short. The rule sits in the template because a
+template reaches every project that installs bee. Find the rule with
+`rg -n "Read rule"` in that directory.
+
 **Single-command help prints flags before details (semantic-token-diet D9).**
 For a single command, `render_help_text` in
 `packages/bee-rs/crates/bee/src/verbs/help.rs` prints the invoke line, the first
@@ -249,6 +258,9 @@ names all five roles (`dispatch`, `merge`, `route`, `supervisor`, `broker`).
   `packages/bee-rs/crates/bee/src/verbs/help.rs` and command descriptions in
   `packages/bee-rs/crates/bee/src/generated/registry_payload.json`
   (semantic-token-diet D9).
+- Worker read rule: `packages/bee/agents/bee-worker.md.tmpl` and its five
+  sibling templates in `packages/bee/agents` (token-spend-cuts D3).
 - Locked decisions: `docs/history/token-thrift/CONTEXT.md`,
   `docs/history/lean-context/CONTEXT.md` (D1),
-  `docs/history/semantic-token-diet/CONTEXT.md` (D7–D9).
+  `docs/history/semantic-token-diet/CONTEXT.md` (D7–D9),
+  `docs/history/token-spend-cuts/CONTEXT.md` (D1, D3–D5).
