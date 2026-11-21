@@ -1463,3 +1463,4 @@
 {"ts":"2026-11-20T01:24:02.977Z","event":"complete","id":"2d8c7f41-9b51-424d-8ed1-1a39274b1d8d"}
 {"ts":"2026-11-20T01:24:06.941Z","event":"complete","id":"6885c946-a6b4-4edc-8b35-6210068ebb30"}
 {"ts":"2026-11-20T01:24:10.738Z","event":"complete","id":"173c39d4-dce6-4924-9aef-95cce98c5cac"}
+{"ts":"2026-11-21T05:15:45.683Z","event":"add","id":"b22ba2e6-e860-4410-9571-bd5a74b12e4e","kind":"worktree-cleanup","feature":"token-spend-cuts","cells":[],"areas":[],"files":["/mnt/data/Projects/goglbe/beehive--wt--token-spend-cuts"],"reason":"Worktree beehive--wt--token-spend-cuts (branch wt/token-spend-cuts) merged into main at f132c00870f477370511a0606b790c75fa1b6930 and kept per default (D1) — remove it with `bee worktree prune`."}

@@ -961,6 +961,9 @@
     "contract:release-2-113-0",
     "contract:handoff-mark-directive",
     "contract:knowledge-pack-budget",
-    "contract:judge-small-diff"
+    "contract:judge-small-diff",
+    "contract:auto-settle-answers",
+    "contract:worker-full-suite-guard",
+    "contract:cap-one-refusal"
   ]
 }

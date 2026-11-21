@@ -1,0 +1,710 @@
+{
+  "schema_version": "1.0",
+  "feature": "leader-call-thrift",
+  "mode": null,
+  "phase": "exploring",
+  "approved_gates": {
+    "context": true,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"leader-call-thrift\" started at phase \"exploring\" (lane).",
+  "next_action": "Continue bee-exploring for \"leader-call-thrift\" (lane).",
+  "created_at": "2026-11-21T05:51:27.563Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null,
+  "route": {
+    "class": "feature",
+    "lane": "standard",
+    "flags": [],
+    "product_files": 8,
+    "rationale": "three small Rust changes in cap, herding run and the worker guard",
+    "updated_at": "2026-11-21T05:56:15.333Z",
+    "feature": "leader-call-thrift"
+  },
+  "gate_preview": {
+    "feature": "leader-call-thrift",
+    "plan_sha256": "bc46f3e9cf10d7264263a50bcc80f7aec28ab5dd17b3a35f98607968e895b428",
+    "previewed_at": "2026-11-21T05:56:25.201Z",
+    "cells": [
+      {
+        "id": "lct-1",
+        "title": "Name every missing cap answer in one refusal",
+        "role": "code",
+        "deps": [],
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- verbs::cells",
+        "must_haves": {
+          "truths": [
+            "cap_cell_from_flags in handlers_close.rs evaluates the mistakes answer, the principles answer, the principles-arm answer, the proof floor, the finish commit trailer and the sync door without returning at the first, and refuses once with one text that lists each problem and its fix flag",
+            "state refusals (cell not found, already capped or dropped, archived, claim ownership, report shape, verify mismatch, design, advisor nudge, departure door, NEEDS_REVISION judge, inline and lane checks) keep their order and still refuse alone",
+            "the judge override decision (log_decision near line 513) is written only after every check has passed",
+            "existing tests that pin a single refusal text are updated to the combined text and pass"
+          ],
+          "why": "About 20 leader calls in token-spend-cuts were refuse-then-retry on cap answers (D1).",
+          "out_of_scope": [
+            "herding run",
+            "new tests",
+            "the check rules themselves"
+          ]
+        },
+        "decisions": [
+          "4597b92e-9de8-47cd-b217-61bc984ff7f8",
+          "fab7d838-2a3c-4093-a65a-b79530bb71ca"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+          "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+        ],
+        "action": "Implement CONTEXT.md D1 in packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs cap_cell_from_flags (line 256). The missing-answer checks today are: read_mistakes_answer (line 385), read_principles_used_answer (line 388), the finish commit trailer (lines 415-435), the proof floor (lines 459-464), the principles arm (lines 465-469), and the sync door (lines 871-896). Collect their refusal texts into a Vec in their current order and, after the last of them, refuse once when the Vec is not empty: first line 'capCell: cell \"<id>\" needs N answer(s) before it caps:' then one line per problem, each keeping its existing text and fix. Keep every other refusal where it is. Move the judge override side effect (log_decision near line 513) after the sync door so nothing is written when any check refuses. Update existing assertions in verbs/cells/tests.rs that break; add no new tests (lct-5 owns them). Locate with rg -n and read ranges only. Write no code comment. Run only the cell verify, never the full suite. One commit with the cell trailer, files staged by explicit path. In the result, put principles_used ([] when none) and, if the cap door asks, sync_ack.",
+        "feature": "leader-call-thrift",
+        "lane": "standard",
+        "read_first": [
+          "docs/history/leader-call-thrift/CONTEXT.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": []
+      },
+      {
+        "id": "lct-2",
+        "title": "Let herding run cap with the worker's own answers",
+        "role": "code",
+        "deps": [],
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- herding::run herding::mailbox",
+        "must_haves": {
+          "truths": [
+            "try_cap_finished_cell in herding/run.rs passes the worker result's principles_used array to the cap (an empty array answers no principle used) and its sync_ack string when present",
+            "when the auto-settle cap refuses, herding run prints the cap refusal text and a bee cells finish command carrying --from-job, --proof-result with the parsed label, --no-mistakes, and each flag the refusal names (--principle-used or --no-principle-used, --sync-ack), in place of the fixed hint",
+            "the cell brief's result contract (render_brief in herding/mailbox.rs) names principles_used and sync_ack as result fields with one line on when to fill each, and the result parser accepts them",
+            "existing tests that pin the old hint or the old result schema are updated and pass"
+          ],
+          "why": "6 of 8 token-spend-cuts workers returned done without a cap; each cost the leader finish calls (D2).",
+          "out_of_scope": [
+            "the cap door order",
+            "new tests"
+          ]
+        },
+        "decisions": [
+          "2b81baba-c7c9-4345-be34-46ff3797ecdd",
+          "42961013-6afe-462e-937d-445aa6c8f9d8"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/herding/run.rs",
+          "packages/bee-rs/crates/bee/src/herding/mailbox.rs"
+        ],
+        "action": "Implement CONTEXT.md D2. In packages/bee-rs/crates/bee/src/herding/run.rs try_cap_finished_cell (lines 6142-6213) fill CapFlags principle_used / no_principle_used and sync_ack from the parsed mailbox result fields principles_used (array of strings; empty means no principle used) and sync_ack (non-blank string). When finish_cap_and_release refuses, replace the fixed hint at line 6384 with the refusal text plus one bee cells finish command line that carries every flag the refusal names. In packages/bee-rs/crates/bee/src/herding/mailbox.rs add the two optional fields to the result type near line 545 and to the result contract text near line 430 (one line each: principles_used lists the principle slugs that changed a decision, [] for none; sync_ack gives the reason when the cap sync door asks). Update existing assertions that break; add no new tests (lct-5 owns them). Locate with rg -n and read ranges only. Write no code comment. Run only the cell verify, never the full suite. One commit with the cell trailer, files staged by explicit path. In the result, put principles_used ([] when none) and, if the cap door asks, sync_ack.",
+        "feature": "leader-call-thrift",
+        "lane": "standard",
+        "read_first": [
+          "docs/history/leader-call-thrift/CONTEXT.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": []
+      },
+      {
+        "id": "lct-3",
+        "title": "Stop a herded cell worker from starting the full suite",
+        "role": "code",
+        "deps": [],
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- hooks::worker_guard full_suite",
+        "must_haves": {
+          "truths": [
+            "the worker guard in hooks/worker_guard.rs, for a herded worker whose job carries a cell id, refuses a Bash command when any segment (split and env-stripped the way verbs/cells/validate.rs verify_segments and strip_env_assignments do) equals a declared commands.test entry, bee test or .bee/bin/bee test",
+            "it does not refuse when that cell has a non-blank full_suite_reason, when the job has no cell id, or for a cargo test command with a filter",
+            "the refusal text names the full suite, says it runs once per feature through bee test, and names the cell verify to run",
+            "the segment test is one shared function used by both validate.rs full_suite_verify_problem and the guard"
+          ],
+          "why": "The token-spend-cuts tester ran the full suite, went idle twice and lost its result (D3).",
+          "out_of_scope": [
+            "read-only jobs",
+            "new tests"
+          ]
+        },
+        "decisions": [
+          "9b3a677f-815c-46a7-9c49-bd07d8084e43",
+          "6e253441-8645-487b-a35b-c791822bb353"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/hooks/worker_guard.rs",
+          "packages/bee-rs/crates/bee/src/verbs/cells/validate.rs"
+        ],
+        "action": "Implement CONTEXT.md D3. Factor the full-suite segment test out of packages/bee-rs/crates/bee/src/verbs/cells/validate.rs full_suite_verify_problem (lines 183-204, helpers verify_segments line 172 and strip_env_assignments line 143) into one pub(crate) fn that takes a command string and the declared commands.test list. In packages/bee-rs/crates/bee/src/hooks/worker_guard.rs run (line 16), for a herded worker (BEE_HERDING_WORKER set) find the job's cell id the way herding already exposes it to the worker (find with rg -n for the env or job.json the worker reads, for example in herding/run.rs), load that cell from the control root store, and refuse a Bash tool call whose command matches, unless the cell has a non-blank full_suite_reason. Reuse the existing denial output shape and exit code. Update existing assertions that break; add no new tests (lct-5 owns them). Locate with rg -n and read ranges only. Write no code comment. Run only the cell verify, never the full suite. One commit with the cell trailer, files staged by explicit path. In the result, put principles_used ([] when none) and, if the cap door asks, sync_ack.",
+        "feature": "leader-call-thrift",
+        "lane": "standard",
+        "read_first": [
+          "docs/history/leader-call-thrift/CONTEXT.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": []
+      },
+      {
+        "id": "lct-4",
+        "title": "Sync the knowledge concepts to the three changes",
+        "role": "docs",
+        "deps": [
+          "lct-1",
+          "lct-2",
+          "lct-3"
+        ],
+        "verify": "./.bee/bin/bee knowledge check",
+        "must_haves": {
+          "truths": [
+            "docs/knowledge/areas/workflow-state/cells-completion-judge-and-archive.md states the one combined missing-answer refusal and the judge override write order, citing leader-call-thrift D1",
+            "docs/knowledge/areas/bee-herding/the-run-verb-and-worker-outcomes.md states that auto-settle passes principles_used and sync_ack and prints the full finish command, citing leader-call-thrift D2",
+            "docs/knowledge/areas/hook-runtime/hook-runtime-the-worker-outward-guard.md states the full-suite refusal for herded cell jobs and its full_suite_reason escape, citing leader-call-thrift D3"
+          ],
+          "why": "docs/knowledge is the state layer and must match the code.",
+          "out_of_scope": [
+            "Rust code",
+            "skills"
+          ]
+        },
+        "decisions": [
+          "4597b92e-9de8-47cd-b217-61bc984ff7f8",
+          "2b81baba-c7c9-4345-be34-46ff3797ecdd",
+          "9b3a677f-815c-46a7-9c49-bd07d8084e43"
+        ],
+        "files": [
+          "docs/knowledge/areas/workflow-state/cells-completion-judge-and-archive.md",
+          "docs/knowledge/areas/bee-herding/the-run-verb-and-worker-outcomes.md",
+          "docs/knowledge/areas/hook-runtime/hook-runtime-the-worker-outward-guard.md"
+        ],
+        "action": "Read the three code commits (git log --oneline for cells lct-1, lct-2, lct-3) and update the three concepts in place: find the paragraph with rg -n, edit it, cite leader-call-thrift D-numbers (never raw decision ids), add the D-numbers to each frontmatter decisions list and the changed file to Pointers. Avoid the words deferred, until and later. Locate with rg -n and read ranges only. Write no code comment. Run only the cell verify, never the full suite. One commit with the cell trailer, files staged by explicit path. In the result, put principles_used ([] when none) and, if the cap door asks, sync_ack.",
+        "feature": "leader-call-thrift",
+        "lane": "standard",
+        "read_first": [
+          "docs/history/leader-call-thrift/CONTEXT.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": []
+      },
+      {
+        "id": "lct-5",
+        "title": "Prove the three contracts and check the concept sync",
+        "role": "test",
+        "deps": [
+          "lct-1",
+          "lct-2",
+          "lct-3",
+          "lct-4"
+        ],
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- cap_one_refusal auto_settle_answers worker_full_suite",
+        "must_haves": {
+          "truths": [
+            "tests named with cap_one_refusal show: a cap missing the mistakes answer, the principles-arm answer and the sync ack refuses once naming all three fixes and writes nothing; with all three it caps; a judge override decision is not written when a check after it refuses",
+            "tests named with auto_settle_answers show: a done cell job whose result carries principles_used and sync_ack is capped by herding run in the principles arm on a cell the sync door would refuse; without them herding run prints the refusal and a finish command naming the principle flag and --sync-ack",
+            "tests named with worker_full_suite show: a herded cell job is refused the declared suite, bee test and an env-prefixed suite; allowed a filtered cargo test; allowed the suite when the cell has full_suite_reason; a job with no cell id is not refused",
+            "each contract has a test that failed at the parent of its code cell commit, quoted in the report",
+            "the report lists each lct-4 must_have with the file:line that shows it, or names the gap",
+            "the report holds one fenced block per cell lct-1, lct-2, lct-3 with info string json <cell-id> holding a judge-verdict/1 object: schema, verdict PASS or NEEDS_REVISION, checks each with id, status PASS or FAIL, evidence (file:line and what it shows) and failure_signature when FAIL, fixability automatic or authority, confidence low, medium or high"
+          ],
+          "why": "A code cell never certifies itself; the tester also carries the judge (token-spend-cuts D5).",
+          "out_of_scope": [
+            "production code"
+          ]
+        },
+        "decisions": [
+          "fab7d838-2a3c-4093-a65a-b79530bb71ca",
+          "42961013-6afe-462e-937d-445aa6c8f9d8",
+          "6e253441-8645-487b-a35b-c791822bb353",
+          "4597b92e-9de8-47cd-b217-61bc984ff7f8",
+          "2b81baba-c7c9-4345-be34-46ff3797ecdd",
+          "9b3a677f-815c-46a7-9c49-bd07d8084e43"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+          "packages/bee-rs/crates/bee/src/herding/run.rs",
+          "packages/bee-rs/crates/bee/src/hooks/worker_guard.rs",
+          "docs/history/leader-call-thrift/reports/lct-5.md"
+        ],
+        "action": "Check contracts cap-one-refusal (fab7d838), auto-settle-answers (42961013) and worker-full-suite-guard (6e253441) on the lct-1, lct-2 and lct-3 commits. Add tests only inside existing test modules: verbs/cells/tests.rs (near contract_cells_finish_from_job tests), herding/run.rs tests (near done_result_with_commit_and_green_proof_is_capped_by_herding_run_itself), hooks/worker_guard.rs tests. Every new test name contains cap_one_refusal, auto_settle_answers or worker_full_suite. Red proof per contract: put the production file at its code cell's parent with git show <parent>:<path>, run the verify, record the failure or compile error, restore to HEAD. Then run the verify green. Edit no production code. Check lct-4 parity and judge lct-1 to lct-3 from their diffs. Write everything to docs/history/leader-call-thrift/reports/lct-5.md. Locate with rg -n and read ranges only. Write no code comment. Run only the cell verify, never the full suite. One commit with the cell trailer, files staged by explicit path. In the result, put principles_used ([] when none) and, if the cap door asks, sync_ack.",
+        "feature": "leader-call-thrift",
+        "lane": "standard",
+        "read_first": [
+          "docs/history/leader-call-thrift/CONTEXT.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": []
+      }
+    ],
+    "role_plan": {
+      "schema_version": "1.0",
+      "runtime": "claude",
+      "roster_sha256": "cd477eb57b66a0cef7310533c504a43a20e8b19e131431e73112bda9a9f114c8",
+      "stages": [
+        {
+          "stage": "implementation",
+          "classification": "required",
+          "role": "code",
+          "reason": "lct-1, lct-2, lct-3 change Rust code."
+        },
+        {
+          "stage": "test-and-live-proof",
+          "classification": "required",
+          "role": "test",
+          "reason": "lct-5 proves the contracts, judges the code cells and checks lct-4 parity."
+        },
+        {
+          "stage": "docs",
+          "classification": "required",
+          "role": "docs",
+          "reason": "lct-4 syncs three concepts."
+        },
+        {
+          "stage": "slice-judge",
+          "classification": "not-applicable",
+          "role": "review",
+          "reason": "token-spend-cuts D5: the tester returns the judge blocks."
+        },
+        {
+          "stage": "hat-facts-gaps",
+          "classification": "not-applicable",
+          "role": "hat-facts-gaps",
+          "reason": "Evidence and code map are in CONTEXT.md."
+        },
+        {
+          "stage": "hat-alternatives",
+          "classification": "not-applicable",
+          "role": "hat-alternatives",
+          "reason": "The owner picked these three from seven."
+        },
+        {
+          "stage": "hat-user-impact",
+          "classification": "not-applicable",
+          "role": "hat-user-impact",
+          "reason": "CLI text and a worker guard; no UI."
+        },
+        {
+          "stage": "hat-risks",
+          "classification": "not-applicable",
+          "role": "hat-risks",
+          "reason": "Each change is reversible in one commit; the guard has a recorded escape."
+        },
+        {
+          "stage": "hat-value",
+          "classification": "not-applicable",
+          "role": "hat-value",
+          "reason": "Owner-requested with spend evidence."
+        },
+        {
+          "stage": "deployment",
+          "classification": "not-applicable",
+          "role": "deploy",
+          "reason": "No release in this feature."
+        },
+        {
+          "stage": "planning",
+          "classification": "not-applicable",
+          "role": "plan",
+          "reason": "The leader wrote the plan."
+        },
+        {
+          "stage": "read-only-gather",
+          "classification": "not-applicable",
+          "role": "read",
+          "reason": "The code map ran before the plan."
+        },
+        {
+          "stage": "fact-extraction",
+          "classification": "not-applicable",
+          "role": "extraction",
+          "reason": "No extraction stage."
+        },
+        {
+          "stage": "generation-fallback",
+          "classification": "not-applicable",
+          "role": "generation",
+          "reason": "Every cell has a configured role."
+        },
+        {
+          "stage": "writing",
+          "classification": "not-applicable",
+          "role": "writer",
+          "reason": "The docs cell covers the prose."
+        },
+        {
+          "stage": "generic-advisor",
+          "classification": "not-applicable",
+          "role": "advisor",
+          "reason": "Standard lane."
+        },
+        {
+          "stage": "supervision",
+          "classification": "not-applicable",
+          "role": "supervisor",
+          "reason": "Attended session."
+        },
+        {
+          "stage": "blind-lane-1",
+          "classification": "not-applicable",
+          "role": "lane-1",
+          "reason": "No blind lanes."
+        },
+        {
+          "stage": "blind-lane-2",
+          "classification": "not-applicable",
+          "role": "lane-2",
+          "reason": "No blind lanes."
+        },
+        {
+          "stage": "blind-lane-3",
+          "classification": "not-applicable",
+          "role": "lane-3",
+          "reason": "No blind lanes."
+        },
+        {
+          "stage": "design-ui",
+          "classification": "not-applicable",
+          "role": "design",
+          "reason": "No rendered UI."
+        }
+      ]
+    }
+  },
+  "approved_cell_packet": {
+    "feature": "leader-call-thrift",
+    "plan_sha256": "bc46f3e9cf10d7264263a50bcc80f7aec28ab5dd17b3a35f98607968e895b428",
+    "previewed_at": "2026-11-21T05:56:25.201Z",
+    "cells": [
+      {
+        "id": "lct-1",
+        "title": "Name every missing cap answer in one refusal",
+        "role": "code",
+        "deps": [],
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- verbs::cells",
+        "must_haves": {
+          "truths": [
+            "cap_cell_from_flags in handlers_close.rs evaluates the mistakes answer, the principles answer, the principles-arm answer, the proof floor, the finish commit trailer and the sync door without returning at the first, and refuses once with one text that lists each problem and its fix flag",
+            "state refusals (cell not found, already capped or dropped, archived, claim ownership, report shape, verify mismatch, design, advisor nudge, departure door, NEEDS_REVISION judge, inline and lane checks) keep their order and still refuse alone",
+            "the judge override decision (log_decision near line 513) is written only after every check has passed",
+            "existing tests that pin a single refusal text are updated to the combined text and pass"
+          ],
+          "why": "About 20 leader calls in token-spend-cuts were refuse-then-retry on cap answers (D1).",
+          "out_of_scope": [
+            "herding run",
+            "new tests",
+            "the check rules themselves"
+          ]
+        },
+        "decisions": [
+          "4597b92e-9de8-47cd-b217-61bc984ff7f8",
+          "fab7d838-2a3c-4093-a65a-b79530bb71ca"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+          "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+        ],
+        "action": "Implement CONTEXT.md D1 in packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs cap_cell_from_flags (line 256). The missing-answer checks today are: read_mistakes_answer (line 385), read_principles_used_answer (line 388), the finish commit trailer (lines 415-435), the proof floor (lines 459-464), the principles arm (lines 465-469), and the sync door (lines 871-896). Collect their refusal texts into a Vec in their current order and, after the last of them, refuse once when the Vec is not empty: first line 'capCell: cell \"<id>\" needs N answer(s) before it caps:' then one line per problem, each keeping its existing text and fix. Keep every other refusal where it is. Move the judge override side effect (log_decision near line 513) after the sync door so nothing is written when any check refuses. Update existing assertions in verbs/cells/tests.rs that break; add no new tests (lct-5 owns them). Locate with rg -n and read ranges only. Write no code comment. Run only the cell verify, never the full suite. One commit with the cell trailer, files staged by explicit path. In the result, put principles_used ([] when none) and, if the cap door asks, sync_ack.",
+        "feature": "leader-call-thrift",
+        "lane": "standard",
+        "read_first": [
+          "docs/history/leader-call-thrift/CONTEXT.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": []
+      },
+      {
+        "id": "lct-2",
+        "title": "Let herding run cap with the worker's own answers",
+        "role": "code",
+        "deps": [],
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- herding::run herding::mailbox",
+        "must_haves": {
+          "truths": [
+            "try_cap_finished_cell in herding/run.rs passes the worker result's principles_used array to the cap (an empty array answers no principle used) and its sync_ack string when present",
+            "when the auto-settle cap refuses, herding run prints the cap refusal text and a bee cells finish command carrying --from-job, --proof-result with the parsed label, --no-mistakes, and each flag the refusal names (--principle-used or --no-principle-used, --sync-ack), in place of the fixed hint",
+            "the cell brief's result contract (render_brief in herding/mailbox.rs) names principles_used and sync_ack as result fields with one line on when to fill each, and the result parser accepts them",
+            "existing tests that pin the old hint or the old result schema are updated and pass"
+          ],
+          "why": "6 of 8 token-spend-cuts workers returned done without a cap; each cost the leader finish calls (D2).",
+          "out_of_scope": [
+            "the cap door order",
+            "new tests"
+          ]
+        },
+        "decisions": [
+          "2b81baba-c7c9-4345-be34-46ff3797ecdd",
+          "42961013-6afe-462e-937d-445aa6c8f9d8"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/herding/run.rs",
+          "packages/bee-rs/crates/bee/src/herding/mailbox.rs"
+        ],
+        "action": "Implement CONTEXT.md D2. In packages/bee-rs/crates/bee/src/herding/run.rs try_cap_finished_cell (lines 6142-6213) fill CapFlags principle_used / no_principle_used and sync_ack from the parsed mailbox result fields principles_used (array of strings; empty means no principle used) and sync_ack (non-blank string). When finish_cap_and_release refuses, replace the fixed hint at line 6384 with the refusal text plus one bee cells finish command line that carries every flag the refusal names. In packages/bee-rs/crates/bee/src/herding/mailbox.rs add the two optional fields to the result type near line 545 and to the result contract text near line 430 (one line each: principles_used lists the principle slugs that changed a decision, [] for none; sync_ack gives the reason when the cap sync door asks). Update existing assertions that break; add no new tests (lct-5 owns them). Locate with rg -n and read ranges only. Write no code comment. Run only the cell verify, never the full suite. One commit with the cell trailer, files staged by explicit path. In the result, put principles_used ([] when none) and, if the cap door asks, sync_ack.",
+        "feature": "leader-call-thrift",
+        "lane": "standard",
+        "read_first": [
+          "docs/history/leader-call-thrift/CONTEXT.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": []
+      },
+      {
+        "id": "lct-3",
+        "title": "Stop a herded cell worker from starting the full suite",
+        "role": "code",
+        "deps": [],
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- hooks::worker_guard full_suite",
+        "must_haves": {
+          "truths": [
+            "the worker guard in hooks/worker_guard.rs, for a herded worker whose job carries a cell id, refuses a Bash command when any segment (split and env-stripped the way verbs/cells/validate.rs verify_segments and strip_env_assignments do) equals a declared commands.test entry, bee test or .bee/bin/bee test",
+            "it does not refuse when that cell has a non-blank full_suite_reason, when the job has no cell id, or for a cargo test command with a filter",
+            "the refusal text names the full suite, says it runs once per feature through bee test, and names the cell verify to run",
+            "the segment test is one shared function used by both validate.rs full_suite_verify_problem and the guard"
+          ],
+          "why": "The token-spend-cuts tester ran the full suite, went idle twice and lost its result (D3).",
+          "out_of_scope": [
+            "read-only jobs",
+            "new tests"
+          ]
+        },
+        "decisions": [
+          "9b3a677f-815c-46a7-9c49-bd07d8084e43",
+          "6e253441-8645-487b-a35b-c791822bb353"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/hooks/worker_guard.rs",
+          "packages/bee-rs/crates/bee/src/verbs/cells/validate.rs"
+        ],
+        "action": "Implement CONTEXT.md D3. Factor the full-suite segment test out of packages/bee-rs/crates/bee/src/verbs/cells/validate.rs full_suite_verify_problem (lines 183-204, helpers verify_segments line 172 and strip_env_assignments line 143) into one pub(crate) fn that takes a command string and the declared commands.test list. In packages/bee-rs/crates/bee/src/hooks/worker_guard.rs run (line 16), for a herded worker (BEE_HERDING_WORKER set) find the job's cell id the way herding already exposes it to the worker (find with rg -n for the env or job.json the worker reads, for example in herding/run.rs), load that cell from the control root store, and refuse a Bash tool call whose command matches, unless the cell has a non-blank full_suite_reason. Reuse the existing denial output shape and exit code. Update existing assertions that break; add no new tests (lct-5 owns them). Locate with rg -n and read ranges only. Write no code comment. Run only the cell verify, never the full suite. One commit with the cell trailer, files staged by explicit path. In the result, put principles_used ([] when none) and, if the cap door asks, sync_ack.",
+        "feature": "leader-call-thrift",
+        "lane": "standard",
+        "read_first": [
+          "docs/history/leader-call-thrift/CONTEXT.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": []
+      },
+      {
+        "id": "lct-4",
+        "title": "Sync the knowledge concepts to the three changes",
+        "role": "docs",
+        "deps": [
+          "lct-1",
+          "lct-2",
+          "lct-3"
+        ],
+        "verify": "./.bee/bin/bee knowledge check",
+        "must_haves": {
+          "truths": [
+            "docs/knowledge/areas/workflow-state/cells-completion-judge-and-archive.md states the one combined missing-answer refusal and the judge override write order, citing leader-call-thrift D1",
+            "docs/knowledge/areas/bee-herding/the-run-verb-and-worker-outcomes.md states that auto-settle passes principles_used and sync_ack and prints the full finish command, citing leader-call-thrift D2",
+            "docs/knowledge/areas/hook-runtime/hook-runtime-the-worker-outward-guard.md states the full-suite refusal for herded cell jobs and its full_suite_reason escape, citing leader-call-thrift D3"
+          ],
+          "why": "docs/knowledge is the state layer and must match the code.",
+          "out_of_scope": [
+            "Rust code",
+            "skills"
+          ]
+        },
+        "decisions": [
+          "4597b92e-9de8-47cd-b217-61bc984ff7f8",
+          "2b81baba-c7c9-4345-be34-46ff3797ecdd",
+          "9b3a677f-815c-46a7-9c49-bd07d8084e43"
+        ],
+        "files": [
+          "docs/knowledge/areas/workflow-state/cells-completion-judge-and-archive.md",
+          "docs/knowledge/areas/bee-herding/the-run-verb-and-worker-outcomes.md",
+          "docs/knowledge/areas/hook-runtime/hook-runtime-the-worker-outward-guard.md"
+        ],
+        "action": "Read the three code commits (git log --oneline for cells lct-1, lct-2, lct-3) and update the three concepts in place: find the paragraph with rg -n, edit it, cite leader-call-thrift D-numbers (never raw decision ids), add the D-numbers to each frontmatter decisions list and the changed file to Pointers. Avoid the words deferred, until and later. Locate with rg -n and read ranges only. Write no code comment. Run only the cell verify, never the full suite. One commit with the cell trailer, files staged by explicit path. In the result, put principles_used ([] when none) and, if the cap door asks, sync_ack.",
+        "feature": "leader-call-thrift",
+        "lane": "standard",
+        "read_first": [
+          "docs/history/leader-call-thrift/CONTEXT.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": []
+      },
+      {
+        "id": "lct-5",
+        "title": "Prove the three contracts and check the concept sync",
+        "role": "test",
+        "deps": [
+          "lct-1",
+          "lct-2",
+          "lct-3",
+          "lct-4"
+        ],
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- cap_one_refusal auto_settle_answers worker_full_suite",
+        "must_haves": {
+          "truths": [
+            "tests named with cap_one_refusal show: a cap missing the mistakes answer, the principles-arm answer and the sync ack refuses once naming all three fixes and writes nothing; with all three it caps; a judge override decision is not written when a check after it refuses",
+            "tests named with auto_settle_answers show: a done cell job whose result carries principles_used and sync_ack is capped by herding run in the principles arm on a cell the sync door would refuse; without them herding run prints the refusal and a finish command naming the principle flag and --sync-ack",
+            "tests named with worker_full_suite show: a herded cell job is refused the declared suite, bee test and an env-prefixed suite; allowed a filtered cargo test; allowed the suite when the cell has full_suite_reason; a job with no cell id is not refused",
+            "each contract has a test that failed at the parent of its code cell commit, quoted in the report",
+            "the report lists each lct-4 must_have with the file:line that shows it, or names the gap",
+            "the report holds one fenced block per cell lct-1, lct-2, lct-3 with info string json <cell-id> holding a judge-verdict/1 object: schema, verdict PASS or NEEDS_REVISION, checks each with id, status PASS or FAIL, evidence (file:line and what it shows) and failure_signature when FAIL, fixability automatic or authority, confidence low, medium or high"
+          ],
+          "why": "A code cell never certifies itself; the tester also carries the judge (token-spend-cuts D5).",
+          "out_of_scope": [
+            "production code"
+          ]
+        },
+        "decisions": [
+          "fab7d838-2a3c-4093-a65a-b79530bb71ca",
+          "42961013-6afe-462e-937d-445aa6c8f9d8",
+          "6e253441-8645-487b-a35b-c791822bb353",
+          "4597b92e-9de8-47cd-b217-61bc984ff7f8",
+          "2b81baba-c7c9-4345-be34-46ff3797ecdd",
+          "9b3a677f-815c-46a7-9c49-bd07d8084e43"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+          "packages/bee-rs/crates/bee/src/herding/run.rs",
+          "packages/bee-rs/crates/bee/src/hooks/worker_guard.rs",
+          "docs/history/leader-call-thrift/reports/lct-5.md"
+        ],
+        "action": "Check contracts cap-one-refusal (fab7d838), auto-settle-answers (42961013) and worker-full-suite-guard (6e253441) on the lct-1, lct-2 and lct-3 commits. Add tests only inside existing test modules: verbs/cells/tests.rs (near contract_cells_finish_from_job tests), herding/run.rs tests (near done_result_with_commit_and_green_proof_is_capped_by_herding_run_itself), hooks/worker_guard.rs tests. Every new test name contains cap_one_refusal, auto_settle_answers or worker_full_suite. Red proof per contract: put the production file at its code cell's parent with git show <parent>:<path>, run the verify, record the failure or compile error, restore to HEAD. Then run the verify green. Edit no production code. Check lct-4 parity and judge lct-1 to lct-3 from their diffs. Write everything to docs/history/leader-call-thrift/reports/lct-5.md. Locate with rg -n and read ranges only. Write no code comment. Run only the cell verify, never the full suite. One commit with the cell trailer, files staged by explicit path. In the result, put principles_used ([] when none) and, if the cap door asks, sync_ack.",
+        "feature": "leader-call-thrift",
+        "lane": "standard",
+        "read_first": [
+          "docs/history/leader-call-thrift/CONTEXT.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": []
+      }
+    ],
+    "role_plan": {
+      "schema_version": "1.0",
+      "runtime": "claude",
+      "roster_sha256": "cd477eb57b66a0cef7310533c504a43a20e8b19e131431e73112bda9a9f114c8",
+      "stages": [
+        {
+          "stage": "implementation",
+          "classification": "required",
+          "role": "code",
+          "reason": "lct-1, lct-2, lct-3 change Rust code."
+        },
+        {
+          "stage": "test-and-live-proof",
+          "classification": "required",
+          "role": "test",
+          "reason": "lct-5 proves the contracts, judges the code cells and checks lct-4 parity."
+        },
+        {
+          "stage": "docs",
+          "classification": "required",
+          "role": "docs",
+          "reason": "lct-4 syncs three concepts."
+        },
+        {
+          "stage": "slice-judge",
+          "classification": "not-applicable",
+          "role": "review",
+          "reason": "token-spend-cuts D5: the tester returns the judge blocks."
+        },
+        {
+          "stage": "hat-facts-gaps",
+          "classification": "not-applicable",
+          "role": "hat-facts-gaps",
+          "reason": "Evidence and code map are in CONTEXT.md."
+        },
+        {
+          "stage": "hat-alternatives",
+          "classification": "not-applicable",
+          "role": "hat-alternatives",
+          "reason": "The owner picked these three from seven."
+        },
+        {
+          "stage": "hat-user-impact",
+          "classification": "not-applicable",
+          "role": "hat-user-impact",
+          "reason": "CLI text and a worker guard; no UI."
+        },
+        {
+          "stage": "hat-risks",
+          "classification": "not-applicable",
+          "role": "hat-risks",
+          "reason": "Each change is reversible in one commit; the guard has a recorded escape."
+        },
+        {
+          "stage": "hat-value",
+          "classification": "not-applicable",
+          "role": "hat-value",
+          "reason": "Owner-requested with spend evidence."
+        },
+        {
+          "stage": "deployment",
+          "classification": "not-applicable",
+          "role": "deploy",
+          "reason": "No release in this feature."
+        },
+        {
+          "stage": "planning",
+          "classification": "not-applicable",
+          "role": "plan",
+          "reason": "The leader wrote the plan."
+        },
+        {
+          "stage": "read-only-gather",
+          "classification": "not-applicable",
+          "role": "read",
+          "reason": "The code map ran before the plan."
+        },
+        {
+          "stage": "fact-extraction",
+          "classification": "not-applicable",
+          "role": "extraction",
+          "reason": "No extraction stage."
+        },
+        {
+          "stage": "generation-fallback",
+          "classification": "not-applicable",
+          "role": "generation",
+          "reason": "Every cell has a configured role."
+        },
+        {
+          "stage": "writing",
+          "classification": "not-applicable",
+          "role": "writer",
+          "reason": "The docs cell covers the prose."
+        },
+        {
+          "stage": "generic-advisor",
+          "classification": "not-applicable",
+          "role": "advisor",
+          "reason": "Standard lane."
+        },
+        {
+          "stage": "supervision",
+          "classification": "not-applicable",
+          "role": "supervisor",
+          "reason": "Attended session."
+        },
+        {
+          "stage": "blind-lane-1",
+          "classification": "not-applicable",
+          "role": "lane-1",
+          "reason": "No blind lanes."
+        },
+        {
+          "stage": "blind-lane-2",
+          "classification": "not-applicable",
+          "role": "lane-2",
+          "reason": "No blind lanes."
+        },
+        {
+          "stage": "blind-lane-3",
+          "classification": "not-applicable",
+          "role": "lane-3",
+          "reason": "No blind lanes."
+        },
+        {
+          "stage": "design-ui",
+          "classification": "not-applicable",
+          "role": "design",
+          "reason": "No rendered UI."
+        }
+      ]
+    }
+  },
+  "merge_ready": {
+    "since": "2026-11-21T06:25:33.396Z",
+    "branch": "wt/leader-call-thrift",
+    "worktree_id": "beehive--wt--leader-call-thrift",
+    "uat": "pending",
+    "blocked_by": []
+  }
+}
