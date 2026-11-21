@@ -34,7 +34,7 @@ fn plain_command(text: &str) -> bool {
     !text.contains(['|', ';', '&', '<', '>', '$', '`', '(', ')', '\n', '*', '?', '[', '{', '~'])
 }
 
-fn cat_operand(command: &str) -> Option<(Option<String>, String)> {
+fn cat_operands(command: &str) -> Option<(Option<String>, Vec<String>)> {
     let command = command.trim();
     let (cd_dir, rest) = match command.strip_prefix("cd ") {
         Some(after) => {
@@ -54,18 +54,25 @@ fn cat_operand(command: &str) -> Option<(Option<String>, String)> {
     if parts.next()? != "cat" {
         return None;
     }
-    let file = parts.next()?;
-    if parts.next().is_some() || file.starts_with('-') {
+    let files = parts
+        .map(|file| {
+            if file.starts_with('-') {
+                return None;
+            }
+            Some(unquote(file)?.to_string())
+        })
+        .collect::<Option<Vec<_>>>()?;
+    if files.is_empty() {
         return None;
     }
-    Some((cd_dir, unquote(file)?.to_string()))
+    Some((cd_dir, files))
 }
 
 pub(crate) fn unranged_target(
     tool_name: &str,
     tool_input: &Map<String, Value>,
     cwd: &Path,
-) -> Option<PathBuf> {
+) -> Option<Vec<PathBuf>> {
     match tool_name {
         "Read" => {
             if tool_input.contains_key("offset") || tool_input.contains_key("limit") {
@@ -75,19 +82,19 @@ pub(crate) fn unranged_target(
                 .iter()
                 .filter_map(|k| tool_input.get(*k).and_then(Value::as_str))
                 .find(|s| !s.is_empty())?;
-            Some(cwd.join(raw))
+            Some(vec![cwd.join(raw)])
         }
         "Bash" | "exec" => {
             let command = ["command", "cmd"]
                 .iter()
                 .filter_map(|k| tool_input.get(*k).and_then(Value::as_str))
                 .find(|s| !s.is_empty())?;
-            let (dir, file) = cat_operand(command)?;
+            let (dir, files) = cat_operands(command)?;
             let base = match dir {
                 Some(d) => cwd.join(d),
                 None => cwd.to_path_buf(),
             };
-            Some(base.join(file))
+            Some(files.iter().map(|file| base.join(file)).collect())
         }
         _ => None,
     }
@@ -114,21 +121,33 @@ pub(crate) fn leader_read_refusal(
     tool_input: &Map<String, Value>,
     cwd: &Path,
     worker: bool,
-    line_count: impl FnOnce(&Path) -> Option<usize>,
+    mut line_count: impl FnMut(&Path) -> Option<usize>,
     limit: u64,
 ) -> Option<String> {
     if worker || limit == 0 {
         return None;
     }
-    let target = unranged_target(tool_name, tool_input, cwd)?;
-    let lines = line_count(&target)?;
+    let targets = unranged_target(tool_name, tool_input, cwd)?;
+    let mut lines = 0usize;
+    for target in &targets {
+        lines += line_count(target)?;
+    }
     if (lines as u64) <= limit {
         return None;
     }
+    let subject = match targets.as_slice() {
+        [one] => format!("\"{}\" is {lines} lines", one.display()),
+        many => format!(
+            "{} are {lines} lines together",
+            many.iter()
+                .map(|t| format!("\"{}\"", t.display()))
+                .collect::<Vec<_>>()
+                .join(", ")
+        ),
+    };
     Some(format!(
-        "bee leader read guard: \"{}\" is {lines} lines (leader_read_max_lines: {limit}) and this read has no range, so the whole file would enter the leader context and be re-read on every later call. \
-FIX: read a range with offset and limit; or dispatch a read gather: .bee/bin/bee dispatch prepare --runtime claude --kind gather --role read --json",
-        target.display()
+        "bee leader read guard: {subject} (leader_read_max_lines: {limit}) and this read has no range, so the whole content would enter the leader context and be re-read on every later call. \
+FIX: read a range with offset and limit; or dispatch a read gather: .bee/bin/bee dispatch prepare --runtime claude --kind gather --role read --json"
     ))
 }
 
