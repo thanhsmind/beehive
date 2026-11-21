@@ -97,5 +97,5 @@ An empty `knowledge_used` means no concept changed a decision. `knowledge_wrong`
 Finish with: .bee/bin/bee cells finish --id {{cell_id}} --outcome "<one line>" --files <a,b> --report '<json>'
 {{/if}}
 {{#if herding}}
-- Run the narrowest proof: the result file's proof field is `<command> — <green:unit|green:live|green:static> — <scope reason>`, its summary one line ending with the commit sha, and it may carry `knowledge_used`. When a Principles block appears above, the result file also carries `principles_used`, `[]` when none changed a decision.
+- Run the narrowest proof: the result file's proof field is `<command> — <green:unit|green:live|green:static> — <scope reason>`, e.g. `cargo test -p bee — green:unit — touched close.rs`, its summary one line ending with the commit sha, and it may carry `knowledge_used`. When a Principles block appears above, the result file also carries `principles_used`, `[]` when none changed a decision.
 {{/if}}
