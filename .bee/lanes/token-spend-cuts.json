@@ -11,10 +11,15 @@
     "uat": false
   },
   "summary": "Feature \"token-spend-cuts\" started at phase \"exploring\" (lane).",
-  "next_action": "Continue bee-exploring for \"token-spend-cuts\" (lane).",
+  "next_action": "Merged into main at f132c00; reload the product and test \"token-spend-cuts\", then either approve uat (\"bee gate --name uat --approved true --lane token-spend-cuts\") or fix it in the worktree and merge again.",
   "created_at": "2026-11-21T04:43:33.768Z",
   "run_state": "awaiting-approval",
-  "waiting_on": null,
+  "waiting_on": {
+    "kind": "gate",
+    "subject": "uat: token-spend-cuts",
+    "asked_at": "2026-11-21T05:15:45.578Z",
+    "session": "bee-worktree-merge-sessionless"
+  },
   "gate_preview": {
     "feature": "token-spend-cuts",
     "plan_sha256": "9400d55577f0fbfbf72ae660338f0f96a89cb0b0877f29e1b42fb1d31062f6a4",
@@ -974,12 +979,5 @@
   },
   "gate_revoked_at": {
     "execution": "2026-11-21T05:10:42.466Z"
-  },
-  "merge_ready": {
-    "since": "2026-11-21T05:10:13.220Z",
-    "branch": "wt/token-spend-cuts",
-    "worktree_id": "beehive--wt--token-spend-cuts",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
