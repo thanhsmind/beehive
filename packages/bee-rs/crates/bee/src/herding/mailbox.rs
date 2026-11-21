@@ -1648,6 +1648,65 @@ the report file's exact final name"),
         assert!(!text.contains("files listed under the Expertise section are yours to read"));
     }
 
+    fn read_only_text(read_only: bool) -> String {
+        let worktree_root = Path::new("/repo/work");
+        let bee_dir = Path::new("/repo/.bee");
+        let files = sample_files();
+        let mut spec = sample_spec(worktree_root, bee_dir, &files, 1);
+        spec.read_only = read_only;
+        render_brief(&spec)
+    }
+
+    #[test]
+    fn read_only_shell_rules_list_every_allowed_command_and_the_refused_forms() {
+        let text = read_only_text(true);
+        let start = text.find("# Shell rules").expect("a read-only brief carries the shell rules");
+        let end = start + text[start..].find("# Task").expect("the block ends before the task");
+        let block = &text[start..end];
+        let commands = crate::hooks::worker_guard::READ_ONLY_ALLOWED
+            .split(',')
+            .map(|entry| entry.strip_prefix("Bash(").unwrap().strip_suffix(":*)").unwrap())
+            .collect::<Vec<_>>();
+        assert_eq!(commands.len(), 23);
+        for command in commands {
+            assert!(
+                block.contains(command),
+                "the block must name `{command}`:\n{block}"
+            );
+        }
+        for refused in [
+            "command substitution `$(...)` and backticks",
+            "redirects outside the job mailbox",
+            "`sh -c`, `bash -c` and `eval`",
+            "`sort`",
+            "`fd --exec` and `fd -x`",
+            "a pipe into any command not on the list above",
+        ] {
+            assert!(block.contains(refused), "the block must refuse {refused}:\n{block}");
+        }
+    }
+
+    #[test]
+    fn read_only_shell_rules_are_absent_from_a_brief_that_is_not_read_only() {
+        let text = read_only_text(false);
+        assert!(!text.contains("# Shell rules"), "{text}");
+        assert!(!text.contains("This job is read-only"), "{text}");
+        assert!(text.contains("with the current time as an ISO-8601 timestamp:"), "{text}");
+    }
+
+    #[test]
+    fn read_only_shell_rules_ack_step_needs_no_command_substitution() {
+        let text = read_only_text(true);
+        let ack_end = text.find("# Shell rules").unwrap();
+        let ack = &text[..ack_end];
+        assert!(!ack.contains("$("), "the ack text must not use command substitution:\n{ack}");
+        assert!(
+            ack.contains("run `date -u +%Y-%m-%dT%H:%M:%SZ` alone as its own command"),
+            "{ack}"
+        );
+        assert!(ack.contains("never with a shell redirect or command substitution"), "{ack}");
+    }
+
     #[test]
     fn render_brief_separates_optional_result_schema_fields() {
         // prf-5: optional fields (options, leaning, dissent) are presented apart from the required schema

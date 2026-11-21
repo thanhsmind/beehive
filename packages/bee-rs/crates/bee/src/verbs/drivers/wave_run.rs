@@ -523,6 +523,105 @@ mod tests {
         assert_eq!(ids, vec!["a", "b"], "{value}");
     }
 
+    fn judge_block(id: &str, verdict: &str) -> String {
+        let body = json!({
+            "schema": "judge-verdict/1",
+            "verdict": verdict,
+            "checks": [{"id": "c1", "status": "PASS", "evidence": "f.rs:1 shows it"}],
+            "fixability": "automatic",
+            "confidence": "high",
+        });
+        format!("```json {id}\n{body}\n```\n")
+    }
+
+    fn put_cell(root: &Path, id: &str, role: &str, deps: &[&str]) {
+        let dir = root.join(".bee").join("cells");
+        std::fs::create_dir_all(&dir).unwrap();
+        let cell = json!({"id": id, "role": role, "deps": deps, "status": "open", "trace": {}});
+        std::fs::write(dir.join(format!("{id}.json")), cell.to_string()).unwrap();
+    }
+
+    fn put_report(root: &Path, id: &str, text: &str) {
+        let dir = root.join(".bee").join("mailbox").join(format!("job-{id}"));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("report-1.md"), text).unwrap();
+    }
+
+    fn judge_entries(root: &Path, id: &str) -> usize {
+        let raw = std::fs::read_to_string(root.join(".bee").join("cells").join(format!("{id}.json"))).unwrap();
+        let cell: Value = serde_json::from_str(&raw).unwrap();
+        cell["trace"]["semantic_judge"].as_array().map_or(0, Vec::len)
+    }
+
+    fn run_one(root: &Path, id: &str) -> Value {
+        let items = vec![herding_item(id)];
+        let runner = |_c: &str, stdin: &str, _cwd: &Path| {
+            let id = stdin.trim_start_matches("brief for ").to_string();
+            Spawn { exit: Some(0), stdout: done_envelope(&id) }
+        };
+        let (value, _) = run_wave_with(root, &items, &[], &runner);
+        value["ran"][0].clone()
+    }
+
+    #[test]
+    fn wave_judge_record_records_one_verdict_per_dep_block_of_a_test_cell() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        put_cell(root, "a-1", "code", &[]);
+        put_cell(root, "a-2", "code", &[]);
+        put_cell(root, "t-1", "test", &["a-1", "a-2"]);
+        let text = format!("{}{}", judge_block("a-1", "PASS"), judge_block("a-2", "PASS"));
+        put_report(root, "t-1", &text);
+        let row = run_one(root, "t-1");
+        assert_eq!(row["judged"], json!(["a-1", "a-2"]), "{row}");
+        assert!(row.get("judge_errors").is_none(), "{row}");
+        assert_eq!(judge_entries(root, "a-1"), 1);
+        assert_eq!(judge_entries(root, "a-2"), 1);
+    }
+
+    #[test]
+    fn wave_judge_record_ignores_a_block_for_a_cell_that_is_not_a_dep() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        put_cell(root, "a-1", "code", &[]);
+        put_cell(root, "x-9", "code", &[]);
+        put_cell(root, "t-1", "test", &["a-1"]);
+        let text = format!("{}{}", judge_block("a-1", "PASS"), judge_block("x-9", "PASS"));
+        put_report(root, "t-1", &text);
+        let row = run_one(root, "t-1");
+        assert_eq!(row["judged"], json!(["a-1"]), "{row}");
+        assert_eq!(judge_entries(root, "a-1"), 1);
+        assert_eq!(judge_entries(root, "x-9"), 0);
+    }
+
+    #[test]
+    fn wave_judge_record_records_nothing_for_an_invalid_block_and_shows_it_on_the_row() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        put_cell(root, "a-1", "code", &[]);
+        put_cell(root, "t-1", "test", &["a-1"]);
+        put_report(root, "t-1", &judge_block("a-1", "MAYBE"));
+        let row = run_one(root, "t-1");
+        assert_eq!(row["judged"], json!([]), "{row}");
+        let errors = row["judge_errors"].as_array().unwrap_or_else(|| panic!("{row}"));
+        assert_eq!(errors.len(), 1, "{row}");
+        assert!(errors[0].as_str().unwrap().contains("verdict must be one of"), "{row}");
+        assert_eq!(judge_entries(root, "a-1"), 0);
+    }
+
+    #[test]
+    fn wave_judge_record_never_reads_the_report_of_a_code_cell() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        put_cell(root, "a-1", "code", &[]);
+        put_cell(root, "c-1", "code", &["a-1"]);
+        put_report(root, "c-1", &judge_block("a-1", "PASS"));
+        let row = run_one(root, "c-1");
+        assert_eq!(row["judged"], json!([]), "{row}");
+        assert!(row.get("judge_errors").is_none(), "{row}");
+        assert_eq!(judge_entries(root, "a-1"), 0);
+    }
+
     #[test]
     fn rolling_returns_native_items_once_and_never_refills_them() {
         let tmp = tempfile::tempdir().unwrap();
