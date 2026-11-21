@@ -3350,6 +3350,21 @@ mod tests {
     }
 
     #[test]
+    fn handoff_mark_configured_above_default_silences_the_line_between_the_two() {
+        assert_eq!(
+            handoff_mark_warning(Some(r#"{"handoff_context_tokens": 300000}"#), 190_000),
+            None
+        );
+    }
+
+    #[test]
+    fn handoff_mark_configured_below_default_fires_the_line_with_its_own_number() {
+        let line = handoff_mark_warning(Some(r#"{"handoff_context_tokens": 150000}"#), 100_000).unwrap();
+        assert!(line.contains("(mark 150k)"));
+        assert!(line.starts_with("context 160k tokens"));
+    }
+
+    #[test]
     fn missing_or_unreadable_transcript_adds_no_line_and_exits_zero() {
         let tmp = tempfile::tempdir().unwrap();
         bee_repo(tmp.path());
