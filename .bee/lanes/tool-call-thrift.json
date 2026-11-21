@@ -1,0 +1,1118 @@
+{
+  "schema_version": "1.0",
+  "feature": "tool-call-thrift",
+  "mode": null,
+  "phase": "exploring",
+  "approved_gates": {
+    "context": true,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"tool-call-thrift\" started at phase \"exploring\" (lane).",
+  "next_action": "Continue bee-exploring for \"tool-call-thrift\" (lane).",
+  "created_at": "2026-11-21T15:16:24.824Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null,
+  "route": {
+    "class": "feature",
+    "lane": "standard",
+    "flags": [],
+    "product_files": 10,
+    "rationale": null,
+    "updated_at": "2026-11-21T15:16:21.622Z",
+    "feature": "tool-call-thrift"
+  },
+  "gate_preview": {
+    "feature": "tool-call-thrift",
+    "plan_sha256": "5d8e0ebe45caac76d186fa211f93ce2b5892fa1c0fe91054a42ec114ddba295f",
+    "previewed_at": "2026-11-21T16:00:20.393Z",
+    "cells": [
+      {
+        "id": "tct-1",
+        "feature": "tool-call-thrift",
+        "title": "Print a brief help card with one line per flag",
+        "lane": "standard",
+        "role": "code",
+        "deps": [],
+        "decisions": [
+          "12391e63-eabe-43da-801e-203af21c7123"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/verbs/help.rs"
+        ],
+        "read_first": [
+          "docs/history/tool-call-thrift/CONTEXT.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Per D2: in packages/bee-rs/crates/bee/src/verbs/help.rs, try_native (:51) accepts --brief in the token set beside --json, --all and --names. With --brief and no --json, one-verb and group help render a brief card per entry: the usage line, the one-line summary, then one line per flag: '--name' plus '*' when required, the type in parentheses, ' — ' and the description cut at 80 chars with a trailing ellipsis when cut. No 'details:' paragraph, no header note, no footer. Put the card in one pub(crate) function that takes one registry entry and returns the lines, so the router and the shape guard can call it (tct-3). Without --brief every output stays byte-identical; do not touch the existing render paths beyond the branch. If the CLI-shape guard (hooks/cli_shape.rs) refuses a Bash command with --help --brief, make it pass the same way --help --names passes, and nothing else in that file. Build with CARGO_TARGET_DIR=/home/thanhsmind/.cache/cargo-target-tct. Add no test (tct-2 writes them). Write no code comments. Run the verify, and only the verify, never the full suite. Read CONTEXT.md first.",
+        "verify": "CARGO_TARGET_DIR=/home/thanhsmind/.cache/cargo-target-tct PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- help cli_shape",
+        "must_haves": {
+          "why": "109 help reads at 2.9k chars each stay in the leader context for the rest of the session (D2).",
+          "out_of_scope": [
+            "refusal text (tct-3)",
+            "the preamble line (tct-7)",
+            "new tests (tct-2)"
+          ],
+          "truths": [
+            "the brief card of cells finish has one line per flag and no details line",
+            "the full help of every verb is byte-identical to its output before the change",
+            "the CLI-shape guard lets a brief help call through"
+          ],
+          "prohibitions": [
+            "No change to the default help or the json help output"
+          ]
+        },
+        "behavior_change": true,
+        "judge_obligation_ack": "Each code cell has a separate dispatched tester cell that reads the change with no shared context."
+      },
+      {
+        "id": "tct-2",
+        "feature": "tool-call-thrift",
+        "title": "Test the brief help card contract",
+        "lane": "standard",
+        "role": "test",
+        "deps": [
+          "tct-1"
+        ],
+        "decisions": [
+          "e5e7d363-7a31-4cca-abbc-257641efb499"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/verbs/help.rs"
+        ],
+        "read_first": [
+          "docs/history/tool-call-thrift/CONTEXT.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Per C1: add tests whose names start with help_brief_ in the tests module of packages/bee-rs/crates/bee/src/verbs/help.rs. Assert on the rendered output, not internals: the brief card of cells finish names every cells finish flag from the registry exactly once, each on its own line; it has no line 'details:'; it is under 2500 bytes; a description longer than 80 chars ends in an ellipsis. Assert the full one-verb help of cells finish and one group help are unchanged against the existing render function output. Add one test in hooks/cli_shape.rs tests named help_brief_passes_the_shape_guard showing a Bash command for the brief help of cells finish is not denied. Change no product code; a red that needs a product fix: block the cell and say why. Build with CARGO_TARGET_DIR=/home/thanhsmind/.cache/cargo-target-tct. Write no code comments. Run the verify, and only the verify.",
+        "verify": "CARGO_TARGET_DIR=/home/thanhsmind/.cache/cargo-target-tct PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- help_brief",
+        "must_haves": {
+          "why": "A tester with no shared context proves C1 on the real output.",
+          "out_of_scope": [
+            "product code"
+          ],
+          "truths": [
+            "at least five help_brief tests run and pass",
+            "the verify output names each help_brief test"
+          ],
+          "prohibitions": [
+            "No product code change"
+          ]
+        },
+        "behavior_change": false,
+        "judge_obligation_ack": "Tester for tct-1."
+      },
+      {
+        "id": "tct-3",
+        "feature": "tool-call-thrift",
+        "title": "Print the verb's flag card in argument refusals",
+        "lane": "standard",
+        "role": "code",
+        "deps": [
+          "tct-2"
+        ],
+        "decisions": [
+          "3876c870-6e57-4e9f-a102-58f3e073d8de"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/router.rs",
+          "packages/bee-rs/crates/bee/src/hooks/cli_shape.rs",
+          "packages/bee-rs/crates/bee/src/verbs/help.rs"
+        ],
+        "read_first": [
+          "docs/history/tool-call-thrift/CONTEXT.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Per D3: the missing-required refusal (router.rs:458) and the unknown-flag refusal (router.rs:486) append the verb's brief card lines from the tct-1 function after their current text, under a line 'flags:'; the unknown-flag FIX hint names '--help --brief' in place of '--help'. In hooks/cli_shape.rs render_denial (:628) appends the same card for the resolved command and the Correction line (:647) says 'see `<cmd> --help --brief`' in place of '--help --json'. Keep the problem list and the did-you-mean hint. Move existing tests that pin the old correction text to the new text with the same shape; add no new test. Build with CARGO_TARGET_DIR=/home/thanhsmind/.cache/cargo-target-tct. Write no code comments. Run the verify, and only the verify. Read CONTEXT.md first.",
+        "verify": "CARGO_TARGET_DIR=/home/thanhsmind/.cache/cargo-target-tct PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- cli_shape router write_guard",
+        "must_haves": {
+          "why": "A refusal that only points at help costs a help read and a retry; the card makes the retry the next call (D3).",
+          "out_of_scope": [
+            "help rendering (tct-1)",
+            "new tests (tct-4)"
+          ],
+          "truths": [
+            "a cells finish call with no --id is refused with the --id card line in the text",
+            "the shape guard denial carries the card and names --help --brief"
+          ],
+          "prohibitions": [
+            "No second card renderer"
+          ]
+        },
+        "behavior_change": true,
+        "judge_obligation_ack": "Each code cell has a separate dispatched tester cell that reads the change with no shared context."
+      },
+      {
+        "id": "tct-4",
+        "feature": "tool-call-thrift",
+        "title": "Test the refusal card contract",
+        "lane": "standard",
+        "role": "test",
+        "deps": [
+          "tct-3"
+        ],
+        "decisions": [
+          "6f1ae265-e3aa-412d-a6d4-6e4e1b2b3e9e"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/router.rs",
+          "packages/bee-rs/crates/bee/src/hooks/cli_shape.rs"
+        ],
+        "read_first": [
+          "docs/history/tool-call-thrift/CONTEXT.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Per C2: add tests whose names start with refusal_card_ beside the existing router and cli_shape tests. Assert on refusal text: cells finish with no --id is refused with a line that starts with --id and the 'flags:' line; cells finish with an unknown flag is refused with the card; the shape guard denial for the same Bash command carries the card and names --help --brief and not --help --json. Change no product code; a red that needs a product fix: block the cell and say why. Build with CARGO_TARGET_DIR=/home/thanhsmind/.cache/cargo-target-tct. Write no code comments. Run the verify, and only the verify.",
+        "verify": "CARGO_TARGET_DIR=/home/thanhsmind/.cache/cargo-target-tct PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- refusal_card",
+        "must_haves": {
+          "why": "A tester with no shared context proves C2 on the real refusal text.",
+          "out_of_scope": [
+            "product code"
+          ],
+          "truths": [
+            "at least three refusal_card tests run and pass"
+          ],
+          "prohibitions": [
+            "No product code change"
+          ]
+        },
+        "behavior_change": false,
+        "judge_obligation_ack": "Tester for tct-3."
+      },
+      {
+        "id": "tct-5",
+        "feature": "tool-call-thrift",
+        "title": "Refuse a leader's bare cat of several long files",
+        "lane": "standard",
+        "role": "code",
+        "deps": [],
+        "decisions": [
+          "94d78600-e103-4ef4-814a-608025c2cb65"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/hooks/write_guard/leader_read.rs",
+          "packages/bee-rs/crates/bee/src/hooks/write_guard/main.rs"
+        ],
+        "read_first": [
+          "docs/history/tool-call-thrift/CONTEXT.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Per D6: in packages/bee-rs/crates/bee/src/hooks/write_guard/leader_read.rs, cat_operand (:37) accepts two or more file operands (no flag operands, plain command only, optional leading 'cd <dir> &&' as today); the guard sums count_lines over them and refuses when the sum passes the limit. The refusal names every file and the sum, and keeps both remedies (offset and limit, a read gather through dispatch prepare). A file that count_lines cannot read makes the command pass, as today. One-file behavior, piped or ranged reads, workers and limit 0 stay exactly as they are. Touch main.rs only if the call site needs the new return shape. Move existing tests only if their shape must change; add no new test. Build with CARGO_TARGET_DIR=/home/thanhsmind/.cache/cargo-target-tct. Write no code comments. Run the verify, and only the verify. Read CONTEXT.md first.",
+        "verify": "CARGO_TARGET_DIR=/home/thanhsmind/.cache/cargo-target-tct PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- leader_read write_guard",
+        "must_haves": {
+          "why": "Multi-file cat dumps passed the one-file guard (D6).",
+          "out_of_scope": [
+            "new tests (tct-6)"
+          ],
+          "truths": [
+            "a leader's bare cat of two files summing past the limit is refused",
+            "one-file cat behavior is unchanged"
+          ],
+          "prohibitions": [
+            "No change for workers or limit 0"
+          ]
+        },
+        "behavior_change": true,
+        "judge_obligation_ack": "Each code cell has a separate dispatched tester cell that reads the change with no shared context."
+      },
+      {
+        "id": "tct-6",
+        "feature": "tool-call-thrift",
+        "title": "Test the multi-file cat read guard contract",
+        "lane": "standard",
+        "role": "test",
+        "deps": [
+          "tct-5"
+        ],
+        "decisions": [
+          "3a2194d7-4f09-4952-8ecc-6f99b2132c5f"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/hooks/write_guard/leader_read.rs"
+        ],
+        "read_first": [
+          "docs/history/tool-call-thrift/CONTEXT.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Per C4: add tests whose names start with leader_read_multi_cat_ in the tests module of leader_read.rs, on temp files: two files of 250 and 151 lines with limit 400 refused, naming both files; 200 and 200 pass; a worker passes; limit 0 passes; 'cat a b | head' passes; one 401-line file is still refused and one 400-line file still passes. Change no product code; a red that needs a product fix: block the cell and say why. Build with CARGO_TARGET_DIR=/home/thanhsmind/.cache/cargo-target-tct. Write no code comments. Run the verify, and only the verify.",
+        "verify": "CARGO_TARGET_DIR=/home/thanhsmind/.cache/cargo-target-tct PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- leader_read_multi_cat",
+        "must_haves": {
+          "why": "A tester with no shared context proves C4.",
+          "out_of_scope": [
+            "product code"
+          ],
+          "truths": [
+            "at least six leader_read_multi_cat tests run and pass"
+          ],
+          "prohibitions": [
+            "No product code change"
+          ]
+        },
+        "behavior_change": false,
+        "judge_obligation_ack": "Tester for tct-5."
+      },
+      {
+        "id": "tct-7",
+        "feature": "tool-call-thrift",
+        "title": "Ask leaders to batch calls and drop the help-first line",
+        "lane": "standard",
+        "role": "code",
+        "deps": [
+          "tct-1"
+        ],
+        "decisions": [
+          "4982d4a5-b3eb-4008-9a06-7b25b7f7fa5f",
+          "6fb5c82e-fd7d-40bd-8339-e50de227ba71",
+          "a2d1736f-2b46-4672-b5e0-6c0d510d7773"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs",
+          "packages/bee/LEADER.md",
+          "packages/bee/playbooks/leader-detail.md",
+          "skills/bee-hive/references/routing-and-contracts.md",
+          "skills/bee-swarming/references/execute.md",
+          ".bee/LEADER.md",
+          ".bee/playbooks/leader-detail.md",
+          ".bee/onboarding.json",
+          ".claude/skills/.bee-render.json",
+          ".claude/skills/bee-hive/references/routing-and-contracts.md",
+          ".claude/skills/bee-swarming/references/execute.md",
+          "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+          "docs/history/codex-harness-hardening/release-manifest.json"
+        ],
+        "read_first": [
+          "docs/history/tool-call-thrift/CONTEXT.md"
+        ],
+        "affects_skills": [
+          "skills/bee-hive/references/routing-and-contracts.md",
+          "skills/bee-swarming/references/execute.md"
+        ],
+        "affects_specs": [],
+        "action": "Per D4: in packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs:161 replace the sentence from 'Flags and usage:' to the semicolon with: 'Flags: run the verb — a wrong flag shape is refused before it runs and the refusal lists the verb's flags; to see them first, `bee <verb> --help --brief` (one line per flag)'; keep the names-only start and the json count tail; move tests that pin the old text. In skills/bee-hive/references/routing-and-contracts.md:347 and skills/bee-swarming/references/execute.md:105 make any read-help-before-use wording match. Per D1: in packages/bee/LEADER.md under '## Token efficiency' add one bullet before the existing one: 'Every tool call re-reads the whole session. Put independent commands in one Bash call, or send independent calls together in one message; run a short command alone only when its output decides the next command.' and add the matching detail paragraph under § Token efficiency in packages/bee/playbooks/leader-detail.md. Per D5: in packages/bee/LEADER.md, in the dispatch bullets under '## Work in parallel', add: 'Start a cell with one call: dispatch prepare with its `--claim` flag for one cell, dispatch wave for a wave — never a separate claim and reserve first.' Never spell a bee command in a doc with a flag set its schema refuses (the no_shipped_command_spelling test reads shipped docs). Build with CARGO_TARGET_DIR=/home/thanhsmind/.cache/cargo-target-tct cargo build --release --manifest-path packages/bee-rs/Cargo.toml and run /home/thanhsmind/.cache/cargo-target-tct/release/bee dev regen; never ./.bee/bin/bee for regen. After regen restore .claude/skills changes you did not cause. Files regen writes change only through regen. Write no code comments. Run the verify, and only the verify. Read CONTEXT.md first.",
+        "verify": "/home/thanhsmind/.cache/cargo-target-tct/release/bee onboard --repo-root . --json && /home/thanhsmind/.cache/cargo-target-tct/release/bee dev release-manifest --check && CARGO_TARGET_DIR=/home/thanhsmind/.cache/cargo-target-tct PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- session_preamble no_shipped_command_spelling",
+        "must_haves": {
+          "why": "The help-first line drove 109 help calls in 6 sessions; only 16 percent of tool turns ran calls together (D1, D4, D5).",
+          "out_of_scope": [
+            "new tests (tct-8)",
+            "knowledge concepts (tct-9)"
+          ],
+          "truths": [
+            "the rendered Command surface block holds no 'FIRST use' and names --help --brief",
+            "the regenerated leader doctrine carries the batching bullet and the one-call cell start"
+          ],
+          "prohibitions": [
+            "No change to other LEADER.md rules"
+          ]
+        },
+        "behavior_change": true,
+        "judge_obligation_ack": "Each code cell has a separate dispatched tester cell that reads the change with no shared context."
+      },
+      {
+        "id": "tct-8",
+        "feature": "tool-call-thrift",
+        "title": "Test the preamble command surface contract",
+        "lane": "standard",
+        "role": "test",
+        "deps": [
+          "tct-7"
+        ],
+        "decisions": [
+          "e7428371-3be3-47e5-aa6b-4cb8325a02de"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs"
+        ],
+        "read_first": [
+          "docs/history/tool-call-thrift/CONTEXT.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Per C3: add tests whose names start with preamble_command_surface_ beside the existing budget tests: the rendered Command surface block holds no 'FIRST use' and holds '--help --brief'; a full preamble render on the existing fixture stays inside its byte budget. Also assert .bee/LEADER.md (read from the repo root) holds the batching bullet text 'Every tool call re-reads the whole session' and 'with its `--claim` flag'. Two of these tests (Command surface text, budget) may already sit uncommitted in budget.rs from an earlier blocked run: keep them if they match this action. Change no product code; a red that needs a product fix: block the cell and say why. Build with CARGO_TARGET_DIR=/home/thanhsmind/.cache/cargo-target-tct. Write no code comments. Run the verify, and only the verify.",
+        "verify": "CARGO_TARGET_DIR=/home/thanhsmind/.cache/cargo-target-tct PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- preamble_command_surface",
+        "must_haves": {
+          "why": "A tester with no shared context proves C3.",
+          "out_of_scope": [
+            "product code"
+          ],
+          "truths": [
+            "at least three preamble_command_surface tests run and pass"
+          ],
+          "prohibitions": [
+            "No product code change"
+          ]
+        },
+        "behavior_change": false,
+        "judge_obligation_ack": "Tester for tct-7."
+      },
+      {
+        "id": "tct-9",
+        "feature": "tool-call-thrift",
+        "title": "Sync the command surface and token economy concepts",
+        "lane": "standard",
+        "role": "docs",
+        "deps": [
+          "tct-2",
+          "tct-4",
+          "tct-6",
+          "tct-8"
+        ],
+        "decisions": [
+          "a681eeb7-a7c4-471a-a888-8b3e93cfd6a7"
+        ],
+        "files": [
+          "docs/knowledge/areas/rust-runtime/command-surface.md",
+          "docs/knowledge/areas/hook-runtime/token-economy-of-injected-context.md"
+        ],
+        "read_first": [
+          "docs/history/tool-call-thrift/CONTEXT.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Sync two concepts with what shipped, citing the D-numbers from docs/history/tool-call-thrift/CONTEXT.md, never raw decision ids. command-surface.md: the --brief help card (D2), refusals that carry the card (D3), the preamble line (D4). token-economy-of-injected-context.md: the batching rule (D1), the one-call cell start (D5), the multi-file cat guard (D6), and the CONTEXT.md measurements in two lines. Extend existing sections; do not add near-duplicates. Write in plain short sentences. Run the verify, and only the verify.",
+        "verify": "./.bee/bin/bee knowledge check",
+        "must_haves": {
+          "why": "docs/knowledge is the state layer; a concept that lags the code misleads the next reader.",
+          "out_of_scope": [
+            "code"
+          ],
+          "truths": [
+            "each concept names the shipped behavior and its D-number"
+          ],
+          "prohibitions": [
+            "No raw decision ids in the concepts"
+          ]
+        },
+        "behavior_change": false,
+        "judge_obligation_ack": "Docs cell; no tester."
+      },
+      {
+        "id": "tct-10",
+        "feature": "tool-call-thrift",
+        "title": "Check the synced concepts against the shipped code",
+        "lane": "standard",
+        "role": "test",
+        "deps": [
+          "tct-9"
+        ],
+        "decisions": [
+          "11af7e1c-ae47-4a8e-8c37-d84d2a5c60a9"
+        ],
+        "files": [
+          "docs/knowledge/areas/rust-runtime/command-surface.md",
+          "docs/knowledge/areas/hook-runtime/token-economy-of-injected-context.md"
+        ],
+        "read_first": [
+          "docs/history/tool-call-thrift/CONTEXT.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Per C5: read the lines the tct-9 commit added to the two concepts (git show of the tct-9 commit). For each behavior claim, open the code or doctrine it describes (verbs/help.rs brief_card, router.rs refusals, hooks/cli_shape.rs render_denial, hooks/session_preamble/budget.rs Command surface line, hooks/write_guard/leader_read.rs, packages/bee/LEADER.md Token efficiency and Work in parallel) and confirm it with an rg hit. Fix a wrong claim in the concept itself; change no code. List each claim with its file:line evidence in the report. Run the verify, and only the verify.",
+        "verify": "./.bee/bin/bee knowledge check",
+        "must_haves": {
+          "why": "A docs cell does not certify itself; a separate checker confirms each claim.",
+          "out_of_scope": [
+            "code"
+          ],
+          "truths": [
+            "every claim tct-9 added has a file:line anchor in the report"
+          ],
+          "prohibitions": [
+            "No code change"
+          ]
+        },
+        "behavior_change": false,
+        "judge_obligation_ack": "Checker for tct-9."
+      }
+    ],
+    "role_plan": {
+      "schema_version": "1.0",
+      "runtime": "claude",
+      "roster_sha256": "cd477eb57b66a0cef7310533c504a43a20e8b19e131431e73112bda9a9f114c8",
+      "stages": [
+        {
+          "stage": "implementation",
+          "classification": "required",
+          "role": "code",
+          "reason": "tct-1, 3, 5 and 7 write the code."
+        },
+        {
+          "stage": "test-and-live-proof",
+          "classification": "required",
+          "role": "test",
+          "reason": "tct-2, 4, 6 and 8 test each code cell with no shared context."
+        },
+        {
+          "stage": "documentation-and-capture",
+          "classification": "required",
+          "role": "docs",
+          "reason": "tct-9 syncs the two knowledge concepts."
+        },
+        {
+          "stage": "consolidation",
+          "classification": "not-applicable",
+          "role": "writer",
+          "reason": "No consolidation cell: tct-9 is the one concept sync."
+        },
+        {
+          "stage": "read-only-gather",
+          "classification": "required",
+          "role": "read",
+          "reason": "A haiku gather mapped the code before this plan (job-1795274214475-3981037-1)."
+        },
+        {
+          "stage": "hat-facts-gaps",
+          "classification": "not-applicable",
+          "role": "hat-facts-gaps",
+          "reason": "The measurements in CONTEXT.md are the facts; each part is a small independent change."
+        },
+        {
+          "stage": "hat-alternatives",
+          "classification": "not-applicable",
+          "role": "hat-alternatives",
+          "reason": "Alternatives are recorded per decision with their rejection reason."
+        },
+        {
+          "stage": "hat-user-impact",
+          "classification": "not-applicable",
+          "role": "hat-user-impact",
+          "reason": "The owner is the user of every part and asked for it."
+        },
+        {
+          "stage": "hat-risks",
+          "classification": "not-applicable",
+          "role": "hat-risks",
+          "reason": "Risks are listed in this plan; the read guard keeps its 0 switch; full help is unchanged."
+        },
+        {
+          "stage": "hat-value",
+          "classification": "not-applicable",
+          "role": "hat-value",
+          "reason": "Value is measured in CONTEXT.md and re-measured with bee report context after release."
+        },
+        {
+          "stage": "planning",
+          "classification": "not-applicable",
+          "role": "plan",
+          "reason": "The leader writes this plan."
+        },
+        {
+          "stage": "deployment",
+          "classification": "not-applicable",
+          "role": "deploy",
+          "reason": "The next release publishes it."
+        },
+        {
+          "stage": "fact-extraction",
+          "classification": "not-applicable",
+          "role": "extraction",
+          "reason": "No extraction."
+        },
+        {
+          "stage": "generation-fallback",
+          "classification": "not-applicable",
+          "role": "generation",
+          "reason": "Every job has a specific role."
+        },
+        {
+          "stage": "independent-review",
+          "classification": "not-applicable",
+          "role": "review",
+          "reason": "Independent review stays user-invoked."
+        },
+        {
+          "stage": "generic-advisor",
+          "classification": "not-applicable",
+          "role": "advisor",
+          "reason": "No consult needed."
+        },
+        {
+          "stage": "supervision",
+          "classification": "not-applicable",
+          "role": "supervisor",
+          "reason": "No unattended loop."
+        },
+        {
+          "stage": "blind-lane-1",
+          "classification": "not-applicable",
+          "role": "lane-1",
+          "reason": "One clear design per part."
+        },
+        {
+          "stage": "blind-lane-2",
+          "classification": "not-applicable",
+          "role": "lane-2",
+          "reason": "One clear design per part."
+        },
+        {
+          "stage": "blind-lane-3",
+          "classification": "not-applicable",
+          "role": "lane-3",
+          "reason": "One clear design per part."
+        },
+        {
+          "stage": "design-ui",
+          "classification": "not-applicable",
+          "role": "design",
+          "reason": "No rendered UI."
+        }
+      ]
+    }
+  },
+  "approved_cell_packet": {
+    "feature": "tool-call-thrift",
+    "plan_sha256": "5d8e0ebe45caac76d186fa211f93ce2b5892fa1c0fe91054a42ec114ddba295f",
+    "previewed_at": "2026-11-21T16:00:20.393Z",
+    "cells": [
+      {
+        "id": "tct-1",
+        "feature": "tool-call-thrift",
+        "title": "Print a brief help card with one line per flag",
+        "lane": "standard",
+        "role": "code",
+        "deps": [],
+        "decisions": [
+          "12391e63-eabe-43da-801e-203af21c7123"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/verbs/help.rs"
+        ],
+        "read_first": [
+          "docs/history/tool-call-thrift/CONTEXT.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Per D2: in packages/bee-rs/crates/bee/src/verbs/help.rs, try_native (:51) accepts --brief in the token set beside --json, --all and --names. With --brief and no --json, one-verb and group help render a brief card per entry: the usage line, the one-line summary, then one line per flag: '--name' plus '*' when required, the type in parentheses, ' — ' and the description cut at 80 chars with a trailing ellipsis when cut. No 'details:' paragraph, no header note, no footer. Put the card in one pub(crate) function that takes one registry entry and returns the lines, so the router and the shape guard can call it (tct-3). Without --brief every output stays byte-identical; do not touch the existing render paths beyond the branch. If the CLI-shape guard (hooks/cli_shape.rs) refuses a Bash command with --help --brief, make it pass the same way --help --names passes, and nothing else in that file. Build with CARGO_TARGET_DIR=/home/thanhsmind/.cache/cargo-target-tct. Add no test (tct-2 writes them). Write no code comments. Run the verify, and only the verify, never the full suite. Read CONTEXT.md first.",
+        "verify": "CARGO_TARGET_DIR=/home/thanhsmind/.cache/cargo-target-tct PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- help cli_shape",
+        "must_haves": {
+          "why": "109 help reads at 2.9k chars each stay in the leader context for the rest of the session (D2).",
+          "out_of_scope": [
+            "refusal text (tct-3)",
+            "the preamble line (tct-7)",
+            "new tests (tct-2)"
+          ],
+          "truths": [
+            "the brief card of cells finish has one line per flag and no details line",
+            "the full help of every verb is byte-identical to its output before the change",
+            "the CLI-shape guard lets a brief help call through"
+          ],
+          "prohibitions": [
+            "No change to the default help or the json help output"
+          ]
+        },
+        "behavior_change": true,
+        "judge_obligation_ack": "Each code cell has a separate dispatched tester cell that reads the change with no shared context."
+      },
+      {
+        "id": "tct-2",
+        "feature": "tool-call-thrift",
+        "title": "Test the brief help card contract",
+        "lane": "standard",
+        "role": "test",
+        "deps": [
+          "tct-1"
+        ],
+        "decisions": [
+          "e5e7d363-7a31-4cca-abbc-257641efb499"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/verbs/help.rs"
+        ],
+        "read_first": [
+          "docs/history/tool-call-thrift/CONTEXT.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Per C1: add tests whose names start with help_brief_ in the tests module of packages/bee-rs/crates/bee/src/verbs/help.rs. Assert on the rendered output, not internals: the brief card of cells finish names every cells finish flag from the registry exactly once, each on its own line; it has no line 'details:'; it is under 2500 bytes; a description longer than 80 chars ends in an ellipsis. Assert the full one-verb help of cells finish and one group help are unchanged against the existing render function output. Add one test in hooks/cli_shape.rs tests named help_brief_passes_the_shape_guard showing a Bash command for the brief help of cells finish is not denied. Change no product code; a red that needs a product fix: block the cell and say why. Build with CARGO_TARGET_DIR=/home/thanhsmind/.cache/cargo-target-tct. Write no code comments. Run the verify, and only the verify.",
+        "verify": "CARGO_TARGET_DIR=/home/thanhsmind/.cache/cargo-target-tct PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- help_brief",
+        "must_haves": {
+          "why": "A tester with no shared context proves C1 on the real output.",
+          "out_of_scope": [
+            "product code"
+          ],
+          "truths": [
+            "at least five help_brief tests run and pass",
+            "the verify output names each help_brief test"
+          ],
+          "prohibitions": [
+            "No product code change"
+          ]
+        },
+        "behavior_change": false,
+        "judge_obligation_ack": "Tester for tct-1."
+      },
+      {
+        "id": "tct-3",
+        "feature": "tool-call-thrift",
+        "title": "Print the verb's flag card in argument refusals",
+        "lane": "standard",
+        "role": "code",
+        "deps": [
+          "tct-2"
+        ],
+        "decisions": [
+          "3876c870-6e57-4e9f-a102-58f3e073d8de"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/router.rs",
+          "packages/bee-rs/crates/bee/src/hooks/cli_shape.rs",
+          "packages/bee-rs/crates/bee/src/verbs/help.rs"
+        ],
+        "read_first": [
+          "docs/history/tool-call-thrift/CONTEXT.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Per D3: the missing-required refusal (router.rs:458) and the unknown-flag refusal (router.rs:486) append the verb's brief card lines from the tct-1 function after their current text, under a line 'flags:'; the unknown-flag FIX hint names '--help --brief' in place of '--help'. In hooks/cli_shape.rs render_denial (:628) appends the same card for the resolved command and the Correction line (:647) says 'see `<cmd> --help --brief`' in place of '--help --json'. Keep the problem list and the did-you-mean hint. Move existing tests that pin the old correction text to the new text with the same shape; add no new test. Build with CARGO_TARGET_DIR=/home/thanhsmind/.cache/cargo-target-tct. Write no code comments. Run the verify, and only the verify. Read CONTEXT.md first.",
+        "verify": "CARGO_TARGET_DIR=/home/thanhsmind/.cache/cargo-target-tct PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- cli_shape router write_guard",
+        "must_haves": {
+          "why": "A refusal that only points at help costs a help read and a retry; the card makes the retry the next call (D3).",
+          "out_of_scope": [
+            "help rendering (tct-1)",
+            "new tests (tct-4)"
+          ],
+          "truths": [
+            "a cells finish call with no --id is refused with the --id card line in the text",
+            "the shape guard denial carries the card and names --help --brief"
+          ],
+          "prohibitions": [
+            "No second card renderer"
+          ]
+        },
+        "behavior_change": true,
+        "judge_obligation_ack": "Each code cell has a separate dispatched tester cell that reads the change with no shared context."
+      },
+      {
+        "id": "tct-4",
+        "feature": "tool-call-thrift",
+        "title": "Test the refusal card contract",
+        "lane": "standard",
+        "role": "test",
+        "deps": [
+          "tct-3"
+        ],
+        "decisions": [
+          "6f1ae265-e3aa-412d-a6d4-6e4e1b2b3e9e"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/router.rs",
+          "packages/bee-rs/crates/bee/src/hooks/cli_shape.rs"
+        ],
+        "read_first": [
+          "docs/history/tool-call-thrift/CONTEXT.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Per C2: add tests whose names start with refusal_card_ beside the existing router and cli_shape tests. Assert on refusal text: cells finish with no --id is refused with a line that starts with --id and the 'flags:' line; cells finish with an unknown flag is refused with the card; the shape guard denial for the same Bash command carries the card and names --help --brief and not --help --json. Change no product code; a red that needs a product fix: block the cell and say why. Build with CARGO_TARGET_DIR=/home/thanhsmind/.cache/cargo-target-tct. Write no code comments. Run the verify, and only the verify.",
+        "verify": "CARGO_TARGET_DIR=/home/thanhsmind/.cache/cargo-target-tct PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- refusal_card",
+        "must_haves": {
+          "why": "A tester with no shared context proves C2 on the real refusal text.",
+          "out_of_scope": [
+            "product code"
+          ],
+          "truths": [
+            "at least three refusal_card tests run and pass"
+          ],
+          "prohibitions": [
+            "No product code change"
+          ]
+        },
+        "behavior_change": false,
+        "judge_obligation_ack": "Tester for tct-3."
+      },
+      {
+        "id": "tct-5",
+        "feature": "tool-call-thrift",
+        "title": "Refuse a leader's bare cat of several long files",
+        "lane": "standard",
+        "role": "code",
+        "deps": [],
+        "decisions": [
+          "94d78600-e103-4ef4-814a-608025c2cb65"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/hooks/write_guard/leader_read.rs",
+          "packages/bee-rs/crates/bee/src/hooks/write_guard/main.rs"
+        ],
+        "read_first": [
+          "docs/history/tool-call-thrift/CONTEXT.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Per D6: in packages/bee-rs/crates/bee/src/hooks/write_guard/leader_read.rs, cat_operand (:37) accepts two or more file operands (no flag operands, plain command only, optional leading 'cd <dir> &&' as today); the guard sums count_lines over them and refuses when the sum passes the limit. The refusal names every file and the sum, and keeps both remedies (offset and limit, a read gather through dispatch prepare). A file that count_lines cannot read makes the command pass, as today. One-file behavior, piped or ranged reads, workers and limit 0 stay exactly as they are. Touch main.rs only if the call site needs the new return shape. Move existing tests only if their shape must change; add no new test. Build with CARGO_TARGET_DIR=/home/thanhsmind/.cache/cargo-target-tct. Write no code comments. Run the verify, and only the verify. Read CONTEXT.md first.",
+        "verify": "CARGO_TARGET_DIR=/home/thanhsmind/.cache/cargo-target-tct PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- leader_read write_guard",
+        "must_haves": {
+          "why": "Multi-file cat dumps passed the one-file guard (D6).",
+          "out_of_scope": [
+            "new tests (tct-6)"
+          ],
+          "truths": [
+            "a leader's bare cat of two files summing past the limit is refused",
+            "one-file cat behavior is unchanged"
+          ],
+          "prohibitions": [
+            "No change for workers or limit 0"
+          ]
+        },
+        "behavior_change": true,
+        "judge_obligation_ack": "Each code cell has a separate dispatched tester cell that reads the change with no shared context."
+      },
+      {
+        "id": "tct-6",
+        "feature": "tool-call-thrift",
+        "title": "Test the multi-file cat read guard contract",
+        "lane": "standard",
+        "role": "test",
+        "deps": [
+          "tct-5"
+        ],
+        "decisions": [
+          "3a2194d7-4f09-4952-8ecc-6f99b2132c5f"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/hooks/write_guard/leader_read.rs"
+        ],
+        "read_first": [
+          "docs/history/tool-call-thrift/CONTEXT.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Per C4: add tests whose names start with leader_read_multi_cat_ in the tests module of leader_read.rs, on temp files: two files of 250 and 151 lines with limit 400 refused, naming both files; 200 and 200 pass; a worker passes; limit 0 passes; 'cat a b | head' passes; one 401-line file is still refused and one 400-line file still passes. Change no product code; a red that needs a product fix: block the cell and say why. Build with CARGO_TARGET_DIR=/home/thanhsmind/.cache/cargo-target-tct. Write no code comments. Run the verify, and only the verify.",
+        "verify": "CARGO_TARGET_DIR=/home/thanhsmind/.cache/cargo-target-tct PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- leader_read_multi_cat",
+        "must_haves": {
+          "why": "A tester with no shared context proves C4.",
+          "out_of_scope": [
+            "product code"
+          ],
+          "truths": [
+            "at least six leader_read_multi_cat tests run and pass"
+          ],
+          "prohibitions": [
+            "No product code change"
+          ]
+        },
+        "behavior_change": false,
+        "judge_obligation_ack": "Tester for tct-5."
+      },
+      {
+        "id": "tct-7",
+        "feature": "tool-call-thrift",
+        "title": "Ask leaders to batch calls and drop the help-first line",
+        "lane": "standard",
+        "role": "code",
+        "deps": [
+          "tct-1"
+        ],
+        "decisions": [
+          "4982d4a5-b3eb-4008-9a06-7b25b7f7fa5f",
+          "6fb5c82e-fd7d-40bd-8339-e50de227ba71",
+          "a2d1736f-2b46-4672-b5e0-6c0d510d7773"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs",
+          "packages/bee/LEADER.md",
+          "packages/bee/playbooks/leader-detail.md",
+          "skills/bee-hive/references/routing-and-contracts.md",
+          "skills/bee-swarming/references/execute.md",
+          ".bee/LEADER.md",
+          ".bee/playbooks/leader-detail.md",
+          ".bee/onboarding.json",
+          ".claude/skills/.bee-render.json",
+          ".claude/skills/bee-hive/references/routing-and-contracts.md",
+          ".claude/skills/bee-swarming/references/execute.md",
+          "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+          "docs/history/codex-harness-hardening/release-manifest.json"
+        ],
+        "read_first": [
+          "docs/history/tool-call-thrift/CONTEXT.md"
+        ],
+        "affects_skills": [
+          "skills/bee-hive/references/routing-and-contracts.md",
+          "skills/bee-swarming/references/execute.md"
+        ],
+        "affects_specs": [],
+        "action": "Per D4: in packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs:161 replace the sentence from 'Flags and usage:' to the semicolon with: 'Flags: run the verb — a wrong flag shape is refused before it runs and the refusal lists the verb's flags; to see them first, `bee <verb> --help --brief` (one line per flag)'; keep the names-only start and the json count tail; move tests that pin the old text. In skills/bee-hive/references/routing-and-contracts.md:347 and skills/bee-swarming/references/execute.md:105 make any read-help-before-use wording match. Per D1: in packages/bee/LEADER.md under '## Token efficiency' add one bullet before the existing one: 'Every tool call re-reads the whole session. Put independent commands in one Bash call, or send independent calls together in one message; run a short command alone only when its output decides the next command.' and add the matching detail paragraph under § Token efficiency in packages/bee/playbooks/leader-detail.md. Per D5: in packages/bee/LEADER.md, in the dispatch bullets under '## Work in parallel', add: 'Start a cell with one call: dispatch prepare with its `--claim` flag for one cell, dispatch wave for a wave — never a separate claim and reserve first.' Never spell a bee command in a doc with a flag set its schema refuses (the no_shipped_command_spelling test reads shipped docs). Build with CARGO_TARGET_DIR=/home/thanhsmind/.cache/cargo-target-tct cargo build --release --manifest-path packages/bee-rs/Cargo.toml and run /home/thanhsmind/.cache/cargo-target-tct/release/bee dev regen; never ./.bee/bin/bee for regen. After regen restore .claude/skills changes you did not cause. Files regen writes change only through regen. Write no code comments. Run the verify, and only the verify. Read CONTEXT.md first.",
+        "verify": "/home/thanhsmind/.cache/cargo-target-tct/release/bee onboard --repo-root . --json && /home/thanhsmind/.cache/cargo-target-tct/release/bee dev release-manifest --check && CARGO_TARGET_DIR=/home/thanhsmind/.cache/cargo-target-tct PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- session_preamble no_shipped_command_spelling",
+        "must_haves": {
+          "why": "The help-first line drove 109 help calls in 6 sessions; only 16 percent of tool turns ran calls together (D1, D4, D5).",
+          "out_of_scope": [
+            "new tests (tct-8)",
+            "knowledge concepts (tct-9)"
+          ],
+          "truths": [
+            "the rendered Command surface block holds no 'FIRST use' and names --help --brief",
+            "the regenerated leader doctrine carries the batching bullet and the one-call cell start"
+          ],
+          "prohibitions": [
+            "No change to other LEADER.md rules"
+          ]
+        },
+        "behavior_change": true,
+        "judge_obligation_ack": "Each code cell has a separate dispatched tester cell that reads the change with no shared context."
+      },
+      {
+        "id": "tct-8",
+        "feature": "tool-call-thrift",
+        "title": "Test the preamble command surface contract",
+        "lane": "standard",
+        "role": "test",
+        "deps": [
+          "tct-7"
+        ],
+        "decisions": [
+          "e7428371-3be3-47e5-aa6b-4cb8325a02de"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs"
+        ],
+        "read_first": [
+          "docs/history/tool-call-thrift/CONTEXT.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Per C3: add tests whose names start with preamble_command_surface_ beside the existing budget tests: the rendered Command surface block holds no 'FIRST use' and holds '--help --brief'; a full preamble render on the existing fixture stays inside its byte budget. Also assert .bee/LEADER.md (read from the repo root) holds the batching bullet text 'Every tool call re-reads the whole session' and 'with its `--claim` flag'. Two of these tests (Command surface text, budget) may already sit uncommitted in budget.rs from an earlier blocked run: keep them if they match this action. Change no product code; a red that needs a product fix: block the cell and say why. Build with CARGO_TARGET_DIR=/home/thanhsmind/.cache/cargo-target-tct. Write no code comments. Run the verify, and only the verify.",
+        "verify": "CARGO_TARGET_DIR=/home/thanhsmind/.cache/cargo-target-tct PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- preamble_command_surface",
+        "must_haves": {
+          "why": "A tester with no shared context proves C3.",
+          "out_of_scope": [
+            "product code"
+          ],
+          "truths": [
+            "at least three preamble_command_surface tests run and pass"
+          ],
+          "prohibitions": [
+            "No product code change"
+          ]
+        },
+        "behavior_change": false,
+        "judge_obligation_ack": "Tester for tct-7."
+      },
+      {
+        "id": "tct-9",
+        "feature": "tool-call-thrift",
+        "title": "Sync the command surface and token economy concepts",
+        "lane": "standard",
+        "role": "docs",
+        "deps": [
+          "tct-2",
+          "tct-4",
+          "tct-6",
+          "tct-8"
+        ],
+        "decisions": [
+          "a681eeb7-a7c4-471a-a888-8b3e93cfd6a7"
+        ],
+        "files": [
+          "docs/knowledge/areas/rust-runtime/command-surface.md",
+          "docs/knowledge/areas/hook-runtime/token-economy-of-injected-context.md"
+        ],
+        "read_first": [
+          "docs/history/tool-call-thrift/CONTEXT.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Sync two concepts with what shipped, citing the D-numbers from docs/history/tool-call-thrift/CONTEXT.md, never raw decision ids. command-surface.md: the --brief help card (D2), refusals that carry the card (D3), the preamble line (D4). token-economy-of-injected-context.md: the batching rule (D1), the one-call cell start (D5), the multi-file cat guard (D6), and the CONTEXT.md measurements in two lines. Extend existing sections; do not add near-duplicates. Write in plain short sentences. Run the verify, and only the verify.",
+        "verify": "./.bee/bin/bee knowledge check",
+        "must_haves": {
+          "why": "docs/knowledge is the state layer; a concept that lags the code misleads the next reader.",
+          "out_of_scope": [
+            "code"
+          ],
+          "truths": [
+            "each concept names the shipped behavior and its D-number"
+          ],
+          "prohibitions": [
+            "No raw decision ids in the concepts"
+          ]
+        },
+        "behavior_change": false,
+        "judge_obligation_ack": "Docs cell; no tester."
+      },
+      {
+        "id": "tct-10",
+        "feature": "tool-call-thrift",
+        "title": "Check the synced concepts against the shipped code",
+        "lane": "standard",
+        "role": "test",
+        "deps": [
+          "tct-9"
+        ],
+        "decisions": [
+          "11af7e1c-ae47-4a8e-8c37-d84d2a5c60a9"
+        ],
+        "files": [
+          "docs/knowledge/areas/rust-runtime/command-surface.md",
+          "docs/knowledge/areas/hook-runtime/token-economy-of-injected-context.md"
+        ],
+        "read_first": [
+          "docs/history/tool-call-thrift/CONTEXT.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Per C5: read the lines the tct-9 commit added to the two concepts (git show of the tct-9 commit). For each behavior claim, open the code or doctrine it describes (verbs/help.rs brief_card, router.rs refusals, hooks/cli_shape.rs render_denial, hooks/session_preamble/budget.rs Command surface line, hooks/write_guard/leader_read.rs, packages/bee/LEADER.md Token efficiency and Work in parallel) and confirm it with an rg hit. Fix a wrong claim in the concept itself; change no code. List each claim with its file:line evidence in the report. Run the verify, and only the verify.",
+        "verify": "./.bee/bin/bee knowledge check",
+        "must_haves": {
+          "why": "A docs cell does not certify itself; a separate checker confirms each claim.",
+          "out_of_scope": [
+            "code"
+          ],
+          "truths": [
+            "every claim tct-9 added has a file:line anchor in the report"
+          ],
+          "prohibitions": [
+            "No code change"
+          ]
+        },
+        "behavior_change": false,
+        "judge_obligation_ack": "Checker for tct-9."
+      }
+    ],
+    "role_plan": {
+      "schema_version": "1.0",
+      "runtime": "claude",
+      "roster_sha256": "cd477eb57b66a0cef7310533c504a43a20e8b19e131431e73112bda9a9f114c8",
+      "stages": [
+        {
+          "stage": "implementation",
+          "classification": "required",
+          "role": "code",
+          "reason": "tct-1, 3, 5 and 7 write the code."
+        },
+        {
+          "stage": "test-and-live-proof",
+          "classification": "required",
+          "role": "test",
+          "reason": "tct-2, 4, 6 and 8 test each code cell with no shared context."
+        },
+        {
+          "stage": "documentation-and-capture",
+          "classification": "required",
+          "role": "docs",
+          "reason": "tct-9 syncs the two knowledge concepts."
+        },
+        {
+          "stage": "consolidation",
+          "classification": "not-applicable",
+          "role": "writer",
+          "reason": "No consolidation cell: tct-9 is the one concept sync."
+        },
+        {
+          "stage": "read-only-gather",
+          "classification": "required",
+          "role": "read",
+          "reason": "A haiku gather mapped the code before this plan (job-1795274214475-3981037-1)."
+        },
+        {
+          "stage": "hat-facts-gaps",
+          "classification": "not-applicable",
+          "role": "hat-facts-gaps",
+          "reason": "The measurements in CONTEXT.md are the facts; each part is a small independent change."
+        },
+        {
+          "stage": "hat-alternatives",
+          "classification": "not-applicable",
+          "role": "hat-alternatives",
+          "reason": "Alternatives are recorded per decision with their rejection reason."
+        },
+        {
+          "stage": "hat-user-impact",
+          "classification": "not-applicable",
+          "role": "hat-user-impact",
+          "reason": "The owner is the user of every part and asked for it."
+        },
+        {
+          "stage": "hat-risks",
+          "classification": "not-applicable",
+          "role": "hat-risks",
+          "reason": "Risks are listed in this plan; the read guard keeps its 0 switch; full help is unchanged."
+        },
+        {
+          "stage": "hat-value",
+          "classification": "not-applicable",
+          "role": "hat-value",
+          "reason": "Value is measured in CONTEXT.md and re-measured with bee report context after release."
+        },
+        {
+          "stage": "planning",
+          "classification": "not-applicable",
+          "role": "plan",
+          "reason": "The leader writes this plan."
+        },
+        {
+          "stage": "deployment",
+          "classification": "not-applicable",
+          "role": "deploy",
+          "reason": "The next release publishes it."
+        },
+        {
+          "stage": "fact-extraction",
+          "classification": "not-applicable",
+          "role": "extraction",
+          "reason": "No extraction."
+        },
+        {
+          "stage": "generation-fallback",
+          "classification": "not-applicable",
+          "role": "generation",
+          "reason": "Every job has a specific role."
+        },
+        {
+          "stage": "independent-review",
+          "classification": "not-applicable",
+          "role": "review",
+          "reason": "Independent review stays user-invoked."
+        },
+        {
+          "stage": "generic-advisor",
+          "classification": "not-applicable",
+          "role": "advisor",
+          "reason": "No consult needed."
+        },
+        {
+          "stage": "supervision",
+          "classification": "not-applicable",
+          "role": "supervisor",
+          "reason": "No unattended loop."
+        },
+        {
+          "stage": "blind-lane-1",
+          "classification": "not-applicable",
+          "role": "lane-1",
+          "reason": "One clear design per part."
+        },
+        {
+          "stage": "blind-lane-2",
+          "classification": "not-applicable",
+          "role": "lane-2",
+          "reason": "One clear design per part."
+        },
+        {
+          "stage": "blind-lane-3",
+          "classification": "not-applicable",
+          "role": "lane-3",
+          "reason": "One clear design per part."
+        },
+        {
+          "stage": "design-ui",
+          "classification": "not-applicable",
+          "role": "design",
+          "reason": "No rendered UI."
+        }
+      ]
+    }
+  },
+  "merge_ready": {
+    "since": "2026-11-21T15:56:58.686Z",
+    "branch": "wt/tool-call-thrift",
+    "worktree_id": "beehive--wt--tool-call-thrift",
+    "uat": "pending",
+    "blocked_by": []
+  }
+}

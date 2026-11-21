@@ -978,6 +978,7 @@
     "contract:leader-read-cap",
     "contract:dispatch-prompt-out",
     "contract:report-context",
-    "contract:published-release-2-115-0"
+    "contract:published-release-2-115-0",
+    "contract:tct-docs-claims"
   ]
 }

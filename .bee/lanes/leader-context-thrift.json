@@ -11,14 +11,14 @@
     "uat": false
   },
   "summary": "Feature \"leader-context-thrift\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at 877d81b; reload the product and test \"leader-context-thrift\", then either approve uat (\"bee gate --name uat --approved true --lane leader-context-thrift\") or fix it in the worktree and merge again.",
+  "next_action": "Continue bee-exploring for \"leader-context-thrift\" (lane).",
   "created_at": "2026-11-21T13:53:09.615Z",
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "gate",
-    "subject": "uat: leader-context-thrift",
-    "asked_at": "2026-11-21T14:40:24.242Z",
-    "session": "bee-worktree-merge-sessionless"
+    "subject": "uat for leader-context-thrift: owner tests bee 2.115.0",
+    "asked_at": "2026-11-21T14:57:16.906Z",
+    "session": "b1444ff5-0d88-4072-9b37-e8943cbb9ae4"
   },
   "route": {
     "class": "feature",
