@@ -35,14 +35,14 @@ Evidence (`bee report usage` on that session, and its transcripts):
 
 | ID | Decision | Store id |
 |----|----------|----------|
-| D1 | A successful `bee worktree merge` ends with one line that tells the leader to hand off before the next feature. `bee feature start` refuses with `handoff_due` when the calling session already merged a different feature, unless `--same-session` carries a reason, which goes to the audit log. A caller with no session id is not refused. | 6746c0d3 |
+| D1 | The merge already prints the handoff directive (token-spend-cuts D1); that half is not rebuilt. A successful `bee worktree merge` stores the merging session id and the merged feature. `bee feature start` refuses with `handoff_due` when the calling session already merged a different feature, unless `--same-session` carries a reason, which goes to the audit log. A caller with no session id is not refused. | b56a554a (narrows 6746c0d3) |
 | D2 | `bee herding result --job <id>` prints a digest of the job's result file (status, summary, proof, files_changed, found, unknowns, skipped, report_path), at most 1500 characters, never the report body. bee-swarming tells the leader to read the digest, to open a report only on a red, a question or a blocked status, and to start a diff review with the stat view. | 5c368ef5 |
 | D3 | Every claude launch that gets `THIN_PEER_CLAUDE_ENV` also gets `SLASH_COMMAND_TOOL_CHAR_BUDGET=1`. Where bee builds the claude argument list itself (claude-session spawn, built-in claude herding pane), a thin worker launch also carries `--disable-slash-commands` and `--disallowedTools Agent`. Other launches are unchanged. | 6d55d3dd |
 | D4 | The worker cell prompt carries a short search rule. bee-planning's cell rules say a cell action names each function it changes as path plus symbol. | b4521fc9 |
 | D5 | `packages/bee/LEADER.md` shrinks from 21685 bytes to at most 15000. Every rule marker id stays with its boundary sentence. Moved detail lands in full in a playbook or reference that LEADER.md names with a read-when line. No rule is deleted or weakened. | 4c6e84ea |
 | D6 | The fixed text of a cell brief shrinks by at least 25 percent in bytes, measured on one rendered non-read-only cell brief for the same cell before and after. Every result field and status the parser accepts is still named. | acb2c2d8 |
 | C1 | Test contract thin-worker-listings-off. | 1dd8b534 |
-| C2 | Test contract handoff-after-merge-door. | 8cceb386 |
+| C2 | Test contract handoff-after-merge-door. | cd3be8ac (replaces 8cceb386) |
 | C3 | Test contract herding-result-job-digest. | 7e81e0f2 |
 | C4 | Test contract cell-brief-search-rule-and-size. | 5737bdba |
 
