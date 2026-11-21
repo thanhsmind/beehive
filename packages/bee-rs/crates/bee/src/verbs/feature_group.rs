@@ -189,6 +189,7 @@ fn run_start(tokens: &[OsString], t0: Instant) -> Option<ExitCode> {
     let main_root = ctx.work_root.clone();
 
     let main_root_s = p(&main_root);
+    let mut waiver: Option<String> = None;
     if let Ok(ctrl_root) = crate::verbs::reservations::control_root_for(&main_root_s) {
         let session_id = crate::verbs::reservations::resolve_session_id(None, &ctrl_root).ok().flatten();
         if let Some(sid) = session_id.as_deref()
@@ -211,17 +212,7 @@ fn run_start(tokens: &[OsString], t0: Instant) -> Option<ExitCode> {
                             "[handoff_due] --same-session needs a non-empty reason: --same-session \"<reason>\".",
                         ));
                     }
-                    if let Err(e) = crate::audit::append(
-                        &main_root,
-                        "handoff-waived",
-                        &feature,
-                        None,
-                        &reason,
-                        "feature start",
-                        None,
-                    ) {
-                        return Some(ctx.fail(&format!("could not write the handoff-waived audit row: {e}")));
-                    }
+                    waiver = Some(reason);
                 }
             }
         }
@@ -332,6 +323,12 @@ fn run_start(tokens: &[OsString], t0: Instant) -> Option<ExitCode> {
     lane_map.insert("route".into(), Value::Object(route_object.clone()));
     if write_lane(&main_root, &lane_map).is_err() {
         return None;
+    }
+
+    if let Some(reason) = waiver.as_deref()
+        && let Err(e) = crate::audit::append(&main_root, "handoff-waived", &feature, None, reason, "feature start", None)
+    {
+        eprintln!("warning: could not write the handoff-waived audit row: {e}");
     }
 
     if let Ok(live) = list_workflows(&main_root)

@@ -637,13 +637,21 @@ fn merger_record_path(control_root: &Path, session_id: &str) -> PathBuf {
 
 pub(crate) fn record_merger(control_root: &Path, session_id: &str, feature: &str) {
     let path = merger_record_path(control_root, session_id);
-    if let Some(dir) = path.parent() {
-        let _ = std::fs::create_dir_all(dir);
+    let written = path
+        .parent()
+        .map(std::fs::create_dir_all)
+        .transpose()
+        .map_err(|e| e.to_string())
+        .and_then(|_| {
+            write_json_atomic(
+                &path,
+                &json!({"session_id": session_id, "feature": feature, "merged_at": now_iso()}),
+            )
+            .map_err(|e| e.to_string())
+        });
+    if let Err(e) = written {
+        eprintln!("warning: could not record the merging session for the handoff check: {e}");
     }
-    let _ = write_json_atomic(
-        &path,
-        &json!({"session_id": session_id, "feature": feature, "merged_at": now_iso()}),
-    );
 }
 
 pub(crate) fn merged_feature_of(control_root: &Path, session_id: &str) -> Option<String> {
