@@ -1474,3 +1474,4 @@
 {"ts":"2026-11-21T12:27:56.121Z","event":"complete","id":"5eeb7e89-59d7-488d-85ba-f8203e66bf59"}
 {"ts":"2026-11-21T12:28:04.415Z","event":"complete","id":"b22ba2e6-e860-4410-9571-bd5a74b12e4e"}
 {"ts":"2026-11-21T12:28:11.365Z","event":"complete","id":"52ac17bf-059d-4114-83b7-338940cf4eb5"}
+{"ts":"2026-11-21T14:40:24.290Z","event":"add","id":"7f7a709f-80bc-44b8-b180-5a5b370bfef9","kind":"worktree-cleanup","feature":"leader-context-thrift","cells":[],"areas":[],"files":["/mnt/data/Projects/goglbe/beehive--wt--leader-context-thrift"],"reason":"Worktree beehive--wt--leader-context-thrift (branch wt/leader-context-thrift) merged into main at 877d81b1d7b9fb960af9adea60ec5dd7d478432d and kept per default (D1) — remove it with `bee worktree prune`."}
