@@ -89,6 +89,7 @@ use sha2::{Digest, Sha256};
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
+pub(crate) const DEFAULT_HANDOFF_MARK: u64 = 120_000;
 const HOOK_NAME: &str = "prompt-context";
 
 // inject.mjs INJECT_INTERVAL_MS
@@ -351,8 +352,8 @@ fn plan(root: &Path, payload: &Map<String, Value>) -> Pf<Option<Plan>> {
 
 fn compute_handoff_warning(config: &Map<String, Value>, payload: &Map<String, Value>) -> Option<String> {
     let threshold = match config.get("handoff_context_tokens") {
-        Some(Value::Number(n)) => n.as_u64().unwrap_or(120_000),
-        _ => 120_000,
+        Some(Value::Number(n)) => n.as_u64().unwrap_or(DEFAULT_HANDOFF_MARK),
+        _ => DEFAULT_HANDOFF_MARK,
     };
     if threshold == 0 {
         return None;

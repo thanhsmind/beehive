@@ -1,4 +1,5 @@
 use crate::fsutil::{read_json, ReadJson};
+use crate::hooks::prompt_context::DEFAULT_HANDOFF_MARK;
 use crate::hooks::session_close::{claude_projects_root, encode_project_dir, event_ms, js_date_parse, read_jsonl};
 use crate::jsjson;
 use crate::roots::{resolve_store_root_any as resolve_store_root, Roots};
@@ -12,7 +13,6 @@ use std::time::Instant;
 
 const CMD: &str = "report context";
 const VALUE_FLAGS: [&str; 2] = ["since", "projects-dir"];
-const DEFAULT_HANDOFF_MARK: u64 = 120_000;
 const REWORK_WINDOW_CALLS: usize = 40;
 const REWORK_NEEDLES: [&str; 2] = ["cells reopen", "mailbox reflect"];
 const HANDOFF_PROMPT_NEEDLES: [&str; 2] = ["handoff", "follow-up"];
@@ -363,4 +363,107 @@ fn render_json(s: &Stats) -> Value {
     m.insert("handoff_started_sessions".into(), Value::from(s.handoff_started_sessions));
     m.insert("rework_commands".into(), Value::from(s.rework_commands));
     Value::Object(m)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn assistant(id: &str, context: u64, bash: Option<&str>) -> String {
+        let mut content = vec![json!({"type": "text", "text": "step"})];
+        if let Some(cmd) = bash {
+            content.push(json!({"type": "tool_use", "name": "Bash", "input": {"command": cmd}}));
+        }
+        json!({
+            "type": "assistant",
+            "message": {
+                "id": id,
+                "model": "claude-opus",
+                "content": content,
+                "usage": {
+                    "input_tokens": 1000,
+                    "cache_creation_input_tokens": 2000,
+                    "cache_read_input_tokens": context - 3000,
+                    "output_tokens": 99_999
+                }
+            }
+        })
+        .to_string()
+    }
+
+    fn user(text: &str) -> String {
+        json!({"type": "user", "message": {"content": text}}).to_string()
+    }
+
+    fn handoff_leader() -> String {
+        let mut lines = vec![user("Continue from the handoff record.")];
+        for i in 1..=42u64 {
+            let context = if i == 2 { 150_000 } else { 10_000 };
+            let bash = match i {
+                1 => Some("bee cells reopen lcx-1 --reason early"),
+                41 => Some("bee cells reopen lcx-2 --reason late"),
+                _ => None,
+            };
+            lines.push(assistant(&format!("a{i}"), context, bash));
+        }
+        lines.join("\n")
+    }
+
+    fn plain_leader() -> String {
+        [user("Fix the parser."), assistant("b1", 50_000, None), assistant("b2", 130_000, None)].join("\n")
+    }
+
+    fn worker() -> String {
+        [user("Do the cell."), assistant("w1", 900_000, Some("bee cells reopen lcx-3"))].join("\n")
+    }
+
+    fn measure_fixtures() -> Stats {
+        let tmp = tempfile::tempdir().unwrap();
+        let control = tmp.path().join("control");
+        let projects = tmp.path().join("projects");
+        let job = control.join(".bee").join("mailbox").join("job-1");
+        std::fs::create_dir_all(&job).unwrap();
+        std::fs::create_dir_all(&projects).unwrap();
+        let worker_path = projects.join("worker-sess.jsonl");
+        std::fs::write(
+            job.join("activity.json"),
+            json!({"transcript_path": worker_path.to_string_lossy()}).to_string(),
+        )
+        .unwrap();
+        std::fs::write(projects.join("leader-a.jsonl"), handoff_leader()).unwrap();
+        std::fs::write(projects.join("leader-b.jsonl"), plain_leader()).unwrap();
+        std::fs::write(&worker_path, worker()).unwrap();
+        let opts = Opts { values: vec![("projects-dir", projects.to_string_lossy().into_owned())], json: false };
+        measure(&control, &opts).unwrap_or_else(|f| panic!("{}", f.msg))
+    }
+
+    #[test]
+    fn report_context_counts_only_the_leader_transcripts() {
+        let stats = measure_fixtures();
+        assert_eq!(stats.sessions, 2);
+        assert_eq!(stats.calls, 44);
+        assert_eq!(stats.p90_context, 10_000);
+    }
+
+    #[test]
+    fn report_context_mean_comes_from_message_usage() {
+        let stats = measure_fixtures();
+        assert_eq!(stats.mean_context, 16_818);
+    }
+
+    #[test]
+    fn report_context_above_mark_calls_land_in_the_share() {
+        let stats = measure_fixtures();
+        assert_eq!(stats.handoff_mark, 120_000);
+        assert_eq!(stats.above_mark_calls, 2);
+        let share = stats.above_mark_share.unwrap();
+        assert!((share - 280_000.0 / 740_000.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn report_context_counts_reopen_inside_the_first_40_calls_only() {
+        let stats = measure_fixtures();
+        assert_eq!(stats.handoff_started_sessions, 1);
+        assert_eq!(stats.rework_commands, 1);
+    }
 }
