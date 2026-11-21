@@ -709,14 +709,18 @@ A `[BLOCKED]` whose worker recorded a dissent owes its `.bee/bin/bee cells disse
 
 ## Handoff JSON
 
-At the next clean stop past the context mark, after every green worktree merge, or when the user asks for a switch, write `.bee/HANDOFF.json` (rule: agents-context-handoff-65) — this is the record's schema, the one site that keeps it: `{ phase, feature, mode, cells_in_flight, done, remaining, next_action, verified, tree, key_files, gotchas, written_at }`. The four newer fields let the next session trust what it reads:
+At the next clean stop past the context mark, after every green worktree merge, or when the user asks for a switch, write `.bee/HANDOFF.json` (rule: agents-context-handoff-65) — this is the record's schema, the one site that keeps it: `{ phase, feature, mode, cells_in_flight, done, remaining, next_action, verified, tree, key_files, gotchas, standing_orders, ruled_out, written_at }`. The newer fields let the next session trust what it reads:
 
 - `verified` — the proof lines run so far, each `<command> — <result> — <scope reason>`; work with no line here is unproven.
 - `tree` — `clean`, or `dirty:<paths>` naming each uncommitted path.
 - `key_files` — the files the next session reads first.
 - `gotchas` — what surprised you: a trap, a false lead, a command that misleads.
+- `standing_orders` — the user's standing instructions the next session keeps obeying.
+- `ruled_out` — the paths tried and dropped, each with the evidence that dropped it.
 
-`bee state handoff write` has flags for the older fields only. Until it has flags for these four, write them into `--next-action` as `verified: …; tree: …; key_files: …; gotchas: …`.
+`bee state handoff write` takes one flag per newer field: `--verified`, `--tree`, `--key-files`, `--gotchas`, `--standing-orders` and `--ruled-out`. `--key-files` splits on commas; `--verified`, `--gotchas`, `--standing-orders` and `--ruled-out` split on semicolons; `--tree` stays one string.
+
+Before you release the session, probe the record with a cold read: one dispatch through `bee dispatch prepare --runtime claude --kind gather --role read --json`, its brief holding only the `bee state handoff show` output and asking for the next action and the ruled-out paths. A miss means rewrite the record and probe once more.
 
 Two rules make the pause safe:
 

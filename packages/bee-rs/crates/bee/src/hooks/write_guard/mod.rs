@@ -138,6 +138,7 @@ mod main;
 mod worker_tree;
 mod knowledge_first;
 mod cross_project;
+mod leader_read;
 pub(crate) use self::jspath::*;
 pub(crate) use self::store::*;
 pub(crate) use self::guards::*;
@@ -146,6 +147,7 @@ pub(crate) use self::checks::*;
 pub(crate) use self::hook_local::*;
 pub(crate) use self::detectors::*;
 pub(crate) use self::main::*;
+pub(crate) use self::leader_read::*;
 pub(crate) use self::cross_project::cross_project_denial;
 #[cfg(test)]
 pub(crate) use self::cross_project::cross_project_denial_with_registry;

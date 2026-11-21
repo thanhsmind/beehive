@@ -168,6 +168,35 @@ pub fn bypass_banner_lines(level: &str) -> Vec<String> {
     lines
 }
 
+const HANDOFF_RECORD_LINE_CHARS: usize = 300;
+
+pub(crate) fn handoff_record_lines(handoff: &Value) -> Vec<String> {
+    let mut lines = Vec::new();
+    for (key, label) in [
+        ("standing_orders", "Standing orders"),
+        ("ruled_out", "Ruled out"),
+        ("key_files", "Key files"),
+        ("gotchas", "Gotchas"),
+        ("verified", "Verified"),
+        ("tree", "Tree"),
+    ] {
+        let text = match vget(handoff, key) {
+            Some(Value::Array(items)) => js_join(items, "; "),
+            Some(Value::String(s)) => s.clone(),
+            _ => continue,
+        };
+        if text.trim().is_empty() {
+            continue;
+        }
+        let line: String = format!("- {label}: {text}")
+            .chars()
+            .take(HANDOFF_RECORD_LINE_CHARS)
+            .collect();
+        lines.push(line);
+    }
+    lines
+}
+
 /// The wait-and-never-auto-resume HANDOFF block, WITHOUT its leading blank.
 ///
 /// `outcome` is a real parameter, not a formality (D26): the SessionStart
@@ -202,6 +231,7 @@ pub fn handoff_block_lines(handoff: &Value, outcome: Option<&HandoffOutcome>) ->
             clamp_chars(&tpl(vget(handoff, "next_action")), HANDOFF_ACTION_CHARS)
         ));
     }
+    lines.extend(handoff_record_lines(handoff));
     if str_eq(vget(handoff, "kind"), "planned-next")
         && let Some(outcome) = outcome.filter(|o| !o.ok) {
             let reason = outcome
@@ -515,5 +545,44 @@ mod waiting_on_tests {
         write(root, ".bee/state.json", r#"{"phase":"idle"}"#);
         let preamble = build_session_preamble(root, None, None);
         assert!(!preamble.contains("waiting on human"), "{preamble}");
+    }
+}
+
+#[cfg(test)]
+mod handoff_record_fields_tests {
+    use super::*;
+
+    fn block(handoff: Value) -> Vec<String> {
+        handoff_block_lines(&handoff, None)
+    }
+
+    #[test]
+    fn handoff_record_fields_block_prints_a_present_field() {
+        let lines = block(json!({
+            "kind": "pause",
+            "ruled_out": ["path a", "path b"],
+            "key_files": ["a.rs", "b.rs"],
+            "tree": "clean",
+        }));
+        assert!(lines.contains(&"- Ruled out: path a; path b".to_string()), "{lines:?}");
+        assert!(lines.contains(&"- Key files: a.rs; b.rs".to_string()), "{lines:?}");
+        assert!(lines.contains(&"- Tree: clean".to_string()), "{lines:?}");
+    }
+
+    #[test]
+    fn handoff_record_fields_block_omits_an_absent_field() {
+        let lines = block(json!({"kind": "pause", "ruled_out": ["path a"]}));
+        let text = lines.join("\n");
+        assert!(text.contains("Ruled out"), "{text}");
+        for label in ["Standing orders", "Key files", "Gotchas", "Verified", "Tree"] {
+            assert!(!text.contains(label), "{label} leaked: {text}");
+        }
+    }
+
+    #[test]
+    fn handoff_record_fields_block_cuts_a_400_char_value_to_300() {
+        let lines = block(json!({"kind": "pause", "gotchas": "x".repeat(400)}));
+        let line = lines.iter().find(|l| l.starts_with("- Gotchas: ")).expect("gotchas line");
+        assert_eq!(line.chars().count(), 300, "{line}");
     }
 }

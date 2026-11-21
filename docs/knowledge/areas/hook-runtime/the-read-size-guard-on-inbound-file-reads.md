@@ -9,10 +9,10 @@ bee:
   lifecycle: active
   areas: [hook-runtime]
   required_context: [areas/hook-runtime/overview.md, areas/hook-runtime/write-guard-request-shapes.md]
-  decisions: [router-cost D1, router-cost D2, router-cost D3, router-cost D4, router-cost D10]
+  decisions: [leader-context-thrift D4, router-cost D1, router-cost D2, router-cost D3, router-cost D4, router-cost D10]
   sources: [docs/history/router-cost/CONTEXT.md, "docs/history/router-cost/ (cell rc-1, capped)"]
   authoritative_for: "hook-runtime: the read-size guard on inbound file reads"
-  anchors: [packages/bee-rs/crates/bee/src/hooks/write_guard/mod.rs, packages/bee-rs/crates/bee/src/hooks/adapter.rs, packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs]
+  anchors: [packages/bee-rs/crates/bee/src/hooks/write_guard/mod.rs, packages/bee-rs/crates/bee/src/hooks/write_guard/leader_read.rs, packages/bee-rs/crates/bee/src/hooks/write_guard/main.rs, packages/bee-rs/crates/bee/src/hooks/adapter.rs, packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs]
   verified_at: 2026-11-07
   verified_commit: 9861c1b430dc099ce4e0ba481503579ad3a2d738
 ---
@@ -135,3 +135,13 @@ switch, because there is no case where a repository wants the other file guards 
 - `.bee/config.json` — `guards.max_read_lines` (threshold) and `hooks.write-guard` (family toggle).
 - The pre-action checkpoint's matcher already routes file reads into this guard, so no catalog entry
   and no regeneration of the rendered hook projections was required (router-cost D3).
+
+## Leader read cap (leader-context-thrift D4)
+
+Read when: a leader's unranged Read or bare `cat` of a long file is refused with "bee leader read guard".
+
+- A second, stricter cap sits before the general one and applies to leaders only: a Read with no offset and no limit, or a Bash command whose whole text is one `cat <file>` (optionally after `cd <dir> &&`), on a file over `leader_read_max_lines` lines is refused. The general `guards.max_read_lines` cap stays as it was.
+- Why leaders only: a long file read by a leader is re-read on every later call as cached context; a worker's context ends with its job. The prose rule to read ranges did not hold, so the guard enforces it.
+- The key is top-level in `.bee/config.json`, default 400, `0` turns it off. Workers (the herding marker or a set `PASEO_AGENT_ID`) pass.
+- Every other shape passes: pipes, redirects, globs, extra arguments, missing files, binary files. Guess: a command chain the parser does not recognise passes rather than being refused, because a wrong refusal blocks work and a miss only costs context.
+- Both remedies are named in the refusal: a ranged read, or a read gather through `bee dispatch prepare`. Find the exact text in `leader_read.rs`.

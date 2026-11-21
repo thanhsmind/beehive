@@ -149,6 +149,30 @@ pub(crate) fn cell_path_modelable(id: &str) -> bool {
     !(id.contains(':') || id.starts_with('/') || id.starts_with('\\') || id.contains('\0'))
 }
 
+const RECORD_FIELD_KEYS: [&str; 6] =
+    ["verified", "tree", "key_files", "gotchas", "standing_orders", "ruled_out"];
+
+fn record_fields(input: &Map<String, Value>) -> Vec<(&'static str, Value)> {
+    let mut out = Vec::new();
+    for key in RECORD_FIELD_KEYS {
+        let Some(Value::String(raw)) = input.get(key) else { continue };
+        let value = if key == "tree" {
+            json!(raw)
+        } else {
+            let sep = if key == "key_files" { ',' } else { ';' };
+            let list: Vec<Value> = raw
+                .split(sep)
+                .map(js_trim)
+                .filter(|s| !s.is_empty())
+                .map(|s| json!(s))
+                .collect();
+            Value::Array(list)
+        };
+        out.push((key, value));
+    }
+    out
+}
+
 /// state.mjs writeMailboxHandoff. `input` is the CLI-built record (kind first,
 /// then the optional fields, in bee.mjs's own insertion order); `target_role`
 /// is passed separately because bee.mjs spreads it on last. Every precondition
@@ -180,11 +204,18 @@ pub(crate) fn write_mailbox_handoff(
     let mut fields: Map<String, Value> = Map::new();
     if kind == "pause" {
         for (k, v) in input {
-            if k != "kind" && k != "target_role" && k != "from_session" {
+            if k != "kind"
+                && k != "target_role"
+                && k != "from_session"
+                && !RECORD_FIELD_KEYS.contains(&k.as_str())
+            {
                 fields.insert(k.clone(), v.clone());
             }
         }
         fields.insert("kind".into(), json!("pause"));
+        for (k, v) in record_fields(input) {
+            fields.insert(k.into(), v);
+        }
         // `from_session` is never supplied by the CLI, so this is always null.
         let from = match input.get("from_session") {
             Some(Value::String(s)) if !js_trim(s).is_empty() => json!(js_trim(s)),
@@ -257,9 +288,13 @@ pub(crate) fn write_mailbox_handoff(
             if !matches!(
                 k.as_str(),
                 "kind" | "target_role" | "writer_session" | "from_session" | "previous_cell" | "next_cell"
-            ) {
+            ) && !RECORD_FIELD_KEYS.contains(&k.as_str())
+            {
                 fields.insert(k.clone(), v.clone());
             }
+        }
+        for (k, v) in record_fields(input) {
+            fields.insert(k.into(), v);
         }
         fields.insert("kind".into(), json!("planned-next"));
         fields.insert("writer_session".into(), json!(writer_session));

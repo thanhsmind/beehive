@@ -478,7 +478,8 @@ pub(crate) fn run_handoff_write(flags: Flags, use_json: bool, t0: Instant) -> Op
         &[
             "kind", "writer-session", "previous-cell", "next-cell", "cell", "files", "done",
             "remaining", "feature", "phase", "mode", "next-action", "lane", "target-role",
-            "session-id",
+            "session-id", "verified", "tree", "key-files", "gotchas", "standing-orders",
+            "ruled-out",
         ],
     ) {
         return None;
@@ -513,6 +514,18 @@ pub(crate) fn run_handoff_write(flags: Flags, use_json: bool, t0: Instant) -> Op
         }
         if let Some(v) = flag_string(&flags, "next-action") {
             input.insert("next_action".into(), json!(v));
+        }
+        for (flag, key) in [
+            ("verified", "verified"),
+            ("tree", "tree"),
+            ("key-files", "key_files"),
+            ("gotchas", "gotchas"),
+            ("standing-orders", "standing_orders"),
+            ("ruled-out", "ruled_out"),
+        ] {
+            if let Some(v) = flag_string(&flags, flag) {
+                input.insert(key.into(), json!(v));
+            }
         }
         if kind == "planned-next" {
             for (flag, key) in [
@@ -716,13 +729,17 @@ pub(crate) fn run_handoff_show(flags: Flags, use_json: bool, t0: Instant) -> Opt
             None | Some(Value::Null) => "unknown".to_string(),
             Some(v) => js_disp(v),
         };
-        let text = format!(
+        let mut text = format!(
             "kind={} feature={} phase={} mode={}",
             js_disp(m.get("kind").unwrap_or(&Value::Null)),
             field("feature"),
             field("phase"),
             field("mode"),
         );
+        for line in crate::hooks::session_preamble::handoff_record_lines(&Value::Object(m.clone())) {
+            text.push('\n');
+            text.push_str(&line);
+        }
         Ok(Out::Emit(Value::Object(m), text, 0))
     })();
     finish(&ctx, out)

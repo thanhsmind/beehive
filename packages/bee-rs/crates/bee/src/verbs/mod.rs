@@ -40,6 +40,7 @@ pub mod models_group;
 pub mod protocol;
 pub mod report;
 pub mod report_outcomes;
+pub mod report_context;
 pub mod report_usage;
 pub mod reservations;
 pub mod reviews;
@@ -128,6 +129,9 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
         return Some(code);
     }
     if let Some(code) = report_outcomes::try_native(args, t0) {
+        return Some(code);
+    }
+    if let Some(code) = report_context::try_native(args, t0) {
         return Some(code);
     }
     if let Some(code) = report_usage::try_native(args, t0) {

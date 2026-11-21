@@ -89,6 +89,7 @@ use sha2::{Digest, Sha256};
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
+pub(crate) const DEFAULT_HANDOFF_MARK: u64 = 120_000;
 const HOOK_NAME: &str = "prompt-context";
 
 // inject.mjs INJECT_INTERVAL_MS
@@ -351,8 +352,8 @@ fn plan(root: &Path, payload: &Map<String, Value>) -> Pf<Option<Plan>> {
 
 fn compute_handoff_warning(config: &Map<String, Value>, payload: &Map<String, Value>) -> Option<String> {
     let threshold = match config.get("handoff_context_tokens") {
-        Some(Value::Number(n)) => n.as_u64().unwrap_or(200_000),
-        _ => 200_000,
+        Some(Value::Number(n)) => n.as_u64().unwrap_or(DEFAULT_HANDOFF_MARK),
+        _ => DEFAULT_HANDOFF_MARK,
     };
     if threshold == 0 {
         return None;
@@ -3248,7 +3249,7 @@ mod tests {
         });
         let payload = parse_payload(&payload_val.to_string());
         let p = plan(tmp.path(), &payload).ok().flatten().unwrap();
-        let expected_line = "context 310k tokens (mark 200k): hand off at the next clean stop (a capped cell or a merged worktree), then continue in a fresh leader session";
+        let expected_line = "context 310k tokens (mark 120k): hand off at the next clean stop (a capped cell or a merged worktree), then continue in a fresh leader session";
         assert_eq!(p.handoff_warning.as_deref(), Some(expected_line));
 
         let ctx = read_hook_context(HOOK_NAME, &[], &payload_val.to_string());
@@ -3266,7 +3267,7 @@ mod tests {
     fn transcript_below_handoff_mark_adds_no_line() {
         let tmp = tempfile::tempdir().unwrap();
         bee_repo(tmp.path());
-        let transcript = write_transcript_with_usage(tmp.path(), "transcript.jsonl", 10_000, 80_000, 50_000);
+        let transcript = write_transcript_with_usage(tmp.path(), "transcript.jsonl", 10_000, 40_000, 50_000);
         let payload_val = json!({
             "cwd": tmp.path().to_string_lossy(),
             "transcript_path": transcript,
@@ -3330,21 +3331,42 @@ mod tests {
     }
 
     #[test]
-    fn handoff_mark_absent_key_at_exactly_200000_tokens_adds_the_directive_line() {
+    fn handoff_mark_absent_key_at_exactly_120000_tokens_adds_the_directive_line() {
         assert_eq!(
-            handoff_mark_warning(None, 140_000).as_deref(),
-            Some("context 200k tokens (mark 200k): hand off at the next clean stop (a capped cell or a merged worktree), then continue in a fresh leader session")
+            handoff_mark_warning(None, 60_000).as_deref(),
+            Some("context 120k tokens (mark 120k): hand off at the next clean stop (a capped cell or a merged worktree), then continue in a fresh leader session")
         );
     }
 
     #[test]
-    fn handoff_mark_absent_key_at_199999_tokens_adds_no_line() {
-        assert_eq!(handoff_mark_warning(None, 139_999), None);
+    fn handoff_mark_absent_key_at_119999_tokens_adds_no_line() {
+        assert_eq!(handoff_mark_warning(None, 59_999), None);
+    }
+
+    #[test]
+    fn handoff_mark_absent_key_at_120000_tokens_emits_exactly_one_directive_line() {
+        let tmp = tempfile::tempdir().unwrap();
+        bee_repo(tmp.path());
+        let transcript = write_transcript_with_usage(tmp.path(), "transcript.jsonl", 10_000, 60_000, 50_000);
+        let payload_val = json!({
+            "cwd": tmp.path().to_string_lossy(),
+            "transcript_path": transcript,
+            "session_id": "sess-mark-once",
+        });
+        let payload = parse_payload(&payload_val.to_string());
+        let p = plan(tmp.path(), &payload).ok().flatten().unwrap();
+        let ctx = read_hook_context(HOOK_NAME, &[], &payload_val.to_string());
+        let mut out = Vec::new();
+        execute_to(tmp.path(), &ctx, p, &mut out);
+        let stdout = String::from_utf8(out).unwrap();
+        assert_eq!(stdout.matches("(mark 120k)").count(), 1);
+        assert_eq!(stdout.matches("hand off at the next clean stop").count(), 1);
+        assert!(stdout.contains("context 120k tokens (mark 120k)"));
     }
 
     #[test]
     fn handoff_mark_key_zero_adds_no_line_at_any_size() {
-        for cache_read in [0, 139_999, 140_000, 940_000] {
+        for cache_read in [0, 59_999, 60_000, 940_000] {
             assert_eq!(handoff_mark_warning(Some(r#"{"handoff_context_tokens": 0}"#), cache_read), None);
         }
     }
@@ -3359,9 +3381,9 @@ mod tests {
 
     #[test]
     fn handoff_mark_configured_below_default_fires_the_line_with_its_own_number() {
-        let line = handoff_mark_warning(Some(r#"{"handoff_context_tokens": 150000}"#), 100_000).unwrap();
-        assert!(line.contains("(mark 150k)"));
-        assert!(line.starts_with("context 160k tokens"));
+        let line = handoff_mark_warning(Some(r#"{"handoff_context_tokens": 80000}"#), 30_000).unwrap();
+        assert!(line.contains("(mark 80k)"));
+        assert!(line.starts_with("context 90k tokens"));
     }
 
     #[test]

@@ -13791,3 +13791,74 @@ Finish with: .bee/bin/bee cells finish --id c-golden --outcome "<one line>" --fi
             "payload: {payload}"
         );
     }
+
+    const PROMPT_OUT_CONFIG: &str = r#"{"team":{"claude":{"advisor":{"kind":"herding","agent":"pi-agent"}}},"herding":{"agents":{"pi-agent":["pi","-a"]}}}"#;
+
+    fn prompt_out_envelope(root: &Path, kind: &str, prompt_out: Option<&str>) -> Value {
+        let purpose = (kind == "advisor").then_some("advisor");
+        match prepare_dispatch_wire_out(
+            root, "claude", kind, purpose, None, None, false, None, purpose, false, None, None, None, None, None,
+            None, prompt_out,
+        )
+        .unwrap()
+        {
+            Prepared::Value(v) => v,
+            Prepared::Thrown(m) => panic!("{m}"),
+        }
+    }
+
+    #[test]
+    fn dispatch_prompt_out_file_holds_the_prompt_and_its_sha256_equals_prompt_sha256() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, PROMPT_OUT_CONFIG);
+        let baseline = prompt_out_envelope(&root, "advisor", None);
+        let stdin = baseline["payload"]["stdin"].as_str().expect("the herding arm carries stdin without the flag");
+        let out = tmp.path().join("nested/prompts/advisor.txt");
+        let v = prompt_out_envelope(&root, "advisor", Some(out.to_str().unwrap()));
+        let written = std::fs::read_to_string(&out).expect("the prompt file exists, parent dirs created");
+        assert_eq!(written, stdin, "the file holds the same prompt stdin carried");
+        assert_eq!(v["prompt_sha256"], json!(crate::verbs::reservations::sha256_hex(&written)));
+        assert_eq!(v["prompt_sha256"], baseline["prompt_sha256"]);
+    }
+
+    #[test]
+    fn dispatch_prompt_out_drops_payload_stdin_and_names_task_file_with_the_path() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, PROMPT_OUT_CONFIG);
+        let out = tmp.path().join("advisor.txt");
+        let path = out.to_str().unwrap();
+        let v = prompt_out_envelope(&root, "advisor", Some(path));
+        assert!(v["payload"].get("stdin").is_none(), "{v}");
+        let command = v["payload"]["command"].as_str().unwrap();
+        assert!(command.starts_with(".bee/bin/bee herding run --task-file "), "{command}");
+        assert!(command.contains(&format!("--task-file {path} ")) || command.contains(&format!("--task-file '{path}' ")), "{command}");
+        assert!(!command.contains("--task-file - "), "{command}");
+    }
+
+    #[test]
+    fn dispatch_prompt_out_absent_flag_output_equals_the_no_flag_output_of_the_same_dispatch() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, PROMPT_OUT_CONFIG);
+        let strip = |mut v: Value| {
+            v.as_object_mut().unwrap().remove("dispatch_id");
+            v
+        };
+        let first = strip(prompt_out_envelope(&root, "advisor", None));
+        let second = strip(prompt_out_envelope(&root, "advisor", None));
+        assert_eq!(first, second);
+        assert!(first["payload"]["stdin"].is_string());
+        assert_eq!(first["payload"]["command"], json!(".bee/bin/bee herding run --task-file - --json --agent \"pi-agent\" --read-only"));
+        assert!(!tmp.path().join("advisor.txt").exists());
+    }
+
+    #[test]
+    fn dispatch_prompt_out_is_ignored_on_the_agent_arm() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, r#"{"models":{"claude":{"generation":"sonnet"}}}"#);
+        let out = tmp.path().join("agent.txt");
+        let plain = prompt_out_envelope(&root, "gather", None);
+        let routed = prompt_out_envelope(&root, "gather", Some(out.to_str().unwrap()));
+        assert_eq!(routed["tool"], json!("Agent"));
+        assert_eq!(routed["payload"], plain["payload"]);
+        assert!(!out.exists());
+    }

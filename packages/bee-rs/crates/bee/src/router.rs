@@ -70,6 +70,7 @@ pub const PORTED: &[&str] = &[
     "feedback count",
     "report usage --transcript <path>|--session <id> [--corr <t-hex>] [--since/--until] [--task] [--json]",
     "report outcomes [--feature <slug>] [--json]",
+    "report context [--since <iso>] [--projects-dir <path>] [--json]",
     // R3 wave 2
     "--help (all forms, incl. group-scoped)",
     "test",

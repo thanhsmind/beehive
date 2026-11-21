@@ -315,6 +315,22 @@ FIX: repair or recreate the Git worktree before retrying; no worktree-local .bee
         }
     }
 
+    if is_shell || tool_name == "Read" {
+        let limit = resolve_leader_read_max_lines(&read_config(&store_root_pb)?);
+        if let Some(reason) = leader_read_refusal(
+            &tool_name,
+            &tool_input,
+            Path::new(&cwd),
+            is_worker_session(),
+            count_lines,
+            limit,
+        ) {
+            emit.stderr.push_str(&reason);
+            emit.code = 2;
+            return Ok(emit);
+        }
+    }
+
     let mut denial: Option<String> = None;
     let mut fixed_ask: Option<(Value, Vec<String>)> = None;
     let mut reservation_warnings: Vec<String> = Vec::new();

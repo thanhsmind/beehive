@@ -4515,6 +4515,11 @@ use std::process::ExitCode;
         std::fs::write(fx.root.join("big.md"), &big).unwrap();
         std::fs::write(fx.root.join("small.md"), "line 1\nline 2\nline 3\n").unwrap();
         std::fs::create_dir_all(fx.root.join("a-directory")).unwrap();
+        std::fs::write(
+            fx.root.join(".bee").join("config.json"),
+            format!("{}\n", json!({"leader_read_max_lines": 0})),
+        )
+        .unwrap();
 
         let read = |ti: Value| json!({ "tool_name": "Read", "tool_input": ti });
         let deny = expect_done(read(json!({"file_path":"big.md"})), &fx.root);
@@ -4552,6 +4557,39 @@ use std::process::ExitCode;
         let e = expect_done(read(json!({"file_path":"small.md"})), &custom.root);
         assert_eq!(e.code, 2);
         assert!(e.stderr.contains("(threshold: 2)"));
+    }
+
+    fn as_leader_session<T>(f: impl FnOnce() -> T) -> T {
+        let _guard = crate::hooks::herding_env_lock();
+        let priors: Vec<(&str, Option<String>)> = ["BEE_HERDING_WORKER", "PASEO_AGENT_ID"]
+            .into_iter()
+            .map(|k| (k, std::env::var(k).ok()))
+            .collect();
+        for (k, _) in &priors {
+            // SAFETY: `herding_env_lock` serializes every test that touches these vars.
+            unsafe { std::env::remove_var(k) };
+        }
+        let out = f();
+        for (k, v) in priors {
+            if let Some(v) = v {
+                // SAFETY: see above.
+                unsafe { std::env::set_var(k, v) };
+            }
+        }
+        out
+    }
+
+    #[test]
+    fn leader_read_cap_refuses_unranged_read_of_big_file_in_a_leader_session() {
+        let fx = build_fixture("swarming", true);
+        let big: String = (0..900).map(|i| format!("line {i}\n")).collect();
+        std::fs::write(fx.root.join("big.md"), &big).unwrap();
+        let read = json!({ "tool_name": "Read", "tool_input": {"file_path": "big.md"} });
+        let deny = as_leader_session(|| expect_done(read, &fx.root));
+        assert_eq!(deny.code, 2);
+        assert!(deny.stderr.contains("bee leader read guard"), "{}", deny.stderr);
+        assert!(deny.stderr.contains("offset and limit"), "{}", deny.stderr);
+        assert!(deny.stderr.contains("bee dispatch prepare"), "{}", deny.stderr);
     }
 
     #[test]
