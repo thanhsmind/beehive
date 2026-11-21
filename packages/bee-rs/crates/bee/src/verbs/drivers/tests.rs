@@ -195,7 +195,7 @@ use std::time::Instant;
         // Zero residue: both block markers and their newlines are gone.
         assert!(!rendered.contains("{{"));
         assert!(rendered.contains(
-            "- docs/history/f/plan.md (when present)\n\nDepth on demand — follow a principle's Depth line, or route .bee/expertise/INDEX.md and read only the one guide section it names.\n\nSearch rule: locate with `rg -l`, or one `rg -n` on a named path. Bound every search output (a max count or a named file). Read a range with offset and limit; never print a whole file.\n\nContract:\n"
+            "- docs/history/f/plan.md (when present)\n\nDepth on demand — follow a principle's Depth line, or route .bee/expertise/INDEX.md and read only the section it names.\n\nSearch rule: locate with `rg -l`, or one `rg -n` on a named path. Bound every search output (a max count or a named file). Read a range with offset and limit; never print a whole file.\n\nContract:\n"
         ));
     }
 
@@ -10961,7 +10961,7 @@ Location — work here, the store is in the other checkout:
 - Work in: /repo/wt-feat
 - The bee store (cells, claims, reservations) lives in: /repo/control
 
-Before any work step, check that your working directory is inside /repo/wt-feat; if not, stop with zero edits and return `[BLOCKED: session cwd is not the worktree]`.
+Before any work, check your working directory is inside /repo/wt-feat; if not, stop with zero edits and return `[BLOCKED: session cwd is not the worktree]`.
 
 Cell (authoritative):
 {
@@ -10990,7 +10990,7 @@ Inputs — read these only:
 - docs/history/feat-golden/CONTEXT.md
 - docs/history/feat-golden/plan.md (when present)
 
-Depth on demand — follow a principle's Depth line, or route .bee/expertise/INDEX.md and read only the one guide section it names.
+Depth on demand — follow a principle's Depth line, or route .bee/expertise/INDEX.md and read only the section it names.
 
 Search rule: locate with `rg -l`, or one `rg -n` on a named path. Bound every search output (a max count or a named file). Read a range with offset and limit; never print a whole file.
 
@@ -11000,9 +11000,9 @@ Contract:
 - Read skills/bee-swarming/references/execute.md for the full worker contract.
 - At each meaningful step record one progress note: `.bee/bin/bee herding notify --kind progress --job c-golden --step <word> --text "<note, at most 120 characters>"`.
 - Execute only the assigned cell.
-- Never offer the leader a menu: choose inside the cell's scope and record it as a departure; a decision outside it is one yes/no question, through `[PARKED]` or `[BLOCKED]`.
+- Never offer the leader a menu: choose inside the cell's scope and record it as a departure; a decision outside it is one yes/no question via `[PARKED]` or `[BLOCKED]`.
 - Never reinterpret a locked CONTEXT.md decision; architecture changes and package installs return [BLOCKED] with a proposal.
-- Prefer deletion, the smallest diff and the direct path over threading a signal through layers. Write no comment in code, in any language — the why goes to a docs/knowledge concept whose Pointers name the file, or to bee decisions log; where `no_code_comments` is on, the write guard refuses the rest.
+- Prefer deletion, the smallest diff and the direct path over threading signals. Write no comment in code, in any language — the why goes to a docs/knowledge concept whose Pointers name the file, or to bee decisions log; where `no_code_comments` is on, the write guard refuses the rest.
 - Write your knowledge delta (owning area concept update, a pitfall pattern when you hit one, bee.anchors for files you changed) in the same commit as your code, thin and anchored, no review step.
   Knowledge rules (the same list `bee knowledge consolidate` prints):
   - Anchor every entry to the code files it describes in bee.anchors — files, never directories.
@@ -11015,7 +11015,7 @@ Contract:
 - Commit once: imperative subject; the LAST body line is the literal trailer `cell: c-golden` (a bare id fails the cap).
 - Return exactly one final status token: [DONE] (outcome, files, commit), [BLOCKED] (what, why, diagnosis), [HANDOFF] (at ~65% context, after writing .bee/HANDOFF.json), [PARKED] (question, cell id — after `bee cells park`), or [NOOP] (cell missing or capped).
 
-Result form: beside the token, emit exactly one fenced JSON block, never in place of the token. `tests` is `<command> — <result> — <scope reason>`; result is `green:live` (the real command was driven, its result inspected), `green:unit` (tests passed) or `green:static` (compiled or linted, nothing executed):
+Result form: beside the token, emit exactly one fenced JSON block, never in place of the token. `tests` is `<command> — <result> — <scope reason>`; result is `green:live` (real command driven, result inspected), `green:unit` (tests passed) or `green:static` (compiled or linted, nothing executed):
 ```json
 {"outcome": "<one line>", "commit": "<sha or none>", "files": ["<path>", "..."], "tests": "<command> — <result> — <scope reason>", "deviations": ["<line>", "..."], "mistakes": ["<what went wrong> — <what would have been better> — <fix-at>", "..."], "found": ["<discovery outside the cell>"], "knowledge_used": ["<docs/knowledge path> — <the decision it changed>"], "knowledge_wrong": ["<docs/knowledge path> — <what was wrong>"], "baseline": "<optional: what the same proof produced on base>"}
 ```
@@ -13243,7 +13243,7 @@ Finish with: .bee/bin/bee cells finish --id c-golden --outcome "<one line>" --fi
         );
         assert!(prompt.contains(&block), "{prompt}");
         assert!(prompt.contains(
-            "- docs/history/demo/plan.md (when present)\n\nDepth on demand — follow a principle's Depth line, or route .bee/expertise/INDEX.md and read only the one guide section it names.\n\nSearch rule: locate with `rg -l`, or one `rg -n` on a named path. Bound every search output (a max count or a named file). Read a range with offset and limit; never print a whole file.\n\nLearned context (machine-assembled"
+            "- docs/history/demo/plan.md (when present)\n\nDepth on demand — follow a principle's Depth line, or route .bee/expertise/INDEX.md and read only the section it names.\n\nSearch rule: locate with `rg -l`, or one `rg -n` on a named path. Bound every search output (a max count or a named file). Read a range with offset and limit; never print a whole file.\n\nLearned context (machine-assembled"
         ));
     }
 
