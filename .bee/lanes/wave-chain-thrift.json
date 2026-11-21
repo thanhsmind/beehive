@@ -1,0 +1,728 @@
+{
+  "schema_version": "1.0",
+  "feature": "wave-chain-thrift",
+  "mode": null,
+  "phase": "exploring",
+  "approved_gates": {
+    "context": true,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"wave-chain-thrift\" started at phase \"exploring\" (lane).",
+  "next_action": "Continue bee-exploring for \"wave-chain-thrift\" (lane).",
+  "created_at": "2026-11-21T06:49:50.080Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null,
+  "gate_preview": {
+    "feature": "wave-chain-thrift",
+    "plan_sha256": "1f038a8928ca762fbf6bbdc91abf22e849bf48a2863c3eb60c45d893365f4b9f",
+    "previewed_at": "2026-11-21T06:53:43.171Z",
+    "cells": [
+      {
+        "id": "wct-1",
+        "title": "Record the tester's judge blocks inside a wave run",
+        "role": "code",
+        "deps": [],
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- wave_run dispatch_wave",
+        "must_haves": {
+          "truths": [
+            "after a test-role cell's herded run ends in a plain or rolling wave run, the runner reads that worker's report text and passes it to process_judge_from_text (verbs/cells/handlers_meta.rs) so each valid json <cell-id> block whose cell is one of the test cell's deps is recorded",
+            "a block naming a cell that is not a dep of the test cell records nothing; an invalid block records nothing and its error text appears on that cell's row",
+            "a code-role or docs-role cell's report is never read for judge blocks",
+            "each row carries capped (true or false, read from the cell store after the run) and judged (the list of cell ids whose verdict was recorded)",
+            "existing wave_run and dispatch wave tests pass, updated only where a row shape assertion breaks"
+          ],
+          "why": "The opus leader paid several calls per cell between implementer result and cap (D1).",
+          "out_of_scope": [
+            "the scheduler",
+            "auto-settle",
+            "new tests"
+          ]
+        },
+        "decisions": [
+          "426a6af1-7dc6-42bd-8df3-da1484a2fe96",
+          "a8b6b9f4-b55e-4bce-b6ce-f25288961740"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/verbs/drivers/wave_run.rs",
+          "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+        ],
+        "action": "Implement CONTEXT.md D1. In packages/bee-rs/crates/bee/src/verbs/drivers/wave_run.rs (run_wave line 107, run_rolling line 18, save_row line 68, row line 172) after each herding item finishes, read the cell from the store; if its role is test, read the worker report (the envelope saved by save_row names the job; the report sits in the job mailbox as report-N.md, find the reader herding already uses with rg -n report_path) and call crate::verbs::cells::process_judge_from_text for the blocks whose id is in the test cell's deps (filter the text to those blocks, or pass each block with its expected id). Add capped and judged fields to each row. Thread anything prepare.rs (run_dispatch_wave line 4668, rolling fill lines 4790-4840) must pass. Update only existing assertions that break; add no new tests (wct-5 owns them). Locate with rg -n and read ranges only. Write no code comment. Run only the cell verify, never the full suite. One commit with the cell trailer, files staged by explicit path. In your result put principles_used as an array of full slugs (bee-principle-<name> — <the decision it changed>), [] when none, and sync_ack with a reason if the cap sync door asks.",
+        "feature": "wave-chain-thrift",
+        "lane": "standard",
+        "read_first": [
+          "docs/history/wave-chain-thrift/CONTEXT.md"
+        ],
+        "affects_specs": [],
+        "affects_skills": []
+      },
+      {
+        "id": "wct-2",
+        "title": "Carry conflict verdicts the new cells do not touch",
+        "role": "code",
+        "deps": [],
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- state_group plan_conflicts",
+        "must_haves": {
+          "truths": [
+            "a derive stores beside the review a map from each plan cell id to a sha256 digest of its packet (the fields the terms and paths are drawn from)",
+            "a re-derive copies verdict and note from the previous review for each candidate whose id is unchanged, unless that candidate is also derived from the cells that are new or whose digest changed, and marks each copied row with carried_from set to the previous plan_rev",
+            "the first derive of a lane and a derive with no previous review carry nothing",
+            "the derive output line names how many verdicts were carried and how many candidates are open",
+            "existing state_group tests pass, updated only where an output text assertion breaks"
+          ],
+          "why": "Adding 2 small cells reopened 62 candidates in token-spend-cuts (D2).",
+          "out_of_scope": [
+            "candidate ranking",
+            "the 50-decision cap",
+            "new tests"
+          ]
+        },
+        "decisions": [
+          "78112206-9b7b-4688-8872-ec063e8e0805",
+          "e8e0b78c-8047-4e61-895b-f4c639f3291c"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/verbs/state_group/plan_conflicts.rs",
+          "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs"
+        ],
+        "action": "Implement CONTEXT.md D2 in packages/bee-rs/crates/bee/src/verbs/state_group/plan_conflicts.rs. In run_plan_conflicts_derive (line 564, closure near 575-598) read the current conflict_review before building the new one. Compute a digest per plan cell (plan_cells line 121) from the fields plan_terms and plan_paths read. Find the new or changed cells against the stored digest map, derive candidates from those cells alone (factor derive_candidates_reported so it can take a cell subset), and copy verdict and note into every other new candidate whose id had a non-null verdict, adding carried_from. Store the digest map in conflict_review under cell_digests. Print carried and open counts on the derive line. Update only existing assertions that break; add no new tests (wct-5 owns them). Locate with rg -n and read ranges only. Write no code comment. Run only the cell verify, never the full suite. One commit with the cell trailer, files staged by explicit path. In your result put principles_used as an array of full slugs (bee-principle-<name> — <the decision it changed>), [] when none, and sync_ack with a reason if the cap sync door asks.",
+        "feature": "wave-chain-thrift",
+        "lane": "standard",
+        "read_first": [
+          "docs/history/wave-chain-thrift/CONTEXT.md"
+        ],
+        "affects_specs": [],
+        "affects_skills": []
+      },
+      {
+        "id": "wct-3",
+        "title": "List the read-only shell rules in the brief",
+        "role": "code",
+        "deps": [],
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- herding::mailbox hooks::worker_guard",
+        "must_haves": {
+          "truths": [
+            "render_brief adds, only for a read-only job, a short Shell rules block that lists each command of READ_ONLY_ALLOWED read from worker_guard.rs (one source, no copied list) and names the refused forms: command substitution and backticks, redirects outside the job mailbox, sh -c and eval, sort, fd --exec, pipes into commands not on the list",
+            "the read-only ack instruction writes received_at without command substitution (for example the Write tool, or date run alone and its output pasted)",
+            "a non-read-only brief is byte-identical to before",
+            "existing mailbox and worker_guard tests pass, updated only where a pinned read-only brief text breaks"
+          ],
+          "why": "5 of about 18 Bash calls in the advisor's read-only job were refused by the guard (D3).",
+          "out_of_scope": [
+            "the guard rules themselves",
+            "new tests"
+          ]
+        },
+        "decisions": [
+          "e9cd3a25-0652-4cfd-9d1b-b83fc9a0ea75",
+          "1bf12c30-49f8-4513-8813-ab8d5de198f6"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/herding/mailbox.rs",
+          "packages/bee-rs/crates/bee/src/hooks/worker_guard.rs"
+        ],
+        "action": "Implement CONTEXT.md D3. Make READ_ONLY_ALLOWED in packages/bee-rs/crates/bee/src/hooks/worker_guard.rs (line 10) reachable as pub(crate) and add a pub(crate) fn that turns it into a plain command list. In packages/bee-rs/crates/bee/src/herding/mailbox.rs render_brief (line 286; ack block lines 369-388) find how the brief knows the job is read-only (rg -n read_only in herding) and, for a read-only job, add the Shell rules block and change the ack instruction so it needs no command substitution. Leave every other brief byte-identical. Update only existing assertions that break; add no new tests (wct-5 owns them). Locate with rg -n and read ranges only. Write no code comment. Run only the cell verify, never the full suite. One commit with the cell trailer, files staged by explicit path. In your result put principles_used as an array of full slugs (bee-principle-<name> — <the decision it changed>), [] when none, and sync_ack with a reason if the cap sync door asks.",
+        "feature": "wave-chain-thrift",
+        "lane": "standard",
+        "read_first": [
+          "docs/history/wave-chain-thrift/CONTEXT.md"
+        ],
+        "affects_specs": [],
+        "affects_skills": []
+      },
+      {
+        "id": "wct-4",
+        "title": "Make the rolling run the default loop and sync the concepts",
+        "role": "docs",
+        "deps": [
+          "wct-1",
+          "wct-2",
+          "wct-3"
+        ],
+        "verify": "./.bee/bin/bee dev release-manifest --check && ./.bee/bin/bee knowledge check",
+        "must_haves": {
+          "truths": [
+            "skills/bee-swarming/SKILL.md step 2 names bee dispatch wave --rolling --run as the default execution loop: code cells, their testers, the judge record and the caps run without a leader call between them; the leader reviews diffs and runs bee cells leader-check once per wave",
+            "docs/knowledge/areas/bee-herding/waves-and-occupancy.md states the judge recording and the capped and judged row fields, citing wave-chain-thrift D1",
+            "docs/knowledge/areas/workflow-state/gates.md states the verdict carry, cell_digests and carried_from, citing wave-chain-thrift D2",
+            "docs/knowledge/areas/hook-runtime/hook-runtime-the-worker-outward-guard.md states the read-only shell-rules block and its one source, citing wave-chain-thrift D3",
+            "the rendered skill trees are regenerated with the binary built from this worktree and committed"
+          ],
+          "why": "Doctrine and docs/knowledge are what every project receives and reads.",
+          "out_of_scope": [
+            "Rust code"
+          ]
+        },
+        "decisions": [
+          "426a6af1-7dc6-42bd-8df3-da1484a2fe96",
+          "78112206-9b7b-4688-8872-ec063e8e0805",
+          "e9cd3a25-0652-4cfd-9d1b-b83fc9a0ea75"
+        ],
+        "files": [
+          "skills/bee-swarming/SKILL.md",
+          "docs/knowledge/areas/bee-herding/waves-and-occupancy.md",
+          "docs/knowledge/areas/workflow-state/gates.md",
+          "docs/knowledge/areas/hook-runtime/hook-runtime-the-worker-outward-guard.md",
+          "docs/history/codex-harness-hardening/release-manifest.json"
+        ],
+        "action": "Edit skills/bee-swarming/SKILL.md step 2 (near line 48-58) for D1, in short plain sentences. Update the three concepts in place: find the paragraph with rg -n, cite wave-chain-thrift D-numbers (never raw decision ids), add them to frontmatter decisions and the code file to Pointers; avoid the words deferred, until and later. Then build with cargo build --release --manifest-path packages/bee-rs/Cargo.toml using CARGO_TARGET_DIR=/home/thanhsmind/.cache/cargo-target-wct and run that binary's dev regen (/home/thanhsmind/.cache/cargo-target-wct/release/bee dev regen); never ./.bee/bin/bee for regen. Restore .claude/skills changes you did not cause. Run the verify. Locate with rg -n and read ranges only. Write no code comment. Run only the cell verify, never the full suite. One commit with the cell trailer, files staged by explicit path. In your result put principles_used as an array of full slugs (bee-principle-<name> — <the decision it changed>), [] when none, and sync_ack with a reason if the cap sync door asks.",
+        "feature": "wave-chain-thrift",
+        "lane": "standard",
+        "read_first": [
+          "docs/history/wave-chain-thrift/CONTEXT.md"
+        ],
+        "affects_specs": [],
+        "affects_skills": [
+          "skills/bee-swarming/SKILL.md"
+        ]
+      },
+      {
+        "id": "wct-5",
+        "title": "Prove the three contracts and check the docs",
+        "role": "test",
+        "deps": [
+          "wct-1",
+          "wct-2",
+          "wct-3",
+          "wct-4"
+        ],
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- wave_judge_record conflict_verdict_carry read_only_shell_rules",
+        "must_haves": {
+          "truths": [
+            "tests named with wave_judge_record show: a test cell's report with valid blocks for its deps records one verdict per dep; a block for a non-dep records nothing; an invalid block records nothing and shows on the row; a code cell's report is never read",
+            "tests named with conflict_verdict_carry show: after a verdicted derive, adding one cell and re-deriving keeps verdicts not derived from the new cell, leaves the new cell's candidates open, marks carried rows with carried_from; changing a cell packet reopens its candidates",
+            "tests named with read_only_shell_rules show: a read-only brief lists every READ_ONLY_ALLOWED command and the refused forms; a non-read-only brief has no such block; the read-only ack has no command substitution",
+            "each contract has a test that failed at the parent of its code cell commit, quoted in the report",
+            "the report lists each wct-4 must_have with the file:line that shows it, or names the gap",
+            "the report holds one fenced block per cell wct-1, wct-2, wct-3 with info string json <cell-id> holding a judge-verdict/1 object: schema, verdict PASS or NEEDS_REVISION, checks each with id, status PASS or FAIL, evidence (file:line and what it shows) and failure_signature when FAIL, fixability automatic or authority, confidence low, medium or high"
+          ],
+          "why": "A code cell never certifies itself; the tester also carries the judge.",
+          "out_of_scope": [
+            "production code"
+          ]
+        },
+        "decisions": [
+          "a8b6b9f4-b55e-4bce-b6ce-f25288961740",
+          "e8e0b78c-8047-4e61-895b-f4c639f3291c",
+          "1bf12c30-49f8-4513-8813-ab8d5de198f6",
+          "426a6af1-7dc6-42bd-8df3-da1484a2fe96",
+          "78112206-9b7b-4688-8872-ec063e8e0805",
+          "e9cd3a25-0652-4cfd-9d1b-b83fc9a0ea75"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/verbs/drivers/wave_run.rs",
+          "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs",
+          "packages/bee-rs/crates/bee/src/herding/mailbox.rs",
+          "docs/history/wave-chain-thrift/reports/wct-5.md"
+        ],
+        "action": "Check contracts wave-judge-record (a8b6b9f4), conflict-verdict-carry (e8e0b78c) and read-only-shell-rules (1bf12c30) on the wct-1, wct-2 and wct-3 commits. Add tests only inside existing test modules (packages/bee-rs/crates/bee/src/verbs/drivers/wave_run.rs tests near rolling_starts_a_cell_whose_dependency_a_finished_run_capped, packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs near derive_yields_one_null_verdict_candidate_per_matching_decision_and_rule_home, packages/bee-rs/crates/bee/src/herding/mailbox.rs render_brief tests). Every new test name contains wave_judge_record, conflict_verdict_carry or read_only_shell_rules. Red proof per contract: put the production file at its code cell's parent with git show <parent>:<path>, run the verify, record the failure or compile error, restore to HEAD. Then run the verify green. Edit no production code. Check wct-4 parity and judge wct-1 to wct-3 from their diffs. Write everything to docs/history/wave-chain-thrift/reports/wct-5.md. Locate with rg -n and read ranges only. Write no code comment. Run only the cell verify, never the full suite. One commit with the cell trailer, files staged by explicit path. In your result put principles_used as an array of full slugs (bee-principle-<name> — <the decision it changed>), [] when none, and sync_ack with a reason if the cap sync door asks.",
+        "feature": "wave-chain-thrift",
+        "lane": "standard",
+        "read_first": [
+          "docs/history/wave-chain-thrift/CONTEXT.md"
+        ],
+        "affects_specs": [],
+        "affects_skills": []
+      }
+    ],
+    "role_plan": {
+      "schema_version": "1.0",
+      "runtime": "claude",
+      "roster_sha256": "cd477eb57b66a0cef7310533c504a43a20e8b19e131431e73112bda9a9f114c8",
+      "stages": [
+        {
+          "stage": "implementation",
+          "classification": "required",
+          "role": "code",
+          "reason": "wct-1, wct-2, wct-3 change Rust code."
+        },
+        {
+          "stage": "test-and-live-proof",
+          "classification": "required",
+          "role": "test",
+          "reason": "wct-5 proves the contracts, judges the code cells and checks wct-4."
+        },
+        {
+          "stage": "docs",
+          "classification": "required",
+          "role": "docs",
+          "reason": "wct-4 updates bee-swarming and three concepts."
+        },
+        {
+          "stage": "slice-judge",
+          "classification": "not-applicable",
+          "role": "review",
+          "reason": "token-spend-cuts D5: the tester returns the judge blocks."
+        },
+        {
+          "stage": "hat-facts-gaps",
+          "classification": "not-applicable",
+          "role": "hat-facts-gaps",
+          "reason": "The advisor digest and code map answer the open facts."
+        },
+        {
+          "stage": "hat-alternatives",
+          "classification": "not-applicable",
+          "role": "hat-alternatives",
+          "reason": "The advisor already ranked alternatives."
+        },
+        {
+          "stage": "hat-user-impact",
+          "classification": "not-applicable",
+          "role": "hat-user-impact",
+          "reason": "CLI and brief text; no UI."
+        },
+        {
+          "stage": "hat-risks",
+          "classification": "not-applicable",
+          "role": "hat-risks",
+          "reason": "The advisor named each risk and its guard."
+        },
+        {
+          "stage": "hat-value",
+          "classification": "not-applicable",
+          "role": "hat-value",
+          "reason": "Owner-requested with spend evidence."
+        },
+        {
+          "stage": "deployment",
+          "classification": "not-applicable",
+          "role": "deploy",
+          "reason": "No release in this feature."
+        },
+        {
+          "stage": "planning",
+          "classification": "not-applicable",
+          "role": "plan",
+          "reason": "The leader wrote the plan."
+        },
+        {
+          "stage": "read-only-gather",
+          "classification": "not-applicable",
+          "role": "read",
+          "reason": "The code map ran before the plan."
+        },
+        {
+          "stage": "fact-extraction",
+          "classification": "not-applicable",
+          "role": "extraction",
+          "reason": "No extraction stage."
+        },
+        {
+          "stage": "generation-fallback",
+          "classification": "not-applicable",
+          "role": "generation",
+          "reason": "Every cell has a configured role."
+        },
+        {
+          "stage": "writing",
+          "classification": "not-applicable",
+          "role": "writer",
+          "reason": "The docs cell covers the prose."
+        },
+        {
+          "stage": "generic-advisor",
+          "classification": "not-applicable",
+          "role": "advisor",
+          "reason": "The advisor answered before the plan."
+        },
+        {
+          "stage": "supervision",
+          "classification": "not-applicable",
+          "role": "supervisor",
+          "reason": "Attended session."
+        },
+        {
+          "stage": "blind-lane-1",
+          "classification": "not-applicable",
+          "role": "lane-1",
+          "reason": "No blind lanes."
+        },
+        {
+          "stage": "blind-lane-2",
+          "classification": "not-applicable",
+          "role": "lane-2",
+          "reason": "No blind lanes."
+        },
+        {
+          "stage": "blind-lane-3",
+          "classification": "not-applicable",
+          "role": "lane-3",
+          "reason": "No blind lanes."
+        },
+        {
+          "stage": "design-ui",
+          "classification": "not-applicable",
+          "role": "design",
+          "reason": "No rendered UI."
+        }
+      ]
+    }
+  },
+  "route": {
+    "class": "feature",
+    "lane": "standard",
+    "flags": [],
+    "product_files": 9,
+    "rationale": "three small Rust changes in the wave runner, plan conflicts and the brief",
+    "updated_at": "2026-11-21T06:53:46.489Z",
+    "feature": "wave-chain-thrift"
+  },
+  "approved_cell_packet": {
+    "feature": "wave-chain-thrift",
+    "plan_sha256": "1f038a8928ca762fbf6bbdc91abf22e849bf48a2863c3eb60c45d893365f4b9f",
+    "previewed_at": "2026-11-21T06:53:43.171Z",
+    "cells": [
+      {
+        "id": "wct-1",
+        "title": "Record the tester's judge blocks inside a wave run",
+        "role": "code",
+        "deps": [],
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- wave_run dispatch_wave",
+        "must_haves": {
+          "truths": [
+            "after a test-role cell's herded run ends in a plain or rolling wave run, the runner reads that worker's report text and passes it to process_judge_from_text (verbs/cells/handlers_meta.rs) so each valid json <cell-id> block whose cell is one of the test cell's deps is recorded",
+            "a block naming a cell that is not a dep of the test cell records nothing; an invalid block records nothing and its error text appears on that cell's row",
+            "a code-role or docs-role cell's report is never read for judge blocks",
+            "each row carries capped (true or false, read from the cell store after the run) and judged (the list of cell ids whose verdict was recorded)",
+            "existing wave_run and dispatch wave tests pass, updated only where a row shape assertion breaks"
+          ],
+          "why": "The opus leader paid several calls per cell between implementer result and cap (D1).",
+          "out_of_scope": [
+            "the scheduler",
+            "auto-settle",
+            "new tests"
+          ]
+        },
+        "decisions": [
+          "426a6af1-7dc6-42bd-8df3-da1484a2fe96",
+          "a8b6b9f4-b55e-4bce-b6ce-f25288961740"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/verbs/drivers/wave_run.rs",
+          "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+        ],
+        "action": "Implement CONTEXT.md D1. In packages/bee-rs/crates/bee/src/verbs/drivers/wave_run.rs (run_wave line 107, run_rolling line 18, save_row line 68, row line 172) after each herding item finishes, read the cell from the store; if its role is test, read the worker report (the envelope saved by save_row names the job; the report sits in the job mailbox as report-N.md, find the reader herding already uses with rg -n report_path) and call crate::verbs::cells::process_judge_from_text for the blocks whose id is in the test cell's deps (filter the text to those blocks, or pass each block with its expected id). Add capped and judged fields to each row. Thread anything prepare.rs (run_dispatch_wave line 4668, rolling fill lines 4790-4840) must pass. Update only existing assertions that break; add no new tests (wct-5 owns them). Locate with rg -n and read ranges only. Write no code comment. Run only the cell verify, never the full suite. One commit with the cell trailer, files staged by explicit path. In your result put principles_used as an array of full slugs (bee-principle-<name> — <the decision it changed>), [] when none, and sync_ack with a reason if the cap sync door asks.",
+        "feature": "wave-chain-thrift",
+        "lane": "standard",
+        "read_first": [
+          "docs/history/wave-chain-thrift/CONTEXT.md"
+        ],
+        "affects_specs": [],
+        "affects_skills": []
+      },
+      {
+        "id": "wct-2",
+        "title": "Carry conflict verdicts the new cells do not touch",
+        "role": "code",
+        "deps": [],
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- state_group plan_conflicts",
+        "must_haves": {
+          "truths": [
+            "a derive stores beside the review a map from each plan cell id to a sha256 digest of its packet (the fields the terms and paths are drawn from)",
+            "a re-derive copies verdict and note from the previous review for each candidate whose id is unchanged, unless that candidate is also derived from the cells that are new or whose digest changed, and marks each copied row with carried_from set to the previous plan_rev",
+            "the first derive of a lane and a derive with no previous review carry nothing",
+            "the derive output line names how many verdicts were carried and how many candidates are open",
+            "existing state_group tests pass, updated only where an output text assertion breaks"
+          ],
+          "why": "Adding 2 small cells reopened 62 candidates in token-spend-cuts (D2).",
+          "out_of_scope": [
+            "candidate ranking",
+            "the 50-decision cap",
+            "new tests"
+          ]
+        },
+        "decisions": [
+          "78112206-9b7b-4688-8872-ec063e8e0805",
+          "e8e0b78c-8047-4e61-895b-f4c639f3291c"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/verbs/state_group/plan_conflicts.rs",
+          "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs"
+        ],
+        "action": "Implement CONTEXT.md D2 in packages/bee-rs/crates/bee/src/verbs/state_group/plan_conflicts.rs. In run_plan_conflicts_derive (line 564, closure near 575-598) read the current conflict_review before building the new one. Compute a digest per plan cell (plan_cells line 121) from the fields plan_terms and plan_paths read. Find the new or changed cells against the stored digest map, derive candidates from those cells alone (factor derive_candidates_reported so it can take a cell subset), and copy verdict and note into every other new candidate whose id had a non-null verdict, adding carried_from. Store the digest map in conflict_review under cell_digests. Print carried and open counts on the derive line. Update only existing assertions that break; add no new tests (wct-5 owns them). Locate with rg -n and read ranges only. Write no code comment. Run only the cell verify, never the full suite. One commit with the cell trailer, files staged by explicit path. In your result put principles_used as an array of full slugs (bee-principle-<name> — <the decision it changed>), [] when none, and sync_ack with a reason if the cap sync door asks.",
+        "feature": "wave-chain-thrift",
+        "lane": "standard",
+        "read_first": [
+          "docs/history/wave-chain-thrift/CONTEXT.md"
+        ],
+        "affects_specs": [],
+        "affects_skills": []
+      },
+      {
+        "id": "wct-3",
+        "title": "List the read-only shell rules in the brief",
+        "role": "code",
+        "deps": [],
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- herding::mailbox hooks::worker_guard",
+        "must_haves": {
+          "truths": [
+            "render_brief adds, only for a read-only job, a short Shell rules block that lists each command of READ_ONLY_ALLOWED read from worker_guard.rs (one source, no copied list) and names the refused forms: command substitution and backticks, redirects outside the job mailbox, sh -c and eval, sort, fd --exec, pipes into commands not on the list",
+            "the read-only ack instruction writes received_at without command substitution (for example the Write tool, or date run alone and its output pasted)",
+            "a non-read-only brief is byte-identical to before",
+            "existing mailbox and worker_guard tests pass, updated only where a pinned read-only brief text breaks"
+          ],
+          "why": "5 of about 18 Bash calls in the advisor's read-only job were refused by the guard (D3).",
+          "out_of_scope": [
+            "the guard rules themselves",
+            "new tests"
+          ]
+        },
+        "decisions": [
+          "e9cd3a25-0652-4cfd-9d1b-b83fc9a0ea75",
+          "1bf12c30-49f8-4513-8813-ab8d5de198f6"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/herding/mailbox.rs",
+          "packages/bee-rs/crates/bee/src/hooks/worker_guard.rs"
+        ],
+        "action": "Implement CONTEXT.md D3. Make READ_ONLY_ALLOWED in packages/bee-rs/crates/bee/src/hooks/worker_guard.rs (line 10) reachable as pub(crate) and add a pub(crate) fn that turns it into a plain command list. In packages/bee-rs/crates/bee/src/herding/mailbox.rs render_brief (line 286; ack block lines 369-388) find how the brief knows the job is read-only (rg -n read_only in herding) and, for a read-only job, add the Shell rules block and change the ack instruction so it needs no command substitution. Leave every other brief byte-identical. Update only existing assertions that break; add no new tests (wct-5 owns them). Locate with rg -n and read ranges only. Write no code comment. Run only the cell verify, never the full suite. One commit with the cell trailer, files staged by explicit path. In your result put principles_used as an array of full slugs (bee-principle-<name> — <the decision it changed>), [] when none, and sync_ack with a reason if the cap sync door asks.",
+        "feature": "wave-chain-thrift",
+        "lane": "standard",
+        "read_first": [
+          "docs/history/wave-chain-thrift/CONTEXT.md"
+        ],
+        "affects_specs": [],
+        "affects_skills": []
+      },
+      {
+        "id": "wct-4",
+        "title": "Make the rolling run the default loop and sync the concepts",
+        "role": "docs",
+        "deps": [
+          "wct-1",
+          "wct-2",
+          "wct-3"
+        ],
+        "verify": "./.bee/bin/bee dev release-manifest --check && ./.bee/bin/bee knowledge check",
+        "must_haves": {
+          "truths": [
+            "skills/bee-swarming/SKILL.md step 2 names bee dispatch wave --rolling --run as the default execution loop: code cells, their testers, the judge record and the caps run without a leader call between them; the leader reviews diffs and runs bee cells leader-check once per wave",
+            "docs/knowledge/areas/bee-herding/waves-and-occupancy.md states the judge recording and the capped and judged row fields, citing wave-chain-thrift D1",
+            "docs/knowledge/areas/workflow-state/gates.md states the verdict carry, cell_digests and carried_from, citing wave-chain-thrift D2",
+            "docs/knowledge/areas/hook-runtime/hook-runtime-the-worker-outward-guard.md states the read-only shell-rules block and its one source, citing wave-chain-thrift D3",
+            "the rendered skill trees are regenerated with the binary built from this worktree and committed"
+          ],
+          "why": "Doctrine and docs/knowledge are what every project receives and reads.",
+          "out_of_scope": [
+            "Rust code"
+          ]
+        },
+        "decisions": [
+          "426a6af1-7dc6-42bd-8df3-da1484a2fe96",
+          "78112206-9b7b-4688-8872-ec063e8e0805",
+          "e9cd3a25-0652-4cfd-9d1b-b83fc9a0ea75"
+        ],
+        "files": [
+          "skills/bee-swarming/SKILL.md",
+          "docs/knowledge/areas/bee-herding/waves-and-occupancy.md",
+          "docs/knowledge/areas/workflow-state/gates.md",
+          "docs/knowledge/areas/hook-runtime/hook-runtime-the-worker-outward-guard.md",
+          "docs/history/codex-harness-hardening/release-manifest.json"
+        ],
+        "action": "Edit skills/bee-swarming/SKILL.md step 2 (near line 48-58) for D1, in short plain sentences. Update the three concepts in place: find the paragraph with rg -n, cite wave-chain-thrift D-numbers (never raw decision ids), add them to frontmatter decisions and the code file to Pointers; avoid the words deferred, until and later. Then build with cargo build --release --manifest-path packages/bee-rs/Cargo.toml using CARGO_TARGET_DIR=/home/thanhsmind/.cache/cargo-target-wct and run that binary's dev regen (/home/thanhsmind/.cache/cargo-target-wct/release/bee dev regen); never ./.bee/bin/bee for regen. Restore .claude/skills changes you did not cause. Run the verify. Locate with rg -n and read ranges only. Write no code comment. Run only the cell verify, never the full suite. One commit with the cell trailer, files staged by explicit path. In your result put principles_used as an array of full slugs (bee-principle-<name> — <the decision it changed>), [] when none, and sync_ack with a reason if the cap sync door asks.",
+        "feature": "wave-chain-thrift",
+        "lane": "standard",
+        "read_first": [
+          "docs/history/wave-chain-thrift/CONTEXT.md"
+        ],
+        "affects_specs": [],
+        "affects_skills": [
+          "skills/bee-swarming/SKILL.md"
+        ]
+      },
+      {
+        "id": "wct-5",
+        "title": "Prove the three contracts and check the docs",
+        "role": "test",
+        "deps": [
+          "wct-1",
+          "wct-2",
+          "wct-3",
+          "wct-4"
+        ],
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- wave_judge_record conflict_verdict_carry read_only_shell_rules",
+        "must_haves": {
+          "truths": [
+            "tests named with wave_judge_record show: a test cell's report with valid blocks for its deps records one verdict per dep; a block for a non-dep records nothing; an invalid block records nothing and shows on the row; a code cell's report is never read",
+            "tests named with conflict_verdict_carry show: after a verdicted derive, adding one cell and re-deriving keeps verdicts not derived from the new cell, leaves the new cell's candidates open, marks carried rows with carried_from; changing a cell packet reopens its candidates",
+            "tests named with read_only_shell_rules show: a read-only brief lists every READ_ONLY_ALLOWED command and the refused forms; a non-read-only brief has no such block; the read-only ack has no command substitution",
+            "each contract has a test that failed at the parent of its code cell commit, quoted in the report",
+            "the report lists each wct-4 must_have with the file:line that shows it, or names the gap",
+            "the report holds one fenced block per cell wct-1, wct-2, wct-3 with info string json <cell-id> holding a judge-verdict/1 object: schema, verdict PASS or NEEDS_REVISION, checks each with id, status PASS or FAIL, evidence (file:line and what it shows) and failure_signature when FAIL, fixability automatic or authority, confidence low, medium or high"
+          ],
+          "why": "A code cell never certifies itself; the tester also carries the judge.",
+          "out_of_scope": [
+            "production code"
+          ]
+        },
+        "decisions": [
+          "a8b6b9f4-b55e-4bce-b6ce-f25288961740",
+          "e8e0b78c-8047-4e61-895b-f4c639f3291c",
+          "1bf12c30-49f8-4513-8813-ab8d5de198f6",
+          "426a6af1-7dc6-42bd-8df3-da1484a2fe96",
+          "78112206-9b7b-4688-8872-ec063e8e0805",
+          "e9cd3a25-0652-4cfd-9d1b-b83fc9a0ea75"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/verbs/drivers/wave_run.rs",
+          "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs",
+          "packages/bee-rs/crates/bee/src/herding/mailbox.rs",
+          "docs/history/wave-chain-thrift/reports/wct-5.md"
+        ],
+        "action": "Check contracts wave-judge-record (a8b6b9f4), conflict-verdict-carry (e8e0b78c) and read-only-shell-rules (1bf12c30) on the wct-1, wct-2 and wct-3 commits. Add tests only inside existing test modules (packages/bee-rs/crates/bee/src/verbs/drivers/wave_run.rs tests near rolling_starts_a_cell_whose_dependency_a_finished_run_capped, packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs near derive_yields_one_null_verdict_candidate_per_matching_decision_and_rule_home, packages/bee-rs/crates/bee/src/herding/mailbox.rs render_brief tests). Every new test name contains wave_judge_record, conflict_verdict_carry or read_only_shell_rules. Red proof per contract: put the production file at its code cell's parent with git show <parent>:<path>, run the verify, record the failure or compile error, restore to HEAD. Then run the verify green. Edit no production code. Check wct-4 parity and judge wct-1 to wct-3 from their diffs. Write everything to docs/history/wave-chain-thrift/reports/wct-5.md. Locate with rg -n and read ranges only. Write no code comment. Run only the cell verify, never the full suite. One commit with the cell trailer, files staged by explicit path. In your result put principles_used as an array of full slugs (bee-principle-<name> — <the decision it changed>), [] when none, and sync_ack with a reason if the cap sync door asks.",
+        "feature": "wave-chain-thrift",
+        "lane": "standard",
+        "read_first": [
+          "docs/history/wave-chain-thrift/CONTEXT.md"
+        ],
+        "affects_specs": [],
+        "affects_skills": []
+      }
+    ],
+    "role_plan": {
+      "schema_version": "1.0",
+      "runtime": "claude",
+      "roster_sha256": "cd477eb57b66a0cef7310533c504a43a20e8b19e131431e73112bda9a9f114c8",
+      "stages": [
+        {
+          "stage": "implementation",
+          "classification": "required",
+          "role": "code",
+          "reason": "wct-1, wct-2, wct-3 change Rust code."
+        },
+        {
+          "stage": "test-and-live-proof",
+          "classification": "required",
+          "role": "test",
+          "reason": "wct-5 proves the contracts, judges the code cells and checks wct-4."
+        },
+        {
+          "stage": "docs",
+          "classification": "required",
+          "role": "docs",
+          "reason": "wct-4 updates bee-swarming and three concepts."
+        },
+        {
+          "stage": "slice-judge",
+          "classification": "not-applicable",
+          "role": "review",
+          "reason": "token-spend-cuts D5: the tester returns the judge blocks."
+        },
+        {
+          "stage": "hat-facts-gaps",
+          "classification": "not-applicable",
+          "role": "hat-facts-gaps",
+          "reason": "The advisor digest and code map answer the open facts."
+        },
+        {
+          "stage": "hat-alternatives",
+          "classification": "not-applicable",
+          "role": "hat-alternatives",
+          "reason": "The advisor already ranked alternatives."
+        },
+        {
+          "stage": "hat-user-impact",
+          "classification": "not-applicable",
+          "role": "hat-user-impact",
+          "reason": "CLI and brief text; no UI."
+        },
+        {
+          "stage": "hat-risks",
+          "classification": "not-applicable",
+          "role": "hat-risks",
+          "reason": "The advisor named each risk and its guard."
+        },
+        {
+          "stage": "hat-value",
+          "classification": "not-applicable",
+          "role": "hat-value",
+          "reason": "Owner-requested with spend evidence."
+        },
+        {
+          "stage": "deployment",
+          "classification": "not-applicable",
+          "role": "deploy",
+          "reason": "No release in this feature."
+        },
+        {
+          "stage": "planning",
+          "classification": "not-applicable",
+          "role": "plan",
+          "reason": "The leader wrote the plan."
+        },
+        {
+          "stage": "read-only-gather",
+          "classification": "not-applicable",
+          "role": "read",
+          "reason": "The code map ran before the plan."
+        },
+        {
+          "stage": "fact-extraction",
+          "classification": "not-applicable",
+          "role": "extraction",
+          "reason": "No extraction stage."
+        },
+        {
+          "stage": "generation-fallback",
+          "classification": "not-applicable",
+          "role": "generation",
+          "reason": "Every cell has a configured role."
+        },
+        {
+          "stage": "writing",
+          "classification": "not-applicable",
+          "role": "writer",
+          "reason": "The docs cell covers the prose."
+        },
+        {
+          "stage": "generic-advisor",
+          "classification": "not-applicable",
+          "role": "advisor",
+          "reason": "The advisor answered before the plan."
+        },
+        {
+          "stage": "supervision",
+          "classification": "not-applicable",
+          "role": "supervisor",
+          "reason": "Attended session."
+        },
+        {
+          "stage": "blind-lane-1",
+          "classification": "not-applicable",
+          "role": "lane-1",
+          "reason": "No blind lanes."
+        },
+        {
+          "stage": "blind-lane-2",
+          "classification": "not-applicable",
+          "role": "lane-2",
+          "reason": "No blind lanes."
+        },
+        {
+          "stage": "blind-lane-3",
+          "classification": "not-applicable",
+          "role": "lane-3",
+          "reason": "No blind lanes."
+        },
+        {
+          "stage": "design-ui",
+          "classification": "not-applicable",
+          "role": "design",
+          "reason": "No rendered UI."
+        }
+      ]
+    }
+  },
+  "merge_ready": {
+    "since": "2026-11-21T07:12:37.722Z",
+    "branch": "wt/wave-chain-thrift",
+    "worktree_id": "beehive--wt--wave-chain-thrift",
+    "uat": "pending",
+    "blocked_by": [
+      "doc-deferral"
+    ]
+  }
+}

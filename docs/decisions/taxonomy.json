@@ -964,6 +964,9 @@
     "contract:judge-small-diff",
     "contract:auto-settle-answers",
     "contract:worker-full-suite-guard",
-    "contract:cap-one-refusal"
+    "contract:cap-one-refusal",
+    "contract:wave-judge-record",
+    "contract:conflict-verdict-carry",
+    "contract:read-only-shell-rules"
   ]
 }
