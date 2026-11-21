@@ -248,6 +248,26 @@ pub(crate) fn cap_flags_with_report_file(
     Ok(cap_flags)
 }
 
+fn collect_refusal<T>(result: MR<T>, problems: &mut Vec<String>, fallback: T) -> MR<T> {
+    match result {
+        Err(Fail::Thrown(text)) => {
+            problems.push(text);
+            Ok(fallback)
+        }
+        other => other,
+    }
+}
+
+fn combined_cap_refusal(id: &str, problems: &[String]) -> String {
+    let prefix = format!("capCell: cell \"{id}\" refused — ");
+    let mut text = format!("capCell: cell \"{id}\" needs {} answer(s) before it caps:", problems.len());
+    for problem in problems {
+        text.push_str("\n- ");
+        text.push_str(problem.strip_prefix(&prefix).unwrap_or(problem));
+    }
+    text
+}
+
 /// capCellFromFlags — the ONE cap door cap and finish share.
 /// decision 13ce1858 (test-cadence-boundary D1): no test command runs here
 /// anymore — the declared-test cwd split (`test_root`) this signature used
@@ -382,10 +402,11 @@ pub(crate) fn cap_cell_from_flags(root: &Path, f: &CapFlags, finish: bool) -> MR
     // write, and fill both sinks from it below. NOT armed-gated, unlike the
     // departure door above: `bee close` files its letter unconditionally, so
     // the answer it will ask for must be recorded unconditionally too.
-    let mistakes_answer = read_mistakes_answer(id, f, &report_value)?;
+    let mut problems: Vec<String> = Vec::new();
+    let mistakes_answer = collect_refusal(read_mistakes_answer(id, f, &report_value), &mut problems, MistakesAnswer::Silent)?;
 
     let knowledge_used_answer = read_knowledge_used_answer(f, &report_value);
-    let principles_used_answer = read_principles_used_answer(root, id, f, &report_value)?;
+    let principles_used_answer = collect_refusal(read_principles_used_answer(root, id, f, &report_value), &mut problems, PrinciplesUsedAnswer::Silent)?;
     let knowledge_wrong_answer = read_knowledge_wrong_answer(f, &report_value);
 
     // decision 13ce1858 (test-cadence-boundary D1): the one test door used
@@ -426,11 +447,11 @@ pub(crate) fn cap_cell_from_flags(root: &Path, f: &CapFlags, finish: bool) -> MR
         // otherwise.
         let history_root = commit_trailer_history_root(root, feature);
         if !commit_trailer_present(&history_root, id) && f.commit_pending.is_none() {
-            return Err(Fail::Thrown(format!(
+            problems.push(format!(
                 "capCell: cell \"{id}\" refused — one commit per cell: no commit in the last {COMMIT_TRAILER_WINDOW} commit(s) of {} carries the trailer \"{}\". Commit the work with that trailer, then retry \"bee cells finish --id {id}\" — or pass --commit-pending \"<reason>\" to finish anyway (the reason is stored on the cell's own trace.commit_pending).",
                 history_root.display(),
                 cell_commit_trailer(id),
-            )));
+            ));
         }
     }
 
@@ -458,14 +479,14 @@ pub(crate) fn cap_cell_from_flags(root: &Path, f: &CapFlags, finish: bool) -> MR
         let class = crate::verbs::plan_group::route_class(root, cell_feature);
         if let Some(floor) = cell_proof_floor(&Value::Object(cell_map.clone()), class.as_deref())
             && !proof_meets_floor(floor, &proof_result) {
-                return Err(Fail::Thrown(format!(
+                problems.push(format!(
                     "capCell: cell \"{id}\" refused — its proof result \"{proof_result}\" is weaker than this cell's floor {floor}. Re-run the proof so it shows {floor}, or say why in a deviation and ask the leader."
-                )));
+                ));
             }
         if principles_used_answer == PrinciplesUsedAnswer::Silent && prepare_put_in_principles_arm(root, id) {
-            return Err(Fail::Thrown(format!(
+            problems.push(format!(
                 "capCell: cell \"{id}\" refused — its prepare record put it in the principles arm, so the cap must answer which principle changed a decision: pass --principle-used \"<slug> — <the decision it changed>\", or --no-principle-used (a report may carry a principles_used array, [] for none)."
-            )));
+            ));
         }
         let mut trace = merge_trace(cell_map.get("trace"))?;
         trace = guard_claim_ownership(
@@ -489,39 +510,6 @@ pub(crate) fn cap_cell_from_flags(root: &Path, f: &CapFlags, finish: bool) -> MR
             return Err(Fail::Thrown(format!(
                 "capCell: cell \"{id}\" has a NEEDS_REVISION semantic-judge verdict — rework the cell and record a PASS verdict (bee cells judge-record), or cap with an audited override (bee cells cap --id {id} --override-judge \"<reason>\")."
             )));
-        }
-        if !f.override_reason.is_empty() {
-            let overrides: Vec<Value> = match trace.get("judge_overrides") {
-                Some(Value::Array(a)) => a.clone(),
-                _ => Vec::new(),
-            };
-            let mut entry = Map::new();
-            entry.insert("overridden_at".into(), Value::String(utc_now()));
-            entry.insert("reason".into(), Value::String(f.override_reason.clone()));
-            match &latest_judge {
-                None => {
-                    entry.insert("last_verdict".into(), Value::Null);
-                }
-                Some(l) => if let Some(v) = l.get("verdict") {
-                    entry.insert("last_verdict".into(), v.clone());
-                },
-            }
-            let worker_disp = match trace.get("worker") {
-                Some(w) if js_truthy(w) => jsjson::js_to_string(w),
-                _ => "unknown".to_string(),
-            };
-            log_decision(
-                root,
-                &format!(
-                    "«cells cap: cell \"{id}\" judge override by {worker_disp} — {}»",
-                    f.override_reason
-                ),
-                "Audited cap over a NEEDS_REVISION (or absent) semantic-judge verdict (D-GHF-C, GH #27.5) — the verdict itself is never rewritten, only a judge_overrides marker appended.",
-                &["cells", "judge"],
-            )?;
-            let mut next = overrides;
-            next.push(Value::Object(entry));
-            trace.insert("judge_overrides".into(), Value::Array(next));
         }
         if f.inline_reason.is_some() && touches_code(&Value::Object(cell_map.clone())) {
             return Err(Fail::Thrown(format!(
@@ -892,7 +880,7 @@ pub(crate) fn cap_cell_from_flags(root: &Path, f: &CapFlags, finish: bool) -> MR
                 }
             }
             if let Some(refusal) = sync_refusal(root, &history_root, &cell_map, &touched_set) {
-                return Err(Fail::Thrown(refusal));
+                problems.push(refusal);
             }
             // D3/D4: legacy cell predates affects_skills — check (c) is
             // skipped by `sync_refusal` for it. Only worth a deviation line
@@ -912,6 +900,42 @@ pub(crate) fn cap_cell_from_flags(root: &Path, f: &CapFlags, finish: bool) -> MR
                 }
         }
 
+        if !problems.is_empty() {
+            return Err(Fail::Thrown(combined_cap_refusal(id, &problems)));
+        }
+        if !f.override_reason.is_empty() {
+            let overrides: Vec<Value> = match trace.get("judge_overrides") {
+                Some(Value::Array(a)) => a.clone(),
+                _ => Vec::new(),
+            };
+            let mut entry = Map::new();
+            entry.insert("overridden_at".into(), Value::String(utc_now()));
+            entry.insert("reason".into(), Value::String(f.override_reason.clone()));
+            match &latest_judge {
+                None => {
+                    entry.insert("last_verdict".into(), Value::Null);
+                }
+                Some(l) => if let Some(v) = l.get("verdict") {
+                    entry.insert("last_verdict".into(), v.clone());
+                },
+            }
+            let worker_disp = match trace.get("worker") {
+                Some(w) if js_truthy(w) => jsjson::js_to_string(w),
+                _ => "unknown".to_string(),
+            };
+            log_decision(
+                root,
+                &format!(
+                    "«cells cap: cell \"{id}\" judge override by {worker_disp} — {}»",
+                    f.override_reason
+                ),
+                "Audited cap over a NEEDS_REVISION (or absent) semantic-judge verdict (D-GHF-C, GH #27.5) — the verdict itself is never rewritten, only a judge_overrides marker appended.",
+                &["cells", "judge"],
+            )?;
+            let mut next = overrides;
+            next.push(Value::Object(entry));
+            trace.insert("judge_overrides".into(), Value::Array(next));
+        }
         match cell_usage(root, id) {
             Ok(usage) => {
                 cell_map.insert("usage".into(), usage);

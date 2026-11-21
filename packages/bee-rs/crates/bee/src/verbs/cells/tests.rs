@@ -7721,7 +7721,8 @@ use std::time::Instant;
             true, // finish
         ));
         assert!(
-            refusal.starts_with("capCell: cell \"bh-6a\" refused — one commit per cell"),
+            refusal.starts_with("capCell: cell \"bh-6a\" needs ")
+                && refusal.contains("\n- one commit per cell"),
             "{refusal}"
         );
         let after = read_cell_norm(root, "bh-6a").ok().unwrap().unwrap();
