@@ -668,6 +668,11 @@ mod tests {
         }
     }
 
+    #[test]
+    fn help_brief_passes_the_shape_guard() {
+        allow("bee cells finish --help --brief");
+    }
+
     // ── the registry is really there ───────────────────────────────────────
 
     #[test]

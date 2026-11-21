@@ -1009,4 +1009,134 @@ mod tests {
             reg.commands.iter().all(|e| core.iter().all(|k| e.contains_key(*k)));
         assert!(all_have_six_keys, "registry entries carry the six manifest keys");
     }
+
+    fn registry_entry(name: &str) -> Value {
+        let reg = registry().expect("embedded payload parses");
+        let entry = reg
+            .commands
+            .iter()
+            .find(|e| e.get("name").and_then(Value::as_str) == Some(name))
+            .unwrap_or_else(|| panic!("{name} is registered"));
+        Value::Object(manifest_entry(entry))
+    }
+
+    fn finish_flags() -> Vec<String> {
+        registry_entry("cells.finish")["parameters"]["properties"]
+            .as_object()
+            .expect("cells.finish declares properties")
+            .keys()
+            .filter(|k| k.as_str() != "json")
+            .cloned()
+            .collect()
+    }
+
+    fn finish_card() -> String {
+        brief_card(&registry_entry("cells.finish")).join("\n")
+    }
+
+    #[test]
+    fn help_brief_names_every_cells_finish_flag_once_on_its_own_line() {
+        let card = finish_card();
+        let flags = finish_flags();
+        assert!(!flags.is_empty());
+        for flag in &flags {
+            let prefix = format!("  --{flag}");
+            let hits = card
+                .lines()
+                .filter(|l| {
+                    l.strip_prefix(prefix.as_str())
+                        .is_some_and(|r| r.starts_with(['*', ' ']))
+                })
+                .count();
+            assert_eq!(hits, 1, "--{flag} appears on {hits} lines\n{card}");
+        }
+        let flag_lines = card.lines().filter(|l| l.starts_with("  --")).count();
+        assert_eq!(flag_lines, flags.len(), "{card}");
+    }
+
+    #[test]
+    fn help_brief_has_no_details_line() {
+        let card = finish_card();
+        assert!(!card.lines().any(|l| l.trim() == "details:"), "{card}");
+    }
+
+    #[test]
+    fn help_brief_stays_under_2500_bytes() {
+        let card = finish_card();
+        assert!(card.len() < 2500, "{} bytes\n{card}", card.len());
+    }
+
+    #[test]
+    fn help_brief_ends_a_long_description_in_an_ellipsis() {
+        let entry = Value::Object(obj(&format!(
+            r#"{{"name":"cmd.a","invoke":"bee cmd a","description":"Run a.",
+                "parameters":{{"type":"object","properties":{{"long":{{"type":"string","description":"{}"}},"short":{{"type":"string","description":"Short text"}}}},"required":[]}},
+                "examples":[],"deprecated":null}}"#,
+            "word ".repeat(30)
+        )));
+        let card = brief_card(&entry);
+        let long = card.iter().find(|l| l.starts_with("  --long")).expect("long flag line");
+        assert!(long.ends_with('…'), "{long}");
+        let desc = long.split(" — ").nth(1).expect("description part");
+        assert!(desc.chars().count() <= 80, "{long}");
+        let short = card.iter().find(|l| l.starts_with("  --short")).expect("short flag line");
+        assert!(short.ends_with("Short text"), "{short}");
+    }
+
+    #[test]
+    fn help_brief_leaves_every_real_long_description_cut_or_whole() {
+        let entry = registry_entry("cells.finish");
+        let props = entry["parameters"]["properties"].as_object().unwrap();
+        for line in brief_card(&entry).iter().filter(|l| l.starts_with("  --")) {
+            let name = line[4..].split(['*', ' ']).next().unwrap();
+            let full = props[name]["description"].as_str().unwrap_or("");
+            let flat = full.split_whitespace().collect::<Vec<_>>().join(" ");
+            if flat.chars().count() > 80 {
+                assert!(line.ends_with('…'), "{line}");
+            } else if !flat.is_empty() {
+                assert!(line.ends_with(flat.as_str()), "{line}");
+            }
+        }
+    }
+
+    #[test]
+    fn help_brief_leaves_the_one_verb_help_of_cells_finish_unchanged() {
+        let entry = registry_entry("cells.finish");
+        let text = render_help_text(&[entry.clone()], &[], &json!("1.0"));
+        assert!(text.contains("\n    flags:\n      --"), "{text}");
+        for flag in finish_flags() {
+            assert!(text.contains(&format!("      --{flag}")), "--{flag}\n{text}");
+        }
+        let full = entry["description"].as_str().unwrap_or("");
+        if split_description(full).1.is_empty() {
+            assert!(!text.contains("    details:"), "{text}");
+        } else {
+            assert!(text.contains("    details:"), "{text}");
+        }
+        assert!(text.len() > finish_card().len(), "{text}");
+    }
+
+    #[test]
+    fn help_brief_leaves_the_group_help_unchanged() {
+        let reg = registry().expect("embedded payload parses");
+        let entries: Vec<Value> = reg
+            .commands
+            .iter()
+            .filter(|e| {
+                e.get("name")
+                    .and_then(Value::as_str)
+                    .is_some_and(|n| n == "cells" || n.starts_with("cells."))
+            })
+            .map(|e| Value::Object(manifest_entry(e)))
+            .collect();
+        assert!(entries.len() > 1);
+        let text = render_help_text(&entries, &[], &json!("1.0"));
+        assert!(!text.contains("    details:"), "{text}");
+        assert!(text.contains("    flags: "), "{text}");
+        assert!(!text.contains("\n    flags:\n"), "{text}");
+        for e in &entries {
+            let invoke = e["invoke"].as_str().unwrap();
+            assert!(text.contains(&format!("\n{invoke}\n")), "{invoke}");
+        }
+    }
 }
