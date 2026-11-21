@@ -3493,6 +3493,7 @@ pub(super) fn execute_no_pane(opts: &Options) -> ExecResult {
         proof: proof.clone(),
         knowledge_used: None,
         principles_used: None,
+        sync_ack: None,
         knowledge_wrong: None,
         options: Vec::new(),
         leaning: None,
@@ -6137,6 +6138,18 @@ fn postflight_cap_check(
 enum PostflightCapResult {
     Capped,
     Uncapped,
+    Refused(String),
+}
+
+fn settle_command(cell_id: &str, job_id: &str, proof_res: &str, refusal: &str) -> String {
+    let mut cmd = format!("bee cells finish --id {cell_id} --from-job {job_id} --proof-result {proof_res} --no-mistakes");
+    if refusal.contains("--principle-used") {
+        cmd.push_str(" --principle-used \"<slug> — <the decision it changed>\"");
+    }
+    if refusal.contains("--sync-ack") {
+        cmd.push_str(" --sync-ack \"<reason>\"");
+    }
+    cmd
 }
 
 fn try_cap_finished_cell(
@@ -6200,14 +6213,15 @@ fn try_cap_finished_cell(
         commit_pending: None,
         inline_reason: None,
         report: None,
-        sync_ack: None,
+        sync_ack: r.sync_ack.clone().filter(|s| !s.trim().is_empty()),
         from_job: Some(opts.job_id.clone()),
-        proof_result: Some(proof_res),
+        proof_result: Some(proof_res.clone()),
         proof_reason: Some(proof_reason),
     };
 
     match crate::verbs::cells::finish_cap_and_release(&opts.main_root, topo_ref, cap_flags, None) {
         Ok(crate::verbs::reservations::Out::Emit(_, _, _)) => PostflightCapResult::Capped,
+        Err(crate::verbs::cells::Fail::Thrown(refusal)) => PostflightCapResult::Refused(refusal),
         _ => PostflightCapResult::Uncapped,
     }
 }
@@ -6379,10 +6393,22 @@ pub(super) fn run(flags: &[&str]) -> ExitCode {
                     eprintln!("bee herding run: capped cell \"{cell_id}\"");
                     ExitCode::SUCCESS
                 }
+                PostflightCapResult::Refused(refusal) => {
+                    let proof_res = match &result.outcome {
+                        RunOutcome::Result(r) => crate::verbs::cells::parse_tests_proof(&r.proof).map(|(_, res, _)| res),
+                        _ => None,
+                    }
+                    .unwrap_or_else(|| "<green:unit>".to_string());
+                    eprintln!(
+                        "bee herding run: worker reported success for cell \"{cell_id}\" without capping it — the cap refused: {refusal}\nsettle with `{}`",
+                        settle_command(cell_id, &opts.job_id, &proof_res, &refusal)
+                    );
+                    ExitCode::FAILURE
+                }
                 PostflightCapResult::Uncapped => {
                     eprintln!(
-                        "bee herding run: worker reported success for cell \"{cell_id}\" without capping it — settle with `bee cells finish --id {cell_id} --from-job {} --proof-result <green:unit> --no-mistakes`",
-                        opts.job_id
+                        "bee herding run: worker reported success for cell \"{cell_id}\" without capping it — settle with `{}`",
+                        settle_command(cell_id, &opts.job_id, "<green:unit>", "")
                     );
                     ExitCode::FAILURE
                 }
@@ -9418,6 +9444,7 @@ mod tests {
                 proof: "n/a".to_string(),
                 knowledge_used: None,
                 principles_used: None,
+            sync_ack: None,
                 knowledge_wrong: None,
                 options: vec![],
                 leaning: None,
@@ -9460,6 +9487,7 @@ mod tests {
                 proof: "green".to_string(),
                 knowledge_used: None,
                 principles_used: None,
+            sync_ack: None,
                 knowledge_wrong: None,
                 options: vec![],
                 leaning: None,
@@ -11646,6 +11674,7 @@ mod tests {
                 proof: "test — green".to_string(),
                 knowledge_used: None,
                 principles_used: None,
+            sync_ack: None,
                 knowledge_wrong: None,
                 report_path: None,
                 report_note: None,
@@ -11674,6 +11703,7 @@ mod tests {
                 proof: "n/a".to_string(),
                 knowledge_used: None,
                 principles_used: None,
+            sync_ack: None,
                 knowledge_wrong: None,
                 report_path: None,
                 report_note: None,
@@ -11711,6 +11741,7 @@ mod tests {
                 proof: "test — green".to_string(),
                 knowledge_used: None,
                 principles_used: None,
+            sync_ack: None,
                 knowledge_wrong: None,
                 report_path: None,
                 report_note: None,
@@ -12356,6 +12387,7 @@ mod tests {
             proof: "cargo test — green:unit — test".to_string(),
             knowledge_used: None,
             principles_used: None,
+            sync_ack: None,
             knowledge_wrong: None,
             options: vec![],
             leaning: None,
@@ -12408,6 +12440,7 @@ mod tests {
             proof: "n/a".to_string(),
             knowledge_used: None,
             principles_used: None,
+            sync_ack: None,
             knowledge_wrong: None,
             options: vec![],
             leaning: None,
@@ -12636,6 +12669,7 @@ mod tests {
             proof: "cargo test — green:unit — test reason".to_string(),
             knowledge_used: None,
             principles_used: None,
+            sync_ack: None,
             knowledge_wrong: None,
             options: vec![],
             leaning: None,
@@ -12678,6 +12712,7 @@ mod tests {
             proof: "cargo test — red — test failed".to_string(),
             knowledge_used: None,
             principles_used: None,
+            sync_ack: None,
             knowledge_wrong: None,
             options: vec![],
             leaning: None,
@@ -12701,6 +12736,7 @@ mod tests {
             proof: "missing separators".to_string(),
             knowledge_used: None,
             principles_used: None,
+            sync_ack: None,
             knowledge_wrong: None,
             options: vec![],
             leaning: None,
@@ -12759,6 +12795,7 @@ mod tests {
             proof: "cargo test — green:unit — ok".to_string(),
             knowledge_used: None,
             principles_used: None,
+            sync_ack: None,
             knowledge_wrong: None,
             options: vec![],
             leaning: None,
@@ -12899,6 +12936,7 @@ mod tests {
                 proof: "".to_string(),
                 knowledge_used: None,
                 principles_used: None,
+            sync_ack: None,
                 knowledge_wrong: None,
                 options: vec![],
                 leaning: None,
