@@ -367,3 +367,13 @@ permit.
   in `areas/hook-runtime/guard-precision-exemptions-and-remedies.md`.
 - Operator-facing detail:
   `skills/bee-herding/references/operational-invariants.md` ("Spawn resilience").
+
+## The fixed brief text is a budget, not a free field
+
+Read when: you add a sentence to `render_brief` or `worker-cell.md`. Every cell
+brief repeats that fixed text, so rrt-4 (reread-thrift D4, D6) cut it by a
+quarter and added one Search rule block to the prompt (rg -l, bounded output,
+range reads). Each rule is stated once, and every result field and the ack,
+report-first and temp-then-rename rules stay. To re-measure, render the brief
+for one fixed `BriefSpec` with an empty task and add the byte size of the
+prompt file.

@@ -3,7 +3,7 @@ use crate::verbs::decisions::read_jsonl;
 use serde_json::{json, Map, Value};
 use std::path::{Path, PathBuf};
 
-pub(crate) const KINDS: [&str; 20] = [
+pub(crate) const KINDS: [&str; 21] = [
     "gate-bypass",
     "gate",
     "close",
@@ -24,6 +24,7 @@ pub(crate) const KINDS: [&str; 20] = [
     "knowledge-upkeep",
     "verify-upkeep",
     "fix-at-upkeep",
+    "handoff-waived",
 ];
 
 pub(crate) fn audit_path(root: &Path) -> PathBuf {

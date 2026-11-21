@@ -175,6 +175,25 @@ use std::time::Instant;
     /// A first-dispatch cell with neither machine block renders byte-identically
     /// to the unconditional template — the invariant the C4 pin protects.
     #[test]
+    fn cell_brief_search_rule_and_size_rendered_prompt_holds_the_search_rule_once() {
+        let template = load_prompt("worker-cell").unwrap();
+        let rendered = render(
+            &template,
+            &[
+                ("worker", "w"),
+                ("cell_id", "c-1"),
+                ("feature", "f"),
+                ("cell_json", "{}"),
+                ("learned_context", ""),
+                ("prior_rounds", ""),
+            ],
+        )
+        .unwrap();
+        assert_eq!(rendered.matches("Search rule:").count(), 1, "{rendered}");
+        assert_eq!(rendered.matches("`rg -l`").count(), 1, "{rendered}");
+    }
+
+    #[test]
     fn worker_cell_without_machine_blocks_matches_the_plain_template() {
         let template = load_prompt("worker-cell").unwrap();
         let rendered = render(
@@ -195,7 +214,7 @@ use std::time::Instant;
         // Zero residue: both block markers and their newlines are gone.
         assert!(!rendered.contains("{{"));
         assert!(rendered.contains(
-            "- docs/history/f/plan.md (when present)\n\nDepth on demand — when a principle line or the cell's work needs more than the brief, follow that principle's Depth line or route .bee/expertise/INDEX.md and read only the one guide section it names; never load the whole shelf.\n\nContract:\n"
+            "- docs/history/f/plan.md (when present)\n\nDepth on demand — follow a principle's Depth line, or route .bee/expertise/INDEX.md and read only the section it names.\n\nSearch rule: locate with `rg -l`, or one `rg -n` on a named path. Bound every search output (a max count or a named file). Read a range with offset and limit; never print a whole file.\n\nContract:\n"
         ));
     }
 
@@ -313,7 +332,7 @@ use std::time::Instant;
             "{rendered}"
         );
         assert!(
-            rendered.contains("An empty `knowledge_used` array means no concept changed a decision."),
+            rendered.contains("An empty `knowledge_used` means no concept changed a decision."),
             "{rendered}"
         );
         assert!(!rendered.contains("principles_used"), "{rendered}");
@@ -334,11 +353,11 @@ use std::time::Instant;
         .unwrap()
         .unwrap();
         assert!(
-            herded.contains("The result file may carry the same `knowledge_used` array"),
+            herded.contains("and it may carry `knowledge_used`"),
             "{herded}"
         );
         assert!(
-            herded.contains("the result file also carries a `principles_used` array"),
+            herded.contains("the result file also carries `principles_used`"),
             "{herded}"
         );
     }
@@ -381,7 +400,7 @@ use std::time::Instant;
     #[test]
     fn worker_prompt_without_expertise_carries_no_expertise_body_in_either_render() {
         let body = "EXPERTISE-BODY-SENTINEL tests.md section";
-        let header = "Expertise — dispatcher-picked";
+        let header = "Expertise — read before implementing";
         for is_herding in [false, true] {
             let with = worker_prompt_render(is_herding, Some(body));
             assert!(with.contains(header) && with.contains(body), "herding={is_herding}: {with}");
@@ -7481,7 +7500,7 @@ exit 0
         };
         let p = v.get("payload").unwrap();
         let prompt = p.get("prompt").unwrap().as_str().unwrap();
-        assert!(prompt.contains("Expertise — dispatcher-picked; read/load before implementing:"));
+        assert!(prompt.contains("Expertise — read before implementing:"));
         assert!(prompt.contains("- skills/bee-swarming/SKILL.md — swarming contract. Read it to follow worker protocol."));
         assert!(prompt.contains("- docs/knowledge/index.md — knowledge index. Read it to understand patterns."));
     }
@@ -9954,7 +9973,7 @@ advance_on — falling to another model there hides the defect (D11)"
                 );
                 assert!(!body.contains("{{"), "{runtime}/{kind}: unrendered marker left behind");
                 if kind == "cell" {
-                    let head = "Nickname (reservation identity): w\nAssigned cell id: c-1\nFeature: f\n\nCell (authoritative — do not re-fetch):";
+                    let head = "Nickname (reservation identity): w\nAssigned cell id: c-1\nFeature: f\n\nCell (authoritative):";
                     let expected_head = expected_dispatched_body(runtime, kind, head);
                     assert!(
                         body.starts_with(&expected_head),
@@ -10961,12 +10980,9 @@ Location — work here, the store is in the other checkout:
 - Work in: /repo/wt-feat
 - The bee store (cells, claims, reservations) lives in: /repo/control
 
-Before any work step: self-check the effective working directory. If
-it is not inside /repo/wt-feat, stop with zero edit attempts and return
-`[BLOCKED: session cwd is not the worktree — enter it or spawn this worker
-from a session rooted there]`.
+Before any work, check your working directory is inside /repo/wt-feat; if not, stop with zero edits and return `[BLOCKED: session cwd is not the worktree]`.
 
-Cell (authoritative — do not re-fetch):
+Cell (authoritative):
 {
   "id": "c-golden",
   "feature": "feat-golden",
@@ -10979,31 +10995,33 @@ Cell (authoritative — do not re-fetch):
 }
 
 The cell names five parts apart:
-- Goal — `must_haves.truths`: what must be true when you finish.
+- Goal — `must_haves.truths`: what must be true at the end.
 - Why — `must_haves.why`: why this work matters; use it to choose where the cell is silent.
-- Hard constraints — `must_haves.prohibitions` and the locked D-IDs in CONTEXT.md: a conflict is `[BLOCKED]`, never a workaround.
+- Hard constraints — `must_haves.prohibitions` and the locked D-IDs in CONTEXT.md: a conflict is `[BLOCKED]`.
 - Out of scope — `must_haves.out_of_scope`: never do this work; name a need there in `found`, or return `[PARKED]` (a herding worker writes status `question`).
-- Open choices — `must_haves.open_choices`, when present: design choices the plan made that the user did not ask for; without evidence against one, follow the plan.
-  You may question an open choice with evidence through `bee cells dissent`.
+- Open choices — `must_haves.open_choices`, when present: plan choices the user did not ask for; follow them without evidence against.
+  Question an open choice through `bee cells dissent`, with evidence.
 
-How you build inside the contract is yours: a simpler route than the action describes that keeps every truth and prohibition is your call — record it as a `found a better route` departure.
+A simpler route that keeps every truth and prohibition is your call; record it as a `found a better route` departure.
 
-Inputs — read these; nothing else is provided:
+Inputs — read these only:
 - AGENTS.md
 - docs/history/feat-golden/CONTEXT.md
 - docs/history/feat-golden/plan.md (when present)
 
-Depth on demand — when a principle line or the cell's work needs more than the brief, follow that principle's Depth line or route .bee/expertise/INDEX.md and read only the one guide section it names; never load the whole shelf.
+Depth on demand — follow a principle's Depth line, or route .bee/expertise/INDEX.md and read only the section it names.
+
+Search rule: locate with `rg -l`, or one `rg -n` on a named path. Bound every search output (a max count or a named file). Read a range with offset and limit; never print a whole file.
 
 Advisor: fable
 
 Contract:
-- Read skills/bee-swarming/references/execute.md for the full worker contract; the shape you were handed (native, pane, cli) is config, not a signal about the work.
-- At each meaningful step (read done, red test seen, green, committed) record one progress note with `.bee/bin/bee herding notify --kind progress --job c-golden --step <word> --text "<note, at most 120 characters>"`; a note never ends the turn.
-- Execute only the assigned cell. Do not select or accept other work.
-- Never stop to offer the leader a menu of implementation options: choose inside the cell's scope and record the choice as a departure. A decision outside the scope is one short yes/no question, returned through `[PARKED]` or `[BLOCKED]`.
-- Never reinterpret a locked CONTEXT.md decision; architectural changes and package installs return [BLOCKED] with a proposal.
-- Shape what you leave behind: prefer deletion to addition, write the smallest diff that solves it, and leave the base simpler than you found it. A signal threaded through several layers means stop and find the direct path. Nothing refuses these — craft, applied by judgment and surfaced at review, not by flags. Write no comment in code, in any language — the why goes to a docs/knowledge concept whose Pointers name the file, or to bee decisions log, and a public item's description goes to the owning concept; where `no_code_comments` is on, the write guard refuses the rest.
+- Read skills/bee-swarming/references/execute.md for the full worker contract.
+- At each meaningful step record one progress note: `.bee/bin/bee herding notify --kind progress --job c-golden --step <word> --text "<note, at most 120 characters>"`.
+- Execute only the assigned cell.
+- Never offer the leader a menu: choose inside the cell's scope and record it as a departure; a decision outside it is one yes/no question via `[PARKED]` or `[BLOCKED]`.
+- Never reinterpret a locked CONTEXT.md decision; architecture changes and package installs return [BLOCKED] with a proposal.
+- Prefer deletion, the smallest diff and the direct path over threading signals. Write no comment in code, in any language — the why goes to a docs/knowledge concept whose Pointers name the file, or to bee decisions log; where `no_code_comments` is on, the write guard refuses the rest.
 - Write your knowledge delta (owning area concept update, a pitfall pattern when you hit one, bee.anchors for files you changed) in the same commit as your code, thin and anchored, no review step.
   Knowledge rules (the same list `bee knowledge consolidate` prints):
   - Anchor every entry to the code files it describes in bee.anchors — files, never directories.
@@ -11013,17 +11031,14 @@ Contract:
   - Split a concept that passes 300 lines along its lifecycles.
   - State the condition under which a claim holds, and mark a guess as a guess, never as a fact.
   - For a detail that changes often (a column name, a path, a count), record how to find it, never the detail itself.
-- Commit once: imperative-mood subject; the LAST line of the body is the literal trailer `cell: c-golden` (the words "cell:" then the id — a bare id alone fails the cap).
-- Return exactly one final status token: [DONE] (outcome, files, commit), [BLOCKED] (what, why, diagnosis), [HANDOFF] (at ~65% context, after writing .bee/HANDOFF.json), [PARKED] (question, cell id — after `bee cells park`), or [NOOP] (cell missing/already capped). Never wait silently; never ask a blocking question.
+- Commit once: imperative subject; the LAST body line is the literal trailer `cell: c-golden` (a bare id fails the cap).
+- Return exactly one final status token: [DONE] (outcome, files, commit), [BLOCKED] (what, why, diagnosis), [HANDOFF] (at ~65% context, after writing .bee/HANDOFF.json), [PARKED] (question, cell id — after `bee cells park`), or [NOOP] (cell missing or capped).
 
-Result form: beside the token, in the same message, emit exactly one fenced JSON block — never in place of the token — as the echo of having capped. `tests` is a proof string `<command> — <result> — <scope reason>` closed over `green:live`, `green:unit`, and `green:static` — e.g. `"cargo test -p bee — green:unit — touched close.rs"`:
-- `green:live` — the real product or command was driven and its observable result inspected.
-- `green:unit` — automated tests passed.
-- `green:static` — it compiled, type-checked, linted, or a parity/pointer check passed, with nothing executed.
+Result form: beside the token, emit exactly one fenced JSON block, never in place of the token. `tests` is `<command> — <result> — <scope reason>`; result is `green:live` (real command driven, result inspected), `green:unit` (tests passed) or `green:static` (compiled or linted, nothing executed):
 ```json
 {"outcome": "<one line>", "commit": "<sha or none>", "files": ["<path>", "..."], "tests": "<command> — <result> — <scope reason>", "deviations": ["<line>", "..."], "mistakes": ["<what went wrong> — <what would have been better> — <fix-at>", "..."], "found": ["<discovery outside the cell>"], "knowledge_used": ["<docs/knowledge path> — <the decision it changed>"], "knowledge_wrong": ["<docs/knowledge path> — <what was wrong>"], "baseline": "<optional: what the same proof produced on base>"}
 ```
-An empty `knowledge_used` array means no concept changed a decision. `knowledge_wrong` — a loaded concept that misled this cell and that you did not fix in this commit, `<docs/knowledge path> — <what was wrong>`; omit the key when there is none.
+An empty `knowledge_used` means no concept changed a decision. `knowledge_wrong` — a loaded concept that misled this cell and that you did not fix in this commit; omit it when none did.
 
 Finish with: .bee/bin/bee cells finish --id c-golden --outcome "<one line>" --files <a,b> --report '<json>'"#;
 
@@ -13243,11 +13258,11 @@ Finish with: .bee/bin/bee cells finish --id c-golden --outcome "<one line>" --fi
             .unwrap()
             .join("\n");
         let block = format!(
-            "\n\n{LEARNED_HEADER} — read before implementing; prefer it over re-deriving):\n{lines}\n"
+            "\n\n{LEARNED_HEADER} — read before implementing):\n{lines}\n"
         );
         assert!(prompt.contains(&block), "{prompt}");
         assert!(prompt.contains(
-            "- docs/history/demo/plan.md (when present)\n\nDepth on demand — when a principle line or the cell's work needs more than the brief, follow that principle's Depth line or route .bee/expertise/INDEX.md and read only the one guide section it names; never load the whole shelf.\n\nLearned context (machine-assembled"
+            "- docs/history/demo/plan.md (when present)\n\nDepth on demand — follow a principle's Depth line, or route .bee/expertise/INDEX.md and read only the section it names.\n\nSearch rule: locate with `rg -l`, or one `rg -n` on a named path. Bound every search output (a max count or a named file). Read a range with offset and limit; never print a whole file.\n\nLearned context (machine-assembled"
         ));
     }
 
@@ -13365,7 +13380,7 @@ Finish with: .bee/bin/bee cells finish --id c-golden --outcome "<one line>" --fi
         assert!(first_principle(&routed).contains("`bee-principle-lane`"), "{routed:?}");
     }
 
-    const PRINCIPLES_USED_ASK: &str = "When a Principles block appears above, the result file also carries a `principles_used` array";
+    const PRINCIPLES_USED_ASK: &str = "When a Principles block appears above, the result file also carries `principles_used`";
 
     fn principled_worker_prompt(is_herding: bool) -> String {
         let tmp = tempfile::tempdir().unwrap();

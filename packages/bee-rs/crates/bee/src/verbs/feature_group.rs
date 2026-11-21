@@ -1,7 +1,7 @@
 use crate::jsjson;
 use crate::session_identity::locate_caller;
 use crate::verbs::record_timing;
-use crate::verbs::reservations::{keys_known, parse_flags, Flags};
+use crate::verbs::reservations::{keys_known, parse_flags, FlagV, Flags};
 use crate::verbs::state_group::{
     acquire_state_lock, ensure_workflow_record_for_feature, start_lane, validate_route_set_flags,
 };
@@ -17,6 +17,7 @@ use crate::verbs::worktree::{
 use serde_json::{json, Map, Value};
 use std::collections::HashSet;
 use std::ffi::OsString;
+use std::path::Path;
 use std::process::ExitCode;
 use std::time::Instant;
 
@@ -117,7 +118,7 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
 fn run_start(tokens: &[OsString], t0: Instant) -> Option<ExitCode> {
     let strs: Vec<&str> = tokens.iter().map(|a| a.to_str()).collect::<Option<Vec<_>>>()?;
     let (flags, use_json) = parse_flags(&strs)?;
-    if !keys_known(&flags, &["feature", "class", "lane", "flags", "files"]) {
+    if !keys_known(&flags, &["feature", "class", "lane", "flags", "files", "same-session"]) {
         return None;
     }
 
@@ -188,8 +189,33 @@ fn run_start(tokens: &[OsString], t0: Instant) -> Option<ExitCode> {
     let main_root = ctx.work_root.clone();
 
     let main_root_s = p(&main_root);
+    let mut waiver: Option<String> = None;
     if let Ok(ctrl_root) = crate::verbs::reservations::control_root_for(&main_root_s) {
         let session_id = crate::verbs::reservations::resolve_session_id(None, &ctrl_root).ok().flatten();
+        if let Some(sid) = session_id.as_deref()
+            && let Some(merged) = crate::integration_queue::merged_feature_of(Path::new(&ctrl_root), sid)
+            && merged != feature
+        {
+            match flags.get("same-session") {
+                None => {
+                    return Some(ctx.fail(&format!(
+                        "[handoff_due] this session already merged \"{merged}\"; write the handoff and start \"{feature}\" in a fresh leader session (playbook: .bee/playbooks/handoff.md), or pass --same-session \"<reason>\" to open it here anyway."
+                    )));
+                }
+                Some(v) => {
+                    let reason = match v {
+                        FlagV::S(r) => r.trim().to_string(),
+                        FlagV::Present => String::new(),
+                    };
+                    if reason.is_empty() {
+                        return Some(ctx.fail(
+                            "[handoff_due] --same-session needs a non-empty reason: --same-session \"<reason>\".",
+                        ));
+                    }
+                    waiver = Some(reason);
+                }
+            }
+        }
         match crate::nested_checkout::has_any_shared_nested_checkout(
             &main_root,
             &ctrl_root,
@@ -297,6 +323,12 @@ fn run_start(tokens: &[OsString], t0: Instant) -> Option<ExitCode> {
     lane_map.insert("route".into(), Value::Object(route_object.clone()));
     if write_lane(&main_root, &lane_map).is_err() {
         return None;
+    }
+
+    if let Some(reason) = waiver.as_deref()
+        && let Err(e) = crate::audit::append(&main_root, "handoff-waived", &feature, None, reason, "feature start", None)
+    {
+        eprintln!("warning: could not write the handoff-waived audit row: {e}");
     }
 
     if let Ok(live) = list_workflows(&main_root)
@@ -611,6 +643,156 @@ mod tests {
         assert_eq!(route["lane"], "standard");
         assert_eq!(route["product_files"], 3.0);
         assert_eq!(route["flags"], json!([]));
+    }
+
+    struct SessionEnv {
+        prior: Vec<(&'static str, Option<std::ffi::OsString>)>,
+    }
+
+    impl SessionEnv {
+        fn set(id: Option<&str>) -> Self {
+            let prior = crate::session_identity::SESSION_ENV_VARS
+                .iter()
+                .map(|k| (*k, std::env::var_os(k)))
+                .collect();
+            unsafe {
+                for k in crate::session_identity::SESSION_ENV_VARS {
+                    std::env::remove_var(k);
+                }
+                if let Some(id) = id {
+                    std::env::set_var("BEE_SESSION_ID", id);
+                }
+            }
+            Self { prior }
+        }
+    }
+
+    impl Drop for SessionEnv {
+        fn drop(&mut self) {
+            unsafe {
+                for (k, v) in &self.prior {
+                    match v {
+                        Some(v) => std::env::set_var(k, v),
+                        None => std::env::remove_var(k),
+                    }
+                }
+            }
+        }
+    }
+
+    fn start_argv(feature: &str, same_session: Option<&str>) -> Vec<OsString> {
+        let mut argv: Vec<OsString> = ["feature", "start", "--feature", feature, "--class", "feature", "--lane", "standard", "--files", "3"]
+            .iter()
+            .map(OsString::from)
+            .collect();
+        if let Some(reason) = same_session {
+            argv.push(OsString::from("--same-session"));
+            argv.push(OsString::from(reason));
+        }
+        argv
+    }
+
+    fn audit_rows(repo: &Path) -> Vec<Value> {
+        std::fs::read_to_string(repo.join(".bee").join("audit.jsonl"))
+            .unwrap_or_default()
+            .lines()
+            .map(|l| serde_json::from_str(l).unwrap())
+            .collect()
+    }
+
+    #[test]
+    fn handoff_after_merge_door_refuses_a_second_feature_and_writes_nothing() {
+        let tmp = tempfile::tempdir().unwrap();
+        let repo = init_repo(tmp.path());
+        let _guard = CwdGuard::enter(&repo);
+        let _env = SessionEnv::set(Some("sess-merged-1"));
+        crate::integration_queue::record_merger(&repo, "sess-merged-1", "first-feat");
+
+        let code = try_native(&start_argv("second-feat", None), Instant::now());
+
+        assert_eq!(code, Some(ExitCode::FAILURE));
+        assert!(!tmp.path().join("testrepo--wt--second-feat").exists());
+        assert!(!repo.join(".bee").join("lanes").join("second-feat.json").exists());
+        assert!(audit_rows(&repo).is_empty());
+    }
+
+    #[test]
+    fn handoff_after_merge_door_same_session_with_a_reason_succeeds_and_is_audited() {
+        let tmp = tempfile::tempdir().unwrap();
+        let repo = init_repo(tmp.path());
+        let _guard = CwdGuard::enter(&repo);
+        let _env = SessionEnv::set(Some("sess-merged-2"));
+        crate::integration_queue::record_merger(&repo, "sess-merged-2", "first-feat");
+
+        let blank = try_native(&start_argv("second-feat", Some("  ")), Instant::now());
+        assert_eq!(blank, Some(ExitCode::FAILURE));
+        assert!(audit_rows(&repo).is_empty());
+
+        let code = try_native(&start_argv("second-feat", Some("owner asked for a back to back run")), Instant::now());
+
+        assert_eq!(code, Some(ExitCode::SUCCESS));
+        assert!(tmp.path().join("testrepo--wt--second-feat").exists());
+        let rows = audit_rows(&repo);
+        assert_eq!(rows.len(), 1, "{rows:?}");
+        assert_eq!(rows[0]["kind"], "handoff-waived");
+        assert_eq!(rows[0]["feature"], "second-feat");
+        assert!(rows[0].to_string().contains("owner asked for a back to back run"), "{}", rows[0]);
+    }
+
+    #[test]
+    fn handoff_after_merge_door_audit_log_accepts_the_handoff_waived_kind() {
+        let tmp = tempfile::tempdir().unwrap();
+        let repo = init_repo(tmp.path());
+        let _guard = CwdGuard::enter(&repo);
+        let argv: Vec<OsString> = ["audit", "log", "--kind", "handoff-waived", "--feature", "second-feat", "--note", "owner asked"]
+            .iter()
+            .map(OsString::from)
+            .collect();
+
+        let code = crate::verbs::audit::try_native(&argv, Instant::now());
+
+        assert_eq!(code, Some(ExitCode::SUCCESS));
+        let rows = audit_rows(&repo);
+        assert_eq!(rows.len(), 1, "{rows:?}");
+        assert_eq!(rows[0]["kind"], "handoff-waived");
+    }
+
+    #[test]
+    fn handoff_after_merge_door_a_failed_start_with_same_session_writes_no_audit_row() {
+        let tmp = tempfile::tempdir().unwrap();
+        let repo = init_repo(tmp.path());
+        let _guard = CwdGuard::enter(&repo);
+        let _env = SessionEnv::set(Some("sess-merged-3"));
+        crate::integration_queue::record_merger(&repo, "sess-merged-3", "first-feat");
+        let blocker = tmp.path().join("testrepo--wt--second-feat");
+        std::fs::create_dir_all(&blocker).unwrap();
+        std::fs::write(blocker.join("keep.txt"), "occupied\n").unwrap();
+
+        let code = try_native(&start_argv("second-feat", Some("owner asked for a back to back run")), Instant::now());
+
+        assert_ne!(code, Some(ExitCode::SUCCESS));
+        assert!(audit_rows(&repo).is_empty(), "{:?}", audit_rows(&repo));
+        assert!(!repo.join(".bee").join("lanes").join("second-feat.json").exists());
+    }
+
+    #[test]
+    fn handoff_after_merge_door_lets_a_first_start_and_a_sessionless_start_through() {
+        let tmp = tempfile::tempdir().unwrap();
+        let repo = init_repo(tmp.path());
+        let _guard = CwdGuard::enter(&repo);
+        {
+            let _env = SessionEnv::set(Some("sess-fresh-1"));
+            let code = try_native(&start_argv("first-feat", None), Instant::now());
+            assert_eq!(code, Some(ExitCode::SUCCESS));
+        }
+        crate::integration_queue::record_merger(&repo, "sess-other-9", "earlier-feat");
+        let _env = SessionEnv::set(None);
+
+        let code = try_native(&start_argv("sessionless-feat", None), Instant::now());
+
+        assert_eq!(code, Some(ExitCode::SUCCESS));
+        assert!(tmp.path().join("testrepo--wt--sessionless-feat").exists());
+        assert!(audit_rows(&repo).is_empty());
     }
 
     #[test]

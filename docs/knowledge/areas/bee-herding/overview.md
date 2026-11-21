@@ -105,6 +105,9 @@ The machinery it starts is documented beside it:
   line (D2) — so a cold control agent learns one vocabulary rather than two. Every verb prints one
   envelope of the same shape on both transports (`ok`, `transport`, and either `result` or a typed
   `error.code`), and `bee herding result <dotted.path>` reads one field back out of it.
+  `bee herding result --job <id>` is the other form: it reads the job's newest result file, never the
+  report body, and prints a digest capped at 1500 characters (reread-thrift D2) so a leader opens a
+  report only on a red, a question or a blocked status. Without `--job` the stdin reader is unchanged.
   A pane listing row carries eight facts, and every transport answers all eight: the pane's id,
   its label, its tab, the directory its shell started in, the directory its foreground process is
   in now, the command it runs, and the transport's own word on the agent — that agent's status and

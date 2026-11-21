@@ -1485,6 +1485,17 @@ pub(crate) fn run_merge_with_caller(
         Ok(crate::integration_queue::Drain::Ran(None)) => return None, // MErr::Ex
         Ok(crate::integration_queue::Drain::Ran(Some(answer))) => {
             let lines = merge_text_lines(&id, &main_root, &answer);
+            if answer.ok
+                && answer.result.get("code").and_then(Value::as_str) != Some("ALREADY_UP_TO_DATE")
+                && session_id != WORKTREE_MERGE_SESSIONLESS_ID
+                && let Some(feature) = answer
+                    .result
+                    .get("branch")
+                    .and_then(Value::as_str)
+                    .and_then(|b| b.strip_prefix("wt/"))
+            {
+                crate::integration_queue::record_merger(&ctrl_root, &session_id, feature);
+            }
             (answer.result, answer.ok, lines)
         }
     };

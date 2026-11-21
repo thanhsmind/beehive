@@ -55,7 +55,9 @@ history.
    outputs, persisted state, error shape, the tests that prove it — and
    leaves internal structure (helper names, call graph, variable
    placement, line-level edits) to the worker unless that choice crosses
-   a shared contract. Read anchors that say where to look stay. A detail
+   a shared contract. Read anchors that say where to look stay. The action
+   names each function it changes as path plus symbol, so the worker
+   searches for one symbol and never sweeps. A detail
    the plan never proved turns into a constraint the moment the action
    prescribes it.
 2. **Bounded files.** `files` lists everything the worker may write;

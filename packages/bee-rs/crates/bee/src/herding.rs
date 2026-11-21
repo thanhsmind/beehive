@@ -1803,7 +1803,159 @@ fn herdr_result(flags: &[&str]) -> ExitCode {
 /// `error.message` keys are the same two the herdr reader already walks, so
 /// both verbs share one reader rather than two that can drift.
 pub(crate) fn envelope_result(flags: &[&str]) -> ExitCode {
+    if let Some(args) = job_digest_args(flags) {
+        return job_result_digest(args.0, args.1, args.2);
+    }
     result_reader(flags, "bee herding result", "result", "transport")
+}
+
+const RESULT_DIGEST_LIMIT: usize = 1500;
+const RESULT_DIGEST_REPORT_RESERVE: usize = 300;
+const RESULT_DIGEST_FIELD_LIMIT: usize = 500;
+
+fn job_digest_args<'a>(flags: &[&'a str]) -> Option<(&'a str, bool, Option<&'a str>)> {
+    let mut job = None;
+    let mut json = false;
+    let mut explicit = None;
+    let mut i = 0usize;
+    while i < flags.len() {
+        match flags[i] {
+            "--job" => {
+                job = flags.get(i + 1).copied();
+                i += 1;
+            }
+            "--json" => json = true,
+            "--main-root" => {
+                explicit = flags.get(i + 1).copied();
+                i += 1;
+            }
+            other => {
+                if let Some(rest) = other.strip_prefix("--job=") {
+                    job = Some(rest);
+                } else if let Some(rest) = other.strip_prefix("--main-root=") {
+                    explicit = Some(rest);
+                }
+            }
+        }
+        i += 1;
+    }
+    job.map(|j| (j, json, explicit))
+}
+
+fn cut_to(text: &str, room: usize) -> String {
+    let total = text.chars().count();
+    if total <= room {
+        return text.to_string();
+    }
+    let mut keep = room;
+    loop {
+        let suffix = format!(" [+{} cut]", total - keep);
+        if keep == 0 || keep + suffix.chars().count() <= room {
+            let head: String = text.chars().take(keep).collect();
+            return format!("{head}{suffix}");
+        }
+        keep -= 1;
+    }
+}
+
+fn digest_fields(res: &mailbox::MailboxResult) -> Vec<(&'static str, String)> {
+    let status = match res.status {
+        mailbox::MailboxStatus::Done => "done",
+        mailbox::MailboxStatus::Blocked => "blocked",
+        mailbox::MailboxStatus::Question => "question",
+    };
+    let mut fields = vec![
+        ("status", status.to_string()),
+        ("summary", res.summary.clone()),
+        ("proof", res.proof.clone()),
+        ("files_changed", res.files_changed.join(", ")),
+    ];
+    let handback = [
+        ("found", &res.handback.found),
+        ("unknowns", &res.handback.unknowns),
+        ("skipped", &res.handback.skipped),
+    ];
+    for (key, items) in handback {
+        if !items.is_empty() {
+            fields.push((key, items.join(" | ")));
+        }
+    }
+    if let Some(path) = &res.report_path {
+        fields.push(("report_path", path.clone()));
+    }
+    fields
+}
+
+fn bounded_digest(fields: Vec<(&'static str, String)>, limit: usize) -> Vec<(&'static str, String)> {
+    let reserve = fields
+        .iter()
+        .find(|(k, _)| *k == "report_path")
+        .map(|(k, v)| (k.len() + 3 + v.chars().count()).min(RESULT_DIGEST_REPORT_RESERVE))
+        .unwrap_or(0);
+    let mut room = limit.saturating_sub(reserve);
+    let mut out = Vec::with_capacity(fields.len());
+    for (key, value) in fields {
+        if key == "report_path" {
+            room += reserve;
+        }
+        let overhead = key.len() + 3;
+        let value = cut_to(&value, room.saturating_sub(overhead).min(RESULT_DIGEST_FIELD_LIMIT));
+        room = room.saturating_sub(overhead + value.chars().count());
+        out.push((key, value));
+    }
+    out
+}
+
+fn render_digest(fields: &[(&'static str, String)], json: bool) -> String {
+    if json {
+        let obj: Map<String, Value> =
+            fields.iter().map(|(k, v)| (k.to_string(), Value::String(v.clone()))).collect();
+        return Value::Object(obj).to_string();
+    }
+    fields.iter().map(|(k, v)| format!("{k}: {v}")).collect::<Vec<_>>().join("\n")
+}
+
+fn job_result_digest(job: &str, json: bool, explicit: Option<&str>) -> ExitCode {
+    let refuse = |why: String| {
+        eprintln!("bee herding result: {why}");
+        ExitCode::FAILURE
+    };
+    if job.is_empty() || job.contains('/') || job.contains("..") {
+        return refuse(format!("unknown job id {job:?}"));
+    }
+    let Some(root) = resolve_main_root(explicit) else {
+        return refuse("no bee repo root found".to_string());
+    };
+    let bee_dir = crate::verbs::supervisor::control_root_path(&root).join(".bee");
+    let job_dir = mailbox::mailbox_dir(&bee_dir, job);
+    let Ok(rd) = std::fs::read_dir(&job_dir) else {
+        return refuse(format!("unknown job id {job:?}: no mailbox at {}", job_dir.display()));
+    };
+    let names: Vec<String> = rd.flatten().filter_map(|e| e.file_name().into_string().ok()).collect();
+    let round = match mailbox::select_latest_round(&names) {
+        Ok(round) => round,
+        Err(e) => return refuse(format!("job {job:?}: {e}")),
+    };
+    let text = match std::fs::read_to_string(mailbox::result_path(&bee_dir, job, round)) {
+        Ok(text) => text,
+        Err(e) => return refuse(format!("job {job:?}: cannot read result-{round}.json: {e}")),
+    };
+    let res = match mailbox::parse_result_text(round, &text) {
+        Ok(res) => res,
+        Err(e) => return refuse(format!("job {job:?}: {e}")),
+    };
+    let fields = digest_fields(&res);
+    let mut limit = RESULT_DIGEST_LIMIT;
+    let out = loop {
+        let out = render_digest(&bounded_digest(fields.clone(), limit), json);
+        let len = out.chars().count();
+        if len <= RESULT_DIGEST_LIMIT || limit == 0 {
+            break out;
+        }
+        limit = limit.saturating_sub(len - RESULT_DIGEST_LIMIT);
+    };
+    println!("{out}");
+    ExitCode::SUCCESS
 }
 
 /// The dotted-path walk both readers share: descend `result.<a>.<b>…`,
@@ -1937,6 +2089,83 @@ mod tests {
         assert_eq!(jobs[0]["steer_to"], "bee-cssd-1-abc");
         assert_eq!(jobs[0]["session_id"], "sess1");
         assert!(lines[0].contains("steer_to=bee-cssd-1-abc"), "{}", lines[0]);
+    }
+
+    fn digest_result_json(summary: &str) -> String {
+        serde_json::json!({
+            "status": "done",
+            "summary": summary,
+            "files_changed": ["a.rs", "b.rs"],
+            "proof": "cargo test — green:unit — scope",
+            "report_path": "/m/.bee/mailbox/job-d/report-1.md",
+            "found": ["f1"],
+            "unknowns": ["u1"],
+            "skipped": ["s1"]
+        })
+        .to_string()
+    }
+
+    fn digest_of(summary: &str, json: bool) -> String {
+        let res = mailbox::parse_result_text(1, &digest_result_json(summary)).unwrap();
+        let fields = bounded_digest(digest_fields(&res), RESULT_DIGEST_LIMIT);
+        render_digest(&fields, json)
+    }
+
+    fn seed_digest_job(root: &std::path::Path, job: &str, text: &str) {
+        let dir = root.join(".bee").join("mailbox").join(job);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("result-1.json"), text).unwrap();
+    }
+
+    #[test]
+    fn herding_result_job_digest_prints_every_field_in_text_and_json() {
+        let text = digest_of("short summary", false);
+        for key in ["status: done", "summary: short summary", "proof: cargo test", "files_changed: a.rs, b.rs", "found: f1", "unknowns: u1", "skipped: s1", "report_path: /m/.bee/mailbox/job-d/report-1.md"] {
+            assert!(text.contains(key), "{key} missing: {text}");
+        }
+        let json: Value = serde_json::from_str(&digest_of("short summary", true)).unwrap();
+        for key in ["status", "summary", "proof", "files_changed", "found", "unknowns", "skipped", "report_path"] {
+            assert!(json.get(key).is_some(), "{key} missing: {json}");
+        }
+    }
+
+    #[test]
+    fn herding_result_job_digest_cuts_a_long_result_and_names_the_count() {
+        let long = "x".repeat(6000);
+        let text = digest_of(&long, false);
+        assert!(text.chars().count() <= RESULT_DIGEST_LIMIT, "{}", text.chars().count());
+        assert!(text.contains(" cut]"), "{text}");
+        assert!(text.contains("report_path: /m/.bee/mailbox/job-d/report-1.md"), "{text}");
+        let as_json = digest_of(&long, true);
+        assert!(as_json.chars().count() <= RESULT_DIGEST_LIMIT);
+        let cut = cut_to(&long, 100);
+        assert_eq!(cut.chars().count(), 100);
+        let suffix = &cut[cut.rfind(" [+").unwrap()..];
+        let kept = cut.chars().count() - suffix.chars().count();
+        assert_eq!(suffix, format!(" [+{} cut]", 6000 - kept));
+    }
+
+    #[test]
+    fn herding_result_job_digest_refuses_an_unknown_job_and_reads_a_known_one() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path().to_str().unwrap();
+        seed_digest_job(tmp.path(), "job-d", &digest_result_json("ok"));
+        assert_eq!(job_result_digest("job-missing", false, Some(root)), ExitCode::FAILURE);
+        assert_eq!(job_result_digest("../escape", false, Some(root)), ExitCode::FAILURE);
+        assert_eq!(job_result_digest("", false, Some(root)), ExitCode::FAILURE);
+        assert_eq!(job_result_digest("job-d", true, Some(root)), ExitCode::SUCCESS);
+        seed_digest_job(tmp.path(), "job-bad", "not json");
+        assert_eq!(job_result_digest("job-bad", false, Some(root)), ExitCode::FAILURE);
+    }
+
+    #[test]
+    fn herding_result_job_digest_leaves_the_stdin_form_alone() {
+        assert!(job_digest_args(&["status"]).is_none());
+        assert!(job_digest_args(&["summary", "--context", "x"]).is_none());
+        assert_eq!(job_digest_args(&["--job", "job-d", "--json"]), Some(("job-d", true, None)));
+        assert_eq!(job_digest_args(&["--job=job-d", "--main-root", "/r"]), Some(("job-d", false, Some("/r"))));
+        let envelope = serde_json::json!({"result": {"a": {"b": "v"}}});
+        assert_eq!(walk_result_path(&envelope, "a.b"), Value::String("v".to_string()));
     }
 
     fn labels_for(text: &str) -> Vec<&'static str> {

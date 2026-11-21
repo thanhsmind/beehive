@@ -29,5 +29,7 @@ pause:
   create_agent`). Show the handoff to the user and wait only when a
   gate or decision the user owns is pending, or when the host has no
   leader door. The record's schema lives in
-  `bee-swarming/references/swarming-reference.md`.
+  `bee-swarming/references/swarming-reference.md`. A merge stores the
+  merging session. `bee feature start` then refuses a second feature in
+  that session (`handoff_due`) unless `--same-session` carries a reason.
 <!-- /rule -->
