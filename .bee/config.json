@@ -25,7 +25,7 @@
   "bee_report": {
     "ingest": true
   },
-  "handoff_context_tokens": 200000,
+  "handoff_context_tokens": 120000,
   "design": {
     "packs": [
       "web",
