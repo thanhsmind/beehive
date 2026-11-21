@@ -52,7 +52,7 @@ Rejected: auto-answering "no principle used" for a worker that said nothing
 {
   "schema_version": "1.0",
   "runtime": "claude",
-  "roster_sha256": "d4e696dbde7989d6388dacce3fd7057cb3a6935b46024b79698596a46f6f41d3",
+  "roster_sha256": "cd477eb57b66a0cef7310533c504a43a20e8b19e131431e73112bda9a9f114c8",
   "stages": [
     {"stage": "implementation", "classification": "required", "role": "code", "reason": "lct-1, lct-2, lct-3 change Rust code."},
     {"stage": "test-and-live-proof", "classification": "required", "role": "test", "reason": "lct-5 proves the contracts, judges the code cells and checks lct-4 parity."},
