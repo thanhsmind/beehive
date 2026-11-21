@@ -11,10 +11,15 @@
     "uat": false
   },
   "summary": "Feature \"tool-call-thrift\" started at phase \"exploring\" (lane).",
-  "next_action": "Continue bee-exploring for \"tool-call-thrift\" (lane).",
+  "next_action": "Merged into main at 3119cf7; reload the product and test \"tool-call-thrift\", then either approve uat (\"bee gate --name uat --approved true --lane tool-call-thrift\") or fix it in the worktree and merge again.",
   "created_at": "2026-11-21T15:16:24.824Z",
   "run_state": "awaiting-approval",
-  "waiting_on": null,
+  "waiting_on": {
+    "kind": "gate",
+    "subject": "uat: tool-call-thrift",
+    "asked_at": "2026-11-21T16:01:32.200Z",
+    "session": "bee-worktree-merge-sessionless"
+  },
   "route": {
     "class": "feature",
     "lane": "standard",
@@ -1107,12 +1112,5 @@
         }
       ]
     }
-  },
-  "merge_ready": {
-    "since": "2026-11-21T15:56:58.686Z",
-    "branch": "wt/tool-call-thrift",
-    "worktree_id": "beehive--wt--tool-call-thrift",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
