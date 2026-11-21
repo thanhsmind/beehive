@@ -237,6 +237,61 @@ mod tests {
     }
 
     #[test]
+    fn leader_read_multi_cat_refuses_sum_past_limit_naming_both_files() {
+        let dir = tempfile::tempdir().unwrap();
+        file_with(dir.path(), "a.txt", 250);
+        file_with(dir.path(), "b.txt", 151);
+        let text = refusal("Bash", json!({"command": "cat a.txt b.txt"}), dir.path(), false, 400)
+            .expect("401 summed lines must be refused");
+        assert!(text.contains("a.txt"), "{text}");
+        assert!(text.contains("b.txt"), "{text}");
+        assert!(text.contains("401 lines together"), "{text}");
+    }
+
+    #[test]
+    fn leader_read_multi_cat_passes_sum_at_limit() {
+        let dir = tempfile::tempdir().unwrap();
+        file_with(dir.path(), "a.txt", 200);
+        file_with(dir.path(), "b.txt", 200);
+        assert!(refusal("Bash", json!({"command": "cat a.txt b.txt"}), dir.path(), false, 400).is_none());
+    }
+
+    #[test]
+    fn leader_read_multi_cat_passes_worker_session() {
+        let dir = tempfile::tempdir().unwrap();
+        file_with(dir.path(), "a.txt", 250);
+        file_with(dir.path(), "b.txt", 151);
+        assert!(refusal("Bash", json!({"command": "cat a.txt b.txt"}), dir.path(), true, 400).is_none());
+    }
+
+    #[test]
+    fn leader_read_multi_cat_limit_zero_passes() {
+        let dir = tempfile::tempdir().unwrap();
+        file_with(dir.path(), "a.txt", 250);
+        file_with(dir.path(), "b.txt", 151);
+        assert!(refusal("Bash", json!({"command": "cat a.txt b.txt"}), dir.path(), false, 0).is_none());
+    }
+
+    #[test]
+    fn leader_read_multi_cat_piped_passes() {
+        let dir = tempfile::tempdir().unwrap();
+        file_with(dir.path(), "a.txt", 250);
+        file_with(dir.path(), "b.txt", 151);
+        assert!(
+            refusal("Bash", json!({"command": "cat a.txt b.txt | head"}), dir.path(), false, 400).is_none()
+        );
+    }
+
+    #[test]
+    fn leader_read_multi_cat_single_file_boundary_unchanged() {
+        let dir = tempfile::tempdir().unwrap();
+        file_with(dir.path(), "long.txt", 401);
+        file_with(dir.path(), "edge.txt", 400);
+        assert!(refusal("Bash", json!({"command": "cat long.txt"}), dir.path(), false, 400).is_some());
+        assert!(refusal("Bash", json!({"command": "cat edge.txt"}), dir.path(), false, 400).is_none());
+    }
+
+    #[test]
     fn leader_read_cap_config_default_and_override() {
         assert_eq!(resolve_leader_read_max_lines(&Map::new()), 400);
         assert_eq!(resolve_leader_read_max_lines(&input(json!({"leader_read_max_lines": 0}))), 0);
