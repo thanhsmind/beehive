@@ -958,6 +958,9 @@
     "contract:plan-conflicts-and-briefs",
     "blind",
     "contract:shared-target-warning",
-    "contract:release-2-113-0"
+    "contract:release-2-113-0",
+    "contract:handoff-mark-directive",
+    "contract:knowledge-pack-budget",
+    "contract:judge-small-diff"
   ]
 }
