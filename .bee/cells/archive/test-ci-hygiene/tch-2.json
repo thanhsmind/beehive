@@ -1,0 +1,49 @@
+{
+  "id": "tch-2",
+  "feature": "test-ci-hygiene",
+  "title": "Prove tests run and the release binary lacks the fake",
+  "lane": "tiny",
+  "role": "test",
+  "deps": [
+    "tch-1"
+  ],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p fleet",
+  "must_haves": {
+    "truths": [
+      "a release build of the bee binary contains no FakeBackend symbol",
+      "cargo build -p fleet without features fails to resolve fleet::backend::fake",
+      "fleet choreography tests and bee wave tests run and pass",
+      "the report under docs/history/test-ci-hygiene/reports/ quotes each result"
+    ]
+  },
+  "decisions": [
+    "b0bcc68f-2daa-4d9a-8c8c-b8f7b870fe20",
+    "c597c5b7-1a53-4ee6-9e26-f554e30ab125"
+  ],
+  "files": [
+    "docs/history/test-ci-hygiene/reports/tch-2.md"
+  ],
+  "read_first": [
+    "docs/history/test-ci-hygiene/CONTEXT.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Check contract fake-backend-gated (decision b0bcc68f) on the tch-1 commit. Run 1: cargo build --release -p bee, then search the binary for FakeBackend with strings or rg -a -c FakeBackend on target/release/bee, expect zero. Run 2: confirm a non-test consumer cannot name the fake, for example cargo rustc -p fleet --lib --release with a temporary check is not allowed, so instead read cargo tree -p bee -e features and confirm test-support is absent from the normal bee build. Run 3: cargo test --release -p fleet -p bee -- choreography wave and quote the passing counts. Edit no source. Write docs/history/test-ci-hygiene/reports/tch-2.md with each command and its result verbatim. If a check fails, return BLOCKED with the evidence. Commit only the report (cell trailer).",
+  "status": "dropped",
+  "tester_rule": true,
+  "trace": {
+    "worker": null,
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": null,
+    "verify_command": null,
+    "dropped_reason": "re-add after lane start"
+  }
+}

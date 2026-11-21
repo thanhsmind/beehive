@@ -1,0 +1,158 @@
+{
+  "id": "tch-4",
+  "feature": "test-ci-hygiene",
+  "title": "Prove tests run and the release binary lacks the fake",
+  "lane": "tiny",
+  "role": "test",
+  "deps": [
+    "tch-3"
+  ],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p fleet",
+  "must_haves": {
+    "truths": [
+      "a release build of the bee binary contains no FakeBackend symbol",
+      "cargo build -p fleet without features fails to resolve fleet::backend::fake",
+      "fleet choreography tests and bee wave tests run and pass",
+      "the report under docs/history/test-ci-hygiene/reports/ quotes each result"
+    ]
+  },
+  "decisions": [
+    "f11ebb8d-1a73-4d34-8cc3-357567179c07",
+    "b0bcc68f-2daa-4d9a-8c8c-b8f7b870fe20",
+    "c597c5b7-1a53-4ee6-9e26-f554e30ab125"
+  ],
+  "files": [
+    "docs/history/test-ci-hygiene/reports/tch-4.md"
+  ],
+  "read_first": [
+    "docs/history/test-ci-hygiene/CONTEXT.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Check contract fake-backend-gated (decision b0bcc68f) on the tch-3 commit. Run 1: cargo build --release -p bee, then search the binary for FakeBackend with strings or rg -a -c FakeBackend on target/release/bee, expect zero. Run 2: confirm a non-test consumer cannot name the fake, for example cargo rustc -p fleet --lib --release with a temporary check is not allowed, so instead read cargo tree -p bee -e features and confirm test-support is absent from the normal bee build. Run 3: cargo test --release -p fleet -p bee -- choreography wave and quote the passing counts. Edit no source. Write docs/history/test-ci-hygiene/reports/tch-4.md with each command and its result verbatim. If a check fails, return BLOCKED with the evidence. Commit only the report (cell trailer).",
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "tch-w2",
+    "outcome": "Contract fake-backend-gated holds: release bee has 0 FakeBackend hits, test-support absent from normal tree, choreography/wave tests pass; report committed 0be391fc4",
+    "files_changed": [
+      "docs/history/test-ci-hygiene/reports/tch-4.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-11-19T10:54:13.792Z",
+    "behavior_change": false,
+    "verification_evidence": "cargo test --release -p fleet — green:unit — exit 0, 117 passed 0 failed; plus grep -a -c FakeBackend release/bee = 0",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "75148ef9-4b30-4ae2-8e8a-ffb51a0c702e",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p fleet",
+    "claimed_at": "2026-11-19T10:50:00.646Z",
+    "verified_at": null,
+    "baseline": null,
+    "reaction": "confirm",
+    "skipped": [
+      "full workspace clippy+test proof command — report-only commit, no source changed"
+    ],
+    "unknowns": null,
+    "found": null,
+    "stopped": null,
+    "knowledge_delta": [],
+    "plan_followed": true,
+    "no_mistakes": true,
+    "principles_used": [
+      {
+        "slug": "bee-principle-prove-it-works",
+        "changed": "checked the real release binary, not just the cfg line"
+      }
+    ],
+    "report": {
+      "outcome": "Contract fake-backend-gated holds: release bee has 0 FakeBackend hits, test-support absent from normal tree, choreography/wave tests pass; report committed 0be391fc4",
+      "commit": "0be391fc44679a9f741d08fa909e25fd4cb4d1bd",
+      "files": [
+        "docs/history/test-ci-hygiene/reports/tch-4.md"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p fleet — green:unit — cargo test --release -p fleet — green:unit — exit 0, 117 passed 0 failed; plus grep -a -c FakeBackend release/bee = 0",
+      "deviations": [],
+      "principles_used": [
+        "bee-principle-prove-it-works — checked the real release binary, not just the cfg line"
+      ],
+      "reaction": "confirm",
+      "skipped": [
+        "full workspace clippy+test proof command — report-only commit, no source changed"
+      ],
+      "patch_id": "9e0828753e7d9768189042de04471972cc1835f6"
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "a release build of the bee binary contains no FakeBackend symbol",
+            "artifact": "docs/history/test-ci-hygiene/reports/tch-4.md"
+          },
+          {
+            "requirement": "cargo build -p fleet without features fails to resolve fleet::backend::fake",
+            "artifact": "docs/history/test-ci-hygiene/reports/tch-4.md"
+          },
+          {
+            "requirement": "fleet choreography tests and bee wave tests run and pass",
+            "artifact": "docs/history/test-ci-hygiene/reports/tch-4.md"
+          },
+          {
+            "requirement": "the report under docs/history/test-ci-hygiene/reports/ quotes each result",
+            "artifact": "docs/history/test-ci-hygiene/reports/tch-4.md"
+          }
+        ],
+        "recorded_at": "2026-11-19T11:02:47.290Z",
+        "recorded_by": "75148ef9-4b30-4ae2-8e8a-ffb51a0c702e",
+        "commit_diff": "checked"
+      },
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "a release build of the bee binary contains no FakeBackend symbol",
+            "artifact": "docs/history/test-ci-hygiene/reports/tch-4.md"
+          },
+          {
+            "requirement": "cargo build -p fleet without features fails to resolve fleet::backend::fake",
+            "artifact": "docs/history/test-ci-hygiene/reports/tch-4.md"
+          },
+          {
+            "requirement": "fleet choreography tests and bee wave tests run and pass",
+            "artifact": "docs/history/test-ci-hygiene/reports/tch-4.md"
+          },
+          {
+            "requirement": "the report under docs/history/test-ci-hygiene/reports/ quotes each result",
+            "artifact": "docs/history/test-ci-hygiene/reports/tch-4.md"
+          },
+          {
+            "requirement": "docs/history/test-ci-hygiene/reports/tch-4.md",
+            "artifact": "docs/history/test-ci-hygiene/reports/tch-4.md"
+          }
+        ],
+        "recorded_at": "2026-11-19T16:04:00.664Z",
+        "recorded_by": "fb57a18d-511f-4f8e-9a5f-4fe7cce17a5a",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": {
+    "new": 29151,
+    "cached": 215120,
+    "total": 244271,
+    "models": {
+      "claude-opus-5-5": {
+        "new": 29151,
+        "cached": 215120,
+        "total": 244271
+      }
+    },
+    "jobs": [
+      "job-1795085404719-1990846-1"
+    ]
+  }
+}

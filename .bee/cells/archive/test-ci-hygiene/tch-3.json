@@ -1,0 +1,163 @@
+{
+  "id": "tch-3",
+  "feature": "test-ci-hygiene",
+  "title": "Gate the fleet fake backend behind test-support",
+  "lane": "tiny",
+  "role": "code",
+  "deps": [],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p fleet",
+  "must_haves": {
+    "truths": [
+      "fleet declares a test-support feature with no default",
+      "backend.rs declares pub mod fake under cfg(any(test, feature = test-support))",
+      "fleet and bee enable test-support only through dev-dependencies",
+      "cargo test -p fleet passes including tests/choreography.rs"
+    ]
+  },
+  "decisions": [
+    "c597c5b7-1a53-4ee6-9e26-f554e30ab125",
+    "b0bcc68f-2daa-4d9a-8c8c-b8f7b870fe20"
+  ],
+  "files": [
+    "packages/bee-rs/crates/fleet/src/backend.rs",
+    "packages/bee-rs/crates/fleet/Cargo.toml",
+    "packages/bee-rs/crates/bee/Cargo.toml"
+  ],
+  "read_first": [
+    "docs/history/test-ci-hygiene/CONTEXT.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Implement CONTEXT.md D1. In packages/bee-rs/crates/fleet/Cargo.toml add [features] test-support = [] and [dev-dependencies] fleet = { path = \".\", features = [\"test-support\"] } so fleet's tests/ targets see the fake. In packages/bee-rs/crates/fleet/src/backend.rs change line 12 to #[cfg(any(test, feature = \"test-support\"))] pub mod fake;. In packages/bee-rs/crates/bee/Cargo.toml add [dev-dependencies] fleet = { workspace = true, features = [\"test-support\"] } (merge into an existing dev-dependencies table if there is one). Doc comments that name fake stay as they are. No code comments added, no behavior change. Run the verify, then cargo test --release -p bee --no-run to confirm bee's tests still compile. Commit once (cell trailer).",
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "tch-w1",
+    "outcome": "Gated fleet fake backend behind test-support feature (dev-dependencies only); commit 3ed579166",
+    "files_changed": [
+      "packages/bee-rs/crates/fleet/src/backend.rs",
+      "packages/bee-rs/crates/fleet/Cargo.toml",
+      "packages/bee-rs/crates/bee/Cargo.toml"
+    ],
+    "deviations": [
+      "sync-ack: feature flag gating only, no behavior the six anchored concepts describe changes"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-19T10:49:27.241Z",
+    "behavior_change": false,
+    "verification_evidence": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p fleet — green:unit — fleet tests incl. tests/choreography.rs pass; bee tests compile and bee release build succeeds",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "75148ef9-4b30-4ae2-8e8a-ffb51a0c702e",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p fleet",
+    "claimed_at": "2026-11-19T10:37:31.195Z",
+    "verified_at": null,
+    "baseline": null,
+    "reaction": null,
+    "skipped": [
+      "workspace clippy -D warnings and full workspace cargo test — narrower cell verify run instead"
+    ],
+    "unknowns": null,
+    "found": null,
+    "stopped": null,
+    "knowledge_delta": [],
+    "sync_ack": "feature flag gating only, no behavior the six anchored concepts describe changes",
+    "plan_followed": true,
+    "no_mistakes": true,
+    "no_principles_used": true,
+    "report": {
+      "outcome": "Gated fleet fake backend behind test-support feature (dev-dependencies only); commit 3ed579166",
+      "commit": "3ed579166718dc8bb1970617d28cff820e4c33b5",
+      "files": [
+        "packages/bee-rs/crates/fleet/src/backend.rs",
+        "packages/bee-rs/crates/fleet/Cargo.toml",
+        "packages/bee-rs/crates/bee/Cargo.toml"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p fleet — green:unit — cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p fleet — green:unit — fleet tests incl. tests/choreography.rs pass; bee tests compile and bee release build succeeds",
+      "deviations": [],
+      "skipped": [
+        "workspace clippy -D warnings and full workspace cargo test — narrower cell verify run instead"
+      ],
+      "patch_id": "db26fce0c9d35eca51dd0551341ebe85b6bb4154"
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "fleet declares a test-support feature with no default",
+            "artifact": "packages/bee-rs/crates/fleet/Cargo.toml"
+          },
+          {
+            "requirement": "backend.rs declares pub mod fake under cfg(any(test, feature = test-support))",
+            "artifact": "packages/bee-rs/crates/fleet/src/backend.rs"
+          },
+          {
+            "requirement": "fleet and bee enable test-support only through dev-dependencies",
+            "artifact": "packages/bee-rs/crates/bee/Cargo.toml"
+          },
+          {
+            "requirement": "cargo test -p fleet passes including tests/choreography.rs",
+            "artifact": "packages/bee-rs/crates/fleet/src/backend.rs"
+          }
+        ],
+        "recorded_at": "2026-11-19T11:02:47.274Z",
+        "recorded_by": "75148ef9-4b30-4ae2-8e8a-ffb51a0c702e",
+        "commit_diff": "checked"
+      },
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "fleet declares a test-support feature with no default",
+            "artifact": "packages/bee-rs/crates/fleet/src/backend.rs"
+          },
+          {
+            "requirement": "backend.rs declares pub mod fake under cfg(any(test, feature = test-support))",
+            "artifact": "packages/bee-rs/crates/fleet/src/backend.rs"
+          },
+          {
+            "requirement": "fleet and bee enable test-support only through dev-dependencies",
+            "artifact": "packages/bee-rs/crates/fleet/src/backend.rs"
+          },
+          {
+            "requirement": "cargo test -p fleet passes including tests/choreography.rs",
+            "artifact": "packages/bee-rs/crates/fleet/Cargo.toml"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/fleet/src/backend.rs",
+            "artifact": "packages/bee-rs/crates/fleet/src/backend.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/fleet/Cargo.toml",
+            "artifact": "packages/bee-rs/crates/fleet/Cargo.toml"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/Cargo.toml",
+            "artifact": "packages/bee-rs/crates/bee/Cargo.toml"
+          }
+        ],
+        "recorded_at": "2026-11-19T16:04:00.647Z",
+        "recorded_by": "fb57a18d-511f-4f8e-9a5f-4fe7cce17a5a",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": {
+    "new": 29881,
+    "cached": 186105,
+    "total": 215986,
+    "models": {
+      "claude-sonnet-5-5": {
+        "new": 29881,
+        "cached": 186105,
+        "total": 215986
+      }
+    },
+    "jobs": [
+      "job-1795084654278-1767417-1"
+    ]
+  }
+}

@@ -1,0 +1,135 @@
+{
+  "id": "tch-5t",
+  "feature": "test-ci-hygiene",
+  "title": "Prove the bee crate folder stays clean after the tests",
+  "lane": "tiny",
+  "role": "test",
+  "deps": [
+    "tch-5"
+  ],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- dispatch::authorize timings",
+  "must_haves": {
+    "truths": [
+      "after running the verify, git status shows nothing under packages/bee-rs/crates/bee/.bee/ and the folder holds no timings file",
+      "with the temp root reverted to the old root the new test fails, restored it passes",
+      "the report quotes each run's result line"
+    ]
+  },
+  "decisions": [
+    "a7acd17c-bd32-42a1-bade-dffca6ae8c86"
+  ],
+  "files": [
+    "docs/history/test-ci-hygiene/reports/tch-5t.md"
+  ],
+  "read_first": [
+    "docs/history/test-ci-hygiene/CONTEXT.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Check contract no-crate-bee-dir on the tch-5 commit without reading its cap report. Run the verify, then inspect packages/bee-rs/crates/bee/.bee/ and git status. Mutation: revert the temp-root change in the new test's target, run, expect a failure, restore from HEAD, run, expect pass. Write the report. Edit no source. Commit only the report with the cell trailer.",
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "w-tch-5t",
+    "outcome": "Checked tch-5: working tree passes, mutation goes red then green; but commit bc3bb8bbd lacks the tests.rs edit, which is still uncommitted; report 6ab254587",
+    "files_changed": [
+      "docs/history/test-ci-hygiene/reports/tch-5t.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-11-19T15:49:53.930Z",
+    "behavior_change": false,
+    "verification_evidence": "16 passed; new test FAILED under the crate-dir mutation and passed once restored; crate .bee absent afterwards",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "fb57a18d-511f-4f8e-9a5f-4fe7cce17a5a",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- dispatch::authorize timings",
+    "claimed_at": "2026-11-19T15:35:24.548Z",
+    "knowledge_delta": [],
+    "no_mistakes": true,
+    "no_knowledge_used": true,
+    "principles_used": [
+      {
+        "slug": "bee-principle-red-before-green",
+        "changed": "ran the mutation to watch the new test fail before trusting its green"
+      }
+    ],
+    "report": {
+      "outcome": "Checked tch-5: working tree passes, mutation goes red then green; but commit bc3bb8bbd lacks the tests.rs edit, which is still uncommitted; report 6ab254587",
+      "commit": "6ab25458763957936211186e149db6771cf082ad",
+      "files": [
+        "docs/history/test-ci-hygiene/reports/tch-5t.md"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- dispatch::authorize timings — green:unit — 16 passed; new test FAILED under the crate-dir mutation and passed once restored; crate .bee absent afterwards",
+      "deviations": [],
+      "knowledge_used": [],
+      "principles_used": [
+        "bee-principle-red-before-green — ran the mutation to watch the new test fail before trusting its green"
+      ],
+      "reaction": "partial",
+      "skipped": [
+        "full proof command (clippy + whole suite) — report-only change, no source edited"
+      ],
+      "found": [
+        "tch-5 tests.rs edit (TempCwd, routing temp root, new test) is uncommitted in the worktree and must be committed",
+        "verify filter dispatch::authorize matches no test; routing test not run by verify",
+        "removing the routing test's temp root still passes yet re-dirties crates/bee/.bee — no test guards it"
+      ],
+      "stopped": "Restore from HEAD — HEAD bc3bb8bbd holds only the timings.jsonl deletion; I restored from a byte copy so the uncommitted tests.rs edit survives",
+      "patch_id": "ec629a3ac47877174c78b1f72e399403b85f870b"
+    },
+    "reaction": "partial",
+    "skipped": [
+      "full proof command (clippy + whole suite) — report-only change, no source edited"
+    ],
+    "found": [
+      "tch-5 tests.rs edit (TempCwd, routing temp root, new test) is uncommitted in the worktree and must be committed",
+      "verify filter dispatch::authorize matches no test; routing test not run by verify",
+      "removing the routing test's temp root still passes yet re-dirties crates/bee/.bee — no test guards it"
+    ],
+    "stopped": "Restore from HEAD — HEAD bc3bb8bbd holds only the timings.jsonl deletion; I restored from a byte copy so the uncommitted tests.rs edit survives",
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "after running the verify, git status shows nothing under packages/bee-rs/crates/bee/.bee/ and the folder holds no timings file",
+            "artifact": "docs/history/test-ci-hygiene/reports/tch-5t.md"
+          },
+          {
+            "requirement": "with the temp root reverted to the old root the new test fails, restored it passes",
+            "artifact": "docs/history/test-ci-hygiene/reports/tch-5t.md"
+          },
+          {
+            "requirement": "the report quotes each run's result line",
+            "artifact": "docs/history/test-ci-hygiene/reports/tch-5t.md"
+          },
+          {
+            "requirement": "docs/history/test-ci-hygiene/reports/tch-5t.md",
+            "artifact": "docs/history/test-ci-hygiene/reports/tch-5t.md"
+          }
+        ],
+        "recorded_at": "2026-11-19T16:04:00.706Z",
+        "recorded_by": "fb57a18d-511f-4f8e-9a5f-4fe7cce17a5a",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": {
+    "new": 32859,
+    "cached": 215230,
+    "total": 248089,
+    "models": {
+      "claude-opus-5-5": {
+        "new": 32859,
+        "cached": 215230,
+        "total": 248089
+      }
+    },
+    "jobs": [
+      "job-1795102525454-3793220-1"
+    ]
+  }
+}

@@ -1,0 +1,49 @@
+{
+  "id": "tch-1",
+  "feature": "test-ci-hygiene",
+  "title": "Gate the fleet fake backend behind test-support",
+  "lane": "tiny",
+  "role": "code",
+  "deps": [],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p fleet",
+  "must_haves": {
+    "truths": [
+      "fleet declares a test-support feature with no default",
+      "backend.rs declares pub mod fake under cfg(any(test, feature = test-support))",
+      "fleet and bee enable test-support only through dev-dependencies",
+      "cargo test -p fleet passes including tests/choreography.rs"
+    ]
+  },
+  "decisions": [
+    "c597c5b7-1a53-4ee6-9e26-f554e30ab125",
+    "b0bcc68f-2daa-4d9a-8c8c-b8f7b870fe20"
+  ],
+  "files": [
+    "packages/bee-rs/crates/fleet/src/backend.rs",
+    "packages/bee-rs/crates/fleet/Cargo.toml",
+    "packages/bee-rs/crates/bee/Cargo.toml"
+  ],
+  "read_first": [
+    "docs/history/test-ci-hygiene/CONTEXT.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Implement CONTEXT.md D1. In packages/bee-rs/crates/fleet/Cargo.toml add [features] test-support = [] and [dev-dependencies] fleet = { path = \".\", features = [\"test-support\"] } so fleet's tests/ targets see the fake. In packages/bee-rs/crates/fleet/src/backend.rs change line 12 to #[cfg(any(test, feature = \"test-support\"))] pub mod fake;. In packages/bee-rs/crates/bee/Cargo.toml add [dev-dependencies] fleet = { workspace = true, features = [\"test-support\"] } (merge into an existing dev-dependencies table if there is one). Doc comments that name fake stay as they are. No code comments added, no behavior change. Run the verify, then cargo test --release -p bee --no-run to confirm bee's tests still compile. Commit once (cell trailer).",
+  "status": "dropped",
+  "tester_rule": true,
+  "trace": {
+    "worker": null,
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": null,
+    "verify_command": null,
+    "dropped_reason": "re-add after lane start"
+  }
+}
