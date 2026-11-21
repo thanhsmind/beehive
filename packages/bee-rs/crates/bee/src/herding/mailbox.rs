@@ -277,6 +277,7 @@ pub(crate) struct BriefSpec<'a> {
     /// a null.
     pub cell_id: Option<&'a str>,
     pub allow_question: bool,
+    pub read_only: bool,
 }
 
 /// Render the full worker-facing prompt: task text, absolute paths, file
@@ -365,6 +366,32 @@ report before writing the result file:\n\n\
         String::new()
     };
 
+    let ack_timestamp_clause = if spec.read_only {
+        "as an ISO-8601 timestamp. Write the ack with the Write tool, never with a shell \
+redirect or command substitution: run `date -u +%Y-%m-%dT%H:%M:%SZ` alone as its own \
+command, paste its output into received_at, write the temp file, then rename it with `mv`"
+    } else {
+        "as an ISO-8601 timestamp"
+    };
+
+    let shell_rules_block = if spec.read_only {
+        let allowed = crate::hooks::worker_guard::read_only_commands().join(", ");
+        format!(
+            "# Shell rules\n\n\
+This job is read-only and a guard refuses every Bash call outside these commands: {allowed}.\n\
+The guard refuses these forms:\n\
+  - command substitution `$(...)` and backticks\n\
+  - redirects outside the job mailbox\n\
+  - `sh -c`, `bash -c` and `eval`\n\
+  - `sort`\n\
+  - `fd --exec` and `fd -x`\n\
+  - a pipe into any command not on the list above\n\
+Use the Read tool, `rg` and `fd` to read; use the Write tool for the mailbox files.\n\n"
+        )
+    } else {
+        String::new()
+    };
+
     format!(
         "# Before any other step — write your delivery ack\n\n\
 Before you read the Task below, before touching any other file: write an ack \
@@ -374,8 +401,7 @@ the result file below uses: a temp file in the SAME directory, then RENAME \
 the temp file onto the ack file's exact final name. Never write directly to \
 the final name.\n\n\
 Write this JSON object to the ack file, filling in \"agent\" with your own \
-name for yourself and \"received_at\" with the current time as an ISO-8601 \
-timestamp:\n\n\
+name for yourself and \"received_at\" with the current time {ack_timestamp_clause}:\n\n\
 {{\n\
   \"nickname\": \"{nickname}\",\n\
 {cell_id_line}\
@@ -398,6 +424,7 @@ While you work you may send your leader a short note with \
 A note never ends your turn: keep working after you send it.\n\
 A question you must stop for still goes in your result file, not in a note.\n\n\
 At each meaningful step, append one JSON line {{\"ts\",\"step\",\"note\"}} (note \u{2264}120 chars) to {progress_file}, either by hand or with `bee herding notify --kind progress`.\n\n\
+{shell_rules_block}\
 # Task\n\n\
 {task}\n\n\
 {expertise_block}\
@@ -1203,6 +1230,7 @@ mod tests {
             nickname: "w-job-42",
             cell_id: None,
             allow_question: true,
+            read_only: false,
         }
     }
 
@@ -1578,6 +1606,7 @@ the report file's exact final name"),
             nickname: "w-job-42",
             cell_id: None,
             allow_question: true,
+            read_only: false,
         };
         let text = render_brief(&spec);
 
@@ -1612,10 +1641,70 @@ the report file's exact final name"),
             nickname: "w-job-42",
             cell_id: None,
             allow_question: true,
+            read_only: false,
         };
         let text = render_brief(&spec_no_exp);
         assert!(!text.contains("# Expertise"));
         assert!(!text.contains("files listed under the Expertise section are yours to read"));
+    }
+
+    fn read_only_text(read_only: bool) -> String {
+        let worktree_root = Path::new("/repo/work");
+        let bee_dir = Path::new("/repo/.bee");
+        let files = sample_files();
+        let mut spec = sample_spec(worktree_root, bee_dir, &files, 1);
+        spec.read_only = read_only;
+        render_brief(&spec)
+    }
+
+    #[test]
+    fn read_only_shell_rules_list_every_allowed_command_and_the_refused_forms() {
+        let text = read_only_text(true);
+        let start = text.find("# Shell rules").expect("a read-only brief carries the shell rules");
+        let end = start + text[start..].find("# Task").expect("the block ends before the task");
+        let block = &text[start..end];
+        let commands = crate::hooks::worker_guard::READ_ONLY_ALLOWED
+            .split(',')
+            .map(|entry| entry.strip_prefix("Bash(").unwrap().strip_suffix(":*)").unwrap())
+            .collect::<Vec<_>>();
+        assert_eq!(commands.len(), 23);
+        for command in commands {
+            assert!(
+                block.contains(command),
+                "the block must name `{command}`:\n{block}"
+            );
+        }
+        for refused in [
+            "command substitution `$(...)` and backticks",
+            "redirects outside the job mailbox",
+            "`sh -c`, `bash -c` and `eval`",
+            "`sort`",
+            "`fd --exec` and `fd -x`",
+            "a pipe into any command not on the list above",
+        ] {
+            assert!(block.contains(refused), "the block must refuse {refused}:\n{block}");
+        }
+    }
+
+    #[test]
+    fn read_only_shell_rules_are_absent_from_a_brief_that_is_not_read_only() {
+        let text = read_only_text(false);
+        assert!(!text.contains("# Shell rules"), "{text}");
+        assert!(!text.contains("This job is read-only"), "{text}");
+        assert!(text.contains("with the current time as an ISO-8601 timestamp:"), "{text}");
+    }
+
+    #[test]
+    fn read_only_shell_rules_ack_step_needs_no_command_substitution() {
+        let text = read_only_text(true);
+        let ack_end = text.find("# Shell rules").unwrap();
+        let ack = &text[..ack_end];
+        assert!(!ack.contains("$("), "the ack text must not use command substitution:\n{ack}");
+        assert!(
+            ack.contains("run `date -u +%Y-%m-%dT%H:%M:%SZ` alone as its own command"),
+            "{ack}"
+        );
+        assert!(ack.contains("never with a shell redirect or command substitution"), "{ack}");
     }
 
     #[test]

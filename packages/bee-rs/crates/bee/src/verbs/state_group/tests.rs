@@ -3108,6 +3108,138 @@ use std::time::Instant;
         assert_eq!(stored["conflict_review"]["candidates"].as_array().unwrap().len(), 2);
     }
 
+    fn run_conflict_verb(root: &Path, args: &[&str]) -> Option<ExitCode> {
+        let _cwd = AttachCwdGuard::enter(root);
+        let mut argv = vec![
+            OsString::from("state"),
+            OsString::from("plan-conflicts"),
+        ];
+        argv.extend(args.iter().map(OsString::from));
+        argv.push(OsString::from("--lane"));
+        argv.push(OsString::from("f1"));
+        argv.push(OsString::from("--json"));
+        try_native(&argv, Instant::now())
+    }
+
+    fn conflict_candidates(root: &Path) -> Vec<Value> {
+        read_workflow_file(root, "wf-1")["conflict_review"]["candidates"]
+            .as_array()
+            .cloned()
+            .unwrap_or_default()
+    }
+
+    fn conflict_row(root: &Path, id: &str) -> Value {
+        conflict_candidates(root)
+            .into_iter()
+            .find(|c| c["id"] == json!(id))
+            .unwrap_or_else(|| panic!("no candidate {id}"))
+    }
+
+    fn conflict_carry_fixture(root: &Path) {
+        std::fs::create_dir_all(root.join(".bee")).unwrap();
+        std::fs::write(root.join(".bee").join("onboarding.json"), "{}\n").unwrap();
+        write_matching_cell(root);
+        write_decisions_fixture(root);
+        let extra = serde_json::to_string(&json!({
+            "type": "decide", "id": "dec-extra", "date": "2026-08-03",
+            "decision": "The installer banner text lives in the install script only.",
+            "tags": []
+        }))
+        .unwrap();
+        let path = root.join(".bee").join("decisions.jsonl");
+        let mut raw = std::fs::read_to_string(&path).unwrap();
+        raw.push_str(&extra);
+        raw.push('\n');
+        std::fs::write(&path, raw).unwrap();
+        write_rule_home_fixture(root);
+        write_lane_file(root, "f1", r#"{"feature":"f1","phase":"planning"}"#);
+        write_workflow(
+            root,
+            "wf-1",
+            json!({"id":"wf-1","feature":"f1","status":"active","phase":"planning","plan_rev":3,
+                   "created_at":"2026-01-01T00:00:00.000Z"}),
+        );
+    }
+
+    fn write_banner_cell(root: &Path) {
+        write_plan_cell(
+            root,
+            "koh-banner",
+            json!({
+                "id": "koh-banner", "feature": "f1", "status": "open",
+                "title": "Rename the installer banner",
+                "files": ["scripts/install.sh"],
+                "affects_skills": [], "affects_specs": []
+            }),
+        );
+    }
+
+    fn derive_and_verdict_the_matching_pair(root: &Path) {
+        assert_eq!(run_conflict_verb(root, &["derive"]), Some(ExitCode::SUCCESS));
+        for id in ["dec-match", "koh-plan-conflicts"] {
+            assert_eq!(
+                run_conflict_verb(root, &["verdict", "--id", id, "--verdict", "compatible", "--note", "checked"]),
+                Some(ExitCode::SUCCESS),
+                "{id}"
+            );
+        }
+    }
+
+    #[test]
+    fn conflict_verdict_carry_keeps_verdicts_the_new_cell_does_not_touch_and_opens_its_own() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        conflict_carry_fixture(root);
+        derive_and_verdict_the_matching_pair(root);
+        assert_eq!(conflict_candidates(root).len(), 2);
+
+        write_banner_cell(root);
+        assert_eq!(run_conflict_verb(root, &["derive"]), Some(ExitCode::SUCCESS));
+
+        let ids: Vec<String> =
+            conflict_candidates(root).iter().map(|c| js_disp_opt(jget(c, "id"))).collect();
+        assert!(ids.contains(&"dec-extra".to_string()), "the new cell derives its own candidate: {ids:?}");
+        for id in ["dec-match", "koh-plan-conflicts"] {
+            let row = conflict_row(root, id);
+            assert_eq!(row["verdict"], json!("compatible"), "{id} keeps its verdict: {row}");
+            assert_eq!(row["note"], json!("checked"), "{row}");
+            assert_eq!(row["carried_from"], json!(3), "{id} is marked carried: {row}");
+        }
+        let fresh = conflict_row(root, "dec-extra");
+        assert_eq!(fresh["verdict"], Value::Null, "{fresh}");
+        assert!(fresh.get("carried_from").is_none(), "{fresh}");
+    }
+
+    #[test]
+    fn conflict_verdict_carry_reopens_the_candidates_of_a_cell_whose_packet_changed() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        conflict_carry_fixture(root);
+        derive_and_verdict_the_matching_pair(root);
+
+        write_plan_cell(
+            root,
+            "koh-demo",
+            json!({
+                "id": "koh-demo", "feature": "f1", "status": "open",
+                "title": "Derive plan conflict candidates",
+                "files": [
+                    "packages/bee-rs/crates/bee/src/verbs/state_group/plan_conflicts.rs",
+                    "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs"
+                ],
+                "affects_skills": [],
+                "affects_specs": ["docs/knowledge/areas/workflow-state/gates.md"]
+            }),
+        );
+        assert_eq!(run_conflict_verb(root, &["derive"]), Some(ExitCode::SUCCESS));
+
+        for id in ["dec-match", "koh-plan-conflicts"] {
+            let row = conflict_row(root, id);
+            assert_eq!(row["verdict"], Value::Null, "{id} reopens: {row}");
+            assert!(row.get("carried_from").is_none(), "{row}");
+        }
+    }
+
     /// D5's only true "0 conflicts": bee looked and returned nothing.
     #[test]
     fn derive_yields_an_empty_list_when_nothing_matches() {

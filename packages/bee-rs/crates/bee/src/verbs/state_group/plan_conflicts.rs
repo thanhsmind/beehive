@@ -63,6 +63,7 @@ use crate::verbs::workflow_store::{
     projection_lock_name, rebuild_lane_projection, update_workflow_assuming_lock_with, wf_id,
 };
 use serde_json::{json, Map, Value};
+use sha2::{Digest, Sha256};
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
@@ -325,25 +326,25 @@ fn rule_intersects(rule: &RuleHome, plan_paths: &[String]) -> bool {
 /// occurrence wins — so a rule declared in two homes contributes one row.
 #[cfg(test)]
 pub(crate) fn derive_candidates(root: &Path, feature: &str) -> Result<Vec<Value>, Err2> {
-    Ok(derive_candidates_reported(root, feature)?.0)
+    Ok(derive_from_cells(root, feature, &plan_cells(root, feature)?)?.0)
 }
 
-/// `derive_candidates` plus D4's second half: how many decision candidates
+/// `derive_candidates` over a given cell set, plus D4's second half: how many decision candidates
 /// the cap dropped (0 when nothing was truncated). Returned rather than
 /// swallowed, because a list that silently hides a real conflict is worse
 /// than a long one — `conflict_review`'s stored shape is frozen by D5, so
 /// the notice rides the verb's own output line.
-pub(crate) fn derive_candidates_reported(
+fn derive_from_cells(
     root: &Path,
     feature: &str,
+    cells: &[Value],
 ) -> Result<(Vec<Value>, usize), Err2> {
-    let cells = plan_cells(root, feature)?;
     let terms = if cells.is_empty() {
         document_terms(root, feature)
     } else {
-        plan_terms(&cells)
+        plan_terms(cells)
     };
-    let paths = plan_paths(&cells);
+    let paths = plan_paths(cells);
     let mut out: Vec<Value> = Vec::new();
     let mut seen: Vec<String> = Vec::new();
     let mut capped_away = 0usize;
@@ -429,11 +430,62 @@ pub(crate) fn derive_candidates_reported(
     Ok((out, capped_away))
 }
 
+pub(crate) fn cell_digest(cell: &Value) -> String {
+    let packet = json!([
+        jget(cell, "title").cloned().unwrap_or(Value::Null),
+        string_list(cell, "files"),
+        string_list(cell, "affects_skills"),
+        string_list(cell, "affects_specs"),
+    ]);
+    format!("{:x}", Sha256::digest(packet.to_string().as_bytes()))
+}
+
+fn cell_digests(cells: &[Value]) -> Map<String, Value> {
+    cells
+        .iter()
+        .map(|c| (js_disp_opt(jget(c, "id")), json!(cell_digest(c))))
+        .collect()
+}
+
+fn candidate_ids(candidates: &[Value]) -> Vec<String> {
+    candidates.iter().map(|c| js_disp_opt(jget(c, "id"))).collect()
+}
+
+fn carry_verdicts(
+    previous: &Value,
+    changed_ids: &[String],
+    candidates: &mut [Value],
+) -> usize {
+    let prev_rev = previous.get("plan_rev").cloned().unwrap_or(Value::Null);
+    let Some(Value::Array(prev_rows)) = previous.get("candidates") else {
+        return 0;
+    };
+    let mut carried = 0usize;
+    for row in candidates.iter_mut() {
+        let id = js_disp_opt(jget(row, "id"));
+        if changed_ids.contains(&id) {
+            continue;
+        }
+        let Some(old) = prev_rows
+            .iter()
+            .find(|p| js_disp_opt(jget(p, "id")) == id && jget(p, "verdict").is_some_and(|v| !v.is_null()))
+        else {
+            continue;
+        };
+        let Some(obj) = row.as_object_mut() else { continue };
+        obj.insert("verdict".into(), old.get("verdict").cloned().unwrap_or(Value::Null));
+        obj.insert("note".into(), old.get("note").cloned().unwrap_or(Value::Null));
+        obj.insert("carried_from".into(), prev_rev.clone());
+        carried += 1;
+    }
+    carried
+}
+
 // ─── the record field ───────────────────────────────────────────────────────
 
 /// `conflict_review` as it lands on the workflow record. Re-deriving REPLACES
-/// this whole object, which is how a re-derive clears every verdict: the rows
-/// are rebuilt with `verdict: null`, never patched in place.
+/// this whole object: the rows are rebuilt with `verdict: null`, and the derive
+/// verb copies back only the verdicts of candidates the changed cells never touch.
 pub(crate) fn build_conflict_review(plan_rev: Value, candidates: Vec<Value>, derived_at: &str) -> Value {
     json!({
         "plan_rev": plan_rev,
@@ -574,9 +626,32 @@ pub(crate) fn run_plan_conflicts_derive(flags: Flags, use_json: bool, t0: Instan
     };
     let out = with_lane_workflow(&ctx, &flags, "state plan-conflicts derive", |current, lane| {
             let plan_rev = current.get("plan_rev").cloned().unwrap_or(json!(0));
-            let (candidates, capped_away) = derive_candidates_reported(&ctx.root, lane)?;
+            let cells = plan_cells(&ctx.root, lane)?;
+            let (mut candidates, capped_away) = derive_from_cells(&ctx.root, lane, &cells)?;
+            let digests = cell_digests(&cells);
+            let previous = current.get("conflict_review").filter(|r| r.get("cell_digests").is_some_and(Value::is_object));
+            let carried = match previous {
+                Some(prev) => {
+                    let prev_digests = prev.get("cell_digests").and_then(Value::as_object);
+                    let changed: Vec<Value> = cells
+                        .iter()
+                        .filter(|c| {
+                            let id = js_disp_opt(jget(c, "id"));
+                            prev_digests.and_then(|d| d.get(&id)) != digests.get(&id)
+                        })
+                        .cloned()
+                        .collect();
+                    let touched = candidate_ids(&derive_from_cells(&ctx.root, lane, &changed)?.0);
+                    carry_verdicts(prev, &touched, &mut candidates)
+                }
+                None => 0,
+            };
             let count = candidates.len();
-            let review = build_conflict_review(plan_rev.clone(), candidates, &now_iso());
+            let open = candidates.iter().filter(|c| jget(c, "verdict").is_none_or(Value::is_null)).count();
+            let mut review = build_conflict_review(plan_rev.clone(), candidates, &now_iso());
+            if let Some(obj) = review.as_object_mut() {
+                obj.insert("cell_digests".into(), Value::Object(digests));
+            }
             let mut patch = Map::new();
             patch.insert("conflict_review".into(), review.clone());
             let mut text = if count == 0 {
@@ -590,6 +665,7 @@ pub(crate) fn run_plan_conflicts_derive(flags: Flags, use_json: bool, t0: Instan
                     js_disp(&plan_rev)
                 )
             };
+            text.push_str(&format!(" Carried {carried} verdict(s) from the previous review; {open} candidate(s) open."));
             if capped_away > 0 {
                 text.push_str(&format!(
                     " {capped_away} further decision(s) also scored >= 2 and were DROPPED by the {MAX_DECISION_CANDIDATES}-candidate cap \u{2014} the list holds the highest-scoring ones. FIX: narrow the plan's cells, or verdict these and re-derive."

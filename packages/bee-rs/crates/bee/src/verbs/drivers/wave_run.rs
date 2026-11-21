@@ -71,7 +71,76 @@ fn save_row(root: &Path, id: &str, spawn: &Spawn) -> Value {
         let _ = std::fs::create_dir_all(parent);
     }
     let _ = std::fs::write(&path, spawn.stdout.as_bytes());
-    row(id, spawn, &path)
+    let mut value = row(id, spawn, &path);
+    let (judged, errors) = record_judge_blocks(root, id, &value);
+    let capped = crate::verbs::cells::read_cell(root, id)
+        .ok()
+        .flatten()
+        .is_some_and(|cell| cell.get("status").and_then(Value::as_str) == Some("capped"));
+    if let Value::Object(m) = &mut value {
+        m.insert("capped".into(), Value::Bool(capped));
+        m.insert("judged".into(), Value::from(judged));
+        if !errors.is_empty() {
+            m.insert("judge_errors".into(), Value::from(errors));
+        }
+    }
+    value
+}
+
+fn record_judge_blocks(root: &Path, id: &str, row: &Value) -> (Vec<String>, Vec<String>) {
+    let mut judged = Vec::new();
+    let mut errors = Vec::new();
+    let Ok(Some(cell)) = crate::verbs::cells::read_cell(root, id) else {
+        return (judged, errors);
+    };
+    if cell.get("role").and_then(Value::as_str) != Some("test") {
+        return (judged, errors);
+    }
+    let deps: Vec<&str> = cell
+        .get("deps")
+        .and_then(Value::as_array)
+        .map(|list| list.iter().filter_map(Value::as_str).collect())
+        .unwrap_or_default();
+    let Some(report) = row.get("report_path").and_then(Value::as_str) else {
+        return (judged, errors);
+    };
+    let Ok(text) = std::fs::read_to_string(root.join(report)) else {
+        return (judged, errors);
+    };
+    let blocks = match crate::verbs::cells::extract_fenced_verdicts(&text) {
+        Ok(blocks) => blocks,
+        Err(e) => {
+            if !e.starts_with("no json") {
+                errors.push(e);
+            }
+            return (judged, errors);
+        }
+    };
+    for (block_id, body) in blocks {
+        if !deps.contains(&block_id.as_str()) {
+            continue;
+        }
+        let body = match body {
+            Value::String(raw) => raw,
+            other => other.to_string(),
+        };
+        let one = format!("```json {block_id}\n{body}\n```\n");
+        match crate::verbs::cells::process_judge_from_text(
+            root,
+            &one,
+            Some(&block_id),
+            None,
+            None,
+            None,
+            false,
+        ) {
+            Ok(crate::verbs::reservations::Out::Emit(_, _, 0)) => judged.push(block_id),
+            Ok(crate::verbs::reservations::Out::Emit(_, line, _)) => errors.push(line),
+            Ok(crate::verbs::reservations::Out::Thrown(msg)) => errors.push(msg),
+            Err(_) => errors.push(format!("{block_id}: judge record failed")),
+        }
+    }
+    (judged, errors)
 }
 
 fn is_silent(spawn: &Spawn) -> bool {
@@ -452,6 +521,105 @@ mod tests {
             .map(|r| r["id"].as_str().unwrap())
             .collect();
         assert_eq!(ids, vec!["a", "b"], "{value}");
+    }
+
+    fn judge_block(id: &str, verdict: &str) -> String {
+        let body = json!({
+            "schema": "judge-verdict/1",
+            "verdict": verdict,
+            "checks": [{"id": "c1", "status": "PASS", "evidence": "f.rs:1 shows it"}],
+            "fixability": "automatic",
+            "confidence": "high",
+        });
+        format!("```json {id}\n{body}\n```\n")
+    }
+
+    fn put_cell(root: &Path, id: &str, role: &str, deps: &[&str]) {
+        let dir = root.join(".bee").join("cells");
+        std::fs::create_dir_all(&dir).unwrap();
+        let cell = json!({"id": id, "role": role, "deps": deps, "status": "open", "trace": {}});
+        std::fs::write(dir.join(format!("{id}.json")), cell.to_string()).unwrap();
+    }
+
+    fn put_report(root: &Path, id: &str, text: &str) {
+        let dir = root.join(".bee").join("mailbox").join(format!("job-{id}"));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("report-1.md"), text).unwrap();
+    }
+
+    fn judge_entries(root: &Path, id: &str) -> usize {
+        let raw = std::fs::read_to_string(root.join(".bee").join("cells").join(format!("{id}.json"))).unwrap();
+        let cell: Value = serde_json::from_str(&raw).unwrap();
+        cell["trace"]["semantic_judge"].as_array().map_or(0, Vec::len)
+    }
+
+    fn run_one(root: &Path, id: &str) -> Value {
+        let items = vec![herding_item(id)];
+        let runner = |_c: &str, stdin: &str, _cwd: &Path| {
+            let id = stdin.trim_start_matches("brief for ").to_string();
+            Spawn { exit: Some(0), stdout: done_envelope(&id) }
+        };
+        let (value, _) = run_wave_with(root, &items, &[], &runner);
+        value["ran"][0].clone()
+    }
+
+    #[test]
+    fn wave_judge_record_records_one_verdict_per_dep_block_of_a_test_cell() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        put_cell(root, "a-1", "code", &[]);
+        put_cell(root, "a-2", "code", &[]);
+        put_cell(root, "t-1", "test", &["a-1", "a-2"]);
+        let text = format!("{}{}", judge_block("a-1", "PASS"), judge_block("a-2", "PASS"));
+        put_report(root, "t-1", &text);
+        let row = run_one(root, "t-1");
+        assert_eq!(row["judged"], json!(["a-1", "a-2"]), "{row}");
+        assert!(row.get("judge_errors").is_none(), "{row}");
+        assert_eq!(judge_entries(root, "a-1"), 1);
+        assert_eq!(judge_entries(root, "a-2"), 1);
+    }
+
+    #[test]
+    fn wave_judge_record_ignores_a_block_for_a_cell_that_is_not_a_dep() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        put_cell(root, "a-1", "code", &[]);
+        put_cell(root, "x-9", "code", &[]);
+        put_cell(root, "t-1", "test", &["a-1"]);
+        let text = format!("{}{}", judge_block("a-1", "PASS"), judge_block("x-9", "PASS"));
+        put_report(root, "t-1", &text);
+        let row = run_one(root, "t-1");
+        assert_eq!(row["judged"], json!(["a-1"]), "{row}");
+        assert_eq!(judge_entries(root, "a-1"), 1);
+        assert_eq!(judge_entries(root, "x-9"), 0);
+    }
+
+    #[test]
+    fn wave_judge_record_records_nothing_for_an_invalid_block_and_shows_it_on_the_row() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        put_cell(root, "a-1", "code", &[]);
+        put_cell(root, "t-1", "test", &["a-1"]);
+        put_report(root, "t-1", &judge_block("a-1", "MAYBE"));
+        let row = run_one(root, "t-1");
+        assert_eq!(row["judged"], json!([]), "{row}");
+        let errors = row["judge_errors"].as_array().unwrap_or_else(|| panic!("{row}"));
+        assert_eq!(errors.len(), 1, "{row}");
+        assert!(errors[0].as_str().unwrap().contains("verdict must be one of"), "{row}");
+        assert_eq!(judge_entries(root, "a-1"), 0);
+    }
+
+    #[test]
+    fn wave_judge_record_never_reads_the_report_of_a_code_cell() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        put_cell(root, "a-1", "code", &[]);
+        put_cell(root, "c-1", "code", &["a-1"]);
+        put_report(root, "c-1", &judge_block("a-1", "PASS"));
+        let row = run_one(root, "c-1");
+        assert_eq!(row["judged"], json!([]), "{row}");
+        assert!(row.get("judge_errors").is_none(), "{row}");
+        assert_eq!(judge_entries(root, "a-1"), 0);
     }
 
     #[test]

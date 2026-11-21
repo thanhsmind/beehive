@@ -7,7 +7,14 @@ use serde_json::{Map, Value};
 use std::path::{Component, Path, PathBuf};
 use std::process::ExitCode;
 
-const READ_ONLY_ALLOWED: &str = "Bash(cd:*),Bash(cat:*),Bash(head:*),Bash(tail:*),Bash(wc:*),Bash(date:*),Bash(echo:*),Bash(stat:*),Bash(pwd:*),Bash(ls:*),Bash(rg:*),Bash(fd:*),Bash(jq:*),Bash(git log:*),Bash(git show:*),Bash(git diff:*),Bash(git status:*),Bash(git blame:*),Bash(.bee/bin/bee status:*),Bash(.bee/bin/bee orient:*),Bash(.bee/bin/bee herding status:*),Bash(.bee/bin/bee herding notify:*),Bash(mv:*)";
+pub(crate) const READ_ONLY_ALLOWED: &str = "Bash(cd:*),Bash(cat:*),Bash(head:*),Bash(tail:*),Bash(wc:*),Bash(date:*),Bash(echo:*),Bash(stat:*),Bash(pwd:*),Bash(ls:*),Bash(rg:*),Bash(fd:*),Bash(jq:*),Bash(git log:*),Bash(git show:*),Bash(git diff:*),Bash(git status:*),Bash(git blame:*),Bash(.bee/bin/bee status:*),Bash(.bee/bin/bee orient:*),Bash(.bee/bin/bee herding status:*),Bash(.bee/bin/bee herding notify:*),Bash(mv:*)";
+
+pub(crate) fn read_only_commands() -> Vec<&'static str> {
+    READ_ONLY_ALLOWED
+        .split(',')
+        .filter_map(|entry| entry.strip_prefix("Bash(")?.strip_suffix(":*)"))
+        .collect()
+}
 
 const WRITE_TOOLS: [&str; 4] = ["Edit", "Write", "MultiEdit", "NotebookEdit"];
 
