@@ -350,14 +350,13 @@ and expected — they do not pull you into any workflow.\n\n",
     let question_section = if spec.allow_question {
         format!(
             "# Questions\n\n\
-When you cannot go on without an answer, you may end the round with status\n\
-question and one question. You must first write your partial work to the\n\
-report before writing the result file:\n\n\
+When you cannot go on without an answer, write your partial work to the report \
+first, then end the round with status question and one question:\n\n\
 {{\n\
   \"status\": \"question\",\n\
-  \"summary\": \"<one line: what is needed>\",\n\
+  \"summary\": \"<what is needed>\",\n\
   \"files_changed\": [\"<path>\", \"...\"],\n\
-  \"question\": {{ \"text\": \"<what you need to know>\", \"kind\": \"technical\" | \"product\" | \"gate\" }},\n\
+  \"question\": {{ \"text\": \"<the question>\", \"kind\": \"technical\" | \"product\" | \"gate\" }},\n\
   \"report_path\": \"{report_file}\"\n\
 }}\n\n",
             report_file = report_file.display(),
@@ -394,36 +393,33 @@ Use the Read tool, `rg` and `fd` to read; use the Write tool for the mailbox fil
 
     format!(
         "# Before any other step — write your delivery ack\n\n\
-Before you read the Task below, before touching any other file: write an ack \
-file for this round. It is the ONLY proof anyone has that this brief was \
-ever received, so it comes first — write it atomically, the SAME gesture \
-the result file below uses: a temp file in the SAME directory, then RENAME \
-the temp file onto the ack file's exact final name. Never write directly to \
-the final name.\n\n\
-Write this JSON object to the ack file, filling in \"agent\" with your own \
-name for yourself and \"received_at\" with the current time {ack_timestamp_clause}:\n\n\
+Before you read the Task below or touch any other file, write an ack file: it is \
+the ONLY proof this brief was received. Write it atomically, like the result file: \
+a temp file in the SAME directory, then RENAME the temp file onto \
+the ack file's exact final name.\n\n\
+Write this JSON, with \"agent\" your own name and \"received_at\" with the current time {ack_timestamp_clause}:\n\n\
 {{\n\
   \"nickname\": \"{nickname}\",\n\
 {cell_id_line}\
   \"job_id\": \"{job_id}\",\n\
   \"round\": {round},\n\
-  \"agent\": \"<your own name for yourself>\",\n\
-  \"received_at\": \"<ISO-8601 timestamp, e.g. 2026-01-01T00:00:00Z>\"\n\
+  \"agent\": \"<your own name>\",\n\
+  \"received_at\": \"<ISO-8601 timestamp>\"\n\
 }}\n\n\
   temp file (write your ack JSON here):   {mailbox}/{ack_tmp_name}\n\
-  ack file (round {round}, rename to this exact final name): {ack_file}\n\n\
+  ack file (rename to this exact final name): {ack_file}\n\n\
 # You are a standalone executor\n\n\
 Do exactly the task below and nothing else. Ignore any bee or agent-workflow \
-instructions (gates, cells, claims, state) this repo's AGENTS.md or CLAUDE.md \
-may have loaded into your context — you are not part of that workflow{expertise_clause}. \
+instructions (gates, cells, claims, state) AGENTS.md or CLAUDE.md may have loaded — \
+you are not part of that workflow{expertise_clause}. \
 Never run any `bee` command except `bee herding notify`. Never claim, cap, or write workflow state under .bee/ - \
 writing your mailbox report and result files (described below) is the ONE \
-exception. Those two files are your only contract.\n\
-While you work you may send your leader a short note with \
-`bee herding notify --kind <question|blocked|dependency|progress|reopen> --text <text>`.\n\
-A note never ends your turn: keep working after you send it.\n\
+exception.\n\
+You may send your leader a note with \
+`bee herding notify --kind <question|blocked|dependency|progress|reopen> --text <text>`. \
+A note never ends your turn: keep working. \
 A question you must stop for still goes in your result file, not in a note.\n\n\
-At each meaningful step, append one JSON line {{\"ts\",\"step\",\"note\"}} (note \u{2264}120 chars) to {progress_file}, either by hand or with `bee herding notify --kind progress`.\n\n\
+At each meaningful step, append one JSON line {{\"ts\",\"step\",\"note\"}} (note \u{2264}120 chars) to {progress_file}.\n\n\
 {shell_rules_block}\
 # Task\n\n\
 {task}\n\n\
@@ -433,90 +429,60 @@ At each meaningful step, append one JSON line {{\"ts\",\"step\",\"note\"}} (note
 {proof_command_block}\
 # Files you may touch (absolute paths)\n\n\
 {files_block}\n\
-A file not listed above is out of scope for this round; do not touch it.\n\n\
-# Round\n\n\
-This is round {round} of job \"{job_id}\". Write your result to round {round}'s\n\
-result file below — never a different round's file.\n\n\
+A file not listed above is out of scope.\n\n\
+Round {round} of job \"{job_id}\": write only its files.\n\n\
 # Report — write it FIRST, the result file LAST\n\n\
-Write your FULL deliverable — the whole digest, findings, or write-up the task \
-asks for, at whatever length it needs — to the report file below, BEFORE you \
-write the result file. The result file's \"summary\" is one line and can never \
-carry it, and nothing else survives this session. Write the report the SAME \
-atomic way: a temp file in the SAME directory, then RENAME the temp file onto \
-the report file's exact final name.\n\n\
+Write your FULL deliverable — the whole digest, findings or write-up \
+asked for — to the report file below, BEFORE the result file; the \"summary\" is one \
+line and nothing else survives. Write it atomically: a temp file in \
+the SAME directory, then RENAME the temp file onto the report file's exact final name.\n\n\
 The order is the rule: report first, result last. The result file's appearance \
-ends the round, and whatever is not on disk by then is lost.\n\n\
-If you are taking round {round} up again after an interruption — a resumed or \
-retried attempt at the same round — REWRITE the report file with your current \
-work before you write the result file. A report left behind by the earlier \
-attempt is stale, and a stale report is not read.\n\n\
+ends the round; whatever is not on disk by then is lost.\n\n\
+If you are taking round {round} up again after an interruption, \
+REWRITE the report file with your current work before you write the result file. \
+An earlier report is stale, and a stale report is not read.\n\n\
   temp file (write your report here):  {mailbox}/{report_tmp_name}\n\
-  report file (round {round}, rename to this exact final name): {report_file}\n\n\
-When you have written the report, name its path in the result file's \
-\"report_path\" field, exactly as it is written above.\n\n\
+  report file (rename to this exact final name): {report_file}\n\n\
 # Result contract\n\n\
-When you are done, or genuinely blocked, write EXACTLY ONE JSON object matching\n\
-this schema, and nothing else, to the result file:\n\n\
+Write EXACTLY ONE JSON object matching this schema, and nothing else, to the result file:\n\n\
 {{\n\
   \"status\": \"done\" | \"blocked\",\n\
-  \"summary\": \"<one line: what happened>\",\n\
+  \"summary\": \"<one line>\",\n\
   \"files_changed\": [\"<path>\", \"...\"],\n\
-  \"proof\": \"<command or evidence that backs the status>\",\n\
-  \"report_path\": \"<the report file's path, exactly as named above>\"\n\
+  \"proof\": \"<command or evidence>\",\n\
+  \"report_path\": \"<the report file's path, exactly as named above; omit it when you wrote no report>\"\n\
 }}\n\n\
-Fill \"report_path\" with the report file's path whenever you wrote one — that \
-is the only pointer anyone gets to your deliverable; leave it out only when the \
-round genuinely produced no report.\n\n\
 Optional fields (OPTIONAL — options+leaning only when status is blocked with a choice, dissent only when disagreeing; omit the keys entirely, not empty strings or empty arrays, otherwise):\n\n\
 {{\n\
-  \"options\": [\"<one self-contained sentence per way forward>\", \"...\"],\n\
-  \"leaning\": \"<the one option you would pick, repeated word for word>\",\n\
-  \"dissent\": {{ \"claim\": \"<what is wrong with the task as it was handed to you>\", \"alternative\": \"<what you would do instead>\", \"severity\": \"blocker\" | \"consider\" }}\n\
+  \"options\": [\"<one sentence per way forward>\", \"...\"],\n\
+  \"leaning\": \"<the one option you pick, word for word>\",\n\
+  \"dissent\": {{ \"claim\": \"<what is wrong with the task>\", \"alternative\": \"<what you would do instead>\", \"severity\": \"blocker\" | \"consider\" }}\n\
 }}\n\n\
-When \"blocked\" leaves a choice to make, fill \"options\" with one \
-self-contained sentence per way forward and \"leaning\" with the one you would \
-pick, repeated word for word; leave both out when there is no choice.\n\
-Fill \"dissent\" only when you disagree with the TASK ITSELF — \"claim\" says what \
-is wrong with it, \"alternative\" says what you would do instead, and \
-\"severity\" is \"blocker\" when the work should stop until someone answers or \
-\"consider\" when it should not; leave \"dissent\" out entirely when you agree \
-with the task.\n\n\
+For a blocked choice fill \"options\" and \"leaning\" (one option, word for word); leave both out when there is no choice.\n\
+Fill \"dissent\" only when you disagree with the TASK ITSELF; \"severity\" is \"blocker\" when work should stop until answered; leave \"dissent\" out entirely when you agree with the task.\n\n\
 Handback fields (OPTIONAL — omit any key you have nothing for):\n\n\
 {{\n\
   \"reaction\": \"confirm\" | \"partial\" | \"challenge\" | \"blocked\",\n\
-  \"skipped\": [\"<check you did not run> — <why>\", \"...\"],\n\
-  \"unknowns\": [\"<assumption you could not prove>\", \"...\"],\n\
+  \"skipped\": [\"<check not run> — <why>\", \"...\"],\n\
+  \"unknowns\": [\"<assumption not proven>\", \"...\"],\n\
   \"found\": [\"<discovery outside your task>\", \"...\"],\n\
-  \"stopped\": \"<part you did not do> — <evidence that its premise is false>\"\n\
+  \"stopped\": \"<part not done> — <evidence its premise is false>\"\n\
 }}\n\n\
-\"reaction\" is your stance toward the task as handed to you. When part of the \
-task rests on a false premise, finish the part that does not, set \"reaction\" \
-to \"partial\", and name the stopped part with its evidence in \"stopped\". A \
-dissent on a point that was already ruled on also carries \"new_evidence\" \
-inside \"dissent\": what is new since the ruling.\n\n\
-Knowledge used (OPTIONAL — the sibling of the native Result form's \"mistakes\"): \
-name every concept whose content changed a decision in this cell, one entry per \
-concept as \"<docs/knowledge path> — <the decision it changed>\", or an empty \
-array when no concept changed a decision. Omitting the key states nothing at all; \
-it is never required, and no shape of it is ever refused (knowledge-in-the-flow \
-D1 forbids a mandatory knowledge-ref check).\n\n\
-Cap answers (OPTIONAL result fields — fill them so the cap does not bounce back to the leader):\n\
-- \"principles_used\": [\"<slug> — <the decision it changed>\", \"...\"] lists the principles that changed a decision, [] when none did.\n\
-- \"sync_ack\": \"<reason>\" only when the cap's sync door asks for one.\n\n\
-Knowledge wrong (OPTIONAL): `knowledge_wrong` — a loaded concept that misled \
-this cell and that you did not fix in this commit, one entry per concept as \
-\"<docs/knowledge path> — <what was wrong>\"; omit the key when there is none. \
-It is never required, and no shape of it is ever refused.\n\n\
+\"reaction\" is your stance toward the task. On a false premise, finish the rest, set \"reaction\" to \"partial\" and give the stopped part with its evidence in \"stopped\". A dissent on a ruled point also carries \"new_evidence\": what is new since the ruling.\n\n\
+Cap answers (OPTIONAL, never required):\n\
+- \"knowledge_used\": [\"<docs/knowledge path> — <the decision it changed>\", \"...\"], [] when no concept changed a decision.\n\
+- \"principles_used\": [\"<slug> — <the decision it changed>\", \"...\"], [] when none did.\n\
+- \"sync_ack\": \"<reason>\" only when the cap's sync door asks for one.\n\
+- `knowledge_wrong` — a loaded concept that misled this cell and that you did not fix in this commit, as \"<docs/knowledge path> — <what was wrong>\"; omit the key when there is none.\n\n\
 {question_section}\
-# How to write it — write to a temp file, then rename (do not skip this)\n\n\
-Write the JSON above to a temp file in the SAME directory as the result file,\n\
-then RENAME the temp file onto the result file's exact final name. Never write\n\
-directly to the final name — a partial write at the final name is read as a\n\
-finished result. The result file's appearance at its final name IS the done\n\
-signal; nothing else is read to decide whether you finished.\n\n\
+# How to write it — temp file, then rename\n\n\
+Write the JSON above to a temp file in the SAME directory, then RENAME the temp \
+file onto the result file's exact final name. Never write directly to the final \
+name: a partial write there reads as a finished result. The result file's \
+appearance IS the done signal.\n\n\
   mailbox directory:                  {mailbox}\n\
   temp file (write your JSON here):   {mailbox}/{tmp_name}\n\
-  result file (round {round}, rename to this exact name): {result_file}\n",
+  result file (rename to this exact name): {result_file}\n",
         task = spec.task,
         expertise_block = expertise_block,
         worktree_root = spec.worktree_root.display(),
@@ -1278,6 +1244,11 @@ mod tests {
         assert_eq!(progress_path(bee_dir, "job-1"), PathBuf::from("/repo/.bee/mailbox/job-1/progress.jsonl"));
     }
 
+
+
+
+
+
     // ─── brief renderer ─────────────────────────────────────────────────
 
     #[test]
@@ -1501,7 +1472,7 @@ mod tests {
         let spec = sample_spec(worktree_root, bee_dir, &files, 1);
         let text = render_brief(&spec);
 
-        assert!(text.contains("# Result contract\n\nWhen you are done, or genuinely blocked, write EXACTLY ONE JSON object matching\nthis schema, and nothing else, to the result file:\n\n{\n\"status\": \"done\" | \"blocked\",\n\"summary\": \"<one line: what happened>\",\n\"files_changed\": [\"<path>\", \"...\"],\n\"proof\": \"<command or evidence that backs the status>\",\n\"report_path\": \"<the report file's path, exactly as named above>\"\n}\n\nFill \"report_path\" with the report file's path whenever you wrote one — that is the only pointer anyone gets to your deliverable; leave it out only when the round genuinely produced no report.\n\nOptional fields (OPTIONAL — options+leaning only when status is blocked with a choice, dissent only when disagreeing; omit the keys entirely, not empty strings or empty arrays, otherwise):\n\n{\n\"options\": [\"<one self-contained sentence per way forward>\", \"...\"],\n\"leaning\": \"<the one option you would pick, repeated word for word>\",\n\"dissent\": { \"claim\": \"<what is wrong with the task as it was handed to you>\", \"alternative\": \"<what you would do instead>\", \"severity\": \"blocker\" | \"consider\" }\n}\n\nWhen \"blocked\" leaves a choice to make, fill \"options\" with one self-contained sentence per way forward and \"leaning\" with the one you would pick, repeated word for word; leave both out when there is no choice.\nFill \"dissent\" only when you disagree with the TASK ITSELF — \"claim\" says what is wrong with it, \"alternative\" says what you would do instead, and \"severity\" is \"blocker\" when the work should stop until someone answers or \"consider\" when it should not; leave \"dissent\" out entirely when you agree with the task.\n\nHandback fields (OPTIONAL — omit any key you have nothing for):\n\n{\n\"reaction\": \"confirm\" | \"partial\" | \"challenge\" | \"blocked\",\n\"skipped\": [\"<check you did not run> — <why>\", \"...\"],\n\"unknowns\": [\"<assumption you could not prove>\", \"...\"],\n\"found\": [\"<discovery outside your task>\", \"...\"],\n\"stopped\": \"<part you did not do> — <evidence that its premise is false>\"\n}\n\n\"reaction\" is your stance toward the task as handed to you. When part of the task rests on a false premise, finish the part that does not, set \"reaction\" to \"partial\", and name the stopped part with its evidence in \"stopped\". A dissent on a point that was already ruled on also carries \"new_evidence\" inside \"dissent\": what is new since the ruling.\n\nKnowledge used (OPTIONAL — the sibling of the native Result form's \"mistakes\"): name every concept whose content changed a decision in this cell, one entry per concept as \"<docs/knowledge path> — <the decision it changed>\", or an empty array when no concept changed a decision. Omitting the key states nothing at all; it is never required, and no shape of it is ever refused (knowledge-in-the-flow D1 forbids a mandatory knowledge-ref check).\n\n"), "Result-form block drifted:\n{text}");
+        assert!(text.contains("# Result contract\n\nWrite EXACTLY ONE JSON object matching this schema, and nothing else, to the result file:\n\n{\n\"status\": \"done\" | \"blocked\",\n\"summary\": \"<one line>\",\n\"files_changed\": [\"<path>\", \"...\"],\n\"proof\": \"<command or evidence>\",\n\"report_path\": \"<the report file's path, exactly as named above; omit it when you wrote no report>\"\n}\n\nOptional fields (OPTIONAL — options+leaning only when status is blocked with a choice, dissent only when disagreeing; omit the keys entirely, not empty strings or empty arrays, otherwise):\n\n{\n\"options\": [\"<one sentence per way forward>\", \"...\"],\n\"leaning\": \"<the one option you pick, word for word>\",\n\"dissent\": { \"claim\": \"<what is wrong with the task>\", \"alternative\": \"<what you would do instead>\", \"severity\": \"blocker\" | \"consider\" }\n}\n\nFor a blocked choice fill \"options\" and \"leaning\" (one option, word for word); leave both out when there is no choice.\nFill \"dissent\" only when you disagree with the TASK ITSELF; \"severity\" is \"blocker\" when work should stop until answered; leave \"dissent\" out entirely when you agree with the task.\n\nHandback fields (OPTIONAL — omit any key you have nothing for):\n\n{\n\"reaction\": \"confirm\" | \"partial\" | \"challenge\" | \"blocked\",\n\"skipped\": [\"<check not run> — <why>\", \"...\"],\n\"unknowns\": [\"<assumption not proven>\", \"...\"],\n\"found\": [\"<discovery outside your task>\", \"...\"],\n\"stopped\": \"<part not done> — <evidence its premise is false>\"\n}\n\n\"reaction\" is your stance toward the task. On a false premise, finish the rest, set \"reaction\" to \"partial\" and give the stopped part with its evidence in \"stopped\". A dissent on a ruled point also carries \"new_evidence\": what is new since the ruling.\n\nCap answers (OPTIONAL, never required):\n- \"knowledge_used\": [\"<docs/knowledge path> — <the decision it changed>\", \"...\"], [] when no concept changed a decision.\n- \"principles_used\": [\"<slug> — <the decision it changed>\", \"...\"], [] when none did.\n- \"sync_ack\": \"<reason>\" only when the cap's sync door asks for one.\n- `knowledge_wrong` — a loaded concept that misled this cell and that you did not fix in this commit, as \"<docs/knowledge path> — <what was wrong>\"; omit the key when there is none.\n\n"), "Result-form block drifted:\n{text}");
         assert!(
             text.contains(&format!(
                 "temp file (write your JSON here):   {}/result-1.json.tmp\n",
