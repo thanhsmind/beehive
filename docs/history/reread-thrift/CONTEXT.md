@@ -41,6 +41,7 @@ Evidence (`bee report usage` on that session, and its transcripts):
 | D4 | The worker cell prompt carries a short search rule. bee-planning's cell rules say a cell action names each function it changes as path plus symbol. | b4521fc9 |
 | D5 | `packages/bee/LEADER.md` shrinks from 21685 bytes to at most 15000. Every rule marker id stays with its boundary sentence. Moved detail lands in full in a playbook or reference that LEADER.md names with a read-when line. No rule is deleted or weakened. | 4c6e84ea |
 | D6 | The fixed text of a cell brief shrinks by at least 25 percent in bytes, measured on one rendered non-read-only cell brief for the same cell before and after. Every result field and status the parser accepts is still named. | acb2c2d8 |
+| D7 | Fix-first: the distinct flag vocabulary pin in catalog.rs moves to the count with this feature's new flags, and the worker cell prompt keeps a qualified proof-line example with the anchor `cargo test -p bee`. | dcc6f989 |
 | C1 | Test contract thin-worker-listings-off. | 1dd8b534 |
 | C2 | Test contract handoff-after-merge-door. | cd3be8ac (replaces 8cceb386) |
 | C3 | Test contract herding-result-job-digest. | 7e81e0f2 |
