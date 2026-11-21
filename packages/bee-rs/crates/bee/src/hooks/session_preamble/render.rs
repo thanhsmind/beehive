@@ -547,3 +547,42 @@ mod waiting_on_tests {
         assert!(!preamble.contains("waiting on human"), "{preamble}");
     }
 }
+
+#[cfg(test)]
+mod handoff_record_fields_tests {
+    use super::*;
+
+    fn block(handoff: Value) -> Vec<String> {
+        handoff_block_lines(&handoff, None)
+    }
+
+    #[test]
+    fn handoff_record_fields_block_prints_a_present_field() {
+        let lines = block(json!({
+            "kind": "pause",
+            "ruled_out": ["path a", "path b"],
+            "key_files": ["a.rs", "b.rs"],
+            "tree": "clean",
+        }));
+        assert!(lines.contains(&"- Ruled out: path a; path b".to_string()), "{lines:?}");
+        assert!(lines.contains(&"- Key files: a.rs; b.rs".to_string()), "{lines:?}");
+        assert!(lines.contains(&"- Tree: clean".to_string()), "{lines:?}");
+    }
+
+    #[test]
+    fn handoff_record_fields_block_omits_an_absent_field() {
+        let lines = block(json!({"kind": "pause", "ruled_out": ["path a"]}));
+        let text = lines.join("\n");
+        assert!(text.contains("Ruled out"), "{text}");
+        for label in ["Standing orders", "Key files", "Gotchas", "Verified", "Tree"] {
+            assert!(!text.contains(label), "{label} leaked: {text}");
+        }
+    }
+
+    #[test]
+    fn handoff_record_fields_block_cuts_a_400_char_value_to_300() {
+        let lines = block(json!({"kind": "pause", "gotchas": "x".repeat(400)}));
+        let line = lines.iter().find(|l| l.starts_with("- Gotchas: ")).expect("gotchas line");
+        assert_eq!(line.chars().count(), 300, "{line}");
+    }
+}

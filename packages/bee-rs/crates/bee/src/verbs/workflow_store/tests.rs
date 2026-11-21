@@ -1419,6 +1419,73 @@ state (gates, phase) while reporting success. FIX: inspect/restore the file (e.g
         input
     }
 
+    const RECORD_KEYS: [&str; 6] =
+        ["verified", "tree", "key_files", "gotchas", "standing_orders", "ruled_out"];
+
+    fn with_all_six_flags(input: &mut Map<String, Value>) {
+        input.insert("verified".into(), json!(" built ; tests green ;; "));
+        input.insert("tree".into(), json!("a; b, c"));
+        input.insert("key_files".into(), json!("a.rs, b.rs ,, c.rs; d.rs"));
+        input.insert("gotchas".into(), json!("one, two; three"));
+        input.insert("standing_orders".into(), json!("no menus; ask once"));
+        input.insert("ruled_out".into(), json!("path a; path b"));
+    }
+
+    fn assert_six_flags_split_per_d2(record: &Map<String, Value>) {
+        assert_eq!(record["verified"], json!(["built", "tests green"]));
+        assert_eq!(record["tree"], json!("a; b, c"));
+        assert_eq!(record["key_files"], json!(["a.rs", "b.rs", "c.rs; d.rs"]));
+        assert_eq!(record["gotchas"], json!(["one, two", "three"]));
+        assert_eq!(record["standing_orders"], json!(["no menus", "ask once"]));
+        assert_eq!(record["ruled_out"], json!(["path a", "path b"]));
+    }
+
+    #[test]
+    fn handoff_record_fields_pause_write_reads_back_split_per_d2() {
+        let tmp = tmp_root();
+        write_workflow(tmp.path(), "wf-1", json!({"id":"wf-1","feature":"f1","status":"active"}));
+        let mut input = Map::new();
+        input.insert("kind".into(), json!("pause"));
+        with_all_six_flags(&mut input);
+        ok(write_mailbox_handoff(tmp.path(), "wf-1", &input, None));
+        let stored = ok(list_handoff_mailbox(tmp.path(), "wf-1"));
+        assert_eq!(stored.len(), 1);
+        assert_six_flags_split_per_d2(&stored[0]);
+    }
+
+    #[test]
+    fn handoff_record_fields_planned_next_write_reads_back_split_per_d2() {
+        let tmp = tmp_root();
+        write_workflow(tmp.path(), "wf-1", json!({"id":"wf-1","feature":"f1","status":"active"}));
+        capped_cell_and_claim(tmp.path(), "next", "sess-w");
+        let mut input = planned_next_input();
+        with_all_six_flags(&mut input);
+        ok(write_mailbox_handoff(tmp.path(), "wf-1", &input, None));
+        let stored = ok(list_handoff_mailbox(tmp.path(), "wf-1"));
+        assert_eq!(stored.len(), 1);
+        assert_eq!(stored[0]["kind"], json!("planned-next"));
+        assert_six_flags_split_per_d2(&stored[0]);
+    }
+
+    #[test]
+    fn handoff_record_fields_a_write_with_none_stores_none_of_the_six_keys() {
+        let tmp = tmp_root();
+        write_workflow(tmp.path(), "wf-1", json!({"id":"wf-1","feature":"f1","status":"active"}));
+        write_workflow(tmp.path(), "wf-2", json!({"id":"wf-2","feature":"f1","status":"active"}));
+        let mut pause = Map::new();
+        pause.insert("kind".into(), json!("pause"));
+        ok(write_mailbox_handoff(tmp.path(), "wf-1", &pause, None));
+        capped_cell_and_claim(tmp.path(), "next", "sess-w");
+        ok(write_mailbox_handoff(tmp.path(), "wf-2", &planned_next_input(), None));
+        for wf in ["wf-1", "wf-2"] {
+            let stored = ok(list_handoff_mailbox(tmp.path(), wf));
+            assert_eq!(stored.len(), 1);
+            for key in RECORD_KEYS {
+                assert!(!stored[0].contains_key(key), "{wf} stored {key}");
+            }
+        }
+    }
+
     #[test]
     fn mailbox_write_assigns_seq_clears_the_prior_open_record_and_scopes_by_role() {
         let tmp = tmp_root();
