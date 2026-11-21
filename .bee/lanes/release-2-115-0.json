@@ -462,5 +462,14 @@
         }
       ]
     }
+  },
+  "route": {
+    "class": "release",
+    "lane": "small",
+    "flags": [],
+    "product_files": 3,
+    "rationale": "Release 2.115.0 through scripts/release.sh; two manifests and the release manifest move",
+    "updated_at": "2026-11-21T14:55:46.205Z",
+    "feature": "release-2-115-0"
   }
 }

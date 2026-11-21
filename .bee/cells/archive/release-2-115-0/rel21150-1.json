@@ -1,0 +1,104 @@
+{
+  "id": "rel21150-1",
+  "feature": "release-2-115-0",
+  "title": "Publish release 2.115.0 through the sanctioned script",
+  "lane": "small",
+  "role": "deploy",
+  "deps": [],
+  "decisions": [
+    "0f5b4db9-298b-46c8-83f4-1c3e645edc47"
+  ],
+  "files": [
+    ".claude-plugin/plugin.json",
+    ".codex-plugin/plugin.json",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/release-2-115-0/CONTEXT.md",
+    "scripts/release.sh"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Run `scripts/release.sh 2.115.0` with BEE_DISPATCH_ID set to an authorized deployment dispatch and the CI-pinned opencode 1.18.16 (/mnt/data/Projects/goglbe/beehive/.bee/tmp/oc11816/bin) first on PATH and CARGO_TARGET_DIR=/home/thanhsmind/.cache/cargo-target-rel21150, so the opencode contract tests run green. The script bumps both plugin manifests, runs the regen chain (render-skill-trees, onboard --apply, release-manifest --write), runs the declared test suite before tagging, makes the release commit, tags v2.115.0, pushes main and the tag, waits for the release-binaries workflow and verifies the published assets. Never walk those steps by hand. Re-running at a version already committed is idempotent — it resumes the tail. The regen obligation on .claude-plugin/plugin.json is discharged INSIDE the script's own regen chain, which is why the release manifest rides this cell's files.",
+  "verify": "bash scripts/release.sh 2.115.0 && bee dev release-manifest --check",
+  "must_haves": {
+    "truths": [
+      "both plugin manifests report 2.115.0",
+      "tag v2.115.0 exists locally and on the remote",
+      "the GitHub release for v2.115.0 carries the binaries and SHA256SUMS",
+      "the script printed its final OK line"
+    ],
+    "artifacts": [
+      {
+        "path": ".claude-plugin/plugin.json",
+        "substantive": "version 2.115.0"
+      },
+      {
+        "path": ".codex-plugin/plugin.json",
+        "substantive": "version 2.115.0"
+      }
+    ],
+    "key_links": [
+      "the pushed tag is what triggers release-binaries.yml"
+    ],
+    "prohibitions": [
+      "Do not hand-walk bump, tag or push",
+      "Do not skip the test gate"
+    ]
+  },
+  "behavior_change": false,
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "rel21150-deploy",
+    "outcome": null,
+    "files_changed": [
+      ".claude-plugin/plugin.json",
+      ".codex-plugin/plugin.json",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [
+      "The first deploy dispatch was refused by release.sh for a dirty tree left by the claim; nothing changed; the bookkeeping was committed and a fresh permit was prepared",
+      "sync-ack: release.sh ran the regen chain inside its own run"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-21T14:55:29.508Z",
+    "behavior_change": false,
+    "verification_evidence": "https://github.com/thanhsmind/beehive/actions/runs/44915856220 release-binaries success; the script exits 0 only after its final OK line",
+    "verify_output": "green:live",
+    "verify_passed": true,
+    "claim_session": "b1444ff5-0d88-4072-9b37-e8943cbb9ae4",
+    "verify_command": "bash scripts/release.sh 2.115.0 && bee dev release-manifest --check",
+    "claimed_at": "2026-11-21T14:44:05.505Z",
+    "knowledge_delta": [],
+    "sync_ack": "release.sh ran the regen chain inside its own run",
+    "mistakes": [
+      {
+        "wrong": "Committed the plan before claiming, so the claim dirtied the tree and release.sh refused",
+        "better": "claim and commit all .bee changes before dispatch prepare",
+        "fix_at": "doctrine"
+      }
+    ],
+    "no_principles_used": true,
+    "commit_pending": "release.sh makes the release commit without a cell trailer",
+    "changed_lines": 20,
+    "report": {
+      "outcome": "Released bee 2.115.0 through scripts/release.sh: suite and live smoke green, release commit 86a491b9b, tag v2.115.0 pushed, release-binaries run 44915856220 success, six assets published",
+      "commit": "86a491b9b359270fce623fe79ce17150440e6ac1",
+      "files": [
+        ".claude-plugin/plugin.json",
+        ".codex-plugin/plugin.json",
+        "docs/history/codex-harness-hardening/release-manifest.json"
+      ],
+      "tests": "bash scripts/release.sh 2.115.0 && bee dev release-manifest --check — green:live — https://github.com/thanhsmind/beehive/actions/runs/44915856220 release-binaries success; the script exits 0 only after its final OK line",
+      "deviations": [
+        "The first deploy dispatch was refused by release.sh for a dirty tree left by the claim; nothing changed; the bookkeeping was committed and a fresh permit was prepared"
+      ],
+      "patch_id": "229925e72b1484a2a7564e209d380a28621bb663"
+    },
+    "warnings": [],
+    "tests": "boundary"
+  },
+  "usage": null,
+  "usage_reason": "no herding job names this cell: no session is attributable to it"
+}

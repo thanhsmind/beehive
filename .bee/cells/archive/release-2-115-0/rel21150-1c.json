@@ -1,0 +1,84 @@
+{
+  "id": "rel21150-1c",
+  "feature": "release-2-115-0",
+  "title": "Check the published 2.115.0 release",
+  "lane": "small",
+  "role": "test",
+  "deps": [
+    "rel21150-1"
+  ],
+  "decisions": [
+    "0f5b4db9-298b-46c8-83f4-1c3e645edc47",
+    "3338a3ae-81ae-4be5-b51e-e69e2cd8ff98"
+  ],
+  "files": [
+    "docs/history/release-2-115-0/reports/rel21150-1c.md"
+  ],
+  "read_first": [
+    "docs/history/release-2-115-0/CONTEXT.md",
+    "docs/history/release-2-115-0/plan.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Check the release independently, read-only: both plugin manifests on main report 2.115.0; tag v2.115.0 exists locally and on origin (git ls-remote --tags origin v2.115.0); the GitHub release v2.115.0 lists the five binaries and SHA256SUMS (gh release view v2.115.0 --json assets); the release-binaries run for v2.115.0 concluded success. Write each check with its command and output to docs/history/release-2-115-0/reports/rel21150-1c.md and commit it with the trailer cell: rel21150-1c. Bee commands you may run: bee herding notify; never bee dispatch.",
+  "verify": "gh release view v2.115.0 --json assets --jq '.assets | length'",
+  "must_haves": {
+    "truths": [
+      "the report shows each of the four checks with its command and output"
+    ],
+    "prohibitions": [
+      "No edit outside the report file"
+    ]
+  },
+  "behavior_change": false,
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "rel21150-check",
+    "outcome": null,
+    "files_changed": [
+      "docs/history/release-2-115-0/reports/rel21150-1c.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-11-21T14:56:31.032Z",
+    "behavior_change": false,
+    "verification_evidence": "prints 6; https://github.com/thanhsmind/beehive/releases/tag/v2.115.0",
+    "verify_output": "green:live",
+    "verify_passed": true,
+    "claim_session": "b1444ff5-0d88-4072-9b37-e8943cbb9ae4",
+    "verify_command": "gh release view v2.115.0 --json assets --jq '.assets | length'",
+    "claimed_at": "2026-11-21T14:55:47.052Z",
+    "knowledge_delta": [],
+    "no_mistakes": true,
+    "no_principles_used": true,
+    "changed_lines": 38,
+    "report": {
+      "outcome": "All four checks of the published 2.115.0 release pass; report committed",
+      "commit": "0bd971ef82c2195e1797568faec5d2e7be8fe3ef",
+      "files": [
+        "docs/history/release-2-115-0/reports/rel21150-1c.md"
+      ],
+      "tests": "gh release view v2.115.0 --json assets --jq '.assets | length' — green:live — prints 6; https://github.com/thanhsmind/beehive/releases/tag/v2.115.0",
+      "deviations": [],
+      "patch_id": "dc6865e620b9b5afc3f11a81320a8770a0af87c0"
+    },
+    "warnings": [],
+    "tests": "boundary"
+  },
+  "usage": {
+    "new": 16770,
+    "cached": 66954,
+    "total": 83724,
+    "models": {
+      "claude-sonnet-5-5": {
+        "new": 16770,
+        "cached": 66954,
+        "total": 83724
+      }
+    },
+    "jobs": [
+      "job-1795272951720-3899231-1"
+    ]
+  }
+}
