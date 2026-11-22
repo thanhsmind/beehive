@@ -29,7 +29,7 @@ bee knowledge context --work human-mailbox --budget 20000 --lane standard
 
 bee answers with an ordered manifest — path, bytes, estimated tokens, and one line saying why each entry is in the list — cut at the lane's token budget. It is a reading list, never file content; the agent decides what to open.
 
-At the far end of the feature, `bee close` runs `promote` on the agent's behalf, writes the proposal to `docs/history/<feature>/promote-proposals.md`, and files a capture stub pointing at it. The proposal sits there until somebody applies what belongs in the bundle or records why not.
+`bee close` no longer runs `promote` or writes a proposal: the writer cell consolidates knowledge before merge, so code and knowledge land in main together. A `docs/history/<feature>/promote-proposals.md` from an earlier feature is legacy debt. It sits there until somebody applies what belongs in the bundle or records why not, and the `bee-curating` skill settles it on the curator's cadence.
 
 ## The interaction, event by event
 
@@ -72,7 +72,6 @@ Six verbs never have one. For them, "first side effect" is the timing line and n
 
 - **`knowledge index`** (without `--check`) renders every expected index file in memory, then writes them one at a time, top-down in path order. The first write is the first side effect; a failure part-way through leaves the earlier files written and answers with the io error, exit 1.
 - **`knowledge bootstrap`** writes one `docs/knowledge/areas/<slug>/overview.md` per classifiable spec, in filename order, and then renders the indexes over what landed. The first area file is the first side effect.
-- **`bee close`**, not a knowledge verb, is the third writer on this path: it runs `promote` internally and writes `docs/history/<feature>/promote-proposals.md`.
 
 No knowledge verb takes the store lock; no knowledge verb writes into `.bee/`.
 
@@ -134,7 +133,7 @@ Budgets by lane: tiny 8000, small 12000, standard 20000, high-risk 30000. An exp
 
 Every proposed line traces to a cell trace or the work item; nothing is invented. `writes` in the JSON payload is always `[]`, and the human text says so at the top: `PROPOSAL ONLY — nothing was written.`
 
-Proposals normally arrive without anyone running the verb. A green `bee close`, past the tests door and the scribing-debt door, runs `promote` for the feature *before* retiring its cells (retirement moves them into `.bee/cells/archive/`, where the mine would find nothing) and then does three things: writes the rendered proposal to `docs/history/<feature>/promote-proposals.md`, appends a capture stub to the capture queue naming that file, and enqueues a `promote` record in the deferred queue. Close reports one line — `Promote proposed for "<feature>": N capped cell(s) mined, M area bullet(s), K pattern candidate(s)` — and the door is **soft**: a failure to mine or write degrades to `Promote skipped for "<feature>": <reason>` and close proceeds.
+`bee close` no longer writes a proposal. It once ran `promote` for the feature, wrote the rendered proposal to `docs/history/<feature>/promote-proposals.md`, appended a capture stub naming that file and enqueued a `promote` record in the deferred queue. The writer cell now consolidates knowledge before merge (`skills/bee-capturing/SKILL.md`, Compound step 2), so no new proposal file appears. The files already on disk, and their queue records, are legacy debt: `bee-curating` reads each one, applies what clears the promotion bars, and settles it with `bee deferred-queue complete --kind promote --feature <feature>`.
 
 Applying a proposal is a human or agent decision, and it is a plain file write: author the delivery concept, edit the area document, save the pattern. Declining is equally explicit — record why not. Either way the proposal is *cleared* through the queue records, not by deleting the file. Until one of them clears, `bee orient` and the session preamble carry the debt: `### Unapplied promote proposal(s): 2 — newest: docs/history/f2/promote-proposals.md — review the proposal, then apply what belongs to docs/knowledge/ or record why not.` The file itself is kept as the audit trail either way.
 
@@ -162,7 +161,7 @@ That flip closes the spec tree. Once a bundle exists, `docs/specs/` is a **compa
 | Gate-bypass level | No effect. No knowledge verb is gated in either direction. | No effect. |
 | Store phase | No effect on any verb. The phase does decide what the [guards](../foundations/guards.md) allow the agent itself to write into `docs/knowledge/`: in a gated phase the allow-list is `.bee/`, `docs/history/`, `plans/`, `AGENTS.md`, so authoring a concept before the execution gate is denied; at idle or a terminal phase the blanket `docs/` applies. | No effect. |
 | Where it runs | The bundle read is whichever product root the invocation resolves. This group takes the wide root door, so it is served in an ungranted *and* a granted worktree — a granted worktree reads its own `docs/knowledge/`, which may differ from main's mid-feature. | The read is where the invocation runs. |
-| Who runs it | No effect. `search` is everyone's mid-flow move; `context` is the orchestrator's and every worker's opening read; `check`/`index --check` are the verify chain's; `promote` is usually `bee close`'s, internally, rather than anyone's typed command. Nothing enforces that split. | — |
+| Who runs it | No effect. `search` is everyone's mid-flow move; `context` is the orchestrator's and every worker's opening read; `check`/`index --check` are the verify chain's; `promote` is typed by whoever wants a proposal; `bee close` no longer runs it. | — |
 
 ## Cancel and interrupt
 
@@ -192,7 +191,7 @@ After any interrupt the bundle is exactly what the files say; there is no half-s
 
 **Sibling sessions.** All siblings read the same tree and coordinate through git, not through bee. Two sessions authoring in the same area conflict as a merge conflict, not as a bee refusal.
 
-**What the human sees.** Indirectly, and constantly. The session preamble names the bundle in the project map (`Knowledge bundle: docs/knowledge/ … Bundle holds: N area(s), M concept(s)`), offers the search move in one line, prints the knowledge-context command with its resolved anchor kind for the active feature, and carries the unapplied-promote-proposal count. `bee close` reports the promote line. Beyond that the human sees the bundle as files in a diff.
+**What the human sees.** Indirectly, and constantly. The session preamble names the bundle in the project map (`Knowledge bundle: docs/knowledge/ … Bundle holds: N area(s), M concept(s)`), offers the search move in one line, prints the knowledge-context command with its resolved anchor kind for the active feature, and carries the unapplied-promote-proposal count. Beyond that the human sees the bundle as files in a diff.
 
 **Configuration.** One key matters: a configured non-empty `product_root` moves the bundle (and the compatibility surface) to the product tree — and, today, makes the native verbs refuse (see "Open questions"). No per-hook toggle touches this group.
 

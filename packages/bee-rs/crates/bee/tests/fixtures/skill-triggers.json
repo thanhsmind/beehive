@@ -149,6 +149,11 @@
   {"brief": "Run the periodic pass over the existing knowledge base after this release.", "expect": ["bee-knowledge-upkeep"]},
   {"brief": "We just agreed the retry cap lives in the loop — record that decision now.", "expect": ["bee-capturing"], "near": "bee-knowledge-upkeep"},
   {"brief": "Find the dead code and stale docs in this repo and clean them up.", "expect": ["bee-grooming"], "near": "bee-knowledge-upkeep"},
+  {"brief": "The capture queue has piled up stubs and several closed features never got their promote proposals settled — drain that debt in one bounded pass.", "expect": ["bee-curating"], "near": "bee-capturing"},
+  {"brief": "The scheduled job fired for this project: run the curator pass that settles the flagged knowledge debt.", "expect": ["bee-curating"], "near": "bee-knowledge-upkeep"},
+  {"brief": "Nhiều tính năng đã đóng mà chưa chạy bước ghi lại kiến thức, và hàng đợi ghi nhận còn đầy — dọn nợ tri thức đó theo lịch.", "expect": ["bee-curating"]},
+  {"brief": "Check whether the existing concepts still match the code after this release and fix the ones that drifted.", "expect": ["bee-knowledge-upkeep"], "near": "bee-curating"},
+  {"brief": "We just decided the retry cap lives in the loop — write that decision down and queue a stub for it.", "expect": ["bee-capturing"], "near": "bee-curating"},
 
   {"brief": "Before any code, sketch the types, signatures and module layout for the new billing engine.", "expect": ["bee-architect"]},
   {"brief": "Thiết kế trước cấu trúc module và chữ ký hàm cho tính năng đồng bộ dữ liệu, rồi mới viết mã.", "expect": ["bee-architect"]},
