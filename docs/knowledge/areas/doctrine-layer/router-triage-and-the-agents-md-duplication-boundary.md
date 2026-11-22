@@ -258,7 +258,7 @@ Discipline rules are homed in `packages/bee/LEADER.md` or a file under `packages
   - applied_at:
     - `docs/knowledge/areas/onboarding/skillstation-hub-skills-and-aliases.md`
 - `agents-context-handoff-65` (packages/bee/playbooks/handoff.md § Handoff):
-  spoken: a context mark never stops work — finish the user's task; write the handoff only when the user asks for a switch or at feature close, then hand the rest to waggledance through `waggledance dispatch --project <this project id> --leader --follow-up-of <current run> --handoff --request-id <id>`, with the MCP `waggledance_dispatch` call as the fallback named by rule agents-other-project-to-its-leader, and release the session — never tell the user to open a new session (docs/history/context-mark-advisory D1, D3; handoff-flag-doctrine D1; waggledance-cli-first D1, D2, D7)
+  spoken: at or past the context mark (default 120000, `handoff_context_tokens`, 0 off) and after every green worktree merge, hand off at the next clean stop (a capped cell or a merged worktree), never mid-cell; write the handoff, then hand the rest to waggledance through `waggledance dispatch --project <this project id> --leader --follow-up-of <current run> --handoff --request-id <id>`, with the MCP `waggledance_dispatch` call as the fallback named by rule agents-other-project-to-its-leader, and release the session — never tell the user to open a new session (token-spend-cuts D1 and leader-context-thrift D1 replaced docs/history/context-mark-advisory D1, D3; handoff-flag-doctrine D1; waggledance-cli-first D1, D2, D7)
   - applied_at:
     - `docs/knowledge/areas/onboarding/status-display-vendoring.md`
     - `skills/bee-hive/SKILL.md`
