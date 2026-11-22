@@ -25,7 +25,10 @@ enum Kind {
     Knowledge,
     Verify,
     FixAt,
+    Curator,
 }
+
+const ALL_KINDS: [Kind; 4] = [Kind::Knowledge, Kind::Verify, Kind::FixAt, Kind::Curator];
 
 impl Kind {
     fn name(self) -> &'static str {
@@ -33,6 +36,7 @@ impl Kind {
             Kind::Knowledge => "knowledge",
             Kind::Verify => "verify",
             Kind::FixAt => "fix-at",
+            Kind::Curator => "curator",
         }
     }
 
@@ -41,6 +45,7 @@ impl Kind {
             Kind::Knowledge => Some("bee-knowledge-upkeep"),
             Kind::Verify => Some("bee-verify-upkeep"),
             Kind::FixAt => None,
+            Kind::Curator => Some("bee-curating"),
         }
     }
 
@@ -56,6 +61,7 @@ impl Kind {
             Kind::Knowledge => "knowledge-upkeep",
             Kind::Verify => "verify-upkeep",
             Kind::FixAt => "fix-at-upkeep",
+            Kind::Curator => "curator-run",
         }
     }
 }
@@ -225,8 +231,131 @@ fn fix_at_signals(ledger: Option<&fix_at::Ledger>, last: &Option<LastRun>, reaso
     }
 }
 
+#[derive(Clone, Copy, PartialEq)]
+enum DebtKind {
+    Capture,
+    Promote,
+    Scribing,
+}
+
+impl DebtKind {
+    const ALL: [DebtKind; 3] = [DebtKind::Capture, DebtKind::Promote, DebtKind::Scribing];
+
+    fn key(self) -> &'static str {
+        match self {
+            DebtKind::Capture => "capture",
+            DebtKind::Promote => "promote",
+            DebtKind::Scribing => "scribing",
+        }
+    }
+}
+
+struct CuratorConfig {
+    enabled: bool,
+    cadence_hours: u64,
+    kinds: Vec<DebtKind>,
+    thresholds: [usize; 3],
+}
+
+impl CuratorConfig {
+    fn read(root: &Path) -> Self {
+        Self::from_value(&crate::state::read_config_value(root))
+    }
+
+    fn from_value(cfg: &Value) -> Self {
+        let block = cfg.get("curator");
+        let field = |name: &str| block.and_then(|b| b.get(name));
+        let kinds = match field("kinds").and_then(Value::as_array) {
+            Some(list) if list.iter().all(|k| k.as_str().is_some_and(|k| DebtKind::ALL.iter().any(|d| d.key() == k))) => {
+                DebtKind::ALL.into_iter().filter(|d| list.iter().any(|k| k.as_str() == Some(d.key()))).collect()
+            }
+            _ => DebtKind::ALL.to_vec(),
+        };
+        let threshold = |d: DebtKind| {
+            field("thresholds")
+                .and_then(|t| t.get(d.key()))
+                .and_then(Value::as_u64)
+                .filter(|n| *n >= 1)
+                .map_or(1, |n| n as usize)
+        };
+        CuratorConfig {
+            enabled: field("enabled").and_then(Value::as_bool).unwrap_or(false),
+            cadence_hours: field("cadence_hours")
+                .and_then(Value::as_u64)
+                .filter(|n| (1..=720).contains(n))
+                .unwrap_or(24),
+            kinds,
+            thresholds: DebtKind::ALL.map(threshold),
+        }
+    }
+
+    fn threshold(&self, kind: DebtKind) -> usize {
+        self.thresholds[DebtKind::ALL.iter().position(|d| *d == kind).unwrap_or(0)]
+    }
+}
+
+fn curator_debt(root: &Path, cfg: &CuratorConfig) -> Vec<Entry> {
+    let mut debt = Vec::new();
+    for kind in DebtKind::ALL.into_iter().filter(|k| cfg.kinds.contains(k)) {
+        let need = cfg.threshold(kind);
+        match kind {
+            DebtKind::Capture => {
+                let n = crate::hooks::session_preamble::capture_queue_count(root);
+                if n >= need {
+                    debt.push(("capture_queue", format!("{n} capture stub(s) wait in the queue (threshold {need})")));
+                }
+            }
+            DebtKind::Promote => {
+                let n = crate::verbs::status_full::unapplied_promote_proposals(root).len();
+                if n >= need {
+                    debt.push(("promote_unsettled", format!("{n} unapplied promote proposal(s) (threshold {need})")));
+                }
+            }
+            DebtKind::Scribing => {
+                let (n, features) = crate::hooks::session_preamble::global_scribing_debt(root);
+                if n >= need {
+                    let heaviest = features
+                        .iter()
+                        .max_by_key(|(_, ids)| ids.len())
+                        .map(|(f, ids)| format!("{f} ({} cell(s))", ids.len()))
+                        .unwrap_or_default();
+                    debt.push((
+                        "scribing_orphaned",
+                        format!(
+                            "{n} capped cell(s) across {} feature(s) have no scribing run; heaviest: {heaviest} (threshold {need})",
+                            features.len()
+                        ),
+                    ));
+                }
+            }
+        }
+    }
+    debt
+}
+
+fn curator_signals(root: &Path, cfg: &CuratorConfig, last: &Option<LastRun>, reasons: &mut Vec<Entry>, info: &mut Vec<Entry>) {
+    let debt = curator_debt(root, cfg);
+    if debt.is_empty() {
+        return;
+    }
+    let cadence_secs = cfg.cadence_hours as i64 * 3600;
+    let next = last.as_ref().and_then(|run| epoch(&run.at)).map(|at| at + cadence_secs);
+    match next {
+        Some(at) if at > chrono::Utc::now().timestamp() => {
+            let when = DateTime::from_timestamp(at, 0).map(|d| d.to_rfc3339()).unwrap_or_default();
+            info.extend(debt);
+            info.push((
+                "cadence_not_elapsed",
+                format!("last curator run is inside the {}h cadence; next eligible at {when}", cfg.cadence_hours),
+            ));
+        }
+        _ => reasons.extend(debt),
+    }
+}
+
 struct Item {
     kind: Kind,
+    cadence_hours: Option<u64>,
     present: bool,
     reasons: Vec<Entry>,
     info: Vec<Entry>,
@@ -247,6 +376,7 @@ impl Item {
             "due": self.due(),
             "reasons": entries_json(&self.reasons),
             "info": entries_json(&self.info),
+            "cadence_hours": self.cadence_hours,
             "last_run": self.last.as_ref().map(LastRun::json),
         })
     }
@@ -256,27 +386,38 @@ impl Item {
             return vec![format!("{}: not present", self.kind.name())];
         }
         if !self.due() {
-            return vec![format!("{}: not due", self.kind.name())];
+            return match self.cadence_hours {
+                Some(hours) => vec![format!("{}: not due (cadence {hours}h)", self.kind.name())],
+                None => vec![format!("{}: not due", self.kind.name())],
+            };
         }
         let codes: Vec<&str> = self.reasons.iter().map(|(c, _)| *c).collect();
-        vec![
+        let mut lines = vec![
             format!("{}: due — {}", self.kind.name(), codes.join(", ")),
             format!("  run: {}", self.kind.invoke()),
-        ]
+        ];
+        if let Some(hours) = self.cadence_hours {
+            lines.push(format!("  cadence: every {hours}h"));
+        }
+        lines
     }
 }
 
 fn assess(root: &Path, kind: Kind) -> Item {
     let last = last_run(root, kind);
     let ledger = (kind == Kind::FixAt).then(|| fix_at::Ledger::load(root)).flatten();
+    let curator = (kind == Kind::Curator).then(|| CuratorConfig::read(root));
     let present = match kind {
+        Kind::Curator => curator.as_ref().is_some_and(|c| c.enabled),
         Kind::Knowledge => root.join("docs").join("knowledge").join("index.md").is_file(),
         Kind::Verify => root.join(".bee").join("verify").join("verify-app").join("SKILL.md").is_file(),
         Kind::FixAt => ledger.as_ref().is_some_and(|l| !l.groups.is_empty()),
     };
     let mut reasons = Vec::new();
     let mut info = Vec::new();
-    if present && kind == Kind::FixAt {
+    if let (true, Some(cfg)) = (present, curator.as_ref()) {
+        curator_signals(root, cfg, &last, &mut reasons, &mut info);
+    } else if present && kind == Kind::FixAt {
         fix_at_signals(ledger.as_ref(), &last, &mut reasons);
     } else if present {
         release_and_never_run(root, &last, &mut reasons);
@@ -284,7 +425,7 @@ fn assess(root: &Path, kind: Kind) -> Item {
             knowledge_signals(root, &last, &mut reasons, &mut info);
         }
     }
-    Item { kind, present, reasons, info, last }
+    Item { kind, cadence_hours: curator.map(|c| c.cadence_hours), present, reasons, info, last }
 }
 
 pub(crate) fn knowledge_due_codes(root: &Path) -> Option<Vec<&'static str>> {
@@ -332,14 +473,15 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
         GPre::Emitted(code) => return Some(code),
     };
     let kinds: Vec<Kind> = match kind_flag.as_deref() {
-        None => vec![Kind::Knowledge, Kind::Verify, Kind::FixAt],
+        None => ALL_KINDS.to_vec(),
         Some("knowledge") => vec![Kind::Knowledge],
         Some("verify") => vec![Kind::Verify],
         Some("fix-at") => vec![Kind::FixAt],
+        Some("curator") => vec![Kind::Curator],
         Some(other) => {
             return Some(refuse(
                 json,
-                &format!("upkeep due: unknown --kind \"{other}\" — must be knowledge, verify or fix-at."),
+                &format!("upkeep due: unknown --kind \"{other}\" — must be knowledge, verify, fix-at or curator."),
             ));
         }
     };
@@ -520,11 +662,11 @@ mod tests {
     }
 
     #[test]
-    fn a_bad_kind_refuses_and_names_both_kinds() {
+    fn a_bad_kind_refuses_and_names_all_four_kinds() {
         let tmp = store();
         let (code, _, text) = due(tmp.path(), &["--kind", "vibes"]);
         assert_eq!(code, Some(1), "{text}");
-        assert!(text.contains("knowledge") && text.contains("verify") && text.contains("fix-at") && text.contains("vibes"), "{text}");
+        assert!(text.contains("knowledge") && text.contains("verify") && text.contains("fix-at") && text.contains("curator") && text.contains("vibes"), "{text}");
     }
 
     #[test]
@@ -594,5 +736,137 @@ mod tests {
         let (code, v, text) = due(tmp.path(), &["--kind", "fix-at", "--json"]);
         assert_eq!(code, Some(0), "{text}");
         assert_eq!(item(&v, "fix-at")["last_run"]["outcome"], "clean");
+    }
+
+    fn enable_curator(root: &Path, block: Value) {
+        std::fs::write(root.join(".bee/config.json"), json!({"curator": block}).to_string()).unwrap();
+    }
+
+    fn add_stub(root: &Path, id: &str) {
+        let path = root.join(".bee/capture-queue.jsonl");
+        let mut text = std::fs::read_to_string(&path).unwrap_or_default();
+        text.push_str(&format!("{}\n", json!({"kind": "stub", "id": id})));
+        std::fs::write(path, text).unwrap();
+    }
+
+    fn reason_codes(i: &Value, key: &str) -> Vec<String> {
+        i[key].as_array().unwrap().iter().map(|e| e["code"].as_str().unwrap().to_string()).collect()
+    }
+
+    #[test]
+    fn curator_without_a_block_or_disabled_is_not_present_and_not_due() {
+        let tmp = store();
+        add_stub(tmp.path(), "a");
+        let (code, v, text) = due(tmp.path(), &["--kind", "curator", "--json"]);
+        assert_eq!(code, Some(0), "{text}");
+        let i = item(&v, "curator");
+        assert_eq!(i["present"], false);
+        assert_eq!(i["due"], false);
+        assert_eq!(i["skill"], "bee-curating");
+        assert_eq!(i["invoke"], "/bee-curating");
+        enable_curator(tmp.path(), json!({"enabled": false}));
+        let (code, v, text) = due(tmp.path(), &["--kind", "curator", "--json"]);
+        assert_eq!(code, Some(0), "{text}");
+        assert_eq!(item(&v, "curator")["present"], false);
+    }
+
+    #[test]
+    fn curator_with_a_capture_stub_and_no_run_row_is_due_and_writes_nothing() {
+        let tmp = store();
+        add_stub(tmp.path(), "a");
+        enable_curator(tmp.path(), json!({"enabled": true}));
+        let before = snapshot(tmp.path());
+        let (code, v, text) = due(tmp.path(), &["--kind", "curator", "--json"]);
+        assert_eq!(code, Some(10), "{text}");
+        let i = item(&v, "curator");
+        assert_eq!(i["present"], true);
+        assert_eq!(i["due"], true);
+        assert_eq!(reason_codes(i, "reasons"), vec!["capture_queue"]);
+        assert_eq!(i["cadence_hours"], 24);
+        assert!(snapshot(tmp.path()) == before, "bee upkeep due wrote a file");
+        let (_, _, plain) = due(tmp.path(), &["--kind", "curator"]);
+        assert!(plain.contains("curator: due — capture_queue") && plain.contains("/bee-curating") && plain.contains("24h"), "{plain}");
+    }
+
+    #[test]
+    fn a_fresh_curator_run_row_moves_the_debt_to_info_and_an_old_row_makes_it_due_again() {
+        let tmp = store();
+        add_stub(tmp.path(), "a");
+        enable_curator(tmp.path(), json!({"enabled": true, "cadence_hours": 6}));
+        let fresh = (chrono::Utc::now() - chrono::Duration::hours(1)).to_rfc3339();
+        log_row(tmp.path(), "curator-run", &fresh, "clean — drained");
+        let (code, v, text) = due(tmp.path(), &["--kind", "curator", "--json"]);
+        assert_eq!(code, Some(0), "{text}");
+        let i = item(&v, "curator");
+        assert_eq!(i["due"], false);
+        assert_eq!(i["reasons"].as_array().unwrap().len(), 0);
+        let info = reason_codes(i, "info");
+        assert!(info.contains(&"capture_queue".to_string()) && info.contains(&"cadence_not_elapsed".to_string()), "{info:?}");
+        assert_eq!(i["last_run"]["outcome"], "clean");
+        let old = (chrono::Utc::now() - chrono::Duration::hours(7)).to_rfc3339();
+        std::fs::remove_file(tmp.path().join(".bee/audit.jsonl")).unwrap();
+        log_row(tmp.path(), "curator-run", &old, "clean — drained");
+        let (code, v, text) = due(tmp.path(), &["--kind", "curator", "--json"]);
+        assert_eq!(code, Some(10), "{text}");
+        assert_eq!(reason_codes(item(&v, "curator"), "reasons"), vec!["capture_queue"]);
+    }
+
+    #[test]
+    fn curator_kinds_and_thresholds_narrow_the_debt_reasons() {
+        let tmp = store();
+        add_stub(tmp.path(), "a");
+        enable_curator(tmp.path(), json!({"enabled": true, "kinds": ["promote"]}));
+        let (code, v, text) = due(tmp.path(), &["--kind", "curator", "--json"]);
+        assert_eq!(code, Some(0), "{text}");
+        assert_eq!(item(&v, "curator")["due"], false);
+        assert!(reason_codes(item(&v, "curator"), "reasons").is_empty());
+        enable_curator(tmp.path(), json!({"enabled": true, "thresholds": {"capture": 5}}));
+        let (code, v, text) = due(tmp.path(), &["--kind", "curator", "--json"]);
+        assert_eq!(code, Some(0), "{text}");
+        assert!(reason_codes(item(&v, "curator"), "reasons").is_empty());
+        add_stub(tmp.path(), "b");
+        add_stub(tmp.path(), "c");
+        add_stub(tmp.path(), "d");
+        add_stub(tmp.path(), "e");
+        let (code, v, text) = due(tmp.path(), &["--kind", "curator", "--json"]);
+        assert_eq!(code, Some(10), "{text}");
+        assert_eq!(reason_codes(item(&v, "curator"), "reasons"), vec!["capture_queue"]);
+    }
+
+    #[test]
+    fn a_bad_curator_block_falls_back_to_defaults() {
+        let cfg = CuratorConfig::from_value(&json!({"curator": {"enabled": "yes", "cadence_hours": 0, "kinds": ["nope"], "thresholds": {"capture": 0, "promote": "x"}}}));
+        assert!(!cfg.enabled);
+        assert_eq!(cfg.cadence_hours, 24);
+        assert_eq!(cfg.kinds.len(), 3);
+        assert_eq!(cfg.thresholds, [1, 1, 1]);
+        assert_eq!(CuratorConfig::from_value(&json!({"curator": {"cadence_hours": 721}})).cadence_hours, 24);
+        assert_eq!(CuratorConfig::from_value(&json!({"curator": {"cadence_hours": 720}})).cadence_hours, 720);
+    }
+
+    #[test]
+    fn every_item_carries_cadence_hours_and_only_the_curator_has_a_number() {
+        let tmp = store();
+        let (_, v, text) = due(tmp.path(), &["--json"]);
+        let items = v["items"].as_array().unwrap();
+        assert_eq!(items.len(), 4, "{text}");
+        for i in items {
+            assert!(i.get("cadence_hours").is_some(), "{i}");
+        }
+        assert!(item(&v, "knowledge")["cadence_hours"].is_null());
+        assert!(item(&v, "curator")["cadence_hours"].is_number());
+    }
+
+    #[test]
+    fn audit_log_accepts_curator_run() {
+        let tmp = store();
+        let out = Command::new(crate::test_support::built_bee())
+            .args(["audit", "log", "--kind", "curator-run", "--feature", "curator", "--note", "clean — nothing"])
+            .env_remove("BEE_HERDING_WORKER")
+            .current_dir(tmp.path())
+            .output()
+            .unwrap();
+        assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+        assert_eq!(audit::rows(tmp.path(), Some("curator-run"), None).len(), 1);
     }
 }

@@ -28,6 +28,11 @@ store exists to recall.
 
 ## Behaviors & Operations
 
+`curator-run` joins the closed kind set as the fourth upkeep row (after `knowledge-upkeep`,
+`verify-upkeep`, `fix-at-upkeep`): `bee upkeep due --kind curator` reads its newest row to decide
+whether the cadence window has elapsed. Adding a kind means the `KINDS` array, the registry enum
+of `audit.log` and its description move together; `registry_contracts` fails when they drift.
+
 **B1 — Gate auto-approval has one home** (plan D3). `bee gate --actor auto`
 stamps the gate record and appends one `gate-bypass` row to the audit log
 itself. The agent logs no decision for an auto-approval, and no doctrine, skill,

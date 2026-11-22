@@ -13,7 +13,7 @@ bee:
   owns.code: [packages/bee-rs/crates/bee/src/verbs/knowledge/*]
   owns.skills: []
   owns.tests: [packages/bee-rs/crates/bee/src/verbs/knowledge/tests.rs, packages/bee-rs/crates/bee/tests/specs_fence.rs, packages/bee-rs/crates/bee/tests/pointer_integrity.rs]
-  anchors: [scripts/, skills/bee-knowledge-setup/SKILL.md, skills/bee-knowledge-upkeep/SKILL.md, skills/bee-verify-upkeep/SKILL.md]
+  anchors: [scripts/, skills/bee-knowledge-setup/SKILL.md, skills/bee-knowledge-upkeep/SKILL.md, skills/bee-verify-upkeep/SKILL.md, packages/bee-rs/crates/bee/src/verbs/upkeep_group.rs]
   verified_at: 2026-11-10
   verified_commit: f1c771b12fbf1a9b491a54191cb1f6423e911ec3
 ---
@@ -123,6 +123,13 @@ the job dispatches that item's `invoke` text (`/bee-knowledge-upkeep` or
 The verb is read-only (upkeep-due-signal D1, D2). A run clears its own signal by ending with a
 `knowledge-upkeep` or `verify-upkeep` audit row (D3); the reasons that make each
 kind due are upkeep-due-signal D4 (knowledge) and upkeep-due-signal D5 (verify). bee gives the signal and owns no scheduler.
+
+The `curator` item (scheduled-curator D1, D2) differs from the other kinds in one way: it is
+opt-in per project through the `curator` block of `.bee/config.json`, and its due test adds a
+debt threshold and a cadence window to the audit-row check. Debt inside the window is shown under
+`info` and never sets due, so a scheduler that ticks often does not re-dispatch a pass that just
+ran. Read the verb's output or the registry entry `upkeep.due` for the reason codes and defaults,
+not this page.
 
 ## Actors & Access
 

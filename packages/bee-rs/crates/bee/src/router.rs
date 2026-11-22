@@ -96,7 +96,7 @@ pub const PORTED: &[&str] = &[
     "reviews create|list|show|record|candidate add|candidates|status (--file shapes)",
     "knowledge check|index|list|context",
     "tmp sweep",
-    "upkeep due [--kind knowledge|verify] [--root <path>] [--json]",
+    "upkeep due [--kind knowledge|verify|fix-at|curator] [--root <path>] [--json]",
     "plan check [--feature <slug>] [--json]",
     "design gate [--write] [--json]",
     // R3 wave 3
