@@ -985,6 +985,7 @@
     "curator",
     "work-queue",
     "contract:upkeep-curator-due",
-    "contract:work-queue-registry"
+    "contract:work-queue-registry",
+    "contract:published-release-2-117-0"
   ]
 }
