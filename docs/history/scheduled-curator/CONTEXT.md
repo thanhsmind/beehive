@@ -44,8 +44,10 @@ schedule tick itself is waggledance's (handed to its leader).
 | Concept | Grade at read | Why it matters |
 |---------|---------------|----------------|
 | docs/knowledge/areas/okf-profile/overview.md | suspect | holds the Scheduled upkeep how-to the curator joins (D5) |
-| docs/history/upkeep-due-signal/CONTEXT.md | confirmed | the due signal this feature extends (D2) |
-| docs/history/curator-drain-2026-11-22/audit.md | confirmed | the manual curator method the skill encodes (D3) |
+| docs/knowledge/areas/decision-memory/audit-log.md | suspect | the closed audit kind set that gains `curator-run` (D2) |
+
+The due signal this extends is `docs/history/upkeep-due-signal/CONTEXT.md`;
+the method the skill encodes is `docs/history/curator-drain-2026-11-22/audit.md`.
 
 ### Code
 
