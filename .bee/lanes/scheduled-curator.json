@@ -8,18 +8,13 @@
     "shape": true,
     "execution": true,
     "review": false,
-    "uat": false
+    "uat": true
   },
   "summary": "Feature \"scheduled-curator\" started at phase \"exploring\" (lane).",
   "next_action": "Merged into main at b0f536a; reload the product and test \"scheduled-curator\", then either approve uat (\"bee gate --name uat --approved true --lane scheduled-curator\") or fix it in the worktree and merge again.",
   "created_at": "2026-11-22T00:13:05.742Z",
-  "run_state": "awaiting-approval",
-  "waiting_on": {
-    "kind": "gate",
-    "subject": "uat: scheduled-curator",
-    "asked_at": "2026-11-22T00:51:27.883Z",
-    "session": "bee-worktree-merge-sessionless"
-  },
+  "run_state": "done",
+  "waiting_on": null,
   "gate_preview": {
     "feature": "scheduled-curator",
     "plan_sha256": "9be109fa77abf64df57217a26a91aa1a4edcc6036ad75f7fb1da26ad161aa364",

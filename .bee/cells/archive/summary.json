@@ -2448,5 +2448,10 @@
     "capped": 2,
     "dropped": 0,
     "archived_at": "2026-11-21T23:59:15.024Z"
+  },
+  "scheduled-curator": {
+    "capped": 5,
+    "dropped": 0,
+    "archived_at": "2026-11-22T00:55:45.608Z"
   }
 }

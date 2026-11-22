@@ -1,0 +1,158 @@
+{
+  "id": "scur-4",
+  "feature": "scheduled-curator",
+  "title": "Test the curator due item, the work-queue help and the curator skill end to end",
+  "lane": "standard",
+  "role": "test",
+  "deps": [
+    "scur-1",
+    "scur-2",
+    "scur-3",
+    "scur-5"
+  ],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- upkeep session_preamble",
+  "must_haves": {
+    "why": "A code cell never certifies itself; a tester that shares no context with the implementers checks the user-visible path.",
+    "out_of_scope": [
+      "changing production code beyond a test-found defect report",
+      "the waggledance tick"
+    ],
+    "truths": [
+      "the session_preamble tests pass with COMMAND_SURFACE_BUDGET_CHARS 3000",
+      "a built bee in a throwaway store with curator.enabled true and one capture stub reports the curator item due and exits 10",
+      "after bee audit log --kind curator-run the same store reports due false with info cadence_not_elapsed",
+      "bee deferred-queue complete --help --brief prints its flags",
+      "skills/bee-curating/SKILL.md names bee upkeep due --kind curator and ends with the curator-run audit row",
+      "any missing behavior test for D1 or D2 is added to the upkeep_group tests module"
+    ]
+  },
+  "decisions": [
+    "9d7b5180-2cdd-4dd9-899d-eb24190e61ae",
+    "bca6b659-f6c9-42b2-953a-8ac024a12566",
+    "595d3c77-3f8f-46ec-a43b-7f702bcf9aaa",
+    "69cb3f47-2f01-4abb-8914-e9e3b771cfaf"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/upkeep_group.rs",
+    "docs/history/scheduled-curator/test-report.md"
+  ],
+  "read_first": [
+    "docs/history/scheduled-curator/CONTEXT.md",
+    "docs/history/scheduled-curator/plan.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Independent tester for scur-1, scur-2, scur-3, scur-5. Build the bee binary (cargo build --release --manifest-path packages/bee-rs/Cargo.toml) and drive it against a throwaway onboarded sandbox under .bee/tmp (the verify-app skill shows how): set curator.enabled true with bee config set, add one capture stub with bee capture add, run bee upkeep due --kind curator --json (expect due true, reason capture_queue, exit 10), run bee audit log --kind curator-run --feature curator --note \"clean — test\", run it again (expect due false, info cadence_not_elapsed, exit 0), and run bee deferred-queue complete --help --brief (expect flags). Read skills/bee-curating/SKILL.md against CONTEXT.md D3. Compare the scur-1 tests against the contract decision upkeep-curator-due; add any missing behavior test to the upkeep_group tests module. Write the commands, outputs and verdict to docs/history/scheduled-curator/test-report.md. Report a defect instead of fixing production code. No code comments. Proof: the cell verify plus the sandbox run; quote both.",
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "scur4-tester",
+    "outcome": "Sandbox run, skill read and cell verify all pass; added promote_unsettled test; no defect; commit 83c4c6b4c",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/upkeep_group.rs",
+      "docs/history/scheduled-curator/test-report.md"
+    ],
+    "deviations": [
+      "sync-ack: tester cell added one behavior test only; okf-profile overview was synced for the curator in scur-3"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-22T00:47:41.427Z",
+    "behavior_change": false,
+    "verification_evidence": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- upkeep session_preamble — green:unit — 113 passed 0 failed; sandbox: due exit 10 then due false cadence_not_elapsed exit 0; deferred-queue complete --help --brief prints flags",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "ea77756e-238f-43d2-a81c-92b8307fd227",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- upkeep session_preamble",
+    "claimed_at": "2026-11-22T00:45:08.263Z",
+    "knowledge_delta": [],
+    "sync_ack": "tester cell added one behavior test only; okf-profile overview was synced for the curator in scur-3",
+    "no_mistakes": true,
+    "no_principles_used": true,
+    "changed_lines": 121,
+    "report": {
+      "outcome": "Sandbox run, skill read and cell verify all pass; added promote_unsettled test; no defect; commit 83c4c6b4c",
+      "commit": "83c4c6b4cb1cd3169dafdafa941cbce36e85ca23",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/upkeep_group.rs",
+        "docs/history/scheduled-curator/test-report.md"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- upkeep session_preamble — green:unit — cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- upkeep session_preamble — green:unit — 113 passed 0 failed; sandbox: due exit 10 then due false cadence_not_elapsed exit 0; deferred-queue complete --help --brief prints flags",
+      "deviations": [],
+      "principles_used": [],
+      "skipped": [
+        "clippy and full suite — leader note forbids the full suite"
+      ],
+      "found": [
+        "the shared cargo-target bee binary is stale and lacks deferred-queue complete; use packages/bee-rs/target/release/bee",
+        "scribing_orphaned has no behavior test; it needs a capped behavior-change cell fixture"
+      ],
+      "patch_id": "2dc9b6f9b0d044ce161372d16dd099e6330353ba"
+    },
+    "skipped": [
+      "clippy and full suite — leader note forbids the full suite"
+    ],
+    "found": [
+      "the shared cargo-target bee binary is stale and lacks deferred-queue complete; use packages/bee-rs/target/release/bee",
+      "scribing_orphaned has no behavior test; it needs a capped behavior-change cell fixture"
+    ],
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "the session_preamble tests pass with COMMAND_SURFACE_BUDGET_CHARS 3000",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/upkeep_group.rs"
+          },
+          {
+            "requirement": "a built bee in a throwaway store with curator.enabled true and one capture stub reports the curator item due and exits 10",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/upkeep_group.rs"
+          },
+          {
+            "requirement": "after bee audit log --kind curator-run the same store reports due false with info cadence_not_elapsed",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/upkeep_group.rs"
+          },
+          {
+            "requirement": "bee deferred-queue complete --help --brief prints its flags",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/upkeep_group.rs"
+          },
+          {
+            "requirement": "skills/bee-curating/SKILL.md names bee upkeep due --kind curator and ends with the curator-run audit row",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/upkeep_group.rs"
+          },
+          {
+            "requirement": "any missing behavior test for D1 or D2 is added to the upkeep_group tests module",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/upkeep_group.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/upkeep_group.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/upkeep_group.rs"
+          },
+          {
+            "requirement": "docs/history/scheduled-curator/test-report.md",
+            "artifact": "docs/history/scheduled-curator/test-report.md"
+          }
+        ],
+        "recorded_at": "2026-11-22T00:48:18.809Z",
+        "recorded_by": "ea77756e-238f-43d2-a81c-92b8307fd227",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": {
+    "new": 40640,
+    "cached": 405704,
+    "total": 446344,
+    "models": {
+      "claude-sonnet-5-5": {
+        "new": 40640,
+        "cached": 405704,
+        "total": 446344
+      }
+    },
+    "jobs": [
+      "job-1795308312230-1495828-1"
+    ]
+  }
+}

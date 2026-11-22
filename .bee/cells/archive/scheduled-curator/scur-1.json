@@ -1,0 +1,273 @@
+{
+  "id": "scur-1",
+  "feature": "scheduled-curator",
+  "title": "Add the curator due kind and its per-project config",
+  "lane": "standard",
+  "role": "code",
+  "deps": [],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- upkeep audit && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test registry_contracts",
+  "must_haves": {
+    "why": "The scheduler needs one signal that says when this project curator should run.",
+    "out_of_scope": [
+      "the waggledance tick",
+      "the bee-curating skill text",
+      "the work-queue registry entries"
+    ],
+    "truths": [
+      "bee upkeep due --kind curator --json with no curator block reports present false and due false",
+      "with curator.enabled true, a pending capture stub and no curator-run audit row, the curator item is due with reason capture_queue and the verb exits 10",
+      "a curator-run audit row newer than cadence_hours moves the debt to info cadence_not_elapsed and due false",
+      "curator.kinds and curator.thresholds narrow which debt reasons appear",
+      "every item of bee upkeep due carries cadence_hours",
+      "bee audit log accepts --kind curator-run",
+      "bee upkeep due writes no file"
+    ]
+  },
+  "decisions": [
+    "bca6b659-f6c9-42b2-953a-8ac024a12566",
+    "9d7b5180-2cdd-4dd9-899d-eb24190e61ae",
+    "595d3c77-3f8f-46ec-a43b-7f702bcf9aaa"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/upkeep_group.rs",
+    "packages/bee-rs/crates/bee/src/audit.rs",
+    "packages/bee-rs/crates/bee/src/router.rs",
+    "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+    "packages/bee-rs/crates/bee/src/hooks/session_preamble/store.rs",
+    "packages/bee-rs/crates/bee/src/verbs/status_full/mod.rs"
+  ],
+  "read_first": [
+    "docs/history/scheduled-curator/CONTEXT.md",
+    "docs/history/upkeep-due-signal/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/verbs/upkeep_group.rs",
+    "packages/bee-rs/crates/bee/src/audit.rs",
+    "packages/bee-rs/crates/bee/src/herding.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/okf-profile/overview.md"
+  ],
+  "action": "Implement CONTEXT.md D1 and D2 in Rust. (1) audit.rs KINDS gains \"curator-run\" (bump the array length; fix any test or help listing the closed set). (2) In verbs/upkeep_group.rs add Kind::Curator: name curator, skill bee-curating, invoke /bee-curating, audit kind curator-run; --kind accepts curator and the refusal names all four kinds; the default set is all four. (3) A typed curator config read from .bee/config.json via crate::state::read_config_value, modeled on herding.rs ceiling_seconds (fail open to defaults): enabled bool default false; cadence_hours integer 1..=720 default 24; kinds subset of capture,promote,scribing default all; thresholds.capture/promote/scribing integer >= 1 default 1. Parse once into a struct; no loose Value reads in the assess logic. (4) Curator assess: present = enabled. Debt reasons for each enabled kind whose count >= its threshold: capture_queue from hooks/session_preamble/store.rs capture_queue_count, promote_unsettled from verbs/status_full/mod.rs unapplied_promote_proposals (len), scribing_orphaned from store.rs global_scribing_debt (cells count; detail names features count and the heaviest feature). Cadence: last_run = newest curator-run audit row; elapsed when none or its ts is older than cadence_hours. due = present and any debt reason and elapsed. When debt exists and the cadence has not elapsed, put the debt codes under info plus one info row cadence_not_elapsed whose detail names when it is next eligible, and keep reasons empty. (5) Every item JSON gains cadence_hours: the number for curator, null for the others. Text output names the cadence for curator. (6) router.rs:99 help lists knowledge|verify|fix-at|curator. Registry entry upkeep.due: kind enum gains fix-at if missing and curator; description names the curator item. (7) Read-only: no write of any file. Tests in the upkeep_group tests module (temp-dir stores, behavior): disabled or no block => present false due false; enabled + one capture stub + no row => due capture_queue, exit 10; a fresh curator-run row => due false, info cadence_not_elapsed; a row older than cadence_hours => due again; kinds [promote] hides capture_queue; threshold capture 5 with 1 stub => no capture_queue reason; every item has cadence_hours; bad --kind refuses naming four kinds; audit log accepts curator-run. No code comments. Proof: the cell verify; quote the counts.",
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "w-scur-1",
+    "outcome": "Curator due kind, per-project config, cadence_hours on all items and curator-run audit kind added; bc80d5476",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/upkeep_group.rs",
+      "packages/bee-rs/crates/bee/src/audit.rs",
+      "packages/bee-rs/crates/bee/src/router.rs",
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+      "docs/knowledge/areas/okf-profile/overview.md",
+      "docs/knowledge/areas/decision-memory/audit-log.md"
+    ],
+    "deviations": [
+      "sync-ack: worker committed bc80d5476 and reported the verify green but exited without capping"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-22T00:27:13.392Z",
+    "behavior_change": false,
+    "verification_evidence": "cargo clippy -D warnings && cargo test --release --no-fail-fast (6274 passed, 0 failed) — green:unit — touched upkeep due, audit kinds and registry",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "05d38719-2f82-4d82-adc5-df359559676c",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- upkeep audit && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test registry_contracts",
+    "claimed_at": "2026-11-22T00:20:46.421Z",
+    "knowledge_delta": [
+      "docs/knowledge/areas/okf-profile/overview.md",
+      "docs/knowledge/areas/decision-memory/audit-log.md"
+    ],
+    "sync_ack": "worker committed bc80d5476 and reported the verify green but exited without capping",
+    "no_mistakes": true,
+    "knowledge_used": [
+      {
+        "path": "docs/knowledge/areas/decision-memory/audit-log.md",
+        "changed": "registry enum and KINDS move together"
+      }
+    ],
+    "no_principles_used": true,
+    "changed_lines": 313,
+    "report": {
+      "outcome": "Curator due kind, per-project config, cadence_hours on all items and curator-run audit kind added; bc80d5476",
+      "commit": "bc80d5476a801bd5d568cfc45c44f40dea8015c9",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/upkeep_group.rs",
+        "packages/bee-rs/crates/bee/src/audit.rs",
+        "packages/bee-rs/crates/bee/src/router.rs",
+        "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+        "docs/knowledge/areas/okf-profile/overview.md",
+        "docs/knowledge/areas/decision-memory/audit-log.md"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- upkeep audit && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test registry_contracts — green:unit — cargo clippy -D warnings && cargo test --release --no-fail-fast (6274 passed, 0 failed) — green:unit — touched upkeep due, audit kinds and registry",
+      "deviations": [],
+      "knowledge_used": [
+        "docs/knowledge/areas/decision-memory/audit-log.md — registry enum and KINDS move together"
+      ],
+      "principles_used": [],
+      "skipped": [
+        "cargo test --test registry_contracts run alone — covered by the full suite run"
+      ],
+      "found": [
+        "upkeep_group tests need target/release/bee built first"
+      ],
+      "patch_id": "446d6d4f4fd0cc091bbc102adf8a2a3d91c179a6"
+    },
+    "skipped": [
+      "cargo test --test registry_contracts run alone — covered by the full suite run"
+    ],
+    "found": [
+      "upkeep_group tests need target/release/bee built first"
+    ],
+    "warnings": [
+      "advisory: this cap's commit changes 313 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "t1",
+            "status": "PASS",
+            "evidence": "upkeep_group.rs:411 present=enabled default false; test :757 exit 0 present/due false"
+          },
+          {
+            "id": "t2",
+            "status": "PASS",
+            "evidence": "upkeep_group.rs:344-355 no row -> reasons; test :774 exit 10 reasons [capture_queue]"
+          },
+          {
+            "id": "t3",
+            "status": "PASS",
+            "evidence": "upkeep_group.rs:344-352 info debt+cadence_not_elapsed; test :792 fresh row exit 0, 7h-old row exit 10"
+          },
+          {
+            "id": "t4",
+            "status": "PASS",
+            "evidence": "upkeep_group.rs:269-280 kinds/thresholds; test :815 kinds [promote] and capture threshold 5"
+          },
+          {
+            "id": "t5",
+            "status": "PASS",
+            "evidence": "upkeep_group.rs:379 cadence_hours on every item; test :848 four items, null vs number"
+          },
+          {
+            "id": "t6",
+            "status": "PASS",
+            "evidence": "audit.rs:27 curator-run; registry enum updated; test :861 via built binary"
+          },
+          {
+            "id": "t7",
+            "status": "PASS",
+            "evidence": "no writes in added code or count fns; test :774 full-tree snapshot equal"
+          },
+          {
+            "id": "no-comments",
+            "status": "PASS",
+            "evidence": "rg on added .rs lines for // or /* found none"
+          },
+          {
+            "id": "fail-open",
+            "status": "PASS",
+            "evidence": "from_value per-field defaults, corrupt layer skipped config_layers.rs:118-127; test :837"
+          },
+          {
+            "id": "cadence-boundary",
+            "status": "PASS",
+            "evidence": "at > now at :344, exactly-at-boundary counts as elapsed; untested (minor m2)"
+          },
+          {
+            "id": "tests-behavior",
+            "status": "PASS",
+            "evidence": "tests drive built bee via due() :537; cargo test -- upkeep: 25 passed 0 failed 1 ignored"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": null,
+        "model_independence": "unverified",
+        "recorded_at": "2026-11-22T00:31:18.167Z"
+      }
+    ],
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "bee upkeep due --kind curator --json with no curator block reports present false and due false",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/upkeep_group.rs"
+          },
+          {
+            "requirement": "with curator.enabled true, a pending capture stub and no curator-run audit row, the curator item is due with reason capture_queue and the verb exits 10",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/upkeep_group.rs"
+          },
+          {
+            "requirement": "a curator-run audit row newer than cadence_hours moves the debt to info cadence_not_elapsed and due false",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/upkeep_group.rs"
+          },
+          {
+            "requirement": "curator.kinds and curator.thresholds narrow which debt reasons appear",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/upkeep_group.rs"
+          },
+          {
+            "requirement": "every item of bee upkeep due carries cadence_hours",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/upkeep_group.rs"
+          },
+          {
+            "requirement": "bee audit log accepts --kind curator-run",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/upkeep_group.rs"
+          },
+          {
+            "requirement": "bee upkeep due writes no file",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/upkeep_group.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/upkeep_group.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/upkeep_group.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/audit.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/audit.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/router.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/router.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+            "artifact": "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+          },
+          {
+            "requirement": "docs/knowledge/areas/okf-profile/overview.md",
+            "artifact": "docs/knowledge/areas/okf-profile/overview.md"
+          },
+          {
+            "requirement": "docs/knowledge/areas/decision-memory/audit-log.md",
+            "artifact": "docs/knowledge/areas/decision-memory/audit-log.md"
+          }
+        ],
+        "recorded_at": "2026-11-22T00:48:18.733Z",
+        "recorded_by": "ea77756e-238f-43d2-a81c-92b8307fd227",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": {
+    "new": 79851,
+    "cached": 1012419,
+    "total": 1092270,
+    "models": {
+      "claude-sonnet-5-5": {
+        "new": 79851,
+        "cached": 1012419,
+        "total": 1092270
+      }
+    },
+    "jobs": [
+      "job-1795306848205-1140209-1"
+    ]
+  }
+}

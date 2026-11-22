@@ -1,0 +1,189 @@
+{
+  "id": "scur-2",
+  "feature": "scheduled-curator",
+  "title": "Declare the work-queue verbs in the registry",
+  "lane": "standard",
+  "role": "code",
+  "deps": [
+    "scur-1"
+  ],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test registry_contracts && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test registry_dispatch",
+  "must_haves": {
+    "why": "The curator settles a promote proposal with the work-queue complete verb; help and the shape guard must know it.",
+    "out_of_scope": [
+      "changing the work-queue verb behavior",
+      "the upkeep verb"
+    ],
+    "truths": [
+      "the registry declares deferred-queue add, list, claim, release and complete with the flags verbs/deferred_queue.rs accepts",
+      "bee deferred-queue complete --help --brief prints its flags instead of unknown command",
+      "registry_contracts and registry_dispatch pass"
+    ]
+  },
+  "decisions": [
+    "04671091-b71e-4698-aebe-cc564664a502",
+    "69cb3f47-2f01-4abb-8914-e9e3b771cfaf",
+    "2bc0da11-9d3c-426f-984c-000760902f40"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+    "packages/bee-rs/crates/bee/src/catalog.rs",
+    "packages/bee-rs/crates/bee/tests/verb_doctrine_home_allowlist.txt"
+  ],
+  "read_first": [
+    "docs/history/scheduled-curator/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/verbs/deferred_queue.rs",
+    "packages/bee-rs/crates/bee/tests/registry_contracts.rs",
+    "packages/bee-rs/crates/bee/tests/registry_dispatch.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Implement CONTEXT.md D4. A previous worker already wrote the five registry entries (deferred-queue add, list, claim, release, complete) into generated/registry_payload.json; they are UNCOMMITTED in this worktree and its report says registry_contracts and registry_dispatch pass. Review that diff against verbs/deferred_queue.rs parse code, keep it, and finish: (1) catalog.rs PINNED_FLAG_COUNT 267 -> 269 (new spellings --claimed, --lease), per decision 2bc0da11; (2) add allowlist rows with a reason to tests/verb_doctrine_home_allowlist.txt for deferred-queue claim, list and release (complete is named by skills/bee-curating); match the file format. Do NOT run bee dev regen. Run the cell verify plus cargo test for catalog and the verb_doctrine_home test. Commit only these three files with the cell trailer. No code comments. Proof: quote counts and the built binary answering deferred-queue complete --help --brief.",
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "w-scur-2",
+    "outcome": "Five deferred-queue verbs declared, flag pin 269, allowlist rows added; cell verify green but full suite has 1 failing preamble budget test, commit 24e301035",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+      "packages/bee-rs/crates/bee/src/catalog.rs",
+      "packages/bee-rs/crates/bee/tests/verb_doctrine_home_allowlist.txt"
+    ],
+    "deviations": [
+      "sync-ack: worker committed 24e301035 and reported its verify green but exited without capping"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-22T00:36:35.281Z",
+    "behavior_change": false,
+    "verification_evidence": "cargo test --release registry_contracts + registry_dispatch — green:unit — cell verify; full suite 6273 passed 1 failed (session_preamble command surface budget 2947>2900)",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "05d38719-2f82-4d82-adc5-df359559676c",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test registry_contracts && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test registry_dispatch",
+    "claimed_at": "2026-11-22T00:32:48.800Z",
+    "verified_at": null,
+    "baseline": null,
+    "reaction": "partial",
+    "skipped": [
+      "knowledge delta — files limited to three"
+    ],
+    "unknowns": null,
+    "found": [
+      "hooks::session_preamble::tests::the_command_surface_section_stays_inside_its_character_budget fails at 2947 chars vs COMMAND_SURFACE_BUDGET_CHARS 2900 (budget.rs:100) because of the five new verbs; needs a budget bump in a file outside this cell"
+    ],
+    "stopped": "full-suite proof not green — session_preamble budget test fails at 2947 > 2900 after adding five verbs",
+    "knowledge_delta": [],
+    "sync_ack": "worker committed 24e301035 and reported its verify green but exited without capping",
+    "no_mistakes": true,
+    "no_principles_used": true,
+    "changed_lines": 7,
+    "report": {
+      "outcome": "Five deferred-queue verbs declared, flag pin 269, allowlist rows added; cell verify green but full suite has 1 failing preamble budget test, commit 24e301035",
+      "commit": "24e3010352edf544f1fe8f6699d6fef810293328",
+      "files": [
+        "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+        "packages/bee-rs/crates/bee/src/catalog.rs",
+        "packages/bee-rs/crates/bee/tests/verb_doctrine_home_allowlist.txt"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test registry_contracts && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test registry_dispatch — green:unit — cargo test --release registry_contracts + registry_dispatch — green:unit — cell verify; full suite 6273 passed 1 failed (session_preamble command surface budget 2947>2900)",
+      "deviations": [],
+      "principles_used": [],
+      "reaction": "partial",
+      "skipped": [
+        "knowledge delta — files limited to three"
+      ],
+      "found": [
+        "hooks::session_preamble::tests::the_command_surface_section_stays_inside_its_character_budget fails at 2947 chars vs COMMAND_SURFACE_BUDGET_CHARS 2900 (budget.rs:100) because of the five new verbs; needs a budget bump in a file outside this cell"
+      ],
+      "stopped": "full-suite proof not green — session_preamble budget test fails at 2947 > 2900 after adding five verbs",
+      "patch_id": "75a615df49943f291ab5476624c21365f913e7fb"
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "the registry declares deferred-queue add, list, claim, release and complete with the flags verbs/deferred_queue.rs accepts",
+            "status": "PASS",
+            "evidence": "deferred_queue.rs:455-460 parse_shape value_flags equal registry commands[177..181] properties for all five verbs (plus --json, feedback.rs:265); kind enum = KINDS deferred_queue.rs:66; claimed enum matches :535-538"
+          },
+          {
+            "id": "bee deferred-queue complete --help --brief prints its flags instead of unknown command",
+            "status": "PASS",
+            "evidence": "fresh packages/bee-rs/target/release/bee (07:43, post-commit) prints --id/--kind/--feature/--owner, exit 0; cached ~/.cache/cargo-target/release/bee predates commit and still says unknown command"
+          },
+          {
+            "id": "registry_contracts and registry_dispatch pass",
+            "status": "PASS",
+            "evidence": "cargo test --release --test registry_contracts: ok. 12 passed; 0 failed. --test registry_dispatch: ok. 10 passed; 0 failed"
+          },
+          {
+            "id": "no code comments added",
+            "status": "PASS",
+            "evidence": "added lines: catalog.rs:823 const change, 3 allowlist data rows, JSON entries; no comments"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "sonnet",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-11-22T00:44:24.597Z"
+      }
+    ],
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "the registry declares deferred-queue add, list, claim, release and complete with the flags verbs/deferred_queue.rs accepts",
+            "artifact": "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+          },
+          {
+            "requirement": "bee deferred-queue complete --help --brief prints its flags instead of unknown command",
+            "artifact": "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+          },
+          {
+            "requirement": "registry_contracts and registry_dispatch pass",
+            "artifact": "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+            "artifact": "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/catalog.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/catalog.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/tests/verb_doctrine_home_allowlist.txt",
+            "artifact": "packages/bee-rs/crates/bee/tests/verb_doctrine_home_allowlist.txt"
+          }
+        ],
+        "recorded_at": "2026-11-22T00:48:18.757Z",
+        "recorded_by": "ea77756e-238f-43d2-a81c-92b8307fd227",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": {
+    "new": 91497,
+    "cached": 906147,
+    "total": 997644,
+    "models": {
+      "claude-sonnet-5-5": {
+        "new": 91497,
+        "cached": 906147,
+        "total": 997644
+      }
+    },
+    "jobs": [
+      "job-1795307239468-1249456-1",
+      "job-1795307570380-1334172-1"
+    ]
+  }
+}

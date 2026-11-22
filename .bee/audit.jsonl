@@ -549,3 +549,4 @@
 {"id":"89cbf482-d2a2-4832-853c-681fd8faa4a9","ts":"2026-11-22T00:41:35.045Z","kind":"gate","feature":"scheduled-curator","note":"gate shape set to true by auto","source":"bee gate","bypass_level":"full"}
 {"id":"9c45530d-a909-4dac-b267-a20eaf765a77","ts":"2026-11-22T00:41:35.046Z","kind":"gate","feature":"scheduled-curator","note":"gate execution set to true by auto","source":"bee gate","bypass_level":"full"}
 {"id":"838034b1-e449-4200-9905-209277b6042b","ts":"2026-11-22T00:41:35.046Z","kind":"gate-bypass","feature":"scheduled-curator","note":"gate shape, execution set to true by auto: FULL AUTOPILOT: scur-4 tester now depends on fix cell scur-5","source":"bee gate","bypass_level":"full"}
+{"id":"7be6650e-f82c-409a-8650-267db922bd95","ts":"2026-11-22T00:55:34.589Z","kind":"gate","feature":"scheduled-curator","note":"gate uat set to true by user","source":"bee gate"}

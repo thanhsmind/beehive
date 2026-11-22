@@ -1,0 +1,122 @@
+{
+  "id": "scur-5",
+  "feature": "scheduled-curator",
+  "title": "Fit the work-queue verbs into the preamble command-surface budget",
+  "lane": "standard",
+  "role": "code",
+  "deps": [
+    "scur-2"
+  ],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- session_preamble",
+  "must_haves": {
+    "why": "The five work-queue verbs scur-2 declared grow the preamble command surface to 2947 characters, over its 2900 budget, and the full suite is red.",
+    "out_of_scope": [
+      "the registry entries",
+      "the command-surface renderer"
+    ],
+    "truths": [
+      "COMMAND_SURFACE_BUDGET_CHARS is 3000",
+      "the_command_surface_section_stays_inside_its_character_budget passes",
+      "every session_preamble test passes"
+    ]
+  },
+  "decisions": [
+    "26ead1c7-54bb-4cc0-a6f6-2c75f2e1a1bc"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs",
+    "packages/bee-rs/crates/bee/src/hooks/session_preamble/tests.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Change COMMAND_SURFACE_BUDGET_CHARS in packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs from 2900 to 3000, per decision 26ead1c7. Change nothing else. If another session_preamble budget test also fails for the same growth, report it instead of widening scope. No code comments. Proof: the cell verify; quote the counts.",
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "scur5-worker",
+    "outcome": "Raised COMMAND_SURFACE_BUDGET_CHARS 2900 to 3000; session_preamble 87 passed, full suite 6274 passed 0 failed, clippy clean; commit 66de31f5f40add7c7e9bf3a6c2494de4090451d0",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs"
+    ],
+    "deviations": [
+      "sync-ack: one-constant budget raise; the why lives in decision 26ead1c7, no knowledge concept states the old number"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-22T00:45:01.432Z",
+    "behavior_change": false,
+    "verification_evidence": "cargo clippy -D warnings && cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml — green:unit — full suite after one-constant budget change",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "ea77756e-238f-43d2-a81c-92b8307fd227",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- session_preamble",
+    "claimed_at": "2026-11-22T00:41:43.020Z",
+    "knowledge_delta": [],
+    "sync_ack": "one-constant budget raise; the why lives in decision 26ead1c7, no knowledge concept states the old number",
+    "no_mistakes": true,
+    "no_principles_used": true,
+    "changed_lines": 2,
+    "report": {
+      "outcome": "Raised COMMAND_SURFACE_BUDGET_CHARS 2900 to 3000; session_preamble 87 passed, full suite 6274 passed 0 failed, clippy clean; commit 66de31f5f40add7c7e9bf3a6c2494de4090451d0",
+      "commit": "66de31f5f40add7c7e9bf3a6c2494de4090451d0",
+      "files": [
+        "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- session_preamble — green:unit — cargo clippy -D warnings && cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml — green:unit — full suite after one-constant budget change",
+      "deviations": [],
+      "principles_used": [],
+      "skipped": [
+        "knowledge concept update — one-constant change, why recorded in decision 26ead1c7"
+      ],
+      "patch_id": "62066672ef80de0846b85bab20c4778f116a58c5"
+    },
+    "skipped": [
+      "knowledge concept update — one-constant change, why recorded in decision 26ead1c7"
+    ],
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "COMMAND_SURFACE_BUDGET_CHARS is 3000",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs"
+          },
+          {
+            "requirement": "the_command_surface_section_stays_inside_its_character_budget passes",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs"
+          },
+          {
+            "requirement": "every session_preamble test passes",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs"
+          }
+        ],
+        "recorded_at": "2026-11-22T00:48:18.835Z",
+        "recorded_by": "ea77756e-238f-43d2-a81c-92b8307fd227",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": {
+    "new": 19950,
+    "cached": 144228,
+    "total": 164178,
+    "models": {
+      "claude-sonnet-5-5": {
+        "new": 19950,
+        "cached": 144228,
+        "total": 164178
+      }
+    },
+    "jobs": [
+      "job-1795308111264-1449706-1"
+    ]
+  }
+}
