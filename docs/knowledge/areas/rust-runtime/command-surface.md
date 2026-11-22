@@ -177,6 +177,17 @@ bought a smaller help output at the price of a blind guard.
   compares against the global layer and nothing else does. Where the moved
   keys live and the layer order: `config_layers.rs`
   (team-global-config D7, D8, D11, D12, D13, tgc-4, 2026-11-16).
+<!-- bee:not-a-deferral: names the deferred-queue verb, a command name, not a promise to act -->
+
+- R12 — **The work-queue verbs are declared commands.** `deferred-queue add`,
+  `list`, `claim`, `release` and `complete` (`verbs/deferred_queue.rs`) sit in
+  `registry_payload.json`, so `bee deferred-queue complete --help --brief`
+  prints its flags and the CLI-shape guard checks them. The five names grew
+  the preamble command surface to 2947 characters, and
+  `COMMAND_SURFACE_BUDGET_CHARS` moved from 2900 to 3000 in the same feature
+  (scheduled-curator D4, scur-2, scur-5, 2026-11-22).
+
+<!-- /bee:not-a-deferral -->
 
 ## Edge Cases Settled
 

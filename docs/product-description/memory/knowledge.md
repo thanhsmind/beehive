@@ -133,7 +133,11 @@ Budgets by lane: tiny 8000, small 12000, standard 20000, high-risk 30000. An exp
 
 Every proposed line traces to a cell trace or the work item; nothing is invented. `writes` in the JSON payload is always `[]`, and the human text says so at the top: `PROPOSAL ONLY — nothing was written.`
 
+<!-- bee:not-a-deferral: names the deferred-queue verb, a command name, not a promise to act -->
+
 `bee close` no longer writes a proposal. It once ran `promote` for the feature, wrote the rendered proposal to `docs/history/<feature>/promote-proposals.md`, appended a capture stub naming that file and enqueued a `promote` record in the deferred queue. The writer cell now consolidates knowledge before merge (`skills/bee-capturing/SKILL.md`, Compound step 2), so no new proposal file appears. The files already on disk, and their queue records, are legacy debt: `bee-curating` reads each one, applies what clears the promotion bars, and settles it with `bee deferred-queue complete --kind promote --feature <feature>`.
+
+<!-- /bee:not-a-deferral -->
 
 Applying a proposal is a human or agent decision, and it is a plain file write: author the delivery concept, edit the area document, save the pattern. Declining is equally explicit — record why not. Either way the proposal is *cleared* through the queue records, not by deleting the file. Until one of them clears, `bee orient` and the session preamble carry the debt: `### Unapplied promote proposal(s): 2 — newest: docs/history/f2/promote-proposals.md — review the proposal, then apply what belongs to docs/knowledge/ or record why not.` The file itself is kept as the audit trail either way.
 

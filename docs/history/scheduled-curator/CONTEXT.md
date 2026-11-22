@@ -28,6 +28,8 @@ schedule tick itself is waggledance's (handed to its leader).
 
 ## Locked Decisions
 
+<!-- bee:not-a-deferral: names the deferred-queue verb, a command name, not a promise to act -->
+
 | ID | Decision | Store id |
 |---|---|---|
 | D1 | Per-project `curator` block in `.bee/config.json`: `enabled` (bool, default false), `cadence_hours` (integer 1..720, default 24), `kinds` (subset of `capture`, `promote`, `scribing`; default all three), `thresholds` {`capture`, `promote`, `scribing`} (integer >= 1, default 1 each). A missing or bad value falls back to its default, like `herding.ceiling_seconds`. Setup is `bee config set curator.enabled true` plus any cadence or threshold key; no new setup verb. | bca6b659 |
@@ -36,6 +38,8 @@ schedule tick itself is waggledance's (handed to its leader).
 | D4 | The work-queue verb group of `verbs/deferred_queue.rs` (add, list, claim, release, complete) joins `registry_payload.json`, so help, the command surface and the CLI-shape guard know it. The preamble clear line stays; it is now a declared command. | 04671091 |
 | D5 | The schedule tick lives in waggledance: its daemon runs `bee upkeep due --json` per registered project on a fixed tick and dispatches each due item's `invoke` to that project's leader, one dispatch per project, kind and window. bee owns no scheduler. The okf-profile overview "Scheduled upkeep" section and `docs/config-reference.md` describe the curator block and this setup. Handed to the waggledance leader as run `run-fe3c8669856e98a2`. | a9b01f87 |
 | D6 | `docs/product-description/memory/knowledge.md` is corrected to match `skills/bee-capturing/SKILL.md`: `bee close` no longer writes `promote-proposals.md`; the existing files are legacy debt the curator settles. | b113f500 |
+
+<!-- /bee:not-a-deferral -->
 
 ## Read set
 
