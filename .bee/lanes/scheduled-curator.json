@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "scheduled-curator",
   "mode": null,
-  "phase": "exploring",
+  "phase": "idle",
   "approved_gates": {
     "context": true,
     "shape": true,
@@ -11,9 +11,9 @@
     "uat": true
   },
   "summary": "Feature \"scheduled-curator\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at b0f536a; reload the product and test \"scheduled-curator\", then either approve uat (\"bee gate --name uat --approved true --lane scheduled-curator\") or fix it in the worktree and merge again.",
+  "next_action": "bee close finished \"scheduled-curator\" — feature is closed.",
   "created_at": "2026-11-22T00:13:05.742Z",
-  "run_state": "done",
+  "run_state": "shaping",
   "waiting_on": null,
   "gate_preview": {
     "feature": "scheduled-curator",
