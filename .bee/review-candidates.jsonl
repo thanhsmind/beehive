@@ -168,3 +168,4 @@
 {"id":"574a2bb8-3167-429e-9b6b-5b3ef941f3ba","type":"candidate","date":"2026-10-06T10:05:18.245Z","feature":"herding-leader-toil","head":"3af625b1e","mode":"high-risk","baseline":"569490ef4","cells":["hlt-1","hlt-2","hlt-3","hlt-4","hlt-5","hlt-6","hlt-7"]}
 {"id":"c83ca80b-66d3-40ea-9c38-4da35f6e524a","type":"candidate","date":"2026-10-24T11:01:18.992Z","feature":"design-os-in-bee","head":"1473306d2","mode":"high-risk","baseline":null,"cells":[]}
 {"id":"ae081862-5b8c-4264-8b50-779250d7cb08","type":"candidate","date":"2026-10-27T14:50:55.848Z","feature":"capture-drain-20261027","head":"7b6ae6e75","mode":"docs","baseline":null,"cells":[]}
+{"id":"650a5175-691b-47a2-ba2f-a685b46a06ae","type":"candidate","date":"2026-11-22T00:56:54.480Z","feature":"scheduled-curator","head":"e88f0a8","mode":"standard","baseline":"1602d5577","cells":["scur-1","scur-2","scur-3","scur-4","scur-5"]}
