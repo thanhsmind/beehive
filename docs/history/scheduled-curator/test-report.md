@@ -8,7 +8,11 @@ Verdict: pass. No production defect found.
 
 ## Sandbox run
 
+<!-- bee:not-a-deferral: names the deferred-queue verb, a command name, not a promise to act -->
+
 Binary: `packages/bee-rs/target/release/bee` (carries `deferred-queue complete`; the shared `/home/thanhsmind/.cache/cargo-target/release/bee` is stale and does not). Sandbox: `.bee/tmp/scur4-sandbox`. `bee onboard` refuses outside a bee checkout, so `.bee/onboarding.json` was written the way the upkeep_group test helper does.
+
+<!-- /bee:not-a-deferral -->
 
 ```
 $ bee config set --key curator.enabled --value true
@@ -90,11 +94,19 @@ bee deferred-queue complete
 exit 0
 ```
 
+<!-- bee:not-a-deferral: names the deferred-queue verb, a command name, not a promise to act -->
+
 Truths: due true / capture_queue / exit 10; after the curator-run row due false, info cadence_not_elapsed, exit 0; deferred-queue complete prints its flags.
+
+<!-- /bee:not-a-deferral -->
 
 ## Skill against D3
 
+<!-- bee:not-a-deferral: names the deferred-queue verb, a command name, not a promise to act -->
+
 `skills/bee-curating/SKILL.md` has `disable-model-invocation: true`, opens with `bee upkeep due --kind curator --json` (line 49), caps promote at 10 and scribing at 5, uses `bee deferred-queue complete --kind promote --feature` and `bee state scribing-run`, and ends step 6 with `bee audit log --kind curator-run --feature curator --note "<clean|changed|blocked> — <one line>"`. Matches D3.
+
+<!-- /bee:not-a-deferral -->
 
 ## Test gap against D2
 
