@@ -981,6 +981,10 @@
     "contract:published-release-2-115-0",
     "contract:tct-docs-claims",
     "contract:published-release-2-116-0",
-    "contract:published-release-2-116-1"
+    "contract:published-release-2-116-1",
+    "curator",
+    "work-queue",
+    "contract:upkeep-curator-due",
+    "contract:work-queue-registry"
   ]
 }
