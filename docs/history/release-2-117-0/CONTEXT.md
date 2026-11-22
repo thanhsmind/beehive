@@ -27,7 +27,7 @@ release class playbook is `skills/bee-planning/playbooks/release.md`.
 
 The released version is 2.116.1. Since then main gained new behavior:
 scheduled-curator added the curator due kind, its per-project config, the
-deferred-queue work-queue verbs and the bee-curating skill. A new feature,
+work-queue verbs and the bee-curating skill. A new feature,
 so a minor bump.
 
 ## Read set
