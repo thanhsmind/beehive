@@ -11,10 +11,15 @@
     "uat": false
   },
   "summary": "Feature \"scheduled-curator\" started at phase \"exploring\" (lane).",
-  "next_action": "Continue bee-exploring for \"scheduled-curator\" (lane).",
+  "next_action": "Merged into main at bc01159; reload the product and test \"scheduled-curator\", then either approve uat (\"bee gate --name uat --approved true --lane scheduled-curator\") or fix it in the worktree and merge again.",
   "created_at": "2026-11-22T00:13:05.742Z",
   "run_state": "awaiting-approval",
-  "waiting_on": null,
+  "waiting_on": {
+    "kind": "gate",
+    "subject": "uat: scheduled-curator",
+    "asked_at": "2026-11-22T00:49:47.578Z",
+    "session": "bee-worktree-merge-sessionless"
+  },
   "gate_preview": {
     "feature": "scheduled-curator",
     "plan_sha256": "9be109fa77abf64df57217a26a91aa1a4edcc6036ad75f7fb1da26ad161aa364",
@@ -769,12 +774,5 @@
     "rationale": null,
     "updated_at": "2026-11-22T00:21:22.576Z",
     "feature": "scheduled-curator"
-  },
-  "merge_ready": {
-    "since": "2026-11-22T00:47:41.479Z",
-    "branch": "wt/scheduled-curator",
-    "worktree_id": "beehive--wt--scheduled-curator",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
