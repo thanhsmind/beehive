@@ -462,5 +462,14 @@
         }
       ]
     }
+  },
+  "route": {
+    "class": "release",
+    "lane": "tiny",
+    "flags": [],
+    "product_files": 0,
+    "rationale": "release execution through scripts/release.sh; no product files",
+    "updated_at": "2026-11-22T00:59:46.760Z",
+    "feature": "release-2-117-0"
   }
 }
