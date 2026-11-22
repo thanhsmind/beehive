@@ -11,13 +11,13 @@
     "uat": false
   },
   "summary": "Feature \"scheduled-curator\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at bc01159; reload the product and test \"scheduled-curator\", then either approve uat (\"bee gate --name uat --approved true --lane scheduled-curator\") or fix it in the worktree and merge again.",
+  "next_action": "Merged into main at b0f536a; reload the product and test \"scheduled-curator\", then either approve uat (\"bee gate --name uat --approved true --lane scheduled-curator\") or fix it in the worktree and merge again.",
   "created_at": "2026-11-22T00:13:05.742Z",
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "gate",
     "subject": "uat: scheduled-curator",
-    "asked_at": "2026-11-22T00:49:47.578Z",
+    "asked_at": "2026-11-22T00:51:27.883Z",
     "session": "bee-worktree-merge-sessionless"
   },
   "gate_preview": {
