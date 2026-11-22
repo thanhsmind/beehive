@@ -1,0 +1,97 @@
+{
+  "id": "rel21170-1",
+  "feature": "release-2-117-0",
+  "title": "Publish release 2.117.0 through the sanctioned script",
+  "lane": "small",
+  "role": "deploy",
+  "deps": [],
+  "decisions": [
+    "307ac212-f71e-450c-9272-a356b967dc20"
+  ],
+  "files": [
+    ".claude-plugin/plugin.json",
+    ".codex-plugin/plugin.json",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/release-2-117-0/CONTEXT.md",
+    "scripts/release.sh"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Run `scripts/release.sh 2.117.0` with BEE_DISPATCH_ID set to an authorized deployment dispatch and the CI-pinned opencode 1.18.16 (/mnt/data/Projects/goglbe/beehive/.bee/tmp/oc11816/bin) first on PATH and CARGO_TARGET_DIR=/home/thanhsmind/.cache/cargo-target-rel21170, so the opencode contract tests run green. The script bumps both plugin manifests, runs the regen chain (render-skill-trees, onboard --apply, release-manifest --write), runs the declared test suite before tagging, makes the release commit, tags v2.117.0, pushes main and the tag, waits for the release-binaries workflow and verifies the published assets. Never walk those steps by hand. Re-running at a version already committed is idempotent — it resumes the tail. The regen obligation on .claude-plugin/plugin.json is discharged INSIDE the script's own regen chain, which is why the release manifest rides this cell's files.",
+  "verify": "bash scripts/release.sh 2.117.0 && bee dev release-manifest --check",
+  "must_haves": {
+    "truths": [
+      "both plugin manifests report 2.117.0",
+      "tag v2.117.0 exists locally and on the remote",
+      "the GitHub release for v2.117.0 carries the binaries and SHA256SUMS",
+      "the script printed its final OK line"
+    ],
+    "artifacts": [
+      {
+        "path": ".claude-plugin/plugin.json",
+        "substantive": "version 2.117.0"
+      },
+      {
+        "path": ".codex-plugin/plugin.json",
+        "substantive": "version 2.117.0"
+      }
+    ],
+    "key_links": [
+      "the pushed tag is what triggers release-binaries.yml"
+    ],
+    "prohibitions": [
+      "Do not hand-walk bump, tag or push",
+      "Do not skip the test gate"
+    ]
+  },
+  "behavior_change": false,
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "deploy-rel21170",
+    "outcome": null,
+    "files_changed": [
+      ".claude-plugin/plugin.json",
+      ".codex-plugin/plugin.json",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [
+      "The leader exported the CI-pinned opencode 1.18.16 PATH and a private CARGO_TARGET_DIR before the returned payload, as the cell action asks; the payload itself ran unchanged.",
+      "sync-ack: release publishes main as-is; no knowledge sync owed"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-22T01:09:00.814Z",
+    "behavior_change": false,
+    "verification_evidence": "release.sh final line 'OK       bee 2.117.0 is live — installers now serve v2.117.0'; release-binaries run https://github.com/thanhsmind/beehive/actions/runs/44969643972 success; tag v2.117.0 on origin at 0825ac7a; GitHub release carries 5 binaries and SHA256SUMS",
+    "verify_output": "green:live",
+    "verify_passed": true,
+    "claim_session": "178d374f-0c7e-41c7-b024-cb4f5452fa41",
+    "verify_command": "bash scripts/release.sh 2.117.0 && bee dev release-manifest --check",
+    "claimed_at": "2026-11-22T00:59:42.714Z",
+    "knowledge_delta": [],
+    "sync_ack": "release publishes main as-is; no knowledge sync owed",
+    "no_mistakes": true,
+    "commit_pending": "release.sh makes the release commit 0825ac7a with no cell trailer",
+    "changed_lines": 20,
+    "report": {
+      "outcome": "done",
+      "commit": "0825ac7aac1c7642c7f9da8d81e2f9b1a21c55f0",
+      "files": [
+        ".claude-plugin/plugin.json",
+        ".codex-plugin/plugin.json",
+        "docs/history/codex-harness-hardening/release-manifest.json"
+      ],
+      "tests": "bash scripts/release.sh 2.117.0 && bee dev release-manifest --check — green:live — release.sh final line 'OK       bee 2.117.0 is live — installers now serve v2.117.0'; release-binaries run https://github.com/thanhsmind/beehive/actions/runs/44969643972 success; tag v2.117.0 on origin at 0825ac7a; GitHub release carries 5 binaries and SHA256SUMS",
+      "deviations": [
+        "The leader exported the CI-pinned opencode 1.18.16 PATH and a private CARGO_TARGET_DIR before the returned payload, as the cell action asks; the payload itself ran unchanged."
+      ],
+      "patch_id": "34d5f74d320557241ec62520e8339dbca0f6fd54"
+    },
+    "warnings": [],
+    "tests": "boundary"
+  },
+  "usage": null,
+  "usage_reason": "no herding job names this cell: no session is attributable to it"
+}
