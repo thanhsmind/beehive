@@ -13,9 +13,9 @@ bee:
   owns.code: [packages/bee-rs/crates/bee/src/verbs/knowledge/*]
   owns.skills: []
   owns.tests: [packages/bee-rs/crates/bee/src/verbs/knowledge/tests.rs, packages/bee-rs/crates/bee/tests/specs_fence.rs, packages/bee-rs/crates/bee/tests/pointer_integrity.rs]
-  anchors: [scripts/, skills/bee-knowledge-setup/SKILL.md, skills/bee-knowledge-upkeep/SKILL.md, skills/bee-verify-upkeep/SKILL.md]
-  verified_at: 2026-11-10
-  verified_commit: f1c771b12fbf1a9b491a54191cb1f6423e911ec3
+  anchors: [scripts/, skills/bee-knowledge-setup/SKILL.md, skills/bee-knowledge-upkeep/SKILL.md, skills/bee-verify-upkeep/SKILL.md, skills/bee-curating/SKILL.md, packages/bee-rs/crates/bee/src/verbs/upkeep_group.rs]
+  verified_at: 2026-11-22
+  verified_commit: bc80d5476a801bd5d568cfc45c44f40dea8015c9
 ---
 
 # Bee OKF Profile (purpose, entry points, and actors)
@@ -123,6 +123,23 @@ the job dispatches that item's `invoke` text (`/bee-knowledge-upkeep` or
 The verb is read-only (upkeep-due-signal D1, D2). A run clears its own signal by ending with a
 `knowledge-upkeep` or `verify-upkeep` audit row (D3); the reasons that make each
 kind due are upkeep-due-signal D4 (knowledge) and upkeep-due-signal D5 (verify). bee gives the signal and owns no scheduler.
+
+The `curator` item (scheduled-curator D1, D2) differs from the other kinds in one way: it is
+opt-in per project through the `curator` block of `.bee/config.json`, and its due test adds a
+debt threshold and a cadence window to the audit-row check. Debt inside the window is shown under
+`info` and never sets due, so a scheduler that ticks often does not re-dispatch a pass that just
+ran. Read the verb's output or the registry entry `upkeep.due` for the reason codes and defaults,
+not this page.
+
+Its invoke text is `/bee-curating`, a skill that drains the capture queue, unsettled promote
+proposals and orphaned scribing in one bounded pass and ends with a `curator-run` audit row
+(scheduled-curator D3). The owner turns a project's curator on with
+`.bee/bin/bee config set curator.enabled true`; the block's other keys (`cadence_hours`, `kinds`,
+`thresholds`) are optional and default as `docs/config-reference.md` lists, and a missing or bad
+value falls back to its default (scheduled-curator D1). The schedule is waggledance's: its daemon
+runs `bee upkeep due --json` on every registered project on a fixed tick and dispatches each due
+item's invoke to that project's leader, one dispatch per project, kind and window
+(scheduled-curator D5). bee still owns no scheduler.
 
 ## Actors & Access
 

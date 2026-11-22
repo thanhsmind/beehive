@@ -6,6 +6,9 @@ config validate :: diagnostic that checks the config layers, surfaced through do
 decisions archive :: log-compaction housekeeping for decisions.jsonl with no agent decision in it
 decisions redact :: maintainer correction of one decision's status, used on request and not part of a flow
 decisions render :: renders docs/decisions/index.md, a generated view run by the binary and scripts
+deferred-queue claim :: queue-internal claim step that the curator and a future queue consumer run, not named in a skill flow yet
+deferred-queue list :: read of the deferred queue for those same consumers, not named in a skill flow yet
+deferred-queue release :: queue-internal release of a claim, the inverse of claim, not named in a skill flow yet
 dev install-support :: installer JSON steps called by the install scripts, never by an agent
 dev plugin-distribution :: installer distribution preflight called by the install scripts, never by an agent
 dev release-manifest :: release and CI hash check run by scripts/release.sh and CI, not by an agent
