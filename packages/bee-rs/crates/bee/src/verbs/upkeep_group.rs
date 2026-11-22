@@ -834,6 +834,22 @@ mod tests {
     }
 
     #[test]
+    fn an_unapplied_promote_proposal_is_curator_debt_and_a_kinds_filter_hides_it() {
+        let tmp = store();
+        let dir = tmp.path().join("docs/history/demo");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("promote-proposals.md"), "# Promote proposals — demo — 1 capped cell(s): c1\n").unwrap();
+        enable_curator(tmp.path(), json!({"enabled": true}));
+        let (code, v, text) = due(tmp.path(), &["--kind", "curator", "--json"]);
+        assert_eq!(code, Some(10), "{text}");
+        assert_eq!(reason_codes(item(&v, "curator"), "reasons"), vec!["promote_unsettled"]);
+        enable_curator(tmp.path(), json!({"enabled": true, "kinds": ["capture"]}));
+        let (code, v, text) = due(tmp.path(), &["--kind", "curator", "--json"]);
+        assert_eq!(code, Some(0), "{text}");
+        assert!(reason_codes(item(&v, "curator"), "reasons").is_empty());
+    }
+
+    #[test]
     fn a_bad_curator_block_falls_back_to_defaults() {
         let cfg = CuratorConfig::from_value(&json!({"curator": {"enabled": "yes", "cadence_hours": 0, "kinds": ["nope"], "thresholds": {"capture": 0, "promote": "x"}}}));
         assert!(!cfg.enabled);
