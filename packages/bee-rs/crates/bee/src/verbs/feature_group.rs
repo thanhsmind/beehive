@@ -873,6 +873,328 @@ mod tests {
         assert!(audit_rows(&repo).is_empty());
     }
 
+    const FAKE_WAGGLEDANCE: &str = r#"#!/bin/sh
+case "$1" in
+  list) echo '{"projects":[{"id":"proj-hive","root_path":"__ROOT__"}]}' ;;
+  runs) echo '{"runs":[{"id":"run-other","pane_id":"paseo:agent-other"},{"id":"run-mine","pane_id":"paseo:agent-me"}]}' ;;
+  dispatch) printf '%s\n' "$@" > '__ARGV__'; __DISPATCH__ ;;
+  *) exit 9 ;;
+esac
+"#;
+
+    #[derive(Clone, Copy, Debug)]
+    enum FakeDispatch {
+        Sends,
+        ExitsNonZero,
+        Unparsable,
+    }
+
+    struct FakeWaggledance {
+        prior_path: Option<OsString>,
+        prior_agent: Option<OsString>,
+        argv_file: PathBuf,
+    }
+
+    impl FakeWaggledance {
+        fn install(tmp: &Path, listed_root: &Path, agent: Option<&str>, dispatch: FakeDispatch) -> Self {
+            let bin = tmp.join("fake-bin");
+            std::fs::create_dir_all(&bin).unwrap();
+            let argv_file = tmp.join("dispatch-argv.txt");
+            let listed = std::fs::canonicalize(listed_root).unwrap_or_else(|_| listed_root.to_path_buf());
+            let body = match dispatch {
+                FakeDispatch::Sends => r#"echo '{"run_id":"run-new-7","status":"queued"}'"#,
+                FakeDispatch::ExitsNonZero => r#"echo '{"run_id":"run-bad"}'; echo 'dispatch exploded' >&2; exit 3"#,
+                FakeDispatch::Unparsable => "echo 'queued, maybe'",
+            };
+            let script = FAKE_WAGGLEDANCE
+                .replace("__ROOT__", &listed.to_string_lossy())
+                .replace("__ARGV__", &argv_file.to_string_lossy())
+                .replace("__DISPATCH__", body);
+            let exe = bin.join("waggledance");
+            std::fs::write(&exe, script).unwrap();
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&exe, std::fs::Permissions::from_mode(0o755)).unwrap();
+            let prior_path = std::env::var_os("PATH");
+            let prior_agent = std::env::var_os("PASEO_AGENT_ID");
+            let mut dirs = vec![bin];
+            if let Some(p) = &prior_path {
+                dirs.extend(std::env::split_paths(p));
+            }
+            unsafe {
+                std::env::set_var("PATH", std::env::join_paths(dirs).unwrap());
+                match agent {
+                    Some(a) => std::env::set_var("PASEO_AGENT_ID", a),
+                    None => std::env::remove_var("PASEO_AGENT_ID"),
+                }
+            }
+            Self { prior_path, prior_agent, argv_file }
+        }
+
+        fn dispatch_argv(&self) -> Option<Vec<String>> {
+            std::fs::read_to_string(&self.argv_file)
+                .ok()
+                .map(|t| t.lines().map(str::to_string).collect())
+        }
+    }
+
+    impl Drop for FakeWaggledance {
+        fn drop(&mut self) {
+            unsafe {
+                match &self.prior_path {
+                    Some(v) => std::env::set_var("PATH", v),
+                    None => std::env::remove_var("PATH"),
+                }
+                match &self.prior_agent {
+                    Some(v) => std::env::set_var("PASEO_AGENT_ID", v),
+                    None => std::env::remove_var("PASEO_AGENT_ID"),
+                }
+            }
+        }
+    }
+
+    fn handoff_argv(feature: &str, task: Option<&str>, same_session: Option<&str>) -> Vec<OsString> {
+        let mut argv = start_argv(feature, same_session);
+        if let Some(t) = task {
+            argv.push(OsString::from("--handoff-task"));
+            argv.push(OsString::from(t));
+        }
+        argv
+    }
+
+    fn seed_merged_session(repo: &Path, sid: &str) {
+        crate::integration_queue::record_merger(repo, sid, "first-feat");
+        let dir = repo.join(".bee").join("sessions");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join(format!("{sid}.json")), json!({"id": sid, "status": "active"}).to_string()).unwrap();
+    }
+
+    fn session_record(repo: &Path, sid: &str) -> Value {
+        serde_json::from_str(&std::fs::read_to_string(repo.join(".bee").join("sessions").join(format!("{sid}.json"))).unwrap()).unwrap()
+    }
+
+    fn assert_no_lane_and_no_worktree(tmp: &Path, repo: &Path) {
+        assert!(!tmp.join("testrepo--wt--second-feat").exists());
+        assert!(!repo.join(".bee").join("lanes").join("second-feat.json").exists());
+    }
+
+    fn set_handoff_auto(repo: &Path, on: bool) {
+        std::fs::write(
+            repo.join(".bee").join("config.json"),
+            json!({"commands": {"test": "none"}, "handoff_auto": on}).to_string(),
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn handoff_after_merge_door_with_waggledance_refuses_without_handoff_task() {
+        let tmp = tempfile::tempdir().unwrap();
+        let repo = init_repo(tmp.path());
+        let _guard = CwdGuard::enter(&repo);
+        let _env = SessionEnv::set(Some("sess-auto-1"));
+        seed_merged_session(&repo, "sess-auto-1");
+        let fake = FakeWaggledance::install(tmp.path(), &repo, Some("agent-me"), FakeDispatch::Sends);
+
+        let code = try_native(&handoff_argv("second-feat", None, None), Instant::now());
+        let blank = try_native(&handoff_argv("second-feat", Some("   "), None), Instant::now());
+
+        assert_eq!(code, Some(ExitCode::FAILURE));
+        assert_eq!(blank, Some(ExitCode::FAILURE));
+        assert_eq!(fake.dispatch_argv(), None);
+        assert_no_lane_and_no_worktree(tmp.path(), &repo);
+        assert!(audit_rows(&repo).is_empty());
+        assert_eq!(session_record(&repo, "sess-auto-1")["status"], "active");
+    }
+
+    #[test]
+    fn handoff_after_merge_door_with_waggledance_refuses_same_session() {
+        let tmp = tempfile::tempdir().unwrap();
+        let repo = init_repo(tmp.path());
+        let _guard = CwdGuard::enter(&repo);
+        let _env = SessionEnv::set(Some("sess-auto-2"));
+        seed_merged_session(&repo, "sess-auto-2");
+        let fake = FakeWaggledance::install(tmp.path(), &repo, Some("agent-me"), FakeDispatch::Sends);
+
+        let code = try_native(
+            &handoff_argv("second-feat", Some("owner wants the next feature"), Some("owner asked for a back to back run")),
+            Instant::now(),
+        );
+
+        assert_eq!(code, Some(ExitCode::FAILURE));
+        assert_eq!(fake.dispatch_argv(), None);
+        assert_no_lane_and_no_worktree(tmp.path(), &repo);
+        assert!(audit_rows(&repo).is_empty(), "{:?}", audit_rows(&repo));
+        assert_eq!(session_record(&repo, "sess-auto-2")["status"], "active");
+    }
+
+    #[test]
+    fn handoff_after_merge_door_with_waggledance_sends_releases_and_follows_up_on_a_pane_match() {
+        let tmp = tempfile::tempdir().unwrap();
+        let repo = init_repo(tmp.path());
+        let _guard = CwdGuard::enter(&repo);
+        let _env = SessionEnv::set(Some("sess-auto-3"));
+        seed_merged_session(&repo, "sess-auto-3");
+        let fake = FakeWaggledance::install(tmp.path(), &repo, Some("agent-me"), FakeDispatch::Sends);
+
+        let code = try_native(
+            &handoff_argv("second-feat", Some("Owner: build second-feat. Standing order: keep it small."), None),
+            Instant::now(),
+        );
+
+        assert_eq!(code, Some(ExitCode::FAILURE));
+        assert_no_lane_and_no_worktree(tmp.path(), &repo);
+        assert!(!repo.join(".bee").join("HANDOFF.json").exists());
+        let record = session_record(&repo, "sess-auto-3");
+        assert_eq!(record["status"], "closed", "{record}");
+        assert_eq!(record["released"], true, "{record}");
+        let rows = audit_rows(&repo);
+        assert_eq!(rows.len(), 1, "{rows:?}");
+        assert_eq!(rows[0]["kind"], "handoff-dispatched");
+        assert_eq!(rows[0]["feature"], "second-feat");
+        assert!(rows[0].to_string().contains("run-new-7"), "{}", rows[0]);
+        assert!(rows[0].to_string().contains("bee-handoff-sess-auto-3-second-feat"), "{}", rows[0]);
+
+        let argv = fake.dispatch_argv().expect("dispatch was called");
+        let task_file = argv.last().unwrap().clone();
+        assert_eq!(
+            argv,
+            vec![
+                "dispatch",
+                "--project",
+                "proj-hive",
+                "--leader",
+                "--follow-up-of",
+                "run-mine",
+                "--handoff",
+                "--request-id",
+                "bee-handoff-sess-auto-3-second-feat",
+                "--task-file",
+                task_file.as_str(),
+            ]
+        );
+        let canon_repo = std::fs::canonicalize(&repo).unwrap();
+        let canon_task = std::fs::canonicalize(&task_file).unwrap();
+        assert!(canon_task.starts_with(canon_repo.join(".bee").join("tmp")), "{task_file}");
+        let task = std::fs::read_to_string(&task_file).unwrap();
+        assert!(task.contains("first-feat"), "{task}");
+        assert!(task.contains("bee feature start --feature second-feat --class feature --lane standard --files 3"), "{task}");
+        assert!(task.contains("Owner: build second-feat. Standing order: keep it small."), "{task}");
+    }
+
+    #[test]
+    fn handoff_after_merge_door_with_waggledance_sends_a_plain_leader_dispatch_without_a_pane_match() {
+        for agent in [Some("agent-stranger"), None] {
+            let tmp = tempfile::tempdir().unwrap();
+            let repo = init_repo(tmp.path());
+            let _guard = CwdGuard::enter(&repo);
+            let _env = SessionEnv::set(Some("sess-auto-4"));
+            seed_merged_session(&repo, "sess-auto-4");
+            let fake = FakeWaggledance::install(tmp.path(), &repo, agent, FakeDispatch::Sends);
+
+            let code = try_native(&handoff_argv("second-feat", Some("owner wants second-feat"), None), Instant::now());
+
+            assert_eq!(code, Some(ExitCode::FAILURE));
+            let argv = fake.dispatch_argv().expect("dispatch was called");
+            assert_eq!(&argv[..4], ["dispatch", "--project", "proj-hive", "--leader"], "{agent:?}");
+            assert!(!argv.iter().any(|a| a == "--follow-up-of" || a == "--handoff"), "{agent:?} {argv:?}");
+            assert!(argv.iter().any(|a| a == "bee-handoff-sess-auto-4-second-feat"), "{argv:?}");
+            assert_eq!(audit_rows(&repo)[0]["kind"], "handoff-dispatched");
+            assert_eq!(session_record(&repo, "sess-auto-4")["status"], "closed");
+        }
+    }
+
+    #[test]
+    fn handoff_after_merge_door_with_waggledance_failed_dispatch_writes_nothing() {
+        for failure in [FakeDispatch::ExitsNonZero, FakeDispatch::Unparsable] {
+            let tmp = tempfile::tempdir().unwrap();
+            let repo = init_repo(tmp.path());
+            let _guard = CwdGuard::enter(&repo);
+            let _env = SessionEnv::set(Some("sess-auto-5"));
+            seed_merged_session(&repo, "sess-auto-5");
+            let fake = FakeWaggledance::install(tmp.path(), &repo, Some("agent-me"), failure);
+
+            let code = try_native(&handoff_argv("second-feat", Some("owner wants second-feat"), None), Instant::now());
+
+            assert_eq!(code, Some(ExitCode::FAILURE), "{failure:?}");
+            assert!(fake.dispatch_argv().is_some(), "dispatch was attempted");
+            assert_no_lane_and_no_worktree(tmp.path(), &repo);
+            assert!(audit_rows(&repo).is_empty(), "{failure:?} {:?}", audit_rows(&repo));
+            assert_eq!(session_record(&repo, "sess-auto-5")["status"], "active", "{failure:?}");
+        }
+    }
+
+    #[test]
+    fn handoff_after_merge_door_with_waggledance_for_another_root_keeps_the_waiver() {
+        let tmp = tempfile::tempdir().unwrap();
+        let repo = init_repo(tmp.path());
+        let _guard = CwdGuard::enter(&repo);
+        let _env = SessionEnv::set(Some("sess-auto-6"));
+        seed_merged_session(&repo, "sess-auto-6");
+        let elsewhere = tmp.path().join("elsewhere");
+        std::fs::create_dir_all(&elsewhere).unwrap();
+        let fake = FakeWaggledance::install(tmp.path(), &elsewhere, Some("agent-me"), FakeDispatch::Sends);
+
+        let refused = try_native(&handoff_argv("second-feat", Some("owner wants second-feat"), None), Instant::now());
+        assert_eq!(refused, Some(ExitCode::FAILURE));
+        assert!(audit_rows(&repo).is_empty());
+
+        let code = try_native(&handoff_argv("second-feat", None, Some("owner asked for a back to back run")), Instant::now());
+
+        assert_eq!(code, Some(ExitCode::SUCCESS));
+        assert_eq!(fake.dispatch_argv(), None);
+        let rows = audit_rows(&repo);
+        assert_eq!(rows.len(), 1, "{rows:?}");
+        assert_eq!(rows[0]["kind"], "handoff-waived");
+        assert_eq!(session_record(&repo, "sess-auto-6")["status"], "active");
+    }
+
+    #[test]
+    fn handoff_after_merge_door_with_handoff_auto_false_keeps_the_waiver() {
+        let tmp = tempfile::tempdir().unwrap();
+        let repo = init_repo(tmp.path());
+        let _guard = CwdGuard::enter(&repo);
+        let _env = SessionEnv::set(Some("sess-auto-7"));
+        seed_merged_session(&repo, "sess-auto-7");
+        set_handoff_auto(&repo, false);
+        let fake = FakeWaggledance::install(tmp.path(), &repo, Some("agent-me"), FakeDispatch::Sends);
+
+        let code = try_native(
+            &handoff_argv("second-feat", Some("owner wants second-feat"), Some("owner asked for a back to back run")),
+            Instant::now(),
+        );
+
+        assert_eq!(code, Some(ExitCode::SUCCESS));
+        assert_eq!(fake.dispatch_argv(), None);
+        assert!(tmp.path().join("testrepo--wt--second-feat").exists());
+        let rows = audit_rows(&repo);
+        assert_eq!(rows.len(), 1, "{rows:?}");
+        assert_eq!(rows[0]["kind"], "handoff-waived");
+        assert_eq!(session_record(&repo, "sess-auto-7")["status"], "active");
+    }
+
+    #[test]
+    fn handoff_auto_cannot_be_changed_through_config_set() {
+        let tmp = tempfile::tempdir().unwrap();
+        let repo = init_repo(tmp.path());
+        let _guard = CwdGuard::enter(&repo);
+        let before = std::fs::read_to_string(repo.join(".bee").join("config.json")).unwrap();
+
+        for extra in [None, Some("--local")] {
+            let mut argv: Vec<OsString> = ["config", "set", "--key", "handoff_auto", "--value", "false"]
+                .iter()
+                .map(OsString::from)
+                .collect();
+            if let Some(e) = extra {
+                argv.push(OsString::from(e));
+            }
+            let code = crate::verbs::config::try_native(&argv, Instant::now());
+            assert_eq!(code, Some(ExitCode::FAILURE), "{extra:?}");
+        }
+
+        assert_eq!(std::fs::read_to_string(repo.join(".bee").join("config.json")).unwrap(), before);
+        assert!(!repo.join(".bee").join("config.local.json").exists());
+        assert!(!crate::state::read_config_raw(&repo).contains_key("handoff_auto"));
+    }
+
     #[test]
     fn feature_finish_refuses_when_no_worktree() {
         let tmp = tempfile::tempdir().unwrap();

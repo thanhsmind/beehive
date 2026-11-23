@@ -322,10 +322,14 @@ fn parse_registry_projects(bytes: &[u8]) -> Option<Vec<RegistryProject>> {
 }
 
 fn parse_registry(bytes: &[u8]) -> Option<Vec<PathBuf>> {
+    let doc: Value = serde_json::from_slice(bytes).ok()?;
+    let projects = doc.get("projects")?.as_array()?;
     Some(
-        parse_registry_projects(bytes)?
-            .into_iter()
-            .map(|p| p.root_path)
+        projects
+            .iter()
+            .filter_map(|p| p.get("root_path").and_then(Value::as_str))
+            .filter(|p| p.starts_with('/'))
+            .map(PathBuf::from)
             .collect(),
     )
 }
