@@ -989,6 +989,7 @@
     "contract:published-release-2-117-0",
     "feature-start",
     "contract:auto-handoff-on-due",
-    "contract:published-release-2-118-0"
+    "contract:published-release-2-118-0",
+    "contract:paseo-plain-send-behavior"
   ]
 }
