@@ -224,7 +224,8 @@ Playbook: `skills/bee-planning/playbooks/feature.md`, situation `skills/bee-plan
    "packages/bee/playbooks/multi-session.md",
    "docs/knowledge/areas/worktree-parallelism/returning-and-the-merge-gate.md",
    "docs/knowledge/areas/hook-runtime/token-economy-of-injected-context.md",
-   "docs/knowledge/areas/workflow-state/sessions-lanes-and-identity.md"
+   "docs/knowledge/areas/workflow-state/sessions-lanes-and-identity.md",
+   "docs/history/codex-harness-hardening/release-manifest.json"
   ],
   "read_first": [
    "docs/history/parallel-session-unblock/CONTEXT.md"
