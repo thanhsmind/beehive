@@ -128,7 +128,7 @@ Playbook: `skills/bee-planning/playbooks/release.md`, situation `skills/bee-plan
 {
   "schema_version": "1.0",
   "runtime": "claude",
-  "roster_sha256": "cd477eb57b66a0cef7310533c504a43a20e8b19e131431e73112bda9a9f114c8",
+  "roster_sha256": "d4e696dbde7989d6388dacce3fd7057cb3a6935b46024b79698596a46f6f41d3",
   "stages": [
     {"stage":"deployment","classification":"required","role":"deploy","reason":"This lane exists to publish 2.118.0; the deploy role owns the release permit."},
     {"stage":"planning","classification":"not-applicable","role":"plan","reason":"The plan is this one page and needs no planning dispatch."},
