@@ -277,7 +277,13 @@ fn rule(text: &str) -> Why {
     Why::Rule(text.to_string())
 }
 
-fn waggledance_binary(scope: &Scope) -> Option<PathBuf> {
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct RegistryProject {
+    pub(crate) id: String,
+    pub(crate) root_path: PathBuf,
+}
+
+pub(crate) fn waggledance_binary(scope: &Scope) -> Option<PathBuf> {
     let path = std::env::var_os("PATH")?;
     for dir in std::env::split_paths(&path) {
         let candidate = dir.join("waggledance");
@@ -287,6 +293,32 @@ fn waggledance_binary(scope: &Scope) -> Option<PathBuf> {
         }
     }
     None
+}
+
+pub(crate) fn waggledance_binary_for_root(root: &Path) -> Option<PathBuf> {
+    let scope = Scope::load(root, root, None);
+    waggledance_binary(&scope)
+}
+
+fn parse_registry_projects(bytes: &[u8]) -> Option<Vec<RegistryProject>> {
+    let doc: Value = serde_json::from_slice(bytes).ok()?;
+    let projects = doc.get("projects")?.as_array()?;
+    Some(
+        projects
+            .iter()
+            .filter_map(|p| {
+                let id = p.get("id").and_then(Value::as_str)?.trim();
+                let root = p.get("root_path").and_then(Value::as_str)?;
+                if id.is_empty() || !root.starts_with('/') {
+                    return None;
+                }
+                Some(RegistryProject {
+                    id: id.to_string(),
+                    root_path: PathBuf::from(root),
+                })
+            })
+            .collect(),
+    )
 }
 
 fn parse_registry(bytes: &[u8]) -> Option<Vec<PathBuf>> {
@@ -302,8 +334,7 @@ fn parse_registry(bytes: &[u8]) -> Option<Vec<PathBuf>> {
     )
 }
 
-pub(crate) fn waggledance_registry_roots(scope: &Scope) -> Option<Vec<PathBuf>> {
-    let binary = waggledance_binary(scope)?;
+fn run_waggledance_list(binary: &Path) -> Option<Vec<u8>> {
     let mut child = Command::new(binary)
         .args(["list", "--json"])
         .stdin(Stdio::null())
@@ -334,7 +365,17 @@ pub(crate) fn waggledance_registry_roots(scope: &Scope) -> Option<Vec<PathBuf>> 
         return None;
     }
     let left = deadline.saturating_duration_since(Instant::now()).max(Duration::from_millis(200));
-    let bytes = rx.recv_timeout(left).ok()?.ok()?;
+    rx.recv_timeout(left).ok()?.ok()
+}
+
+pub(crate) fn waggledance_list_projects(binary: &Path) -> Option<Vec<RegistryProject>> {
+    let bytes = run_waggledance_list(binary)?;
+    parse_registry_projects(&bytes)
+}
+
+pub(crate) fn waggledance_registry_roots(scope: &Scope) -> Option<Vec<PathBuf>> {
+    let binary = waggledance_binary(scope)?;
+    let bytes = run_waggledance_list(&binary)?;
     parse_registry(&bytes)
 }
 

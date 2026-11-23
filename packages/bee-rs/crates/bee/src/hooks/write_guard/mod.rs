@@ -148,7 +148,9 @@ pub(crate) use self::hook_local::*;
 pub(crate) use self::detectors::*;
 pub(crate) use self::main::*;
 pub(crate) use self::leader_read::*;
-pub(crate) use self::cross_project::cross_project_denial;
+pub(crate) use self::cross_project::{
+    cross_project_denial, waggledance_binary_for_root, waggledance_list_projects,
+};
 #[cfg(test)]
 pub(crate) use self::cross_project::cross_project_denial_with_registry;
 pub(crate) use self::worker_tree::run_herded;

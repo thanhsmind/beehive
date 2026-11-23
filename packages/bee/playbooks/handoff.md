@@ -14,31 +14,29 @@ pause:
   adopts, it surfaces and waits.
 
 <!-- rule: agents-context-handoff-65 -->
-- The default context mark is 120000 (`handoff_context_tokens`; 0 turns
-  it off). At or past it the leader hands off at the next clean stop (a
-  capped cell or a merged worktree). After every green worktree merge the
-  leader writes `.bee/HANDOFF.json` and continues in a fresh leader session
-  through the host's leader door. It never stops mid-cell. The door, when
-  one exists (waggledance: `waggledance dispatch --project <this project id> --leader --follow-up-of <current run> --handoff --request-id <id>` with the task through `--task`,
-  `--task-file` or stdin; the MCP fallback follows rule
-  `agents-other-project-to-its-leader`), keeps the
-  successor in the same run family; task text names what is done,
-  what is next, and the user's standing orders; the record itself carries
-  the proof lines, the tree state, the first-read files, the traps, the
-  standing orders and the ruled-out paths through the write flags
-  `--verified`, `--tree`, `--key-files`, `--gotchas`, `--standing-orders`
-  and `--ruled-out`. After the write and before the release, probe the
-  record once with a cold read: one dispatch through
-  `bee dispatch prepare --runtime claude --kind gather --role read --json`
-  whose brief holds only the `bee state handoff show` output and asks for
-  the next action and the ruled-out paths. A miss means rewrite the
-  record and probe once more. Release the
-  session after the handoff. Never tell the user to open a new session, never wait for a
-  `/clear`, and never spawn the leader yourself (no `paseo
-  create_agent`). Show the handoff to the user and wait only when a
-  gate or decision the user owns is pending, or when the host has no
-  leader door. The record's schema lives in
-  `bee-swarming/references/swarming-reference.md`. A merge stores the
-  merging session. `bee feature start` then refuses a second feature in
-  that session (`handoff_due`) unless `--same-session` carries a reason.
+- Default context mark: 120000 (`handoff_context_tokens`; `0` disables).
+  At or past the mark, hand off at the next clean stop (a capped cell or
+  a merged worktree); never stop mid-cell. Write `.bee/HANDOFF.json`
+  with `--verified`, `--tree`, `--key-files`, `--gotchas`,
+  `--standing-orders`, and `--ruled-out`, probe it once with a cold read
+  (`bee dispatch prepare --runtime claude --kind gather --role read --json`
+  showing `bee state handoff show` and asking for the next action and
+  ruled-out paths), rewrite once on a miss, then dispatch the fresh
+  leader through the host's leader door (`waggledance dispatch --project
+  <id> --leader --follow-up-of <run> --handoff --request-id <id>` with
+  `--task`, `--task-file`, or stdin; MCP fallback follows rule
+  `agents-other-project-to-its-leader`) and release this session. Never
+  tell the user to open a new session, wait for `/clear`, or spawn a
+  leader with `paseo create_agent`. Show the handoff and wait only when a
+  user-owned gate or decision is pending, or when no leader door exists.
+  Schema: `bee-swarming/references/swarming-reference.md`.
+- After a green worktree merge, `bee feature start` refuses a second
+  feature in that session (`handoff_due`). Rerun `bee feature start`
+  with `--handoff-task "<owner's request in their words; standing orders>"`:
+  bee writes the task file, dispatches the fresh leader itself, writes
+  no `.bee/HANDOFF.json`, and releases the session. On `[handoff_sent]`,
+  tell the owner in one line and stop. `--same-session "<reason>"` is
+  accepted only when bee has no waggledance door or the owner set
+  `handoff_auto` to `false` by hand; an owner asking for more in the
+  same chat is never a reason to waive.
 <!-- /rule -->

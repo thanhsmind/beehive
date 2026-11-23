@@ -1194,6 +1194,10 @@ pub(crate) fn config_governed_view(text: &str) -> Option<Value> {
         view.insert("guards".to_string(), Value::Object(guards_view));
     }
 
+    if let Some(handoff_auto) = root_obj.get("handoff_auto") {
+        view.insert("handoff_auto".to_string(), handoff_auto.clone());
+    }
+
     Some(Value::Object(view))
 }
 
@@ -1562,6 +1566,17 @@ fn diff_governed_views(rel: &str, old_view: &Value, new_view: &Value) -> Option<
             "guards.supervises",
             &format_diff_old(old_sup),
             &format_diff_val(new_sup),
+        ));
+    }
+
+    let old_handoff_auto = old_view.get("handoff_auto");
+    let new_handoff_auto = new_view.get("handoff_auto");
+    if old_handoff_auto != new_handoff_auto {
+        return Some(build_config_denial(
+            rel,
+            "handoff_auto",
+            &format_diff_old(old_handoff_auto),
+            &format_diff_val(new_handoff_auto),
         ));
     }
 

@@ -353,6 +353,41 @@ fn resolve_release_session_id(flag: Option<&str>) -> Option<String> {
 /// command's own trailing hook call can't immediately undo it), while
 /// `prompt_context.rs`'s UserPromptSubmit revival DOES clear it — the user
 /// speaking again is the re-engage signal.
+pub(crate) enum ReleaseSessionResult {
+    Released { id: String, closed_at: String },
+    NoRecord { id: String },
+    LockTimeout { id: String },
+}
+
+pub(crate) fn release_session_record(
+    root: &Path,
+    session_raw: &str,
+) -> R2<ReleaseSessionResult> {
+    let session = require_id(session_raw, "session id")?;
+    let Some(guard) = acquire_sessions_lock(root) else {
+        return Ok(ReleaseSessionResult::LockTimeout { id: session });
+    };
+    let record = read_session(root, &session)?;
+    let Some(mut record) = record else {
+        drop(guard);
+        return Ok(ReleaseSessionResult::NoRecord { id: session });
+    };
+    let closed_at = now_iso();
+    record.insert("status".into(), json!("closed"));
+    record.insert("closed_at".into(), json!(closed_at));
+    record.insert("released".into(), json!(true));
+    write_json_atomic(
+        &sessions_dir(root).join(format!("{session}.json")),
+        &Value::Object(record),
+    )
+    .map_err(|_| Err2::Ex)?;
+    drop(guard);
+    Ok(ReleaseSessionResult::Released {
+        id: session,
+        closed_at,
+    })
+}
+
 pub(crate) fn run_session_release(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
     if !keys_known(&flags, &["session-id"]) {
         return None;
@@ -378,40 +413,21 @@ pub(crate) fn run_session_release(flags: Flags, use_json: bool, t0: Instant) -> 
                     .to_string(),
             ));
         };
-        let session = match require_id(&session_raw, "session id") {
-            Ok(v) => v,
-            Err(Err2::Msg(m)) => return Ok(Out::Thrown(m)),
-            Err(Err2::Ex) => return Err(Err2::Ex),
-        };
-        let Some(guard) = acquire_sessions_lock(&ctx.root) else {
-            return Ok(Out::Thrown(format!(
-                "state session release: session \"{session}\" release could not acquire the sessions lock after 15 bounded attempts — never waited unboundedly."
-            )));
-        };
-        let record = read_session(&ctx.root, &session)?;
-        let Some(mut record) = record else {
-            drop(guard);
-            return Ok(Out::Emit(
-                json!({"id": session, "released": false, "reason": "no_session_record"}),
-                format!("Session \"{session}\" has no record — nothing to release."),
+        match release_session_record(&ctx.root, &session_raw)? {
+            ReleaseSessionResult::LockTimeout { id } => Ok(Out::Thrown(format!(
+                "state session release: session \"{id}\" release could not acquire the sessions lock after 15 bounded attempts — never waited unboundedly."
+            ))),
+            ReleaseSessionResult::NoRecord { id } => Ok(Out::Emit(
+                json!({"id": id, "released": false, "reason": "no_session_record"}),
+                format!("Session \"{id}\" has no record — nothing to release."),
                 0,
-            ));
-        };
-        let closed_at = now_iso();
-        record.insert("status".into(), json!("closed"));
-        record.insert("closed_at".into(), json!(closed_at));
-        record.insert("released".into(), json!(true));
-        write_json_atomic(
-            &sessions_dir(&ctx.root).join(format!("{session}.json")),
-            &Value::Object(record),
-        )
-        .map_err(|_| Err2::Ex)?;
-        drop(guard);
-        Ok(Out::Emit(
-            json!({"id": session, "released": true, "closed_at": closed_at}),
-            format!("Session \"{session}\" released — marked closed until the user returns."),
-            0,
-        ))
+            )),
+            ReleaseSessionResult::Released { id, closed_at } => Ok(Out::Emit(
+                json!({"id": id, "released": true, "closed_at": closed_at}),
+                format!("Session \"{id}\" released — marked closed until the user returns."),
+                0,
+            )),
+        }
     })();
     finish(&ctx, out)
 }

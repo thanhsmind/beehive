@@ -476,6 +476,11 @@ waggledance, or you are changing what that grant opens. Rules are supervisor-rea
   after a candidate already resolved to another project, so a repo without the key pays nothing. The 2 s
   kill and fail-closed result exist because a hang or panic reads as allow on a fail-open host. No cache:
   the registry is the owner's authority. A binary that resolves inside this project is never used.
+  The guard's root list and the handoff door's `waggledance_list_projects` share one `list --json` call
+  but parse it separately on purpose: the door needs a row `id`, the guard does not. Folding the guard
+  onto the id-requiring parse (auto-handoff-on-due ahd-1) dropped id-less rows, so a registry naming the
+  project only by `root_path` read as unreadable and the supervisor grant broke
+  (`cross_project_supervisor_a_registry_naming_the_project_grants_the_read`); ahd-2 split them back.
 - Match (D3): canonical root or shared git common dir, so the stale `/home/...` roots waggledance still
   holds and `--wt--` worktrees count as managed.
 - Surface (D4): `.bee/**` and `docs/knowledge/**` minus secret-shaped files and `config.local.json`.
