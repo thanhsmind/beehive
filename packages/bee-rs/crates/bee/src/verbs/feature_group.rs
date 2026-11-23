@@ -11,8 +11,9 @@ use crate::verbs::workflow_store::{
     read_lane_strict, rebuild_lane_projection, update_workflow_assuming_lock, wf_id, write_lane,
 };
 use crate::verbs::worktree::{
-    build_instruction, build_session_transition, create_feature_worktree,
-    emit_pi_transition_marker_if_present, feature_slug_ok, p, prelude, CErr, CompanionSpec, Pre,
+    build_instruction, build_session_transition, check_shared_nested_checkout_guard,
+    create_feature_worktree, emit_pi_transition_marker_if_present, feature_slug_ok, p, prelude,
+    CErr, CompanionSpec, Pre,
 };
 use serde_json::{json, Map, Value};
 use std::collections::HashSet;
@@ -203,114 +204,184 @@ fn run_start(tokens: &[OsString], t0: Instant) -> Option<ExitCode> {
     let mut waiver: Option<String> = None;
     if let Ok(ctrl_root) = crate::verbs::reservations::control_root_for(&main_root_s) {
         let session_id = crate::verbs::reservations::resolve_session_id(None, &ctrl_root).ok().flatten();
-        if let Some(sid) = session_id.as_deref()
-            && let Some(merged) = crate::integration_queue::merged_feature_of(Path::new(&ctrl_root), sid)
-            && merged != feature
-        {
-            let config = crate::state::read_config_raw(&main_root);
-            let handoff_auto = !matches!(config.get("handoff_auto"), Some(Value::Bool(false)));
-            let door = if handoff_auto {
-                crate::verbs::handoff_door::probe_door(&main_root)
-            } else {
-                crate::verbs::handoff_door::HandoffDoor::Absent
-            };
-
-            if handoff_auto
-                && matches!(door, crate::verbs::handoff_door::HandoffDoor::Present { .. })
+        if let Some(sid) = session_id.as_deref() {
+            if let Some(merged) = crate::integration_queue::merged_feature_of(Path::new(&ctrl_root), sid)
+                && merged != feature
             {
-                if flags.get("same-session").is_some() {
-                    return Some(ctx.fail(
-                        "[handoff_due] --same-session is not accepted while bee can hand off",
-                    ));
-                }
-                let owner_text = match flags.get("handoff-task") {
-                    Some(FlagV::S(t)) => t.trim().to_string(),
-                    _ => String::new(),
+                let config = crate::state::read_config_raw(&main_root);
+                let handoff_auto = !matches!(config.get("handoff_auto"), Some(Value::Bool(false)));
+                let door = if handoff_auto {
+                    crate::verbs::handoff_door::probe_door(&main_root)
+                } else {
+                    crate::verbs::handoff_door::HandoffDoor::Absent
                 };
-                if owner_text.is_empty() {
-                    return Some(ctx.fail(&format!(
-                        "[handoff_due] this session already merged \"{merged}\"; pass --handoff-task \"<owner request and standing orders>\" so bee can hand off \"{feature}\" to a fresh leader session."
-                    )));
-                }
-                let flag_str = |k: &str| match flags.get(k) {
-                    Some(FlagV::S(s)) => Some(s.as_str()),
-                    _ => None,
-                };
-                match crate::verbs::handoff_door::execute_handoff(
-                    &door,
-                    &main_root,
-                    sid,
-                    &merged,
-                    &feature,
-                    flag_str("class"),
-                    flag_str("lane"),
-                    flag_str("files"),
-                    flag_str("flags"),
-                    &owner_text,
-                ) {
-                    crate::verbs::handoff_door::HandoffOutcome::Sent { run_id, request_id } => {
-                        let _ = crate::verbs::state_group::release_session_record(
-                            &main_root, sid,
-                        );
-                        let note = format!("run {run_id} request {request_id}");
-                        if let Err(e) = crate::audit::append(
-                            &main_root,
-                            "handoff-dispatched",
-                            &feature,
-                            None,
-                            &note,
-                            "feature start",
-                            None,
-                        ) {
-                            eprintln!("warning: could not write the handoff-dispatched audit row: {e}");
-                        }
-                        return Some(ctx.fail(&format!(
-                            "[handoff_sent] run {run_id}: this session is released; tell the owner in one line and stop."
-                        )));
-                    }
-                    crate::verbs::handoff_door::HandoffOutcome::Failed { reason } => {
-                        return Some(ctx.fail(&format!("[handoff_failed] {reason}")));
-                    }
-                }
-            }
 
-            match flags.get("same-session") {
-                None => {
-                    return Some(ctx.fail(&format!(
-                        "[handoff_due] this session already merged \"{merged}\"; write the handoff and start \"{feature}\" in a fresh leader session (playbook: .bee/playbooks/handoff.md), or pass --same-session \"<reason>\" to open it here anyway."
-                    )));
-                }
-                Some(v) => {
-                    let reason = match v {
-                        FlagV::S(r) => r.trim().to_string(),
-                        FlagV::Present => String::new(),
-                    };
-                    if reason.is_empty() {
+                if handoff_auto
+                    && matches!(door, crate::verbs::handoff_door::HandoffDoor::Present { .. })
+                {
+                    if flags.get("same-session").is_some() {
                         return Some(ctx.fail(
-                            "[handoff_due] --same-session needs a non-empty reason: --same-session \"<reason>\".",
+                            "[handoff_due] --same-session is not accepted while bee can hand off",
                         ));
                     }
-                    waiver = Some(reason);
+                    let owner_text = match flags.get("handoff-task") {
+                        Some(FlagV::S(t)) => t.trim().to_string(),
+                        _ => String::new(),
+                    };
+                    if owner_text.is_empty() {
+                        return Some(ctx.fail(&format!(
+                            "[handoff_due] this session already merged \"{merged}\"; pass --handoff-task \"<owner request and standing orders>\" so bee can hand off \"{feature}\" to a fresh leader session."
+                        )));
+                    }
+                    let flag_str = |k: &str| match flags.get(k) {
+                        Some(FlagV::S(s)) => Some(s.as_str()),
+                        _ => None,
+                    };
+                    match crate::verbs::handoff_door::execute_handoff(
+                        &door,
+                        &main_root,
+                        sid,
+                        &crate::verbs::handoff_door::HandoffReason::MergedFeature {
+                            merged: merged.clone(),
+                        },
+                        &feature,
+                        flag_str("class"),
+                        flag_str("lane"),
+                        flag_str("files"),
+                        flag_str("flags"),
+                        &[],
+                        &owner_text,
+                    ) {
+                        crate::verbs::handoff_door::HandoffOutcome::Sent { run_id, request_id } => {
+                            let _ = crate::verbs::state_group::release_session_record(
+                                &main_root, sid,
+                            );
+                            let note = format!("run {run_id} request {request_id}");
+                            if let Err(e) = crate::audit::append(
+                                &main_root,
+                                "handoff-dispatched",
+                                &feature,
+                                None,
+                                &note,
+                                "feature start",
+                                None,
+                            ) {
+                                eprintln!("warning: could not write the handoff-dispatched audit row: {e}");
+                            }
+                            return Some(ctx.fail(&format!(
+                                "[handoff_sent] run {run_id}: this session is released; tell the owner in one line and stop."
+                            )));
+                        }
+                        crate::verbs::handoff_door::HandoffOutcome::Failed { reason } => {
+                            return Some(ctx.fail(&format!("[handoff_failed] {reason}")));
+                        }
+                    }
+                }
+
+                match flags.get("same-session") {
+                    None => {
+                        return Some(ctx.fail(&format!(
+                            "[handoff_due] this session already merged \"{merged}\"; write the handoff and start \"{feature}\" in a fresh leader session (playbook: .bee/playbooks/handoff.md), or pass --same-session \"<reason>\" to open it here anyway."
+                        )));
+                    }
+                    Some(v) => {
+                        let reason = match v {
+                            FlagV::S(r) => r.trim().to_string(),
+                            FlagV::Present => String::new(),
+                        };
+                        if reason.is_empty() {
+                            return Some(ctx.fail(
+                                "[handoff_due] --same-session needs a non-empty reason: --same-session \"<reason>\".",
+                            ));
+                        }
+                        waiver = Some(reason);
+                    }
+                }
+            } else if !crate::hooks::herding_worker_marker_set() {
+                let config = crate::state::read_config_raw(&main_root);
+                let handoff_auto = !matches!(config.get("handoff_auto"), Some(Value::Bool(false)));
+                if handoff_auto {
+                    let session_file = Path::new(&ctrl_root)
+                        .join(".bee")
+                        .join("sessions")
+                        .join(format!("{sid}.json"));
+                    if let crate::fsutil::ReadJson::Parsed(Value::Object(session_record)) =
+                        crate::fsutil::read_json(&session_file)
+                        && let Some(due) =
+                            crate::verbs::handoff_door::context_mark_due(&config, &session_record)
+                    {
+                        let door = crate::verbs::handoff_door::probe_door(&main_root);
+                        if matches!(door, crate::verbs::handoff_door::HandoffDoor::Present { .. }) {
+                            let owner_text = match flags.get("handoff-task") {
+                                Some(FlagV::S(t)) => t.trim().to_string(),
+                                _ => String::new(),
+                            };
+                            if owner_text.is_empty() {
+                                let n_k = due.tokens / 1000;
+                                let m_k = due.mark / 1000;
+                                return Some(ctx.fail(&format!(
+                                    "[handoff_due] context {n_k}k is past the {m_k}k mark; run bee state handoff send --task \"<owner request and standing orders>\""
+                                )));
+                            }
+                            let flag_str = |k: &str| match flags.get(k) {
+                                Some(FlagV::S(s)) => Some(s.as_str()),
+                                _ => None,
+                            };
+                            match crate::verbs::handoff_door::execute_handoff(
+                                &door,
+                                &main_root,
+                                sid,
+                                &crate::verbs::handoff_door::HandoffReason::ContextMark {
+                                    tokens: due.tokens,
+                                    mark: due.mark,
+                                },
+                                &feature,
+                                flag_str("class"),
+                                flag_str("lane"),
+                                flag_str("files"),
+                                flag_str("flags"),
+                                &[],
+                                &owner_text,
+                            ) {
+                                crate::verbs::handoff_door::HandoffOutcome::Sent {
+                                    run_id,
+                                    request_id,
+                                } => {
+                                    let _ = crate::verbs::state_group::release_session_record(
+                                        &main_root, sid,
+                                    );
+                                    let note = format!("run {run_id} request {request_id}");
+                                    if let Err(e) = crate::audit::append(
+                                        &main_root,
+                                        "handoff-dispatched",
+                                        &feature,
+                                        None,
+                                        &note,
+                                        "feature start",
+                                        None,
+                                    ) {
+                                        eprintln!("warning: could not write the handoff-dispatched audit row: {e}");
+                                    }
+                                    return Some(ctx.fail(&format!(
+                                        "[handoff_sent] run {run_id}: this session is released; tell the owner in one line and stop."
+                                    )));
+                                }
+                                crate::verbs::handoff_door::HandoffOutcome::Failed { reason } => {
+                                    return Some(ctx.fail(&format!("[handoff_failed] {reason}")));
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
-        match crate::nested_checkout::has_any_shared_nested_checkout(
+        if let Err(msg) = check_shared_nested_checkout_guard(
             &main_root,
             &ctrl_root,
             session_id.as_deref(),
+            &feature,
         ) {
-            Ok(true) => {
-                return Some(ctx.fail(&format!(
-                    "refusing to create a worktree: another session is concurrently live on {main_root_s} and it contains a shared nested checkout a companion mount must cover — running unguarded is how one session silently ate another's work. Re-run with \"bee worktree new --feature {feature} --with-companion\" so the shared checkout is mounted and tracked (the paved road for concurrent shared-checkout work — AGENTS.md rule 13). This creates a NEW companion-mounted worktree; it does not retrofit the checkout you are in."
-                )));
-            }
-            Err(detect) => {
-                return Some(ctx.fail(&format!(
-                    "refusing to create a worktree: could not determine whether {main_root_s} holds a shared nested checkout another live session could reach — the detection check itself errored ({}). This guard fails CLOSED on a detection error rather than risk silently allowing an unguarded worktree. FIX: resolve the underlying filesystem error, then retry.",
-                    detect.reason
-                )));
-            }
-            _ => {}
+            return Some(ctx.fail(&msg));
         }
     }
 
@@ -1668,5 +1739,397 @@ esac
         let after = list_lanes(&repo).unwrap_or_else(|_| panic!("list_lanes failed"));
         let w = evaluate_wip_warning(&after, "wip-feat", &cfg).unwrap();
         assert_eq!(w.count, 5);
+    }
+
+    struct HerdingEnv {
+        _unherded: crate::hooks::UnherdedEnv,
+    }
+
+    impl HerdingEnv {
+        fn set(worker: bool) -> Self {
+            let unherded = crate::hooks::UnherdedEnv::new();
+            if worker {
+                unsafe { std::env::set_var("BEE_HERDING_WORKER", "1") };
+            }
+            Self { _unherded: unherded }
+        }
+    }
+
+    impl Drop for HerdingEnv {
+        fn drop(&mut self) {
+            unsafe { std::env::remove_var("BEE_HERDING_WORKER") };
+        }
+    }
+
+    fn seed_session_at(repo: &Path, sid: &str, tokens: u64) {
+        let dir = repo.join(".bee").join("sessions");
+        std::fs::create_dir_all(&dir).unwrap();
+        let now = crate::verbs::reservations::now_iso();
+        std::fs::write(
+            dir.join(format!("{sid}.json")),
+            json!({
+                "id": sid,
+                "status": "active",
+                "started_at": now,
+                "last_heartbeat": now,
+                "context": {"tokens": tokens, "measured_at": now}
+            })
+            .to_string(),
+        )
+        .unwrap();
+    }
+
+    fn set_mark_config(repo: &Path, extra: Value) {
+        let mut cfg = json!({"commands": {"test": "none"}});
+        for (k, v) in extra.as_object().unwrap() {
+            cfg[k] = v.clone();
+        }
+        std::fs::write(repo.join(".bee").join("config.json"), cfg.to_string()).unwrap();
+    }
+
+    fn seed_claimable_cell(repo: &Path, id: &str) {
+        std::fs::write(
+            repo.join(".bee").join("state.json"),
+            json!({
+                "schema_version": "1.0",
+                "phase": "swarming",
+                "mode": "standard",
+                "feature": "demo",
+                "approved_gates": {"context": true, "shape": true, "execution": true, "review": false}
+            })
+            .to_string(),
+        )
+        .unwrap();
+        let cell = repo.join("cell.json");
+        std::fs::write(
+            &cell,
+            json!({
+                "id": id,
+                "feature": "demo",
+                "title": "t",
+                "lane": "standard",
+                "role": "docs",
+                "action": "act",
+                "files": ["docs/a.md"],
+                "read_first": [],
+                "must_haves": {"truths": ["ok"]},
+                "verify": "true",
+                "affects_skills": [],
+                "affects_specs": []
+            })
+            .to_string(),
+        )
+        .unwrap();
+        let code = crate::verbs::cells::try_native(
+            &[OsString::from("cells"), OsString::from("add"), OsString::from("--file"), cell.into_os_string()],
+            Instant::now(),
+        );
+        assert_eq!(code, Some(ExitCode::SUCCESS));
+    }
+
+    fn cell_status(repo: &Path, id: &str) -> Value {
+        let v: Value = serde_json::from_str(
+            &std::fs::read_to_string(repo.join(".bee").join("cells").join(format!("{id}.json"))).unwrap(),
+        )
+        .unwrap();
+        v["status"].clone()
+    }
+
+    fn claim_argv(id: &str) -> Vec<OsString> {
+        ["cells", "claim", "--id", id, "--worker", "w1"].iter().map(OsString::from).collect()
+    }
+
+    fn send_argv(task: &str) -> Vec<OsString> {
+        ["state", "handoff", "send", "--task", task].iter().map(OsString::from).collect()
+    }
+
+    #[test]
+    fn handoff_context_mark_refusal_names_the_send_verb_at_and_past_the_mark() {
+        let tmp = tempfile::tempdir().unwrap();
+        let repo = init_repo(tmp.path());
+        let _guard = CwdGuard::enter(&repo);
+        let _herd = HerdingEnv::set(false);
+        let _fake = FakeWaggledance::install(tmp.path(), &repo, None, FakeDispatch::Sends);
+
+        for tokens in [120_000u64, 187_654] {
+            seed_session_at(&repo, "sess-mark-r", tokens);
+            let msg = crate::verbs::handoff_door::context_mark_refusal(&repo, &repo, Some("sess-mark-r"))
+                .expect("refused at or past the mark");
+            assert!(msg.starts_with("[handoff_due]"), "{msg}");
+            assert!(msg.contains(&format!("context {}k", tokens / 1000)), "{msg}");
+            assert!(msg.contains("the 120k mark"), "{msg}");
+            assert!(msg.contains("bee state handoff send --task"), "{msg}");
+        }
+        seed_session_at(&repo, "sess-mark-r", 119_999);
+        assert_eq!(crate::verbs::handoff_door::context_mark_refusal(&repo, &repo, Some("sess-mark-r")), None);
+        assert_eq!(crate::verbs::handoff_door::context_mark_refusal(&repo, &repo, None), None);
+    }
+
+    #[test]
+    fn handoff_context_mark_refusal_passes_when_the_door_is_off() {
+        let cases: [(&str, Value, bool, bool); 4] = [
+            ("mark-zero", json!({"handoff_context_tokens": 0}), true, false),
+            ("no-door", json!({}), false, false),
+            ("auto-off", json!({"handoff_auto": false}), true, false),
+            ("herding-worker", json!({}), true, true),
+        ];
+        for (label, cfg, door_here, worker) in cases {
+            let tmp = tempfile::tempdir().unwrap();
+            let repo = init_repo(tmp.path());
+            let _guard = CwdGuard::enter(&repo);
+            let _herd = HerdingEnv::set(worker);
+            set_mark_config(&repo, cfg);
+            seed_session_at(&repo, "sess-mark-off", 900_000);
+            let elsewhere = tmp.path().join("elsewhere");
+            std::fs::create_dir_all(&elsewhere).unwrap();
+            let listed = if door_here { repo.clone() } else { elsewhere };
+            let _fake = FakeWaggledance::install(tmp.path(), &listed, None, FakeDispatch::Sends);
+
+            assert_eq!(
+                crate::verbs::handoff_door::context_mark_refusal(&repo, &repo, Some("sess-mark-off")),
+                None,
+                "{label}"
+            );
+        }
+    }
+
+    #[test]
+    fn handoff_context_mark_door_refuses_feature_start_at_and_past_the_mark() {
+        for tokens in [120_000u64, 150_000] {
+            let tmp = tempfile::tempdir().unwrap();
+            let repo = init_repo(tmp.path());
+            let _guard = CwdGuard::enter(&repo);
+            let _herd = HerdingEnv::set(false);
+            let _env = SessionEnv::set(Some("sess-mark-1"));
+            seed_session_at(&repo, "sess-mark-1", tokens);
+            let fake = FakeWaggledance::install(tmp.path(), &repo, Some("agent-me"), FakeDispatch::Sends);
+
+            let code = try_native(&start_argv("second-feat", None), Instant::now());
+
+            assert_eq!(code, Some(ExitCode::FAILURE), "{tokens}");
+            assert_eq!(fake.dispatch_argv(), None);
+            assert_no_lane_and_no_worktree(tmp.path(), &repo);
+            assert!(audit_rows(&repo).is_empty());
+            assert_eq!(session_record(&repo, "sess-mark-1")["status"], "active");
+        }
+    }
+
+    #[test]
+    fn handoff_context_mark_door_lets_feature_start_through_when_off() {
+        let cases: [(&str, u64, Value, bool, bool); 5] = [
+            ("below", 119_999, json!({}), true, false),
+            ("mark-zero", 900_000, json!({"handoff_context_tokens": 0}), true, false),
+            ("no-door", 150_000, json!({}), false, false),
+            ("auto-off", 150_000, json!({"handoff_auto": false}), true, false),
+            ("herding-worker", 150_000, json!({}), true, true),
+        ];
+        for (label, tokens, cfg, door_here, worker) in cases {
+            let tmp = tempfile::tempdir().unwrap();
+            let repo = init_repo(tmp.path());
+            let _guard = CwdGuard::enter(&repo);
+            let _herd = HerdingEnv::set(worker);
+            let _env = SessionEnv::set(Some("sess-mark-2"));
+            set_mark_config(&repo, cfg);
+            seed_session_at(&repo, "sess-mark-2", tokens);
+            let elsewhere = tmp.path().join("elsewhere");
+            std::fs::create_dir_all(&elsewhere).unwrap();
+            let listed = if door_here { repo.clone() } else { elsewhere };
+            let fake = FakeWaggledance::install(tmp.path(), &listed, Some("agent-me"), FakeDispatch::Sends);
+
+            let code = try_native(&start_argv("second-feat", None), Instant::now());
+
+            assert_eq!(code, Some(ExitCode::SUCCESS), "{label}");
+            assert!(tmp.path().join("testrepo--wt--second-feat").exists(), "{label}");
+            assert_eq!(fake.dispatch_argv(), None, "{label}");
+            assert_eq!(session_record(&repo, "sess-mark-2")["status"], "active", "{label}");
+        }
+    }
+
+    #[test]
+    fn handoff_context_mark_door_feature_start_with_handoff_task_sends_with_the_mark_request_id() {
+        let tmp = tempfile::tempdir().unwrap();
+        let repo = init_repo(tmp.path());
+        let _guard = CwdGuard::enter(&repo);
+        let _herd = HerdingEnv::set(false);
+        let _env = SessionEnv::set(Some("sess-mark-3"));
+        seed_session_at(&repo, "sess-mark-3", 140_000);
+        let fake = FakeWaggledance::install(tmp.path(), &repo, None, FakeDispatch::Sends);
+
+        let code = try_native(&handoff_argv("second-feat", Some("Owner: build second-feat."), None), Instant::now());
+
+        assert_eq!(code, Some(ExitCode::FAILURE));
+        assert_no_lane_and_no_worktree(tmp.path(), &repo);
+        let argv = fake.dispatch_argv().expect("dispatch was called");
+        assert!(argv.iter().any(|a| a == "bee-handoff-sess-mark-3-mark"), "{argv:?}");
+        let task = std::fs::read_to_string(argv.last().unwrap()).unwrap();
+        assert!(task.contains("140k"), "{task}");
+        assert!(task.contains("Owner: build second-feat."), "{task}");
+        assert_eq!(session_record(&repo, "sess-mark-3")["status"], "closed");
+        let rows = audit_rows(&repo);
+        assert_eq!(rows.len(), 1, "{rows:?}");
+        assert_eq!(rows[0]["kind"], "handoff-dispatched");
+    }
+
+    #[test]
+    fn handoff_context_mark_door_refuses_cells_claim_past_the_mark_and_not_below() {
+        let tmp = tempfile::tempdir().unwrap();
+        let repo = init_repo(tmp.path());
+        let _guard = CwdGuard::enter(&repo);
+        let _herd = HerdingEnv::set(false);
+        let _env = SessionEnv::set(Some("sess-mark-4"));
+        seed_claimable_cell(&repo, "demo-1");
+        let fake = FakeWaggledance::install(tmp.path(), &repo, None, FakeDispatch::Sends);
+
+        seed_session_at(&repo, "sess-mark-4", 130_000);
+        let refused = crate::verbs::cells::try_native(&claim_argv("demo-1"), Instant::now());
+        assert_eq!(refused, Some(ExitCode::FAILURE));
+        assert_eq!(cell_status(&repo, "demo-1"), "open");
+
+        seed_session_at(&repo, "sess-mark-4", 119_000);
+        let claimed = crate::verbs::cells::try_native(&claim_argv("demo-1"), Instant::now());
+        assert_eq!(claimed, Some(ExitCode::SUCCESS));
+        assert_eq!(cell_status(&repo, "demo-1"), "claimed");
+        assert_eq!(fake.dispatch_argv(), None);
+    }
+
+    #[test]
+    fn handoff_context_mark_door_never_refuses_cells_cap() {
+        let tmp = tempfile::tempdir().unwrap();
+        let repo = init_repo(tmp.path());
+        let _guard = CwdGuard::enter(&repo);
+        let _herd = HerdingEnv::set(false);
+        let _env = SessionEnv::set(Some("sess-mark-5"));
+        seed_claimable_cell(&repo, "demo-1");
+        let _fake = FakeWaggledance::install(tmp.path(), &repo, None, FakeDispatch::Sends);
+        seed_session_at(&repo, "sess-mark-5", 1_000);
+        assert_eq!(crate::verbs::cells::try_native(&claim_argv("demo-1"), Instant::now()), Some(ExitCode::SUCCESS));
+        seed_session_at(&repo, "sess-mark-5", 200_000);
+        assert!(crate::verbs::handoff_door::context_mark_refusal(&repo, &repo, Some("sess-mark-5")).is_some());
+
+        let cap: Vec<OsString> = [
+            "cells", "cap", "--id", "demo-1", "--report",
+            "{\"outcome\":\"done\",\"commit\":\"none\",\"files\":[],\"tests\":\"true — green:unit — ok\",\"deviations\":[]}",
+            "--files", "docs/a.md", "--inline-reason", "tester caps inline", "--no-mistakes",
+        ]
+        .iter()
+        .map(OsString::from)
+        .collect();
+        let code = crate::verbs::cells::try_native(&cap, Instant::now());
+
+        assert_eq!(code, Some(ExitCode::SUCCESS));
+        assert_ne!(cell_status(&repo, "demo-1"), "claimed");
+    }
+
+    #[test]
+    fn handoff_send_dispatches_with_the_mark_request_id_releases_and_audits() {
+        let tmp = tempfile::tempdir().unwrap();
+        let repo = init_repo(tmp.path());
+        let _guard = CwdGuard::enter(&repo);
+        let _herd = HerdingEnv::set(false);
+        let _env = SessionEnv::set(Some("sess-mark-6"));
+        seed_claimable_cell(&repo, "demo-1");
+        seed_session_at(&repo, "sess-mark-6", 160_000);
+        let fake = FakeWaggledance::install(tmp.path(), &repo, Some("agent-me"), FakeDispatch::Sends);
+
+        let code = crate::verbs::state_group::try_native(&send_argv("Owner: finish demo. Keep it small."), Instant::now());
+
+        assert_eq!(code, Some(ExitCode::FAILURE));
+        let argv = fake.dispatch_argv().expect("dispatch was called");
+        assert_eq!(&argv[..4], ["dispatch", "--project", "proj-hive", "--leader"], "{argv:?}");
+        assert!(argv.iter().any(|a| a == "bee-handoff-sess-mark-6-mark"), "{argv:?}");
+        let task = std::fs::read_to_string(argv.last().unwrap()).unwrap();
+        assert!(task.contains("160k"), "{task}");
+        assert!(task.contains("120k"), "{task}");
+        assert!(task.contains("demo-1"), "{task}");
+        assert!(task.contains("Owner: finish demo. Keep it small."), "{task}");
+        let record = session_record(&repo, "sess-mark-6");
+        assert_eq!(record["status"], "closed", "{record}");
+        assert_eq!(record["released"], true, "{record}");
+        let rows = audit_rows(&repo);
+        assert_eq!(rows.len(), 1, "{rows:?}");
+        assert_eq!(rows[0]["kind"], "handoff-dispatched");
+        assert!(rows[0].to_string().contains("run-new-7"), "{}", rows[0]);
+        assert!(rows[0].to_string().contains("bee-handoff-sess-mark-6-mark"), "{}", rows[0]);
+    }
+
+    #[test]
+    fn handoff_send_failed_dispatch_writes_nothing() {
+        for failure in [FakeDispatch::ExitsNonZero, FakeDispatch::Unparsable] {
+            let tmp = tempfile::tempdir().unwrap();
+            let repo = init_repo(tmp.path());
+            let _guard = CwdGuard::enter(&repo);
+            let _herd = HerdingEnv::set(false);
+            let _env = SessionEnv::set(Some("sess-mark-7"));
+            seed_session_at(&repo, "sess-mark-7", 160_000);
+            let fake = FakeWaggledance::install(tmp.path(), &repo, Some("agent-me"), failure);
+
+            let code = crate::verbs::state_group::try_native(&send_argv("owner task"), Instant::now());
+
+            assert_eq!(code, Some(ExitCode::FAILURE), "{failure:?}");
+            assert!(fake.dispatch_argv().is_some(), "{failure:?}");
+            assert!(audit_rows(&repo).is_empty(), "{failure:?} {:?}", audit_rows(&repo));
+            let record = session_record(&repo, "sess-mark-7");
+            assert_eq!(record["status"], "active", "{failure:?}");
+            assert!(record.get("released").is_none(), "{failure:?} {record}");
+        }
+    }
+
+    #[test]
+    fn handoff_send_refuses_without_a_door() {
+        let tmp = tempfile::tempdir().unwrap();
+        let repo = init_repo(tmp.path());
+        let _guard = CwdGuard::enter(&repo);
+        let _herd = HerdingEnv::set(false);
+        let _env = SessionEnv::set(Some("sess-mark-8"));
+        seed_session_at(&repo, "sess-mark-8", 160_000);
+        let elsewhere = tmp.path().join("elsewhere");
+        std::fs::create_dir_all(&elsewhere).unwrap();
+        let fake = FakeWaggledance::install(tmp.path(), &elsewhere, Some("agent-me"), FakeDispatch::Sends);
+
+        let code = crate::verbs::state_group::try_native(&send_argv("owner task"), Instant::now());
+
+        assert_eq!(code, Some(ExitCode::FAILURE));
+        assert_eq!(fake.dispatch_argv(), None);
+        assert!(audit_rows(&repo).is_empty());
+        assert_eq!(session_record(&repo, "sess-mark-8")["status"], "active");
+    }
+
+    #[test]
+    fn handoff_hook_records_context_tokens_for_a_bee_command_only() {
+        let tmp = tempfile::tempdir().unwrap();
+        let repo = init_repo(tmp.path());
+        let repo = std::fs::canonicalize(&repo).unwrap();
+        let _herd = HerdingEnv::set(false);
+        let transcript = tmp.path().join("transcript.jsonl");
+        std::fs::write(
+            &transcript,
+            format!(
+                "{}\n",
+                json!({"message": {"id": "m1", "model": "claude-opus-5-5", "usage": {"input_tokens": 1000, "cache_read_input_tokens": 120000, "cache_creation_input_tokens": 3456, "output_tokens": 10}}})
+            ),
+        )
+        .unwrap();
+        let run = |sid: &str, cmd: &str| {
+            let payload = json!({
+                "hook_event_name": "PreToolUse",
+                "session_id": sid,
+                "transcript_path": transcript.to_string_lossy(),
+                "cwd": repo.to_string_lossy(),
+                "tool_name": "Bash",
+                "tool_input": {"command": cmd}
+            });
+            let ctx = crate::hooks::adapter::read_hook_context("write-guard", &[], &payload.to_string());
+            let _ = crate::hooks::write_guard::run_native(&ctx);
+        };
+
+        run("sess-hook-bee", ".bee/bin/bee cells list");
+        run("sess-hook-plain", "ls -la");
+
+        let sessions = repo.join(".bee").join("sessions");
+        let record: Value =
+            serde_json::from_str(&std::fs::read_to_string(sessions.join("sess-hook-bee.json")).unwrap()).unwrap();
+        assert_eq!(record["context"]["tokens"], 124_456, "{record}");
+        assert!(record["context"]["measured_at"].is_string(), "{record}");
+        assert!(!sessions.join("sess-hook-plain.json").exists());
     }
 }

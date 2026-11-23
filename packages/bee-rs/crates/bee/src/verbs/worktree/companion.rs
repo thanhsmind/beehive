@@ -352,3 +352,58 @@ pub(crate) fn teardown_companion_if_present(
     }
     Some(Value::Object(out))
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum CompanionRemedy {
+    Configured,
+    NotConfigured,
+}
+
+impl CompanionRemedy {
+    pub(crate) fn from_main_root(main_root: &Path) -> Self {
+        match read_worktree_commands(main_root) {
+            Some(commands)
+                if commands.companion_start.is_some() && commands.companion_mount.is_some() =>
+            {
+                Self::Configured
+            }
+            _ => Self::NotConfigured,
+        }
+    }
+}
+
+pub(crate) const SHARED_NESTED_CHECKOUT_WARNING: &str = "warning: another session is live and this checkout holds a shared nested checkout; the write guard keeps that checkout guarded while sessions are concurrent, and --with-companion becomes available once commands.worktree_companion_start and commands.worktree_companion_mount are set.";
+
+pub(crate) fn check_shared_nested_checkout_guard(
+    main_root: &Path,
+    ctrl_root: &str,
+    session_id: Option<&str>,
+    feature: &str,
+) -> Result<(), String> {
+    if let Some(warning) = shared_nested_checkout_verdict(main_root, ctrl_root, session_id, feature)? {
+        eprintln!("{warning}");
+    }
+    Ok(())
+}
+
+pub(crate) fn shared_nested_checkout_verdict(
+    main_root: &Path,
+    ctrl_root: &str,
+    session_id: Option<&str>,
+    feature: &str,
+) -> Result<Option<&'static str>, String> {
+    let main_root_s = p(main_root);
+    match crate::nested_checkout::has_any_shared_nested_checkout(main_root, ctrl_root, session_id) {
+        Ok(false) => Ok(None),
+        Ok(true) => match CompanionRemedy::from_main_root(main_root) {
+            CompanionRemedy::Configured => Err(format!(
+                "refusing to create a worktree: another session is concurrently live on {main_root_s} and it contains a shared nested checkout a companion mount must cover — running unguarded is how one session silently ate another's work. Re-run with \"bee worktree new --feature {feature} --with-companion\" so the shared checkout is mounted and tracked (the paved road for concurrent shared-checkout work — AGENTS.md rule 13). This creates a NEW companion-mounted worktree; it does not retrofit the checkout you are in."
+            )),
+            CompanionRemedy::NotConfigured => Ok(Some(SHARED_NESTED_CHECKOUT_WARNING)),
+        },
+        Err(detect) => Err(format!(
+            "refusing to create a worktree: could not determine whether {main_root_s} holds a shared nested checkout another live session could reach — the detection check itself errored ({}). This guard fails CLOSED on a detection error rather than risk silently allowing an unguarded worktree. FIX: resolve the underlying filesystem error, then retry.",
+            detect.reason
+        )),
+    }
+}

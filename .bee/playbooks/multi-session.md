@@ -21,3 +21,10 @@ disjoint files when the split is natural, and defer the overlapped
 remainder with a recorded reason ("likely swallowed by <cell>;
 re-triage after its merge") — one report line, then keep working. Ask
 the user only when the deferred set is the entire explicit ask.
+
+A worktree refusal for a shared nested checkout is never a reason to ask
+the owner to turn `worktree_first` off or to close another session. With
+no companion config (`commands.worktree_companion_start` and
+`commands.worktree_companion_mount`), `bee` opens the worktree and warns
+that the nested checkout stays guarded by the write guard while sessions
+are concurrent.

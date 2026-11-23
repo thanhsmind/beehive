@@ -3,6 +3,86 @@ use serde_json::Value;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct MarkDue {
+    pub tokens: u64,
+    pub mark: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum HandoffReason {
+    MergedFeature { merged: String },
+    ContextMark { tokens: u64, mark: u64 },
+}
+
+pub fn handoff_mark(config: &serde_json::Map<String, Value>) -> u64 {
+    match config.get("handoff_context_tokens") {
+        Some(Value::Number(n)) => {
+            n.as_u64().unwrap_or(crate::hooks::prompt_context::DEFAULT_HANDOFF_MARK)
+        }
+        _ => crate::hooks::prompt_context::DEFAULT_HANDOFF_MARK,
+    }
+}
+
+pub fn session_context_tokens(session_record: &serde_json::Map<String, Value>) -> Option<u64> {
+    let tokens = session_record
+        .get("context")
+        .and_then(Value::as_object)
+        .and_then(|c| c.get("tokens"))?;
+    tokens.as_u64().or_else(|| {
+        tokens
+            .as_f64()
+            .filter(|f| f.is_finite() && *f >= 0.0)
+            .map(|f| f as u64)
+    })
+}
+
+pub fn context_mark_due(
+    config: &serde_json::Map<String, Value>,
+    session_record: &serde_json::Map<String, Value>,
+) -> Option<MarkDue> {
+    let mark = handoff_mark(config);
+    if mark == 0 {
+        return None;
+    }
+    let tokens = session_context_tokens(session_record)?;
+    if tokens >= mark {
+        Some(MarkDue { tokens, mark })
+    } else {
+        None
+    }
+}
+
+pub fn context_mark_refusal(
+    main_root: &Path,
+    ctrl_root: &Path,
+    session_id: Option<&str>,
+) -> Option<String> {
+    if crate::hooks::herding_worker_marker_set() {
+        return None;
+    }
+    let sid = session_id.map(str::trim).filter(|s| !s.is_empty())?;
+    let config = crate::state::read_config_raw(main_root);
+    let handoff_auto = !matches!(config.get("handoff_auto"), Some(Value::Bool(false)));
+    if !handoff_auto {
+        return None;
+    }
+    let session_file = ctrl_root.join(".bee").join("sessions").join(format!("{sid}.json"));
+    let session_record = match crate::fsutil::read_json(&session_file) {
+        crate::fsutil::ReadJson::Parsed(Value::Object(m)) => m,
+        _ => return None,
+    };
+    let due = context_mark_due(&config, &session_record)?;
+    if !matches!(probe_door(main_root), HandoffDoor::Present { .. }) {
+        return None;
+    }
+    let n_k = due.tokens / 1000;
+    let m_k = due.mark / 1000;
+    Some(format!(
+        "[handoff_due] context {n_k}k is past the {m_k}k mark; run bee state handoff send --task \"<owner request and standing orders>\""
+    ))
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum HandoffDoor {
     Absent,
@@ -80,42 +160,93 @@ pub fn find_follow_up(runs_json: &str, agent_id: &str) -> Option<String> {
     None
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn compose_task_text(
-    merged: &str,
+    reason: &HandoffReason,
     feature: &str,
     class: Option<&str>,
     lane: Option<&str>,
     files: Option<&str>,
     flags: Option<&str>,
+    open_cells: &[String],
     owner_text: &str,
 ) -> String {
-    let mut cmd = format!("bee feature start --feature {feature}");
-    if let Some(c) = class {
-        cmd.push_str(&format!(" --class {c}"));
+    match reason {
+        HandoffReason::MergedFeature { merged } => {
+            let mut cmd = format!("bee feature start --feature {feature}");
+            if let Some(c) = class {
+                cmd.push_str(&format!(" --class {c}"));
+            }
+            if let Some(l) = lane {
+                cmd.push_str(&format!(" --lane {l}"));
+            }
+            if let Some(n) = files {
+                cmd.push_str(&format!(" --files {n}"));
+            }
+            if let Some(f) = flags
+                && !f.trim().is_empty()
+            {
+                cmd.push_str(&format!(" --flags {f}"));
+            }
+            format!(
+                "Handoff from previous leader session (merged feature: {merged}).\n\
+                 Requested feature: {feature}\n\
+                 Route: class={} lane={} files={} flags={}\n\
+                 Run: {cmd}\n\n\
+                 {}\n",
+                class.unwrap_or("-"),
+                lane.unwrap_or("-"),
+                files.unwrap_or("-"),
+                flags.filter(|f| !f.trim().is_empty()).unwrap_or("-"),
+                owner_text.trim()
+            )
+        }
+        HandoffReason::ContextMark { tokens, mark } => {
+            let n_k = tokens / 1000;
+            let m_k = mark / 1000;
+            let mut out = format!(
+                "Handoff from previous leader session (context {n_k}k tokens past {m_k}k mark).\n"
+            );
+            if class.is_some() || lane.is_some() || files.is_some() || flags.is_some() {
+                let mut cmd = format!("bee feature start --feature {feature}");
+                if let Some(c) = class {
+                    cmd.push_str(&format!(" --class {c}"));
+                }
+                if let Some(l) = lane {
+                    cmd.push_str(&format!(" --lane {l}"));
+                }
+                if let Some(n) = files {
+                    cmd.push_str(&format!(" --files {n}"));
+                }
+                if let Some(f) = flags
+                    && !f.trim().is_empty()
+                {
+                    cmd.push_str(&format!(" --flags {f}"));
+                }
+                out.push_str(&format!(
+                    "Requested feature: {feature}\n\
+                     Route: class={} lane={} files={} flags={}\n\
+                     Run: {cmd}\n",
+                    class.unwrap_or("-"),
+                    lane.unwrap_or("-"),
+                    files.unwrap_or("-"),
+                    flags.filter(|f| !f.trim().is_empty()).unwrap_or("-"),
+                ));
+            } else {
+                let cells_disp = if open_cells.is_empty() {
+                    "none".to_string()
+                } else {
+                    open_cells.join(", ")
+                };
+                out.push_str(&format!(
+                    "Current feature: {feature}\n\
+                     Open or claimed cells: {cells_disp}\n"
+                ));
+            }
+            out.push_str(&format!("\n{}\n", owner_text.trim()));
+            out
+        }
     }
-    if let Some(l) = lane {
-        cmd.push_str(&format!(" --lane {l}"));
-    }
-    if let Some(n) = files {
-        cmd.push_str(&format!(" --files {n}"));
-    }
-    if let Some(f) = flags
-        && !f.trim().is_empty()
-    {
-        cmd.push_str(&format!(" --flags {f}"));
-    }
-    format!(
-        "Handoff from previous leader session (merged feature: {merged}).\n\
-         Requested feature: {feature}\n\
-         Route: class={} lane={} files={} flags={}\n\
-         Run: {cmd}\n\n\
-         {}\n",
-        class.unwrap_or("-"),
-        lane.unwrap_or("-"),
-        files.unwrap_or("-"),
-        flags.filter(|f| !f.trim().is_empty()).unwrap_or("-"),
-        owner_text.trim()
-    )
 }
 
 pub fn probe_door(main_root: &Path) -> HandoffDoor {
@@ -191,12 +322,13 @@ pub fn execute_handoff(
     door: &HandoffDoor,
     main_root: &Path,
     session_id: &str,
-    merged: &str,
+    reason: &HandoffReason,
     feature: &str,
     class: Option<&str>,
     lane: Option<&str>,
     files: Option<&str>,
     flags: Option<&str>,
+    open_cells: &[String],
     owner_text: &str,
 ) -> HandoffOutcome {
     let HandoffDoor::Present { binary, project_id } = door else {
@@ -228,17 +360,30 @@ pub fn execute_handoff(
             reason: format!("could not create {}: {e}", tmp_dir.display()),
         };
     }
+    let req_suffix = match reason {
+        HandoffReason::MergedFeature { .. } => feature,
+        HandoffReason::ContextMark { .. } => "mark",
+    };
     let safe_sid = sanitize_path_segment(session_id);
-    let safe_feat = sanitize_path_segment(feature);
-    let task_file = tmp_dir.join(format!("handoff-{safe_sid}-{safe_feat}.md"));
-    let task_text = compose_task_text(merged, feature, class, lane, files, flags, owner_text);
+    let safe_suffix = sanitize_path_segment(req_suffix);
+    let task_file = tmp_dir.join(format!("handoff-{safe_sid}-{safe_suffix}.md"));
+    let task_text = compose_task_text(
+        reason,
+        feature,
+        class,
+        lane,
+        files,
+        flags,
+        open_cells,
+        owner_text,
+    );
     if let Err(e) = std::fs::write(&task_file, &task_text) {
         return HandoffOutcome::Failed {
             reason: format!("could not write handoff task file: {e}"),
         };
     }
 
-    let req = build_request(project_id, follow_up_of, session_id, feature, task_file);
+    let req = build_request(project_id, follow_up_of, session_id, req_suffix, task_file);
     let argv = dispatch_argv(&req);
     let output = match Command::new(binary)
         .args(&argv)
@@ -364,12 +509,15 @@ mod tests {
     #[test]
     fn compose_task_text_includes_header_command_and_owner_text() {
         let text = compose_task_text(
-            "old-feat",
+            &HandoffReason::MergedFeature {
+                merged: "old-feat".to_string(),
+            },
             "new-feat",
             Some("feature"),
             Some("standard"),
             Some("4"),
             Some("multi-domain"),
+            &[],
             "Build the new feature and keep it simple.",
         );
         assert!(text.contains("old-feat"));
@@ -378,6 +526,65 @@ mod tests {
             "bee feature start --feature new-feat --class feature --lane standard --files 4 --flags multi-domain"
         ));
         assert!(text.contains("Build the new feature and keep it simple."));
+    }
+
+    #[test]
+    fn compose_task_text_context_mark_names_feature_and_cells() {
+        let text = compose_task_text(
+            &HandoffReason::ContextMark {
+                tokens: 135_000,
+                mark: 120_000,
+            },
+            "parallel-session-unblock",
+            None,
+            None,
+            None,
+            None,
+            &["psu-3".to_string(), "psu-4".to_string()],
+            "Continue psu-4 after psu-3 caps.",
+        );
+        assert!(text.contains("135k"));
+        assert!(text.contains("120k"));
+        assert!(text.contains("parallel-session-unblock"));
+        assert!(text.contains("psu-3, psu-4"));
+        assert!(text.contains("Continue psu-4 after psu-3 caps."));
+    }
+
+    #[test]
+    fn context_mark_due_checks_threshold_and_zero_off() {
+        let mut cfg = serde_json::Map::new();
+        let mut sess = serde_json::Map::new();
+        assert_eq!(context_mark_due(&cfg, &sess), None);
+
+        sess.insert(
+            "context".into(),
+            serde_json::json!({"tokens": 119_999, "measured_at": "2026-11-23T00:00:00Z"}),
+        );
+        assert_eq!(context_mark_due(&cfg, &sess), None);
+
+        sess.insert(
+            "context".into(),
+            serde_json::json!({"tokens": 120_000, "measured_at": "2026-11-23T00:00:00Z"}),
+        );
+        assert_eq!(
+            context_mark_due(&cfg, &sess),
+            Some(MarkDue {
+                tokens: 120_000,
+                mark: crate::hooks::prompt_context::DEFAULT_HANDOFF_MARK
+            })
+        );
+
+        cfg.insert("handoff_context_tokens".into(), serde_json::json!(0));
+        assert_eq!(context_mark_due(&cfg, &sess), None);
+
+        cfg.insert("handoff_context_tokens".into(), serde_json::json!(80_000));
+        assert_eq!(
+            context_mark_due(&cfg, &sess),
+            Some(MarkDue {
+                tokens: 120_000,
+                mark: 80_000
+            })
+        );
     }
 
     #[test]

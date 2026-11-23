@@ -4441,6 +4441,18 @@ pub(crate) fn run_dispatch_prepare(flags: Flags, use_json: bool, t0: Instant) ->
     let mut worker_registered = false;
     let mut registration_error: Option<String> = None;
     if claim {
+        let ctrl_root = topology.as_ref().map(|(m, _)| m.as_path()).unwrap_or(&ctx.root);
+        let sid = crate::verbs::reservations::resolve_session_id(
+            session_flag.as_deref(),
+            &ctrl_root.to_string_lossy(),
+        )
+        .ok()
+        .flatten();
+        if let Some(msg) =
+            crate::verbs::handoff_door::context_mark_refusal(&ctx.root, ctrl_root, sid.as_deref())
+        {
+            return finish(&ctx, Ok(Out::Thrown(msg)));
+        }
         let topo = topology.as_ref().map(|(m, h)| (m.as_path(), h.as_str()));
         match claim_and_reserve_for_dispatch(
             &ctx.root,
@@ -4857,6 +4869,19 @@ pub(crate) fn run_dispatch_wave(flags: Flags, use_json: bool, t0: Instant) -> Op
                     .to_string(),
             )),
         );
+    }
+
+    let ctrl_root = topology.as_ref().map(|(m, _)| m.as_path()).unwrap_or(&ctx.root);
+    let sid = crate::verbs::reservations::resolve_session_id(
+        session_flag.as_deref(),
+        &ctrl_root.to_string_lossy(),
+    )
+    .ok()
+    .flatten();
+    if let Some(msg) =
+        crate::verbs::handoff_door::context_mark_refusal(&ctx.root, ctrl_root, sid.as_deref())
+    {
+        return finish(&ctx, Err(Err2::Msg(msg)));
     }
 
     if rolling_flag {
