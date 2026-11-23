@@ -8,18 +8,13 @@
     "shape": true,
     "execution": true,
     "review": false,
-    "uat": false
+    "uat": true
   },
   "summary": "Feature \"parallel-session-unblock\" started at phase \"exploring\" (lane).",
   "next_action": "Merged into main at b53c66b; reload the product and test \"parallel-session-unblock\", then either approve uat (\"bee gate --name uat --approved true --lane parallel-session-unblock\") or fix it in the worktree and merge again.",
   "created_at": "2026-11-23T11:45:21.416Z",
-  "run_state": "awaiting-approval",
-  "waiting_on": {
-    "kind": "gate",
-    "subject": "uat: parallel-session-unblock",
-    "asked_at": "2026-11-23T12:43:06.585Z",
-    "session": "bee-worktree-merge-sessionless"
-  },
+  "run_state": "done",
+  "waiting_on": null,
   "route": {
     "class": "feature",
     "lane": "standard",
