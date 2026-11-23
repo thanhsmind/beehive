@@ -988,6 +988,7 @@
     "contract:work-queue-registry",
     "contract:published-release-2-117-0",
     "feature-start",
-    "contract:auto-handoff-on-due"
+    "contract:auto-handoff-on-due",
+    "contract:published-release-2-118-0"
   ]
 }
