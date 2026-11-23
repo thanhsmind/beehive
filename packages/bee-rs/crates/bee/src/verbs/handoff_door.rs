@@ -15,24 +15,37 @@ pub enum HandoffReason {
     ContextMark { tokens: u64, mark: u64 },
 }
 
-pub fn context_mark_due(
-    config: &serde_json::Map<String, Value>,
-    session_record: &serde_json::Map<String, Value>,
-) -> Option<MarkDue> {
-    let mark = match config.get("handoff_context_tokens") {
+pub fn handoff_mark(config: &serde_json::Map<String, Value>) -> u64 {
+    match config.get("handoff_context_tokens") {
         Some(Value::Number(n)) => {
             n.as_u64().unwrap_or(crate::hooks::prompt_context::DEFAULT_HANDOFF_MARK)
         }
         _ => crate::hooks::prompt_context::DEFAULT_HANDOFF_MARK,
-    };
-    if mark == 0 {
-        return None;
     }
+}
+
+pub fn session_context_tokens(session_record: &serde_json::Map<String, Value>) -> Option<u64> {
     let tokens = session_record
         .get("context")
         .and_then(Value::as_object)
-        .and_then(|c| c.get("tokens"))
-        .and_then(Value::as_u64)?;
+        .and_then(|c| c.get("tokens"))?;
+    tokens.as_u64().or_else(|| {
+        tokens
+            .as_f64()
+            .filter(|f| f.is_finite() && *f >= 0.0)
+            .map(|f| f as u64)
+    })
+}
+
+pub fn context_mark_due(
+    config: &serde_json::Map<String, Value>,
+    session_record: &serde_json::Map<String, Value>,
+) -> Option<MarkDue> {
+    let mark = handoff_mark(config);
+    if mark == 0 {
+        return None;
+    }
+    let tokens = session_context_tokens(session_record)?;
     if tokens >= mark {
         Some(MarkDue { tokens, mark })
     } else {

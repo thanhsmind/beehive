@@ -893,21 +893,11 @@ pub(crate) fn run_handoff_send(flags: Flags, use_json: bool, t0: Instant) -> Opt
                 .filter_map(|c| c.get("id").and_then(Value::as_str).map(str::to_string))
                 .collect();
         let config = crate::state::read_config_raw(&ctx.root);
-        let mark = match config.get("handoff_context_tokens") {
-            Some(Value::Number(n)) => {
-                n.as_u64().unwrap_or(crate::hooks::prompt_context::DEFAULT_HANDOFF_MARK)
-            }
-            _ => crate::hooks::prompt_context::DEFAULT_HANDOFF_MARK,
-        };
+        let mark = crate::verbs::handoff_door::handoff_mark(&config);
         let tokens = read_session(&ctx.root, &sid)
             .ok()
             .flatten()
-            .and_then(|r| {
-                r.get("context")
-                    .and_then(Value::as_object)
-                    .and_then(|c| c.get("tokens"))
-                    .and_then(Value::as_u64)
-            })
+            .and_then(|r| crate::verbs::handoff_door::session_context_tokens(&r))
             .unwrap_or(0);
         match crate::verbs::handoff_door::execute_handoff(
             &door,
