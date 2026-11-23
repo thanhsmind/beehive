@@ -72,6 +72,7 @@ first yes wins:
 This is the procedure behind the handoff rule (rule: agents-context-handoff-65):
 a handoff happens at the next clean stop past the context mark and after every
 green worktree merge, never mid-cell; that rule says when, this tree says which move to make.
+When `bee feature start` refuses with `handoff_due`, rerun with `--handoff-task "<owner's request in their words; standing orders>"` so bee dispatches the fresh leader and releases the session; on `[handoff_sent]`, tell the owner in one line and stop (`--same-session` is accepted only when no waggledance door exists or `handoff_auto` is `false` by hand).
 
 ## Scout Contract (just-enough reading)
 
