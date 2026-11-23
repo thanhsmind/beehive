@@ -105,8 +105,12 @@ checkout at all, nothing about this behavior changes today's write.
   companion mount or a registered git submodule (worktree-concurrency-guard
   D1(b)/D2). The refusal never depends on a configurable bypass switch — it is
   a permanent safety check, not an approval gate (worktree-concurrency-guard
-  D5). There is no override flag; the only recovery is opening a fresh,
-  properly mounted worktree (worktree-concurrency-guard D3/D4).
+  D5). There is no override flag for the write. Creating a worktree beside
+  such a checkout is refused only when the companion remedy is configured
+  (`commands.worktree_companion_start` and `commands.worktree_companion_mount`
+  both set); without it, `bee worktree new` and `bee feature start` create the
+  worktree and print one warning line, and this write refusal keeps the nested
+  checkout guarded (parallel-session-unblock D1).
 - R37 — A verification command that can run concurrently in two worktrees must
   keep mutable build artifacts inside the worktree it verifies. A shared Cargo
   target can serve an executable built from another checkout, so source review
