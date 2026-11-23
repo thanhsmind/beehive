@@ -8206,3 +8206,146 @@ use std::time::Instant;
             .expect("read_workflow_record succeeds");
         assert!(rec.get("waiting_on").map_or(true, |v| v.is_null()));
     }
+
+    fn nested_guard_fixture(tmp: &Path) -> PathBuf {
+        let main = main_repo(tmp);
+        std::fs::create_dir_all(main.join("shared").join(".git")).unwrap();
+        std::fs::create_dir_all(main.join(".bee").join("sessions")).unwrap();
+        main
+    }
+
+    fn live_session_record(main: &Path, id: &str) {
+        let now = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string();
+        std::fs::write(
+            main.join(".bee").join("sessions").join(format!("{id}.json")),
+            serde_json::to_string(&json!({"id": id, "last_heartbeat": now})).unwrap(),
+        )
+        .unwrap();
+    }
+
+    fn companion_commands(main: &Path, start: Option<&str>, mount: Option<&str>) {
+        let mut commands = Map::new();
+        if let Some(start) = start {
+            commands.insert("worktree_companion_start".into(), json!(start));
+        }
+        if let Some(mount) = mount {
+            commands.insert("worktree_companion_mount".into(), json!(mount));
+        }
+        std::fs::write(
+            main.join(".bee").join("config.json"),
+            serde_json::to_string(&json!({"commands": commands})).unwrap(),
+        )
+        .unwrap();
+    }
+
+    fn worktree_new_from_main_as(main: &Path, feature: &str, session: &str) -> Option<ExitCode> {
+        let _lock = crate::verbs::drivers::TEST_CWD_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let orig = std::env::current_dir().unwrap();
+        let vars = crate::session_identity::SESSION_ENV_VARS;
+        let prior: Vec<_> = vars.iter().map(|k| (*k, std::env::var_os(k))).collect();
+        unsafe {
+            for k in vars {
+                std::env::remove_var(k);
+            }
+            std::env::set_var("BEE_SESSION_ID", session);
+        }
+        std::env::set_current_dir(main).unwrap();
+        let (flags, use_json) = parse_flags(&["--feature", feature]).unwrap();
+        let code = run_new(flags, use_json, Instant::now());
+        std::env::set_current_dir(orig).unwrap();
+        unsafe {
+            for (k, v) in prior {
+                match v {
+                    Some(v) => std::env::set_var(k, v),
+                    None => std::env::remove_var(k),
+                }
+            }
+        }
+        code
+    }
+
+    fn verdict_as(main: &Path, session: &str) -> Result<Option<&'static str>, String> {
+        shared_nested_checkout_verdict(main, &main.to_string_lossy(), Some(session), "demo")
+    }
+
+    #[test]
+    fn worktree_new_beside_a_live_session_opens_and_warns_without_companion_config() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = nested_guard_fixture(tmp.path());
+        live_session_record(&main, "other-session");
+
+        assert_eq!(verdict_as(&main, "me"), Ok(Some(SHARED_NESTED_CHECKOUT_WARNING)));
+        assert!(SHARED_NESTED_CHECKOUT_WARNING.starts_with(
+            "warning: another session is live and this checkout holds a shared nested checkout;"
+        ));
+        assert_eq!(worktree_new_from_main_as(&main, "demo", "me"), Some(ExitCode::SUCCESS));
+        assert!(tmp.path().join("main--wt--demo").exists(), "the worktree must be created");
+    }
+
+    #[test]
+    fn worktree_new_beside_a_live_session_refuses_when_both_companion_commands_are_set() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = nested_guard_fixture(tmp.path());
+        live_session_record(&main, "other-session");
+        companion_commands(&main, Some("true"), Some("vendor/companion"));
+
+        let refusal = verdict_as(&main, "me").unwrap_err();
+        assert!(refusal.starts_with("refusing to create a worktree: another session is concurrently live on "), "{refusal}");
+        assert!(refusal.contains("\"bee worktree new --feature demo --with-companion\""), "{refusal}");
+        let code = worktree_new_from_main_as(&main, "demo", "me");
+        assert!(code.is_some() && code != Some(ExitCode::SUCCESS), "{code:?}");
+        assert!(!tmp.path().join("main--wt--demo").exists(), "a refusal creates nothing");
+    }
+
+    #[test]
+    fn one_companion_command_alone_counts_as_not_configured() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = nested_guard_fixture(tmp.path());
+        live_session_record(&main, "other-session");
+
+        for (start, mount) in [
+            (Some("true"), None),
+            (None, Some("vendor/companion")),
+            (Some("true"), Some("   ")),
+            (None, None),
+        ] {
+            companion_commands(&main, start, mount);
+            assert_eq!(CompanionRemedy::from_main_root(&main), CompanionRemedy::NotConfigured, "{start:?} {mount:?}");
+            assert_eq!(verdict_as(&main, "me"), Ok(Some(SHARED_NESTED_CHECKOUT_WARNING)), "{start:?} {mount:?}");
+        }
+        companion_commands(&main, Some("true"), Some("vendor/companion"));
+        assert_eq!(CompanionRemedy::from_main_root(&main), CompanionRemedy::Configured);
+
+        companion_commands(&main, None, Some("vendor/companion"));
+        assert_eq!(worktree_new_from_main_as(&main, "demo", "me"), Some(ExitCode::SUCCESS));
+        assert!(tmp.path().join("main--wt--demo").exists());
+    }
+
+    #[test]
+    fn a_solo_session_never_refuses_even_with_companion_config() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = nested_guard_fixture(tmp.path());
+        live_session_record(&main, "me");
+        companion_commands(&main, Some("true"), Some("vendor/companion"));
+
+        assert_eq!(verdict_as(&main, "me"), Ok(None));
+        assert_eq!(worktree_new_from_main_as(&main, "demo", "me"), Some(ExitCode::SUCCESS));
+        assert!(tmp.path().join("main--wt--demo").exists());
+    }
+
+    #[test]
+    fn a_nested_checkout_detection_error_fails_closed_without_companion_config() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = nested_guard_fixture(tmp.path());
+        live_session_record(&main, "other-session");
+        std::fs::write(main.join(".bee").join("companion-session.json"), "{not json").unwrap();
+
+        let refusal = verdict_as(&main, "me").unwrap_err();
+        assert!(
+            refusal.starts_with("refusing to create a worktree: could not determine whether "),
+            "{refusal}"
+        );
+        let code = worktree_new_from_main_as(&main, "demo", "me");
+        assert!(code.is_some() && code != Some(ExitCode::SUCCESS), "{code:?}");
+        assert!(!tmp.path().join("main--wt--demo").exists());
+    }
