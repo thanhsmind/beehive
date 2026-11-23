@@ -663,7 +663,7 @@ A `[BLOCKED]` whose worker recorded a dissent owes its `.bee/bin/bee cells disse
 
 ## Handoff JSON
 
-At the next clean stop past the context mark or when the user asks for a switch, write `.bee/HANDOFF.json` (rule: `agents-context-handoff-65`; after a green worktree merge, `bee feature start --handoff-task "<owner's request in their words; standing orders>"` hands off directly without `.bee/HANDOFF.json`) — this is the record's schema, the one site that keeps it: `{ phase, feature, mode, cells_in_flight, done, remaining, next_action, verified, tree, key_files, gotchas, standing_orders, ruled_out, written_at }`. The newer fields let the next session trust what it reads:
+Past the context mark (when a waggledance door is present and `handoff_auto` is on), the next claim, wave, or feature start refuses `[handoff_due]`; the leader runs `bee state handoff send --task "<owner's request in their words; standing orders>"` and on `[handoff_sent]` tells the owner in one line and stops (a merge-time handoff still uses `bee feature start --handoff-task "<owner's request in their words; standing orders>"`, without `.bee/HANDOFF.json`). When the user asks for a switch, or when no waggledance door exists or `handoff_auto` is `false`, write `.bee/HANDOFF.json` (rule: `agents-context-handoff-65`) — this is the record's schema, the one site that keeps it: `{ phase, feature, mode, cells_in_flight, done, remaining, next_action, verified, tree, key_files, gotchas, standing_orders, ruled_out, written_at }`. The newer fields let the next session trust what it reads:
 
 - `verified` — the proof lines run so far, each `<command> — <result> — <scope reason>`; work with no line here is unproven.
 - `tree` — `clean`, or `dirty:<paths>` naming each uncommitted path.
@@ -694,16 +694,16 @@ Include the resume commands:
 When a cell or wave finishes (capped, tests green) and further
 execution-approved work remains — this lane or another Gate-3-approved one —
 continue with the next unit in this session: finishing a unit is never a
-reason to stop, ask, or wait. The planned-next handoff is a session-exit
-artifact, not an offer: only when this session is
-actually ending (past the context mark at a clean stop, or the user asked for a switch), claim the next unit (`bee cells claim-next`), write the
+reason to stop, ask, or wait. Past the context mark (with a waggledance door and `handoff_auto` on), the next claim, wave, or feature start refuses `[handoff_due]`: run `bee state handoff send --task "<owner's request in their words; standing orders>"` at once, and on `[handoff_sent]` tell the owner in one line and stop. After a green worktree merge, when opening the next feature, `bee feature start` refuses with `handoff_due`; rerun with `--handoff-task "<owner's request in their words; standing orders>"` so bee dispatches the fresh leader itself and releases the session (on `[handoff_sent]`, tell the owner in one line and stop; `--same-session` is accepted only when no waggledance door exists or `handoff_auto` is `false` by hand). The planned-next handoff is a session-exit
+artifact, not an offer: when this session is
+actually ending via `.bee/HANDOFF.json` (the user asked for a switch, or no waggledance door exists / `handoff_auto` is `false` past the mark), claim the next unit (`bee cells claim-next`), write the
 handoff (`bee state handoff write --kind planned-next --writer-session <id>
 --previous-cell <capped-id> --next-cell <claimed-id>`), and hand the
 remaining work to a fresh leader through the host's leader door when one
 exists (waggledance: `waggledance dispatch --project <this project id> --leader --follow-up-of <current run> --handoff --request-id <id>` with the task through `--task`, `--task-file` or stdin; the MCP fallback follows rule `agents-other-project-to-its-leader`, so the
 successor joins the same run family; task text naming what is done, what is next, and the user's
 standing orders),
-then release this session. After a green worktree merge, when opening the next feature, `bee feature start` refuses with `handoff_due`; rerun with `--handoff-task "<owner's request in their words; standing orders>"` so bee dispatches the fresh leader itself and releases the session (on `[handoff_sent]`, tell the owner in one line and stop; `--same-session` is accepted only when no waggledance door exists or `handoff_auto` is `false` by hand). The fresh leader adopts the carried claim
+then release this session. The fresh leader adopts the carried claim
 automatically and opens straight into the next cell, no confirmation
 asked. Never tell the user to open a new session, never stop to suggest
 `/clear`, never wait for one, and never spawn the leader yourself (no
