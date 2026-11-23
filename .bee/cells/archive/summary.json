@@ -2458,5 +2458,10 @@
     "capped": 2,
     "dropped": 0,
     "archived_at": "2026-11-22T01:10:38.819Z"
+  },
+  "auto-handoff-on-due": {
+    "capped": 4,
+    "dropped": 0,
+    "archived_at": "2026-11-23T05:05:46.481Z"
   }
 }

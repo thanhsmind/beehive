@@ -1,0 +1,144 @@
+{
+  "id": "ahd-2",
+  "feature": "auto-handoff-on-due",
+  "title": "Test the automatic handoff path against a fake waggledance",
+  "lane": "standard",
+  "role": "test",
+  "deps": [
+    "ahd-1"
+  ],
+  "decisions": [
+    "3e5312e2-e9b7-43b5-a5d1-1bff3587ff9c",
+    "09f34000-c517-45da-8b23-8a4367aec8af",
+    "01efdfee-899e-406a-828f-6f270c73c477"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/feature_group.rs",
+    "packages/bee-rs/crates/bee/src/verbs/handoff_door.rs"
+  ],
+  "read_first": [
+    "docs/history/auto-handoff-on-due/CONTEXT.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Without reading the ahd-1 worker's notes, check the ahd-1 commit against CONTEXT.md D1-D6 and add behavior tests next to the existing handoff_after_merge_door_* tests: a fake waggledance executable (test temp dir, injected the same way the code finds the binary) that answers list --json with this repo's root, runs --full with a matching and a non-matching pane, and dispatch with a run_id JSON and records its argv. Cover: refuses without --handoff-task; refuses --same-session with a door; Sent releases the session, writes the handoff-dispatched audit row, writes no lane, and the recorded argv holds --follow-up-of and --handoff only on a pane match; Failed dispatch writes nothing; door absent keeps the waiver; handoff_auto false keeps the waiver; bee config set handoff_auto is refused. Fix any defect you find in ahd-1's code and name it in the cap.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee handoff",
+  "must_haves": {
+    "why": "A code cell never certifies itself.",
+    "out_of_scope": [
+      "doctrine text"
+    ],
+    "truths": [
+      "every D1-D5 behavior has a test that fails if the behavior is removed"
+    ],
+    "prohibitions": [
+      "No code comments",
+      "No real waggledance call from a test"
+    ]
+  },
+  "behavior_change": false,
+  "tester_rule": true,
+  "judge_obligation_ack": "Tester for ahd-1.",
+  "status": "capped",
+  "trace": {
+    "worker": "leader-efae1f08",
+    "outcome": "Added 8 fake-waggledance behavior tests for the auto handoff path, fixed 2 ahd-1 defects (registry id regression, unpinned flag count) 188cdecc94cc07a4023f46470802a9e80cb6444c",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/feature_group.rs",
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/cross_project.rs",
+      "packages/bee-rs/crates/bee/src/catalog.rs",
+      "docs/knowledge/areas/hook-runtime/write-guard-request-shapes.md",
+      "docs/knowledge/areas/workflow-state/sessions-lanes-and-identity.md"
+    ],
+    "deviations": [
+      "sync-ack: tester cell; sibling cell ahd-3 owns the rule sync across applied_at files"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-23T04:50:49.492Z",
+    "behavior_change": false,
+    "verification_evidence": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee handoff (54+4 passed) plus clippy -D warnings (exit 0) and full cargo test --release --no-fail-fast (exit 0, 5647 passed) — green:unit — touched feature_group.rs tests, cross_project.rs, catalog.rs",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "efae1f08-ca3a-4c96-8c3e-82ebb011f75e",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee handoff",
+    "claimed_at": "2026-11-23T04:25:20.500Z",
+    "knowledge_delta": [
+      "docs/knowledge/areas/hook-runtime/write-guard-request-shapes.md",
+      "docs/knowledge/areas/workflow-state/sessions-lanes-and-identity.md"
+    ],
+    "sync_ack": "tester cell; sibling cell ahd-3 owns the rule sync across applied_at files",
+    "no_mistakes": true,
+    "knowledge_used": [
+      {
+        "path": "docs/knowledge/patterns/20260821-a-faked-seam-hides-the-parse.md",
+        "changed": "the fake goes through the real PATH lookup and real JSON parse rather than stubbing probe_door"
+      }
+    ],
+    "principles_used": [
+      {
+        "slug": "bee-principle-red-before-green",
+        "changed": "every new test was mutation-checked red; one survivor led to the run_id-printing failing fake"
+      },
+      {
+        "slug": "bee-principle-test-behavior-not-structure",
+        "changed": "assertions are on argv, audit rows, session record and the filesystem, never on internal calls"
+      }
+    ],
+    "changed_lines": 341,
+    "report": {
+      "outcome": "Added 8 fake-waggledance behavior tests for the auto handoff path, fixed 2 ahd-1 defects (registry id regression, unpinned flag count) 188cdecc94cc07a4023f46470802a9e80cb6444c",
+      "commit": "188cdecc94cc07a4023f46470802a9e80cb6444c",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/feature_group.rs",
+        "packages/bee-rs/crates/bee/src/hooks/write_guard/cross_project.rs",
+        "packages/bee-rs/crates/bee/src/catalog.rs",
+        "docs/knowledge/areas/hook-runtime/write-guard-request-shapes.md",
+        "docs/knowledge/areas/workflow-state/sessions-lanes-and-identity.md"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee handoff — green:unit — PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee handoff (54+4 passed) plus clippy -D warnings (exit 0) and full cargo test --release --no-fail-fast (exit 0, 5647 passed) — green:unit — touched feature_group.rs tests, cross_project.rs, catalog.rs",
+      "deviations": [],
+      "knowledge_used": [
+        "docs/knowledge/patterns/20260821-a-faked-seam-hides-the-parse.md — the fake goes through the real PATH lookup and real JSON parse rather than stubbing probe_door"
+      ],
+      "principles_used": [
+        "bee-principle-red-before-green — every new test was mutation-checked red; one survivor led to the run_id-printing failing fake",
+        "bee-principle-test-behavior-not-structure — assertions are on argv, audit rows, session record and the filesystem, never on internal calls"
+      ],
+      "reaction": "confirm",
+      "found": [
+        "ahd-1 defect fixed: parse_registry required a row id, breaking cross_project_supervisor_a_registry_naming_the_project_grants_the_read",
+        "ahd-1 defect fixed: --handoff-task grew the flag vocabulary to 270 without bumping PINNED_FLAG_COUNT",
+        "sessions.rs: the run_session_release doc comment now attaches to ReleaseSessionResult (cosmetic, not fixed)",
+        "departure: edited cross_project.rs and catalog.rs outside the declared files under the cell's fix-ahd-1-defects instruction"
+      ],
+      "patch_id": "397697df9dbc5ddc240fcbe8911f73f91b5e92a9"
+    },
+    "reaction": "confirm",
+    "found": [
+      "ahd-1 defect fixed: parse_registry required a row id, breaking cross_project_supervisor_a_registry_naming_the_project_grants_the_read",
+      "ahd-1 defect fixed: --handoff-task grew the flag vocabulary to 270 without bumping PINNED_FLAG_COUNT",
+      "sessions.rs: the run_session_release doc comment now attaches to ReleaseSessionResult (cosmetic, not fixed)",
+      "departure: edited cross_project.rs and catalog.rs outside the declared files under the cell's fix-ahd-1-defects instruction"
+    ],
+    "warnings": [
+      "advisory: this cap's commit changes 341 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
+  },
+  "usage": {
+    "new": 187191,
+    "cached": 4060450,
+    "total": 4247641,
+    "models": {
+      "claude-opus-5-5": {
+        "new": 187191,
+        "cached": 4060450,
+        "total": 4247641
+      }
+    },
+    "jobs": [
+      "job-1795408033669-1300989-1",
+      "job-1795408602606-1331298-1"
+    ]
+  }
+}

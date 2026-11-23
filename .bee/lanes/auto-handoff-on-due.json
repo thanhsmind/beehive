@@ -8,18 +8,13 @@
     "shape": true,
     "execution": true,
     "review": false,
-    "uat": false
+    "uat": true
   },
   "summary": "Feature \"auto-handoff-on-due\" started at phase \"exploring\" (lane).",
   "next_action": "Merged into main at d89d0fd; reload the product and test \"auto-handoff-on-due\", then either approve uat (\"bee gate --name uat --approved true --lane auto-handoff-on-due\") or fix it in the worktree and merge again.",
   "created_at": "2026-11-23T04:02:58.857Z",
-  "run_state": "awaiting-approval",
-  "waiting_on": {
-    "kind": "gate",
-    "subject": "uat: auto-handoff-on-due",
-    "asked_at": "2026-11-23T04:52:37.283Z",
-    "session": "bee-worktree-merge-sessionless"
-  },
+  "run_state": "done",
+  "waiting_on": null,
   "route": {
     "class": "feature",
     "lane": "standard",

@@ -1,0 +1,198 @@
+{
+  "id": "ahd-4",
+  "feature": "auto-handoff-on-due",
+  "title": "Check the handoff doctrine against the shipped behavior",
+  "lane": "standard",
+  "role": "test",
+  "deps": [
+    "ahd-3",
+    "ahd-1"
+  ],
+  "decisions": [
+    "3e5312e2-e9b7-43b5-a5d1-1bff3587ff9c",
+    "09f34000-c517-45da-8b23-8a4367aec8af",
+    "01efdfee-899e-406a-828f-6f270c73c477"
+  ],
+  "files": [
+    "packages/bee/playbooks/handoff.md",
+    "docs/knowledge/areas/workflow-state/sessions-lanes-and-identity.md"
+  ],
+  "read_first": [
+    "docs/history/auto-handoff-on-due/CONTEXT.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Read the lines the ahd-3 commit changed. For each behavior claim (flag names, refusal tags, handoff_auto, follow-up run rule, audit kind), open the ahd-1 code in verbs/feature_group.rs and verbs/handoff_door.rs and confirm it, with a file:line anchor in the cap. Fix a wrong claim in the doc, never in code. Confirm no doctrine source still offers --same-session as the normal way on when a door exists (rg -n same-session under packages/bee skills).",
+  "verify": "/mnt/data/Projects/goglbe/beehive/.bee/bin/bee knowledge check",
+  "must_haves": {
+    "why": "A docs cell does not certify itself; a separate checker confirms each claim.",
+    "out_of_scope": [
+      "code"
+    ],
+    "truths": [
+      "every claim ahd-3 added has a file:line anchor in the cap"
+    ],
+    "prohibitions": [
+      "No code change"
+    ]
+  },
+  "regen_obligation_ack": "A wording fix here is rare; ahd-3 owns the regen and the leader reruns bee dev regen before merge if ahd-4 edits.",
+  "behavior_change": false,
+  "tester_rule": true,
+  "judge_obligation_ack": "Checker for ahd-3.",
+  "status": "capped",
+  "trace": {
+    "worker": "w-ahd-4",
+    "outcome": "All ahd-3 handoff doctrine claims confirmed against ahd-1 code with file:line anchors; no wrong claim, no edit, no commit (verified against ecca68ee7)",
+    "files_changed": [
+      ".agents/skills/.bee-render.json",
+      ".agents/skills/bee-hive/references/routing-and-contracts.md",
+      ".agents/skills/bee-swarming/SKILL.md",
+      ".agents/skills/bee-swarming/references/swarming-reference.md",
+      ".bee/onboarding.json",
+      ".bee/playbooks/handoff.md",
+      ".claude-plugin/skills/.bee-render.json",
+      ".claude-plugin/skills/bee-hive/references/routing-and-contracts.md",
+      ".claude-plugin/skills/bee-swarming/SKILL.md",
+      ".claude-plugin/skills/bee-swarming/references/swarming-reference.md",
+      ".claude/skills/.bee-render.json",
+      ".claude/skills/bee-hive/references/routing-and-contracts.md",
+      ".claude/skills/bee-swarming/SKILL.md",
+      ".claude/skills/bee-swarming/references/swarming-reference.md",
+      ".codex-plugin/skills/.bee-render.json",
+      ".codex-plugin/skills/bee-hive/references/routing-and-contracts.md",
+      ".codex-plugin/skills/bee-swarming/SKILL.md",
+      ".codex-plugin/skills/bee-swarming/references/swarming-reference.md",
+      ".opencode/skills/.bee-render.json",
+      ".opencode/skills/bee-hive/references/routing-and-contracts.md",
+      ".opencode/skills/bee-swarming/SKILL.md",
+      ".opencode/skills/bee-swarming/references/swarming-reference.md",
+      "docs/history/auto-handoff-on-due/CONTEXT.md",
+      "docs/history/auto-handoff-on-due/plan.md",
+      "docs/history/codex-harness-hardening/release-manifest.json",
+      "docs/knowledge/areas/workflow-state/sessions-lanes-and-identity.md",
+      "packages/bee-rs/crates/bee/src/audit.rs",
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/cross_project.rs",
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/guards.rs",
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/mod.rs",
+      "packages/bee-rs/crates/bee/src/verbs/feature_group.rs",
+      "packages/bee-rs/crates/bee/src/verbs/handoff_door.rs",
+      "packages/bee-rs/crates/bee/src/verbs/mod.rs",
+      "packages/bee-rs/crates/bee/src/verbs/state_group/sessions.rs",
+      "packages/bee/playbooks/handoff.md",
+      "skills/bee-hive/references/routing-and-contracts.md",
+      "skills/bee-swarming/SKILL.md",
+      "skills/bee-swarming/references/swarming-reference.md"
+    ],
+    "deviations": [
+      "sync-ack: read-only checker; sibling cell ahd-3 owns the rule sync across applied_at files"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-23T04:29:10.728Z",
+    "behavior_change": false,
+    "verification_evidence": "/mnt/data/Projects/goglbe/beehive/.bee/bin/bee knowledge check — green:static — 0 OKF/profile errors, OK; read-only doc-vs-code check",
+    "verify_output": "green:static",
+    "verify_passed": true,
+    "claim_session": "d47e7235-d26c-4676-b744-e1752c4bea6d",
+    "verify_command": "/mnt/data/Projects/goglbe/beehive/.bee/bin/bee knowledge check",
+    "claimed_at": "2026-11-23T04:26:51.187Z",
+    "knowledge_delta": [
+      "docs/knowledge/areas/workflow-state/sessions-lanes-and-identity.md"
+    ],
+    "sync_ack": "read-only checker; sibling cell ahd-3 owns the rule sync across applied_at files",
+    "no_mistakes": true,
+    "no_knowledge_used": true,
+    "principles_used": [
+      {
+        "slug": "bee-principle-verify-before-reporting",
+        "changed": "every claim anchored to code lines before declaring no edit needed"
+      }
+    ],
+    "commit_pending": "read-only checker cell: every ahd-3 claim confirmed against ahd-1 code, no file changed, nothing to commit",
+    "changed_lines": 632,
+    "report": {
+      "outcome": "All ahd-3 handoff doctrine claims confirmed against ahd-1 code with file:line anchors; no wrong claim, no edit, no commit (verified against ecca68ee7)",
+      "commit": "ecca68ee7994fd8008ae498de654d63210ebe822",
+      "files": [
+        ".agents/skills/.bee-render.json",
+        ".agents/skills/bee-hive/references/routing-and-contracts.md",
+        ".agents/skills/bee-swarming/SKILL.md",
+        ".agents/skills/bee-swarming/references/swarming-reference.md",
+        ".bee/onboarding.json",
+        ".bee/playbooks/handoff.md",
+        ".claude-plugin/skills/.bee-render.json",
+        ".claude-plugin/skills/bee-hive/references/routing-and-contracts.md",
+        ".claude-plugin/skills/bee-swarming/SKILL.md",
+        ".claude-plugin/skills/bee-swarming/references/swarming-reference.md",
+        ".claude/skills/.bee-render.json",
+        ".claude/skills/bee-hive/references/routing-and-contracts.md",
+        ".claude/skills/bee-swarming/SKILL.md",
+        ".claude/skills/bee-swarming/references/swarming-reference.md",
+        ".codex-plugin/skills/.bee-render.json",
+        ".codex-plugin/skills/bee-hive/references/routing-and-contracts.md",
+        ".codex-plugin/skills/bee-swarming/SKILL.md",
+        ".codex-plugin/skills/bee-swarming/references/swarming-reference.md",
+        ".opencode/skills/.bee-render.json",
+        ".opencode/skills/bee-hive/references/routing-and-contracts.md",
+        ".opencode/skills/bee-swarming/SKILL.md",
+        ".opencode/skills/bee-swarming/references/swarming-reference.md",
+        "docs/history/auto-handoff-on-due/CONTEXT.md",
+        "docs/history/auto-handoff-on-due/plan.md",
+        "docs/history/codex-harness-hardening/release-manifest.json",
+        "docs/knowledge/areas/workflow-state/sessions-lanes-and-identity.md",
+        "packages/bee-rs/crates/bee/src/audit.rs",
+        "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+        "packages/bee-rs/crates/bee/src/hooks/write_guard/cross_project.rs",
+        "packages/bee-rs/crates/bee/src/hooks/write_guard/guards.rs",
+        "packages/bee-rs/crates/bee/src/hooks/write_guard/mod.rs",
+        "packages/bee-rs/crates/bee/src/verbs/feature_group.rs",
+        "packages/bee-rs/crates/bee/src/verbs/handoff_door.rs",
+        "packages/bee-rs/crates/bee/src/verbs/mod.rs",
+        "packages/bee-rs/crates/bee/src/verbs/state_group/sessions.rs",
+        "packages/bee/playbooks/handoff.md",
+        "skills/bee-hive/references/routing-and-contracts.md",
+        "skills/bee-swarming/SKILL.md",
+        "skills/bee-swarming/references/swarming-reference.md"
+      ],
+      "tests": "/mnt/data/Projects/goglbe/beehive/.bee/bin/bee knowledge check — green:static — /mnt/data/Projects/goglbe/beehive/.bee/bin/bee knowledge check — green:static — 0 OKF/profile errors, OK; read-only doc-vs-code check",
+      "deviations": [],
+      "knowledge_used": [],
+      "principles_used": [
+        "bee-principle-verify-before-reporting — every claim anchored to code lines before declaring no edit needed"
+      ],
+      "reaction": "confirm",
+      "skipped": [
+        "cargo clippy/test proof — no file changed, doc-only checker cell"
+      ],
+      "found": [
+        "sessions-lanes-and-identity.md shows stale_anchor in knowledge check; content now verified, leader may run bee knowledge confirm --id workflow-state-sessions-lanes-and-identity"
+      ],
+      "patch_id": "68af1ed33b527867a6b9296c82d13cc7cc2850ff"
+    },
+    "reaction": "confirm",
+    "skipped": [
+      "cargo clippy/test proof — no file changed, doc-only checker cell"
+    ],
+    "found": [
+      "sessions-lanes-and-identity.md shows stale_anchor in knowledge check; content now verified, leader may run bee knowledge confirm --id workflow-state-sessions-lanes-and-identity"
+    ],
+    "warnings": [],
+    "tests": "boundary"
+  },
+  "usage": {
+    "new": 52864,
+    "cached": 526843,
+    "total": 579707,
+    "models": {
+      "claude-opus-5-5": {
+        "new": 52864,
+        "cached": 526843,
+        "total": 579707
+      }
+    },
+    "jobs": [
+      "job-1795408035316-1301155-1"
+    ]
+  }
+}

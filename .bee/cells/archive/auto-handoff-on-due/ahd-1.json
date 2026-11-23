@@ -1,0 +1,192 @@
+{
+  "id": "ahd-1",
+  "feature": "auto-handoff-on-due",
+  "title": "Hand off through waggledance when feature start hits handoff_due",
+  "lane": "standard",
+  "role": "code",
+  "deps": [],
+  "decisions": [
+    "3e5312e2-e9b7-43b5-a5d1-1bff3587ff9c",
+    "09f34000-c517-45da-8b23-8a4367aec8af"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/handoff_door.rs",
+    "packages/bee-rs/crates/bee/src/verbs/mod.rs",
+    "packages/bee-rs/crates/bee/src/verbs/feature_group.rs",
+    "packages/bee-rs/crates/bee/src/audit.rs",
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/guards.rs",
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/cross_project.rs",
+    "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+  ],
+  "read_first": [
+    "docs/history/auto-handoff-on-due/CONTEXT.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Implement CONTEXT.md D1-D6. New module verbs/handoff_door.rs owns the data shape: enum HandoffDoor { Absent, Present { binary, project_id } }, struct HandoffRequest { project_id, follow_up_of: Option<String>, request_id, task_file }, enum HandoffOutcome { Sent { run_id, request_id }, Failed { reason } }; pure fns build_request(...) and dispatch_argv(&HandoffRequest) -> Vec<String>, a pure fn find_follow_up(runs_json, agent_id) -> Option<String> (pane_id == paseo:<agent_id>), a pure fn compose_task_text(merged, feature, class, lane, files, flags, owner_text) -> String, and a thin shell that probes the door (reuse waggledance_binary and the waggledance list --json read in hooks/write_guard/cross_project.rs, exposing what you need as pub(crate); match root_path to the main root and take that row's id), runs waggledance runs --project <id> --full, writes the task file under <main root>/.bee/tmp/, runs waggledance dispatch and parses run_id from its JSON stdout. In verbs/feature_group.rs handoff_due branch: add flag handoff-task to keys_known and the flag registry (regen registry_payload.json with bee dev regen); when the door is Present and config handoff_auto is not false: --same-session refuses with [handoff_due] --same-session is not accepted while bee can hand off; no --handoff-task refuses with [handoff_due] naming --handoff-task; with it, dispatch, then on Sent release the session (call the same code bee state session release uses), append audit kind handoff-dispatched (add it to the known kinds in audit.rs) with run id and request id in the note, and fail with [handoff_sent] run <run_id>: this session is released; tell the owner in one line and stop. On Failed fail with [handoff_failed] <reason> and write nothing. Door Absent or handoff_auto false: today's behavior unchanged. Make handoff_auto a governed config key in the governed view in hooks/write_guard/guards.rs so bee config set refuses it. Add unit tests for the pure fns. No code comments.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee handoff",
+  "must_haves": {
+    "why": "Agents waive the handoff with their own reason; bee must do the handoff itself.",
+    "out_of_scope": [
+      "doctrine and docs text",
+      "the prompt-line context warning"
+    ],
+    "truths": [
+      "with a present door and handoff_auto on, no agent-supplied flag lets a second feature open in the same session",
+      "the dispatch argv carries --leader, --request-id bee-handoff-<session>-<feature>, --task-file, and --follow-up-of <run> --handoff only when a run matches",
+      "door absent keeps the existing --same-session waiver and its tests green"
+    ],
+    "prohibitions": [
+      "No code comments",
+      "No HANDOFF.json write on this path",
+      "No fallback to a waiver after a failed dispatch"
+    ]
+  },
+  "behavior_change": true,
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "w-ahd-1",
+    "outcome": "Implemented automatic waggledance handoff on handoff_due, governed handoff_auto, and --handoff-task flag ecca68ee7",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/handoff_door.rs",
+      "packages/bee-rs/crates/bee/src/verbs/mod.rs",
+      "packages/bee-rs/crates/bee/src/verbs/feature_group.rs",
+      "packages/bee-rs/crates/bee/src/audit.rs",
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/guards.rs",
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/cross_project.rs",
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/mod.rs",
+      "packages/bee-rs/crates/bee/src/verbs/state_group/sessions.rs",
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+    ],
+    "deviations": [
+      "sync-ack: The owned skill text moves in sibling cell ahd-3 of the same feature (skills/bee-swarming/SKILL.md and swarming-reference.md)"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-23T04:24:55.609Z",
+    "behavior_change": true,
+    "verification_evidence": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo clippy --manifest-path packages/bee-rs/Cargo.toml -- -D warnings && cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee handoff — green:unit — touched handoff_door.rs, feature_group.rs, audit.rs, guards.rs, cross_project.rs, sessions.rs, registry_payload.json (46 handoff tests, 12 registry_contracts, 8 session_release tests passed)",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "efae1f08-ca3a-4c96-8c3e-82ebb011f75e",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee handoff",
+    "claimed_at": "2026-11-23T04:18:53.402Z",
+    "knowledge_delta": [],
+    "sync_ack": "The owned skill text moves in sibling cell ahd-3 of the same feature (skills/bee-swarming/SKILL.md and swarming-reference.md)",
+    "no_mistakes": true,
+    "principles_used": [
+      {
+        "slug": "bee-principle-foundational-thinking",
+        "changed": "settled HandoffDoor/HandoffRequest/HandoffOutcome types and pure functions before wiring feature_group.rs"
+      },
+      {
+        "slug": "bee-principle-minimize-reader-load",
+        "changed": "extracted shared release_session_record and run_waggledance_list helpers instead of duplicating logic"
+      }
+    ],
+    "changed_lines": 632,
+    "report": {
+      "outcome": "Implemented automatic waggledance handoff on handoff_due, governed handoff_auto, and --handoff-task flag ecca68ee7",
+      "commit": "ecca68ee7994fd8008ae498de654d63210ebe822",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/handoff_door.rs",
+        "packages/bee-rs/crates/bee/src/verbs/mod.rs",
+        "packages/bee-rs/crates/bee/src/verbs/feature_group.rs",
+        "packages/bee-rs/crates/bee/src/audit.rs",
+        "packages/bee-rs/crates/bee/src/hooks/write_guard/guards.rs",
+        "packages/bee-rs/crates/bee/src/hooks/write_guard/cross_project.rs",
+        "packages/bee-rs/crates/bee/src/hooks/write_guard/mod.rs",
+        "packages/bee-rs/crates/bee/src/verbs/state_group/sessions.rs",
+        "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee handoff — green:unit — PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo clippy --manifest-path packages/bee-rs/Cargo.toml -- -D warnings && cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee handoff — green:unit — touched handoff_door.rs, feature_group.rs, audit.rs, guards.rs, cross_project.rs, sessions.rs, registry_payload.json (46 handoff tests, 12 registry_contracts, 8 session_release tests passed)",
+      "deviations": [],
+      "principles_used": [
+        "bee-principle-foundational-thinking — settled HandoffDoor/HandoffRequest/HandoffOutcome types and pure functions before wiring feature_group.rs",
+        "bee-principle-minimize-reader-load — extracted shared release_session_record and run_waggledance_list helpers instead of duplicating logic"
+      ],
+      "patch_id": "68af1ed33b527867a6b9296c82d13cc7cc2850ff"
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 632 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "D1",
+            "status": "PASS",
+            "evidence": "feature_group.rs:218-220 gate; :239-250 execute_handoff; :252 release_session_record; :267-269 [handoff_sent] non-zero exit before create_feature_worktree :318 / start_lane :359"
+          },
+          {
+            "id": "D2",
+            "status": "PASS",
+            "evidence": "feature_group.rs:130 flag; :226-233 [handoff_due] names --handoff-task; handoff_door.rs:225-239 .bee/tmp task file; :83-119 header with merged, slug, route, Run command, owner text"
+          },
+          {
+            "id": "D3",
+            "status": "PASS",
+            "evidence": "feature_group.rs:221-224 exact refusal; :211 default true; test :1175 config set refuses; :277-295 + :406-410 waiver kept when absent/false"
+          },
+          {
+            "id": "D4",
+            "status": "PASS",
+            "evidence": "handoff_door.rs:208-223 PASEO_AGENT_ID + runs --full; :60-81 paseo:<id> pane match; :36 bee-handoff-<sid>-<feature>"
+          },
+          {
+            "id": "D5",
+            "status": "PASS",
+            "evidence": "feature_group.rs:255-263 handoff-dispatched note run+request; :271-273 [handoff_failed] returns before release/audit/waiver; handoff_door.rs:256-270 stderr tail and unparsable"
+          },
+          {
+            "id": "D6",
+            "status": "PASS",
+            "evidence": "no HANDOFF.json write in handoff_door.rs or feature_group.rs (only test assert :1045); packages/bee/playbooks/handoff.md:35 names --handoff-task"
+          },
+          {
+            "id": "T1",
+            "status": "PASS",
+            "evidence": "feature_group.rs:221-274 every Present+auto path returns; :121-131 closed flag set; router.rs:300 refuses unknown shape"
+          },
+          {
+            "id": "T2",
+            "status": "PASS",
+            "evidence": "handoff_door.rs:41-58 argv; :48-52 follow-up pair only when Some, only from pane match :73; tests feature_group.rs:1030,:1084"
+          },
+          {
+            "id": "T3",
+            "status": "PASS",
+            "evidence": "feature_group.rs:212-216 Absent when auto off; :277-295 waiver; tests :1126,:1151"
+          },
+          {
+            "id": "P1-no-comments",
+            "status": "PASS",
+            "evidence": "git diff 618dec32b 188cdecc9 -- '*.rs' has no added // or /* lines"
+          },
+          {
+            "id": "P2-no-HANDOFF.json",
+            "status": "PASS",
+            "evidence": "rg HANDOFF.json hits only feature_group.rs:1045 assert !exists"
+          },
+          {
+            "id": "P3-no-waiver-after-failed-dispatch",
+            "status": "PASS",
+            "evidence": "feature_group.rs:271-273 returns before :277 waiver; test :1106"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "claude-opus-5-5",
+        "judge_model": "claude-opus-5-5",
+        "model_independence": "same-model",
+        "recorded_at": "2026-11-23T04:55:43.754Z"
+      }
+    ]
+  },
+  "usage": null,
+  "usage_reason": "herding job(s) named this cell but no readable session transcript (1 unreadable)"
+}

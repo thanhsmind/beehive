@@ -1,0 +1,121 @@
+{
+  "id": "ahd-3",
+  "feature": "auto-handoff-on-due",
+  "title": "Tell leaders that bee hands off and the waiver is gone",
+  "lane": "standard",
+  "role": "docs",
+  "deps": [],
+  "decisions": [
+    "3e5312e2-e9b7-43b5-a5d1-1bff3587ff9c",
+    "09f34000-c517-45da-8b23-8a4367aec8af"
+  ],
+  "files": [
+    "packages/bee/playbooks/handoff.md",
+    "skills/bee-swarming/SKILL.md",
+    "skills/bee-swarming/references/swarming-reference.md",
+    "skills/bee-hive/references/routing-and-contracts.md",
+    "docs/knowledge/areas/workflow-state/sessions-lanes-and-identity.md",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/auto-handoff-on-due/CONTEXT.md"
+  ],
+  "affects_skills": [
+    "skills/bee-swarming/SKILL.md",
+    "skills/bee-hive/SKILL.md"
+  ],
+  "affects_specs": [],
+  "action": "Update rule agents-context-handoff-65 wherever its source text lives (rg -l agents-context-handoff-65 under packages/ and skills/; .bee/playbooks and .claude/skills are generated copies, refresh them with bee dev regen, never by hand) and the handoff_due mentions: when bee feature start refuses with handoff_due, the leader reruns it with --handoff-task \"<owner's request in their words; standing orders>\" and bee dispatches the fresh leader itself and releases the session; on [handoff_sent] the leader tells the owner in one line and stops; --same-session is accepted only when bee has no waggledance door or the owner set handoff_auto false by hand; an owner asking for more in the same chat is never a reason to waive. Keep the rule short, STE style. Sync the knowledge concept sessions-lanes-and-identity with D1-D6, citing the history D-numbers. Run the regen chain inside this cell: bee dev regen.",
+  "verify": "/mnt/data/Projects/goglbe/beehive/.bee/bin/bee knowledge check && /mnt/data/Projects/goglbe/beehive/.bee/bin/bee dev release-manifest --check",
+  "must_haves": {
+    "why": "Doctrine must match the new behavior in every project on refresh.",
+    "out_of_scope": [
+      "code"
+    ],
+    "truths": [
+      "no doctrine text still offers --same-session as the normal way on when a door exists"
+    ],
+    "prohibitions": [
+      "No hand edit of generated copies"
+    ]
+  },
+  "behavior_change": false,
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "w-ahd-3",
+    "outcome": "Updated agents-context-handoff-65 doctrine, skills, sessions-lanes-and-identity knowledge (D1-D6), and ran bee dev regen (618dec32b)",
+    "files_changed": [
+      "packages/bee/playbooks/handoff.md",
+      "skills/bee-swarming/SKILL.md",
+      "skills/bee-swarming/references/swarming-reference.md",
+      "skills/bee-hive/references/routing-and-contracts.md",
+      "docs/knowledge/areas/workflow-state/sessions-lanes-and-identity.md",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [
+      "sync-ack: The four applied_at files cite the rule only for when to hand off (past the mark, after a merge); none names --same-session or the feature start door, so D1-D6 leave them true"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-23T04:22:23.498Z",
+    "behavior_change": false,
+    "verification_evidence": "/mnt/data/Projects/goglbe/beehive/.bee/bin/bee knowledge check && /mnt/data/Projects/goglbe/beehive/.bee/bin/bee dev release-manifest --check — green:static — regen, knowledge check (0 errors), and release-manifest check (994 files) all passed",
+    "verify_output": "green:static",
+    "verify_passed": true,
+    "claim_session": "efae1f08-ca3a-4c96-8c3e-82ebb011f75e",
+    "verify_command": "/mnt/data/Projects/goglbe/beehive/.bee/bin/bee knowledge check && /mnt/data/Projects/goglbe/beehive/.bee/bin/bee dev release-manifest --check",
+    "claimed_at": "2026-11-23T04:18:55.048Z",
+    "knowledge_delta": [
+      "docs/knowledge/areas/workflow-state/sessions-lanes-and-identity.md"
+    ],
+    "sync_ack": "The four applied_at files cite the rule only for when to hand off (past the mark, after a merge); none names --same-session or the feature start door, so D1-D6 leave them true",
+    "no_mistakes": true,
+    "knowledge_used": [
+      {
+        "path": "docs/knowledge/areas/workflow-state/sessions-lanes-and-identity.md",
+        "changed": "synced handoff_due section with D1-D6 and preserved existing anchors since handoff_door.rs is not yet in this worktree"
+      }
+    ],
+    "principles_used": [
+      {
+        "slug": "bee-principle-single-source-of-truth",
+        "changed": "edited only source doctrine files and refreshed all generated copies via bee dev regen"
+      },
+      {
+        "slug": "bee-principle-prove-it-works",
+        "changed": "ran bee knowledge check, bee dev release-manifest --check, and rg -n same-session after final edits"
+      }
+    ],
+    "changed_lines": 220,
+    "report": {
+      "outcome": "Updated agents-context-handoff-65 doctrine, skills, sessions-lanes-and-identity knowledge (D1-D6), and ran bee dev regen (618dec32b)",
+      "commit": "618dec32b75434c5cc619a98e892349e1a2c5034",
+      "files": [
+        "packages/bee/playbooks/handoff.md",
+        "skills/bee-swarming/SKILL.md",
+        "skills/bee-swarming/references/swarming-reference.md",
+        "skills/bee-hive/references/routing-and-contracts.md",
+        "docs/knowledge/areas/workflow-state/sessions-lanes-and-identity.md",
+        "docs/history/codex-harness-hardening/release-manifest.json"
+      ],
+      "tests": "/mnt/data/Projects/goglbe/beehive/.bee/bin/bee knowledge check && /mnt/data/Projects/goglbe/beehive/.bee/bin/bee dev release-manifest --check — green:static — /mnt/data/Projects/goglbe/beehive/.bee/bin/bee knowledge check && /mnt/data/Projects/goglbe/beehive/.bee/bin/bee dev release-manifest --check — green:static — regen, knowledge check (0 errors), and release-manifest check (994 files) all passed",
+      "deviations": [],
+      "knowledge_used": [
+        "docs/knowledge/areas/workflow-state/sessions-lanes-and-identity.md — synced handoff_due section with D1-D6 and preserved existing anchors since handoff_door.rs is not yet in this worktree"
+      ],
+      "principles_used": [
+        "bee-principle-single-source-of-truth — edited only source doctrine files and refreshed all generated copies via bee dev regen",
+        "bee-principle-prove-it-works — ran bee knowledge check, bee dev release-manifest --check, and rg -n same-session after final edits"
+      ],
+      "reaction": "confirm",
+      "patch_id": "b1eb10faaf4f77ef8b155a12a554921ea873be7b"
+    },
+    "reaction": "confirm",
+    "warnings": [
+      "advisory: this cap's commit changes 220 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
+  },
+  "usage": null,
+  "usage_reason": "herding job(s) named this cell but no readable session transcript (1 unreadable)"
+}
