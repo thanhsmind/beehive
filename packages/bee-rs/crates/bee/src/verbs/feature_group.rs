@@ -118,7 +118,18 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
 fn run_start(tokens: &[OsString], t0: Instant) -> Option<ExitCode> {
     let strs: Vec<&str> = tokens.iter().map(|a| a.to_str()).collect::<Option<Vec<_>>>()?;
     let (flags, use_json) = parse_flags(&strs)?;
-    if !keys_known(&flags, &["feature", "class", "lane", "flags", "files", "same-session"]) {
+    if !keys_known(
+        &flags,
+        &[
+            "feature",
+            "class",
+            "lane",
+            "flags",
+            "files",
+            "same-session",
+            "handoff-task",
+        ],
+    ) {
         return None;
     }
 
@@ -196,6 +207,73 @@ fn run_start(tokens: &[OsString], t0: Instant) -> Option<ExitCode> {
             && let Some(merged) = crate::integration_queue::merged_feature_of(Path::new(&ctrl_root), sid)
             && merged != feature
         {
+            let config = crate::state::read_config_raw(&main_root);
+            let handoff_auto = !matches!(config.get("handoff_auto"), Some(Value::Bool(false)));
+            let door = if handoff_auto {
+                crate::verbs::handoff_door::probe_door(&main_root)
+            } else {
+                crate::verbs::handoff_door::HandoffDoor::Absent
+            };
+
+            if handoff_auto
+                && matches!(door, crate::verbs::handoff_door::HandoffDoor::Present { .. })
+            {
+                if flags.get("same-session").is_some() {
+                    return Some(ctx.fail(
+                        "[handoff_due] --same-session is not accepted while bee can hand off",
+                    ));
+                }
+                let owner_text = match flags.get("handoff-task") {
+                    Some(FlagV::S(t)) => t.trim().to_string(),
+                    _ => String::new(),
+                };
+                if owner_text.is_empty() {
+                    return Some(ctx.fail(&format!(
+                        "[handoff_due] this session already merged \"{merged}\"; pass --handoff-task \"<owner request and standing orders>\" so bee can hand off \"{feature}\" to a fresh leader session."
+                    )));
+                }
+                let flag_str = |k: &str| match flags.get(k) {
+                    Some(FlagV::S(s)) => Some(s.as_str()),
+                    _ => None,
+                };
+                match crate::verbs::handoff_door::execute_handoff(
+                    &door,
+                    &main_root,
+                    sid,
+                    &merged,
+                    &feature,
+                    flag_str("class"),
+                    flag_str("lane"),
+                    flag_str("files"),
+                    flag_str("flags"),
+                    &owner_text,
+                ) {
+                    crate::verbs::handoff_door::HandoffOutcome::Sent { run_id, request_id } => {
+                        let _ = crate::verbs::state_group::release_session_record(
+                            &main_root, sid,
+                        );
+                        let note = format!("run {run_id} request {request_id}");
+                        if let Err(e) = crate::audit::append(
+                            &main_root,
+                            "handoff-dispatched",
+                            &feature,
+                            None,
+                            &note,
+                            "feature start",
+                            None,
+                        ) {
+                            eprintln!("warning: could not write the handoff-dispatched audit row: {e}");
+                        }
+                        return Some(ctx.fail(&format!(
+                            "[handoff_sent] run {run_id}: this session is released; tell the owner in one line and stop."
+                        )));
+                    }
+                    crate::verbs::handoff_door::HandoffOutcome::Failed { reason } => {
+                        return Some(ctx.fail(&format!("[handoff_failed] {reason}")));
+                    }
+                }
+            }
+
             match flags.get("same-session") {
                 None => {
                     return Some(ctx.fail(&format!(
