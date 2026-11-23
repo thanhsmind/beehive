@@ -1,0 +1,87 @@
+{
+  "id": "rel21190-1c",
+  "feature": "release-2-119-0",
+  "title": "Check the published 2.119.0 release",
+  "lane": "small",
+  "role": "test",
+  "deps": [
+    "rel21190-1"
+  ],
+  "decisions": [
+    "729acbcf-57b5-4a0c-9ea5-2fe11fefebc5",
+    "371c2d3b-79ec-4565-827a-709d952a8e94"
+  ],
+  "files": [
+    "docs/history/release-2-119-0/reports/rel21190-1c.md"
+  ],
+  "read_first": [
+    "docs/history/release-2-119-0/CONTEXT.md",
+    "docs/history/release-2-119-0/plan.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Check the release independently, read-only: both plugin manifests on main report 2.119.0; tag v2.119.0 exists locally and on origin (git ls-remote --tags origin v2.119.0); the GitHub release v2.119.0 lists the five binaries and SHA256SUMS (gh release view v2.119.0 --json assets); the release-binaries run for v2.119.0 concluded success. Write each check with its command and output to docs/history/release-2-119-0/reports/rel21190-1c.md and commit it with the trailer cell: rel21190-1c. Bee commands you may run: bee herding notify; never bee dispatch.",
+  "verify": "gh release view v2.119.0 --json assets --jq '.assets | length'",
+  "must_haves": {
+    "truths": [
+      "the report shows each of the four checks with its command and output"
+    ],
+    "prohibitions": [
+      "No edit outside the report file"
+    ]
+  },
+  "behavior_change": false,
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "rel21190-checker",
+    "outcome": null,
+    "files_changed": [
+      "docs/history/release-2-119-0/reports/rel21190-1c.md"
+    ],
+    "deviations": [
+      "sync-ack: read-only release check; no knowledge area changes"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-23T08:10:25.107Z",
+    "behavior_change": false,
+    "verification_evidence": "6 assets (5 binaries + SHA256SUMS), manifests 2.119.0, tag v2.119.0 on origin, release-binaries https://github.com/thanhsmind/beehive/actions/runs/45135618399 success; read-only check, report docs/history/release-2-119-0/reports/rel21190-1c.md",
+    "verify_output": "green:live",
+    "verify_passed": true,
+    "claim_session": "0f38d478-aa80-4584-b419-4c2c335e1e91",
+    "verify_command": "gh release view v2.119.0 --json assets --jq '.assets | length'",
+    "claimed_at": "2026-11-23T08:08:48.850Z",
+    "knowledge_delta": [],
+    "sync_ack": "read-only release check; no knowledge area changes",
+    "no_mistakes": true,
+    "no_principles_used": true,
+    "changed_lines": 64,
+    "report": {
+      "outcome": "done",
+      "commit": "7d7305464",
+      "files": [
+        "docs/history/release-2-119-0/reports/rel21190-1c.md"
+      ],
+      "tests": "gh release view v2.119.0 --json assets --jq '.assets | length' — green:live — 6 assets (5 binaries + SHA256SUMS), manifests 2.119.0, tag v2.119.0 on origin, release-binaries https://github.com/thanhsmind/beehive/actions/runs/45135618399 success; read-only check, report docs/history/release-2-119-0/reports/rel21190-1c.md",
+      "deviations": [],
+      "patch_id": "f68303ac979b6da14dd84061b24bddb49ffe4324"
+    },
+    "warnings": [],
+    "tests": "boundary"
+  },
+  "usage": {
+    "new": 22445,
+    "cached": 137925,
+    "total": 160370,
+    "models": {
+      "claude-opus-5-5": {
+        "new": 22445,
+        "cached": 137925,
+        "total": 160370
+      }
+    },
+    "jobs": [
+      "job-1795421332620-2349521-1"
+    ]
+  }
+}

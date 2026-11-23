@@ -462,5 +462,14 @@
         }
       ]
     }
+  },
+  "route": {
+    "class": "release",
+    "lane": "small",
+    "flags": [],
+    "product_files": 3,
+    "rationale": null,
+    "updated_at": "2026-11-23T08:08:47.940Z",
+    "feature": "release-2-119-0"
   }
 }
