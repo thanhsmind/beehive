@@ -986,6 +986,8 @@
     "work-queue",
     "contract:upkeep-curator-due",
     "contract:work-queue-registry",
-    "contract:published-release-2-117-0"
+    "contract:published-release-2-117-0",
+    "feature-start",
+    "contract:auto-handoff-on-due"
   ]
 }

@@ -1,0 +1,658 @@
+{
+  "schema_version": "1.0",
+  "feature": "auto-handoff-on-due",
+  "mode": null,
+  "phase": "exploring",
+  "approved_gates": {
+    "context": true,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"auto-handoff-on-due\" started at phase \"exploring\" (lane).",
+  "next_action": "Continue bee-exploring for \"auto-handoff-on-due\" (lane).",
+  "created_at": "2026-11-23T04:02:58.857Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null,
+  "route": {
+    "class": "feature",
+    "lane": "standard",
+    "flags": [],
+    "product_files": 4,
+    "rationale": null,
+    "updated_at": "2026-11-23T04:02:55.309Z",
+    "feature": "auto-handoff-on-due"
+  },
+  "gate_preview": {
+    "feature": "auto-handoff-on-due",
+    "plan_sha256": "aeabfb10c206e5c1690e1027daaa3621827b0fd0aa35a42451716a55a7c5a9fc",
+    "previewed_at": "2026-11-23T04:17:53.376Z",
+    "cells": [
+      {
+        "id": "ahd-1",
+        "feature": "auto-handoff-on-due",
+        "title": "Hand off through waggledance when feature start hits handoff_due",
+        "lane": "standard",
+        "role": "code",
+        "deps": [],
+        "decisions": [
+          "3e5312e2-e9b7-43b5-a5d1-1bff3587ff9c",
+          "09f34000-c517-45da-8b23-8a4367aec8af"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/verbs/handoff_door.rs",
+          "packages/bee-rs/crates/bee/src/verbs/mod.rs",
+          "packages/bee-rs/crates/bee/src/verbs/feature_group.rs",
+          "packages/bee-rs/crates/bee/src/audit.rs",
+          "packages/bee-rs/crates/bee/src/hooks/write_guard/guards.rs",
+          "packages/bee-rs/crates/bee/src/hooks/write_guard/cross_project.rs",
+          "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+        ],
+        "read_first": [
+          "docs/history/auto-handoff-on-due/CONTEXT.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Implement CONTEXT.md D1-D6. New module verbs/handoff_door.rs owns the data shape: enum HandoffDoor { Absent, Present { binary, project_id } }, struct HandoffRequest { project_id, follow_up_of: Option<String>, request_id, task_file }, enum HandoffOutcome { Sent { run_id, request_id }, Failed { reason } }; pure fns build_request(...) and dispatch_argv(&HandoffRequest) -> Vec<String>, a pure fn find_follow_up(runs_json, agent_id) -> Option<String> (pane_id == paseo:<agent_id>), a pure fn compose_task_text(merged, feature, class, lane, files, flags, owner_text) -> String, and a thin shell that probes the door (reuse waggledance_binary and the waggledance list --json read in hooks/write_guard/cross_project.rs, exposing what you need as pub(crate); match root_path to the main root and take that row's id), runs waggledance runs --project <id> --full, writes the task file under <main root>/.bee/tmp/, runs waggledance dispatch and parses run_id from its JSON stdout. In verbs/feature_group.rs handoff_due branch: add flag handoff-task to keys_known and the flag registry (regen registry_payload.json with bee dev regen); when the door is Present and config handoff_auto is not false: --same-session refuses with [handoff_due] --same-session is not accepted while bee can hand off; no --handoff-task refuses with [handoff_due] naming --handoff-task; with it, dispatch, then on Sent release the session (call the same code bee state session release uses), append audit kind handoff-dispatched (add it to the known kinds in audit.rs) with run id and request id in the note, and fail with [handoff_sent] run <run_id>: this session is released; tell the owner in one line and stop. On Failed fail with [handoff_failed] <reason> and write nothing. Door Absent or handoff_auto false: today's behavior unchanged. Make handoff_auto a governed config key in the governed view in hooks/write_guard/guards.rs so bee config set refuses it. Add unit tests for the pure fns. No code comments.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee handoff",
+        "must_haves": {
+          "why": "Agents waive the handoff with their own reason; bee must do the handoff itself.",
+          "out_of_scope": [
+            "doctrine and docs text",
+            "the prompt-line context warning"
+          ],
+          "truths": [
+            "with a present door and handoff_auto on, no agent-supplied flag lets a second feature open in the same session",
+            "the dispatch argv carries --leader, --request-id bee-handoff-<session>-<feature>, --task-file, and --follow-up-of <run> --handoff only when a run matches",
+            "door absent keeps the existing --same-session waiver and its tests green"
+          ],
+          "prohibitions": [
+            "No code comments",
+            "No HANDOFF.json write on this path",
+            "No fallback to a waiver after a failed dispatch"
+          ]
+        },
+        "behavior_change": true
+      },
+      {
+        "id": "ahd-2",
+        "feature": "auto-handoff-on-due",
+        "title": "Test the automatic handoff path against a fake waggledance",
+        "lane": "standard",
+        "role": "test",
+        "deps": [
+          "ahd-1"
+        ],
+        "decisions": [
+          "3e5312e2-e9b7-43b5-a5d1-1bff3587ff9c",
+          "09f34000-c517-45da-8b23-8a4367aec8af"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/verbs/feature_group.rs",
+          "packages/bee-rs/crates/bee/src/verbs/handoff_door.rs"
+        ],
+        "read_first": [
+          "docs/history/auto-handoff-on-due/CONTEXT.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Without reading the ahd-1 worker's notes, check the ahd-1 commit against CONTEXT.md D1-D6 and add behavior tests next to the existing handoff_after_merge_door_* tests: a fake waggledance executable (test temp dir, injected the same way the code finds the binary) that answers list --json with this repo's root, runs --full with a matching and a non-matching pane, and dispatch with a run_id JSON and records its argv. Cover: refuses without --handoff-task; refuses --same-session with a door; Sent releases the session, writes the handoff-dispatched audit row, writes no lane, and the recorded argv holds --follow-up-of and --handoff only on a pane match; Failed dispatch writes nothing; door absent keeps the waiver; handoff_auto false keeps the waiver; bee config set handoff_auto is refused. Fix any defect you find in ahd-1's code and name it in the cap.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee handoff",
+        "must_haves": {
+          "why": "A code cell never certifies itself.",
+          "out_of_scope": [
+            "doctrine text"
+          ],
+          "truths": [
+            "every D1-D5 behavior has a test that fails if the behavior is removed"
+          ],
+          "prohibitions": [
+            "No code comments",
+            "No real waggledance call from a test"
+          ]
+        },
+        "behavior_change": false,
+        "tester_rule": true,
+        "judge_obligation_ack": "Tester for ahd-1."
+      },
+      {
+        "id": "ahd-3",
+        "feature": "auto-handoff-on-due",
+        "title": "Tell leaders that bee hands off and the waiver is gone",
+        "lane": "standard",
+        "role": "docs",
+        "deps": [],
+        "decisions": [
+          "3e5312e2-e9b7-43b5-a5d1-1bff3587ff9c",
+          "09f34000-c517-45da-8b23-8a4367aec8af"
+        ],
+        "files": [
+          "packages/bee/playbooks/handoff.md",
+          "skills/bee-swarming/SKILL.md",
+          "skills/bee-swarming/references/swarming-reference.md",
+          "skills/bee-hive/references/routing-and-contracts.md",
+          "docs/knowledge/areas/workflow-state/sessions-lanes-and-identity.md",
+          "docs/history/codex-harness-hardening/release-manifest.json"
+        ],
+        "read_first": [
+          "docs/history/auto-handoff-on-due/CONTEXT.md"
+        ],
+        "affects_skills": [
+          "skills/bee-swarming/SKILL.md",
+          "skills/bee-hive/SKILL.md"
+        ],
+        "affects_specs": [],
+        "action": "Update rule agents-context-handoff-65 wherever its source text lives (rg -l agents-context-handoff-65 under packages/ and skills/; .bee/playbooks and .claude/skills are generated copies, refresh them with bee dev regen, never by hand) and the handoff_due mentions: when bee feature start refuses with handoff_due, the leader reruns it with --handoff-task \"<owner's request in their words; standing orders>\" and bee dispatches the fresh leader itself and releases the session; on [handoff_sent] the leader tells the owner in one line and stops; --same-session is accepted only when bee has no waggledance door or the owner set handoff_auto false by hand; an owner asking for more in the same chat is never a reason to waive. Keep the rule short, STE style. Sync the knowledge concept sessions-lanes-and-identity with D1-D6, citing the history D-numbers. Run the regen chain inside this cell: bee dev regen.",
+        "verify": "/mnt/data/Projects/goglbe/beehive/.bee/bin/bee knowledge check && /mnt/data/Projects/goglbe/beehive/.bee/bin/bee dev release-manifest --check",
+        "must_haves": {
+          "why": "Doctrine must match the new behavior in every project on refresh.",
+          "out_of_scope": [
+            "code"
+          ],
+          "truths": [
+            "no doctrine text still offers --same-session as the normal way on when a door exists"
+          ],
+          "prohibitions": [
+            "No hand edit of generated copies"
+          ]
+        },
+        "behavior_change": false
+      },
+      {
+        "id": "ahd-4",
+        "feature": "auto-handoff-on-due",
+        "title": "Check the handoff doctrine against the shipped behavior",
+        "lane": "standard",
+        "role": "test",
+        "deps": [
+          "ahd-3",
+          "ahd-1"
+        ],
+        "decisions": [
+          "3e5312e2-e9b7-43b5-a5d1-1bff3587ff9c",
+          "09f34000-c517-45da-8b23-8a4367aec8af"
+        ],
+        "files": [
+          "packages/bee/playbooks/handoff.md",
+          "docs/knowledge/areas/workflow-state/sessions-lanes-and-identity.md"
+        ],
+        "read_first": [
+          "docs/history/auto-handoff-on-due/CONTEXT.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Read the lines the ahd-3 commit changed. For each behavior claim (flag names, refusal tags, handoff_auto, follow-up run rule, audit kind), open the ahd-1 code in verbs/feature_group.rs and verbs/handoff_door.rs and confirm it, with a file:line anchor in the cap. Fix a wrong claim in the doc, never in code. Confirm no doctrine source still offers --same-session as the normal way on when a door exists (rg -n same-session under packages/bee skills).",
+        "verify": "/mnt/data/Projects/goglbe/beehive/.bee/bin/bee knowledge check",
+        "must_haves": {
+          "why": "A docs cell does not certify itself; a separate checker confirms each claim.",
+          "out_of_scope": [
+            "code"
+          ],
+          "truths": [
+            "every claim ahd-3 added has a file:line anchor in the cap"
+          ],
+          "prohibitions": [
+            "No code change"
+          ]
+        },
+        "regen_obligation_ack": "A wording fix here is rare; ahd-3 owns the regen and the leader reruns bee dev regen before merge if ahd-4 edits.",
+        "behavior_change": false,
+        "tester_rule": true,
+        "judge_obligation_ack": "Checker for ahd-3."
+      }
+    ],
+    "role_plan": {
+      "schema_version": "1.0",
+      "runtime": "claude",
+      "roster_sha256": "d4e696dbde7989d6388dacce3fd7057cb3a6935b46024b79698596a46f6f41d3",
+      "stages": [
+        {
+          "stage": "deployment",
+          "classification": "not-applicable",
+          "role": "deploy",
+          "reason": "The release runs after merge as its own lane."
+        },
+        {
+          "stage": "planning",
+          "classification": "not-applicable",
+          "role": "plan",
+          "reason": "The leader wrote this one-page plan from CONTEXT.md."
+        },
+        {
+          "stage": "implementation",
+          "classification": "required",
+          "role": "code",
+          "reason": "ahd-1 writes the handoff door code."
+        },
+        {
+          "stage": "test-and-live-proof",
+          "classification": "required",
+          "role": "test",
+          "reason": "ahd-2 tests ahd-1 independently against a fake waggledance."
+        },
+        {
+          "stage": "documentation-and-capture",
+          "classification": "required",
+          "role": "docs",
+          "reason": "ahd-3 updates the handoff rule and the knowledge concept."
+        },
+        {
+          "stage": "read-only-gather",
+          "classification": "required",
+          "role": "read",
+          "reason": "A gather mapped the handoff code before design."
+        },
+        {
+          "stage": "fact-extraction",
+          "classification": "not-applicable",
+          "role": "extraction",
+          "reason": "No narrow fact lookup is needed."
+        },
+        {
+          "stage": "generation-fallback",
+          "classification": "not-applicable",
+          "role": "generation",
+          "reason": "Every job here has a specific role."
+        },
+        {
+          "stage": "independent-review",
+          "classification": "not-applicable",
+          "role": "review",
+          "reason": "Independent review stays user-invoked and was not requested."
+        },
+        {
+          "stage": "generic-advisor",
+          "classification": "not-applicable",
+          "role": "advisor",
+          "reason": "No high-risk consult is owed for a publish."
+        },
+        {
+          "stage": "supervision",
+          "classification": "not-applicable",
+          "role": "supervisor",
+          "reason": "No unattended loop runs here."
+        },
+        {
+          "stage": "blind-lane-1",
+          "classification": "not-applicable",
+          "role": "lane-1",
+          "reason": "No competing designs; the owner chose B."
+        },
+        {
+          "stage": "blind-lane-2",
+          "classification": "not-applicable",
+          "role": "lane-2",
+          "reason": "No competing designs; the owner chose B."
+        },
+        {
+          "stage": "blind-lane-3",
+          "classification": "not-applicable",
+          "role": "lane-3",
+          "reason": "No competing designs; the owner chose B."
+        },
+        {
+          "stage": "design-ui",
+          "classification": "not-applicable",
+          "role": "design",
+          "reason": "No rendered UI."
+        },
+        {
+          "stage": "hat-facts-gaps",
+          "classification": "not-applicable",
+          "role": "hat-facts-gaps",
+          "reason": "Owner picked the design (option B) in chat; the shape is one door, no hat wave."
+        },
+        {
+          "stage": "hat-risks",
+          "classification": "not-applicable",
+          "role": "hat-risks",
+          "reason": "Owner picked the design (option B) in chat; the shape is one door, no hat wave."
+        },
+        {
+          "stage": "hat-value",
+          "classification": "not-applicable",
+          "role": "hat-value",
+          "reason": "Owner picked the design (option B) in chat; the shape is one door, no hat wave."
+        },
+        {
+          "stage": "hat-alternatives",
+          "classification": "not-applicable",
+          "role": "hat-alternatives",
+          "reason": "Owner picked the design (option B) in chat; the shape is one door, no hat wave."
+        },
+        {
+          "stage": "hat-user-impact",
+          "classification": "not-applicable",
+          "role": "hat-user-impact",
+          "reason": "Owner picked the design (option B) in chat; the shape is one door, no hat wave."
+        },
+        {
+          "stage": "writing",
+          "classification": "not-applicable",
+          "role": "writer",
+          "reason": "Doctrine text rides ahd-3 under the docs role."
+        }
+      ]
+    }
+  },
+  "approved_cell_packet": {
+    "feature": "auto-handoff-on-due",
+    "plan_sha256": "aeabfb10c206e5c1690e1027daaa3621827b0fd0aa35a42451716a55a7c5a9fc",
+    "previewed_at": "2026-11-23T04:17:53.376Z",
+    "cells": [
+      {
+        "id": "ahd-1",
+        "feature": "auto-handoff-on-due",
+        "title": "Hand off through waggledance when feature start hits handoff_due",
+        "lane": "standard",
+        "role": "code",
+        "deps": [],
+        "decisions": [
+          "3e5312e2-e9b7-43b5-a5d1-1bff3587ff9c",
+          "09f34000-c517-45da-8b23-8a4367aec8af"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/verbs/handoff_door.rs",
+          "packages/bee-rs/crates/bee/src/verbs/mod.rs",
+          "packages/bee-rs/crates/bee/src/verbs/feature_group.rs",
+          "packages/bee-rs/crates/bee/src/audit.rs",
+          "packages/bee-rs/crates/bee/src/hooks/write_guard/guards.rs",
+          "packages/bee-rs/crates/bee/src/hooks/write_guard/cross_project.rs",
+          "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+        ],
+        "read_first": [
+          "docs/history/auto-handoff-on-due/CONTEXT.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Implement CONTEXT.md D1-D6. New module verbs/handoff_door.rs owns the data shape: enum HandoffDoor { Absent, Present { binary, project_id } }, struct HandoffRequest { project_id, follow_up_of: Option<String>, request_id, task_file }, enum HandoffOutcome { Sent { run_id, request_id }, Failed { reason } }; pure fns build_request(...) and dispatch_argv(&HandoffRequest) -> Vec<String>, a pure fn find_follow_up(runs_json, agent_id) -> Option<String> (pane_id == paseo:<agent_id>), a pure fn compose_task_text(merged, feature, class, lane, files, flags, owner_text) -> String, and a thin shell that probes the door (reuse waggledance_binary and the waggledance list --json read in hooks/write_guard/cross_project.rs, exposing what you need as pub(crate); match root_path to the main root and take that row's id), runs waggledance runs --project <id> --full, writes the task file under <main root>/.bee/tmp/, runs waggledance dispatch and parses run_id from its JSON stdout. In verbs/feature_group.rs handoff_due branch: add flag handoff-task to keys_known and the flag registry (regen registry_payload.json with bee dev regen); when the door is Present and config handoff_auto is not false: --same-session refuses with [handoff_due] --same-session is not accepted while bee can hand off; no --handoff-task refuses with [handoff_due] naming --handoff-task; with it, dispatch, then on Sent release the session (call the same code bee state session release uses), append audit kind handoff-dispatched (add it to the known kinds in audit.rs) with run id and request id in the note, and fail with [handoff_sent] run <run_id>: this session is released; tell the owner in one line and stop. On Failed fail with [handoff_failed] <reason> and write nothing. Door Absent or handoff_auto false: today's behavior unchanged. Make handoff_auto a governed config key in the governed view in hooks/write_guard/guards.rs so bee config set refuses it. Add unit tests for the pure fns. No code comments.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee handoff",
+        "must_haves": {
+          "why": "Agents waive the handoff with their own reason; bee must do the handoff itself.",
+          "out_of_scope": [
+            "doctrine and docs text",
+            "the prompt-line context warning"
+          ],
+          "truths": [
+            "with a present door and handoff_auto on, no agent-supplied flag lets a second feature open in the same session",
+            "the dispatch argv carries --leader, --request-id bee-handoff-<session>-<feature>, --task-file, and --follow-up-of <run> --handoff only when a run matches",
+            "door absent keeps the existing --same-session waiver and its tests green"
+          ],
+          "prohibitions": [
+            "No code comments",
+            "No HANDOFF.json write on this path",
+            "No fallback to a waiver after a failed dispatch"
+          ]
+        },
+        "behavior_change": true
+      },
+      {
+        "id": "ahd-2",
+        "feature": "auto-handoff-on-due",
+        "title": "Test the automatic handoff path against a fake waggledance",
+        "lane": "standard",
+        "role": "test",
+        "deps": [
+          "ahd-1"
+        ],
+        "decisions": [
+          "3e5312e2-e9b7-43b5-a5d1-1bff3587ff9c",
+          "09f34000-c517-45da-8b23-8a4367aec8af"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/verbs/feature_group.rs",
+          "packages/bee-rs/crates/bee/src/verbs/handoff_door.rs"
+        ],
+        "read_first": [
+          "docs/history/auto-handoff-on-due/CONTEXT.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Without reading the ahd-1 worker's notes, check the ahd-1 commit against CONTEXT.md D1-D6 and add behavior tests next to the existing handoff_after_merge_door_* tests: a fake waggledance executable (test temp dir, injected the same way the code finds the binary) that answers list --json with this repo's root, runs --full with a matching and a non-matching pane, and dispatch with a run_id JSON and records its argv. Cover: refuses without --handoff-task; refuses --same-session with a door; Sent releases the session, writes the handoff-dispatched audit row, writes no lane, and the recorded argv holds --follow-up-of and --handoff only on a pane match; Failed dispatch writes nothing; door absent keeps the waiver; handoff_auto false keeps the waiver; bee config set handoff_auto is refused. Fix any defect you find in ahd-1's code and name it in the cap.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee handoff",
+        "must_haves": {
+          "why": "A code cell never certifies itself.",
+          "out_of_scope": [
+            "doctrine text"
+          ],
+          "truths": [
+            "every D1-D5 behavior has a test that fails if the behavior is removed"
+          ],
+          "prohibitions": [
+            "No code comments",
+            "No real waggledance call from a test"
+          ]
+        },
+        "behavior_change": false,
+        "tester_rule": true,
+        "judge_obligation_ack": "Tester for ahd-1."
+      },
+      {
+        "id": "ahd-3",
+        "feature": "auto-handoff-on-due",
+        "title": "Tell leaders that bee hands off and the waiver is gone",
+        "lane": "standard",
+        "role": "docs",
+        "deps": [],
+        "decisions": [
+          "3e5312e2-e9b7-43b5-a5d1-1bff3587ff9c",
+          "09f34000-c517-45da-8b23-8a4367aec8af"
+        ],
+        "files": [
+          "packages/bee/playbooks/handoff.md",
+          "skills/bee-swarming/SKILL.md",
+          "skills/bee-swarming/references/swarming-reference.md",
+          "skills/bee-hive/references/routing-and-contracts.md",
+          "docs/knowledge/areas/workflow-state/sessions-lanes-and-identity.md",
+          "docs/history/codex-harness-hardening/release-manifest.json"
+        ],
+        "read_first": [
+          "docs/history/auto-handoff-on-due/CONTEXT.md"
+        ],
+        "affects_skills": [
+          "skills/bee-swarming/SKILL.md",
+          "skills/bee-hive/SKILL.md"
+        ],
+        "affects_specs": [],
+        "action": "Update rule agents-context-handoff-65 wherever its source text lives (rg -l agents-context-handoff-65 under packages/ and skills/; .bee/playbooks and .claude/skills are generated copies, refresh them with bee dev regen, never by hand) and the handoff_due mentions: when bee feature start refuses with handoff_due, the leader reruns it with --handoff-task \"<owner's request in their words; standing orders>\" and bee dispatches the fresh leader itself and releases the session; on [handoff_sent] the leader tells the owner in one line and stops; --same-session is accepted only when bee has no waggledance door or the owner set handoff_auto false by hand; an owner asking for more in the same chat is never a reason to waive. Keep the rule short, STE style. Sync the knowledge concept sessions-lanes-and-identity with D1-D6, citing the history D-numbers. Run the regen chain inside this cell: bee dev regen.",
+        "verify": "/mnt/data/Projects/goglbe/beehive/.bee/bin/bee knowledge check && /mnt/data/Projects/goglbe/beehive/.bee/bin/bee dev release-manifest --check",
+        "must_haves": {
+          "why": "Doctrine must match the new behavior in every project on refresh.",
+          "out_of_scope": [
+            "code"
+          ],
+          "truths": [
+            "no doctrine text still offers --same-session as the normal way on when a door exists"
+          ],
+          "prohibitions": [
+            "No hand edit of generated copies"
+          ]
+        },
+        "behavior_change": false
+      },
+      {
+        "id": "ahd-4",
+        "feature": "auto-handoff-on-due",
+        "title": "Check the handoff doctrine against the shipped behavior",
+        "lane": "standard",
+        "role": "test",
+        "deps": [
+          "ahd-3",
+          "ahd-1"
+        ],
+        "decisions": [
+          "3e5312e2-e9b7-43b5-a5d1-1bff3587ff9c",
+          "09f34000-c517-45da-8b23-8a4367aec8af"
+        ],
+        "files": [
+          "packages/bee/playbooks/handoff.md",
+          "docs/knowledge/areas/workflow-state/sessions-lanes-and-identity.md"
+        ],
+        "read_first": [
+          "docs/history/auto-handoff-on-due/CONTEXT.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Read the lines the ahd-3 commit changed. For each behavior claim (flag names, refusal tags, handoff_auto, follow-up run rule, audit kind), open the ahd-1 code in verbs/feature_group.rs and verbs/handoff_door.rs and confirm it, with a file:line anchor in the cap. Fix a wrong claim in the doc, never in code. Confirm no doctrine source still offers --same-session as the normal way on when a door exists (rg -n same-session under packages/bee skills).",
+        "verify": "/mnt/data/Projects/goglbe/beehive/.bee/bin/bee knowledge check",
+        "must_haves": {
+          "why": "A docs cell does not certify itself; a separate checker confirms each claim.",
+          "out_of_scope": [
+            "code"
+          ],
+          "truths": [
+            "every claim ahd-3 added has a file:line anchor in the cap"
+          ],
+          "prohibitions": [
+            "No code change"
+          ]
+        },
+        "regen_obligation_ack": "A wording fix here is rare; ahd-3 owns the regen and the leader reruns bee dev regen before merge if ahd-4 edits.",
+        "behavior_change": false,
+        "tester_rule": true,
+        "judge_obligation_ack": "Checker for ahd-3."
+      }
+    ],
+    "role_plan": {
+      "schema_version": "1.0",
+      "runtime": "claude",
+      "roster_sha256": "d4e696dbde7989d6388dacce3fd7057cb3a6935b46024b79698596a46f6f41d3",
+      "stages": [
+        {
+          "stage": "deployment",
+          "classification": "not-applicable",
+          "role": "deploy",
+          "reason": "The release runs after merge as its own lane."
+        },
+        {
+          "stage": "planning",
+          "classification": "not-applicable",
+          "role": "plan",
+          "reason": "The leader wrote this one-page plan from CONTEXT.md."
+        },
+        {
+          "stage": "implementation",
+          "classification": "required",
+          "role": "code",
+          "reason": "ahd-1 writes the handoff door code."
+        },
+        {
+          "stage": "test-and-live-proof",
+          "classification": "required",
+          "role": "test",
+          "reason": "ahd-2 tests ahd-1 independently against a fake waggledance."
+        },
+        {
+          "stage": "documentation-and-capture",
+          "classification": "required",
+          "role": "docs",
+          "reason": "ahd-3 updates the handoff rule and the knowledge concept."
+        },
+        {
+          "stage": "read-only-gather",
+          "classification": "required",
+          "role": "read",
+          "reason": "A gather mapped the handoff code before design."
+        },
+        {
+          "stage": "fact-extraction",
+          "classification": "not-applicable",
+          "role": "extraction",
+          "reason": "No narrow fact lookup is needed."
+        },
+        {
+          "stage": "generation-fallback",
+          "classification": "not-applicable",
+          "role": "generation",
+          "reason": "Every job here has a specific role."
+        },
+        {
+          "stage": "independent-review",
+          "classification": "not-applicable",
+          "role": "review",
+          "reason": "Independent review stays user-invoked and was not requested."
+        },
+        {
+          "stage": "generic-advisor",
+          "classification": "not-applicable",
+          "role": "advisor",
+          "reason": "No high-risk consult is owed for a publish."
+        },
+        {
+          "stage": "supervision",
+          "classification": "not-applicable",
+          "role": "supervisor",
+          "reason": "No unattended loop runs here."
+        },
+        {
+          "stage": "blind-lane-1",
+          "classification": "not-applicable",
+          "role": "lane-1",
+          "reason": "No competing designs; the owner chose B."
+        },
+        {
+          "stage": "blind-lane-2",
+          "classification": "not-applicable",
+          "role": "lane-2",
+          "reason": "No competing designs; the owner chose B."
+        },
+        {
+          "stage": "blind-lane-3",
+          "classification": "not-applicable",
+          "role": "lane-3",
+          "reason": "No competing designs; the owner chose B."
+        },
+        {
+          "stage": "design-ui",
+          "classification": "not-applicable",
+          "role": "design",
+          "reason": "No rendered UI."
+        },
+        {
+          "stage": "hat-facts-gaps",
+          "classification": "not-applicable",
+          "role": "hat-facts-gaps",
+          "reason": "Owner picked the design (option B) in chat; the shape is one door, no hat wave."
+        },
+        {
+          "stage": "hat-risks",
+          "classification": "not-applicable",
+          "role": "hat-risks",
+          "reason": "Owner picked the design (option B) in chat; the shape is one door, no hat wave."
+        },
+        {
+          "stage": "hat-value",
+          "classification": "not-applicable",
+          "role": "hat-value",
+          "reason": "Owner picked the design (option B) in chat; the shape is one door, no hat wave."
+        },
+        {
+          "stage": "hat-alternatives",
+          "classification": "not-applicable",
+          "role": "hat-alternatives",
+          "reason": "Owner picked the design (option B) in chat; the shape is one door, no hat wave."
+        },
+        {
+          "stage": "hat-user-impact",
+          "classification": "not-applicable",
+          "role": "hat-user-impact",
+          "reason": "Owner picked the design (option B) in chat; the shape is one door, no hat wave."
+        },
+        {
+          "stage": "writing",
+          "classification": "not-applicable",
+          "role": "writer",
+          "reason": "Doctrine text rides ahd-3 under the docs role."
+        }
+      ]
+    }
+  },
+  "merge_ready": {
+    "since": "2026-11-23T04:50:49.537Z",
+    "branch": "wt/auto-handoff-on-due",
+    "worktree_id": "beehive--wt--auto-handoff-on-due",
+    "uat": "pending",
+    "blocked_by": []
+  }
+}
