@@ -830,6 +830,124 @@ pub(crate) fn run_handoff_dismiss(flags: Flags, use_json: bool, t0: Instant) -> 
     finish(&ctx, out)
 }
 
+pub(crate) fn run_handoff_send(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
+    if !keys_known(&flags, &["task", "session-id"]) {
+        return None;
+    }
+    let ctx = match go("state handoff send", use_json, t0)? {
+        Ok(c) => c,
+        Err(code) => return Some(code),
+    };
+    let out = (|| -> R2<Out> {
+        let task_raw = match require_flag(&flags, "task") {
+            Ok(v) => v,
+            Err(Err2::Msg(m)) => return Ok(Out::Thrown(m)),
+            Err(Err2::Ex) => return Err(Err2::Ex),
+        };
+        let task_text = js_trim(&task_raw).to_string();
+        if task_text.is_empty() {
+            return Ok(Out::Thrown(
+                "state handoff send: --task must be a non-empty string.".to_string(),
+            ));
+        }
+        let sid = resolve_release_session_id(flag_value(&flags, "session-id").as_deref())
+            .or_else(|| {
+                crate::verbs::reservations::resolve_session_id(
+                    None,
+                    &ctx.root.to_string_lossy(),
+                )
+                .ok()
+                .flatten()
+            });
+        let Some(sid) = sid else {
+            return Ok(Out::Thrown(
+                "state handoff send: no session id resolved — pass --session-id, or run \
+                 inside a session exporting BEE_SESSION_ID / CLAUDE_CODE_SESSION_ID."
+                    .to_string(),
+            ));
+        };
+        let door = crate::verbs::handoff_door::probe_door(&ctx.root);
+        if !matches!(door, crate::verbs::handoff_door::HandoffDoor::Present { .. }) {
+            return Ok(Out::Thrown(
+                "state handoff send: refused — no waggledance door is present for this repository."
+                    .to_string(),
+            ));
+        }
+        let scope = resolve_mutation_lock_scope(&ctx.root, None, false)?;
+        let feature = scope.feature.unwrap_or_else(|| "none".to_string());
+        let feature_filter = if feature == "none" {
+            None
+        } else {
+            Some(feature.as_str())
+        };
+        let open_cells: Vec<String> =
+            crate::verbs::cells::list_cells(&ctx.root, feature_filter, None)
+                .unwrap_or_default()
+                .into_iter()
+                .filter(|c| {
+                    matches!(
+                        c.get("status").and_then(Value::as_str),
+                        Some("open" | "claimed")
+                    )
+                })
+                .filter_map(|c| c.get("id").and_then(Value::as_str).map(str::to_string))
+                .collect();
+        let config = crate::state::read_config_raw(&ctx.root);
+        let mark = match config.get("handoff_context_tokens") {
+            Some(Value::Number(n)) => {
+                n.as_u64().unwrap_or(crate::hooks::prompt_context::DEFAULT_HANDOFF_MARK)
+            }
+            _ => crate::hooks::prompt_context::DEFAULT_HANDOFF_MARK,
+        };
+        let tokens = read_session(&ctx.root, &sid)
+            .ok()
+            .flatten()
+            .and_then(|r| {
+                r.get("context")
+                    .and_then(Value::as_object)
+                    .and_then(|c| c.get("tokens"))
+                    .and_then(Value::as_u64)
+            })
+            .unwrap_or(0);
+        match crate::verbs::handoff_door::execute_handoff(
+            &door,
+            &ctx.root,
+            &sid,
+            &crate::verbs::handoff_door::HandoffReason::ContextMark { tokens, mark },
+            &feature,
+            None,
+            None,
+            None,
+            None,
+            &open_cells,
+            &task_text,
+        ) {
+            crate::verbs::handoff_door::HandoffOutcome::Sent { run_id, request_id } => {
+                let _ = release_session_record(&ctx.root, &sid);
+                let note = format!("run {run_id} request {request_id}");
+                if let Err(e) = crate::audit::append(
+                    &ctx.root,
+                    "handoff-dispatched",
+                    &feature,
+                    None,
+                    &note,
+                    "state handoff send",
+                    None,
+                ) {
+                    eprintln!("warning: could not write the handoff-dispatched audit row: {e}");
+                }
+                Ok(Out::Thrown(format!(
+                    "[handoff_sent] run {run_id}: this session is released; tell the owner in one line and stop."
+                )))
+            }
+            crate::verbs::handoff_door::HandoffOutcome::Failed { reason } => {
+                Ok(Out::Thrown(format!("[handoff_failed] {reason}")))
+            }
+        }
+    })();
+    finish(&ctx, out)
+}
+
 
 // ─── tests ──────────────────────────────────────────────────────────────────
 

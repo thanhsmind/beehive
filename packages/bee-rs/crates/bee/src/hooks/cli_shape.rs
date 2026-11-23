@@ -575,6 +575,29 @@ fn parse_cli_flags(flag_tokens: &[String], properties: Option<&Map<String, Value
     parsed
 }
 
+pub(crate) fn command_runs_bee_verb(command: &str) -> bool {
+    if command.is_empty() {
+        return false;
+    }
+    let registry = registry();
+    if registry.is_empty() {
+        return false;
+    }
+    for segment in split_cli_segments(tokenize(command)) {
+        for i in 0..segment.len() {
+            let Some(script) = recognize_script(&segment, i) else {
+                continue;
+            };
+            let positional = &segment[i + 1..];
+            if resolve_cli_command_name(&script, positional, registry).is_some() {
+                return true;
+            }
+            break;
+        }
+    }
+    false
+}
+
 /// checkCliShape — scan every shell segment for a recognizable bee-CLI
 /// invocation and validate it. `Some(reason)` on the first structural mismatch.
 pub(crate) fn check_cli_shape(command: &str) -> Option<String> {

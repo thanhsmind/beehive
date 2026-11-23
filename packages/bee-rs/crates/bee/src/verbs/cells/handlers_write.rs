@@ -980,6 +980,14 @@ pub(crate) fn claim_cell_with_reservations(
     ttl: Option<f64>,
     fix_first: Option<&str>,
 ) -> MR<ClaimDoor> {
+    let ctrl = control_root(root)?;
+    let sid = resolve_session_flag_env(session_flag)
+        .or_else(|| resolve_session_adopt(&ctrl).ok().flatten());
+    if let Some(msg) =
+        crate::verbs::handoff_door::context_mark_refusal(&ctrl, &ctrl, sid.as_deref())
+    {
+        return Err(Fail::Thrown(msg));
+    }
     let door = claim_cell_from_flags_ex(root, id, worker, session_flag, ttl, fix_first)?;
     match reserve_claimed_files(root, topo, &door.cell, worker, door.session_id.as_deref())? {
         ClaimReserve::Held => Ok(door),

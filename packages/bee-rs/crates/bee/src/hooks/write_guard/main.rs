@@ -231,6 +231,55 @@ Exceptions: a #! line, a SAFETY: line on unsafe, a license header at file top."
     )
 }
 
+fn record_session_context_if_bee_verb(
+    ctrl: &Path,
+    payload: &Map<String, Value>,
+    command: &str,
+) {
+    let Some(sid) = str_trim_nonempty(payload.get("session_id")) else {
+        return;
+    };
+    if sid.contains('/') || sid.contains('\\') || sid.contains("..") {
+        return;
+    }
+    let Some(transcript_path) = str_trim_nonempty(payload.get("transcript_path")) else {
+        return;
+    };
+    if !crate::hooks::cli_shape::command_runs_bee_verb(command) {
+        return;
+    }
+    let Some((tokens, _)) = crate::devtools::statusline::context_and_turns(&transcript_path) else {
+        return;
+    };
+    let sessions_dir = ctrl.join(".bee").join("sessions");
+    if std::fs::create_dir_all(&sessions_dir).is_err() {
+        return;
+    }
+    let crate::lock::AcquireOnce::Acquired(mut guard) =
+        crate::lock::acquire_store_lock_once(ctrl, "sessions")
+    else {
+        return;
+    };
+    let session_file = sessions_dir.join(format!("{sid}.json"));
+    let mut record = match crate::fsutil::read_json(&session_file) {
+        crate::fsutil::ReadJson::Parsed(Value::Object(m)) => m,
+        _ => {
+            let mut m = Map::new();
+            m.insert("id".into(), Value::String(sid.clone()));
+            m
+        }
+    };
+    let mut ctx_obj = Map::new();
+    ctx_obj.insert("tokens".into(), Value::Number(tokens.into()));
+    ctx_obj.insert(
+        "measured_at".into(),
+        Value::String(crate::verbs::reservations::now_iso()),
+    );
+    record.insert("context".into(), Value::Object(ctx_obj));
+    let _ = crate::fsutil::write_json_atomic(&session_file, &Value::Object(record));
+    guard.release();
+}
+
 pub(crate) fn run_native(ctx: &HookContext) -> R<Emit> {
     run_native_with_roots(ctx, &HarnessRoots::detect())
 }
@@ -917,6 +966,10 @@ lines naming plain in-repo relative paths (no path traversal, no unresolvable es
             && let Some(reason) = crate::hooks::cli_shape::check_cli_shape(&command) {
                 denial = Some(reason);
             }
+        if !command.is_empty() && denial.is_none() {
+            let ctrl_pb = ctx.control_root.as_deref().unwrap_or(&store_root_pb);
+            record_session_context_if_bee_verb(ctrl_pb, payload, &command);
+        }
     }
 
     if let Some((fixed, notes)) = fixed_ask {

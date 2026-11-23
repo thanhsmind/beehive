@@ -684,6 +684,11 @@ pub(crate) fn run_claim_next(flags: rsv::Flags, use_json: bool, t0: Instant) -> 
                 "claim-next: --session-id or CLAUDE_CODE_SESSION_ID env is required.".into(),
             ));
         };
+        if let Some(msg) =
+            crate::verbs::handoff_door::context_mark_refusal(&control, &control, Some(&session_id))
+        {
+            return Err(Fail::Thrown(msg));
+        }
         if let Some(t) = ttl
             && (!t.is_finite() || t <= 0.0) {
                 return Err(Fail::Thrown("--ttl must be a positive integer (seconds).".into()));

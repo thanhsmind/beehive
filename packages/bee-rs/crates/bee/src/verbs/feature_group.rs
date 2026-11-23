@@ -204,94 +204,174 @@ fn run_start(tokens: &[OsString], t0: Instant) -> Option<ExitCode> {
     let mut waiver: Option<String> = None;
     if let Ok(ctrl_root) = crate::verbs::reservations::control_root_for(&main_root_s) {
         let session_id = crate::verbs::reservations::resolve_session_id(None, &ctrl_root).ok().flatten();
-        if let Some(sid) = session_id.as_deref()
-            && let Some(merged) = crate::integration_queue::merged_feature_of(Path::new(&ctrl_root), sid)
-            && merged != feature
-        {
-            let config = crate::state::read_config_raw(&main_root);
-            let handoff_auto = !matches!(config.get("handoff_auto"), Some(Value::Bool(false)));
-            let door = if handoff_auto {
-                crate::verbs::handoff_door::probe_door(&main_root)
-            } else {
-                crate::verbs::handoff_door::HandoffDoor::Absent
-            };
-
-            if handoff_auto
-                && matches!(door, crate::verbs::handoff_door::HandoffDoor::Present { .. })
+        if let Some(sid) = session_id.as_deref() {
+            if let Some(merged) = crate::integration_queue::merged_feature_of(Path::new(&ctrl_root), sid)
+                && merged != feature
             {
-                if flags.get("same-session").is_some() {
-                    return Some(ctx.fail(
-                        "[handoff_due] --same-session is not accepted while bee can hand off",
-                    ));
-                }
-                let owner_text = match flags.get("handoff-task") {
-                    Some(FlagV::S(t)) => t.trim().to_string(),
-                    _ => String::new(),
+                let config = crate::state::read_config_raw(&main_root);
+                let handoff_auto = !matches!(config.get("handoff_auto"), Some(Value::Bool(false)));
+                let door = if handoff_auto {
+                    crate::verbs::handoff_door::probe_door(&main_root)
+                } else {
+                    crate::verbs::handoff_door::HandoffDoor::Absent
                 };
-                if owner_text.is_empty() {
-                    return Some(ctx.fail(&format!(
-                        "[handoff_due] this session already merged \"{merged}\"; pass --handoff-task \"<owner request and standing orders>\" so bee can hand off \"{feature}\" to a fresh leader session."
-                    )));
-                }
-                let flag_str = |k: &str| match flags.get(k) {
-                    Some(FlagV::S(s)) => Some(s.as_str()),
-                    _ => None,
-                };
-                match crate::verbs::handoff_door::execute_handoff(
-                    &door,
-                    &main_root,
-                    sid,
-                    &merged,
-                    &feature,
-                    flag_str("class"),
-                    flag_str("lane"),
-                    flag_str("files"),
-                    flag_str("flags"),
-                    &owner_text,
-                ) {
-                    crate::verbs::handoff_door::HandoffOutcome::Sent { run_id, request_id } => {
-                        let _ = crate::verbs::state_group::release_session_record(
-                            &main_root, sid,
-                        );
-                        let note = format!("run {run_id} request {request_id}");
-                        if let Err(e) = crate::audit::append(
-                            &main_root,
-                            "handoff-dispatched",
-                            &feature,
-                            None,
-                            &note,
-                            "feature start",
-                            None,
-                        ) {
-                            eprintln!("warning: could not write the handoff-dispatched audit row: {e}");
-                        }
-                        return Some(ctx.fail(&format!(
-                            "[handoff_sent] run {run_id}: this session is released; tell the owner in one line and stop."
-                        )));
-                    }
-                    crate::verbs::handoff_door::HandoffOutcome::Failed { reason } => {
-                        return Some(ctx.fail(&format!("[handoff_failed] {reason}")));
-                    }
-                }
-            }
 
-            match flags.get("same-session") {
-                None => {
-                    return Some(ctx.fail(&format!(
-                        "[handoff_due] this session already merged \"{merged}\"; write the handoff and start \"{feature}\" in a fresh leader session (playbook: .bee/playbooks/handoff.md), or pass --same-session \"<reason>\" to open it here anyway."
-                    )));
-                }
-                Some(v) => {
-                    let reason = match v {
-                        FlagV::S(r) => r.trim().to_string(),
-                        FlagV::Present => String::new(),
-                    };
-                    if reason.is_empty() {
+                if handoff_auto
+                    && matches!(door, crate::verbs::handoff_door::HandoffDoor::Present { .. })
+                {
+                    if flags.get("same-session").is_some() {
                         return Some(ctx.fail(
-                            "[handoff_due] --same-session needs a non-empty reason: --same-session \"<reason>\".",
+                            "[handoff_due] --same-session is not accepted while bee can hand off",
                         ));
                     }
-                    waiver = Some(reason);
+                    let owner_text = match flags.get("handoff-task") {
+                        Some(FlagV::S(t)) => t.trim().to_string(),
+                        _ => String::new(),
+                    };
+                    if owner_text.is_empty() {
+                        return Some(ctx.fail(&format!(
+                            "[handoff_due] this session already merged \"{merged}\"; pass --handoff-task \"<owner request and standing orders>\" so bee can hand off \"{feature}\" to a fresh leader session."
+                        )));
+                    }
+                    let flag_str = |k: &str| match flags.get(k) {
+                        Some(FlagV::S(s)) => Some(s.as_str()),
+                        _ => None,
+                    };
+                    match crate::verbs::handoff_door::execute_handoff(
+                        &door,
+                        &main_root,
+                        sid,
+                        &crate::verbs::handoff_door::HandoffReason::MergedFeature {
+                            merged: merged.clone(),
+                        },
+                        &feature,
+                        flag_str("class"),
+                        flag_str("lane"),
+                        flag_str("files"),
+                        flag_str("flags"),
+                        &[],
+                        &owner_text,
+                    ) {
+                        crate::verbs::handoff_door::HandoffOutcome::Sent { run_id, request_id } => {
+                            let _ = crate::verbs::state_group::release_session_record(
+                                &main_root, sid,
+                            );
+                            let note = format!("run {run_id} request {request_id}");
+                            if let Err(e) = crate::audit::append(
+                                &main_root,
+                                "handoff-dispatched",
+                                &feature,
+                                None,
+                                &note,
+                                "feature start",
+                                None,
+                            ) {
+                                eprintln!("warning: could not write the handoff-dispatched audit row: {e}");
+                            }
+                            return Some(ctx.fail(&format!(
+                                "[handoff_sent] run {run_id}: this session is released; tell the owner in one line and stop."
+                            )));
+                        }
+                        crate::verbs::handoff_door::HandoffOutcome::Failed { reason } => {
+                            return Some(ctx.fail(&format!("[handoff_failed] {reason}")));
+                        }
+                    }
+                }
+
+                match flags.get("same-session") {
+                    None => {
+                        return Some(ctx.fail(&format!(
+                            "[handoff_due] this session already merged \"{merged}\"; write the handoff and start \"{feature}\" in a fresh leader session (playbook: .bee/playbooks/handoff.md), or pass --same-session \"<reason>\" to open it here anyway."
+                        )));
+                    }
+                    Some(v) => {
+                        let reason = match v {
+                            FlagV::S(r) => r.trim().to_string(),
+                            FlagV::Present => String::new(),
+                        };
+                        if reason.is_empty() {
+                            return Some(ctx.fail(
+                                "[handoff_due] --same-session needs a non-empty reason: --same-session \"<reason>\".",
+                            ));
+                        }
+                        waiver = Some(reason);
+                    }
+                }
+            } else if !crate::hooks::herding_worker_marker_set() {
+                let config = crate::state::read_config_raw(&main_root);
+                let handoff_auto = !matches!(config.get("handoff_auto"), Some(Value::Bool(false)));
+                if handoff_auto {
+                    let session_file = Path::new(&ctrl_root)
+                        .join(".bee")
+                        .join("sessions")
+                        .join(format!("{sid}.json"));
+                    if let crate::fsutil::ReadJson::Parsed(Value::Object(session_record)) =
+                        crate::fsutil::read_json(&session_file)
+                        && let Some(due) =
+                            crate::verbs::handoff_door::context_mark_due(&config, &session_record)
+                    {
+                        let door = crate::verbs::handoff_door::probe_door(&main_root);
+                        if matches!(door, crate::verbs::handoff_door::HandoffDoor::Present { .. }) {
+                            let owner_text = match flags.get("handoff-task") {
+                                Some(FlagV::S(t)) => t.trim().to_string(),
+                                _ => String::new(),
+                            };
+                            if owner_text.is_empty() {
+                                let n_k = due.tokens / 1000;
+                                let m_k = due.mark / 1000;
+                                return Some(ctx.fail(&format!(
+                                    "[handoff_due] context {n_k}k is past the {m_k}k mark; run bee state handoff send --task \"<owner request and standing orders>\""
+                                )));
+                            }
+                            let flag_str = |k: &str| match flags.get(k) {
+                                Some(FlagV::S(s)) => Some(s.as_str()),
+                                _ => None,
+                            };
+                            match crate::verbs::handoff_door::execute_handoff(
+                                &door,
+                                &main_root,
+                                sid,
+                                &crate::verbs::handoff_door::HandoffReason::ContextMark {
+                                    tokens: due.tokens,
+                                    mark: due.mark,
+                                },
+                                &feature,
+                                flag_str("class"),
+                                flag_str("lane"),
+                                flag_str("files"),
+                                flag_str("flags"),
+                                &[],
+                                &owner_text,
+                            ) {
+                                crate::verbs::handoff_door::HandoffOutcome::Sent {
+                                    run_id,
+                                    request_id,
+                                } => {
+                                    let _ = crate::verbs::state_group::release_session_record(
+                                        &main_root, sid,
+                                    );
+                                    let note = format!("run {run_id} request {request_id}");
+                                    if let Err(e) = crate::audit::append(
+                                        &main_root,
+                                        "handoff-dispatched",
+                                        &feature,
+                                        None,
+                                        &note,
+                                        "feature start",
+                                        None,
+                                    ) {
+                                        eprintln!("warning: could not write the handoff-dispatched audit row: {e}");
+                                    }
+                                    return Some(ctx.fail(&format!(
+                                        "[handoff_sent] run {run_id}: this session is released; tell the owner in one line and stop."
+                                    )));
+                                }
+                                crate::verbs::handoff_door::HandoffOutcome::Failed { reason } => {
+                                    return Some(ctx.fail(&format!("[handoff_failed] {reason}")));
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
