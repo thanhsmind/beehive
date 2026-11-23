@@ -51,9 +51,9 @@
       "bee-defects.md": "128820aaccc3644492f753d10cfba5231bfd7939624aba943da7ab74340a5dc5",
       "cli-before-mcp.md": "4fcf1fbe97f9b91306fb344121d7ffcb5fa3511c916fcd446de07a817d920492",
       "cross-project.md": "6d9d6b23eb73ea4de7f426e1eeca0ecedaeb7d2ded592f7d998dbe9fce379836",
-      "handoff.md": "64609d166c9d96efee61836d0c40b0051c308062475dff143e2b8d7e9d63e44a",
+      "handoff.md": "d7d7972fb76a6ef997bf2b058d52c6e7f695bc4a03989369087350585fcb9add",
       "leader-detail.md": "c1e81d4d6035201d949331a074513994b24a661dd0c2cd5b12bf12b17ad9bd8b",
-      "multi-session.md": "1e820395d0daabd521c5d3b7d3a46fcbc8d24f3ce893ca43e6636693a44b6ea8"
+      "multi-session.md": "4a157ffd0b2761fb8d25f06febd137baf1decd342e9bd31099a02e200eaca597"
     },
     "repo_hooks": {
       ".codex/hooks.json": "b4ecbe18eed3506b7bf3a936aad5ab1f1e61f93379c37257bd26bb90c9b6bd9f"
@@ -193,5 +193,5 @@
   },
   "design_role_offered": true,
   "created_at": "2026-07-24T03:53:44.750Z",
-  "updated_at": "2026-11-23T08:00:24.516Z"
+  "updated_at": "2026-11-23T11:51:45.348Z"
 }

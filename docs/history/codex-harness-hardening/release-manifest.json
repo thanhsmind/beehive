@@ -5112,7 +5112,7 @@
     },
     {
       "path": "packages/bee/playbooks/handoff.md",
-      "sha256": "64609d166c9d96efee61836d0c40b0051c308062475dff143e2b8d7e9d63e44a",
+      "sha256": "d7d7972fb76a6ef997bf2b058d52c6e7f695bc4a03989369087350585fcb9add",
       "mode": "644",
       "role": "package_payload",
       "packagePath": "packages/bee/playbooks/handoff.md"
@@ -5126,7 +5126,7 @@
     },
     {
       "path": "packages/bee/playbooks/multi-session.md",
-      "sha256": "1e820395d0daabd521c5d3b7d3a46fcbc8d24f3ce893ca43e6636693a44b6ea8",
+      "sha256": "4a157ffd0b2761fb8d25f06febd137baf1decd342e9bd31099a02e200eaca597",
       "mode": "644",
       "role": "package_payload",
       "packagePath": "packages/bee/playbooks/multi-session.md"

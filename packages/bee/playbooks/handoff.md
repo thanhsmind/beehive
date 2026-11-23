@@ -16,10 +16,17 @@ pause:
 <!-- rule: agents-context-handoff-65 -->
 - Default context mark: 120000 (`handoff_context_tokens`; `0` disables).
   At or past the mark, hand off at the next clean stop (a capped cell or
-  a merged worktree); never stop mid-cell. Write `.bee/HANDOFF.json`
-  with `--verified`, `--tree`, `--key-files`, `--gotchas`,
-  `--standing-orders`, and `--ruled-out`, probe it once with a cold read
-  (`bee dispatch prepare --runtime claude --kind gather --role read --json`
+  a merged worktree); never stop mid-cell. When a waggledance door is
+  present and `handoff_auto` is on, the next claim (`cells claim`,
+  `cells claim-next`, `dispatch prepare --claim`), wave (`dispatch wave`),
+  or `feature start` past the mark refuses `[handoff_due]`. Run
+  `bee state handoff send --task "<owner's request in their words; standing orders>"`
+  at once (`feature start` also accepts `--handoff-task`), and on
+  `[handoff_sent]` tell the owner in one line and stop. When no
+  waggledance door exists or `handoff_auto` is `false`, write
+  `.bee/HANDOFF.json` with `--verified`, `--tree`, `--key-files`,
+  `--gotchas`, `--standing-orders`, and `--ruled-out`, probe it once with
+  a cold read (`bee dispatch prepare --runtime claude --kind gather --role read --json`
   showing `bee state handoff show` and asking for the next action and
   ruled-out paths), rewrite once on a miss, then dispatch the fresh
   leader through the host's leader door (`waggledance dispatch --project
