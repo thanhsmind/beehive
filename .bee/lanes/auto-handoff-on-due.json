@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "auto-handoff-on-due",
   "mode": null,
-  "phase": "exploring",
+  "phase": "idle",
   "approved_gates": {
     "context": true,
     "shape": true,
@@ -11,9 +11,9 @@
     "uat": true
   },
   "summary": "Feature \"auto-handoff-on-due\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at d89d0fd; reload the product and test \"auto-handoff-on-due\", then either approve uat (\"bee gate --name uat --approved true --lane auto-handoff-on-due\") or fix it in the worktree and merge again.",
+  "next_action": "bee close finished \"auto-handoff-on-due\" — feature is closed.",
   "created_at": "2026-11-23T04:02:58.857Z",
-  "run_state": "done",
+  "run_state": "shaping",
   "waiting_on": null,
   "route": {
     "class": "feature",
