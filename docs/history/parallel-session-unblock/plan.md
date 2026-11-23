@@ -249,6 +249,58 @@ Playbook: `skills/bee-planning/playbooks/feature.md`, situation `skills/bee-plan
    ]
   },
   "behavior_change": false
+ },
+ {
+  "id": "psu-6",
+  "feature": "parallel-session-unblock",
+  "title": "Check the doctrine against the shipped worktree guard and mark door",
+  "lane": "standard",
+  "role": "test",
+  "deps": [
+   "psu-5",
+   "psu-3",
+   "psu-1"
+  ],
+  "decisions": [
+   "e37ebc32-aca4-4f0c-b902-c7a993bbb2db",
+   "5380068f-30cb-4724-b0f0-59e2b05e3443",
+   "d21eab69-43ce-4672-befc-81bb56cd128e",
+   "e27e1ba7-7bd0-4785-b10c-6304072e2550"
+  ],
+  "files": [
+   "packages/bee/playbooks/handoff.md",
+   "packages/bee/playbooks/multi-session.md",
+   "skills/bee-swarming/SKILL.md",
+   "skills/bee-swarming/references/swarming-reference.md",
+   "skills/bee-hive/references/go-mode.md",
+   "docs/knowledge/areas/worktree-parallelism/returning-and-the-merge-gate.md",
+   "docs/knowledge/areas/hook-runtime/token-economy-of-injected-context.md",
+   "docs/knowledge/areas/workflow-state/sessions-lanes-and-identity.md",
+   "docs/knowledge/areas/workflow-state/worktree-isolation.md"
+  ],
+  "read_first": [
+   "docs/history/parallel-session-unblock/CONTEXT.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Read the lines the psu-5 commits (13f4d57b2, 1cc67383f) and the leader commit df55f64b1 changed. For each behavior claim (verb names, flags, refusal tags, which verbs are gated past the mark, the warning when no companion is configured, handoff_auto, request id), open the shipped code in verbs/worktree/companion.rs, verbs/handoff_door.rs, verbs/feature_group.rs, verbs/cells/handlers_write.rs, verbs/cells/handlers_select.rs, verbs/drivers/prepare.rs and hooks/write_guard/main.rs and confirm it, with a file:line anchor in the cap. Fix a wrong claim in the doc, never in code. If you edit a file under packages/bee or skills, run bee dev regen and commit the generated copies too.",
+  "verify": "/mnt/data/Projects/goglbe/beehive/.bee/bin/bee dev release-manifest --check",
+  "must_haves": {
+   "why": "A docs cell does not certify itself; a separate checker confirms each claim.",
+   "out_of_scope": [
+    "code"
+   ],
+   "truths": [
+    "every behavior claim psu-5 added has a file:line anchor in the cap"
+   ],
+   "prohibitions": [
+    "No code change"
+   ]
+  },
+  "regen_obligation_ack": "A wording fix here is rare; when this cell edits a packaged file it runs bee dev regen itself.",
+  "behavior_change": false,
+  "tester_rule": true,
+  "judge_obligation_ack": "Checker for psu-5."
  }
 ]
 ```
