@@ -14715,8 +14715,11 @@ mod tests {
             .find(|c| c.first().map(|s| s.as_str()) == Some("send"))
             .expect("send call present");
         assert_eq!(send_call[1], "agent-idle-1");
-        assert_eq!(send_call[2], "--no-wait");
-        assert!(send_call[3].contains("brief-2.txt"));
+        assert_eq!(send_call[2], "--behavior");
+        assert_eq!(send_call[3], "interrupt");
+        assert_eq!(send_call[4], "--no-wait");
+        assert_eq!(send_call[5], "--");
+        assert!(send_call[6].contains("brief-2.txt"));
 
         let archive_call = calls
             .iter()
@@ -15206,8 +15209,69 @@ mod tests {
         let calls = fake.calls.lock().unwrap();
         let send_calls: Vec<_> = calls.iter().filter(|c| c.first().map(|s| s.as_str()) == Some("send")).collect();
         assert_eq!(send_calls.len(), 1);
-        assert!(send_calls[0][3].contains("brief-1.txt"));
-        assert!(send_calls[0][3].contains("result-1.json"));
+        assert_eq!(send_calls[0][2], "--behavior");
+        assert_eq!(send_calls[0][3], "interrupt");
+        assert_eq!(send_calls[0][4], "--no-wait");
+        assert_eq!(send_calls[0][5], "--");
+        assert!(send_calls[0][6].contains("brief-1.txt"));
+        assert!(send_calls[0][6].contains("result-1.json"));
+    }
+
+    #[test]
+    fn wait_for_round_paseo_inspect_fallback_idle_nudge_sends_with_interrupt_behavior() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main_root = tmp.path();
+        let bee_dir = main_root.join(".bee");
+        let job_id = "job-inspect-nudge";
+        let dir = mailbox::mailbox_dir(&bee_dir, job_id);
+        std::fs::create_dir_all(&dir).unwrap();
+
+        let fake = FakePaseoCli::new(
+            Ok("0.12.0\n".to_string()),
+            Ok("{\"agentId\":\"agent-in\"}\n".to_string()),
+            Ok("{\"Status\":\"idle\"}\n".to_string()),
+            Ok("archived\n".to_string()),
+        );
+
+        let mut wait_src = FakeWaitSource::new(vec![
+            Some(paseo::WaitStatus::Timeout),
+            Some(paseo::WaitStatus::Error),
+        ]);
+
+        let mut clock = 0i64;
+        let silent_idle_cell = std::cell::Cell::new(false);
+
+        let _ = wait_for_round_paseo_driven(
+            &bee_dir,
+            job_id,
+            "agent-in",
+            1,
+            0,
+            60,
+            3600,
+            &fake,
+            None,
+            &silent_idle_cell,
+            &mut wait_src,
+            Duration::from_millis(200),
+            |_| {},
+            || {
+                let current = clock;
+                clock += 200;
+                current
+            },
+        );
+
+        let calls = fake.calls.lock().unwrap();
+        let send_calls: Vec<_> = calls.iter().filter(|c| c.first().map(|s| s.as_str()) == Some("send")).collect();
+        assert_eq!(send_calls.len(), 1);
+        assert_eq!(send_calls[0][1], "agent-in");
+        assert_eq!(send_calls[0][2], "--behavior");
+        assert_eq!(send_calls[0][3], "interrupt");
+        assert_eq!(send_calls[0][4], "--no-wait");
+        assert_eq!(send_calls[0][5], "--");
+        assert!(send_calls[0][6].contains("brief-1.txt"));
+        assert!(send_calls[0][6].contains("result-1.json"));
     }
 
     #[test]
