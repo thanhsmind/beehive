@@ -1,0 +1,123 @@
+{
+  "id": "psu-1",
+  "feature": "parallel-session-unblock",
+  "title": "Let a worktree open beside a live session when no companion is configured",
+  "lane": "standard",
+  "role": "code",
+  "deps": [],
+  "decisions": [
+    "e37ebc32-aca4-4f0c-b902-c7a993bbb2db"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/worktree/handlers.rs",
+    "packages/bee-rs/crates/bee/src/verbs/feature_group.rs",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/companion.rs"
+  ],
+  "read_first": [
+    "docs/history/parallel-session-unblock/CONTEXT.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Implement CONTEXT.md D1. Add a small typed CompanionRemedy { Configured, NotConfigured } read once from the main root's config commands (worktree_companion_start and worktree_companion_mount both non-empty means Configured), next to the companion code in verbs/worktree/companion.rs. In verbs/worktree/handlers.rs at the shared_nested_found refusal and in verbs/feature_group.rs at the has_any_shared_nested_checkout Ok(true) arm: refuse exactly as today only when Configured; when NotConfigured create the worktree and print one stderr line starting 'warning: another session is live and this checkout holds a shared nested checkout;' that says the write guard keeps that checkout guarded while sessions are concurrent and that --with-companion becomes available once commands.worktree_companion_start and commands.worktree_companion_mount are set. The detection-error arm still fails closed. Put the decision in one shared helper both sites call so they cannot drift. No code comments.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee worktree",
+  "must_haves": {
+    "why": "A refusal whose only remedy needs absent config pushes the owner to turn worktree_first off or kill a session.",
+    "out_of_scope": [
+      "doctrine text",
+      "the write-guard nested-checkout deny"
+    ],
+    "truths": [
+      "with another session live, a shared nested checkout and no companion config, bee worktree new and bee feature start create the worktree and print the warning line",
+      "with companion config present the refusal and its --with-companion text are unchanged",
+      "a detection error still fails closed"
+    ],
+    "prohibitions": [
+      "No code comments",
+      "No change to the write-guard deny for writes into the nested checkout"
+    ]
+  },
+  "behavior_change": true,
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "psu-1-worker",
+    "outcome": "Implemented CompanionRemedy and shared nested-checkout guard in companion.rs, handlers.rs, and feature_group.rs (3423396a7).",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/worktree/companion.rs",
+      "packages/bee-rs/crates/bee/src/verbs/worktree/handlers.rs",
+      "packages/bee-rs/crates/bee/src/verbs/feature_group.rs"
+    ],
+    "deviations": [
+      "sync-ack: leader reviewed the anchored concepts: worktree-isolation R36 updated in this cell, returning-and-the-merge-gate and sessions-lanes-and-identity and token-economy synced by psu-5; advisories, release-identity, status-display, rust-runtime overview and gates carry no nested-checkout refusal text"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-23T11:55:04.803Z",
+    "behavior_change": true,
+    "verification_evidence": "cargo clippy --manifest-path packages/bee-rs/Cargo.toml -- -D warnings && cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml — green:unit — touched companion.rs, handlers.rs, feature_group.rs",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "69e31910-9359-4694-a494-118d1b4fb9e5",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee worktree",
+    "claimed_at": "2026-11-23T11:49:47.954Z",
+    "knowledge_delta": [],
+    "sync_ack": "leader reviewed the anchored concepts: worktree-isolation R36 updated in this cell, returning-and-the-merge-gate and sessions-lanes-and-identity and token-economy synced by psu-5; advisories, release-identity, status-display, rust-runtime overview and gates carry no nested-checkout refusal text",
+    "no_mistakes": true,
+    "no_knowledge_used": true,
+    "principles_used": [
+      {
+        "slug": "bee-principle-model-the-domain",
+        "changed": "encoded companion configuration state as CompanionRemedy { Configured, NotConfigured }"
+      },
+      {
+        "slug": "bee-principle-single-source-of-truth",
+        "changed": "extracted check_shared_nested_checkout_guard so worktree new and feature start share one guard path"
+      }
+    ],
+    "changed_lines": 8,
+    "report": {
+      "outcome": "Implemented CompanionRemedy and shared nested-checkout guard in companion.rs, handlers.rs, and feature_group.rs (3423396a7).",
+      "commit": "df55f64b1781158139e78a0d17b9c8c4259a6f7b",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/worktree/companion.rs",
+        "packages/bee-rs/crates/bee/src/verbs/worktree/handlers.rs",
+        "packages/bee-rs/crates/bee/src/verbs/feature_group.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee worktree — green:unit — cargo clippy --manifest-path packages/bee-rs/Cargo.toml -- -D warnings && cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml — green:unit — touched companion.rs, handlers.rs, feature_group.rs",
+      "deviations": [],
+      "knowledge_used": [],
+      "principles_used": [
+        "bee-principle-model-the-domain — encoded companion configuration state as CompanionRemedy { Configured, NotConfigured }",
+        "bee-principle-single-source-of-truth — extracted check_shared_nested_checkout_guard so worktree new and feature start share one guard path"
+      ],
+      "reaction": "confirm",
+      "patch_id": "d3e05b836129966051137a03851a56e20db7b30e"
+    },
+    "reaction": "confirm",
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "with another session live, a shared nested checkout and no companion config, bee worktree new and bee feature start create the worktree and print the warning line",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/worktree/companion.rs"
+          },
+          {
+            "requirement": "with companion config present the refusal and its --with-companion text are unchanged",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/worktree/companion.rs"
+          },
+          {
+            "requirement": "a detection error still fails closed",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/worktree/companion.rs"
+          }
+        ],
+        "recorded_at": "2026-11-23T12:43:03.463Z",
+        "recorded_by": "69e31910-9359-4694-a494-118d1b4fb9e5",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": null,
+  "usage_reason": "herding job(s) named this cell but no readable session transcript (1 unreadable)"
+}

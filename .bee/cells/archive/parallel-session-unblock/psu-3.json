@@ -1,0 +1,176 @@
+{
+  "id": "psu-3",
+  "feature": "parallel-session-unblock",
+  "title": "Refuse new work past the context mark and hand off through waggledance",
+  "lane": "standard",
+  "role": "code",
+  "deps": [
+    "psu-1"
+  ],
+  "decisions": [
+    "5380068f-30cb-4724-b0f0-59e2b05e3443"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/handoff_door.rs",
+    "packages/bee-rs/crates/bee/src/verbs/feature_group.rs",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/sessions.rs",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/mod.rs",
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/mod.rs",
+    "packages/bee-rs/crates/bee/src/hooks/prompt_context.rs",
+    "packages/bee-rs/crates/bee/src/verbs/dispatch/mod.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/mod.rs",
+    "packages/bee-rs/crates/bee/src/audit.rs",
+    "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+  ],
+  "read_first": [
+    "docs/history/parallel-session-unblock/CONTEXT.md",
+    "docs/history/auto-handoff-on-due/CONTEXT.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Implement CONTEXT.md D2 and D2a. (a) The session record gains field context {tokens, measured_at}; the PreToolUse Bash hook path writes it for the payload session id only when the command runs a bee verb, measuring the payload transcript_path with devtools::statusline::context_and_turns; a write failure never blocks the tool call. (b) A pure fn context_mark_due(config, session_record) -> Option<MarkDue { tokens, mark }> using handoff_context_tokens (prompt_context DEFAULT_HANDOFF_MARK stays the single default; 0 is off). (c) Generalize handoff_door::compose_task_text and execute_handoff to take an enum HandoffReason { MergedFeature { merged }, ContextMark { tokens, mark } } and keep the feature-start merge path unchanged in behavior. (d) One shared gate fn used by dispatch prepare when --claim is passed, dispatch wave, cells claim, cells claim-next and feature start: when MarkDue, the door is Present, handoff_auto is not false and BEE_HERDING_WORKER is not 1, refuse with: [handoff_due] context <N>k is past the <M>k mark; run bee state handoff send --task \"<owner request and standing orders>\". feature start also accepts its existing --handoff-task for this case. Never gate cells cap, cells finish, worktree merge, or dispatch prepare without --claim. No door or handoff_auto false: no refusal. (e) New verb bee state handoff send --task <text>: request id bee-handoff-<session>-mark, task text names the current feature and its open or claimed cells; on Sent release the session, audit handoff-dispatched, fail with [handoff_sent] run <id>: this session is released; tell the owner in one line and stop. On Failed fail with [handoff_failed] <reason> and write nothing; with no door present refuse naming the missing door. Register the verb and its flags and regen registry_payload.json with bee dev regen. Add unit tests for context_mark_due and the reason-aware compose. Find the real dispatch and cells verb files with rg before editing; the files list names the likely homes. No code comments.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee handoff",
+  "must_haves": {
+    "why": "Leaders ignore the context mark line; the next clean stop must refuse new work and bee must hand off itself.",
+    "out_of_scope": [
+      "doctrine text",
+      "the worktree guard"
+    ],
+    "truths": [
+      "past the mark with a door, no agent flag lets dispatch prepare --claim, dispatch wave, cells claim, cells claim-next or feature start start new work in the same session",
+      "cells cap, cells finish and worktree merge are never refused by the mark",
+      "the merge-time handoff_due path behaves as before"
+    ],
+    "prohibitions": [
+      "No code comments",
+      "No refusal when no waggledance door exists",
+      "No HANDOFF.json write on this path"
+    ]
+  },
+  "behavior_change": true,
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "psu-3-worker",
+    "outcome": "Implemented context_mark_due, PreToolUse Bash context tracking, shared clean-stop gate, and state handoff send (a0e1bf25a).",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+      "packages/bee-rs/crates/bee/src/hooks/cli_shape.rs",
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/main.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/handlers_select.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+      "packages/bee-rs/crates/bee/src/verbs/feature_group.rs",
+      "packages/bee-rs/crates/bee/src/verbs/handoff_door.rs",
+      "packages/bee-rs/crates/bee/src/verbs/state_group/sessions.rs",
+      "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs"
+    ],
+    "deviations": [
+      "sync-ack: the workflow-state skills were synced in this feature by psu-5 (skills/bee-swarming/SKILL.md and references/swarming-reference.md name bee state handoff send); psu-3 is code only"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-23T12:03:14.192Z",
+    "behavior_change": true,
+    "verification_evidence": "cargo clippy --manifest-path packages/bee-rs/Cargo.toml -- -D warnings && cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee handoff && cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test registry_contracts — green:unit — handoff suite, new unit tests, registry_contracts, dev regen, and clippy all passed after final edit",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "69e31910-9359-4694-a494-118d1b4fb9e5",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee handoff",
+    "claimed_at": "2026-11-23T11:55:10.056Z",
+    "knowledge_delta": [],
+    "sync_ack": "the workflow-state skills were synced in this feature by psu-5 (skills/bee-swarming/SKILL.md and references/swarming-reference.md name bee state handoff send); psu-3 is code only",
+    "no_mistakes": true,
+    "principles_used": [
+      {
+        "slug": "bee-principle-foundational-thinking",
+        "changed": "settled MarkDue and HandoffReason data shapes in handoff_door.rs before wiring callers"
+      },
+      {
+        "slug": "bee-principle-minimize-reader-load",
+        "changed": "placed context_mark_refusal in handoff_door.rs as one shared gate fn used by all five clean-stop doors"
+      }
+    ],
+    "changed_lines": 740,
+    "report": {
+      "outcome": "Implemented context_mark_due, PreToolUse Bash context tracking, shared clean-stop gate, and state handoff send (a0e1bf25a).",
+      "commit": "a0e1bf25a21ad61788f882e878b47b5aad3cf741",
+      "files": [
+        "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+        "packages/bee-rs/crates/bee/src/hooks/cli_shape.rs",
+        "packages/bee-rs/crates/bee/src/hooks/write_guard/main.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/handlers_select.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+        "packages/bee-rs/crates/bee/src/verbs/feature_group.rs",
+        "packages/bee-rs/crates/bee/src/verbs/handoff_door.rs",
+        "packages/bee-rs/crates/bee/src/verbs/state_group/sessions.rs",
+        "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee handoff — green:unit — cargo clippy --manifest-path packages/bee-rs/Cargo.toml -- -D warnings && cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee handoff && cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test registry_contracts — green:unit — handoff suite, new unit tests, registry_contracts, dev regen, and clippy all passed after final edit",
+      "deviations": [],
+      "principles_used": [
+        "bee-principle-foundational-thinking — settled MarkDue and HandoffReason data shapes in handoff_door.rs before wiring callers",
+        "bee-principle-minimize-reader-load — placed context_mark_refusal in handoff_door.rs as one shared gate fn used by all five clean-stop doors"
+      ],
+      "patch_id": "10e6e8ca951f502b1b12fbbd443a74e19641b06e"
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 740 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "past the mark with a door, no agent flag lets dispatch prepare --claim, dispatch wave, cells claim, cells claim-next or feature start start new work in the same session",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/handoff_door.rs"
+          },
+          {
+            "requirement": "cells cap, cells finish and worktree merge are never refused by the mark",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/handoff_door.rs"
+          },
+          {
+            "requirement": "the merge-time handoff_due path behaves as before",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/handoff_door.rs"
+          }
+        ],
+        "recorded_at": "2026-11-23T12:43:03.487Z",
+        "recorded_by": "69e31910-9359-4694-a494-118d1b4fb9e5",
+        "commit_diff": "checked"
+      }
+    ],
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "c1",
+            "status": "PASS",
+            "evidence": "handoff_door.rs:56-84 shared gate is called at prepare.rs:4441-4455 (inside if claim), prepare.rs:~4874-4885 (wave, before rolling and non-rolling), handlers_select.rs:687 (claim-next), handlers_write.rs:983-990 (claim_cell_with_reservations used by run_claim at :1030); feature start has its own copy at feature_group.rs:300-375, which ignores --same-session and sends instead of starting on --handoff-task; tests refuses_cells_claim_past_the_mark_and_not_below and refuses_feature_start_at_and_past_the_mark ok. Note: --session-id <other id> moves the check to that id's record (claims.rs:723); this flag is not new"
+          },
+          {
+            "id": "c2",
+            "status": "PASS",
+            "evidence": "rg context_mark_refusal finds no call in cap/finish/worktree merge; the prepare gate is only inside `if claim` (prepare.rs:4440); the write_guard hook only records context; test handoff_context_mark_door_never_refuses_cells_cap ok"
+          },
+          {
+            "id": "c3",
+            "status": "PASS",
+            "evidence": "a0e1bf25a diff feature_group.rs:204-300 is only re-indent plus HandoffReason::MergedFeature wrap; handoff_door.rs:175-203 matches the old compose body; request suffix stays feature (handoff_door.rs:363-366); all handoff_after_merge_door_* tests ok in cargo test -- handoff context_mark (71 passed, EXIT 0)"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "medium",
+        "builder_model": null,
+        "judge_model": "opus",
+        "model_independence": "unverified",
+        "recorded_at": "2026-11-23T12:53:39.252Z"
+      }
+    ]
+  },
+  "usage": null,
+  "usage_reason": "herding job(s) named this cell but no readable session transcript (1 unreadable)"
+}

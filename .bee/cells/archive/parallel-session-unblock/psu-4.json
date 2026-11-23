@@ -1,0 +1,146 @@
+{
+  "id": "psu-4",
+  "feature": "parallel-session-unblock",
+  "title": "Test the context-mark door against a fake waggledance",
+  "lane": "standard",
+  "role": "test",
+  "deps": [
+    "psu-3"
+  ],
+  "decisions": [
+    "5380068f-30cb-4724-b0f0-59e2b05e3443",
+    "e27e1ba7-7bd0-4785-b10c-6304072e2550"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/feature_group.rs",
+    "packages/bee-rs/crates/bee/src/verbs/handoff_door.rs",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/sessions.rs"
+  ],
+  "read_first": [
+    "docs/history/parallel-session-unblock/CONTEXT.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Without reading the psu-3 worker's notes, check the psu-3 commit against CONTEXT.md D2 and D2a and add behavior tests reusing the fake waggledance harness of the handoff_after_merge_door_with_waggledance_* tests. Cover: a session record at or past the mark refuses cells claim and feature start with [handoff_due] naming bee state handoff send; below the mark passes; mark 0 passes; no door passes; handoff_auto false passes; BEE_HERDING_WORKER=1 passes; cells cap is never refused; bee state handoff send dispatches with request id bee-handoff-<session>-mark, releases the session and writes the handoff-dispatched row; a failed dispatch writes nothing; the hook writes context tokens for a bee command and not for a non-bee command. Fix any defect in psu-3's code and name it in the cap. No code comments.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee handoff",
+  "must_haves": {
+    "why": "A code cell never certifies itself.",
+    "out_of_scope": [
+      "doctrine text"
+    ],
+    "truths": [
+      "every D2 and D2a behavior has a test that fails if it is removed"
+    ],
+    "prohibitions": [
+      "No code comments",
+      "No real waggledance call from a test"
+    ]
+  },
+  "behavior_change": false,
+  "tester_rule": true,
+  "judge_obligation_ack": "Tester for psu-3.",
+  "status": "capped",
+  "trace": {
+    "worker": "psu-4-tester",
+    "outcome": "Tested D2/D2a on fake waggledance; fixed psu-3 defect: read_session js_numberify stores tokens as f64 so as_u64 gave 0k in handoff send — 8a1c4c30fda68925bc365f38c36f2b5a2c0927ac",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/feature_group.rs",
+      "packages/bee-rs/crates/bee/src/verbs/handoff_door.rs",
+      "packages/bee-rs/crates/bee/src/verbs/state_group/sessions.rs"
+    ],
+    "deviations": [
+      "sync-ack: tests plus a float-read fix in sessions.rs; the workflow-state skills were synced in this feature by psu-5 (bee-swarming SKILL and swarming-reference name bee state handoff send)"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-23T12:38:15.046Z",
+    "behavior_change": false,
+    "verification_evidence": "cargo clippy -- -D warnings && cargo test --release --no-fail-fast — green:unit — 6308 passed 0 failed; send test red without the f64 fix",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "69e31910-9359-4694-a494-118d1b4fb9e5",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee handoff",
+    "claimed_at": "2026-11-23T12:03:29.555Z",
+    "knowledge_delta": [],
+    "sync_ack": "tests plus a float-read fix in sessions.rs; the workflow-state skills were synced in this feature by psu-5 (bee-swarming SKILL and swarming-reference name bee state handoff send)",
+    "no_mistakes": true,
+    "no_knowledge_used": true,
+    "principles_used": [
+      {
+        "slug": "bee-principle-red-before-green",
+        "changed": "reverted the f64 fix to watch the send test fail before keeping it"
+      },
+      {
+        "slug": "bee-principle-one-fact-one-home",
+        "changed": "handoff_mark and session_context_tokens replace the copies in sessions.rs"
+      }
+    ],
+    "changed_lines": 439,
+    "report": {
+      "outcome": "Tested D2/D2a on fake waggledance; fixed psu-3 defect: read_session js_numberify stores tokens as f64 so as_u64 gave 0k in handoff send — 8a1c4c30fda68925bc365f38c36f2b5a2c0927ac",
+      "commit": "8a1c4c30fda68925bc365f38c36f2b5a2c0927ac",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/feature_group.rs",
+        "packages/bee-rs/crates/bee/src/verbs/handoff_door.rs",
+        "packages/bee-rs/crates/bee/src/verbs/state_group/sessions.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee handoff — green:unit — cargo clippy -- -D warnings && cargo test --release --no-fail-fast — green:unit — 6308 passed 0 failed; send test red without the f64 fix",
+      "deviations": [],
+      "knowledge_used": [],
+      "principles_used": [
+        "bee-principle-red-before-green — reverted the f64 fix to watch the send test fail before keeping it",
+        "bee-principle-one-fact-one-home — handoff_mark and session_context_tokens replace the copies in sessions.rs"
+      ],
+      "reaction": "confirm",
+      "skipped": [
+        "knowledge concept for the f64 token read — no docs file declared for this round",
+        "dispatch prepare --claim and dispatch wave gate tests — outside the cell's cover list"
+      ],
+      "found": [
+        "cells claim was already gated in claim_cell_with_reservations; the ctx.root vs control-root theory was not the zero-token cause"
+      ],
+      "patch_id": "e4ed15ed5791e055d41cff7f69cf8b331b69dca5"
+    },
+    "reaction": "confirm",
+    "skipped": [
+      "knowledge concept for the f64 token read — no docs file declared for this round",
+      "dispatch prepare --claim and dispatch wave gate tests — outside the cell's cover list"
+    ],
+    "found": [
+      "cells claim was already gated in claim_cell_with_reservations; the ctx.root vs control-root theory was not the zero-token cause"
+    ],
+    "warnings": [
+      "advisory: this cap's commit changes 439 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "every D2 and D2a behavior has a test that fails if it is removed",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/feature_group.rs"
+          }
+        ],
+        "recorded_at": "2026-11-23T12:43:03.500Z",
+        "recorded_by": "69e31910-9359-4694-a494-118d1b4fb9e5",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": {
+    "new": 185878,
+    "cached": 4337638,
+    "total": 4523516,
+    "models": {
+      "claude-opus-5-5": {
+        "new": 185878,
+        "cached": 4337638,
+        "total": 4523516
+      }
+    },
+    "jobs": [
+      "job-1795435414824-2946110-1",
+      "job-1795437105282-3059467-1"
+    ]
+  }
+}

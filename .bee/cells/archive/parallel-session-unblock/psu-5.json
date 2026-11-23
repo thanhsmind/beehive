@@ -1,0 +1,118 @@
+{
+  "id": "psu-5",
+  "feature": "parallel-session-unblock",
+  "title": "Tell leaders the worktree guard has a way on and the mark hands off",
+  "lane": "standard",
+  "role": "docs",
+  "deps": [],
+  "decisions": [
+    "e37ebc32-aca4-4f0c-b902-c7a993bbb2db",
+    "5380068f-30cb-4724-b0f0-59e2b05e3443"
+  ],
+  "files": [
+    "packages/bee/playbooks/handoff.md",
+    "packages/bee/playbooks/multi-session.md",
+    "docs/knowledge/areas/worktree-parallelism/returning-and-the-merge-gate.md",
+    "docs/knowledge/areas/hook-runtime/token-economy-of-injected-context.md",
+    "docs/knowledge/areas/workflow-state/sessions-lanes-and-identity.md",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/parallel-session-unblock/CONTEXT.md"
+  ],
+  "affects_skills": [
+    "skills/bee-hive/SKILL.md"
+  ],
+  "affects_specs": [],
+  "action": "Write CONTEXT.md D3. In rule agents-context-handoff-65 (packages/bee/playbooks/handoff.md is the source; .bee/playbooks is a generated copy refreshed by bee dev regen): past the mark, the next claim, wave or feature start refuses [handoff_due]; the leader runs bee state handoff send --task \"<owner's request in their words; standing orders>\" at once, and on [handoff_sent] tells the owner in one line and stops. In packages/bee/playbooks/multi-session.md add: a worktree refusal for a shared nested checkout is never a reason to ask the owner to turn worktree_first off or to close another session; with no companion config bee opens the worktree and warns. Sync the three knowledge concepts with D1-D3, citing the history D-numbers of parallel-session-unblock, not raw decision ids. STE style, short. Run bee dev regen.",
+  "verify": "/mnt/data/Projects/goglbe/beehive/.bee/bin/bee knowledge check && /mnt/data/Projects/goglbe/beehive/.bee/bin/bee dev release-manifest --check",
+  "must_haves": {
+    "why": "Doctrine must match the new behavior in every project on refresh.",
+    "out_of_scope": [
+      "code"
+    ],
+    "truths": [
+      "no doctrine text tells a leader to ask the owner to turn worktree_first off or close a session for a nested-checkout refusal"
+    ],
+    "prohibitions": [
+      "No hand edit of generated copies"
+    ]
+  },
+  "behavior_change": false,
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "psu-5-worker",
+    "outcome": "Synced remaining agents-context-handoff-65 skill references and regenerated skills in 1cc67383f",
+    "files_changed": [
+      "skills/bee-swarming/references/swarming-reference.md",
+      "skills/bee-swarming/SKILL.md",
+      "skills/bee-hive/references/go-mode.md",
+      "skills/bee-hive/references/routing-and-contracts.md",
+      "docs/history/codex-harness-hardening/release-manifest.json",
+      ".bee/onboarding.json"
+    ],
+    "deviations": [
+      "sync-ack: Checked and left unchanged: docs/knowledge/areas/onboarding/status-display-vendoring.md (caution/alarm bands track handoff mark, still true), skills/bee-swarming/references/worker-details.md (worker [HANDOFF] result token still requires .bee/HANDOFF.json first, still true), skills/bee-hive/SKILL.md (line 23 high-level summary still true), skills/bee-hive/references/routing-and-contracts.md (line 156 table entry still true)"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-23T11:54:36.211Z",
+    "behavior_change": false,
+    "verification_evidence": "regenerated skill trees and verified 994 files match manifest (bee knowledge check failed only on pre-existing unrelated areas/bee-herding/the-paseo-channel.md)",
+    "verify_output": "green:static",
+    "verify_passed": true,
+    "claim_session": "69e31910-9359-4694-a494-118d1b4fb9e5",
+    "verify_command": "/mnt/data/Projects/goglbe/beehive/.bee/bin/bee knowledge check && /mnt/data/Projects/goglbe/beehive/.bee/bin/bee dev release-manifest --check",
+    "claimed_at": "2026-11-23T11:49:50.651Z",
+    "knowledge_delta": [],
+    "sync_ack": "Checked and left unchanged: docs/knowledge/areas/onboarding/status-display-vendoring.md (caution/alarm bands track handoff mark, still true), skills/bee-swarming/references/worker-details.md (worker [HANDOFF] result token still requires .bee/HANDOFF.json first, still true), skills/bee-hive/SKILL.md (line 23 high-level summary still true), skills/bee-hive/references/routing-and-contracts.md (line 156 table entry still true)",
+    "no_mistakes": true,
+    "no_knowledge_used": true,
+    "principles_used": [
+      {
+        "slug": "bee-principle-single-source-of-truth",
+        "changed": "aligned remaining agents-context-handoff-65 skill references to packages/bee/playbooks/handoff.md and regenerated derived skill trees"
+      }
+    ],
+    "changed_lines": 96,
+    "report": {
+      "outcome": "Synced remaining agents-context-handoff-65 skill references and regenerated skills in 1cc67383f",
+      "commit": "3423396a75724a8c438594f24d3bc1ed0d1536f7",
+      "files": [
+        "skills/bee-swarming/references/swarming-reference.md",
+        "skills/bee-swarming/SKILL.md",
+        "skills/bee-hive/references/go-mode.md",
+        "skills/bee-hive/references/routing-and-contracts.md",
+        "docs/history/codex-harness-hardening/release-manifest.json",
+        ".bee/onboarding.json"
+      ],
+      "tests": "/mnt/data/Projects/goglbe/beehive/.bee/bin/bee knowledge check && /mnt/data/Projects/goglbe/beehive/.bee/bin/bee dev release-manifest --check — green:static — regenerated skill trees and verified 994 files match manifest (bee knowledge check failed only on pre-existing unrelated areas/bee-herding/the-paseo-channel.md)",
+      "deviations": [],
+      "knowledge_used": [],
+      "principles_used": [
+        "bee-principle-single-source-of-truth — aligned remaining agents-context-handoff-65 skill references to packages/bee/playbooks/handoff.md and regenerated derived skill trees"
+      ],
+      "reaction": "confirm",
+      "patch_id": "e76fbe54e2386725e9d3033f63d8805566c3b63b"
+    },
+    "reaction": "confirm",
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "no doctrine text tells a leader to ask the owner to turn worktree_first off or close a session for a nested-checkout refusal",
+            "artifact": "skills/bee-swarming/references/swarming-reference.md"
+          }
+        ],
+        "recorded_at": "2026-11-23T12:43:03.516Z",
+        "recorded_by": "69e31910-9359-4694-a494-118d1b4fb9e5",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": null,
+  "usage_reason": "herding job(s) named this cell but no readable session transcript (2 unreadable)"
+}

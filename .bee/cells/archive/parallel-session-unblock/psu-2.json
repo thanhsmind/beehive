@@ -1,0 +1,147 @@
+{
+  "id": "psu-2",
+  "feature": "parallel-session-unblock",
+  "title": "Test the worktree guard with and without companion config",
+  "lane": "standard",
+  "role": "test",
+  "deps": [
+    "psu-1"
+  ],
+  "decisions": [
+    "e37ebc32-aca4-4f0c-b902-c7a993bbb2db",
+    "d21eab69-43ce-4672-befc-81bb56cd128e"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/companion.rs"
+  ],
+  "read_first": [
+    "docs/history/parallel-session-unblock/CONTEXT.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Without reading the psu-1 worker's notes, check the psu-1 commit against CONTEXT.md D1 and contract d21eab69, then add behavior tests in verbs/worktree/tests.rs next to the existing nested-checkout and companion tests: a temp repo with a nested .git dir (not a registered submodule) and a second live session record (fresh last_heartbeat). Both bee worktree new and bee feature start call the one helper check_shared_nested_checkout_guard in verbs/worktree/companion.rs, so cover worktree new end to end and the helper directly: no companion config creates the worktree and prints the warning; both companion commands set refuses naming --with-companion and creates nothing; only one set counts as NotConfigured; a solo session never refuses. Fix any defect you find in psu-1's code (companion.rs only) and name it in the cap. No code comments.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee worktree",
+  "must_haves": {
+    "why": "A code cell never certifies itself.",
+    "out_of_scope": [
+      "doctrine text"
+    ],
+    "truths": [
+      "each D1 branch has a test that fails if the branch is removed"
+    ],
+    "prohibitions": [
+      "No code comments"
+    ]
+  },
+  "behavior_change": false,
+  "tester_rule": true,
+  "judge_obligation_ack": "Tester for psu-1.",
+  "status": "capped",
+  "trace": {
+    "worker": "psu-2-tester",
+    "outcome": "psu-1 guard matches D1; split a pure verdict out of the guard so the warning is testable and added 5 behaviour tests that cover every D1 branch, each shown red by mutation; 00971febb6dbebf9aa22d37f890792582860f0b6",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/worktree/companion.rs",
+      "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs"
+    ],
+    "deviations": [
+      "sync-ack: tests plus a pure verdict split in companion.rs; behavior unchanged from psu-1, whose knowledge sync (worktree-isolation, returning-and-the-merge-gate) already landed in this feature"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-23T12:27:17.811Z",
+    "behavior_change": false,
+    "verification_evidence": "cargo clippy -- -D warnings && cargo test --release --no-fail-fast (packages/bee-rs) — green:unit — run in a detached HEAD+psu-2 checkout because another worker's uncommitted edits in this worktree break clippy; cell verify cargo test -p bee worktree also green (369 passed)",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "69e31910-9359-4694-a494-118d1b4fb9e5",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee worktree",
+    "claimed_at": "2026-11-23T12:03:27.944Z",
+    "verified_at": null,
+    "baseline": null,
+    "reaction": "confirm",
+    "skipped": null,
+    "unknowns": [
+      "feature start covered only through the shared helper, not end to end",
+      "a corrupt .bee/config.json was not exercised against CompanionRemedy"
+    ],
+    "found": [
+      "Another worker's uncommitted edits in this worktree fail clippy: hooks/write_guard/main.rs:237 unused `command`, hooks/cli_shape.rs:578 `command_runs_bee_verb` unused",
+      "found a better route: split the guard into a pure shared_nested_checkout_verdict so the NotConfigured warning is observable; no behaviour change and the callers are unchanged",
+      "a corrupt session record falls back instead of failing closed; only marker and realpath errors reach the detection-error branch"
+    ],
+    "stopped": null,
+    "knowledge_delta": [],
+    "sync_ack": "tests plus a pure verdict split in companion.rs; behavior unchanged from psu-1, whose knowledge sync (worktree-isolation, returning-and-the-merge-gate) already landed in this feature",
+    "no_mistakes": true,
+    "no_knowledge_used": true,
+    "principles_used": [
+      {
+        "slug": "bee-principle-test-behavior-not-structure",
+        "changed": "assert the exit code, the created dir and the verdict text instead of call order"
+      },
+      {
+        "slug": "bee-principle-red-before-green",
+        "changed": "mutating each branch exposed a detection test that passed wrongly, so it now uses a corrupt companion marker"
+      }
+    ],
+    "changed_lines": 166,
+    "report": {
+      "outcome": "psu-1 guard matches D1; split a pure verdict out of the guard so the warning is testable and added 5 behaviour tests that cover every D1 branch, each shown red by mutation; 00971febb6dbebf9aa22d37f890792582860f0b6",
+      "commit": "00971febb6dbebf9aa22d37f890792582860f0b6",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/worktree/companion.rs",
+        "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee worktree — green:unit — cargo clippy -- -D warnings && cargo test --release --no-fail-fast (packages/bee-rs) — green:unit — run in a detached HEAD+psu-2 checkout because another worker's uncommitted edits in this worktree break clippy; cell verify cargo test -p bee worktree also green (369 passed)",
+      "deviations": [],
+      "knowledge_used": [],
+      "principles_used": [
+        "bee-principle-test-behavior-not-structure — assert the exit code, the created dir and the verdict text instead of call order",
+        "bee-principle-red-before-green — mutating each branch exposed a detection test that passed wrongly, so it now uses a corrupt companion marker"
+      ],
+      "reaction": "confirm",
+      "unknowns": [
+        "feature start covered only through the shared helper, not end to end",
+        "a corrupt .bee/config.json was not exercised against CompanionRemedy"
+      ],
+      "found": [
+        "Another worker's uncommitted edits in this worktree fail clippy: hooks/write_guard/main.rs:237 unused `command`, hooks/cli_shape.rs:578 `command_runs_bee_verb` unused",
+        "found a better route: split the guard into a pure shared_nested_checkout_verdict so the NotConfigured warning is observable; no behaviour change and the callers are unchanged",
+        "a corrupt session record falls back instead of failing closed; only marker and realpath errors reach the detection-error branch"
+      ],
+      "patch_id": "9286f6d176af64583723e28c008d8a2ba4e85cde"
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "each D1 branch has a test that fails if the branch is removed",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs"
+          }
+        ],
+        "recorded_at": "2026-11-23T12:43:03.475Z",
+        "recorded_by": "69e31910-9359-4694-a494-118d1b4fb9e5",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": {
+    "new": 97711,
+    "cached": 1882690,
+    "total": 1980401,
+    "models": {
+      "claude-opus-5-5": {
+        "new": 97711,
+        "cached": 1882690,
+        "total": 1980401
+      }
+    },
+    "jobs": [
+      "job-1795435413164-2945793-1"
+    ]
+  }
+}
