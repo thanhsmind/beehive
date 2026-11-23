@@ -775,32 +775,15 @@ pub(crate) fn run_new(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitC
     let main_root_s = p(&main_root);
     let ctrl_root = crate::verbs::reservations::control_root_for(&main_root_s).ok()?;
     let session_id = crate::verbs::reservations::resolve_session_id(None, &ctrl_root).ok()?;
-    let shared_nested_found = if with_companion {
-        false
-    } else {
-        match crate::nested_checkout::has_any_shared_nested_checkout(
+    if !with_companion
+        && let Err(msg) = check_shared_nested_checkout_guard(
             &main_root,
             &ctrl_root,
             session_id.as_deref(),
-        ) {
-            Ok(found) => found,
-            // The detection check itself errored. Node's message interpolates
-            // the caught error's V8 `.message`; this port supplies its own
-            // deterministic reason in the same slot (crate::nested_checkout's
-            // header documents the divergence). Everything else — fail CLOSED,
-            // zero mutation, same wording, same exit — is Node's.
-            Err(detect) => {
-                return Some(ctx.fail(&format!(
-                    "refusing to create a worktree: could not determine whether {main_root_s} holds a shared nested checkout another live session could reach — the detection check itself errored ({}). This guard fails CLOSED on a detection error rather than risk silently allowing an unguarded worktree. FIX: resolve the underlying filesystem error, then retry.",
-                    detect.reason
-                )))
-            }
-        }
-    };
-    if shared_nested_found {
-        return Some(ctx.fail(&format!(
-            "refusing to create a worktree: another session is concurrently live on {main_root_s} and it contains a shared nested checkout a companion mount must cover — running unguarded is how one session silently ate another's work. Re-run with \"bee worktree new --feature {feature} --with-companion\" so the shared checkout is mounted and tracked (the paved road for concurrent shared-checkout work — AGENTS.md rule 13). This creates a NEW companion-mounted worktree; it does not retrofit the checkout you are in."
-        )));
+            &feature,
+        )
+    {
+        return Some(ctx.fail(&msg));
     }
 
     // worktree-companion-hook: resolved HERE from readConfig(mainRoot).commands

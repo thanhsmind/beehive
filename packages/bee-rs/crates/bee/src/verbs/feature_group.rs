@@ -11,8 +11,9 @@ use crate::verbs::workflow_store::{
     read_lane_strict, rebuild_lane_projection, update_workflow_assuming_lock, wf_id, write_lane,
 };
 use crate::verbs::worktree::{
-    build_instruction, build_session_transition, create_feature_worktree,
-    emit_pi_transition_marker_if_present, feature_slug_ok, p, prelude, CErr, CompanionSpec, Pre,
+    build_instruction, build_session_transition, check_shared_nested_checkout_guard,
+    create_feature_worktree, emit_pi_transition_marker_if_present, feature_slug_ok, p, prelude,
+    CErr, CompanionSpec, Pre,
 };
 use serde_json::{json, Map, Value};
 use std::collections::HashSet;
@@ -294,23 +295,13 @@ fn run_start(tokens: &[OsString], t0: Instant) -> Option<ExitCode> {
                 }
             }
         }
-        match crate::nested_checkout::has_any_shared_nested_checkout(
+        if let Err(msg) = check_shared_nested_checkout_guard(
             &main_root,
             &ctrl_root,
             session_id.as_deref(),
+            &feature,
         ) {
-            Ok(true) => {
-                return Some(ctx.fail(&format!(
-                    "refusing to create a worktree: another session is concurrently live on {main_root_s} and it contains a shared nested checkout a companion mount must cover — running unguarded is how one session silently ate another's work. Re-run with \"bee worktree new --feature {feature} --with-companion\" so the shared checkout is mounted and tracked (the paved road for concurrent shared-checkout work — AGENTS.md rule 13). This creates a NEW companion-mounted worktree; it does not retrofit the checkout you are in."
-                )));
-            }
-            Err(detect) => {
-                return Some(ctx.fail(&format!(
-                    "refusing to create a worktree: could not determine whether {main_root_s} holds a shared nested checkout another live session could reach — the detection check itself errored ({}). This guard fails CLOSED on a detection error rather than risk silently allowing an unguarded worktree. FIX: resolve the underlying filesystem error, then retry.",
-                    detect.reason
-                )));
-            }
-            _ => {}
+            return Some(ctx.fail(&msg));
         }
     }
 
