@@ -1,0 +1,134 @@
+{
+  "id": "pc17-2",
+  "feature": "paseo-017-compat",
+  "lane": "small",
+  "role": "test",
+  "change_class": "test",
+  "title": "Prove both run.rs plain sends carry --behavior interrupt",
+  "deps": [
+    "pc17-1"
+  ],
+  "decisions": [
+    "ebda4a72-43c2-41b5-ac09-596c4f30f719",
+    "3e405143-8741-4436-a9c3-ceefc206ce84"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/herding/run.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/herding/run.rs",
+    "packages/bee-rs/crates/bee/src/herding/paseo.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Per decision ebda4a72. Independently check the pc17-1 change: read the diff of packages/bee-rs/crates/bee/src/herding/paseo.rs and confirm send_argv now yields send <id> --behavior interrupt --no-wait -- <text>. Then find the existing tests in packages/bee-rs/crates/bee/src/herding/run.rs (its tests module) that drive the Paseo round path with a fake PaseoCli that records calls: one that sends the next-round brief pointer (send_argv near line 4444) and one that sends the idle nudge (send_argv near lines 5000/5053). Add or extend assertions so a test fails if the recorded send call for the round pointer, and for the idle nudge, lacks the pair --behavior interrupt or carries --behavior queue. Assert on the recorded argv the fake CLI saw, not on send_argv directly. If no existing fake reaches one of those paths, write the smallest new test that does, reusing the module's existing fakes. Run the verify command and record its output. No code comments.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee herding::run",
+  "must_haves": {
+    "truths": [
+      "a run.rs test fails when the round pointer send lacks --behavior interrupt",
+      "a run.rs test fails when the idle nudge send lacks --behavior interrupt"
+    ],
+    "prohibitions": [
+      "no change to production code in run.rs or paseo.rs",
+      "no code comments"
+    ]
+  },
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "pc17-tester-1",
+    "outcome": "Round-pointer and wait-source nudge sends already asserted by pc17-1; added inspect-fallback nudge test; all three red on --behavior queue, green on interrupt — b0483fc2d",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/herding/run.rs"
+    ],
+    "deviations": [
+      "sync-ack: test-only cell; skills/bee-herding describes cockpit roles, not paseo send argv"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-23T07:45:42.278Z",
+    "behavior_change": false,
+    "verification_evidence": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee herding::run — green:unit — touched run.rs tests (376 passed, 0 failed); full clippy+cargo test --no-fail-fast also 0 failed",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "0f38d478-aa80-4584-b419-4c2c335e1e91",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee herding::run",
+    "claimed_at": "2026-11-23T07:37:07.108Z",
+    "knowledge_delta": [],
+    "sync_ack": "test-only cell; skills/bee-herding describes cockpit roles, not paseo send argv",
+    "no_mistakes": true,
+    "no_knowledge_used": true,
+    "principles_used": [
+      {
+        "slug": "bee-principle-red-before-green",
+        "changed": "mutated send_argv to queue and watched all three tests fail before reporting green"
+      },
+      {
+        "slug": "bee-principle-test-behavior-not-structure",
+        "changed": "asserted on the argv the fake CLI recorded, not on send_argv"
+      }
+    ],
+    "changed_lines": 57,
+    "report": {
+      "outcome": "Round-pointer and wait-source nudge sends already asserted by pc17-1; added inspect-fallback nudge test; all three red on --behavior queue, green on interrupt — b0483fc2d",
+      "commit": "b0483fc2d35bc5db977f791077fa6d22439ef52f",
+      "files": [
+        "packages/bee-rs/crates/bee/src/herding/run.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee herding::run — green:unit — PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee herding::run — green:unit — touched run.rs tests (376 passed, 0 failed); full clippy+cargo test --no-fail-fast also 0 failed",
+      "deviations": [],
+      "knowledge_used": [],
+      "principles_used": [
+        "bee-principle-red-before-green — mutated send_argv to queue and watched all three tests fail before reporting green",
+        "bee-principle-test-behavior-not-structure — asserted on the argv the fake CLI recorded, not on send_argv"
+      ],
+      "reaction": "confirm",
+      "found": [
+        "run.rs has three plain send sites, not two: idle nudge exists in both the wait-source branch (5053) and the inspect-fallback branch (5000)"
+      ],
+      "patch_id": "53b55a0f4e3212ae5bfd3a5a807b5c8699c9504f"
+    },
+    "reaction": "confirm",
+    "found": [
+      "run.rs has three plain send sites, not two: idle nudge exists in both the wait-source branch (5053) and the inspect-fallback branch (5000)"
+    ],
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "a run.rs test fails when the round pointer send lacks --behavior interrupt",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/run.rs"
+          },
+          {
+            "requirement": "a run.rs test fails when the idle nudge send lacks --behavior interrupt",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/run.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/herding/run.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/run.rs"
+          }
+        ],
+        "recorded_at": "2026-11-23T07:48:55.994Z",
+        "recorded_by": "0f38d478-aa80-4584-b419-4c2c335e1e91",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": {
+    "new": 46267,
+    "cached": 554333,
+    "total": 600600,
+    "models": {
+      "claude-opus-5-5": {
+        "new": 46267,
+        "cached": 554333,
+        "total": 600600
+      }
+    },
+    "jobs": [
+      "job-1795419432454-2076339-1"
+    ]
+  }
+}

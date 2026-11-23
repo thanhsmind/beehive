@@ -1,0 +1,90 @@
+{
+  "schema": "bee-usage/v1",
+  "feature": "paseo-017-compat",
+  "closed_at": "2026-11-23T07:51:00.235Z",
+  "sessions": [
+    {
+      "session_id": "0f38d478-aa80-4584-b419-4c2c335e1e91",
+      "models": {
+        "claude-opus-5-5": {
+          "input": 206,
+          "output": 43009,
+          "cache_write": 143996,
+          "cache_read": 10003578,
+          "new": 187211,
+          "cached": 10003578,
+          "total": 10190789
+        }
+      },
+      "subagent_models": {},
+      "subagent_count": 0,
+      "started_ms": 1795418470887,
+      "ended_ms": 1795420257370,
+      "totals": {
+        "new": 187211,
+        "cached": 10003578,
+        "total": 10190789
+      }
+    }
+  ],
+  "skipped": 0,
+  "totals": {
+    "main": {
+      "new": 187211,
+      "cached": 10003578,
+      "total": 10190789
+    },
+    "subagents": {
+      "new": 0,
+      "cached": 0,
+      "total": 0
+    },
+    "total": {
+      "new": 233478,
+      "cached": 10557911,
+      "total": 10791389
+    },
+    "herding": {
+      "new": 46267,
+      "cached": 554333,
+      "total": 600600,
+      "models": {
+        "claude-opus-5-5": {
+          "input": 34,
+          "output": 8728,
+          "cache_write": 37505,
+          "cache_read": 554333,
+          "new": 46267,
+          "cached": 554333,
+          "total": 600600
+        }
+      }
+    }
+  },
+  "herding_sessions": [
+    {
+      "session_id": "aebd475d-3447-4429-a625-1b2d8fd2cea0",
+      "models": {
+        "claude-opus-5-5": {
+          "input": 34,
+          "output": 8728,
+          "cache_write": 37505,
+          "cache_read": 554333,
+          "new": 46267,
+          "cached": 554333,
+          "total": 600600
+        }
+      },
+      "subagent_models": {},
+      "subagent_count": 0,
+      "started_ms": 1795419434069,
+      "ended_ms": 1795419904840,
+      "totals": {
+        "new": 46267,
+        "cached": 554333,
+        "total": 600600
+      },
+      "job_id": "job-1795419432454-2076339-1"
+    }
+  ]
+}

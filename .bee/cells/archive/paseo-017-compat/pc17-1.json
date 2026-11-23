@@ -1,0 +1,136 @@
+{
+  "id": "pc17-1",
+  "feature": "paseo-017-compat",
+  "lane": "small",
+  "role": "code",
+  "change_class": "behavior",
+  "title": "Pin the plain paseo send to --behavior interrupt",
+  "deps": [],
+  "decisions": [
+    "ebda4a72-43c2-41b5-ac09-596c4f30f719",
+    "b298b6e6-9acf-43e6-b4c1-c9a68b539def"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/herding/paseo.rs",
+    "docs/knowledge/areas/bee-herding/the-paseo-channel.md"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/herding/paseo.rs",
+    "docs/knowledge/areas/bee-herding/the-paseo-channel.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/bee-herding/the-paseo-channel.md"
+  ],
+  "action": "Per decision ebda4a72 (paseo-017-compat D1). In packages/bee-rs/crates/bee/src/herding/paseo.rs change fn send_argv (about line 500) so it returns [\"send\", id, \"--behavior\", \"interrupt\", \"--no-wait\", \"--\", text], the same shape as send_steer_argv with interrupt in place of steer. Update the unit test that asserts send_argv (about line 1508) to the new argv. Do not change send_steer_argv or any caller in run.rs; both callers (run.rs about 4444 round brief pointer, about 5000 and 5053 idle nudge) pick up the new argv through send_argv. Then sync docs/knowledge/areas/bee-herding/the-paseo-channel.md in the same commit: where it describes the plain send (round pointer / nudge), state that bee passes --behavior interrupt explicitly; add a short 'Paseo 0.17' paragraph with these facts and cite paseo-017-compat D1 ebda4a72 and D2 b298b6e6 in the prose and in the frontmatter decisions list: since Paseo 0.17 the send default depends on the sender (queue for an agent sender with PASEO_AGENT_ID, interrupt for a person); bee sends as a person because it scrubs PASEO_AGENT_ID from every paseo call except the worker run; the 0.17.3 daemon refuses --behavior queue from a non-agent sender; the send receipt guidance exists only for queued agent sends, so bee does not parse it; paseo ls --json now carries workspaceId and labels, which bee does not read; messages from other agents (a worker's notification to its lead) now wait for the lead's current turn to end. Leave the frontmatter status alone unless the knowledge check requires otherwise. No code comments.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee herding::paseo",
+  "must_haves": {
+    "truths": [
+      "send_argv returns send <id> --behavior interrupt --no-wait -- <text>",
+      "send_steer_argv is unchanged",
+      "the-paseo-channel.md states the explicit interrupt and the Paseo 0.17 facts and cites ebda4a72 and b298b6e6"
+    ],
+    "prohibitions": [
+      "no --behavior queue anywhere",
+      "no change to which paseo calls keep PASEO_AGENT_ID",
+      "no code comments"
+    ]
+  },
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "pc17-worker-1",
+    "outcome": "Pinned plain paseo send to --behavior interrupt and synced the-paseo-channel.md (161d3814a)",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/herding/paseo.rs",
+      "packages/bee-rs/crates/bee/src/herding/run.rs",
+      "docs/knowledge/areas/bee-herding/the-paseo-channel.md"
+    ],
+    "deviations": [
+      "sync-ack: skills/bee-herding describes cockpit roles, not paseo send argv; the owning concept the-paseo-channel.md is synced in 161d3814a"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-23T07:37:03.214Z",
+    "behavior_change": true,
+    "verification_evidence": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee herding::paseo && cargo clippy --manifest-path packages/bee-rs/Cargo.toml -- -D warnings && cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml — green:unit — updated send_argv, two send_argv positional unit tests in run.rs, and the-paseo-channel.md",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "0f38d478-aa80-4584-b419-4c2c335e1e91",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee herding::paseo",
+    "claimed_at": "2026-11-23T07:28:22.941Z",
+    "knowledge_delta": [
+      "docs/knowledge/areas/bee-herding/the-paseo-channel.md"
+    ],
+    "sync_ack": "skills/bee-herding describes cockpit roles, not paseo send argv; the owning concept the-paseo-channel.md is synced in 161d3814a",
+    "no_mistakes": true,
+    "knowledge_used": [
+      {
+        "path": "docs/knowledge/areas/bee-herding/the-paseo-channel.md",
+        "changed": "confirmed plain send and steer send descriptions and frontmatter decisions format"
+      }
+    ],
+    "principles_used": [
+      {
+        "slug": "bee-principle-test-behavior-not-structure",
+        "changed": "updated two run.rs unit tests that asserted positional argv indices on send_argv"
+      }
+    ],
+    "changed_lines": 41,
+    "report": {
+      "outcome": "Pinned plain paseo send to --behavior interrupt and synced the-paseo-channel.md (161d3814a)",
+      "commit": "161d3814add1fca180330211397cc0b2e1a1dcd1",
+      "files": [
+        "packages/bee-rs/crates/bee/src/herding/paseo.rs",
+        "packages/bee-rs/crates/bee/src/herding/run.rs",
+        "docs/knowledge/areas/bee-herding/the-paseo-channel.md"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee herding::paseo — green:unit — PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee herding::paseo && cargo clippy --manifest-path packages/bee-rs/Cargo.toml -- -D warnings && cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml — green:unit — updated send_argv, two send_argv positional unit tests in run.rs, and the-paseo-channel.md",
+      "deviations": [],
+      "knowledge_used": [
+        "docs/knowledge/areas/bee-herding/the-paseo-channel.md — confirmed plain send and steer send descriptions and frontmatter decisions format"
+      ],
+      "principles_used": [
+        "bee-principle-test-behavior-not-structure — updated two run.rs unit tests that asserted positional argv indices on send_argv"
+      ],
+      "patch_id": "93503aebb842daa86fec9055dca4f25edcc0e905"
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "send_argv returns send <id> --behavior interrupt --no-wait -- <text>",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/paseo.rs"
+          },
+          {
+            "requirement": "send_steer_argv is unchanged",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/paseo.rs"
+          },
+          {
+            "requirement": "the-paseo-channel.md states the explicit interrupt and the Paseo 0.17 facts and cites ebda4a72 and b298b6e6",
+            "artifact": "docs/knowledge/areas/bee-herding/the-paseo-channel.md"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/herding/paseo.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/paseo.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/herding/run.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/run.rs"
+          },
+          {
+            "requirement": "docs/knowledge/areas/bee-herding/the-paseo-channel.md",
+            "artifact": "docs/knowledge/areas/bee-herding/the-paseo-channel.md"
+          }
+        ],
+        "recorded_at": "2026-11-23T07:48:55.985Z",
+        "recorded_by": "0f38d478-aa80-4584-b419-4c2c335e1e91",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": null,
+  "usage_reason": "herding job(s) named this cell but no readable session transcript (1 unreadable)"
+}
