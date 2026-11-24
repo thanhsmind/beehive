@@ -1,0 +1,18 @@
+{
+  "request_id": "bee-handoff-2ebd7b1e-e964-48d2-9c5a-420a42be316c-mark-mwukj7os",
+  "run_id": "run-793cd8e251a3a107",
+  "project_id": "beehive",
+  "session_id": "2ebd7b1e-e964-48d2-9c5a-420a42be316c",
+  "feature": "windows-test-build",
+  "sent_at": "2026-11-24T10:45:18.909Z",
+  "task_file": "/mnt/data/Projects/goglbe/beehive/.bee/tmp/handoff-2ebd7b1e-e964-48d2-9c5a-420a42be316c-mark-mwukj7os.md",
+  "task_text": "Handoff from previous leader session (context 120k tokens past 120k mark).\nCurrent feature: windows-test-build\nOpen or claimed cells: none\n\nOwner request (Vietnamese, 2026-11-24; reply in Vietnamese, short ELI5): 'Xem chinh viec nay cho beehive chu dong lam viec nay khong doi nhu tren. Nen trien khai mechanic sao cho khi trien khai project khac deu tu dong.' = bee leaders hand off and follow up through waggledance on their own; never ask the owner to open a session or re-run a step the agent can run. Owner feedback in beehive = framework change AND release with scripts/release.sh. gate_bypass is full. Standing orders: never tell the owner to open a session; do not ask the owner for steps you can run; past the context mark hand off again with bee state handoff send.\n\nDONE (this session): leader-self-handoff merged to main (08eaed8d7) after bee test green twice, judged PASS (lsh-2, lsh-3), closed (uat recorded as uat-deferral: uat cannot be auto-approved). pi-1-6-upgrade closed. .bee/bin/bee rebuilt from main and installed (has handoff_deduped and state handoff check). Real proof: bee state handoff check --run run-3481acb8c4fa9a75 --expect-merge wt/pi-1-6-upgrade gave met, no dispatch. Sandbox proof (evidence ~/.local/state/bee-verify/evidence/20261124-174042-2837755): send with no door refuses, check with no door reports pending, Stop net advisory fires on an open-a-new-session reply. Findings recorded in a close audit row.\n\nNEXT: release 2.121.0. Lane release-2-121-0 is started, gates shape+execution approved (auto, full bypass), 50 plan-conflict verdicts done, cells rel21210-1 (deploy) and rel21210-1c (test checker) added, lane docs committed d2a1abe48. Steps: (1) bee cells claim --id rel21210-1 --worker w-rel21210; bee state worker add --nickname w-rel21210 --cell rel21210-1 --tier deploy --status running. (2) bee dispatch prepare --runtime claude --kind gather --role deploy --stage deployment --release-version 2.121.0 --feature release-2-121-0 --json and run the exact payload it returns, with /mnt/data/Projects/goglbe/beehive/.bee/tmp/oc11816/bin first on PATH and CARGO_TARGET_DIR=/home/thanhsmind/.cache/cargo-target-rel21210; the tree must be clean except the pre-existing untracked .agents/skills/* and .codex/agents/* (not ours, leave them). Release is done only at the script's final OK line. (3) settle rel21210-1 with cells finish (green:live, https run URL in tests, --commit-pending, --sync-ack), dispatch rel21210-1c checker, leader-check-deferral audit row for the trailerless release commit, bee close release-2-121-0. (4) Report to the owner in Vietnamese: what changed (leaders now hand off by themselves, every handoff has its own id, a ledger row, bee state handoff check sends a follow-up leader when the merge did not happen, Stop hook blocks 'open a new session' replies), it worked (tests green, judge PASS, live proofs above), released 2.121.0 so every project gets it on refresh; mention the pi provider returned 402 Insufficient Balance (owner account money, not code).\n",
+  "expects": [
+    {
+      "kind": "branch-merged",
+      "branch": "main"
+    }
+  ],
+  "follow_ups": [],
+  "status": "open"
+}
