@@ -49,15 +49,16 @@ Playbook: `skills/bee-planning/playbooks/bugfix.md`, situation `skills/bee-plann
   "files": [
    ".pi/extensions/bee-guard/events.ts",
    ".pi/extensions/bee-guard/index.ts",
-   "packages/bee-rs/crates/bee/src/doctor.rs"
+   "packages/bee-rs/crates/bee/src/doctor.rs",
+   "docs/history/codex-harness-hardening/release-manifest.json"
   ],
   "read_first": [
    "docs/history/pi-1-6-upgrade/CONTEXT.md"
   ],
   "affects_skills": [],
   "affects_specs": [],
-  "action": "Implement CONTEXT.md D1, D2 and the header half of D3. (a) In .pi/extensions/bee-guard/events.ts, the session_shutdown handler: right after the existing stopBrokerTimer() call (which already sits after the reload early return), call stopDrainTimer() imported from ./result-inbox.ts. Do not touch the reload path. (b) In packages/bee-rs/crates/bee/src/doctor.rs runtime_checks_with_env, change the pi install hint to npm install -g @earendil-works/pi-coding-agent; update any test that pins the old string (rg mariozechner). (c) In .pi/extensions/bee-guard/index.ts, the existing CEILING header block: change it to Pi 1.6.0 proven live on 2026-11-24 in this repo (pi -p ok probe printed ok with empty stderr on openai-codex gpt-6-luna and zai glm-5.3-flash; a pre-gate write was refused by the worktree-first guard). Keep the block's shape and the probe sentence. The build embeds .pi/extensions/bee-guard into the binary, so rebuild before testing. Add no new code comments beyond rewording that existing header block.",
-  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test pi_plugin_contracts",
+  "action": "Implement CONTEXT.md D1, D2 and the header half of D3. (a) In .pi/extensions/bee-guard/events.ts, the session_shutdown handler: right after the existing stopBrokerTimer() call (which already sits after the reload early return), call stopDrainTimer() imported from ./result-inbox.ts. Do not touch the reload path. (b) In packages/bee-rs/crates/bee/src/doctor.rs runtime_checks_with_env, change the pi install hint to npm install -g @earendil-works/pi-coding-agent; update any test that pins the old string (rg mariozechner). (c) In .pi/extensions/bee-guard/index.ts, the existing CEILING header block: change it to Pi 1.6.0 proven live on 2026-11-24 in this repo (pi -p ok probe printed ok with empty stderr on openai-codex gpt-6-luna and zai glm-5.3-flash; a pre-gate write was refused by the worktree-first guard). Keep the block's shape and the probe sentence. The build embeds .pi/extensions/bee-guard into the binary, so rebuild before testing. Add no new code comments beyond rewording that existing header block. After the edits run bee dev regen (render-skill-trees, onboard --repo-root . --apply, release-manifest --write) inside this cell, restore any re-rendered .claude/skills tree it changed, and commit docs/history/codex-harness-hardening/release-manifest.json with the change.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test pi_plugin_contracts && .bee/bin/bee dev release-manifest --check",
   "must_haves": {
    "why": "A drain timer outliving its Pi session prints stale-ctx advisories on every tick, and doctor sends users to a pi below the belt floor.",
    "out_of_scope": [
