@@ -1,28 +1,28 @@
 ---
 type: bee.area
-title: "Hook Runtime — the Pi version the belt runs on, and the 0.84.3 to 1.4.0 capability audits"
-description: "Which Pi version bee's extension belt was enumerated against, why the belt's true floor is 0.84.4 rather than the 0.84.3 it claims, which Pi surfaces an upgrade can break, and the keep/adapt/delete disposition for every extension-API change between 0.84.3 and 1.4.0."
-timestamp: 2026-10-27
+title: "Hook Runtime — the Pi version the belt runs on, and the 0.84.3 to 1.6.0 capability audits"
+description: "Which Pi version bee's extension belt was enumerated against, why the belt's true floor is 0.84.4 rather than the 0.84.3 it claims, which Pi surfaces an upgrade can break, and the keep/adapt/delete disposition for every extension-API change between 0.84.3 and 1.6.0."
+timestamp: 2026-11-24
 bee:
   id: hook-runtime-pi-version-pin-and-capability-audit
   lifecycle: active
   areas: [hook-runtime]
   required_context: [areas/hook-runtime/overview.md, areas/hook-runtime/catalog-projections-and-activation.md, areas/hook-runtime/codex-capability-probe-version-pin-and-re-probe-evidence.md]
-  decisions: [pi-stage-dispatch D9 (version labels read 0.84-0.85), pi-beehive D5 / store 5d87f14e (pi means the pi binary only), pi-1-0-upgrade D1 (ceiling moves on live evidence), D2 (codemode and tool_search pass by name), D3 (systemPrompt carrier kept), D4 and D10 (backlog rows), pi-1-4-capability-audit D1 (custom runs inject nothing), D2 (ceiling moves to 1.4.0 on live evidence), D3 (the 1.0.0 to 1.4.0 delta)]
-  sources: [.pi/extensions/bee-guard/ (entry index.ts), packages/bee-rs/crates/bee/src/doctor.rs, .bee/verify/verify-app/features/pi-hat-wave.md, pi 0.84.3, 0.85.1, 1.0.0 and 1.4.0 shipped docs and the 1.4.0 CHANGELOG under the mise install root]
+  decisions: [pi-stage-dispatch D9 (version labels read 0.84-0.85), pi-beehive D5 / store 5d87f14e (pi means the pi binary only), pi-1-0-upgrade D1 (ceiling moves on live evidence), D2 (codemode and tool_search pass by name), D3 (systemPrompt carrier kept), D4 and D10 (backlog rows), pi-1-4-capability-audit D1 (custom runs inject nothing), D2 (ceiling moves to 1.4.0 on live evidence), D3 (the 1.0.0 to 1.4.0 delta), pi-1-6-upgrade D1 (stopDrainTimer on non-reload shutdown), D2 (doctor hint names @earendil-works/pi-coding-agent), D3 (ceiling and audit page move to 1.6.0)]
+  sources: [.pi/extensions/bee-guard/ (entry index.ts), packages/bee-rs/crates/bee/src/doctor.rs, .bee/verify/verify-app/features/pi-hat-wave.md, pi 0.84.3, 0.85.1, 1.0.0, 1.4.0 and 1.6.0 shipped docs and the 1.6.0 CHANGELOG under the mise install root]
   authoritative_for: "hook-runtime: the Pi version floor, the Pi upgrade re-probe list, and the per-version Pi capability audit"
   anchors: [.pi/extensions/bee-guard/, packages/bee-rs/crates/bee/src/doctor.rs, .agents/skills/, scripts/codex-parity-canary.sh]
-  verified_at: 2026-11-07
-  verified_commit: 5e715b42536c2fb2acd1d3b1e08d77452a9ee402
+  verified_at: 2026-11-24
+  verified_commit: 9c78f7c7b9855f8dd84b73ea96637efd897700d3
 ---
 
-# Hook Runtime — The Pi Version the Belt Runs On, and the 0.84.3 to 1.4.0 Capability Audits
+# Hook Runtime — The Pi Version the Belt Runs On, and the 0.84.3 to 1.6.0 Capability Audits
 
 The codex belt records the version it was probed against and re-checks it on
 every `bee doctor` run. The Pi belt records nothing. This concept holds what
 the Pi belt was enumerated against, which Pi surfaces an upgrade can break, and
-what the 0.84.3 to 0.85.1, 0.85.1 to 1.0.0 and 1.0.0 to 1.4.0 ranges actually
-changed.
+what the 0.84.3 to 0.85.1, 0.85.1 to 1.0.0, 1.0.0 to 1.4.0 and 1.4.0 to 1.6.0
+ranges actually changed.
 
 The rule that a version pin moves only on live evidence is not restated here.
 It lives in `codex-capability-probe-version-pin-and-re-probe-evidence.md` and
@@ -34,7 +34,7 @@ governs this audit too.
 |---|---|
 | Claimed version | The version the belt's own comments name: `0.84.3` (`.pi/extensions/bee-guard/` module `index.ts` header comments and `tool-map.ts`). |
 | Actual floor | `0.84.4`. The belt registers `ui_prompt_start` and `ui_prompt_end` (`.pi/extensions/bee-guard/` module `events.ts`), and Pi added both events in 0.84.4. The belt cannot be the belt for 0.84.3. |
-| Last live-evidence version | `1.4.0` — a real `pi` 1.4.0 session in this repo loaded the belt and ran turns with no extension error on 2026-10-27 (session `01a17d9e-85d0-701f-a482-759c1db6a0c6`, worktree `beehive--wt--pi-1-4-capability-audit`), and every `tool_call` in it reached `bee hook worker-guard`/`write-guard`. This is the proven ceiling the belt header names. The one-shot re-probe is `pi -p "Reply with the single word ok"` from the worktree root: it must print `ok` and nothing on stderr. Before it, the 1.0.0 evidence was run `20261002-135348-2965648`, 2026-10-02 (`.bee/verify/verify-app/features/pi-hat-wave.md:136`), and the leader-session hat wave with seat injection was re-run on 1.0.0 with three seats in run `20261003-164226-3799197`, 2026-10-03 (`pi-hat-wave.md`, "Pi 1.0.0 leader-session wave"). The five-seat `--no-pane` wave was not; its newest evidence is still the 0.85.1 run `20260919-073214-2866155`. |
+| Last live-evidence version | `1.6.0` — on 2026-11-24, `pi -p "Reply with the single word ok"` printed `ok` with empty stderr on `openai-codex` `gpt-6-luna` and `zai` `glm-5.3-flash`, a pre-gate write was refused by the worktree-first guard, and `pi_plugin_contracts` passed green. This is the proven ceiling the belt header names (`pi-1-6-upgrade` D3). Before it, the 1.4.0 session `01a17d9e-85d0-701f-a482-759c1db6a0c6` (2026-10-27, worktree `beehive--wt--pi-1-4-capability-audit`) loaded the belt and ran turns with no extension error, the 1.0.0 evidence was run `20261002-135348-2965648`, 2026-10-02 (`.bee/verify/verify-app/features/pi-hat-wave.md:136`), and the leader-session hat wave with seat injection was re-run on 1.0.0 with three seats in run `20261003-164226-3799197`, 2026-10-03 (`pi-hat-wave.md`, "Pi 1.0.0 leader-session wave"). The five-seat `--no-pane` wave was not; its newest evidence is still the 0.85.1 run `20260919-073214-2866155`. |
 | `PI_BUILTIN_TOOLS` | The named list of eight Pi built-in tool names the write guard routes on (`.pi/extensions/bee-guard/` module `tool-map.ts`). Its comment keeps it a named list, not a switch default, "because the fail-safe below depends on knowing exactly which names are enumerated". |
 | Pi attestation | None. `bee doctor attest --runtime pi` refuses by design (`packages/bee-rs/crates/bee/src/doctor.rs:899`): "Pi has no trust-unknown rows, so mechanical green already reaches ready there — there is nothing to attest." |
 
@@ -64,7 +64,7 @@ re-checks. Each is a name the belt hard-codes:
   `before_agent_start`, `tool_execution_start`, `ui_prompt_start`,
   `ui_prompt_end`, `tool_result`, `agent_settled`, `turn_start`, `turn_end`,
   `session_tree`, `session_before_compact`, `session_shutdown`, `input`,
-  `agent_before_settle`. All fifteen names are still in the 1.4.0 `pi` binary.
+  `agent_before_settle`. All fifteen names are still in the 1.6.0 `pi` binary.
 - The eight `PI_BUILTIN_TOOLS` names.
 - The blocking return shape `{ block: true, reason }` on `tool_call`.
 - `SessionManager.forkFrom` and `ctx.switchSession`, used by the five
@@ -185,10 +185,27 @@ surfaces are named where a row leans on a call shape rather than a name.
 
 Nothing in the range earns `delete`.
 
+## The 1.4.0 to 1.6.0 audit
+
+The range covers four releases: 1.5.0 (2026-11-02), 1.5.1 (2026-11-09), 1.5.2 (2026-11-10) and 1.6.0 (2026-11-20). Releases 1.5.0, 1.5.1 and 1.6.0 carry a "Breaking Changes" section, and every entry of all three has a row below. `CHANGELOG.md` line numbers cite the 1.6.0 install tree (`/home/thanhsmind/.local/share/mise/installs/pi/1.6.0/pi/CHANGELOG.md`). Live evidence is the 1.6.0 probe recorded in the Data Dictionary above.
+
+| Upstream capability or change | Disposition | Evidence |
+|---|---|---|
+| 1.5.0 BREAKING: tool argument validation runs on `@earendil-works/pi-schema` instead of TypeBox-only validators (`Type.Refine()`, `Type.BigInt()`, `Type.Undefined()`, codecs, `Format.Set()`) | **keep** | `CHANGELOG.md:227`. The belt's tool parameter definitions are plain JSON Schema objects (`VERDICT_TOOL_PARAMETERS` in `.pi/extensions/bee-guard/tool-verdict.ts` and `BEE_STEER_TOOL_PARAMETERS` in `.pi/extensions/bee-guard/tool-steer.ts`), so pi-schema validates them without change. |
+| 1.5.1 BREAKING: custom `GrepOperations.readFile` callbacks are no longer called for context lines; OpenAI-compatible models omit `"tools": []` when all tools are disabled | **keep — no belt surface** | `CHANGELOG.md:113-114`. The belt defines no custom `GrepOperations` and sends no OpenAI chat requests. |
+| 1.6.0 BREAKING: extension component `render()` returns `readonly string[]`, and `Container` returns the same cached array while its children stay unchanged | **keep** | `CHANGELOG.md:11`. `workers-widget.ts` builds and returns its own `rows` array from `render(width)` and subclasses no `Container`. |
+| 1.5.0: `blocked` option on `ctx.ui.custom()`, `Usage.cost.totalFromProvider`, and `pi.exec()` `maxBuffer` option | **keep — out of scope** | `CHANGELOG.md:232,237,238`. Out of scope per `docs/history/pi-1-6-upgrade/CONTEXT.md`: the belt draws no dialog, tracks no cost, and spawns subprocesses through Node rather than `pi.exec()`. |
+| 1.6.0: RPC `new_session`, `switch_session`, `fork` and `clone` no longer run extension `session_start` and `resources_discover` handlers twice | **keep — belt-relevant fix** | `CHANGELOG.md:51`. The belt's `session_start` handler runs `startResultDrain` and session initialization, so running it once per session replacement avoids duplicate startup work. |
+| The fifteen registered events | **keep — checked in the binary** | All fifteen event names (`tool_call`, `session_start`, `before_agent_start`, `tool_execution_start`, `ui_prompt_start`, `ui_prompt_end`, `tool_result`, `agent_settled`, `turn_start`, `turn_end`, `session_tree`, `session_before_compact`, `session_shutdown`, `input`, `agent_before_settle`) appear in the 1.6.0 `pi` binary (`rg -a -c '"<name>"'`). |
+| Built-in tool registry | **keep** | 1.6.0 `docs/settings.md:46` lists the same eight built-in names (`read`, `bash`, `powershell`, `edit`, `write`, `grep`, `find`, `ls`) plus `codemode` and `tool_search`. `PI_BUILTIN_TOOLS` in `tool-map.ts` is complete at 1.6.0. |
+| Stale `ctx` after `session_shutdown` | **adapt — done in p16u-1 (`pi-1-6-upgrade` D1)** | Pi invalidates captured extension `ctx` about 3 s after `session_shutdown`. The `session_shutdown` handler in `.pi/extensions/bee-guard/events.ts` now calls `stopDrainTimer()` beside `stopBrokerTimer()` for every reason except `reload`, so the drain interval stops at shutdown instead of refreshing the workers widget through a stale `ctx`. |
+
+Nothing in the range earns `delete`.
+
 ## Business Rules
 
 - A row above is true for the versions named in its evidence and for no others.
-  An upgrade past 1.4.0 re-checks each row against the new shipped docs before
+  An upgrade past 1.6.0 re-checks each row against the new shipped docs before
   the row is carried forward. Never carry a row forward on a version label
   alone.
 - The claimed version, the actual floor, and the last live-evidence version are
@@ -204,8 +221,8 @@ Nothing in the range earns `delete`.
   `pvf-1`. The belt header now states the range directly — floor 0.84.4,
   ceiling unproven — and says that a version named anywhere else in the file
   records which docs were READ, so the two are not confused again. The ceiling
-  has since been proven twice, 1.0.0 and then 1.4.0 (pi-1-4-capability-audit
-  D2), and the header carries the current one. The same
+  has since been proven three times: 1.0.0, 1.4.0 (pi-1-4-capability-audit D2),
+  and 1.6.0 (pi-1-6-upgrade D3). The header carries the current one. The same
   note rides both contract tests. The `0.84.3` provenance citations in
   `.pi/extensions/bee-guard/` (`index.ts` header comments and `tool-map.ts`)
   were deliberately left as written, per
@@ -267,11 +284,11 @@ Downgrade step: if rolling back to a legacy single-file bee version, delete the 
   `commands.ts`.
 - Attestation path and the Pi refusal:
   `packages/bee-rs/crates/bee/src/doctor.rs:772-784,899`.
-- Last live evidence: the 1.4.0 session named in the Data Dictionary (2026-10-27);
-  the previous end-to-end workflow evidence is
-  `.bee/verify/verify-app/features/pi-hat-wave.md:136` (Pi 1.0.0).
+- Last live evidence: the 1.6.0 probe named in the Data Dictionary (2026-11-24);
+  the 1.4.0 session (2026-10-27) and the end-to-end workflow evidence in
+  `.bee/verify/verify-app/features/pi-hat-wave.md:136` (Pi 1.0.0) sit behind it.
 - Upstream compared: `docs/settings.md`, `docs/extensions.md` and
-  `CHANGELOG.md` in the Pi 0.84.3, 0.85.1, 1.0.0 and 1.4.0 install trees.
+  `CHANGELOG.md` in the Pi 0.84.3, 0.85.1, 1.0.0, 1.4.0 and 1.6.0 install trees.
 - Regenerate the built-in-tool row:
   `rg -n 'Available built-ins are' <pi-install>/pi/docs/settings.md`
 - Regenerate the extension-API delta:

@@ -1,0 +1,171 @@
+{
+  "id": "p16u-2",
+  "feature": "pi-1-6-upgrade",
+  "title": "Test that Pi session shutdown disarms the drain and doctor names the live package",
+  "lane": "small",
+  "role": "test",
+  "deps": [
+    "p16u-1",
+    "p16u-3"
+  ],
+  "decisions": [
+    "d9fa372a-2fed-4980-826f-0c8e9c5341d4",
+    "8344cfa9-7982-495b-b413-2c1114c43676"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+    "packages/bee-rs/crates/bee/src/doctor/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/pi-1-6-upgrade/CONTEXT.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Without reading the p16u-1 or p16u-3 workers' notes, check the p16u-1 commit against CONTEXT.md D1 and D2 and add behavior tests. In tests/pi_plugin_contracts.rs, reuse the node harness of session_shutdown_closes_record_on_real_end_reasons_and_skips_reload: start a session with a bee store and a usable session id so startResultDrain arms its interval, then fire session_shutdown with reason quit and assert no drain interval remains armed (the belt keeps it in state.drainTimer and the globalThis drain slot), and fire it with reason reload and assert the interval stays armed. Watch the quit test fail against the pre-fix events.ts before trusting it. In src/doctor/tests.rs add a test that the pi runtime check's install hint names @earendil-works/pi-coding-agent and not @mariozechner. Also check the p16u-3 commit: docs/knowledge/areas/hook-runtime/pi-version-pin-and-capability-audit.md names 1.6.0 as the last live-evidence version and has a row for every Breaking Changes entry of pi 1.5.0, 1.5.1 and 1.6.0 in /home/thanhsmind/.local/share/mise/installs/pi/1.6.0/pi/CHANGELOG.md; report any gap in the cap. Fix any defect in p16u-1's code and name it in the cap. No code comments.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test pi_plugin_contracts && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee doctor",
+  "must_haves": {
+    "why": "A code cell never certifies itself.",
+    "out_of_scope": [
+      "the audit page"
+    ],
+    "truths": [
+      "a test fails if session_shutdown stops calling stopDrainTimer",
+      "a test fails if reload disarms the drain",
+      "a test fails if the doctor hint names the old package"
+    ],
+    "prohibitions": [
+      "No code comments"
+    ]
+  },
+  "behavior_change": false,
+  "tester_rule": true,
+  "judge_obligation_ack": "Tester for p16u-1.",
+  "status": "capped",
+  "trace": {
+    "worker": "p16u-2-test",
+    "outcome": "Tested Pi shutdown drain disarm and doctor pi hint (c47b3afc8)",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+      "packages/bee-rs/crates/bee/src/doctor/tests.rs"
+    ],
+    "deviations": [
+      "sync-ack: test-only cell; the stale area concepts listed predate this feature and the hook-runtime pi audit page was updated in p16u-3"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-24T07:15:46.077Z",
+    "behavior_change": false,
+    "verification_evidence": "touched pi_plugin_contracts.rs and doctor/tests.rs; each new test watched red against mutated events.ts and doctor.rs",
+    "verify_output": "green:red-first",
+    "verify_passed": true,
+    "claim_session": "bc1fd879-6ba1-43f4-bec5-96fef406bc68",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test pi_plugin_contracts && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee doctor",
+    "claimed_at": "2026-11-24T07:06:54.857Z",
+    "knowledge_delta": [],
+    "sync_ack": "test-only cell; the stale area concepts listed predate this feature and the hook-runtime pi audit page was updated in p16u-3",
+    "no_mistakes": true,
+    "no_knowledge_used": true,
+    "principles_used": [
+      {
+        "slug": "bee-principle-red-before-green",
+        "changed": "mutated events.ts and doctor.rs to watch each new test fail before trusting it"
+      }
+    ],
+    "changed_lines": 87,
+    "report": {
+      "outcome": "p16u-1 matches D1/D2 with no defect; drain-shutdown and doctor-hint tests added, red-checked, verify green; audit page has no gap c47b3afc86a5fae775df9e0e93bde18a8cd69720",
+      "commit": "c47b3afc86a5fae775df9e0e93bde18a8cd69720",
+      "files": [
+        "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+        "packages/bee-rs/crates/bee/src/doctor/tests.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test pi_plugin_contracts && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee doctor — green:red-first — touched pi_plugin_contracts.rs and doctor/tests.rs; each new test watched red against mutated events.ts and doctor.rs",
+      "deviations": [],
+      "found": [
+        "audit page puts both 1.5.1 breaking entries in one combined row rather than one row each"
+      ],
+      "patch_id": "7d2b5ca69ccae342ffc01f2ca7f3c4b65a50c245"
+    },
+    "found": [
+      "audit page puts both 1.5.1 breaking entries in one combined row rather than one row each"
+    ],
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "a test fails if session_shutdown stops calling stopDrainTimer",
+            "artifact": "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
+          },
+          {
+            "requirement": "a test fails if reload disarms the drain",
+            "artifact": "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
+          },
+          {
+            "requirement": "a test fails if the doctor hint names the old package",
+            "artifact": "packages/bee-rs/crates/bee/src/doctor/tests.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+            "artifact": "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/doctor/tests.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/doctor/tests.rs"
+          }
+        ],
+        "recorded_at": "2026-11-24T07:16:21.403Z",
+        "recorded_by": "bc1fd879-6ba1-43f4-bec5-96fef406bc68",
+        "commit_diff": "checked"
+      },
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "a test fails if session_shutdown stops calling stopDrainTimer",
+            "artifact": "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
+          },
+          {
+            "requirement": "a test fails if reload disarms the drain",
+            "artifact": "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
+          },
+          {
+            "requirement": "a test fails if the doctor hint names the old package",
+            "artifact": "packages/bee-rs/crates/bee/src/doctor/tests.rs"
+          },
+          {
+            "requirement": "No code comments",
+            "artifact": "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+            "artifact": "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/doctor/tests.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/doctor/tests.rs"
+          }
+        ],
+        "recorded_at": "2026-11-24T09:59:31.137Z",
+        "recorded_by": "3823a15b-4a74-4542-82d0-104f14565a93",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": {
+    "new": 61731,
+    "cached": 688592,
+    "total": 750323,
+    "models": {
+      "claude-opus-5-5": {
+        "new": 61731,
+        "cached": 688592,
+        "total": 750323
+      }
+    },
+    "jobs": [
+      "job-1795504033343-1344678-1"
+    ]
+  }
+}

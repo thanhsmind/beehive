@@ -940,6 +940,11 @@ for (const call of spec.calls) {
       results.push(step({ entries }));
       continue;
     }
+    case "drain_slot": {
+      const slot = globalThis[Symbol.for("bee.pi.result-drain")] ?? null;
+      results.push(step({ slot_armed: slot !== null && liveIntervals.has(slot), live_intervals: liveIntervals.size }));
+      continue;
+    }
     case "command": {
       orderLog.push(`command:${call.name}`);
       const cmd = commands.get(call.name);
@@ -5035,6 +5040,74 @@ fn session_shutdown_closes_record_on_real_end_reasons_and_skips_reload() {
                 Some("working"),
                 "reason \"{name}\" keeps the same session alive and must NOT transition activity to exited"
             );
+        }
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn session_shutdown_disarms_the_result_drain_except_on_reload() {
+    node_or_skip!("session_shutdown_disarms_the_result_drain_except_on_reload");
+
+    let harness_dir = tempfile::tempdir().expect("tempdir for the harness script");
+    let harness = write_harness(harness_dir.path());
+
+    let cases = [
+        ("quit", json!({"reason": "quit"}), false),
+        ("new", json!({"reason": "new"}), false),
+        ("resume", json!({"reason": "resume"}), false),
+        ("fork", json!({"reason": "fork"}), false),
+        ("default_no_reason", json!({}), false),
+        ("reload", json!({"reason": "reload"}), true),
+    ];
+
+    for (name, payload, stays_armed) in cases {
+        let dir = tempfile::tempdir().expect("tempdir");
+        write_stub_bee(dir.path(), &StubBehavior::Allow);
+        let session_id = format!("sess-drain-shutdown-{name}");
+
+        let run = run_harness(
+            &harness,
+            vec![
+                session_start(dir.path(), &session_id, "new"),
+                json!({"kind": "drain_slot"}),
+                advisory_call("session_shutdown", dir.path(), &session_id, payload),
+                json!({"kind": "drain_slot"}),
+            ],
+        );
+        assert!(
+            run.results.iter().all(|r| !r.threw),
+            "no step may throw on {name}: {:?} (stderr={})",
+            run.results,
+            run.stderr.trim()
+        );
+
+        let slot = |index: usize| -> (bool, u64) {
+            let r = run.results[index].result.as_ref().expect("drain_slot step result");
+            (
+                r.get("slot_armed").and_then(Value::as_bool).expect("slot_armed"),
+                r.get("live_intervals").and_then(Value::as_u64).expect("live_intervals"),
+            )
+        };
+        let (armed_before, live_before) = slot(1);
+        assert!(
+            armed_before && live_before >= 1,
+            "session_start with a bee store and a usable session id must arm the drain before {name}: armed={armed_before} live={live_before} (stderr={})",
+            run.stderr.trim()
+        );
+
+        let (armed_after, live_after) = slot(3);
+        if stays_armed {
+            assert!(armed_after, "reason \"{name}\" keeps the session and must keep the drain armed");
+            assert_eq!(live_after, live_before, "reason \"{name}\" must not clear any interval");
+        } else {
+            assert!(!armed_after, "reason \"{name}\" must clear the globalThis drain slot");
+            assert_eq!(
+                live_after,
+                live_before - 1,
+                "reason \"{name}\" must clearInterval the drain timer, leaving no drain interval armed"
+            );
+            assert_eq!(run.live_intervals, 0, "reason \"{name}\" must leave no interval armed at all");
         }
     }
 }

@@ -79,10 +79,11 @@
 // FLOOR: Pi 0.84.4. This belt registers `ui_prompt_start` and `ui_prompt_end`
 // (rows 6 and 1 above), and Pi added both events in 0.84.4, so the belt cannot
 // run on 0.84.3.
-// CEILING: Pi 1.4.0, proven live on 2026-10-27 in this repo: a real `pi` 1.4.0
-// session in this worktree loads the belt and runs turns with no extension
-// error (session 01a17d9e-85d0-701f-a482-759c1db6a0c6; the `tool_call` surface
-// answered every one of them). The one-shot probe stays the standing re-proof —
+// CEILING: Pi 1.6.0, proven live on 2026-11-24 in this repo: a real `pi` 1.6.0
+// session in this repo loads the belt and runs turns with no extension error
+// (`pi -p` ok probe printed `ok` with empty stderr on openai-codex gpt-6-luna
+// and zai glm-5.3-flash; a pre-gate write was refused by the worktree-first
+// guard). The one-shot probe stays the standing re-proof —
 // `pi -p "Reply with the single word ok"` from the worktree root must print `ok`
 // and nothing on stderr.
 //

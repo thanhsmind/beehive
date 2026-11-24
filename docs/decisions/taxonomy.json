@@ -994,6 +994,10 @@
     "contract:published-release-2-119-0",
     "contract:worktree-guard-companion-remedy",
     "contract:context-mark-handoff-door",
-    "contract:published-release-2-120-0"
+    "contract:published-release-2-120-0",
+    "pi-version-range",
+    "contract:pi-shutdown-stops-drain",
+    "contract:pi-install-hint",
+    "contract:leader-self-handoff"
   ]
 }

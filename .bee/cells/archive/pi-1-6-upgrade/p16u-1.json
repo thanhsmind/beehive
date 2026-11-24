@@ -1,0 +1,172 @@
+{
+  "id": "p16u-1",
+  "feature": "pi-1-6-upgrade",
+  "title": "Stop the Pi result-inbox drain at session shutdown and name the live pi package in doctor",
+  "lane": "small",
+  "role": "code",
+  "deps": [],
+  "decisions": [
+    "d9fa372a-2fed-4980-826f-0c8e9c5341d4",
+    "8344cfa9-7982-495b-b413-2c1114c43676",
+    "045dd245-308f-49b0-a8e5-198592f5e115"
+  ],
+  "files": [
+    ".pi/extensions/bee-guard/events.ts",
+    ".pi/extensions/bee-guard/index.ts",
+    "packages/bee-rs/crates/bee/src/doctor.rs",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/pi-1-6-upgrade/CONTEXT.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Implement CONTEXT.md D1, D2 and the header half of D3. (a) In .pi/extensions/bee-guard/events.ts, the session_shutdown handler: right after the existing stopBrokerTimer() call (which already sits after the reload early return), call stopDrainTimer() imported from ./result-inbox.ts. Do not touch the reload path. (b) In packages/bee-rs/crates/bee/src/doctor.rs runtime_checks_with_env, change the pi install hint to npm install -g @earendil-works/pi-coding-agent; update any test that pins the old string (rg mariozechner). (c) In .pi/extensions/bee-guard/index.ts, the existing CEILING header block: change it to Pi 1.6.0 proven live on 2026-11-24 in this repo (pi -p ok probe printed ok with empty stderr on openai-codex gpt-6-luna and zai glm-5.3-flash; a pre-gate write was refused by the worktree-first guard). Keep the block's shape and the probe sentence. The build embeds .pi/extensions/bee-guard into the binary, so rebuild before testing. Add no new code comments beyond rewording that existing header block. After the edits run bee dev regen (render-skill-trees, onboard --repo-root . --apply, release-manifest --write) inside this cell, restore any re-rendered .claude/skills tree it changed, and commit docs/history/codex-harness-hardening/release-manifest.json with the change.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test pi_plugin_contracts && .bee/bin/bee dev release-manifest --check",
+  "must_haves": {
+    "why": "A drain timer outliving its Pi session prints stale-ctx advisories on every tick, and doctor sends users to a pi below the belt floor.",
+    "out_of_scope": [
+      "the audit page",
+      "the reload path"
+    ],
+    "truths": [
+      "after session_shutdown with a non-reload reason no drain interval remains armed",
+      "after session_shutdown with reason reload the drain interval stays armed",
+      "bee doctor's pi hint names @earendil-works/pi-coding-agent"
+    ],
+    "prohibitions": [
+      "No new code comments",
+      "No change to the reload early return"
+    ]
+  },
+  "behavior_change": true,
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "p16u-1-impl",
+    "outcome": "Stopped Pi drain timer on non-reload shutdown, updated doctor pi hint and belt ceiling to 1.6.0, and regenerated release-manifest 9c78f7c7b",
+    "files_changed": [
+      ".pi/extensions/bee-guard/events.ts",
+      ".pi/extensions/bee-guard/index.ts",
+      "packages/bee-rs/crates/bee/src/doctor.rs",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [
+      "sync-ack: The listed concepts are suspect from earlier features and are unrelated to this teardown call; the Pi audit page this change touches is p16u-3's file"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-24T07:01:59.036Z",
+    "behavior_change": true,
+    "verification_evidence": "cargo clippy --manifest-path packages/bee-rs/Cargo.toml -- -D warnings && cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml && .bee/bin/bee dev release-manifest --check — green:unit — touched events.ts, index.ts, doctor.rs, release-manifest.json",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "e8fa00c0-3461-476f-92c8-f7968e348906",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test pi_plugin_contracts && .bee/bin/bee dev release-manifest --check",
+    "claimed_at": "2026-11-24T06:55:51.083Z",
+    "knowledge_delta": [],
+    "sync_ack": "The listed concepts are suspect from earlier features and are unrelated to this teardown call; the Pi audit page this change touches is p16u-3's file",
+    "no_mistakes": true,
+    "no_knowledge_used": true,
+    "changed_lines": 17,
+    "report": {
+      "outcome": "Stopped Pi drain timer on non-reload shutdown, updated doctor pi hint and belt ceiling to 1.6.0, and regenerated release-manifest 9c78f7c7b",
+      "commit": "9c78f7c7b9855f8dd84b73ea96637efd897700d3",
+      "files": [
+        ".pi/extensions/bee-guard/events.ts",
+        ".pi/extensions/bee-guard/index.ts",
+        "packages/bee-rs/crates/bee/src/doctor.rs",
+        "docs/history/codex-harness-hardening/release-manifest.json"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test pi_plugin_contracts && .bee/bin/bee dev release-manifest --check — green:unit — cargo clippy --manifest-path packages/bee-rs/Cargo.toml -- -D warnings && cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml && .bee/bin/bee dev release-manifest --check — green:unit — touched events.ts, index.ts, doctor.rs, release-manifest.json",
+      "deviations": [],
+      "knowledge_used": [],
+      "patch_id": "80d673deb529c47aaf11fc1d51f1db78c9ac7286"
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "after session_shutdown with a non-reload reason no drain interval remains armed",
+            "artifact": ".pi/extensions/bee-guard/events.ts"
+          },
+          {
+            "requirement": "after session_shutdown with reason reload the drain interval stays armed",
+            "artifact": ".pi/extensions/bee-guard/events.ts"
+          },
+          {
+            "requirement": "bee doctor's pi hint names @earendil-works/pi-coding-agent",
+            "artifact": "packages/bee-rs/crates/bee/src/doctor.rs"
+          },
+          {
+            "requirement": ".pi/extensions/bee-guard/events.ts",
+            "artifact": ".pi/extensions/bee-guard/events.ts"
+          },
+          {
+            "requirement": ".pi/extensions/bee-guard/index.ts",
+            "artifact": ".pi/extensions/bee-guard/index.ts"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/doctor.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/doctor.rs"
+          },
+          {
+            "requirement": "docs/history/codex-harness-hardening/release-manifest.json",
+            "artifact": "docs/history/codex-harness-hardening/release-manifest.json"
+          }
+        ],
+        "recorded_at": "2026-11-24T07:16:21.392Z",
+        "recorded_by": "bc1fd879-6ba1-43f4-bec5-96fef406bc68",
+        "commit_diff": "checked"
+      },
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "after session_shutdown with a non-reload reason no drain interval remains armed",
+            "artifact": ".pi/extensions/bee-guard/events.ts"
+          },
+          {
+            "requirement": "after session_shutdown with reason reload the drain interval stays armed",
+            "artifact": ".pi/extensions/bee-guard/events.ts"
+          },
+          {
+            "requirement": "bee doctor's pi hint names @earendil-works/pi-coding-agent",
+            "artifact": "packages/bee-rs/crates/bee/src/doctor.rs"
+          },
+          {
+            "requirement": "No new code comments",
+            "artifact": ".pi/extensions/bee-guard/events.ts"
+          },
+          {
+            "requirement": "No change to the reload early return",
+            "artifact": ".pi/extensions/bee-guard/events.ts"
+          },
+          {
+            "requirement": ".pi/extensions/bee-guard/events.ts",
+            "artifact": ".pi/extensions/bee-guard/events.ts"
+          },
+          {
+            "requirement": ".pi/extensions/bee-guard/index.ts",
+            "artifact": ".pi/extensions/bee-guard/index.ts"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/doctor.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/doctor.rs"
+          },
+          {
+            "requirement": "docs/history/codex-harness-hardening/release-manifest.json",
+            "artifact": "docs/history/codex-harness-hardening/release-manifest.json"
+          }
+        ],
+        "recorded_at": "2026-11-24T09:59:31.126Z",
+        "recorded_by": "3823a15b-4a74-4542-82d0-104f14565a93",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": null,
+  "usage_reason": "herding job(s) named this cell but no readable session transcript (1 unreadable)"
+}

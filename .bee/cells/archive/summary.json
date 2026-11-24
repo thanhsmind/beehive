@@ -2488,5 +2488,10 @@
     "capped": 2,
     "dropped": 0,
     "archived_at": "2026-11-23T13:00:01.585Z"
+  },
+  "pi-1-6-upgrade": {
+    "capped": 3,
+    "dropped": 0,
+    "archived_at": "2026-11-24T10:34:49.014Z"
   }
 }

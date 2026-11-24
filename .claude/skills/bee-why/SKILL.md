@@ -1,46 +1,10 @@
 ---
 name: bee-why
-description: >-
-  Answer why this repo is the way it is, from recorded evidence, never memory. Use when the user types /bee-why or asks for the recorded reason behind a rule, guard, threshold or design ("why was X built this way"). Not for how code runs (bee-how), learning (bee-teach) or outside libraries.
+description: "Answer why this repo is the way it is, from recorded evidence, never memory. Use when the user types /bee-why or asks for the recorded reason behind a rule, guard, threshold or design (\"why was X built this way\"). Not for how code runs (bee-how), learning (bee-teach) or outside libraries."
 metadata:
-  version: '0.1'
-  ecosystem: bee
-  dependencies:
-    bee-cli:
-      kind: command
-      command: .bee/bin/bee
-      missing_effect: degraded
-      reason: The decision log and the knowledge bundle are searched through the vendored bee binary. Absent, those rows are reported UNSWEPT with the reason.
+  skillstation_alias: bee-why
 ---
-
-# Why
-
-This skill is a door, never a copy. It scopes a why question, invokes bee-researching, loads `bee-researching/references/provenance.md`, and runs "Provenance sweep". The sweep owns every step, the confidence tiers and the answer shape. Never restate, shorten or reorder a step of it here.
-
-## Run
-
-Read-only. Write no brief file. The account is the reply.
-
-## Scope the question
-
-- Pin the target before the sweep: the `path:line` range, the symbols, the search terms, and the kind of question, as the sweep lists the kinds.
-- Sweep every row. The user asked for the reasons, so a narrow sweep is not the default here.
-- A guess inside the question is one hypothesis to check, per the sweep's phrasing rules.
-- When the user means to change the code, end with the sweep's constraint set.
-- When the question is part why and part how, answer the why part. The how part becomes the one next action, as a ready `/bee-how <question>`.
-- A question about an outside library goes to bee-researching.
-
-## Reply
-
-- First line: the answer in one sentence, with its confidence tier.
-- Then the sweep's answer shape. Keep the tier words, the empty rows and the UNSWEPT rows as the procedure writes them.
-- Close on exactly one next action.
-- At a gate, the gate wins, per `bee-hive/references/routing-and-contracts.md` ("Communication contract").
-
-## Headless
-
-`mode:headless`, or a one-shot run with no live human: deliver the account in one pass, with the one next action at the end.
-
-## Handoff
-
-Account delivered. Invoke bee-hive skill.
+This skill lives in the Skillstation hub.
+Load it with the CLI first: run `skillstation skill show bee-why --json` and follow its content field as this skill when manifest.status is active.
+Call the skillstation MCP tool `skill_get` with skill_id `bee-why` instead when that content sends you to a relative file of the skill, when the status is not active, or when the CLI is missing or fails.
+If neither works, tell the user to run `skillstation connect -g`.
