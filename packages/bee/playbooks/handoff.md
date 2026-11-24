@@ -22,7 +22,17 @@ pause:
   or `feature start` past the mark refuses `[handoff_due]`. Run
   `bee state handoff send --task "<owner's request in their words; standing orders>"`
   at once (`feature start` also accepts `--handoff-task`), and on
-  `[handoff_sent]` tell the owner in one line and stop. When no
+  `[handoff_sent]` tell the owner in one line and stop. Each handoff
+  send is a new attempt with its own request id. `[handoff_deduped]`
+  means waggledance returned an old run and sent nothing, so rerun the
+  send (add `--follow-up-of <run>` to continue a finished run). Every
+  sent handoff records what it must deliver (the feature branch merge,
+  plus `--expect-merge`). `bee state handoff check`, which the
+  SessionStart and Stop hooks also run, dispatches a follow-up leader
+  when a finished run left a merge undone, and after 3 follow-ups names
+  the row `needs-owner`. When a waggledance door exists, the Stop hook
+  refuses a turn end that asks the owner to open a session, run
+  `/clear`, or run a step the agent can run. When no
   waggledance door exists or `handoff_auto` is `false`, write
   `.bee/HANDOFF.json` with `--verified`, `--tree`, `--key-files`,
   `--gotchas`, `--standing-orders`, and `--ruled-out`, probe it once with
