@@ -1751,6 +1751,20 @@ fn a_missing_tool_row_names_an_install_line_for_that_tool() {
 }
 
 #[test]
+fn a_missing_pi_row_names_the_live_pi_package() {
+    let tmp = tempfile::tempdir().unwrap();
+    let good = crate::devtools::render_projection_text_for("codex").unwrap();
+    let root = repo(tmp.path(), true, true, Some(&good));
+    let env = path_with_tools(&tmp.path().join("bin"), &[]);
+    let checks = runtime_checks_with_env(&root, &env);
+    let pi = runtime_check(&checks, "pi");
+    let fix = pi.fix.as_deref().unwrap_or_default();
+    assert!(fix.contains("install pi: npm install -g @earendil-works/pi-coding-agent"), "{fix}");
+    assert!(!fix.contains("@mariozechner"), "{fix}");
+    assert!(!pi.lines().iter().any(|l| l.contains("@mariozechner")), "{:?}", pi.lines());
+}
+
+#[test]
 fn absent_runtimes_print_advisory_rows_and_never_change_the_verdict() {
     let tmp = tempfile::tempdir().unwrap();
     let root = claude_ready_repo(tmp.path());

@@ -27,6 +27,7 @@ import {
   promptDepths,
   settleOutcomes,
   startResultDrain,
+  stopDrainTimer,
 } from "./result-inbox.ts"
 import {
   extractAndCaptureTransitionMarker,
@@ -865,6 +866,7 @@ export function registerEvents(pi: ExtensionAPI, belt: Belt): void {
       }
       if (reason === "reload") return undefined
       stopBrokerTimer()
+      stopDrainTimer()
       if (state.paseoLeader) {
         const mainRoot = mainCheckoutRoot(directoryOf(ctx))
         const settings = readPaseoSettings(mainRoot)
