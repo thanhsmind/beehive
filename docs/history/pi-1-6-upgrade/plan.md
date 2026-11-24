@@ -99,7 +99,7 @@ Playbook: `skills/bee-planning/playbooks/bugfix.md`, situation `skills/bee-plann
   "affects_skills": [],
   "affects_specs": [],
   "action": "Without reading the p16u-1 worker's notes, check the p16u-1 commit against CONTEXT.md D1 and D2 and add behavior tests. In tests/pi_plugin_contracts.rs, reuse the node harness of session_shutdown_closes_record_on_real_end_reasons_and_skips_reload: start a session with a bee store and a usable session id so startResultDrain arms its interval, then fire session_shutdown with reason quit and assert no drain interval remains armed (the belt keeps it in state.drainTimer and the globalThis drain slot), and fire it with reason reload and assert the interval stays armed. Watch the quit test fail against the pre-fix events.ts before trusting it. In src/doctor/tests.rs add a test that the pi runtime check's install hint names @earendil-works/pi-coding-agent and not @mariozechner. Fix any defect in p16u-1's code and name it in the cap. No code comments.",
-  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test pi_plugin_contracts",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test pi_plugin_contracts && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee doctor",
   "must_haves": {
    "why": "A code cell never certifies itself.",
    "out_of_scope": [
@@ -157,6 +157,39 @@ Playbook: `skills/bee-planning/playbooks/bugfix.md`, situation `skills/bee-plann
   "behavior_change": false
  }
 ]
+```
+
+## Role assignments
+
+```json
+{
+ "schema_version": "1.0",
+ "runtime": "claude",
+ "roster_sha256": "d4e696dbde7989d6388dacce3fd7057cb3a6935b46024b79698596a46f6f41d3",
+ "stages": [
+  {"stage": "deployment", "classification": "not-applicable", "role": "deploy", "reason": "The release runs after merge as its own lane."},
+  {"stage": "planning", "classification": "not-applicable", "role": "plan", "reason": "The leader wrote this plan from CONTEXT.md."},
+  {"stage": "implementation", "classification": "required", "role": "code", "reason": "p16u-1 writes the belt teardown, the doctor hint and the header."},
+  {"stage": "test-and-live-proof", "classification": "required", "role": "test", "reason": "p16u-2 tests p16u-1 independently."},
+  {"stage": "documentation-and-capture", "classification": "required", "role": "docs", "reason": "p16u-3 records the 1.4.0 to 1.6.0 audit."},
+  {"stage": "read-only-gather", "classification": "not-applicable", "role": "read", "reason": "The leader read the shutdown and drain sites; no gather needed."},
+  {"stage": "fact-extraction", "classification": "not-applicable", "role": "extraction", "reason": "No narrow fact lookup is needed."},
+  {"stage": "generation-fallback", "classification": "not-applicable", "role": "generation", "reason": "Every job here has a specific role."},
+  {"stage": "independent-review", "classification": "not-applicable", "role": "review", "reason": "Independent review stays user-invoked and was not requested."},
+  {"stage": "generic-advisor", "classification": "not-applicable", "role": "advisor", "reason": "Small lane, no consult owed."},
+  {"stage": "supervision", "classification": "not-applicable", "role": "supervisor", "reason": "No unattended loop runs here."},
+  {"stage": "blind-lane-1", "classification": "not-applicable", "role": "lane-1", "reason": "No competing designs; live evidence fixed the shape."},
+  {"stage": "blind-lane-2", "classification": "not-applicable", "role": "lane-2", "reason": "No competing designs; live evidence fixed the shape."},
+  {"stage": "blind-lane-3", "classification": "not-applicable", "role": "lane-3", "reason": "No competing designs; live evidence fixed the shape."},
+  {"stage": "design-ui", "classification": "not-applicable", "role": "design", "reason": "No rendered UI."},
+  {"stage": "hat-facts-gaps", "classification": "not-applicable", "role": "hat-facts-gaps", "reason": "One obvious fix; no hat wave."},
+  {"stage": "hat-risks", "classification": "not-applicable", "role": "hat-risks", "reason": "One obvious fix; no hat wave."},
+  {"stage": "hat-value", "classification": "not-applicable", "role": "hat-value", "reason": "One obvious fix; no hat wave."},
+  {"stage": "hat-alternatives", "classification": "not-applicable", "role": "hat-alternatives", "reason": "One obvious fix; no hat wave."},
+  {"stage": "hat-user-impact", "classification": "not-applicable", "role": "hat-user-impact", "reason": "One obvious fix; no hat wave."},
+  {"stage": "writing", "classification": "not-applicable", "role": "writer", "reason": "The audit text rides p16u-3 under the docs role."}
+ ]
+}
 ```
 
 ## Proof
