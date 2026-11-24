@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "pi-1-6-upgrade",
   "mode": null,
-  "phase": "exploring",
+  "phase": "idle",
   "approved_gates": {
     "context": true,
     "shape": true,
@@ -11,9 +11,9 @@
     "uat": false
   },
   "summary": "Feature \"pi-1-6-upgrade\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at 599b3da; capture what settled, then bee close --feature pi-1-6-upgrade, then write the handoff and continue in a fresh leader session (one leader session per feature).",
+  "next_action": "bee close finished \"pi-1-6-upgrade\" — feature is closed.",
   "created_at": "2026-11-24T06:52:33.637Z",
-  "run_state": null,
+  "run_state": "awaiting-approval",
   "waiting_on": null,
   "route": {
     "class": "bugfix",

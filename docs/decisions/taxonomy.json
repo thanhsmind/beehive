@@ -997,6 +997,7 @@
     "contract:published-release-2-120-0",
     "pi-version-range",
     "contract:pi-shutdown-stops-drain",
-    "contract:pi-install-hint"
+    "contract:pi-install-hint",
+    "contract:leader-self-handoff"
   ]
 }
