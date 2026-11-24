@@ -34,7 +34,7 @@ pub(crate) const FLAG_ALONE_BOOLEANS: &[&str] = &[
     "no-cleanup", "force-ownership", "local", "all", "untagged", "check",
     "with-companion", "lanes-full", "strict", "queue-submit", "show",
     "isolate", "set", "brief", "all-but-active", "merge", "claim", "skip-uat",
-    "preview", "no-mistakes", "no-knowledge-used", "no-principle-used", "explain", "off", "run", "print", "rolling",
+    "preview", "no-mistakes", "no-knowledge-used", "no-principle-used", "explain", "off", "run", "print", "rolling", "no-dispatch",
 ];
 
 #[derive(Clone, PartialEq)]
@@ -80,6 +80,10 @@ impl Flags {
 /// FLAG sets json and is not stored. Returns None for shapes Node answers
 /// itself (non-flag token, missing value) — the probe delegates.
 pub(crate) fn parse_flags(tokens: &[&str]) -> Option<(Flags, bool)> {
+    parse_flags_for(tokens, &[])
+}
+
+pub(crate) fn parse_flags_for(tokens: &[&str], value_flags: &[&str]) -> Option<(Flags, bool)> {
     let mut flags = Flags(Vec::new());
     let mut json = false;
     let mut i = 0usize;
@@ -92,7 +96,7 @@ pub(crate) fn parse_flags(tokens: &[&str]) -> Option<(Flags, bool)> {
             Some(eq) => (&tok[2..eq], FlagV::S(tok[eq + 1..].to_string())),
             None => {
                 let name = &tok[2..];
-                if FLAG_ALONE_BOOLEANS.contains(&name) {
+                if !value_flags.contains(&name) && FLAG_ALONE_BOOLEANS.contains(&name) {
                     (name, FlagV::Present)
                 } else {
                     {

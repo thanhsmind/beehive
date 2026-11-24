@@ -186,6 +186,25 @@ fn run_inner(argv: &[String], stdin: &str) -> Result<(), ()> {
             parts.push(line);
         }
     }
+    if ctx.event == "Stop" && !crate::hooks::herding_worker_marker_set() {
+        let main_root = control_root(&root, &ctx);
+        if !crate::verbs::handoff_ledger::read_open_rows(&main_root).is_empty() {
+            let door = crate::verbs::handoff_door::probe_door(&main_root);
+            let reports = crate::verbs::handoff_ledger::check_all(&main_root, &door, true);
+            for r in &reports {
+                match &r.outcome {
+                    crate::verbs::handoff_ledger::CheckOutcome::FollowUpSent { .. }
+                    | crate::verbs::handoff_ledger::CheckOutcome::NeedsOwner { .. } => {
+                        parts.push(crate::verbs::handoff_ledger::format_report_line(r));
+                    }
+                    crate::verbs::handoff_ledger::CheckOutcome::DispatchFailed { error, .. } => {
+                        log_crash(Some(&root), HOOK_NAME, error, Some("handoff-check"));
+                    }
+                    _ => {}
+                }
+            }
+        }
+    }
     let claims_warning: Vec<String> = if ctx.event == "Stop" {
         unverified_agreement_warning(events)
             .into_iter()
