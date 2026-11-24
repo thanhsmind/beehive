@@ -251,6 +251,8 @@ fn run_start(tokens: &[OsString], t0: Instant) -> Option<ExitCode> {
                         flag_str("flags"),
                         &[],
                         &owner_text,
+                        None,
+                        &[],
                     ) {
                         crate::verbs::handoff_door::HandoffOutcome::Sent { run_id, request_id } => {
                             let _ = crate::verbs::state_group::release_session_record(
@@ -270,6 +272,11 @@ fn run_start(tokens: &[OsString], t0: Instant) -> Option<ExitCode> {
                             }
                             return Some(ctx.fail(&format!(
                                 "[handoff_sent] run {run_id}: this session is released; tell the owner in one line and stop."
+                            )));
+                        }
+                        crate::verbs::handoff_door::HandoffOutcome::Deduped { run_id, status } => {
+                            return Some(ctx.fail(&format!(
+                                "[handoff_deduped] run {run_id} was already {status}; nothing new was dispatched — rerun bee state handoff send"
                             )));
                         }
                         crate::verbs::handoff_door::HandoffOutcome::Failed { reason } => {
@@ -342,6 +349,8 @@ fn run_start(tokens: &[OsString], t0: Instant) -> Option<ExitCode> {
                                 flag_str("flags"),
                                 &[],
                                 &owner_text,
+                                None,
+                                &[],
                             ) {
                                 crate::verbs::handoff_door::HandoffOutcome::Sent {
                                     run_id,
@@ -364,6 +373,14 @@ fn run_start(tokens: &[OsString], t0: Instant) -> Option<ExitCode> {
                                     }
                                     return Some(ctx.fail(&format!(
                                         "[handoff_sent] run {run_id}: this session is released; tell the owner in one line and stop."
+                                    )));
+                                }
+                                crate::verbs::handoff_door::HandoffOutcome::Deduped {
+                                    run_id,
+                                    status,
+                                } => {
+                                    return Some(ctx.fail(&format!(
+                                        "[handoff_deduped] run {run_id} was already {status}; nothing new was dispatched — rerun bee state handoff send"
                                     )));
                                 }
                                 crate::verbs::handoff_door::HandoffOutcome::Failed { reason } => {
@@ -947,7 +964,13 @@ mod tests {
     const FAKE_WAGGLEDANCE: &str = r#"#!/bin/sh
 case "$1" in
   list) echo '{"projects":[{"id":"proj-hive","root_path":"__ROOT__"}]}' ;;
-  runs) echo '{"runs":[{"id":"run-other","pane_id":"paseo:agent-other"},{"id":"run-mine","pane_id":"paseo:agent-me"}]}' ;;
+  runs)
+    if [ "$2" = "show" ]; then
+      __SHOW__
+    else
+      echo '{"runs":[{"id":"run-other","pane_id":"paseo:agent-other"},{"id":"run-mine","pane_id":"paseo:agent-me"}]}'
+    fi
+    ;;
   dispatch) printf '%s\n' "$@" > '__ARGV__'; __DISPATCH__ ;;
   *) exit 9 ;;
 esac
@@ -958,6 +981,7 @@ esac
         Sends,
         ExitsNonZero,
         Unparsable,
+        DedupedDone,
     }
 
     struct FakeWaggledance {
@@ -973,13 +997,22 @@ esac
             let argv_file = tmp.join("dispatch-argv.txt");
             let listed = std::fs::canonicalize(listed_root).unwrap_or_else(|_| listed_root.to_path_buf());
             let body = match dispatch {
-                FakeDispatch::Sends => r#"echo '{"run_id":"run-new-7","status":"queued"}'"#,
+                FakeDispatch::Sends | FakeDispatch::DedupedDone => {
+                    r#"echo '{"run_id":"run-new-7","status":"queued"}'"#
+                }
                 FakeDispatch::ExitsNonZero => r#"echo '{"run_id":"run-bad"}'; echo 'dispatch exploded' >&2; exit 3"#,
                 FakeDispatch::Unparsable => "echo 'queued, maybe'",
+            };
+            let show = match dispatch {
+                FakeDispatch::DedupedDone => {
+                    r#"echo '{"runs":[{"id":"run-new-7","status":"done","created_at":"2026-11-24T00:00:00.000Z"}]}'"#
+                }
+                _ => r#"echo '{"runs":[{"id":"run-new-7","status":"queued"}]}'"#,
             };
             let script = FAKE_WAGGLEDANCE
                 .replace("__ROOT__", &listed.to_string_lossy())
                 .replace("__ARGV__", &argv_file.to_string_lossy())
+                .replace("__SHOW__", show)
                 .replace("__DISPATCH__", body);
             let exe = bin.join("waggledance");
             std::fs::write(&exe, script).unwrap();
@@ -1122,13 +1155,13 @@ esac
         assert_eq!(rows[0]["kind"], "handoff-dispatched");
         assert_eq!(rows[0]["feature"], "second-feat");
         assert!(rows[0].to_string().contains("run-new-7"), "{}", rows[0]);
-        assert!(rows[0].to_string().contains("bee-handoff-sess-auto-3-second-feat"), "{}", rows[0]);
+        assert!(rows[0].to_string().contains("bee-handoff-sess-auto-3-second-feat-"), "{}", rows[0]);
 
         let argv = fake.dispatch_argv().expect("dispatch was called");
         let task_file = argv.last().unwrap().clone();
         assert_eq!(
-            argv,
-            vec![
+            &argv[..8],
+            [
                 "dispatch",
                 "--project",
                 "proj-hive",
@@ -1137,11 +1170,11 @@ esac
                 "run-mine",
                 "--handoff",
                 "--request-id",
-                "bee-handoff-sess-auto-3-second-feat",
-                "--task-file",
-                task_file.as_str(),
             ]
         );
+        assert!(argv[8].starts_with("bee-handoff-sess-auto-3-second-feat-"), "{argv:?}");
+        assert_eq!(argv[9], "--task-file");
+        assert_eq!(argv[10], task_file.as_str());
         let canon_repo = std::fs::canonicalize(&repo).unwrap();
         let canon_task = std::fs::canonicalize(&task_file).unwrap();
         assert!(canon_task.starts_with(canon_repo.join(".bee").join("tmp")), "{task_file}");
@@ -1167,7 +1200,7 @@ esac
             let argv = fake.dispatch_argv().expect("dispatch was called");
             assert_eq!(&argv[..4], ["dispatch", "--project", "proj-hive", "--leader"], "{agent:?}");
             assert!(!argv.iter().any(|a| a == "--follow-up-of" || a == "--handoff"), "{agent:?} {argv:?}");
-            assert!(argv.iter().any(|a| a == "bee-handoff-sess-auto-4-second-feat"), "{argv:?}");
+            assert!(argv.iter().any(|a| a.starts_with("bee-handoff-sess-auto-4-second-feat-")), "{argv:?}");
             assert_eq!(audit_rows(&repo)[0]["kind"], "handoff-dispatched");
             assert_eq!(session_record(&repo, "sess-auto-4")["status"], "closed");
         }
@@ -1960,7 +1993,7 @@ esac
         assert_eq!(code, Some(ExitCode::FAILURE));
         assert_no_lane_and_no_worktree(tmp.path(), &repo);
         let argv = fake.dispatch_argv().expect("dispatch was called");
-        assert!(argv.iter().any(|a| a == "bee-handoff-sess-mark-3-mark"), "{argv:?}");
+        assert!(argv.iter().any(|a| a.starts_with("bee-handoff-sess-mark-3-mark-")), "{argv:?}");
         let task = std::fs::read_to_string(argv.last().unwrap()).unwrap();
         assert!(task.contains("140k"), "{task}");
         assert!(task.contains("Owner: build second-feat."), "{task}");
@@ -2036,7 +2069,7 @@ esac
         assert_eq!(code, Some(ExitCode::FAILURE));
         let argv = fake.dispatch_argv().expect("dispatch was called");
         assert_eq!(&argv[..4], ["dispatch", "--project", "proj-hive", "--leader"], "{argv:?}");
-        assert!(argv.iter().any(|a| a == "bee-handoff-sess-mark-6-mark"), "{argv:?}");
+        assert!(argv.iter().any(|a| a.starts_with("bee-handoff-sess-mark-6-mark-")), "{argv:?}");
         let task = std::fs::read_to_string(argv.last().unwrap()).unwrap();
         assert!(task.contains("160k"), "{task}");
         assert!(task.contains("120k"), "{task}");
@@ -2049,7 +2082,7 @@ esac
         assert_eq!(rows.len(), 1, "{rows:?}");
         assert_eq!(rows[0]["kind"], "handoff-dispatched");
         assert!(rows[0].to_string().contains("run-new-7"), "{}", rows[0]);
-        assert!(rows[0].to_string().contains("bee-handoff-sess-mark-6-mark"), "{}", rows[0]);
+        assert!(rows[0].to_string().contains("bee-handoff-sess-mark-6-mark-"), "{}", rows[0]);
     }
 
     #[test]
@@ -2131,5 +2164,125 @@ esac
         assert_eq!(record["context"]["tokens"], 124_456, "{record}");
         assert!(record["context"]["measured_at"].is_string(), "{record}");
         assert!(!sessions.join("sess-hook-plain.json").exists());
+    }
+
+    #[test]
+    fn handoff_send_two_attempts_get_distinct_request_ids_and_task_files() {
+        let tmp = tempfile::tempdir().unwrap();
+        let repo = init_repo(tmp.path());
+        let _guard = CwdGuard::enter(&repo);
+        let _herd = HerdingEnv::set(false);
+        let _env = SessionEnv::set(Some("sess-two-1"));
+        seed_session_at(&repo, "sess-two-1", 160_000);
+        let fake = FakeWaggledance::install(tmp.path(), &repo, None, FakeDispatch::Sends);
+
+        assert_eq!(
+            crate::verbs::state_group::try_native(&send_argv("first attempt"), Instant::now()),
+            Some(ExitCode::FAILURE)
+        );
+        let argv1 = fake.dispatch_argv().unwrap();
+        let req1 = argv1[5].clone();
+        let task1 = argv1[7].clone();
+
+        std::thread::sleep(std::time::Duration::from_millis(3));
+        seed_session_at(&repo, "sess-two-1", 160_000);
+        assert_eq!(
+            crate::verbs::state_group::try_native(&send_argv("second attempt"), Instant::now()),
+            Some(ExitCode::FAILURE)
+        );
+        let argv2 = fake.dispatch_argv().unwrap();
+        let req2 = argv2[5].clone();
+        let task2 = argv2[7].clone();
+
+        assert_ne!(req1, req2);
+        assert_ne!(task1, task2);
+        let open = crate::verbs::handoff_ledger::read_open_rows(&repo);
+        assert_eq!(open.len(), 2);
+    }
+
+    #[test]
+    fn handoff_send_follow_up_of_wins_over_paseo_and_expect_merge_writes_ledger() {
+        let tmp = tempfile::tempdir().unwrap();
+        let repo = init_repo(tmp.path());
+        let _guard = CwdGuard::enter(&repo);
+        let _herd = HerdingEnv::set(false);
+        let _env = SessionEnv::set(Some("sess-exp-1"));
+        seed_session_at(&repo, "sess-exp-1", 160_000);
+        let fake = FakeWaggledance::install(tmp.path(), &repo, Some("agent-me"), FakeDispatch::Sends);
+
+        let argv: Vec<OsString> = [
+            "state",
+            "handoff",
+            "send",
+            "--task",
+            "finish work",
+            "--follow-up-of",
+            "run-explicit-77",
+            "--expect-merge",
+            "wt/alpha",
+            "--expect-merge",
+            "wt/beta,wt/gamma",
+        ]
+        .iter()
+        .map(OsString::from)
+        .collect();
+        let code = crate::verbs::state_group::try_native(&argv, Instant::now());
+        assert_eq!(code, Some(ExitCode::FAILURE));
+
+        let dispatched = fake.dispatch_argv().unwrap();
+        assert_eq!(
+            &dispatched[..7],
+            [
+                "dispatch",
+                "--project",
+                "proj-hive",
+                "--leader",
+                "--follow-up-of",
+                "run-explicit-77",
+                "--handoff",
+            ]
+        );
+        let open = crate::verbs::handoff_ledger::read_open_rows(&repo);
+        assert_eq!(open.len(), 1);
+        assert_eq!(
+            open[0].expects,
+            vec![
+                crate::verbs::handoff_ledger::Expectation::BranchMerged {
+                    branch: "wt/alpha".to_string()
+                },
+                crate::verbs::handoff_ledger::Expectation::BranchMerged {
+                    branch: "wt/beta".to_string()
+                },
+                crate::verbs::handoff_ledger::Expectation::BranchMerged {
+                    branch: "wt/gamma".to_string()
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn handoff_send_deduped_done_run_keeps_session_and_writes_no_ledger_or_audit() {
+        let tmp = tempfile::tempdir().unwrap();
+        let repo = init_repo(tmp.path());
+        let _guard = CwdGuard::enter(&repo);
+        let _herd = HerdingEnv::set(false);
+        let _env = SessionEnv::set(Some("sess-dedupe-1"));
+        seed_session_at(&repo, "sess-dedupe-1", 160_000);
+        let fake = FakeWaggledance::install(
+            tmp.path(),
+            &repo,
+            Some("agent-me"),
+            FakeDispatch::DedupedDone,
+        );
+
+        let code = crate::verbs::state_group::try_native(&send_argv("retry task"), Instant::now());
+
+        assert_eq!(code, Some(ExitCode::FAILURE));
+        assert!(fake.dispatch_argv().is_some());
+        assert!(audit_rows(&repo).is_empty());
+        assert!(crate::verbs::handoff_ledger::read_open_rows(&repo).is_empty());
+        let record = session_record(&repo, "sess-dedupe-1");
+        assert_eq!(record["status"], "active");
+        assert!(record.get("released").is_none());
     }
 }

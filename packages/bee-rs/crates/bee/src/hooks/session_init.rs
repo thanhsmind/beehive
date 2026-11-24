@@ -122,6 +122,7 @@ pub fn run(argv: &[String], stdin: &str) -> Outcome {
     };
 
     let belt = belt_contract_line(&root, &ctx.payload);
+    let handoff_lines = handoff_check_lines(&root);
     let output = compose_output_budgeted(
         &root,
         &event_source,
@@ -134,11 +135,47 @@ pub fn run(argv: &[String], stdin: &str) -> Outcome {
         Some(line) => format!("{line}\n\n{output}"),
         None => output,
     };
+    let output = if handoff_lines.is_empty() {
+        output
+    } else {
+        let extra = handoff_lines.join("\n");
+        if output.trim().is_empty() {
+            extra
+        } else {
+            format!("{output}\n\n{extra}")
+        }
+    };
     if !output.trim().is_empty() {
         use std::io::Write;
         let _ = std::io::stdout().write_all(output.as_bytes());
     }
     Outcome::Done(ExitCode::SUCCESS)
+}
+
+fn handoff_check_lines(root: &Path) -> Vec<String> {
+    if crate::hooks::herding_worker_marker_set() {
+        return Vec::new();
+    }
+    let main_root = control_root_for(root);
+    if crate::verbs::handoff_ledger::read_open_rows(&main_root).is_empty() {
+        return Vec::new();
+    }
+    let door = crate::verbs::handoff_door::probe_door(&main_root);
+    let reports = crate::verbs::handoff_ledger::check_all(&main_root, &door, true);
+    let mut lines = Vec::new();
+    for r in &reports {
+        match &r.outcome {
+            crate::verbs::handoff_ledger::CheckOutcome::FollowUpSent { .. }
+            | crate::verbs::handoff_ledger::CheckOutcome::NeedsOwner { .. } => {
+                lines.push(crate::verbs::handoff_ledger::format_report_line(r));
+            }
+            crate::verbs::handoff_ledger::CheckOutcome::DispatchFailed { error, .. } => {
+                log_crash(Some(root), HOOK_NAME, error, Some("handoff-check"));
+            }
+            _ => {}
+        }
+    }
+    lines
 }
 
 fn belt_contract_line(root: &Path, payload: &Map<String, Value>) -> Option<String> {

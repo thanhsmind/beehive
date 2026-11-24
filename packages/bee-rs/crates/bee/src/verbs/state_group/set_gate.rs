@@ -11,8 +11,8 @@ use crate::jsjson;
 use crate::lock::{self, AcquireOnce, LockGuard};
 use crate::verbs::reservations::{
     date_parse_val, finish, iso_from_ms, jget, js_disp, js_disp_opt,
-    js_numberify, js_trim, keys_known, now_iso, now_ms, parse_flags, prelude, truthy,
-    Ctx, Err2, Ex, Exotic, FlagV, Flags, Out, Pre, R2,
+    js_numberify, js_trim, keys_known, now_iso, now_ms, parse_flags, parse_flags_for, prelude,
+    truthy, Ctx, Err2, Ex, Exotic, FlagV, Flags, Out, Pre, R2,
 };
 use crate::verbs::reservations::{list_reservations, paths_overlap, rebuild_reservations_projection};
 use crate::verbs::workspace_store as ws;
@@ -77,6 +77,7 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
         ["handoff", "dismiss", ..] => ("handoff.dismiss", 2),
         ["handoff", "show", ..] => ("handoff.show", 2),
         ["handoff", "send", ..] => ("handoff.send", 2),
+        ["handoff", "check", ..] => ("handoff.check", 2),
         ["workflows", "list", ..] => ("workflows.list", 2),
         ["workflows", "close", ..] => ("workflows.close", 2),
         ["rebuild-projections", ..] => ("rebuild-projections", 1),
@@ -89,7 +90,11 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
     if leading.len() != consumed {
         return None; // "Unexpected argument" — Node's own refusal path
     }
-    let (flags, use_json) = parse_flags(rest)?;
+    let (flags, use_json) = if verb == "handoff.check" {
+        parse_flags_for(rest, &["run"])?
+    } else {
+        parse_flags(rest)?
+    };
     match verb {
         "set" => run_set(flags, use_json, t0),
         "gate.preview" => run_gate_preview(flags, use_json, t0),
@@ -116,6 +121,7 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
         "handoff.dismiss" => run_handoff_dismiss(flags, use_json, t0),
         "handoff.show" => run_handoff_show(flags, use_json, t0),
         "handoff.send" => run_handoff_send(flags, use_json, t0),
+        "handoff.check" => run_handoff_check(flags, use_json, t0),
         "workflows.list" => run_workflows_list(flags, use_json, t0),
         "workflows.close" => run_workflows_close(flags, use_json, t0),
         "rebuild-projections" => run_rebuild_projections(flags, use_json, t0),

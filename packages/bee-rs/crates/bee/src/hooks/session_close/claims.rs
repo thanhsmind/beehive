@@ -186,7 +186,7 @@ fn result_text(content: Option<&Value>) -> String {
     }
 }
 
-fn last_turn_assistant_text(events: &[Value]) -> String {
+pub(crate) fn last_turn_assistant_text(events: &[Value]) -> String {
     let mut texts: Vec<&str> = Vec::new();
     for event in events.iter().rev() {
         if is_turn_boundary(event) {

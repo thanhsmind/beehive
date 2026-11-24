@@ -1,0 +1,273 @@
+---
+artifact_contract: bee-plan/v2
+mode: standard
+---
+
+# Plan: leader-self-handoff
+
+## Summary
+
+A bee leader hands off and follows up through waggledance on its own:
+each handoff attempt gets a fresh request id and a ledger row, a check
+dispatches a follow-up leader when a finished run left its merge undone,
+and the Stop hook refuses a turn end that asks the owner to open a session.
+
+Mode: `standard` — flags: hook behavior change, new verb.
+Why this is the least workflow that protects the work: three code cells
+on disjoint seams, one docs cell, one independent tester.
+
+Playbook: `skills/bee-planning/playbooks/feature.md`, situation
+`skills/bee-planning/playbooks/feature/feature.md`.
+architect skipped: the data shape (one ledger file per handoff) is fixed by
+CONTEXT.md D3 and has one reader and one writer module.
+tutorial skipped: no other code calls these verbs.
+statechart skipped: the ledger row has three states and one transition
+owner (`handoff check`); the tests cover each edge.
+
+Throughput checkpoint:
+- Blocking first steps: context gate approved; shape+execution next.
+- Independent workstreams: lsh-1 (handoff door and send), lsh-3 (Stop
+  net) and lsh-4 (docs) touch disjoint files and run at once.
+- Shared mutable state: the ledger is one file per handoff (D3), so no
+  two writers share a target.
+- Smallest safe decomposition: lsh-2 waits on lsh-1 (ledger module) and
+  lsh-3 (session_close/mod.rs); lsh-5 tests all three.
+
+## Requirements (from CONTEXT.md)
+
+D1-D7, decision `86f0832c-b108-40c0-b77f-0b970ed5ba36`.
+
+## Load-bearing claims
+
+| # | Claim | Label | Anchor | Verbatim evidence |
+|---|-------|-------|--------|-------------------|
+| 1 | the request id is fixed per session and suffix | read | packages/bee-rs/crates/bee/src/verbs/handoff_door.rs:116 | `request_id: format!("bee-handoff-{session_id}-{feature}"),` |
+| 2 | send uses suffix mark | read | packages/bee-rs/crates/bee/src/verbs/handoff_door.rs:365 | `HandoffReason::ContextMark { .. } => "mark",` |
+| 3 | waggledance knows run status done and lost | read | waggledance runs output | `"status":"done"`, `"status":"lost"` |
+| 4 | the registry is hand-edited | read | WORKSPACE_PROTOCOL.md:36 | `registry_payload.json is hand-edited` |
+
+## Approach
+
+The ledger is the organizing structure: one typed row per sent handoff
+with a three-state status (open, met, needs-owner). The send path writes
+it; only `handoff check` moves it. The hooks call the same check, so the
+follow-up needs no human and no new session. The Stop net is a pure
+phrase matcher on the final turn text plus one door probe on a match.
+
+## Role assignments
+
+```json
+{
+ "schema_version": "1.0",
+ "runtime": "claude",
+ "roster_sha256": "d4e696dbde7989d6388dacce3fd7057cb3a6935b46024b79698596a46f6f41d3",
+ "stages": [
+  {"stage": "deployment", "classification": "not-applicable", "role": "deploy", "reason": "The release runs after merge through scripts/release.sh."},
+  {"stage": "planning", "classification": "not-applicable", "role": "plan", "reason": "The leader wrote this plan from CONTEXT.md."},
+  {"stage": "implementation", "classification": "required", "role": "code", "reason": "lsh-1, lsh-2 and lsh-3 write the handoff door, the check verb and the Stop net."},
+  {"stage": "test-and-live-proof", "classification": "required", "role": "test", "reason": "lsh-5 tests lsh-1, lsh-2 and lsh-3 independently."},
+  {"stage": "documentation-and-capture", "classification": "required", "role": "docs", "reason": "lsh-4 updates the handoff doctrine and knowledge."},
+  {"stage": "read-only-gather", "classification": "not-applicable", "role": "read", "reason": "The leader read the handoff door and Stop hook; no gather needed."},
+  {"stage": "fact-extraction", "classification": "not-applicable", "role": "extraction", "reason": "No narrow fact lookup is needed."},
+  {"stage": "generation-fallback", "classification": "not-applicable", "role": "generation", "reason": "Every job here has a specific role."},
+  {"stage": "independent-review", "classification": "not-applicable", "role": "review", "reason": "Independent review stays user-invoked and was not requested."},
+  {"stage": "generic-advisor", "classification": "not-applicable", "role": "advisor", "reason": "Decisions locked by the owner ask; no consult owed."},
+  {"stage": "supervision", "classification": "not-applicable", "role": "supervisor", "reason": "No unattended loop runs here."},
+  {"stage": "blind-lane-1", "classification": "not-applicable", "role": "lane-1", "reason": "The ledger shape is fixed by CONTEXT.md D3."},
+  {"stage": "blind-lane-2", "classification": "not-applicable", "role": "lane-2", "reason": "The ledger shape is fixed by CONTEXT.md D3."},
+  {"stage": "blind-lane-3", "classification": "not-applicable", "role": "lane-3", "reason": "The ledger shape is fixed by CONTEXT.md D3."},
+  {"stage": "design-ui", "classification": "not-applicable", "role": "design", "reason": "No rendered UI."},
+  {"stage": "hat-facts-gaps", "classification": "not-applicable", "role": "hat-facts-gaps", "reason": "Shape fixed by the owner ask and two measured defects; hat wave skipped."},
+  {"stage": "hat-risks", "classification": "not-applicable", "role": "hat-risks", "reason": "Shape fixed by the owner ask and two measured defects; hat wave skipped."},
+  {"stage": "hat-value", "classification": "not-applicable", "role": "hat-value", "reason": "Shape fixed by the owner ask and two measured defects; hat wave skipped."},
+  {"stage": "hat-alternatives", "classification": "not-applicable", "role": "hat-alternatives", "reason": "Shape fixed by the owner ask and two measured defects; hat wave skipped."},
+  {"stage": "hat-user-impact", "classification": "not-applicable", "role": "hat-user-impact", "reason": "Shape fixed by the owner ask and two measured defects; hat wave skipped."},
+  {"stage": "writing", "classification": "not-applicable", "role": "writer", "reason": "Doctrine text rides lsh-4 under the docs role."}
+ ]
+}
+```
+
+## Risk map
+
+| Risk | Where | Control |
+|------|-------|---------|
+| Follow-up loop dispatches forever | handoff check | 3 follow-ups, then needs-owner |
+| Stop net false positive blocks a needed owner ask | session_close | blocks once per turn (stop_hook_active), advisory without a door |
+| Hook latency | SessionStart, Stop | no waggledance call without an open row or a phrase match |
+| Fallback in a project with no door | all | report only, never block |
+
+## Cells (current slice)
+
+```json
+[
+ {
+  "id": "lsh-1",
+  "feature": "leader-self-handoff",
+  "title": "Give each handoff attempt its own request id, detect a deduped run and write a handoff ledger row",
+  "lane": "standard",
+  "role": "code",
+  "deps": [],
+  "decisions": ["86f0832c-b108-40c0-b77f-0b970ed5ba36"],
+  "files": [
+   "packages/bee-rs/crates/bee/src/verbs/handoff_door.rs",
+   "packages/bee-rs/crates/bee/src/verbs/handoff_ledger.rs",
+   "packages/bee-rs/crates/bee/src/verbs/mod.rs",
+   "packages/bee-rs/crates/bee/src/verbs/state_group/sessions.rs",
+   "packages/bee-rs/crates/bee/src/verbs/feature_group.rs",
+   "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+  ],
+  "read_first": ["docs/history/leader-self-handoff/CONTEXT.md"],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Implement CONTEXT.md D1, D2 and D3. Commit a0e1bf25a is the model for this seam (handoff_door.rs, sessions.rs run_handoff_send, set_gate.rs routing, registry_payload.json). (1) D1: build_request takes an attempt token; execute_handoff computes it once per call as the current wall-clock milliseconds in base 36 and the request id becomes bee-handoff-<session>-<suffix>-<attempt>. The task file name gets the same attempt token so two attempts never overwrite one file. run_handoff_send accepts --follow-up-of <run> (wins over the PASEO_AGENT_ID lookup; dispatch_argv then adds --follow-up-of <run> --handoff) and a repeatable or comma-separated --expect-merge <branch>; pass them into execute_handoff through new parameters. Update the existing tests in handoff_door.rs and feature_group.rs that pin the old exact request id so they assert the bee-handoff-<session>-<suffix>- prefix instead. (2) D2: after parse_dispatch_run_id, run <binary> runs show <run_id> (stdin null), parse runs[0].status and runs[0].created_at (RFC3339). If status is done or lost, or created_at is earlier than the attempt start, return a new HandoffOutcome::Deduped { run_id, status }. An unreadable or failed runs show keeps Sent. run_handoff_send and the feature start --handoff-task path map Deduped to the refusal text [handoff_deduped] run <id> was already <status>; nothing new was dispatched — rerun bee state handoff send, write no audit row, and do not release the session. Keep the decision logic in a pure function (status, created_at, attempt start) -> bool with unit tests. (3) D3: a new module verbs/handoff_ledger.rs owns the ledger: a typed struct HandoffLedgerRow { request_id, run_id, project_id, session_id, feature, sent_at, task_file, task_text, expects: Vec<Expectation>, follow_ups: Vec<FollowUp>, status: LedgerStatus } with Expectation::BranchMerged { branch } serialized as {kind: branch-merged, branch}, FollowUp { run_id, request_id, sent_at, reason }, LedgerStatus Open|Met|NeedsOwner serialized open|met|needs-owner. Functions: ledger_dir(main_root) = main_root/.bee/handoffs, write_row (atomic write, one file named <request_id>.json), read_open_rows(main_root), and branch_merged(main_root, branch) -> Option<bool> via git merge-base --is-ancestor <branch> main (None when the branch does not exist). On every Sent outcome (both send and feature start paths) write a row: expects gets wt/<feature> when that branch exists and is not merged, plus each --expect-merge branch. Resolve main_root as the control plane main checkout, the same root probe_door uses. Register --follow-up-of and --expect-merge for state handoff send in registry_payload.json. No code comments.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee handoff && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test registry_contracts",
+  "must_haves": {
+   "why": "A fixed request id returned an old finished run and dispatched nothing, and no record kept what the handoff had to deliver.",
+   "out_of_scope": ["the handoff check verb", "the Stop hook", "doctrine text"],
+   "truths": [
+    "two handoff attempts from one session send two different request ids",
+    "a dispatch that returns a done or lost run, or one created before the attempt, ends [handoff_deduped] and keeps the session",
+    "every sent handoff writes .bee/handoffs/<request_id>.json with an expects row for an unmerged wt/<feature>",
+    "--follow-up-of on handoff send adds --follow-up-of <run> --handoff to the dispatch"
+   ],
+   "prohibitions": ["No code comments", "No hand edit of .bee/*.json(l) state files"]
+  },
+  "behavior_change": true
+ },
+ {
+  "id": "lsh-3",
+  "feature": "leader-self-handoff",
+  "title": "Refuse a leader turn end that asks the owner to open a session or run a step the agent can run",
+  "lane": "standard",
+  "role": "code",
+  "deps": [],
+  "decisions": ["86f0832c-b108-40c0-b77f-0b970ed5ba36"],
+  "files": [
+   "packages/bee-rs/crates/bee/src/hooks/session_close/mod.rs",
+   "packages/bee-rs/crates/bee/src/hooks/session_close/owner_ask_net.rs"
+  ],
+  "read_first": ["docs/history/leader-self-handoff/CONTEXT.md"],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Implement CONTEXT.md D6 in the Stop hook. Add hooks/session_close/owner_ask_net.rs with a pure function owner_ask_match(text: &str) -> Option<&'static str> that lowercases the final assistant text of the turn and returns the matched phrase from a fixed list: English open a new session, start a new session, open a fresh session, start a fresh session, new chat, run /clear, type /clear, please run, you can run, you need to run, you should run, can you run, then run; Vietnamese mở session mới, mở một session mới, mở phiên mới, tạo session mới, bắt đầu session mới, mở chat mới, hãy chạy, anh chạy, bạn chạy, chị chạy, vui lòng chạy. Reuse last_turn_assistant_text / the turn-boundary helpers already in session_close (claims.rs) to get the final turn text from the transcript events the hook already reads (perf_events). In mod.rs, on the Stop event only, before advisory(): skip when payload stop_hook_active is true, when crate::hooks::herding_worker_marker_set() is true, or when no phrase matches. On a match call crate::verbs::handoff_door::probe_door(root) (only on a match, never otherwise). Door Present: emit encode_block with reason: bee turn-end refused: the reply asks the owner to <phrase>. The owner never opens sessions or re-runs steps the agent can run. Run it yourself: bee state handoff send --task \"<owner request in their words; standing orders>\" (add --follow-up-of <run> when a finished run left work undone), or bee state handoff check to dispatch the follow-up for a handed-off run; then end the turn with one line. Door Absent: push one advisory line naming the phrase and saying no waggledance door exists, so write .bee/HANDOFF.json per the handoff playbook; never block. The match must be phrase-level only on the final turn text, not on tool output. Add unit tests in the module for the matcher (each language, a negative case). No code comments.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee session_close",
+  "must_haves": {
+   "why": "A leader told the owner to open a new session instead of dispatching the follow-up itself.",
+   "out_of_scope": ["the handoff check verb", "doctrine text"],
+   "truths": [
+    "a Stop whose final text asks the owner to open a new session blocks when a waggledance door exists",
+    "the same Stop with stop_hook_active true passes",
+    "with no door the Stop passes with one advisory line",
+    "a herding worker is never blocked"
+   ],
+   "prohibitions": ["No code comments", "No waggledance process runs when no phrase matches"]
+  },
+  "behavior_change": true
+ },
+ {
+  "id": "lsh-2",
+  "feature": "leader-self-handoff",
+  "title": "Add bee state handoff check that dispatches a follow-up leader for a finished run with an unmet merge",
+  "lane": "standard",
+  "role": "code",
+  "deps": ["lsh-1", "lsh-3"],
+  "decisions": ["86f0832c-b108-40c0-b77f-0b970ed5ba36"],
+  "files": [
+   "packages/bee-rs/crates/bee/src/verbs/handoff_ledger.rs",
+   "packages/bee-rs/crates/bee/src/verbs/state_group/sessions.rs",
+   "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs",
+   "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+   "packages/bee-rs/crates/bee/src/hooks/session_close/mod.rs",
+   "packages/bee-rs/crates/bee/src/hooks/session_init.rs"
+  ],
+  "read_first": ["docs/history/leader-self-handoff/CONTEXT.md"],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Implement CONTEXT.md D4 and D5 on top of lsh-1's verbs/handoff_ledger.rs. (1) In handoff_ledger.rs add a pure decide(row, run_status, merged: &dyn Fn(&str)->Option<bool>) -> CheckVerdict { Pending, Met, FollowUp { unmet: Vec<String> }, NeedsOwner { unmet } } (finished means status done or lost; a missing branch counts as unmet; 3 follow-ups already sent means NeedsOwner), and check_all(main_root, door, dispatch: bool) -> Vec<CheckReport> that reads open rows, reads each run with <binary> runs show <run_id>, applies decide, and on FollowUp writes a task file .bee/tmp/handoff-followup-<run>-<n>.md (text: Follow-up of handoff run <run>: it ended <status> but these deliverables are unmet: branch <b> is not merged into main. Finish them through the bee chain (worktree merge from main), then report. Original task: <task_text>), runs <binary> dispatch --project <p> --leader --follow-up-of <run> --handoff --request-id bee-handoff-followup-<run>-<n> --task-file <f>, appends the FollowUp, moves run_id to the new run and rewrites the row; Met and NeedsOwner rewrite status. A failed dispatch leaves the row open and reports the error. Door Absent or dispatch false: report only. (2) Add the verb bee state handoff check in sessions.rs (route handoff.check in set_gate.rs like handoff.send, register it in registry_payload.json with flags run, expect-merge, feature, no-dispatch, json): --run <id> with --expect-merge registers an adopted row (request id adopted-<run>, project from the door, feature from --feature or none, task_text from waggledance runs show task) before the walk; prints one line per row ([handoff_check] <request_id> run <run>: pending|met|follow-up sent run <new>|needs-owner: <unmet>|no door: <unmet>) and a JSON array with --json. (3) D5: in hooks/session_init.rs (SessionStart) and in hooks/session_close/mod.rs (Stop, after the lsh-3 net and only when it did not block), when crate::hooks::herding_worker_marker_set() is false and read_open_rows is non-empty, call check_all with dispatch true best-effort (errors to log_crash, never change the exit code) and add one line per follow-up sent or needs-owner row to the hook output. With no open row no waggledance process runs. No code comments.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee handoff && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test registry_contracts",
+  "must_haves": {
+   "why": "A handed-off run reported done while its branch was never merged and nothing followed it up.",
+   "out_of_scope": ["the Stop net phrase list", "doctrine text"],
+   "truths": [
+    "a finished run whose expected branch main does not contain gets one follow-up leader dispatch with --follow-up-of <run> --handoff",
+    "a finished run with every expectation met flips its row to met",
+    "after 3 follow-ups the row is needs-owner and no fourth dispatch runs",
+    "with no open row the hooks run no waggledance process",
+    "with no door the check dispatches nothing and lists the unmet rows"
+   ],
+   "prohibitions": ["No code comments"]
+  },
+  "behavior_change": true
+ },
+ {
+  "id": "lsh-4",
+  "feature": "leader-self-handoff",
+  "title": "State the self-driven handoff and follow-up in the handoff doctrine",
+  "lane": "standard",
+  "role": "docs",
+  "deps": [],
+  "decisions": ["86f0832c-b108-40c0-b77f-0b970ed5ba36"],
+  "files": [
+   "packages/bee/playbooks/handoff.md",
+   "skills/bee-swarming/references/swarming-reference.md",
+   "docs/knowledge/areas/workflow-state/sessions-lanes-and-identity.md",
+   "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": ["docs/history/leader-self-handoff/CONTEXT.md"],
+  "affects_skills": ["skills/bee-swarming/SKILL.md"],
+  "affects_specs": [],
+  "action": "Implement CONTEXT.md D7. In packages/bee/playbooks/handoff.md, inside the rule block agents-context-handoff-65, add plain ASD-STE100 sentences: each handoff send is a new attempt with its own request id; [handoff_deduped] means waggledance returned an old run and nothing was sent, so rerun the send (add --follow-up-of <run> to continue a finished run); every sent handoff records what it must deliver (the feature branch merge, plus --expect-merge); bee state handoff check, which the SessionStart and Stop hooks also run, dispatches a follow-up leader when a finished run left a merge undone, and after 3 follow-ups names the row needs-owner; the Stop hook refuses a turn end that asks the owner to open a session, run /clear or run a step the agent can run when a waggledance door exists. Keep the existing text that still holds; replace the sentence that implies one request id per session. In skills/bee-swarming/references/swarming-reference.md line near 712, add one sentence for the deduped outcome and the check. In docs/knowledge/areas/workflow-state/sessions-lanes-and-identity.md, update the handoff send paragraph to the per-attempt id, the ledger, the check and the Stop net, citing the history D-number as leader-self-handoff D1-D7 (not a raw decision id). Then run bee dev regen as the cell's regen obligation requires and keep only the rendered files it changes for these sources; restore any unrelated .claude/skills churn. No code comments.",
+  "verify": ".bee/bin/bee knowledge check --path docs/knowledge/areas/workflow-state/sessions-lanes-and-identity.md && .bee/bin/bee dev release-manifest --check",
+  "must_haves": {
+   "why": "Doctrine must say what the mechanic does, so every leader in every project reads it.",
+   "out_of_scope": ["code"],
+   "truths": [
+    "rule agents-context-handoff-65 names handoff check and the deduped outcome",
+    "the rule says the Stop hook refuses an ask-the-owner turn end"
+   ],
+   "prohibitions": ["No new rule id"]
+  },
+  "behavior_change": false
+ },
+ {
+  "id": "lsh-5",
+  "feature": "leader-self-handoff",
+  "title": "Test the per-attempt handoff id, the follow-up check and the Stop net",
+  "lane": "standard",
+  "role": "test",
+  "deps": ["lsh-1", "lsh-2", "lsh-3"],
+  "decisions": ["86f0832c-b108-40c0-b77f-0b970ed5ba36"],
+  "files": [
+   "packages/bee-rs/crates/bee/tests/handoff_self_drive.rs"
+  ],
+  "read_first": ["docs/history/leader-self-handoff/CONTEXT.md"],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Without reading the implementers' notes, check lsh-1, lsh-2 and lsh-3 against CONTEXT.md D1-D6 and add integration tests in tests/handoff_self_drive.rs that drive the built bee binary against a temp git repo onboarded the way the existing integration tests do, with a fake waggledance on PATH (a script that answers list --json with the temp repo as a project, records every argv to a file, answers dispatch with a run_id JSON, and answers runs show from a fixture file the test writes). Cover: two bee state handoff send calls send two different request ids; a dispatch whose runs show says done ends [handoff_deduped] and writes no ledger row; a sent handoff writes .bee/handoffs/<id>.json with expects branch-merged wt/<feature> when that branch is unmerged; bee state handoff check on a done run with an unmerged branch dispatches with --follow-up-of <run> --handoff and records a follow-up; a merged branch flips the row to met; a fourth check after 3 follow-ups dispatches nothing and prints needs-owner; with waggledance off PATH the check dispatches nothing. Drive the session-close hook with a Stop payload and a transcript whose last assistant text says open a new session: blocks with a door, passes with stop_hook_active true, passes with an advisory line and no door. See each new test fail on purpose once (break an assertion) before trusting it. A tester never edits product code: on a defect return BLOCKED with the red output. No code comments.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test handoff_self_drive",
+  "must_haves": {
+   "why": "A code cell never certifies itself.",
+   "out_of_scope": ["doctrine text"],
+   "truths": [
+    "a test fails if two sends reuse one request id",
+    "a test fails if a done run is reported as sent",
+    "a test fails if an unmet merge on a finished run gets no follow-up dispatch",
+    "a test fails if the Stop net stops blocking an open-a-new-session reply with a door present"
+   ],
+   "prohibitions": ["No code comments", "No product code edits"]
+  },
+  "behavior_change": false,
+  "tester_rule": true,
+  "judge_obligation_ack": "Tester for lsh-1, lsh-2 and lsh-3."
+ }
+]
+```
+
+## Proof
+
+- lsh-5 integration tests, green.
+- `bee test` (full declared suite) once before `bee worktree merge`.
+- Live (verify-app): sandbox run of send twice, check, Stop net; then the
+  real `bee state handoff check --run run-3481acb8c4fa9a75 --expect-merge
+  wt/pi-1-6-upgrade` from main dispatches the pi-1-6-upgrade follow-up
+  leader.

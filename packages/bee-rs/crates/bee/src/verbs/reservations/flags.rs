@@ -34,7 +34,7 @@ pub(crate) const FLAG_ALONE_BOOLEANS: &[&str] = &[
     "no-cleanup", "force-ownership", "local", "all", "untagged", "check",
     "with-companion", "lanes-full", "strict", "queue-submit", "show",
     "isolate", "set", "brief", "all-but-active", "merge", "claim", "skip-uat",
-    "preview", "no-mistakes", "no-knowledge-used", "no-principle-used", "explain", "off", "run", "print", "rolling",
+    "preview", "no-mistakes", "no-knowledge-used", "no-principle-used", "explain", "off", "run", "print", "rolling", "no-dispatch",
 ];
 
 #[derive(Clone, PartialEq)]
@@ -49,15 +49,13 @@ pub(crate) struct Flags(pub Vec<(String, FlagV)>);
 
 impl Flags {
     pub(crate) fn get(&self, name: &str) -> Option<&FlagV> {
-        self.0.iter().find(|(k, _)| k == name).map(|(_, v)| v)
+        self.0.iter().rev().find(|(k, _)| k == name).map(|(_, v)| v)
+    }
+    pub(crate) fn get_all(&self, name: &str) -> Vec<&FlagV> {
+        self.0.iter().filter(|(k, _)| k == name).map(|(_, v)| v).collect()
     }
     pub(crate) fn insert(&mut self, name: &str, value: FlagV) {
-        // JS `flags[name] = value`: first-occurrence position, last value.
-        if let Some(slot) = self.0.iter_mut().find(|(k, _)| k == name) {
-            slot.1 = value;
-        } else {
-            self.0.push((name.to_string(), value));
-        }
+        self.0.push((name.to_string(), value));
     }
     /// Non-empty string value (requireFlag's accepted shape). Anything else —
     /// absent, boolean-true, empty — is Node's own refusal path → caller
@@ -82,6 +80,10 @@ impl Flags {
 /// FLAG sets json and is not stored. Returns None for shapes Node answers
 /// itself (non-flag token, missing value) — the probe delegates.
 pub(crate) fn parse_flags(tokens: &[&str]) -> Option<(Flags, bool)> {
+    parse_flags_for(tokens, &[])
+}
+
+pub(crate) fn parse_flags_for(tokens: &[&str], value_flags: &[&str]) -> Option<(Flags, bool)> {
     let mut flags = Flags(Vec::new());
     let mut json = false;
     let mut i = 0usize;
@@ -94,7 +96,7 @@ pub(crate) fn parse_flags(tokens: &[&str]) -> Option<(Flags, bool)> {
             Some(eq) => (&tok[2..eq], FlagV::S(tok[eq + 1..].to_string())),
             None => {
                 let name = &tok[2..];
-                if FLAG_ALONE_BOOLEANS.contains(&name) {
+                if !value_flags.contains(&name) && FLAG_ALONE_BOOLEANS.contains(&name) {
                     (name, FlagV::Present)
                 } else {
                     {

@@ -174,10 +174,45 @@ fn run_inner(argv: &[String], stdin: &str) -> Result<(), ()> {
     let mut stdout = String::new();
     let mut stderr = String::new();
     let mut parts: Vec<String> = Vec::new();
-    let claims_warning: Vec<String> = if ctx.event == "Stop" { {
-            let events = perf_events.as_deref().unwrap_or(&[]);
-            unverified_agreement_warning(events).into_iter().chain(routed_reply_warnings(events)).collect()
-        } } else { Default::default() };
+    let events = perf_events.as_deref().unwrap_or(&[]);
+    match owner_ask_net::evaluate(&root, &ctx, events) {
+        owner_ask_net::OwnerAskOutcome::Pass => {}
+        owner_ask_net::OwnerAskOutcome::Block(reason) => {
+            stdout.push_str(&encode_block(&reason));
+            flush(&stdout, &stderr);
+            return Ok(());
+        }
+        owner_ask_net::OwnerAskOutcome::Advisory(line) => {
+            parts.push(line);
+        }
+    }
+    if ctx.event == "Stop" && !crate::hooks::herding_worker_marker_set() {
+        let main_root = control_root(&root, &ctx);
+        if !crate::verbs::handoff_ledger::read_open_rows(&main_root).is_empty() {
+            let door = crate::verbs::handoff_door::probe_door(&main_root);
+            let reports = crate::verbs::handoff_ledger::check_all(&main_root, &door, true);
+            for r in &reports {
+                match &r.outcome {
+                    crate::verbs::handoff_ledger::CheckOutcome::FollowUpSent { .. }
+                    | crate::verbs::handoff_ledger::CheckOutcome::NeedsOwner { .. } => {
+                        parts.push(crate::verbs::handoff_ledger::format_report_line(r));
+                    }
+                    crate::verbs::handoff_ledger::CheckOutcome::DispatchFailed { error, .. } => {
+                        log_crash(Some(&root), HOOK_NAME, error, Some("handoff-check"));
+                    }
+                    _ => {}
+                }
+            }
+        }
+    }
+    let claims_warning: Vec<String> = if ctx.event == "Stop" {
+        unverified_agreement_warning(events)
+            .into_iter()
+            .chain(routed_reply_warnings(events))
+            .collect()
+    } else {
+        Default::default()
+    };
 
     // The .mjs's advisory try/catch: a Crash logs and falls through to the
     // emit of whatever parts were already collected.
@@ -676,6 +711,7 @@ mod store;
 mod perf;
 mod html;
 mod obligations;
+mod owner_ask_net;
 mod claims;
 pub(crate) use self::claims::*;
 pub(crate) use self::reads::*;

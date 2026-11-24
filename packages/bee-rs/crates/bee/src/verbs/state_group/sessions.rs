@@ -831,7 +831,10 @@ pub(crate) fn run_handoff_dismiss(flags: Flags, use_json: bool, t0: Instant) -> 
 }
 
 pub(crate) fn run_handoff_send(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
-    if !keys_known(&flags, &["task", "session-id"]) {
+    if !keys_known(
+        &flags,
+        &["task", "session-id", "follow-up-of", "expect-merge"],
+    ) {
         return None;
     }
     let ctx = match go("state handoff send", use_json, t0)? {
@@ -899,6 +902,20 @@ pub(crate) fn run_handoff_send(flags: Flags, use_json: bool, t0: Instant) -> Opt
             .flatten()
             .and_then(|r| crate::verbs::handoff_door::session_context_tokens(&r))
             .unwrap_or(0);
+        let follow_up_of = flag_value(&flags, "follow-up-of")
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty());
+        let mut expect_merge = Vec::new();
+        for v in flags.get_all("expect-merge") {
+            if let FlagV::S(raw) = v {
+                for part in raw.split(',') {
+                    let b = part.trim();
+                    if !b.is_empty() {
+                        expect_merge.push(b.to_string());
+                    }
+                }
+            }
+        }
         match crate::verbs::handoff_door::execute_handoff(
             &door,
             &ctx.root,
@@ -911,6 +928,8 @@ pub(crate) fn run_handoff_send(flags: Flags, use_json: bool, t0: Instant) -> Opt
             None,
             &open_cells,
             &task_text,
+            follow_up_of.as_deref(),
+            &expect_merge,
         ) {
             crate::verbs::handoff_door::HandoffOutcome::Sent { run_id, request_id } => {
                 let _ = release_session_record(&ctx.root, &sid);
@@ -930,10 +949,115 @@ pub(crate) fn run_handoff_send(flags: Flags, use_json: bool, t0: Instant) -> Opt
                     "[handoff_sent] run {run_id}: this session is released; tell the owner in one line and stop."
                 )))
             }
+            crate::verbs::handoff_door::HandoffOutcome::Deduped { run_id, status } => {
+                Ok(Out::Thrown(format!(
+                    "[handoff_deduped] run {run_id} was already {status}; nothing new was dispatched — rerun bee state handoff send"
+                )))
+            }
             crate::verbs::handoff_door::HandoffOutcome::Failed { reason } => {
                 Ok(Out::Thrown(format!("[handoff_failed] {reason}")))
             }
         }
+    })();
+    finish(&ctx, out)
+}
+
+pub(crate) fn run_handoff_check(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
+    if !keys_known(&flags, &["run", "expect-merge", "feature", "no-dispatch"]) {
+        return None;
+    }
+    let ctx = match go("state handoff check", use_json, t0)? {
+        Ok(c) => c,
+        Err(code) => return Some(code),
+    };
+    let out = (|| -> R2<Out> {
+        let door = crate::verbs::handoff_door::probe_door(&ctx.root);
+        let run_flag = flag_value(&flags, "run")
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty());
+        let mut expect_merge = Vec::new();
+        for v in flags.get_all("expect-merge") {
+            if let FlagV::S(raw) = v {
+                for part in raw.split(',') {
+                    let b = part.trim();
+                    if !b.is_empty() {
+                        expect_merge.push(b.to_string());
+                    }
+                }
+            }
+        }
+        let feature = flag_value(&flags, "feature")
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .unwrap_or_else(|| "none".to_string());
+        let no_dispatch = match flags.get("no-dispatch") {
+            Some(FlagV::Present) => true,
+            Some(FlagV::S(s)) => {
+                matches!(s.trim().to_ascii_lowercase().as_str(), "true" | "1" | "yes")
+            }
+            None => false,
+        };
+
+        if let Some(run_id) = run_flag {
+            if expect_merge.is_empty() {
+                return Ok(Out::Thrown(
+                    "state handoff check: --run requires at least one --expect-merge <branch>."
+                        .to_string(),
+                ));
+            }
+            let req_id = format!("adopted-{run_id}");
+            let row_path = crate::verbs::handoff_ledger::ledger_dir(&ctx.root)
+                .join(format!("{req_id}.json"));
+            if !row_path.exists() {
+                let (project_id, task_text) = match &door {
+                    crate::verbs::handoff_door::HandoffDoor::Present { binary, project_id } => {
+                        let task = crate::verbs::handoff_ledger::read_run_info(binary, &run_id)
+                            .map(|info| info.task_text)
+                            .unwrap_or_default();
+                        (project_id.clone(), task)
+                    }
+                    crate::verbs::handoff_door::HandoffDoor::Absent => {
+                        (String::new(), String::new())
+                    }
+                };
+                let expects = expect_merge
+                    .into_iter()
+                    .map(|branch| crate::verbs::handoff_ledger::Expectation::BranchMerged { branch })
+                    .collect();
+                let adopted = crate::verbs::handoff_ledger::HandoffLedgerRow {
+                    request_id: req_id,
+                    run_id,
+                    project_id,
+                    session_id: "adopted".to_string(),
+                    feature,
+                    sent_at: chrono::Utc::now()
+                        .to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
+                    task_file: String::new(),
+                    task_text,
+                    expects,
+                    follow_ups: Vec::new(),
+                    status: crate::verbs::handoff_ledger::LedgerStatus::Open,
+                };
+                if let Err(e) = crate::verbs::handoff_ledger::write_row(&ctx.root, &adopted) {
+                    return Ok(Out::Thrown(format!(
+                        "state handoff check: could not write adopted ledger row: {e}"
+                    )));
+                }
+            }
+        }
+
+        let reports = crate::verbs::handoff_ledger::check_all(&ctx.root, &door, !no_dispatch);
+        let text = if reports.is_empty() {
+            "No open handoff ledger rows.".to_string()
+        } else {
+            reports
+                .iter()
+                .map(crate::verbs::handoff_ledger::format_report_line)
+                .collect::<Vec<_>>()
+                .join("\n")
+        };
+        let json_val = serde_json::to_value(&reports).unwrap_or(Value::Array(Vec::new()));
+        Ok(Out::Emit(json_val, text, 0))
     })();
     finish(&ctx, out)
 }
