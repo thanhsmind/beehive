@@ -1,0 +1,135 @@
+{
+  "id": "p16u-3",
+  "feature": "pi-1-6-upgrade",
+  "title": "Record the Pi 1.4.0 to 1.6.0 capability audit",
+  "lane": "small",
+  "role": "docs",
+  "deps": [
+    "p16u-1"
+  ],
+  "decisions": [
+    "045dd245-308f-49b0-a8e5-198592f5e115"
+  ],
+  "files": [
+    "docs/knowledge/areas/hook-runtime/pi-version-pin-and-capability-audit.md"
+  ],
+  "read_first": [
+    "docs/history/pi-1-6-upgrade/CONTEXT.md",
+    "docs/knowledge/areas/hook-runtime/pi-version-pin-and-capability-audit.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Implement CONTEXT.md D3 on the audit page. Update the title, description and the Data Dictionary 'Last live-evidence version' row to 1.6.0 (2026-11-24, ok probe on openai-codex gpt-6-luna and zai glm-5.3-flash, guarded write refused, pi_plugin_contracts green). Add a section 'The 1.4.0 to 1.6.0 audit' after the 1.0.0 to 1.4.0 one, same table shape, covering four releases 1.5.0 (2026-11-02), 1.5.1 (2026-11-09), 1.5.2 (2026-11-10), 1.6.0 (2026-11-20), with rows: 1.5.0 BREAKING pi-schema tool argument validation (keep: belt tool parameters are plain JSON Schema, tool-verdict.ts VERDICT_TOOL_PARAMETERS and tool-steer.ts BEE_STEER_TOOL_PARAMETERS); 1.5.1 BREAKING GrepOperations.readFile and OpenAI empty tools omitted (keep, no belt surface); 1.6.0 BREAKING component render() returns readonly string[] (keep: workers-widget.ts returns its own rows array and subclasses no Container); 1.5.0 blocked option for ctx.ui.custom, Usage.cost.totalFromProvider, pi.exec maxBuffer (keep, out of scope per CONTEXT.md); 1.6.0 fix that RPC switch/fork no longer runs session_start twice (keep, belt-relevant fix); the fifteen events (keep, all in the 1.6.0 binary by rg -a -c); built-in registry (keep, 1.6.0 docs/settings.md:46 same eight names); stale ctx after session_shutdown (adapt, p16u-1: the drain now stops at shutdown). Read the CHANGELOG under /home/thanhsmind/.local/share/mise/installs/pi/1.6.0/pi/ for line numbers. Cite CONTEXT.md D-numbers, never raw decision ids. Add the 1.6.0 tree to the Pointers 'Upstream compared' line. Do not use the words deferred, until or later. Write through bee-technical-writing.",
+  "verify": ".bee/bin/bee knowledge check",
+  "must_haves": {
+    "why": "The audit page is the authority for which Pi versions the belt was checked against.",
+    "out_of_scope": [
+      "code"
+    ],
+    "truths": [
+      "the page names 1.6.0 as the last live-evidence version",
+      "every 1.5.0, 1.5.1 and 1.6.0 breaking entry has a row"
+    ],
+    "prohibitions": [
+      "No raw decision ids from this feature"
+    ]
+  },
+  "behavior_change": false,
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "p16u-3-docs",
+    "outcome": "Recorded Pi 1.4.0 to 1.6.0 capability audit and updated ceiling to 1.6.0 (5fc4cf3b3e6fe35dbbbafa9aff2bd85fe774b331)",
+    "files_changed": [
+      "docs/knowledge/areas/hook-runtime/pi-version-pin-and-capability-audit.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-11-24T07:04:05.022Z",
+    "behavior_change": false,
+    "verification_evidence": "330 concept(s) in 351 file(s), 0 OKF error(s), 0 profile error(s)",
+    "verify_output": "green:static",
+    "verify_passed": true,
+    "claim_session": "e8fa00c0-3461-476f-92c8-f7968e348906",
+    "verify_command": ".bee/bin/bee knowledge check",
+    "claimed_at": "2026-11-24T07:02:04.414Z",
+    "knowledge_delta": [
+      "docs/knowledge/areas/hook-runtime/pi-version-pin-and-capability-audit.md"
+    ],
+    "no_mistakes": true,
+    "no_knowledge_used": true,
+    "principles_used": [
+      {
+        "slug": "bee-principle-prove-it-works",
+        "changed": "verified all 15 events in the 1.6.0 binary, CHANGELOG.md line numbers, docs/settings.md:46, and ran bee knowledge check"
+      }
+    ],
+    "changed_lines": 55,
+    "report": {
+      "outcome": "Recorded Pi 1.4.0 to 1.6.0 capability audit and updated ceiling to 1.6.0 (5fc4cf3b3e6fe35dbbbafa9aff2bd85fe774b331)",
+      "commit": "5fc4cf3b3e6fe35dbbbafa9aff2bd85fe774b331",
+      "files": [
+        "docs/knowledge/areas/hook-runtime/pi-version-pin-and-capability-audit.md"
+      ],
+      "tests": ".bee/bin/bee knowledge check — green:static — 330 concept(s) in 351 file(s), 0 OKF error(s), 0 profile error(s)",
+      "deviations": [],
+      "knowledge_used": [],
+      "principles_used": [
+        "bee-principle-prove-it-works — verified all 15 events in the 1.6.0 binary, CHANGELOG.md line numbers, docs/settings.md:46, and ran bee knowledge check"
+      ],
+      "reaction": "confirm",
+      "patch_id": "f089b1732f96959f0807fd7ca1f1cb84a35e4204"
+    },
+    "reaction": "confirm",
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "the page names 1.6.0 as the last live-evidence version",
+            "artifact": "docs/knowledge/areas/hook-runtime/pi-version-pin-and-capability-audit.md"
+          },
+          {
+            "requirement": "every 1.5.0, 1.5.1 and 1.6.0 breaking entry has a row",
+            "artifact": "docs/knowledge/areas/hook-runtime/pi-version-pin-and-capability-audit.md"
+          },
+          {
+            "requirement": "docs/knowledge/areas/hook-runtime/pi-version-pin-and-capability-audit.md",
+            "artifact": "docs/knowledge/areas/hook-runtime/pi-version-pin-and-capability-audit.md"
+          }
+        ],
+        "recorded_at": "2026-11-24T07:16:21.415Z",
+        "recorded_by": "bc1fd879-6ba1-43f4-bec5-96fef406bc68",
+        "commit_diff": "checked"
+      },
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "the page names 1.6.0 as the last live-evidence version",
+            "artifact": "docs/knowledge/areas/hook-runtime/pi-version-pin-and-capability-audit.md"
+          },
+          {
+            "requirement": "every 1.5.0, 1.5.1 and 1.6.0 breaking entry has a row",
+            "artifact": "docs/knowledge/areas/hook-runtime/pi-version-pin-and-capability-audit.md"
+          },
+          {
+            "requirement": "No raw decision ids from this feature",
+            "artifact": "docs/knowledge/areas/hook-runtime/pi-version-pin-and-capability-audit.md"
+          },
+          {
+            "requirement": "docs/knowledge/areas/hook-runtime/pi-version-pin-and-capability-audit.md",
+            "artifact": "docs/knowledge/areas/hook-runtime/pi-version-pin-and-capability-audit.md"
+          }
+        ],
+        "recorded_at": "2026-11-24T09:59:31.147Z",
+        "recorded_by": "3823a15b-4a74-4542-82d0-104f14565a93",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": null,
+  "usage_reason": "herding job(s) named this cell but no readable session transcript (1 unreadable)"
+}
