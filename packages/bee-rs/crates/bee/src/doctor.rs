@@ -1006,7 +1006,7 @@ fn runtime_checks_with_env(root: &Path, env: &dyn Fn(&str) -> Option<String>) ->
         ("claude", "claude", "npm install -g @anthropic-ai/claude-code"),
         ("codex", "codex", "npm install -g @openai/codex"),
         ("opencode", "opencode", "npm install -g opencode-ai"),
-        ("pi", "pi", "npm install -g @mariozechner/pi-coding-agent"),
+        ("pi", "pi", "npm install -g @earendil-works/pi-coding-agent"),
         ("paseo", paseo_cmd.as_str(), "npm install -g @getpaseo/cli"),
     ];
     specs
