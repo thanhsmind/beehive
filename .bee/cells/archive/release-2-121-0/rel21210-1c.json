@@ -1,0 +1,104 @@
+{
+  "id": "rel21210-1c",
+  "feature": "release-2-121-0",
+  "title": "Check the published 2.121.0 release",
+  "lane": "small",
+  "role": "test",
+  "deps": [
+    "rel21210-1"
+  ],
+  "decisions": [
+    "0e1d1889-1813-4d9c-a311-8c4302b2e084",
+    "6eb3dfe8-d1f6-4c25-b12d-77eb1691576d"
+  ],
+  "files": [
+    "docs/history/release-2-121-0/reports/rel21210-1c.md"
+  ],
+  "read_first": [
+    "docs/history/release-2-121-0/CONTEXT.md",
+    "docs/history/release-2-121-0/plan.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Check the release independently, read-only: both plugin manifests on main report 2.121.0; tag v2.121.0 exists locally and on origin (git ls-remote --tags origin v2.121.0); the GitHub release v2.121.0 lists the five binaries and SHA256SUMS (gh release view v2.121.0 --json assets); the release-binaries run for v2.121.0 concluded success. Write each check with its command and output to docs/history/release-2-121-0/reports/rel21210-1c.md and commit it with the trailer cell: rel21210-1c. Bee commands you may run: bee herding notify; never bee dispatch.",
+  "verify": "gh release view v2.121.0 --json assets --jq '.assets | length'",
+  "must_haves": {
+    "truths": [
+      "the report shows each of the four checks with its command and output"
+    ],
+    "prohibitions": [
+      "No edit outside the report file"
+    ]
+  },
+  "behavior_change": false,
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "w-rel21210c",
+    "outcome": "Checked v2.121.0 read-only: manifests 2.121.0, tag local+origin at 53c092746, release has 5 binaries + SHA256SUMS, release-binaries run success; report committed d2407f40e",
+    "files_changed": [
+      "docs/history/release-2-121-0/reports/rel21210-1c.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-11-24T10:58:00.851Z",
+    "behavior_change": false,
+    "verification_evidence": "read-only check of https://github.com/thanhsmind/beehive/releases/tag/v2.121.0 and run https://github.com/thanhsmind/beehive/actions/runs/45378721253",
+    "verify_output": "green:live",
+    "verify_passed": true,
+    "claim_session": "cc6e1da7-ce14-49fa-bb7b-4191d5a1a73c",
+    "verify_command": "gh release view v2.121.0 --json assets --jq '.assets | length'",
+    "claimed_at": "2026-11-24T10:56:25.387Z",
+    "knowledge_delta": [],
+    "no_mistakes": true,
+    "no_knowledge_used": true,
+    "principles_used": [
+      {
+        "slug": "bee-principle-prove-it-works",
+        "changed": "downloaded and read SHA256SUMS and resolved tag sha rather than trusting asset count alone"
+      }
+    ],
+    "changed_lines": 63,
+    "report": {
+      "outcome": "Checked v2.121.0 read-only: manifests 2.121.0, tag local+origin at 53c092746, release has 5 binaries + SHA256SUMS, release-binaries run success; report committed d2407f40e",
+      "commit": "d2407f40e98b1b88a795650849e63865f6289151",
+      "files": [
+        "docs/history/release-2-121-0/reports/rel21210-1c.md"
+      ],
+      "tests": "gh release view v2.121.0 --json assets --jq '.assets | length' — green:live — read-only check of https://github.com/thanhsmind/beehive/releases/tag/v2.121.0 and run https://github.com/thanhsmind/beehive/actions/runs/45378721253",
+      "deviations": [],
+      "knowledge_used": [],
+      "principles_used": [
+        "bee-principle-prove-it-works — downloaded and read SHA256SUMS and resolved tag sha rather than trusting asset count alone"
+      ],
+      "reaction": "confirm",
+      "skipped": [
+        "cargo clippy/test proof command — read-only test cell with no code change; cell verify is the gh command",
+        "hashing binaries against SHA256SUMS — cell requires only listing"
+      ],
+      "patch_id": "c21cd019b8d025dbeb32bd14ec0df9b525711fb2"
+    },
+    "reaction": "confirm",
+    "skipped": [
+      "cargo clippy/test proof command — read-only test cell with no code change; cell verify is the gh command",
+      "hashing binaries against SHA256SUMS — cell requires only listing"
+    ],
+    "warnings": [],
+    "tests": "boundary"
+  },
+  "usage": {
+    "new": 22652,
+    "cached": 160767,
+    "total": 183419,
+    "models": {
+      "claude-opus-5-5": {
+        "new": 22652,
+        "cached": 160767,
+        "total": 183419
+      }
+    },
+    "jobs": [
+      "job-1795517789911-2940942-1"
+    ]
+  }
+}

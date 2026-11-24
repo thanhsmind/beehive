@@ -462,5 +462,14 @@
         }
       ]
     }
+  },
+  "route": {
+    "class": "release",
+    "lane": "small",
+    "flags": [],
+    "product_files": 3,
+    "rationale": "sanctioned release.sh publish plus read-only checker",
+    "updated_at": "2026-11-24T10:56:24.362Z",
+    "feature": "release-2-121-0"
   }
 }
