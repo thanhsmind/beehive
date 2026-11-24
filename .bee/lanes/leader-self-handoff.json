@@ -11,10 +11,15 @@
     "uat": false
   },
   "summary": "Feature \"leader-self-handoff\" started at phase \"exploring\" (lane).",
-  "next_action": "Continue bee-exploring for \"leader-self-handoff\" (lane).",
+  "next_action": "Merged into main at 08eaed8; reload the product and test \"leader-self-handoff\", then either approve uat (\"bee gate --name uat --approved true --lane leader-self-handoff\") or fix it in the worktree and merge again.",
   "created_at": "2026-11-24T09:59:18.383Z",
   "run_state": "awaiting-approval",
-  "waiting_on": null,
+  "waiting_on": {
+    "kind": "gate",
+    "subject": "uat: leader-self-handoff",
+    "asked_at": "2026-11-24T10:39:31.500Z",
+    "session": "bee-worktree-merge-sessionless"
+  },
   "route": {
     "class": "feature",
     "lane": "standard",
@@ -735,12 +740,5 @@
         }
       ]
     }
-  },
-  "merge_ready": {
-    "since": "2026-11-24T10:34:14.839Z",
-    "branch": "wt/leader-self-handoff",
-    "worktree_id": "beehive--wt--leader-self-handoff",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
