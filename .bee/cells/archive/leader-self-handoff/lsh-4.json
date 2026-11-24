@@ -1,0 +1,210 @@
+{
+  "id": "lsh-4",
+  "feature": "leader-self-handoff",
+  "title": "State the self-driven handoff and follow-up in the handoff doctrine",
+  "lane": "standard",
+  "role": "docs",
+  "deps": [],
+  "decisions": [
+    "86f0832c-b108-40c0-b77f-0b970ed5ba36"
+  ],
+  "files": [
+    "packages/bee/playbooks/handoff.md",
+    "skills/bee-swarming/references/swarming-reference.md",
+    "docs/knowledge/areas/workflow-state/sessions-lanes-and-identity.md",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/leader-self-handoff/CONTEXT.md"
+  ],
+  "affects_skills": [
+    "skills/bee-swarming/SKILL.md"
+  ],
+  "affects_specs": [],
+  "action": "Implement CONTEXT.md D7. In packages/bee/playbooks/handoff.md, inside the rule block agents-context-handoff-65, add plain ASD-STE100 sentences: each handoff send is a new attempt with its own request id; [handoff_deduped] means waggledance returned an old run and nothing was sent, so rerun the send (add --follow-up-of <run> to continue a finished run); every sent handoff records what it must deliver (the feature branch merge, plus --expect-merge); bee state handoff check, which the SessionStart and Stop hooks also run, dispatches a follow-up leader when a finished run left a merge undone, and after 3 follow-ups names the row needs-owner; the Stop hook refuses a turn end that asks the owner to open a session, run /clear or run a step the agent can run when a waggledance door exists. Keep the existing text that still holds; replace the sentence that implies one request id per session. In skills/bee-swarming/references/swarming-reference.md line near 712, add one sentence for the deduped outcome and the check. In docs/knowledge/areas/workflow-state/sessions-lanes-and-identity.md, update the handoff send paragraph to the per-attempt id, the ledger, the check and the Stop net, citing the history D-number as leader-self-handoff D1-D7 (not a raw decision id). Then run bee dev regen as the cell's regen obligation requires and keep only the rendered files it changes for these sources; restore any unrelated .claude/skills churn. No code comments.",
+  "verify": ".bee/bin/bee knowledge check --path docs/knowledge/areas/workflow-state/sessions-lanes-and-identity.md && .bee/bin/bee dev release-manifest --check",
+  "must_haves": {
+    "why": "Doctrine must say what the mechanic does, so every leader in every project reads it.",
+    "out_of_scope": [
+      "code"
+    ],
+    "truths": [
+      "rule agents-context-handoff-65 names handoff check and the deduped outcome",
+      "the rule says the Stop hook refuses an ask-the-owner turn end"
+    ],
+    "prohibitions": [
+      "No new rule id"
+    ]
+  },
+  "behavior_change": false,
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "w-lsh-4",
+    "outcome": "Updated handoff doctrine, swarming reference, knowledge concept, and rendered skills in commit b87886005",
+    "files_changed": [
+      "packages/bee/playbooks/handoff.md",
+      "skills/bee-swarming/references/swarming-reference.md",
+      "docs/knowledge/areas/workflow-state/sessions-lanes-and-identity.md",
+      "docs/history/codex-harness-hardening/release-manifest.json",
+      ".bee/playbooks/handoff.md",
+      ".bee/onboarding.json",
+      ".agents/skills/.bee-render.json",
+      ".agents/skills/bee-swarming/references/swarming-reference.md",
+      ".claude-plugin/skills/.bee-render.json",
+      ".claude-plugin/skills/bee-swarming/references/swarming-reference.md",
+      ".claude/skills/bee-swarming/references/swarming-reference.md",
+      ".codex-plugin/skills/.bee-render.json",
+      ".codex-plugin/skills/bee-swarming/references/swarming-reference.md",
+      ".opencode/skills/.bee-render.json",
+      ".opencode/skills/bee-swarming/references/swarming-reference.md"
+    ],
+    "deviations": [
+      "sync-ack: the rule text grows inside agents-context-handoff-65 only; the other applied_at files cite the rule id, whose meaning is unchanged"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-24T10:09:01.821Z",
+    "behavior_change": false,
+    "verification_evidence": ".bee/bin/bee knowledge check && .bee/bin/bee dev release-manifest --check — green:static — docs cell lsh-4",
+    "verify_output": "green:static",
+    "verify_passed": true,
+    "claim_session": "acb2fe59-4061-4af3-b608-761d02fd30c9",
+    "verify_command": ".bee/bin/bee knowledge check --path docs/knowledge/areas/workflow-state/sessions-lanes-and-identity.md && .bee/bin/bee dev release-manifest --check",
+    "claimed_at": "2026-11-24T10:05:11.942Z",
+    "knowledge_delta": [
+      "docs/knowledge/areas/workflow-state/sessions-lanes-and-identity.md"
+    ],
+    "sync_ack": "the rule text grows inside agents-context-handoff-65 only; the other applied_at files cite the rule id, whose meaning is unchanged",
+    "no_mistakes": true,
+    "knowledge_used": [
+      {
+        "path": "docs/knowledge/areas/workflow-state/sessions-lanes-and-identity.md",
+        "changed": "updated handoff send and feature-start handoff contract to leader-self-handoff D1-D7"
+      }
+    ],
+    "principles_used": [
+      {
+        "slug": "bee-principle-single-source-of-truth",
+        "changed": "kept handoff doctrine in packages/bee/playbooks/handoff.md and regenerated rendered targets via bee dev regen"
+      },
+      {
+        "slug": "bee-principle-one-fact-one-home",
+        "changed": "updated existing handoff section in sessions-lanes-and-identity.md instead of creating a new entry"
+      }
+    ],
+    "changed_lines": 68,
+    "report": {
+      "outcome": "Updated handoff doctrine, swarming reference, knowledge concept, and rendered skills in commit b87886005",
+      "commit": "b87886005db725c20190e6ed8c85c9dad540617a",
+      "files": [
+        "packages/bee/playbooks/handoff.md",
+        "skills/bee-swarming/references/swarming-reference.md",
+        "docs/knowledge/areas/workflow-state/sessions-lanes-and-identity.md",
+        "docs/history/codex-harness-hardening/release-manifest.json",
+        ".bee/playbooks/handoff.md",
+        ".bee/onboarding.json",
+        ".agents/skills/.bee-render.json",
+        ".agents/skills/bee-swarming/references/swarming-reference.md",
+        ".claude-plugin/skills/.bee-render.json",
+        ".claude-plugin/skills/bee-swarming/references/swarming-reference.md",
+        ".claude/skills/bee-swarming/references/swarming-reference.md",
+        ".codex-plugin/skills/.bee-render.json",
+        ".codex-plugin/skills/bee-swarming/references/swarming-reference.md",
+        ".opencode/skills/.bee-render.json",
+        ".opencode/skills/bee-swarming/references/swarming-reference.md"
+      ],
+      "tests": ".bee/bin/bee knowledge check --path docs/knowledge/areas/workflow-state/sessions-lanes-and-identity.md && .bee/bin/bee dev release-manifest --check — green:static — .bee/bin/bee knowledge check && .bee/bin/bee dev release-manifest --check — green:static — docs cell lsh-4",
+      "deviations": [],
+      "knowledge_used": [
+        "docs/knowledge/areas/workflow-state/sessions-lanes-and-identity.md — updated handoff send and feature-start handoff contract to leader-self-handoff D1-D7"
+      ],
+      "principles_used": [
+        "bee-principle-single-source-of-truth — kept handoff doctrine in packages/bee/playbooks/handoff.md and regenerated rendered targets via bee dev regen",
+        "bee-principle-one-fact-one-home — updated existing handoff section in sessions-lanes-and-identity.md instead of creating a new entry"
+      ],
+      "patch_id": "2c9e6f9460f64a3ef5471f3c9d6d2e00bdbc232b"
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "rule agents-context-handoff-65 names handoff check and the deduped outcome",
+            "artifact": "packages/bee/playbooks/handoff.md"
+          },
+          {
+            "requirement": "the rule says the Stop hook refuses an ask-the-owner turn end",
+            "artifact": "packages/bee/playbooks/handoff.md"
+          },
+          {
+            "requirement": "packages/bee/playbooks/handoff.md",
+            "artifact": "packages/bee/playbooks/handoff.md"
+          },
+          {
+            "requirement": "skills/bee-swarming/references/swarming-reference.md",
+            "artifact": "skills/bee-swarming/references/swarming-reference.md"
+          },
+          {
+            "requirement": "docs/knowledge/areas/workflow-state/sessions-lanes-and-identity.md",
+            "artifact": "docs/knowledge/areas/workflow-state/sessions-lanes-and-identity.md"
+          },
+          {
+            "requirement": "docs/history/codex-harness-hardening/release-manifest.json",
+            "artifact": "docs/history/codex-harness-hardening/release-manifest.json"
+          },
+          {
+            "requirement": ".bee/playbooks/handoff.md",
+            "artifact": ".bee/playbooks/handoff.md"
+          },
+          {
+            "requirement": ".bee/onboarding.json",
+            "artifact": ".bee/onboarding.json"
+          },
+          {
+            "requirement": ".agents/skills/.bee-render.json",
+            "artifact": ".agents/skills/.bee-render.json"
+          },
+          {
+            "requirement": ".agents/skills/bee-swarming/references/swarming-reference.md",
+            "artifact": ".agents/skills/bee-swarming/references/swarming-reference.md"
+          },
+          {
+            "requirement": ".claude-plugin/skills/.bee-render.json",
+            "artifact": ".claude-plugin/skills/.bee-render.json"
+          },
+          {
+            "requirement": ".claude-plugin/skills/bee-swarming/references/swarming-reference.md",
+            "artifact": ".claude-plugin/skills/bee-swarming/references/swarming-reference.md"
+          },
+          {
+            "requirement": ".claude/skills/bee-swarming/references/swarming-reference.md",
+            "artifact": ".claude/skills/bee-swarming/references/swarming-reference.md"
+          },
+          {
+            "requirement": ".codex-plugin/skills/.bee-render.json",
+            "artifact": ".codex-plugin/skills/.bee-render.json"
+          },
+          {
+            "requirement": ".codex-plugin/skills/bee-swarming/references/swarming-reference.md",
+            "artifact": ".codex-plugin/skills/bee-swarming/references/swarming-reference.md"
+          },
+          {
+            "requirement": ".opencode/skills/.bee-render.json",
+            "artifact": ".opencode/skills/.bee-render.json"
+          },
+          {
+            "requirement": ".opencode/skills/bee-swarming/references/swarming-reference.md",
+            "artifact": ".opencode/skills/bee-swarming/references/swarming-reference.md"
+          }
+        ],
+        "recorded_at": "2026-11-24T10:36:20.372Z",
+        "recorded_by": "2ebd7b1e-e964-48d2-9c5a-420a42be316c",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": null,
+  "usage_reason": "herding job(s) named this cell but no readable session transcript (1 unreadable)"
+}

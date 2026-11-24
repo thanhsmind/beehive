@@ -2493,5 +2493,10 @@
     "capped": 3,
     "dropped": 0,
     "archived_at": "2026-11-24T10:34:49.014Z"
+  },
+  "leader-self-handoff": {
+    "capped": 5,
+    "dropped": 0,
+    "archived_at": "2026-11-24T10:43:41.731Z"
   }
 }

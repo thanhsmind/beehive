@@ -1,0 +1,167 @@
+{
+  "id": "lsh-3",
+  "feature": "leader-self-handoff",
+  "title": "Refuse a leader turn end that asks the owner to open a session or run a step the agent can run",
+  "lane": "standard",
+  "role": "code",
+  "deps": [],
+  "decisions": [
+    "86f0832c-b108-40c0-b77f-0b970ed5ba36"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/hooks/session_close/mod.rs",
+    "packages/bee-rs/crates/bee/src/hooks/session_close/owner_ask_net.rs"
+  ],
+  "read_first": [
+    "docs/history/leader-self-handoff/CONTEXT.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Implement CONTEXT.md D6 in the Stop hook. Add hooks/session_close/owner_ask_net.rs with a pure function owner_ask_match(text: &str) -> Option<&'static str> that lowercases the final assistant text of the turn and returns the matched phrase from a fixed list: English open a new session, start a new session, open a fresh session, start a fresh session, new chat, run /clear, type /clear, please run, you can run, you need to run, you should run, can you run, then run; Vietnamese mở session mới, mở một session mới, mở phiên mới, tạo session mới, bắt đầu session mới, mở chat mới, hãy chạy, anh chạy, bạn chạy, chị chạy, vui lòng chạy. Reuse last_turn_assistant_text / the turn-boundary helpers already in session_close (claims.rs) to get the final turn text from the transcript events the hook already reads (perf_events). In mod.rs, on the Stop event only, before advisory(): skip when payload stop_hook_active is true, when crate::hooks::herding_worker_marker_set() is true, or when no phrase matches. On a match call crate::verbs::handoff_door::probe_door(root) (only on a match, never otherwise). Door Present: emit encode_block with reason: bee turn-end refused: the reply asks the owner to <phrase>. The owner never opens sessions or re-runs steps the agent can run. Run it yourself: bee state handoff send --task \"<owner request in their words; standing orders>\" (add --follow-up-of <run> when a finished run left work undone), or bee state handoff check to dispatch the follow-up for a handed-off run; then end the turn with one line. Door Absent: push one advisory line naming the phrase and saying no waggledance door exists, so write .bee/HANDOFF.json per the handoff playbook; never block. The match must be phrase-level only on the final turn text, not on tool output. Add unit tests in the module for the matcher (each language, a negative case). No code comments.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee session_close",
+  "must_haves": {
+    "why": "A leader told the owner to open a new session instead of dispatching the follow-up itself.",
+    "out_of_scope": [
+      "the handoff check verb",
+      "doctrine text"
+    ],
+    "truths": [
+      "a Stop whose final text asks the owner to open a new session blocks when a waggledance door exists",
+      "the same Stop with stop_hook_active true passes",
+      "with no door the Stop passes with one advisory line",
+      "a herding worker is never blocked"
+    ],
+    "prohibitions": [
+      "No code comments",
+      "No waggledance process runs when no phrase matches"
+    ]
+  },
+  "behavior_change": true,
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "w-lsh-3",
+    "outcome": "Implemented Stop hook owner-ask turn-end net in session_close/owner_ask_net.rs and wired into session_close/mod.rs (commit 84b59cef4)",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/hooks/session_close/claims.rs",
+      "packages/bee-rs/crates/bee/src/hooks/session_close/mod.rs",
+      "packages/bee-rs/crates/bee/src/hooks/session_close/owner_ask_net.rs"
+    ],
+    "deviations": [
+      "sync-ack: the Stop net is documented in sessions-lanes-and-identity.md by lsh-4; the other hook-runtime concepts are anchored to session_close for unrelated behavior that did not change"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-24T10:10:55.145Z",
+    "behavior_change": true,
+    "verification_evidence": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee session_close — green:unit — 91 passed, 0 failed; clippy -p bee -- -D warnings exited 0",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "acb2fe59-4061-4af3-b608-761d02fd30c9",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee session_close",
+    "claimed_at": "2026-11-24T10:05:09.705Z",
+    "knowledge_delta": [],
+    "sync_ack": "the Stop net is documented in sessions-lanes-and-identity.md by lsh-4; the other hook-runtime concepts are anchored to session_close for unrelated behavior that did not change",
+    "no_mistakes": true,
+    "principles_used": [
+      {
+        "slug": "bee-principle-boundary-discipline",
+        "changed": "kept owner_ask_match and evaluate_with pure while isolating probe_door and env checks at the hook boundary"
+      }
+    ],
+    "changed_lines": 290,
+    "report": {
+      "outcome": "Implemented Stop hook owner-ask turn-end net in session_close/owner_ask_net.rs and wired into session_close/mod.rs (commit 84b59cef4)",
+      "commit": "84b59cef42163069714202fa3f59f4b65030f30f",
+      "files": [
+        "packages/bee-rs/crates/bee/src/hooks/session_close/claims.rs",
+        "packages/bee-rs/crates/bee/src/hooks/session_close/mod.rs",
+        "packages/bee-rs/crates/bee/src/hooks/session_close/owner_ask_net.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee session_close — green:unit — PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee session_close — green:unit — 91 passed, 0 failed; clippy -p bee -- -D warnings exited 0",
+      "deviations": [],
+      "principles_used": [
+        "bee-principle-boundary-discipline — kept owner_ask_match and evaluate_with pure while isolating probe_door and env checks at the hook boundary"
+      ],
+      "patch_id": "fa9085cea504ed73bcd53c8f4cfbe69a704f0828"
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 290 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "a Stop whose final text asks the owner to open a new session blocks when a waggledance door exists",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/session_close/mod.rs"
+          },
+          {
+            "requirement": "the same Stop with stop_hook_active true passes",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/session_close/mod.rs"
+          },
+          {
+            "requirement": "with no door the Stop passes with one advisory line",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/session_close/mod.rs"
+          },
+          {
+            "requirement": "a herding worker is never blocked",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/session_close/mod.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/hooks/session_close/claims.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/session_close/claims.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/hooks/session_close/mod.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/session_close/mod.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/hooks/session_close/owner_ask_net.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/session_close/owner_ask_net.rs"
+          }
+        ],
+        "recorded_at": "2026-11-24T10:36:20.358Z",
+        "recorded_by": "2ebd7b1e-e964-48d2-9c5a-420a42be316c",
+        "commit_diff": "checked"
+      }
+    ],
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "c1",
+            "status": "PASS",
+            "evidence": "owner_ask_net.rs:6-31 holds the fixed EN+VI phrase list; 39-42 lowercases and matches; 76-81 Present door -> Block(block_reason) with the briefed text (44-52); mod.rs:178-184 emits encode_block and returns before advisory(); handoff_self_drive stop_net_blocks_an_open_a_new_session_reply_when_a_door_is_present asserts decision block (tests:383-387) — passed"
+          },
+          {
+            "id": "c2",
+            "status": "PASS",
+            "evidence": "owner_ask_net.rs:70-72 stop_hook_active true -> Pass before probe; unit stop_hook_active_passes_without_probing and integration stop_net_passes_a_second_stop_in_the_same_turn (tests:395 assert_ne decision block) — passed"
+          },
+          {
+            "id": "c3",
+            "status": "PASS",
+            "evidence": "owner_ask_net.rs:82 Absent -> Advisory(advisory_line) single line (54-59); mod.rs:185-187 pushes to parts, never blocks; stop_net_adds_an_advisory_line_and_never_blocks_without_a_door (tests:403-406) and door_absent_returns_advisory_without_blocking asserts no newline — passed"
+          },
+          {
+            "id": "c4",
+            "status": "PASS",
+            "evidence": "owner_ask_net.rs:73-75 is_herding_worker -> Pass before probe; evaluate (86-94) passes crate::hooks::herding_worker_marker_set(); unit herding_worker_passes_without_probing — passed"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "gemini-4-hydrogen",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-11-24T10:43:26.964Z"
+      }
+    ]
+  },
+  "usage": null,
+  "usage_reason": "herding job(s) named this cell but no readable session transcript (1 unreadable)"
+}

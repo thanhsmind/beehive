@@ -1,0 +1,137 @@
+{
+  "id": "lsh-1",
+  "feature": "leader-self-handoff",
+  "title": "Give each handoff attempt its own request id, detect a deduped run and write a handoff ledger row",
+  "lane": "standard",
+  "role": "code",
+  "deps": [],
+  "decisions": [
+    "86f0832c-b108-40c0-b77f-0b970ed5ba36"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/handoff_door.rs",
+    "packages/bee-rs/crates/bee/src/verbs/handoff_ledger.rs",
+    "packages/bee-rs/crates/bee/src/verbs/mod.rs",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/sessions.rs",
+    "packages/bee-rs/crates/bee/src/verbs/feature_group.rs",
+    "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+  ],
+  "read_first": [
+    "docs/history/leader-self-handoff/CONTEXT.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Implement CONTEXT.md D1, D2 and D3. Commit a0e1bf25a is the model for this seam (handoff_door.rs, sessions.rs run_handoff_send, set_gate.rs routing, registry_payload.json). (1) D1: build_request takes an attempt token; execute_handoff computes it once per call as the current wall-clock milliseconds in base 36 and the request id becomes bee-handoff-<session>-<suffix>-<attempt>. The task file name gets the same attempt token so two attempts never overwrite one file. run_handoff_send accepts --follow-up-of <run> (wins over the PASEO_AGENT_ID lookup; dispatch_argv then adds --follow-up-of <run> --handoff) and a repeatable or comma-separated --expect-merge <branch>; pass them into execute_handoff through new parameters. Update the existing tests in handoff_door.rs and feature_group.rs that pin the old exact request id so they assert the bee-handoff-<session>-<suffix>- prefix instead. (2) D2: after parse_dispatch_run_id, run <binary> runs show <run_id> (stdin null), parse runs[0].status and runs[0].created_at (RFC3339). If status is done or lost, or created_at is earlier than the attempt start, return a new HandoffOutcome::Deduped { run_id, status }. An unreadable or failed runs show keeps Sent. run_handoff_send and the feature start --handoff-task path map Deduped to the refusal text [handoff_deduped] run <id> was already <status>; nothing new was dispatched — rerun bee state handoff send, write no audit row, and do not release the session. Keep the decision logic in a pure function (status, created_at, attempt start) -> bool with unit tests. (3) D3: a new module verbs/handoff_ledger.rs owns the ledger: a typed struct HandoffLedgerRow { request_id, run_id, project_id, session_id, feature, sent_at, task_file, task_text, expects: Vec<Expectation>, follow_ups: Vec<FollowUp>, status: LedgerStatus } with Expectation::BranchMerged { branch } serialized as {kind: branch-merged, branch}, FollowUp { run_id, request_id, sent_at, reason }, LedgerStatus Open|Met|NeedsOwner serialized open|met|needs-owner. Functions: ledger_dir(main_root) = main_root/.bee/handoffs, write_row (atomic write, one file named <request_id>.json), read_open_rows(main_root), and branch_merged(main_root, branch) -> Option<bool> via git merge-base --is-ancestor <branch> main (None when the branch does not exist). On every Sent outcome (both send and feature start paths) write a row: expects gets wt/<feature> when that branch exists and is not merged, plus each --expect-merge branch. Resolve main_root as the control plane main checkout, the same root probe_door uses. Register --follow-up-of and --expect-merge for state handoff send in registry_payload.json. No code comments.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee handoff && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test registry_contracts",
+  "must_haves": {
+    "why": "A fixed request id returned an old finished run and dispatched nothing, and no record kept what the handoff had to deliver.",
+    "out_of_scope": [
+      "the handoff check verb",
+      "the Stop hook",
+      "doctrine text"
+    ],
+    "truths": [
+      "two handoff attempts from one session send two different request ids",
+      "a dispatch that returns a done or lost run, or one created before the attempt, ends [handoff_deduped] and keeps the session",
+      "every sent handoff writes .bee/handoffs/<request_id>.json with an expects row for an unmerged wt/<feature>",
+      "--follow-up-of on handoff send adds --follow-up-of <run> --handoff to the dispatch"
+    ],
+    "prohibitions": [
+      "No code comments",
+      "No hand edit of .bee/*.json(l) state files"
+    ]
+  },
+  "behavior_change": true,
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "w-lsh-1b",
+    "outcome": "Pinned PINNED_FLAG_COUNT at 273 in catalog.rs and committed d19974ae3",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/catalog.rs"
+    ],
+    "deviations": [
+      "sync-ack: catalog.rs gets a pinned count bump only; no concept describes the number, and the owned skill text was updated by docs cell lsh-4"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-24T10:34:14.787Z",
+    "behavior_change": true,
+    "verification_evidence": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" CARGO_TARGET_DIR=/home/thanhsmind/.cache/cargo-target-lsh cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee distinct_flag_vocabulary — green:unit — 1 passed, 0 failed (distinct_flag_vocabulary_is_pinned_so_growth_is_a_decision)",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "2ebd7b1e-e964-48d2-9c5a-420a42be316c",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee handoff && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test registry_contracts",
+    "claimed_at": "2026-11-24T10:31:47.273Z",
+    "knowledge_delta": [],
+    "sync_ack": "catalog.rs gets a pinned count bump only; no concept describes the number, and the owned skill text was updated by docs cell lsh-4",
+    "no_mistakes": true,
+    "principles_used": [
+      {
+        "slug": "bee-principle-foundational-thinking",
+        "changed": "defined HandoffLedgerRow, Expectation, FollowUp, and LedgerStatus before wiring send and feature start"
+      },
+      {
+        "slug": "bee-principle-single-source-of-truth",
+        "changed": "wrote ledger rows once in execute_handoff for both send and feature start paths"
+      }
+    ],
+    "changed_lines": 2,
+    "report": {
+      "outcome": "Pinned PINNED_FLAG_COUNT at 273 in catalog.rs and committed d19974ae3",
+      "commit": "d19974ae389c0d608fcabab92e76b6becf385db2",
+      "files": [
+        "packages/bee-rs/crates/bee/src/catalog.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee handoff && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test registry_contracts — green:unit — PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" CARGO_TARGET_DIR=/home/thanhsmind/.cache/cargo-target-lsh cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee distinct_flag_vocabulary — green:unit — 1 passed, 0 failed (distinct_flag_vocabulary_is_pinned_so_growth_is_a_decision)",
+      "deviations": [],
+      "principles_used": [],
+      "patch_id": "5fee6cdaeb41e7e75cd8dccdecf886361ab958d6"
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "verified_at": null,
+    "baseline": null,
+    "reaction": null,
+    "skipped": null,
+    "unknowns": null,
+    "found": null,
+    "stopped": null,
+    "blocked_reason": null,
+    "dropped_reason": null,
+    "reopened_at": "2026-11-24T10:31:10.542Z",
+    "reopened_reason": "full suite red: catalog::tests::distinct_flag_vocabulary_is_pinned_so_growth_is_a_decision counts 273 flags, pinned 270; the three new flags follow-up-of, expect-merge, no-dispatch are locked by CONTEXT.md D1, D3, D4, so PINNED_FLAG_COUNT goes to 273",
+    "no_principles_used": true,
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "two handoff attempts from one session send two different request ids",
+            "artifact": "packages/bee-rs/crates/bee/src/catalog.rs"
+          },
+          {
+            "requirement": "a dispatch that returns a done or lost run, or one created before the attempt, ends [handoff_deduped] and keeps the session",
+            "artifact": "packages/bee-rs/crates/bee/src/catalog.rs"
+          },
+          {
+            "requirement": "every sent handoff writes .bee/handoffs/<request_id>.json with an expects row for an unmerged wt/<feature>",
+            "artifact": "packages/bee-rs/crates/bee/src/catalog.rs"
+          },
+          {
+            "requirement": "--follow-up-of on handoff send adds --follow-up-of <run> --handoff to the dispatch",
+            "artifact": "packages/bee-rs/crates/bee/src/catalog.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/catalog.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/catalog.rs"
+          }
+        ],
+        "recorded_at": "2026-11-24T10:36:20.329Z",
+        "recorded_by": "2ebd7b1e-e964-48d2-9c5a-420a42be316c",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": null,
+  "usage_reason": "herding job(s) named this cell but no readable session transcript (2 unreadable)"
+}

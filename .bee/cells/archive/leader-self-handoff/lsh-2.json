@@ -1,0 +1,216 @@
+{
+  "id": "lsh-2",
+  "feature": "leader-self-handoff",
+  "title": "Add bee state handoff check that dispatches a follow-up leader for a finished run with an unmet merge",
+  "lane": "standard",
+  "role": "code",
+  "deps": [
+    "lsh-1",
+    "lsh-3"
+  ],
+  "decisions": [
+    "86f0832c-b108-40c0-b77f-0b970ed5ba36"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/handoff_ledger.rs",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/sessions.rs",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs",
+    "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+    "packages/bee-rs/crates/bee/src/hooks/session_close/mod.rs",
+    "packages/bee-rs/crates/bee/src/hooks/session_init.rs"
+  ],
+  "read_first": [
+    "docs/history/leader-self-handoff/CONTEXT.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Implement CONTEXT.md D4 and D5 on top of lsh-1's verbs/handoff_ledger.rs. (1) In handoff_ledger.rs add a pure decide(row, run_status, merged: &dyn Fn(&str)->Option<bool>) -> CheckVerdict { Pending, Met, FollowUp { unmet: Vec<String> }, NeedsOwner { unmet } } (finished means status done or lost; a missing branch counts as unmet; 3 follow-ups already sent means NeedsOwner), and check_all(main_root, door, dispatch: bool) -> Vec<CheckReport> that reads open rows, reads each run with <binary> runs show <run_id>, applies decide, and on FollowUp writes a task file .bee/tmp/handoff-followup-<run>-<n>.md (text: Follow-up of handoff run <run>: it ended <status> but these deliverables are unmet: branch <b> is not merged into main. Finish them through the bee chain (worktree merge from main), then report. Original task: <task_text>), runs <binary> dispatch --project <p> --leader --follow-up-of <run> --handoff --request-id bee-handoff-followup-<run>-<n> --task-file <f>, appends the FollowUp, moves run_id to the new run and rewrites the row; Met and NeedsOwner rewrite status. A failed dispatch leaves the row open and reports the error. Door Absent or dispatch false: report only. (2) Add the verb bee state handoff check in sessions.rs (route handoff.check in set_gate.rs like handoff.send, register it in registry_payload.json with flags run, expect-merge, feature, no-dispatch, json): --run <id> with --expect-merge registers an adopted row (request id adopted-<run>, project from the door, feature from --feature or none, task_text from waggledance runs show task) before the walk; prints one line per row ([handoff_check] <request_id> run <run>: pending|met|follow-up sent run <new>|needs-owner: <unmet>|no door: <unmet>) and a JSON array with --json. (3) D5: in hooks/session_init.rs (SessionStart) and in hooks/session_close/mod.rs (Stop, after the lsh-3 net and only when it did not block), when crate::hooks::herding_worker_marker_set() is false and read_open_rows is non-empty, call check_all with dispatch true best-effort (errors to log_crash, never change the exit code) and add one line per follow-up sent or needs-owner row to the hook output. With no open row no waggledance process runs. No code comments.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee handoff && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test registry_contracts",
+  "must_haves": {
+    "why": "A handed-off run reported done while its branch was never merged and nothing followed it up.",
+    "out_of_scope": [
+      "the Stop net phrase list",
+      "doctrine text"
+    ],
+    "truths": [
+      "a finished run whose expected branch main does not contain gets one follow-up leader dispatch with --follow-up-of <run> --handoff",
+      "a finished run with every expectation met flips its row to met",
+      "after 3 follow-ups the row is needs-owner and no fourth dispatch runs",
+      "with no open row the hooks run no waggledance process",
+      "with no door the check dispatches nothing and lists the unmet rows"
+    ],
+    "prohibitions": [
+      "No code comments"
+    ]
+  },
+  "behavior_change": true,
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "w-lsh-2",
+    "outcome": "Implemented bee state handoff check and SessionStart/Stop follow-up checks (D4, D5) in dc15a659e",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+      "packages/bee-rs/crates/bee/src/hooks/session_close/mod.rs",
+      "packages/bee-rs/crates/bee/src/hooks/session_init.rs",
+      "packages/bee-rs/crates/bee/src/verbs/handoff_ledger.rs",
+      "packages/bee-rs/crates/bee/src/verbs/reservations/flags.rs",
+      "packages/bee-rs/crates/bee/src/verbs/state_group/sessions.rs",
+      "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs"
+    ],
+    "deviations": [
+      "sync-ack: the owned skill text (bee-swarming swarming-reference.md) was updated for this feature by docs cell lsh-4"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-24T10:22:54.557Z",
+    "behavior_change": true,
+    "verification_evidence": "cargo clippy -- -D warnings && cargo test --release -p bee --bin bee handoff (75 passed) && cargo test --release -p bee --test registry_contracts (12 passed) — green:unit — touched handoff_ledger.rs, sessions.rs, set_gate.rs, flags.rs, registry_payload.json, session_init.rs, session_close/mod.rs",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "acb2fe59-4061-4af3-b608-761d02fd30c9",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee handoff && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test registry_contracts",
+    "claimed_at": "2026-11-24T10:16:18.489Z",
+    "knowledge_delta": [],
+    "sync_ack": "the owned skill text (bee-swarming swarming-reference.md) was updated for this feature by docs cell lsh-4",
+    "no_mistakes": true,
+    "no_knowledge_used": true,
+    "principles_used": [
+      {
+        "slug": "bee-principle-model-the-domain",
+        "changed": "modeled CheckVerdict and CheckOutcome as tagged enums in handoff_ledger.rs"
+      },
+      {
+        "slug": "bee-principle-boundary-discipline",
+        "changed": "isolated flag parsing with parse_flags_for for handoff.check's --run value flag"
+      }
+    ],
+    "changed_lines": 539,
+    "report": {
+      "outcome": "Implemented bee state handoff check and SessionStart/Stop follow-up checks (D4, D5) in dc15a659e",
+      "commit": "dc15a659ea46d0f806134048f76d8fd19c3defe4",
+      "files": [
+        "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+        "packages/bee-rs/crates/bee/src/hooks/session_close/mod.rs",
+        "packages/bee-rs/crates/bee/src/hooks/session_init.rs",
+        "packages/bee-rs/crates/bee/src/verbs/handoff_ledger.rs",
+        "packages/bee-rs/crates/bee/src/verbs/reservations/flags.rs",
+        "packages/bee-rs/crates/bee/src/verbs/state_group/sessions.rs",
+        "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee handoff && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test registry_contracts — green:unit — cargo clippy -- -D warnings && cargo test --release -p bee --bin bee handoff (75 passed) && cargo test --release -p bee --test registry_contracts (12 passed) — green:unit — touched handoff_ledger.rs, sessions.rs, set_gate.rs, flags.rs, registry_payload.json, session_init.rs, session_close/mod.rs",
+      "deviations": [],
+      "knowledge_used": [],
+      "principles_used": [
+        "bee-principle-model-the-domain — modeled CheckVerdict and CheckOutcome as tagged enums in handoff_ledger.rs",
+        "bee-principle-boundary-discipline — isolated flag parsing with parse_flags_for for handoff.check's --run value flag"
+      ],
+      "reaction": "confirm",
+      "patch_id": "e0d21d82a7733a01d17092269b57c3068a789ac7"
+    },
+    "reaction": "confirm",
+    "warnings": [
+      "advisory: this cap's commit changes 539 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "a finished run whose expected branch main does not contain gets one follow-up leader dispatch with --follow-up-of <run> --handoff",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/handoff_ledger.rs"
+          },
+          {
+            "requirement": "a finished run with every expectation met flips its row to met",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/handoff_ledger.rs"
+          },
+          {
+            "requirement": "after 3 follow-ups the row is needs-owner and no fourth dispatch runs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/handoff_ledger.rs"
+          },
+          {
+            "requirement": "with no open row the hooks run no waggledance process",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/handoff_ledger.rs"
+          },
+          {
+            "requirement": "with no door the check dispatches nothing and lists the unmet rows",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/handoff_ledger.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+            "artifact": "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/hooks/session_close/mod.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/session_close/mod.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/hooks/session_init.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/session_init.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/handoff_ledger.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/handoff_ledger.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/reservations/flags.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/reservations/flags.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/state_group/sessions.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/state_group/sessions.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs"
+          }
+        ],
+        "recorded_at": "2026-11-24T10:36:20.343Z",
+        "recorded_by": "2ebd7b1e-e964-48d2-9c5a-420a42be316c",
+        "commit_diff": "checked"
+      }
+    ],
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "c1",
+            "status": "PASS",
+            "evidence": "handoff_ledger.rs:142-167 decide returns FollowUp for done/lost with merged!=Some(true); check_all:275-280 calls dispatch_followup which runs waggledance dispatch with --leader --follow-up-of <old_run> --handoff --request-id bee-handoff-followup-<run>-<n> (333-346), appends FollowUp and moves run_id (371-377); handoff_self_drive a_done_run_with_an_unmerged_branch_gets_a_follow_up_dispatch asserts 1 dispatch, --follow-up-of run-old, --handoff (tests:258-261) — passed"
+          },
+          {
+            "id": "c2",
+            "status": "PASS",
+            "evidence": "handoff_ledger.rs:265-268 Met sets LedgerStatus::Met and write_row; test a_merged_branch_flips_the_row_to_met_without_a_dispatch asserts status met and no dispatch (tests:287-289) — passed"
+          },
+          {
+            "id": "c3",
+            "status": "PASS",
+            "evidence": "handoff_ledger.rs:163 follow_ups.len()>=3 -> NeedsOwner, 270-273 writes needs-owner without dispatch; test a_fourth_check_after_three_follow_ups_dispatches_nothing_and_needs_owner asserts dispatches stays 3 and status needs-owner (tests:303-309) — passed"
+          },
+          {
+            "id": "c4",
+            "status": "PASS",
+            "evidence": "session_init.rs:156-162 returns before probe_door when herding worker or read_open_rows empty; session_close/mod.rs:189-192 same gate before probe_door/check_all; check_all itself returns early on empty rows (handoff_ledger.rs:224-227). No dedicated hook test for this case."
+          },
+          {
+            "id": "c5",
+            "status": "PASS",
+            "evidence": "handoff_ledger.rs:231-253 door Absent computes unmet via branch_merged and emits NoDoor without writing or dispatching; unit test check_all_with_no_door_lists_unmet_and_dispatches_nothing (554 lines file, 524-553) and integration with_waggledance_off_path_the_check_dispatches_nothing assert 'no door: wt/feat-x', empty argv log, row still open (tests:317-321) — passed"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "gemini-4-hydrogen",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-11-24T10:43:26.963Z"
+      }
+    ]
+  },
+  "usage": null,
+  "usage_reason": "herding job(s) named this cell but no readable session transcript (1 unreadable)"
+}

@@ -1,0 +1,161 @@
+{
+  "id": "lsh-5",
+  "feature": "leader-self-handoff",
+  "title": "Test the per-attempt handoff id, the follow-up check and the Stop net",
+  "lane": "standard",
+  "role": "test",
+  "deps": [
+    "lsh-1",
+    "lsh-2",
+    "lsh-3",
+    "lsh-4"
+  ],
+  "decisions": [
+    "86f0832c-b108-40c0-b77f-0b970ed5ba36",
+    "4f8fdbe1-903e-42d1-ab07-7a0b05d02935"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/tests/handoff_self_drive.rs"
+  ],
+  "read_first": [
+    "docs/history/leader-self-handoff/CONTEXT.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Without reading the implementers' notes, check lsh-1, lsh-2 and lsh-3 against CONTEXT.md D1-D6 and add integration tests in tests/handoff_self_drive.rs that drive the built bee binary against a temp git repo onboarded the way the existing integration tests do, with a fake waggledance on PATH (a script that answers list --json with the temp repo as a project, records every argv to a file, answers dispatch with a run_id JSON, and answers runs show from a fixture file the test writes). Cover: two bee state handoff send calls send two different request ids; a dispatch whose runs show says done ends [handoff_deduped] and writes no ledger row; a sent handoff writes .bee/handoffs/<id>.json with expects branch-merged wt/<feature> when that branch is unmerged; bee state handoff check on a done run with an unmerged branch dispatches with --follow-up-of <run> --handoff and records a follow-up; a merged branch flips the row to met; a fourth check after 3 follow-ups dispatches nothing and prints needs-owner; with waggledance off PATH the check dispatches nothing. Drive the session-close hook with a Stop payload and a transcript whose last assistant text says open a new session: blocks with a door, passes with stop_hook_active true, passes with an advisory line and no door. See each new test fail on purpose once (break an assertion) before trusting it. A tester never edits product code: on a defect return BLOCKED with the red output. No code comments.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test handoff_self_drive",
+  "must_haves": {
+    "why": "A code cell never certifies itself.",
+    "out_of_scope": [
+      "doctrine text"
+    ],
+    "truths": [
+      "a test fails if two sends reuse one request id",
+      "a test fails if a done run is reported as sent",
+      "a test fails if an unmet merge on a finished run gets no follow-up dispatch",
+      "a test fails if the Stop net stops blocking an open-a-new-session reply with a door present"
+    ],
+    "prohibitions": [
+      "No code comments",
+      "No product code edits"
+    ]
+  },
+  "behavior_change": false,
+  "tester_rule": true,
+  "judge_obligation_ack": "Tester for lsh-1, lsh-2 and lsh-3.",
+  "status": "capped",
+  "trace": {
+    "worker": "w-lsh-5",
+    "outcome": "Added 10 binary-driven tests for per-attempt handoff ids, dedupe, ledger, follow-up check and the Stop net; all green, each seen red once — 2668658938d6ee83b820dade974394f743a65816",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/tests/handoff_self_drive.rs"
+    ],
+    "deviations": [
+      "sync-ack: a new test file only; the anchored concepts describe unrelated suites and no behavior changed"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-24T10:27:42.423Z",
+    "behavior_change": false,
+    "verification_evidence": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test handoff_self_drive — green:unit — 10 passed; 0 failed; new test file only",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "acb2fe59-4061-4af3-b608-761d02fd30c9",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test handoff_self_drive",
+    "claimed_at": "2026-11-24T10:23:15.661Z",
+    "knowledge_delta": [],
+    "sync_ack": "a new test file only; the anchored concepts describe unrelated suites and no behavior changed",
+    "no_mistakes": true,
+    "no_knowledge_used": true,
+    "principles_used": [
+      {
+        "slug": "bee-principle-red-before-green",
+        "changed": "flipped one assertion per test and saw all 10 fail before trusting the green run"
+      },
+      {
+        "slug": "bee-principle-test-behavior-not-structure",
+        "changed": "asserted on the fake waggledance argv log, ledger files and hook stdout instead of internal calls"
+      }
+    ],
+    "changed_lines": 407,
+    "report": {
+      "outcome": "Added 10 binary-driven tests for per-attempt handoff ids, dedupe, ledger, follow-up check and the Stop net; all green, each seen red once — 2668658938d6ee83b820dade974394f743a65816",
+      "commit": "2668658938d6ee83b820dade974394f743a65816",
+      "files": [
+        "packages/bee-rs/crates/bee/tests/handoff_self_drive.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test handoff_self_drive — green:unit — PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test handoff_self_drive — green:unit — 10 passed; 0 failed; new test file only",
+      "deviations": [],
+      "knowledge_used": [],
+      "principles_used": [
+        "bee-principle-red-before-green — flipped one assertion per test and saw all 10 fail before trusting the green run",
+        "bee-principle-test-behavior-not-structure — asserted on the fake waggledance argv log, ledger files and hook stdout instead of internal calls"
+      ],
+      "reaction": "confirm",
+      "skipped": [
+        "full suite and workspace clippy from the Proof command — the brief says do not run the full suite; ran the cell verify and clippy scoped to this test target",
+        "D5 hook-triggered check — not in the cell's cover list"
+      ],
+      "found": [
+        "handoff_ledger::branch_merged hard-codes main as the trunk; in a project whose trunk is not main, send adds no wt/<feature> expectation and an explicit --expect-merge is never met",
+        "with no door, check reports a row whose expectations are all met as pending instead of met"
+      ],
+      "patch_id": "31da2d3920decff3650fb3286df2517acf25cfc9"
+    },
+    "reaction": "confirm",
+    "skipped": [
+      "full suite and workspace clippy from the Proof command — the brief says do not run the full suite; ran the cell verify and clippy scoped to this test target",
+      "D5 hook-triggered check — not in the cell's cover list"
+    ],
+    "found": [
+      "handoff_ledger::branch_merged hard-codes main as the trunk; in a project whose trunk is not main, send adds no wt/<feature> expectation and an explicit --expect-merge is never met",
+      "with no door, check reports a row whose expectations are all met as pending instead of met"
+    ],
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "a test fails if two sends reuse one request id",
+            "artifact": "packages/bee-rs/crates/bee/tests/handoff_self_drive.rs"
+          },
+          {
+            "requirement": "a test fails if a done run is reported as sent",
+            "artifact": "packages/bee-rs/crates/bee/tests/handoff_self_drive.rs"
+          },
+          {
+            "requirement": "a test fails if an unmet merge on a finished run gets no follow-up dispatch",
+            "artifact": "packages/bee-rs/crates/bee/tests/handoff_self_drive.rs"
+          },
+          {
+            "requirement": "a test fails if the Stop net stops blocking an open-a-new-session reply with a door present",
+            "artifact": "packages/bee-rs/crates/bee/tests/handoff_self_drive.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/tests/handoff_self_drive.rs",
+            "artifact": "packages/bee-rs/crates/bee/tests/handoff_self_drive.rs"
+          }
+        ],
+        "recorded_at": "2026-11-24T10:36:20.385Z",
+        "recorded_by": "2ebd7b1e-e964-48d2-9c5a-420a42be316c",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": {
+    "new": 101780,
+    "cached": 1525074,
+    "total": 1626854,
+    "models": {
+      "claude-opus-5-5": {
+        "new": 101780,
+        "cached": 1525074,
+        "total": 1626854
+      }
+    },
+    "jobs": [
+      "job-1795515799774-2661253-1"
+    ]
+  }
+}

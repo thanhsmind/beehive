@@ -1,0 +1,18 @@
+{
+  "request_id": "adopted-run-3481acb8c4fa9a75",
+  "run_id": "run-3481acb8c4fa9a75",
+  "project_id": "beehive",
+  "session_id": "adopted",
+  "feature": "pi-1-6-upgrade",
+  "sent_at": "2026-11-24T10:40:07.708Z",
+  "task_file": "",
+  "task_text": "Handoff from previous leader session (context 205k tokens past 120k mark).\nCurrent feature: windows-test-build\nOpen or claimed cells: none\n\nOwner request (reply in Vietnamese, short ELI5 style): with pi's new updates (pi 1.6.0 via mise), make beehive run better on pi. Feature pi-1-6-upgrade, worktree /mnt/data/Projects/goglbe/beehive--wt--pi-1-6-upgrade, gates context+shape+execution auto-approved under gate_bypass full. Done: p16u-1 capped (commit 9c78f7c7b: session_shutdown calls stopDrainTimer, doctor pi hint names @earendil-works/pi-coding-agent, belt CEILING 1.6.0, release-manifest regen); p16u-3 capped (commit 5fc4cf3b3, audit page 1.4.0 to 1.6.0). Live re-probe on the fixed worktree belt: an antigravity 429 run printed no bee in-flight-workers stale-ctx line after session_shutdown (before the fix 9 to 48 lines). .bee/bin/bee was rebuilt and reinstalled at 2.120.0. Remaining: (1) dispatch p16u-2 (role test, deps p16u-1 and p16u-3) via bee dispatch prepare --runtime claude --kind cell --cell p16u-2 --worker p16u-2-test --claim from main, run the returned herding payload, settle with cells finish --from-job if it does not cap; (2) bee test once in the worktree; (3) cells leader-check, then bee worktree merge from main; (4) rebuild and reinstall .bee/bin/bee after merge; (5) re-run pi -p ok probe from main; (6) close the two backlog findings filed under feature pi-1-6-capability-audit (doctor pi hint P2, stale-ctx spam P3); (7) report to the owner in Vietnamese: what changed, did it work, what next. Side note: in the worktree run pi printed once 'bee: hook prompt-context could not decide this payload — allowing the operation (fail-open)'; not seen from main; investigate or file. No release unless the owner asks.",
+  "expects": [
+    {
+      "kind": "branch-merged",
+      "branch": "wt/pi-1-6-upgrade"
+    }
+  ],
+  "follow_ups": [],
+  "status": "met"
+}
