@@ -100,6 +100,7 @@ pub struct HandoffRequest {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum HandoffOutcome {
     Sent { run_id: String, request_id: String },
+    Deduped { run_id: String, status: String },
     Failed { reason: String },
 }
 
@@ -108,14 +109,32 @@ pub fn build_request(
     follow_up_of: Option<String>,
     session_id: &str,
     feature: &str,
+    attempt: &str,
     task_file: PathBuf,
 ) -> HandoffRequest {
     HandoffRequest {
         project_id: project_id.to_string(),
         follow_up_of: follow_up_of.filter(|s| !s.trim().is_empty()),
-        request_id: format!("bee-handoff-{session_id}-{feature}"),
+        request_id: format!("bee-handoff-{session_id}-{feature}-{attempt}"),
         task_file,
     }
+}
+
+pub fn is_deduped_run(
+    status: &str,
+    created_at: Option<&str>,
+    attempt_start: chrono::DateTime<chrono::Utc>,
+) -> bool {
+    let norm = status.trim().to_ascii_lowercase();
+    if norm == "done" || norm == "lost" {
+        return true;
+    }
+    if let Some(ts) = created_at.map(str::trim).filter(|s| !s.is_empty())
+        && let Ok(dt) = chrono::DateTime::parse_from_rfc3339(ts)
+    {
+        return dt.with_timezone(&chrono::Utc) < attempt_start;
+    }
+    false
 }
 
 pub fn dispatch_argv(req: &HandoffRequest) -> Vec<String> {
@@ -330,6 +349,8 @@ pub fn execute_handoff(
     flags: Option<&str>,
     open_cells: &[String],
     owner_text: &str,
+    explicit_follow_up_of: Option<&str>,
+    expect_merge: &[String],
 ) -> HandoffOutcome {
     let HandoffDoor::Present { binary, project_id } = door else {
         return HandoffOutcome::Failed {
@@ -337,21 +358,32 @@ pub fn execute_handoff(
         };
     };
 
-    let follow_up_of = std::env::var("PASEO_AGENT_ID")
-        .ok()
-        .map(|s| s.trim().to_string())
+    let attempt_start = chrono::Utc::now();
+    let attempt = crate::verbs::decisions::to_base36(
+        attempt_start.timestamp_millis().max(0) as u64,
+    );
+
+    let follow_up_of = explicit_follow_up_of
+        .map(str::trim)
         .filter(|s| !s.is_empty())
-        .and_then(|agent_id| {
-            let output = Command::new(binary)
-                .args(["runs", "--project", project_id, "--full"])
-                .stdin(Stdio::null())
-                .output()
-                .ok()?;
-            if !output.status.success() {
-                return None;
-            }
-            let stdout = String::from_utf8_lossy(&output.stdout);
-            find_follow_up(&stdout, &agent_id)
+        .map(str::to_string)
+        .or_else(|| {
+            std::env::var("PASEO_AGENT_ID")
+                .ok()
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+                .and_then(|agent_id| {
+                    let output = Command::new(binary)
+                        .args(["runs", "--project", project_id, "--full"])
+                        .stdin(Stdio::null())
+                        .output()
+                        .ok()?;
+                    if !output.status.success() {
+                        return None;
+                    }
+                    let stdout = String::from_utf8_lossy(&output.stdout);
+                    find_follow_up(&stdout, &agent_id)
+                })
         });
 
     let tmp_dir = main_root.join(".bee").join("tmp");
@@ -366,7 +398,7 @@ pub fn execute_handoff(
     };
     let safe_sid = sanitize_path_segment(session_id);
     let safe_suffix = sanitize_path_segment(req_suffix);
-    let task_file = tmp_dir.join(format!("handoff-{safe_sid}-{safe_suffix}.md"));
+    let task_file = tmp_dir.join(format!("handoff-{safe_sid}-{safe_suffix}-{attempt}.md"));
     let task_text = compose_task_text(
         reason,
         feature,
@@ -383,7 +415,14 @@ pub fn execute_handoff(
         };
     }
 
-    let req = build_request(project_id, follow_up_of, session_id, req_suffix, task_file);
+    let req = build_request(
+        project_id,
+        follow_up_of,
+        session_id,
+        req_suffix,
+        &attempt,
+        task_file,
+    );
     let argv = dispatch_argv(&req);
     let output = match Command::new(binary)
         .args(&argv)
@@ -414,6 +453,70 @@ pub fn execute_handoff(
         };
     };
 
+    if let Ok(show_out) = Command::new(binary)
+        .args(["runs", "show", &run_id])
+        .stdin(Stdio::null())
+        .output()
+        && show_out.status.success()
+        && let Ok(doc) = serde_json::from_slice::<Value>(&show_out.stdout)
+        && let Some(row) = doc.get("runs").and_then(Value::as_array).and_then(|a| a.first())
+    {
+        let status = row.get("status").and_then(Value::as_str).unwrap_or("");
+        let created_at = row.get("created_at").and_then(Value::as_str);
+        if is_deduped_run(status, created_at, attempt_start) {
+            let display_status = if status.trim().is_empty() {
+                "unknown".to_string()
+            } else {
+                status.trim().to_string()
+            };
+            return HandoffOutcome::Deduped {
+                run_id,
+                status: display_status,
+            };
+        }
+    }
+
+    let mut expects = Vec::new();
+    let trimmed_feature = feature.trim();
+    if !trimmed_feature.is_empty() && trimmed_feature != "none" {
+        let wt_branch = format!("wt/{trimmed_feature}");
+        if crate::verbs::handoff_ledger::branch_merged(main_root, &wt_branch) == Some(false) {
+            expects.push(crate::verbs::handoff_ledger::Expectation::BranchMerged {
+                branch: wt_branch,
+            });
+        }
+    }
+    for raw in expect_merge {
+        let b = raw.trim();
+        if b.is_empty() {
+            continue;
+        }
+        if !expects.iter().any(|e| match e {
+            crate::verbs::handoff_ledger::Expectation::BranchMerged { branch } => branch == b,
+        }) {
+            expects.push(crate::verbs::handoff_ledger::Expectation::BranchMerged {
+                branch: b.to_string(),
+            });
+        }
+    }
+
+    let ledger_row = crate::verbs::handoff_ledger::HandoffLedgerRow {
+        request_id: req.request_id.clone(),
+        run_id: run_id.clone(),
+        project_id: project_id.to_string(),
+        session_id: session_id.to_string(),
+        feature: feature.to_string(),
+        sent_at: chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
+        task_file: req.task_file.to_string_lossy().into_owned(),
+        task_text,
+        expects,
+        follow_ups: Vec::new(),
+        status: crate::verbs::handoff_ledger::LedgerStatus::Open,
+    };
+    if let Err(e) = crate::verbs::handoff_ledger::write_row(main_root, &ledger_row) {
+        eprintln!("warning: could not write handoff ledger row: {e}");
+    }
+
     HandoffOutcome::Sent {
         run_id,
         request_id: req.request_id,
@@ -425,17 +528,18 @@ mod tests {
     use super::*;
 
     #[test]
-    fn build_request_formats_deterministic_request_id() {
+    fn build_request_formats_attempt_request_id() {
         let req = build_request(
             "beehive",
             Some("run-123".to_string()),
             "sess-abc",
             "next-feat",
+            "m1a2b3",
             PathBuf::from("/tmp/task.md"),
         );
         assert_eq!(req.project_id, "beehive");
         assert_eq!(req.follow_up_of.as_deref(), Some("run-123"));
-        assert_eq!(req.request_id, "bee-handoff-sess-abc-next-feat");
+        assert_eq!(req.request_id, "bee-handoff-sess-abc-next-feat-m1a2b3");
         assert_eq!(req.task_file, PathBuf::from("/tmp/task.md"));
     }
 
@@ -446,6 +550,7 @@ mod tests {
             None,
             "sess-1",
             "feat-a",
+            "att1",
             PathBuf::from("/repo/.bee/tmp/task.md"),
         );
         assert_eq!(
@@ -456,7 +561,7 @@ mod tests {
                 "beehive",
                 "--leader",
                 "--request-id",
-                "bee-handoff-sess-1-feat-a",
+                "bee-handoff-sess-1-feat-a-att1",
                 "--task-file",
                 "/repo/.bee/tmp/task.md",
             ]
@@ -470,6 +575,7 @@ mod tests {
             Some("run-999".to_string()),
             "sess-1",
             "feat-a",
+            "att2",
             PathBuf::from("/repo/.bee/tmp/task.md"),
         );
         assert_eq!(
@@ -483,11 +589,36 @@ mod tests {
                 "run-999",
                 "--handoff",
                 "--request-id",
-                "bee-handoff-sess-1-feat-a",
+                "bee-handoff-sess-1-feat-a-att2",
                 "--task-file",
                 "/repo/.bee/tmp/task.md",
             ]
         );
+    }
+
+    #[test]
+    fn is_deduped_run_detects_terminal_status_and_earlier_created_at() {
+        let attempt = chrono::DateTime::parse_from_rfc3339("2026-11-24T10:00:00.000Z")
+            .unwrap()
+            .with_timezone(&chrono::Utc);
+        assert!(is_deduped_run("done", Some("2026-11-24T10:00:05.000Z"), attempt));
+        assert!(is_deduped_run("lost", None, attempt));
+        assert!(is_deduped_run(
+            "working",
+            Some("2026-11-24T09:59:59.999Z"),
+            attempt
+        ));
+        assert!(!is_deduped_run(
+            "working",
+            Some("2026-11-24T10:00:00.000Z"),
+            attempt
+        ));
+        assert!(!is_deduped_run(
+            "queued",
+            Some("2026-11-24T10:00:01.000Z"),
+            attempt
+        ));
+        assert!(!is_deduped_run("queued", None, attempt));
     }
 
     #[test]

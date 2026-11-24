@@ -49,15 +49,13 @@ pub(crate) struct Flags(pub Vec<(String, FlagV)>);
 
 impl Flags {
     pub(crate) fn get(&self, name: &str) -> Option<&FlagV> {
-        self.0.iter().find(|(k, _)| k == name).map(|(_, v)| v)
+        self.0.iter().rev().find(|(k, _)| k == name).map(|(_, v)| v)
+    }
+    pub(crate) fn get_all(&self, name: &str) -> Vec<&FlagV> {
+        self.0.iter().filter(|(k, _)| k == name).map(|(_, v)| v).collect()
     }
     pub(crate) fn insert(&mut self, name: &str, value: FlagV) {
-        // JS `flags[name] = value`: first-occurrence position, last value.
-        if let Some(slot) = self.0.iter_mut().find(|(k, _)| k == name) {
-            slot.1 = value;
-        } else {
-            self.0.push((name.to_string(), value));
-        }
+        self.0.push((name.to_string(), value));
     }
     /// Non-empty string value (requireFlag's accepted shape). Anything else —
     /// absent, boolean-true, empty — is Node's own refusal path → caller

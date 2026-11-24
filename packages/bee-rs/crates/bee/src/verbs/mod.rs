@@ -32,6 +32,7 @@ pub mod feature_group;
 pub mod feedback;
 pub mod fix_at;
 pub mod handoff_door;
+pub mod handoff_ledger;
 pub mod help;
 pub mod intent_group;
 pub mod knowledge;

@@ -831,7 +831,10 @@ pub(crate) fn run_handoff_dismiss(flags: Flags, use_json: bool, t0: Instant) -> 
 }
 
 pub(crate) fn run_handoff_send(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
-    if !keys_known(&flags, &["task", "session-id"]) {
+    if !keys_known(
+        &flags,
+        &["task", "session-id", "follow-up-of", "expect-merge"],
+    ) {
         return None;
     }
     let ctx = match go("state handoff send", use_json, t0)? {
@@ -899,6 +902,20 @@ pub(crate) fn run_handoff_send(flags: Flags, use_json: bool, t0: Instant) -> Opt
             .flatten()
             .and_then(|r| crate::verbs::handoff_door::session_context_tokens(&r))
             .unwrap_or(0);
+        let follow_up_of = flag_value(&flags, "follow-up-of")
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty());
+        let mut expect_merge = Vec::new();
+        for v in flags.get_all("expect-merge") {
+            if let FlagV::S(raw) = v {
+                for part in raw.split(',') {
+                    let b = part.trim();
+                    if !b.is_empty() {
+                        expect_merge.push(b.to_string());
+                    }
+                }
+            }
+        }
         match crate::verbs::handoff_door::execute_handoff(
             &door,
             &ctx.root,
@@ -911,6 +928,8 @@ pub(crate) fn run_handoff_send(flags: Flags, use_json: bool, t0: Instant) -> Opt
             None,
             &open_cells,
             &task_text,
+            follow_up_of.as_deref(),
+            &expect_merge,
         ) {
             crate::verbs::handoff_door::HandoffOutcome::Sent { run_id, request_id } => {
                 let _ = release_session_record(&ctx.root, &sid);
@@ -928,6 +947,11 @@ pub(crate) fn run_handoff_send(flags: Flags, use_json: bool, t0: Instant) -> Opt
                 }
                 Ok(Out::Thrown(format!(
                     "[handoff_sent] run {run_id}: this session is released; tell the owner in one line and stop."
+                )))
+            }
+            crate::verbs::handoff_door::HandoffOutcome::Deduped { run_id, status } => {
+                Ok(Out::Thrown(format!(
+                    "[handoff_deduped] run {run_id} was already {status}; nothing new was dispatched — rerun bee state handoff send"
                 )))
             }
             crate::verbs::handoff_door::HandoffOutcome::Failed { reason } => {
