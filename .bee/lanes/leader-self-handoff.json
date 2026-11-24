@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "leader-self-handoff",
   "mode": null,
-  "phase": "exploring",
+  "phase": "idle",
   "approved_gates": {
     "context": true,
     "shape": true,
@@ -11,15 +11,10 @@
     "uat": false
   },
   "summary": "Feature \"leader-self-handoff\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at 08eaed8; reload the product and test \"leader-self-handoff\", then either approve uat (\"bee gate --name uat --approved true --lane leader-self-handoff\") or fix it in the worktree and merge again.",
+  "next_action": "bee close finished \"leader-self-handoff\" — feature is closed.",
   "created_at": "2026-11-24T09:59:18.383Z",
   "run_state": "awaiting-approval",
-  "waiting_on": {
-    "kind": "gate",
-    "subject": "uat: leader-self-handoff",
-    "asked_at": "2026-11-24T10:39:31.500Z",
-    "session": "bee-worktree-merge-sessionless"
-  },
+  "waiting_on": null,
   "route": {
     "class": "feature",
     "lane": "standard",
