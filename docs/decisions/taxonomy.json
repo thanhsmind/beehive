@@ -1012,6 +1012,7 @@
     "contract:from-job-adopt",
     "contract:settle-hint-floor",
     "contract:owner-only-refusal",
-    "team-profiles"
+    "team-profiles",
+    "contract:release-2-123-0-published"
   ]
 }
