@@ -124,7 +124,7 @@ fn thin_peer_hook_open(name: &str) -> bool {
 }
 
 fn marker_short_circuits(name: &str) -> bool {
-    name != "activity" && name != "worker-guard" && name != "write-guard"
+    name != "activity" && name != "worker-guard" && name != "write-guard" && name != "agy-belt"
 }
 
 fn print_hook_usage() {
@@ -469,13 +469,33 @@ mod tests {
         assert!(!marker_short_circuits("activity"));
         assert!(!marker_short_circuits("worker-guard"));
         assert!(!marker_short_circuits("write-guard"));
+        assert!(!marker_short_circuits("agy-belt"));
         for hook_name in HOOK_NAMES {
-            if hook_name == "activity" || hook_name == "worker-guard" || hook_name == "write-guard" {
+            if hook_name == "activity"
+                || hook_name == "worker-guard"
+                || hook_name == "write-guard"
+                || hook_name == "agy-belt"
+            {
                 continue;
             }
             assert!(marker_short_circuits(hook_name));
         }
         assert!(marker_short_circuits("some-unknown-hook"));
+    }
+
+    #[test]
+    fn under_the_marker_agy_belt_reaches_dispatch_and_reads_stdin() {
+        let _guard = herding_worker_env_lock();
+        let _env = MarkerEnv::set(Some("1"));
+        let mut stdin_read = false;
+        let args = vec![OsString::from("hook"), OsString::from("agy-belt")];
+        let code = try_native_with(&args, &mut || {
+            stdin_read = true;
+            br#"{"hookEventName":"PreToolUse","conversationId":"c1","toolCall":{"id":"1","name":"list_dir","args":{}}}"#.to_vec()
+        })
+        .expect("bee hook agy-belt is a hook invocation");
+        assert!(stdin_read);
+        assert_eq!(format!("{code:?}"), format!("{:?}", ExitCode::SUCCESS));
     }
 
     /// The guard hooks stay silent through the real entry point too:
