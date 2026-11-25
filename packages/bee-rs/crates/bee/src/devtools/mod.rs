@@ -43,7 +43,7 @@
 // symlink in the skill source, a missing input tree) return None instead.
 
 mod comment_baseline;
-mod hook_manifests;
+pub(crate) mod hook_manifests;
 mod install_support;
 mod jspath;
 mod plugin_distribution;
