@@ -4659,3 +4659,36 @@ fn team_json_notice_names_drop_global_when_the_global_config_sets_team() {
     assert_eq!(notices.len(), 1);
     assert!(notices[0].contains("bee config split-team --drop-global"));
 }
+
+#[test]
+fn agy_belt_merges_backs_up_refuses_malformed_and_is_idempotent() {
+    let fx = fixture();
+    let hooks_path = fx.repo.join(".agents").join("hooks.json");
+    let backup_path = fx.repo.join(".agents").join("hooks.json.bee-backup");
+
+    let original = "{\n  \"owner\": {\"SessionStart\": []},\n  \"bee\": {\"SessionStart\": []}\n}\n";
+    write(&hooks_path, original);
+
+    let p1 = plan(&fx, &[]);
+    assert_eq!(paths_for(&p1, "plan", "agy_belt"), vec![".agents/hooks.json"]);
+
+    let a1 = apply(&fx, &[]);
+    assert_eq!(a1["status"], "applied");
+    assert_eq!(std::fs::read_to_string(&backup_path).unwrap(), original);
+    let after1 = read_json(&hooks_path);
+    assert_eq!(after1["owner"], json!({"SessionStart": []}));
+    assert_eq!(after1["bee"], super::agy_belt::render_bee_key());
+
+    let p2 = plan(&fx, &[]);
+    assert!(!actions(&p2, "plan").contains(&"agy_belt".to_string()));
+    let a2 = apply(&fx, &[]);
+    assert!(!actions(&a2, "applied").contains(&"agy_belt".to_string()));
+
+    write(&hooks_path, "{bad json");
+    let p3 = plan(&fx, &[]);
+    assert_eq!(paths_for(&p3, "plan", "agy_belt"), vec![".agents/hooks.json"]);
+    let a3 = apply(&fx, &[]);
+    assert_eq!(a3["status"], "blocked_hooks_merge");
+    assert!(a3["reason"].as_str().unwrap().contains(".agents/hooks.json"));
+    assert_eq!(std::fs::read_to_string(&hooks_path).unwrap(), "{bad json");
+}

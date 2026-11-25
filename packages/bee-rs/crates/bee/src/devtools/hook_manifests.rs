@@ -51,17 +51,13 @@ use std::process::ExitCode;
 /// `Runtime::Opencode` here would imply a fourth generated-manifest
 /// projection that does not exist; the plugin file is the projection.
 ///
-/// PI TAKES THE SAME EXCLUSION (pi-support D4, named deviation recorded in
-/// docs/history/pi-support/plan.md). Pi is a first-class runtime at the
-/// dispatch door (D5: `team.pi`, herding-only) and ships no hook-config
-/// surface at all — its belt is the checked-in TypeScript extension at
-/// `.pi/extensions/bee-guard/`, auto-discovered by Pi from the workspace
-/// cwd, translating Pi's events onto `bee hook <rule>`. So there is NO
-/// `Runtime::Pi` and NO fourth projection here either; D4's purpose (derived
-/// coverage, never a hand list) is served the OpenCode way — the belt joins
-/// the parity test's derived row set, read out of the TS source. Adding a
-/// variant here would make `hook_manifests_match_disk` demand a generated
-/// file that cannot exist.
+/// PI AND AGY TAKE THE SAME EXCLUSION (pi-support D4, agy-runtime D2). Pi
+/// (`team.pi`, `.pi/extensions/bee-guard/`) and agy (`team.agy`,
+/// `.agents/hooks.json` + `bee hook agy-belt`) are first-class runtimes at
+/// the dispatch door (herding-only), not catalog `Entry`/`Group` projections.
+/// Neither gets a `Runtime::Pi` or `Runtime::Agy` variant here; each belt is
+/// the projection, and adding a variant would make `hook_manifests_match_disk`
+/// demand a generated file that does not exist.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Runtime {
     Claude,

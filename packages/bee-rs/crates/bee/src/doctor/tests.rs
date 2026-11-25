@@ -1780,7 +1780,7 @@ fn absent_runtimes_print_advisory_rows_and_never_change_the_verdict() {
     let names: Vec<&str> = runtime_rows.iter().map(|r| r["row"].as_str().unwrap()).collect();
     assert_eq!(
         names,
-        ["runtime_claude", "runtime_codex", "runtime_opencode", "runtime_pi", "runtime_paseo"]
+        ["runtime_claude", "runtime_codex", "runtime_opencode", "runtime_pi", "runtime_agy", "runtime_paseo"]
     );
     for row in &runtime_rows {
         assert_eq!(row["status"], "advisory");

@@ -1,0 +1,49 @@
+{
+  "bee": {
+    "SessionStart": [
+      {
+        "type": "command",
+        "command": "for b in ../.bee/bin/bee ../.bee/bin/bee.exe; do [ -x \"$b\" ] && exec \"$b\" hook agy-belt; done; g=\"$(git -C .. rev-parse --path-format=absolute --git-common-dir 2>/dev/null)\"; [ -n \"$g\" ] && for b in \"$g/../.bee/bin/bee\" \"$g/../.bee/bin/bee.exe\"; do [ -x \"$b\" ] && exec \"$b\" hook agy-belt; done; printf '%s\\n' '{}'",
+        "timeout": 30
+      }
+    ],
+    "PreInvocation": [
+      {
+        "type": "command",
+        "command": "for b in ../.bee/bin/bee ../.bee/bin/bee.exe; do [ -x \"$b\" ] && exec \"$b\" hook agy-belt; done; g=\"$(git -C .. rev-parse --path-format=absolute --git-common-dir 2>/dev/null)\"; [ -n \"$g\" ] && for b in \"$g/../.bee/bin/bee\" \"$g/../.bee/bin/bee.exe\"; do [ -x \"$b\" ] && exec \"$b\" hook agy-belt; done; printf '%s\\n' '{}'",
+        "timeout": 30
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "for b in ../.bee/bin/bee ../.bee/bin/bee.exe; do [ -x \"$b\" ] && exec \"$b\" hook agy-belt; done; g=\"$(git -C .. rev-parse --path-format=absolute --git-common-dir 2>/dev/null)\"; [ -n \"$g\" ] && for b in \"$g/../.bee/bin/bee\" \"$g/../.bee/bin/bee.exe\"; do [ -x \"$b\" ] && exec \"$b\" hook agy-belt; done; printf '%s\\n' '{\"decision\":\"ask\"}'",
+            "timeout": 30
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "for b in ../.bee/bin/bee ../.bee/bin/bee.exe; do [ -x \"$b\" ] && exec \"$b\" hook agy-belt; done; g=\"$(git -C .. rev-parse --path-format=absolute --git-common-dir 2>/dev/null)\"; [ -n \"$g\" ] && for b in \"$g/../.bee/bin/bee\" \"$g/../.bee/bin/bee.exe\"; do [ -x \"$b\" ] && exec \"$b\" hook agy-belt; done; printf '%s\\n' '{}'",
+            "timeout": 30
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "type": "command",
+        "command": "for b in ../.bee/bin/bee ../.bee/bin/bee.exe; do [ -x \"$b\" ] && exec \"$b\" hook agy-belt; done; g=\"$(git -C .. rev-parse --path-format=absolute --git-common-dir 2>/dev/null)\"; [ -n \"$g\" ] && for b in \"$g/../.bee/bin/bee\" \"$g/../.bee/bin/bee.exe\"; do [ -x \"$b\" ] && exec \"$b\" hook agy-belt; done; printf '%s\\n' '{}'",
+        "timeout": 30
+      }
+    ]
+  }
+}

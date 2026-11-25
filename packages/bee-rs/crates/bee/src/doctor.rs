@@ -51,6 +51,7 @@ enum Runtime {
     Claude,
     Codex,
     Pi,
+    Agy,
 }
 
 impl Runtime {
@@ -59,6 +60,7 @@ impl Runtime {
             Runtime::Claude => "claude",
             Runtime::Codex => "codex",
             Runtime::Pi => "pi",
+            Runtime::Agy => "agy",
         }
     }
     fn parse(s: &str) -> Option<Self> {
@@ -66,6 +68,7 @@ impl Runtime {
             "claude" => Some(Runtime::Claude),
             "codex" => Some(Runtime::Codex),
             "pi" => Some(Runtime::Pi),
+            "agy" => Some(Runtime::Agy),
             _ => None,
         }
     }
@@ -75,6 +78,7 @@ impl Runtime {
             Runtime::Claude => ".claude/settings.json",
             Runtime::Codex => ".codex/hooks.json",
             Runtime::Pi => ".pi/extensions/bee-guard/index.ts",
+            Runtime::Agy => ".agents/hooks.json",
         }
     }
     fn skills_rel(self) -> &'static str {
@@ -82,6 +86,7 @@ impl Runtime {
             Runtime::Claude => ".claude/skills",
             Runtime::Codex => ".agents/skills",
             Runtime::Pi => ".agents/skills",
+            Runtime::Agy => ".agents/skills",
         }
     }
 }
@@ -248,7 +253,7 @@ fn mechanical_rows_with_env(
 
     rows.push(wiring_row(root, runtime, hooks_bytes.as_deref()));
     match runtime {
-        Runtime::Codex | Runtime::Claude => {
+        Runtime::Codex | Runtime::Claude | Runtime::Agy => {
             if let Some(row) = binary_freshness_row(root) {
                 rows.push(row);
             }
@@ -494,6 +499,33 @@ fn wiring_row(root: &Path, runtime: Runtime, hooks_bytes: Option<&[u8]>) -> Row 
                                 "{count} {file_str} in .pi/extensions/bee-guard/ {verb_str} from what this bee embeds ({preview}) — run `bee onboard --apply` to refresh"
                             ),
                         }
+                    }
+                }
+            }
+        }
+        Runtime::Agy => {
+            let expected = crate::onboard::agy_belt::render_bee_key();
+            match hooks_bytes {
+                None => Row {
+                    key: "wiring_matches_binary",
+                    ok: Some(false),
+                    detail: "no .agents/hooks.json to compare — run `bee onboard --apply`".to_string(),
+                },
+                Some(bytes) => {
+                    let parsed: Option<Value> = serde_json::from_slice(bytes).ok();
+                    let same = parsed
+                        .as_ref()
+                        .and_then(|v| v.as_object())
+                        .and_then(|obj| obj.get("bee"))
+                        == Some(&expected);
+                    Row {
+                        key: "wiring_matches_binary",
+                        ok: Some(same),
+                        detail: if same {
+                            ".agents/hooks.json bee key matches what this bee renders".to_string()
+                        } else {
+                            ".agents/hooks.json bee key differs from what this bee renders — run `bee onboard --apply`".to_string()
+                        },
                     }
                 }
             }
@@ -1002,11 +1034,12 @@ pub(crate) fn belt_contract_check(root: &Path, version: Option<u32>) -> (String,
 fn runtime_checks_with_env(root: &Path, env: &dyn Fn(&str) -> Option<String>) -> Vec<RuntimeCheck> {
     let cfg = read_folded_config(root);
     let paseo_cmd = crate::herding::paseo::paseo_command(&cfg);
-    let specs: [(&'static str, &str, &str); 5] = [
+    let specs: [(&'static str, &str, &str); 6] = [
         ("claude", "claude", "npm install -g @anthropic-ai/claude-code"),
         ("codex", "codex", "npm install -g @openai/codex"),
         ("opencode", "opencode", "npm install -g opencode-ai"),
         ("pi", "pi", "npm install -g @earendil-works/pi-coding-agent"),
+        ("agy", "agy", "install Antigravity CLI"),
         ("paseo", paseo_cmd.as_str(), "npm install -g @getpaseo/cli"),
     ];
     specs
@@ -1050,7 +1083,7 @@ fn runtime_checks_with_env(root: &Path, env: &dyn Fn(&str) -> Option<String>) ->
                     }
                 }
                 _ => {
-                    let runtime = Runtime::parse(name).expect("claude, codex and pi parse");
+                    let runtime = Runtime::parse(name).expect("claude, codex, pi and agy parse");
                     let bytes = std::fs::read(root.join(runtime.hooks_rel())).ok();
                     let row = wiring_row(root, runtime, bytes.as_deref());
                     let belt = (runtime == Runtime::Pi).then(|| {
@@ -1628,6 +1661,7 @@ fn run_attest(runtime: Runtime, session: Option<&str>, as_json: bool) -> ExitCod
         let msg = match runtime {
             Runtime::Claude => "bee doctor attest: --runtime codex only. Claude has no trust-unknown rows, so mechanical green already reaches ready there — there is nothing to attest.",
             Runtime::Pi => "bee doctor attest: --runtime codex only. Pi has no trust-unknown rows, so mechanical green already reaches ready there — there is nothing to attest.",
+            Runtime::Agy => "bee doctor attest: --runtime codex only. Agy has no trust-unknown rows, so mechanical green already reaches ready there — there is nothing to attest.",
             Runtime::Codex => unreachable!(),
         };
         if as_json {
@@ -1930,5 +1964,24 @@ mod fix_at_debt_advisory_tests {
         assert!(row["detail"].as_str().unwrap().starts_with("21 open fix-at finding row(s) are older than 30 days"), "{row}");
         assert!(over_lines.iter().any(|l| l.contains("fix_at_debt") && l.contains("bee backlog fix-at next")), "{over_lines:?}");
         assert_eq!(over["overall_status"], clean["overall_status"]);
+    }
+
+    #[test]
+    fn agy_wiring_row_reports_ok_when_bee_key_matches_and_fix_otherwise() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(tmp.path(), "{}", false);
+        let missing = wiring_row(&root, Runtime::Agy, None);
+        assert_eq!(missing.ok, Some(false));
+        assert!(missing.detail.contains("bee onboard --apply"), "{:?}", missing.detail);
+
+        let rendered = crate::onboard::agy_belt::merge_into(None).unwrap();
+        std::fs::create_dir_all(root.join(".agents")).unwrap();
+        std::fs::write(root.join(".agents/hooks.json"), &rendered).unwrap();
+        let matched = wiring_row(&root, Runtime::Agy, Some(rendered.as_bytes()));
+        assert_eq!(matched.ok, Some(true));
+
+        let checks = runtime_checks_with_env(&root, &|_| None);
+        let agy = checks.iter().find(|c| c.name == "agy").expect("agy row present");
+        assert!(agy.detail.contains("matches what this bee renders"), "{}", agy.detail);
     }
 }
