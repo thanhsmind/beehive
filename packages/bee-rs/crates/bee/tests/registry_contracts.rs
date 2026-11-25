@@ -598,3 +598,34 @@ fn deferred_queue_declares_required_flags_for_add_claim_and_release() {
         assert_required_flags(&p, cmd_name, expected);
     }
 }
+
+#[test]
+fn deferred_queue_help_marks_required_flags_with_an_asterisk() {
+    let tmp = tempfile::tempdir().unwrap();
+    for (verb, required, optional) in [
+        ("add", &["--kind", "--feature", "--reason"][..], &["--cells", "--areas", "--files"][..]),
+        ("claim", &["--id"][..], &["--owner", "--lease"][..]),
+        ("release", &["--id"][..], &["--owner"][..]),
+    ] {
+        let out = std::process::Command::new(env!("CARGO_BIN_EXE_bee"))
+            .args(["deferred-queue", verb, "--help", "--brief"])
+            .env_remove("PI_SESSION_ID")
+            .current_dir(tmp.path())
+            .output()
+            .unwrap();
+        assert!(out.status.success(), "bee deferred-queue {verb} --help --brief failed: {out:?}");
+        let text = String::from_utf8_lossy(&out.stdout);
+        for flag in required {
+            assert!(
+                text.contains(&format!("  {flag}* (str)")),
+                "bee deferred-queue {verb} --help --brief must mark {flag} required:\n{text}"
+            );
+        }
+        for flag in optional {
+            assert!(
+                text.contains(&format!("  {flag} (str)")),
+                "bee deferred-queue {verb} --help --brief must leave {flag} unmarked:\n{text}"
+            );
+        }
+    }
+}
