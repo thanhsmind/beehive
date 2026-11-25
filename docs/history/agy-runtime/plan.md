@@ -228,7 +228,7 @@ is a named list read off a live agy run, with a fail-safe for unknown tools.
   "affects_skills": [],
   "affects_specs": [],
   "action": "Implement agy-runtime D8 in plain ASD-STE100 English. (1) New concept docs/knowledge/areas/hook-runtime/the-agy-belt.md with the same frontmatter shape as docs/knowledge/areas/hook-runtime/pi-version-pin-and-capability-audit.md (type bee.area, id hook-runtime-the-agy-belt, areas [hook-runtime], decisions citing agy-runtime D1-D8 as the history D-number on one line, sources docs/history/agy-runtime/CONTEXT.md and discovery.md, anchors the files named in CONTEXT.md plus packages/bee-rs/crates/bee/src/hooks/agy_belt.rs, .agents/hooks.json and packages/bee-rs/crates/bee/src/onboard/agy_belt.rs, verified_at 2026-11-25). Body: what agy reads (AGENTS.md, .agents/skills, .agents/hooks.json), the bee key and its five events, the translation table per event, the D4 tool map, the ask/deny/continue answers and why an empty answer is never printed (agy denies on {}), invoke_subagent denied and herding-only dispatch, ANTIGRAVITY_CONVERSATION_ID, onboarding merge rules, the owner's one-time workspace trust. Register the concept in docs/knowledge/index.md if the bundle needs it (run bee knowledge index if that is the regen path). (2) In catalog-projections-and-activation.md say there are five runtimes and add one paragraph: agy takes the named exclusion; its belt is .agents/hooks.json plus bee hook agy-belt. (3) In onboarding/repo-local-guardrails.md add one Business Rules bullet for the agy belt merge (D7). (4) docs/config-reference.md: add team.agy beside team.pi. (5) README.md: add agy where the supported runtimes are listed. Write the words without deferral words such as deferred, until or later. No code comments.",
-  "verify": ".bee/bin/bee knowledge check --path docs/knowledge/areas/hook-runtime/the-agy-belt.md",
+  "verify": ".bee/bin/bee knowledge check",
   "must_haves": {
    "why": "Leaders and owners need to read how agy is wired before they trust it.",
    "out_of_scope": ["code"],
@@ -271,6 +271,47 @@ is a named list read off a live agy run, with a fail-safe for unknown tools.
   "behavior_change": false,
   "tester_rule": true,
   "judge_obligation_ack": "Tester for agyrt-1, agyrt-2 and agyrt-3."
+ },
+ {
+  "id": "agyrt-6",
+  "feature": "agy-runtime",
+  "title": "Check the agy runtime docs against the shipped code",
+  "lane": "standard",
+  "role": "test",
+  "deps": [
+   "agyrt-4"
+  ],
+  "decisions": [
+   "fa33ba78-d185-4266-8202-1bc155607ec6"
+  ],
+  "files": [
+   "docs/history/agy-runtime/reports/agyrt-6-docs-check.md"
+  ],
+  "read_first": [
+   "docs/history/agy-runtime/CONTEXT.md"
+  ],
+  "action": "Without reading the implementer's notes, check the docs agyrt-4 wrote (docs/knowledge/areas/hook-runtime/the-agy-belt.md, docs/knowledge/areas/hook-runtime/catalog-projections-and-activation.md, docs/knowledge/areas/onboarding/repo-local-guardrails.md, docs/config-reference.md, README.md) against the shipped code: packages/bee-rs/crates/bee/src/hooks/agy_belt.rs, packages/bee-rs/crates/bee/src/onboard/agy_belt.rs, .agents/hooks.json, packages/bee-rs/crates/bee/src/session_identity.rs and packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs. Every event name, tool name, answer shape, file path, config key and env variable the docs name must exist in that code with the meaning the docs give. Run .bee/bin/bee knowledge check and .bee/bin/bee knowledge index --check. Write the findings, one line per checked claim with a file:line anchor, to docs/history/agy-runtime/reports/agyrt-6-docs-check.md and commit it. A checker never edits the docs or the code: on a wrong claim return BLOCKED naming the line.",
+  "verify": ".bee/bin/bee knowledge check",
+  "must_haves": {
+   "why": "A docs cell is checked by a second worker, never by its writer.",
+   "out_of_scope": [
+    "product code",
+    "docs edits"
+   ],
+   "truths": [
+    "every agy claim in the agyrt-4 docs has a file:line anchor in the shipped code",
+    "the knowledge bundle check is green"
+   ],
+   "prohibitions": [
+    "No code comments",
+    "No edits to docs or product code"
+   ]
+  },
+  "behavior_change": false,
+  "affects_skills": [],
+  "affects_specs": [],
+  "tester_rule": true,
+  "judge_obligation_ack": "Checker for agyrt-4."
  }
 ]
 ```
@@ -278,6 +319,7 @@ is a named list read off a live agy run, with a fail-safe for unknown tools.
 ## Proof
 
 - agyrt-5 integration tests, green.
+- agyrt-6 checks the agyrt-4 docs against the shipped code.
 - `bee test` (full declared suite) once before `bee worktree merge`.
 - Live: after merge, `bee onboard --apply` in a scratch repo, then a real
   `agy -p` run there: a write to a refused path is denied by the belt and a
