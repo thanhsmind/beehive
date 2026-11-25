@@ -248,6 +248,11 @@ tutorial skipped: no new API for other code to call.
       "prohibitions": [
         "no code comments",
         "existing guard refusals keep their remedy text"
+      ],
+      "why": "Spike F10: the Stop hook refused a turn end that asked the owner to run a write the guard refuses for the agent.",
+      "out_of_scope": [
+        "owner-ask phrase list changes",
+        "new guard refusals"
       ]
     },
     "behavior_change": true
@@ -288,6 +293,11 @@ tutorial skipped: no new API for other code to call.
       "key_links": [],
       "prohibitions": [
         "no code comments"
+      ],
+      "why": "Spike F10: the Stop hook refused a turn end that asked the owner to run a write the guard refuses for the agent.",
+      "out_of_scope": [
+        "owner-ask phrase list changes",
+        "new guard refusals"
       ]
     },
     "behavior_change": false
