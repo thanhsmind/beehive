@@ -1013,6 +1013,7 @@
     "contract:settle-hint-floor",
     "contract:owner-only-refusal",
     "team-profiles",
-    "contract:release-2-123-0-published"
+    "contract:release-2-123-0-published",
+    "contract:real-bee-global-isolation"
   ]
 }
