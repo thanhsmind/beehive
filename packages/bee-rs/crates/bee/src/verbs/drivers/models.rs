@@ -72,7 +72,7 @@ pub(crate) fn effort_for_dispatch(base: Option<&str>, kind: &str, lane: Option<&
 // reader's job is "does the operator's config name this runtime", and a
 // runtime absent from this list would silently resolve the CLAUDE table
 // instead (see the `RUNTIMES.contains` fallbacks below).
-pub(crate) const RUNTIMES: [&str; 4] = ["claude", "codex", "opencode", "pi"];
+pub(crate) const RUNTIMES: [&str; 5] = ["claude", "codex", "opencode", "pi", "agy"];
 
 /// The names bee itself ships a built-in default for.
 ///

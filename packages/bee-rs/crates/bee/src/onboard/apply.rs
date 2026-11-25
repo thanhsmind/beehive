@@ -480,6 +480,11 @@ pub fn apply_computed_plan(
         let result = match action {
             "merge_repo_hook_settings" => Some(hw::merge_repo_settings(&join_rel(repo_root, rel))),
             "merge_codex_hooks" => Some(hw::merge_codex_hooks(&join_rel(repo_root, rel))),
+            "agy_belt" => Some(
+                super::agy_belt::merge_file(&join_rel(repo_root, rel))
+                    .map(|_| hw::Merged { text: String::new(), changed: true })
+                    .map_err(|e| e.to_string()),
+            ),
             _ => None,
         };
         if let Some(Err(reason)) = result {
@@ -826,6 +831,18 @@ pub fn apply_computed_plan(
                     && err.kind() != std::io::ErrorKind::NotFound {
                         eprintln!("failed to remove {}: {err}", target.display());
                     }
+            }
+            "agy_belt" => {
+                if let Ok(Some(next)) = super::agy_belt::merge_file(&target) {
+                    let backup = target.with_file_name("hooks.json.bee-backup");
+                    if exists(&target) && !exists(&backup) {
+                        let _ = std::fs::copy(&target, &backup);
+                    }
+                    if let Some(parent) = target.parent() {
+                        let _ = std::fs::create_dir_all(parent);
+                    }
+                    let _ = write_file_atomic(&target, next.as_bytes());
+                }
             }
             "copy_statusline" => {
                 let name = posix_basename(rel);

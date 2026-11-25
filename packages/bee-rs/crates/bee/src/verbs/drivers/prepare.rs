@@ -147,7 +147,7 @@ pub(crate) fn granted_worktree_feature(
 /// `dispatch.prepare` AND `dispatch.wave`) BEFORE the handler runs, this list
 /// gates the handlers themselves, and `devtools::render_projection_text_for`
 /// carries the label arm. All three move together or the door half-opens.
-pub(crate) const DISPATCH_RUNTIMES: [&str; 3] = ["codex", "claude", "pi"];
+pub(crate) const DISPATCH_RUNTIMES: [&str; 4] = ["codex", "claude", "pi", "agy"];
 
 pub(crate) const DISPATCH_KINDS: [&str; 4] = ["cell", "gather", "reviewer", "advisor"];
 
@@ -200,6 +200,15 @@ pub(crate) fn unmapped_kind_refusal(kind: &str) -> Value {
 /// The `reason` every pi-runtime refusal carries — ONE reason word, so a
 /// caller at this door branches on one string rather than five.
 pub(crate) const PI_HERDING_ONLY_REASON: &str = "pi_requires_herding";
+pub(crate) const AGY_HERDING_ONLY_REASON: &str = "agy_requires_herding";
+
+pub(crate) fn is_herding_only_runtime(runtime: &str) -> bool {
+    matches!(runtime, "pi" | "agy")
+}
+
+pub(crate) fn herding_only_reason(runtime: &str) -> &'static str {
+    if runtime == "agy" { AGY_HERDING_ONLY_REASON } else { PI_HERDING_ONLY_REASON }
+}
 
 /// pi-result-mailbox D6 — the `detached_delivery` instruction the pi herding
 /// payload carries. It names the flag, the token to pass, and the one case
@@ -243,22 +252,28 @@ pub(crate) fn pi_resolution_word(resolved: &Resolved, escalated: bool) -> &'stat
 /// `--role ceiling`) carries its own remedy: there is no subagent to run on
 /// the session model, so the escalated cell runs INLINE in the session. Every
 /// other arm names the slot and the herding shape to configure.
-pub(crate) fn pi_requires_herding_refusal(slot: &str, resolved: &Resolved, escalated: bool) -> Value {
+pub(crate) fn requires_herding_refusal(
+    runtime: &str,
+    slot: &str,
+    resolved: &Resolved,
+    escalated: bool,
+) -> Value {
     let resolution = pi_resolution_word(resolved, escalated);
+    let label = if runtime == "pi" { "Pi" } else { runtime };
     let mut refusal = Map::new();
     refusal.insert("ok".into(), Value::Bool(false));
     refusal.insert("type".into(), Value::String("refused".into()));
-    refusal.insert("reason".into(), Value::String(PI_HERDING_ONLY_REASON.into()));
-    refusal.insert("runtime".into(), Value::String("pi".into()));
+    refusal.insert("reason".into(), Value::String(herding_only_reason(runtime).into()));
+    refusal.insert("runtime".into(), Value::String(runtime.to_string()));
     refusal.insert("slot".into(), Value::String(slot.to_string()));
     refusal.insert("resolution".into(), Value::String(resolution.to_string()));
     let fix = if resolution == "escalation" {
         format!(
-            "the \"{slot}\" dispatch asked for the session model (escalation), and the pi runtime has no session subagent to hand it to — Pi ships no Agent tool surface, so the payload would dispatch nothing. FIX: Pi has no subagent surface, run the escalated cell inline in the session. Every other cell on pi resolves a {{\"kind\":\"herding\"}} slot under team.pi."
+            "the \"{slot}\" dispatch asked for the session model (escalation), and the {runtime} runtime has no session subagent to hand it to — {label} ships no Agent tool surface, so the payload would dispatch nothing. FIX: {label} has no subagent surface, run the escalated cell inline in the session. Every other cell on {runtime} resolves a {{\"kind\":\"herding\"}} slot under team.{runtime}."
         )
     } else {
         format!(
-            "team.pi.{slot} resolved a \"{resolution}\" slot, and the pi runtime dispatches ONLY through herding — Pi ships no Agent tool surface, so any other payload would dispatch nothing. FIX: set team.pi.{slot} in .bee/config.json to {{\"kind\":\"herding\",\"agent\":\"<herding.agents name>\"}}."
+            "team.{runtime}.{slot} resolved a \"{resolution}\" slot, and the {runtime} runtime dispatches ONLY through herding — {label} ships no Agent tool surface, so any other payload would dispatch nothing. FIX: set team.{runtime}.{slot} in .bee/config.json to {{\"kind\":\"herding\",\"agent\":\"<herding.agents name>\"}}."
         )
     };
     refusal.insert("fix".into(), Value::String(fix));
@@ -2713,8 +2728,8 @@ pub(crate) fn prepare_dispatch_wire_out(
             // for its purpose — `{kind:"cli"}` has no herding pane behind it
             // on any kind, so the refusal that names the herding requirement
             // is the useful one for a gather as much as for a cell.
-            if runtime == "pi" {
-                return Ok(Prepared::Value(pi_requires_herding_refusal(slot, &r, false)));
+            if is_herding_only_runtime(runtime) {
+                return Ok(Prepared::Value(requires_herding_refusal(runtime, slot, &r, false)));
             }
             let mut refusal = Map::new();
             refusal.insert("ok".into(), Value::Bool(false));
@@ -2780,8 +2795,9 @@ pub(crate) fn prepare_dispatch_wire_out(
     // construction — `Model`, `Native`, `Cli`, `Budget` and the escalation
     // path's `Inherit` all arrive here as `resolved`, so a transport arm added
     // to the payload match below cannot open a new hole in this rule.
-    if runtime == "pi" && !matches!(resolved, Resolved::Herding { .. }) {
-        return Ok(Prepared::Value(pi_requires_herding_refusal(
+    if is_herding_only_runtime(runtime) && !matches!(resolved, Resolved::Herding { .. }) {
+        return Ok(Prepared::Value(requires_herding_refusal(
+            runtime,
             marker_role,
             &resolved,
             is_escalated,
@@ -5069,15 +5085,22 @@ fn claim_wave_cell(
                 // row per cell naming the slot and the herding shape,
                 // instead of a `wave` array of refusals holding claims.
                 Ok(Prepared::Value(result))
-                    if result.get("reason").and_then(Value::as_str)
-                        == Some(PI_HERDING_ONLY_REASON) =>
+                    if matches!(
+                        result.get("reason").and_then(Value::as_str),
+                        Some(r) if r == PI_HERDING_ONLY_REASON || r == AGY_HERDING_ONLY_REASON
+                    ) =>
                 {
+                    let reason = if result.get("reason").and_then(Value::as_str) == Some(AGY_HERDING_ONLY_REASON) {
+                        AGY_HERDING_ONLY_REASON
+                    } else {
+                        PI_HERDING_ONLY_REASON
+                    };
                     let note = unwind_wave_claim(root, topo, &worker, id);
                     let fix =
                         result.get("fix").and_then(Value::as_str).unwrap_or_default();
                     skipped.push(wave_skip(
                         id,
-                        PI_HERDING_ONLY_REASON,
+                        reason,
                         format!("cell \"{id}\": {fix} — {note}"),
                     ));
                 }

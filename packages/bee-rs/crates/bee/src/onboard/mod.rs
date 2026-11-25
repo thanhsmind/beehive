@@ -79,6 +79,7 @@
 //     interpreter's wording.
 
 mod agents;
+pub(crate) mod agy_belt;
 pub(crate) mod apply;
 pub(crate) mod hooks_wiring;
 mod merge;

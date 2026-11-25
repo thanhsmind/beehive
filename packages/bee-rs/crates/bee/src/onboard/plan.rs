@@ -1392,6 +1392,11 @@ pub fn compute_plan(engine: &Engine, repo_root: &Path, opts: &Options) -> Comput
         }
     }
 
+    let agy_hooks_path = repo_root.join(".agents").join("hooks.json");
+    if super::agy_belt::needs_apply(&agy_hooks_path) {
+        plan.push(plan_item("agy_belt", ".agents/hooks.json"));
+    }
+
     let current_exe = opts.current_exe.clone().or_else(|| std::env::current_exe().ok());
     if let Some(current_exe) = current_exe {
         let binary_rel = if cfg!(windows) {

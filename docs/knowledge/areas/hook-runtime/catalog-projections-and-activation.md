@@ -19,15 +19,16 @@ bee:
 # Hook Runtime — the catalog of record, its rendered projections, the third runtime's own belt, and checkpoint activation
 
 Which checkpoints exist is one question; whether they fire in a given project is
-another. The first is answered by a single catalog of record. Two of bee's four
+another. The first is answered by a single catalog of record. Two of bee's five
 runtimes each consume a projection rendered from that catalog, where every
 difference between the two rendered projections is a named export rather than
-drift. The other two runtimes cannot consume a rendered projection at all — one
+drift. The other three runtimes cannot consume a rendered projection at all — one
 because its before-tool checkpoint surface carries no deny return value, one
-because it ships no checkpoint-configuration surface whatsoever — so each
-carries its own hand-authored belt instead, itself one more named difference
-under the same rule, held to the identical parity guarantee by proof rather
-than by shared generation. The second question
+because it ships no checkpoint-configuration surface whatsoever, and one because
+its camelCase hook payload and `PreToolUse` verdict contract require a
+translator — so each carries its own hand-authored belt instead, itself one more
+named difference under the same rule, held to the identical parity guarantee by
+proof rather than by shared generation. The second question
 — whether a project's checkpoints are enabled at all — is answered by the
 project's own configuration and by the human owner's trust in each command
 definition.
@@ -63,6 +64,12 @@ definition.
   per `session_start` (cached, reload-idempotent) and each turn appends only
   the existing `prompt-context` output as the slim delta (pi-support D8).
   This belt carries one exclusion of its own, described in B9.
+- The fifth runtime — `agy` (Antigravity CLI 1.5.17+) — takes the same named
+  exclusion from the hook catalog: no `Runtime::Agy` enum variant and no
+  generated projection file. Its belt is `.agents/hooks.json` plus
+  `bee hook agy-belt`, which translates `agy`'s camelCase payloads onto the
+  same checks Claude Code runs (agy-runtime D2, D3; details in
+  [the agy belt](the-agy-belt.md)).
 
 ## Data Dictionary
 
@@ -70,7 +77,7 @@ definition.
 |---|---|
 | catalog of record | The single logical definition of every checkpoint: event, matcher, handler. Claude Code's and Codex's rendered projections are both derived from it deterministically — rendering again must reproduce both byte-for-byte. |
 | projection | The runtime-specific checkpoint list Claude Code or Codex actually loads. One per runtime, checked in, never hand-divergent. |
-| runtime's own belt | A runtime's hand-authored equivalent of a projection: one project file translating that runtime's own events into the same helper calls every projection makes, held to the catalog's coverage guarantee by a derived registry check rather than by shared generation. Two runtimes carry one — OpenCode and Pi. |
+| runtime's own belt | A runtime's hand-authored equivalent of a projection: one project file translating that runtime's own events into the same helper calls every projection makes, held to the catalog's coverage guarantee by a derived registry check rather than by shared generation. Three runtimes carry one — OpenCode, Pi, and agy. |
 | allowed difference | A named, exported exception explaining why one projection — or one runtime's own belt — carries or omits a checkpoint the others do not. Any un-named difference is a defect. |
 | activity checkpoint set | The lifecycle checkpoints that record what a session is doing rather than judging it. Claude carries prompt, before-tool, after-tool, after-tool-failure, permission request, stop, notification, and session end. Codex carries activity on its supported shipped events: prompt, before-tool, after-tool, and stop (`SessionStart` runs `session-init`, and `SessionEnd` is observer-only in canary test harnesses, not in the shipped manifest). One handler serves all activity events. No runtime records activity on `SubagentStart` or `SubagentStop` (`SubagentStart` runs audit only; `SubagentStop` runs audit, state sync, and chain nudge). What the handler writes is in `agent-activity-record.md` (decision b17bfa89). |
 

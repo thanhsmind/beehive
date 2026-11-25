@@ -1721,7 +1721,9 @@ use std::time::Instant;
                         "claude":{"generation":"sonnet","advisor":"sonnet"},
                         "codex":{"generation":"gpt-5","advisor":"gpt-5"},
                         "pi":{"generation":{"kind":"herding","agent":"pi-opus"},
-                              "advisor":{"kind":"herding","agent":"pi-fable"}}
+                              "advisor":{"kind":"herding","agent":"pi-fable"}},
+                        "agy":{"generation":{"kind":"herding","agent":"agy-opus"},
+                               "advisor":{"kind":"herding","agent":"agy-fable"}}
                     }}"#,
                 );
                 let model = if runtime == "claude" { "sonnet" } else { "gpt-5" };
@@ -8677,7 +8679,7 @@ advance_on — falling to another model there hides the defect (D11)"
     /// which carries the rendered prompt on `stdin` (`dispatched_body` already
     /// reads that key), so every body assertion below reads the pi row the
     /// same way it reads the other two.
-    const BRIEF_HOST: &str = r#"{"models":{"claude":{"generation":"sonnet","code":"sonnet","review":"opus","advisor":"opus"},"codex":{"generation":"gpt-5","code":"gpt-5","review":"gpt-5","advisor":"gpt-5-pro"},"pi":{"generation":{"kind":"herding","agent":"pi-agy-flash"},"code":{"kind":"herding","agent":"pi-opus"},"review":{"kind":"herding","agent":"pi-opus"},"advisor":{"kind":"herding","agent":"pi-fable"}}}}"#;
+    const BRIEF_HOST: &str = r#"{"models":{"claude":{"generation":"sonnet","code":"sonnet","review":"opus","advisor":"opus"},"codex":{"generation":"gpt-5","code":"gpt-5","review":"gpt-5","advisor":"gpt-5-pro"},"pi":{"generation":{"kind":"herding","agent":"pi-agy-flash"},"code":{"kind":"herding","agent":"pi-opus"},"review":{"kind":"herding","agent":"pi-opus"},"advisor":{"kind":"herding","agent":"pi-fable"}},"agy":{"generation":{"kind":"herding","agent":"agy-flash"},"code":{"kind":"herding","agent":"agy-opus"},"review":{"kind":"herding","agent":"agy-opus"},"advisor":{"kind":"herding","agent":"agy-fable"}}}}"#;
 
     /// The advisor prompt EXACTLY as it read before the `{{#if brief}}` block
     /// was added, pinned as literal bytes rather than re-derived from the
@@ -8719,7 +8721,7 @@ advance_on — falling to another model there hides the defect (D11)"
     /// hab-2: a herding or cli payload prefixes the embedded agent template body
     /// when the kind maps to a known bee agent (bee-worker, bee-forager, bee-guard).
     fn expected_dispatched_body(runtime: &str, kind: &str, body: &str) -> String {
-        if (runtime == "pi" && kind != "cell") || (runtime == "codex" && kind != "cell") {
+        if ((runtime == "pi" || runtime == "agy") && kind != "cell") || (runtime == "codex" && kind != "cell") {
             let pinned_type = match kind {
                 "cell" => "bee-worker",
                 "gather" => "bee-forager",
@@ -10669,6 +10671,29 @@ advance_on — falling to another model there hides the defect (D11)"
         assert!(fix.contains("team.pi"), "the fix must name the pi table: {fix}");
     }
 
+    #[test]
+    fn a_native_slot_on_agy_refuses_with_the_herding_remedy() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(
+            &tmp,
+            r#"{"models":{"agy":{"generation":{"kind":"native","model":"gemini-3"}}}}"#,
+        );
+        let Prepared::Value(v) = prepare_dispatch_with_role(
+            &root, "agy", "gather", None, None, None, false, None, None, false, None,
+        )
+        .unwrap() else {
+            panic!("expected a typed refusal on agy/gather");
+        };
+        assert_eq!(v.get("ok"), Some(&json!(false)), "{v}");
+        assert_eq!(v.get("type"), Some(&json!("refused")), "{v}");
+        assert_eq!(v.get("reason"), Some(&json!(AGY_HERDING_ONLY_REASON)), "{v}");
+        assert_eq!(v.get("runtime"), Some(&json!("agy")), "{v}");
+        assert_eq!(v.get("resolution"), Some(&json!("native")), "{v}");
+        let fix = v.get("fix").and_then(Value::as_str).unwrap_or_default();
+        assert!(fix.contains("team.agy.generation"), "{fix}");
+        assert!(fix.contains("herding"), "{fix}");
+    }
+
     /// GATE TWO of the three a runtime name passes. The argv-shape guard
     /// reads the `runtime` enum out of the embedded registry payload and
     /// refuses BEFORE the handler runs, so a runtime added to
@@ -10702,6 +10727,7 @@ advance_on — falling to another model there hides the defect (D11)"
                  one and not the other is a door that half-opens"
             );
             assert!(declared.contains(&"pi"), "{name}: --runtime pi must pass the shape guard");
+            assert!(declared.contains(&"agy"), "{name}: --runtime agy must pass the shape guard");
         }
     }
 

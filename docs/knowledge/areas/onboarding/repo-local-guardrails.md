@@ -143,6 +143,15 @@ asymmetry named above for the second runtime does not repeat here
   for byte and names `bee onboard --apply` as the fix (pi-extension-split
   D3, D4, D6; module map in
   `docs/knowledge/areas/hook-runtime/pi-version-pin-and-capability-audit.md`).
+- **The fifth runtime's belt merges under one key in `.agents/hooks.json`.**
+  `bee onboard --apply` writes or merges `.agents/hooks.json` by replacing
+  only the top-level `"bee"` key, keeping every other owner key's value
+  unchanged, backing up a pre-existing file to `.agents/hooks.json.bee-backup`
+  before the first rewrite, refusing a non-object or unparseable file without
+  writing, and making no changes on a second run. The template gives `team.agy`
+  the same herding roles as `team.pi`, `bee doctor` adds an agy wiring row
+  naming `bee onboard --apply` as the fix, and workspace trust in `agy` remains
+  the owner's one-time step (agy-runtime D7).
 
 ## Edge Cases Settled
 

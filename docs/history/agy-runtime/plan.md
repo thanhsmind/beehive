@@ -1,0 +1,429 @@
+---
+artifact_contract: bee-plan/v2
+mode: standard
+---
+
+# Plan: agy-runtime
+
+## Summary
+
+agy (Antigravity CLI) becomes the fifth bee runtime: a runtime label, a
+session identity, a herding-only dispatch door, and a guard belt in
+`.agents/hooks.json` that a Rust translator (`bee hook agy-belt`) turns into
+the same checks Claude Code runs.
+
+Mode: `standard` — flags: new runtime surface, hook behavior.
+Why this is the least workflow that protects the work: three code cells on
+disjoint seams, one docs cell, one independent tester.
+
+Playbook: `skills/bee-planning/playbooks/feature.md`, situation
+`skills/bee-planning/playbooks/feature/feature.md`.
+architect skipped: the belt copies the Pi and OpenCode belt shape (a
+translator onto existing hook commands); the data shape is agy's own,
+recorded in discovery.md.
+tutorial skipped: the belt has one caller, agy.
+statechart skipped: the belt is stateless per call.
+
+Throughput checkpoint:
+- Blocking first steps: context gate approved; shape+execution next.
+- Independent workstreams: agyrt-1 (runtime label, identity, door),
+  agyrt-2 (translator) and agyrt-4 (docs) touch disjoint files and run at
+  once.
+- Shared mutable state: none; each cell owns its files.
+- Smallest safe decomposition: agyrt-3 (belt file, onboarding, doctor)
+  waits on agyrt-2 for the served hook name; agyrt-5 tests all three.
+
+## Requirements (from CONTEXT.md)
+
+agy-runtime D1-D8, decision `fa33ba78-d185-4266-8202-1bc155607ec6`.
+
+## Load-bearing claims
+
+| # | Claim | Label | Anchor | Verbatim evidence |
+|---|-------|-------|--------|-------------------|
+| 1 | an empty PreToolUse answer denies the tool | ran | agy -p with a logging hook printing {} | `tool call denied by pre-tool hook` |
+| 2 | Pi and OpenCode take a named exclusion from the catalog | read | packages/bee-rs/crates/bee/src/devtools/hook_manifests.rs:44 | `/// NAMED EXCLUSION (hook-runtime R1: every per-runtime difference is a named` |
+| 3 | hook names are a closed list | read | packages/bee-rs/crates/bee/src/hooks/mod.rs:243 | `if !HOOK_NAMES.contains(&name.as_str()) {` |
+| 4 | session identity checks Pi first | read | packages/bee-rs/crates/bee/src/session_identity.rs:96 | `if let Some(val) = lookup("PI_SESSION_ID") {` |
+
+## Approach
+
+The belt is a translator, not a new set of checks. agy's hook contract
+carries a real deny verdict, so every existing check works as it is; only
+the payload and the answer change shape. The translator runs the existing
+hook commands as child processes of the same binary with a Claude-shaped
+stdin and maps their stdout and exit code back to agy's JSON. The tool map
+is a named list read off a live agy run, with a fail-safe for unknown tools.
+
+## Role assignments
+
+```json
+{
+ "schema_version": "1.0",
+ "runtime": "claude",
+ "roster_sha256": "d4e696dbde7989d6388dacce3fd7057cb3a6935b46024b79698596a46f6f41d3",
+ "stages": [
+  {"stage": "deployment", "classification": "not-applicable", "role": "deploy", "reason": "Release is a separate owner call."},
+  {"stage": "planning", "classification": "not-applicable", "role": "plan", "reason": "The leader wrote this plan from CONTEXT.md."},
+  {"stage": "implementation", "classification": "required", "role": "code", "reason": "agyrt-1, agyrt-2 and agyrt-3 write the runtime label, the translator and the belt wiring."},
+  {"stage": "test-and-live-proof", "classification": "required", "role": "test", "reason": "agyrt-5 tests agyrt-1, agyrt-2 and agyrt-3 independently."},
+  {"stage": "documentation-and-capture", "classification": "required", "role": "docs", "reason": "agyrt-4 writes the agy knowledge and reference docs."},
+  {"stage": "read-only-gather", "classification": "not-applicable", "role": "read", "reason": "The leader probed agy live and read the hook seams."},
+  {"stage": "fact-extraction", "classification": "not-applicable", "role": "extraction", "reason": "No narrow fact lookup is needed."},
+  {"stage": "generation-fallback", "classification": "not-applicable", "role": "generation", "reason": "Every job here has a specific role."},
+  {"stage": "independent-review", "classification": "not-applicable", "role": "review", "reason": "Independent review stays user-invoked and was not requested."},
+  {"stage": "generic-advisor", "classification": "not-applicable", "role": "advisor", "reason": "Decisions locked from the owner ask and a live probe; no consult owed."},
+  {"stage": "supervision", "classification": "not-applicable", "role": "supervisor", "reason": "No unattended loop runs here."},
+  {"stage": "blind-lane-1", "classification": "not-applicable", "role": "lane-1", "reason": "The belt shape follows the Pi and OpenCode precedent."},
+  {"stage": "blind-lane-2", "classification": "not-applicable", "role": "lane-2", "reason": "The belt shape follows the Pi and OpenCode precedent."},
+  {"stage": "blind-lane-3", "classification": "not-applicable", "role": "lane-3", "reason": "The belt shape follows the Pi and OpenCode precedent."},
+  {"stage": "design-ui", "classification": "not-applicable", "role": "design", "reason": "No rendered UI."},
+  {"stage": "hat-facts-gaps", "classification": "not-applicable", "role": "hat-facts-gaps", "reason": "Shape fixed by the owner ask, a live probe and the Pi belt precedent; hat wave skipped."},
+  {"stage": "hat-risks", "classification": "not-applicable", "role": "hat-risks", "reason": "Shape fixed by the owner ask, a live probe and the Pi belt precedent; hat wave skipped."},
+  {"stage": "hat-value", "classification": "not-applicable", "role": "hat-value", "reason": "Shape fixed by the owner ask, a live probe and the Pi belt precedent; hat wave skipped."},
+  {"stage": "hat-alternatives", "classification": "not-applicable", "role": "hat-alternatives", "reason": "Shape fixed by the owner ask, a live probe and the Pi belt precedent; hat wave skipped."},
+  {"stage": "hat-user-impact", "classification": "not-applicable", "role": "hat-user-impact", "reason": "Shape fixed by the owner ask, a live probe and the Pi belt precedent; hat wave skipped."},
+  {"stage": "writing", "classification": "not-applicable", "role": "writer", "reason": "Reference text rides agyrt-4 under the docs role."}
+ ]
+}
+```
+
+## Risk map
+
+| Risk | Where | Control |
+|------|-------|---------|
+| An empty or broken answer blocks every agy tool | agy-belt PreToolUse | always print a decision; neutral is ask |
+| A write tool slips past the write guard | tool map | named no-write list; path-carrying unknown tools checked as Write |
+| A worker starts outside the dispatch door | invoke_subagent | the belt denies it with the dispatch remedy |
+| An owner's own agy hooks are lost | onboarding merge | only the bee key changes; backup before first rewrite |
+| Wrong runtime when agy runs inside Claude | session identity | agy variable checked first |
+
+## Cells — current slice (preview)
+
+```json
+[
+ {
+  "id": "agyrt-1",
+  "feature": "agy-runtime",
+  "title": "Add agy as a runtime label with its session identity and a herding-only dispatch door",
+  "lane": "standard",
+  "role": "code",
+  "deps": [],
+  "decisions": [
+   "fa33ba78-d185-4266-8202-1bc155607ec6"
+  ],
+  "files": [
+   "packages/bee-rs/crates/bee/src/devtools/skill_trees.rs",
+   "packages/bee-rs/crates/bee/src/onboard/templates.rs",
+   "packages/bee-rs/crates/bee/src/onboard/render.rs",
+   "packages/bee-rs/crates/bee/src/onboard/plan.rs",
+   "packages/bee-rs/crates/bee/src/devtools/mod.rs",
+   "packages/bee-rs/crates/bee/src/verbs/drivers/mod.rs",
+   "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+   "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+   "packages/bee-rs/crates/bee/src/verbs/status_full/mod.rs",
+   "packages/bee-rs/crates/bee/src/verbs/models_group.rs",
+   "packages/bee-rs/crates/bee/src/verbs/config.rs",
+   "packages/bee-rs/crates/bee/src/session_identity.rs",
+   "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+  ],
+  "read_first": [
+   "docs/history/agy-runtime/CONTEXT.md",
+   "docs/history/agy-runtime/discovery.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Implement agy-runtime D1, D5 (the dispatch door half) and D6. Follow every place the label pi is a runtime and add agy beside it: MARKER_RUNTIMES in devtools/skill_trees.rs, RENDER_RUNTIMES and the team template in onboard/templates.rs (team.agy gets the same herding role map team.pi gets, with agent agy; herding.agents gets an agy entry whose argv is [\"agy\"] if the pi entry pattern needs one), the codex render in onboard/render.rs keeps agy blocks as it keeps pi blocks (a claude or opencode render strips them), the label arm in devtools/mod.rs (agy returns None like pi: no rendered hook projection), DISPATCH_RUNTIMES and the pi_requires_herding refusal (generalize it so agy is herding-only with the same remedy text naming its runtime), the status RUNTIMES list, models/config readers that list runtimes, and onboard/plan.rs where team.pi is special-cased. Register agy wherever registry_payload.json lists the --runtime values. In session_identity.rs locate_caller_from, check ANTIGRAVITY_CONVERSATION_ID first, before PI_SESSION_ID, CODEX_THREAD_ID and every Claude variable, returning runtime agy. Update the existing tests that pin the runtime lists (for example models_group.rs names, templates.rs team keys, drivers tests that walk DISPATCH_RUNTIMES) so they include agy, and add unit tests: the agy marker filters like pi, a dispatch prepare --runtime agy with a native slot refuses with the herding remedy, ANTIGRAVITY_CONVERSATION_ID wins over CLAUDE_CODE_SESSION_ID. Use rg to find every list; do not leave a runtime list that names pi without agy unless it is Pi-specific behavior (the Pi extension, PI_GUARD_FILES). No code comments.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee runtime && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee session_identity && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee drivers && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee onboard",
+  "must_haves": {
+   "why": "agy must be a runtime bee knows by name before a leader can run in it.",
+   "out_of_scope": [
+    "the hooks.json belt",
+    "the agy-belt translator",
+    "docs"
+   ],
+   "truths": [
+    "bee dispatch prepare --runtime agy --kind cell is accepted and a native slot refuses with the herding remedy",
+    "a skill block marked bee:only agy survives the codex render and is stripped from the claude render",
+    "ANTIGRAVITY_CONVERSATION_ID names an agy session even when CLAUDE_CODE_SESSION_ID is set",
+    "the onboarding template carries team.agy with the same roles as team.pi"
+   ],
+   "prohibitions": [
+    "No code comments",
+    "No hand edit of .bee/*.json(l) state files"
+   ]
+  },
+  "behavior_change": true
+ },
+ {
+  "id": "agyrt-2",
+  "feature": "agy-runtime",
+  "title": "Add bee hook agy-belt that translates agy hook payloads onto the existing bee checks",
+  "lane": "standard",
+  "role": "code",
+  "deps": [],
+  "decisions": [
+   "fa33ba78-d185-4266-8202-1bc155607ec6"
+  ],
+  "files": [
+   "packages/bee-rs/crates/bee/src/hooks/agy_belt.rs",
+   "packages/bee-rs/crates/bee/src/hooks/mod.rs"
+  ],
+  "read_first": [
+   "docs/history/agy-runtime/CONTEXT.md",
+   "docs/history/agy-runtime/discovery.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Implement agy-runtime D3, D4 and the belt half of D5. Add hooks/agy_belt.rs and register agy-belt in HOOK_NAMES and the dispatch match in hooks/mod.rs. The module has pure functions plus a thin run(): (1) parse the agy payload (camelCase: hookEventName, conversationId, cwd, workspacePaths, lastUserInput, invocationNum, toolCall {id,name,args}, error, continuationActive); (2) map_tool(name, args) -> a typed enum MappedTool { Check { tool_name, tool_input }, NoWrite, Subagent, Unknown } per D4: run_command {CommandLine} -> Bash {command}; write_file {Path, Content} -> Write {file_path, content}; edit_file {Path, Target, Replacement} -> Edit {file_path, old_string, new_string}; read_file {Path} -> Read {file_path}; invoke_subagent -> Subagent; a named const list of no-write tools (search_web, send_message, call_mcp_tool, read_url_content, list_dir, view_file, list_directory, the plan tool name seen in discovery, every name starting with browser_ or capture_browser or read_browser) -> NoWrite; any other tool carrying Path, AbsolutePath, TargetFile or File -> Check as Write {file_path, content: \"\"}; else Unknown; (3) build the Claude-shaped payload: hook_event_name, session_id = conversationId, cwd, bee_runtime agy, transcript_path, plus prompt (UserPromptSubmit), tool_name/tool_input (PreToolUse/PostToolUse), stop_hook_active (Stop); (4) run the existing hooks as child processes of std::env::current_exe() with args [hook, <name>] and the translated stdin, capturing stdout and exit status. Which hooks per event: read the Claude projection rows in devtools/hook_manifests.rs CATALOG for that event and tool (the same scripts the Claude plugin wires, mapped to their bee hook names as the existing Claude command builder does) so the belt never hand-lists checks that drift; (5) map answers back: SessionStart and PreInvocation (only invocationNum 0, else print {} and run nothing; PreInvocation maps to UserPromptSubmit with prompt = lastUserInput) -> collect the plain text or systemMessage text of each hook into {\"injectSteps\":[{\"systemMessage\":{\"systemMessage\":text}}]} or {} when empty; PreToolUse -> the first deny (hookSpecificOutput.permissionDecision deny, decision block, or exit code 2 with stderr) gives {\"decision\":\"deny\",\"reason\":r}; an updatedInput repair gives {\"decision\":\"ask\",\"overwrite\":{...}} mapped back to agy keys (command -> CommandLine, file_path -> Path, content -> Content, old_string -> Target, new_string -> Replacement); otherwise {\"decision\":\"ask\"}; Subagent -> deny with reason naming bee dispatch prepare --runtime agy --kind cell|gather|reviewer|advisor --json; NoWrite -> ask; Unknown -> ask and append a coverage-gap row with adapter::log_coverage_gap; a crash, a spawn error or an unreadable payload on PreToolUse -> deny (fail closed); PostToolUse -> run the checks, print {}; Stop -> session-close with stop_hook_active = continuationActive; a block (decision block) -> {\"decision\":\"continue\",\"reason\":r}, else {}; any failure on a non-PreToolUse event prints the neutral answer and exits 0. Always exit 0 and always print exactly one JSON object. Unit-test every pure function: the tool map for each named tool, the unknown-with-path case, the answer mapping for deny, repair, pass, Stop block, and invocationNum > 0. No code comments.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee agy_belt",
+  "must_haves": {
+   "why": "agy sends its own JSON shape, so the existing checks need a translator to guard an agy session.",
+   "out_of_scope": [
+    "the hooks.json file",
+    "onboarding",
+    "runtime lists"
+   ],
+   "truths": [
+    "a PreToolUse run_command that the write guard refuses prints decision deny with the guard's reason",
+    "a PreToolUse the checks pass prints decision ask",
+    "invoke_subagent is denied with a reason naming bee dispatch prepare --runtime agy --kind cell",
+    "a Stop the session-close hook blocks prints decision continue",
+    "every run prints exactly one JSON object and exits 0"
+   ],
+   "prohibitions": [
+    "No code comments",
+    "No hand list of checks that duplicates the catalog"
+   ]
+  },
+  "behavior_change": true
+ },
+ {
+  "id": "agyrt-3",
+  "feature": "agy-runtime",
+  "title": "Ship the agy belt file and wire it through onboarding and doctor",
+  "lane": "standard",
+  "role": "code",
+  "deps": [
+   "agyrt-2"
+  ],
+  "decisions": [
+   "fa33ba78-d185-4266-8202-1bc155607ec6"
+  ],
+  "files": [
+   ".agents/hooks.json",
+   "packages/bee-rs/crates/bee/src/onboard/agy_belt.rs",
+   "packages/bee-rs/crates/bee/src/onboard/mod.rs",
+   "packages/bee-rs/crates/bee/src/onboard/apply.rs",
+   "packages/bee-rs/crates/bee/src/doctor.rs",
+   "packages/bee-rs/crates/bee/src/devtools/hook_manifests.rs"
+  ],
+  "read_first": [
+   "docs/history/agy-runtime/CONTEXT.md",
+   "docs/history/agy-runtime/discovery.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Implement agy-runtime D2 and D7. (1) Add onboard/agy_belt.rs with a pure render_bee_key() -> serde_json::Value for the bee hook name: SessionStart, PreInvocation and Stop as flat handler lists; PreToolUse and PostToolUse as one group with matcher \"\" and hooks; each handler {\"type\":\"command\",\"command\":C,\"timeout\":30} where C is one POSIX sh line that execs ../.bee/bin/bee hook agy-belt when that file is executable (the hook runs in the .agents folder), else the .bee/bin/bee under the git common dir's parent (the same fallback the Claude wiring uses), else prints the neutral answer for the event ({\"decision\":\"ask\"} on PreToolUse, {} elsewhere) so a missing binary never blocks every tool. Add merge_into(existing: Option<&str>) -> Result<String, MergeError>: no file -> {\"bee\": render}; an object -> replace only key bee, keep every other key's value; a non-object or unparseable file -> MergeError naming the file; output pretty JSON with a trailing newline, stable so a second merge is byte-identical. (2) Wire it into onboarding apply beside copy_pi_extension: plan an agy_belt step when .agents/hooks.json is missing or its bee key differs; back up a pre-existing file to .agents/hooks.json.bee-backup before the first rewrite; refuse with the typed error and write nothing on a malformed file; a settled project plans nothing. Skip it when the target repo is bee's own checkout only if the checked-in file already equals the render. (3) Check in .agents/hooks.json at the repo root, generated by render_bee_key, and add a test that the checked-in file's bee key equals the render. (4) doctor.rs: add an agy wiring row: ok when the bee key equals the render, else names bee onboard --apply as the fix. (5) In devtools/hook_manifests.rs extend the NAMED EXCLUSION text block to agy (no Runtime::Agy; the belt is the projection) without adding comments elsewhere, and add agy to the derived coverage test the same way Pi joins it if that test enumerates belts. Unit-test merge_into: fresh, owner key kept, stale bee key replaced, malformed refused, idempotent. No code comments other than the existing doc block you extend.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee agy && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee hook_manifests && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee doctor",
+  "must_haves": {
+   "why": "agy only runs the belt when the workspace hooks.json names it, and owners keep their own agy hooks.",
+   "out_of_scope": [
+    "the translator logic",
+    "runtime lists",
+    "docs"
+   ],
+   "truths": [
+    "bee onboard --apply writes .agents/hooks.json with a bee key whose handlers run bee hook agy-belt",
+    "an owner's own hook key in .agents/hooks.json survives the apply unchanged",
+    "a second apply changes nothing",
+    "a malformed .agents/hooks.json refuses the merge and is not overwritten",
+    "bee doctor reports the agy wiring row"
+   ],
+   "prohibitions": [
+    "No code comments",
+    "No change to the Claude or Codex rendered projections"
+   ]
+  },
+  "behavior_change": true
+ },
+ {
+  "id": "agyrt-4",
+  "feature": "agy-runtime",
+  "title": "Document the agy runtime, its belt and team.agy",
+  "lane": "standard",
+  "role": "docs",
+  "deps": [],
+  "decisions": [
+   "fa33ba78-d185-4266-8202-1bc155607ec6"
+  ],
+  "files": [
+   "docs/knowledge/areas/hook-runtime/the-agy-belt.md",
+   "docs/knowledge/areas/hook-runtime/catalog-projections-and-activation.md",
+   "docs/knowledge/areas/onboarding/repo-local-guardrails.md",
+   "docs/config-reference.md",
+   "README.md"
+  ],
+  "read_first": [
+   "docs/history/agy-runtime/CONTEXT.md",
+   "docs/history/agy-runtime/discovery.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Implement agy-runtime D8 in plain ASD-STE100 English. (1) New concept docs/knowledge/areas/hook-runtime/the-agy-belt.md with the same frontmatter shape as docs/knowledge/areas/hook-runtime/pi-version-pin-and-capability-audit.md (type bee.area, id hook-runtime-the-agy-belt, areas [hook-runtime], decisions citing agy-runtime D1-D8 as the history D-number on one line, sources docs/history/agy-runtime/CONTEXT.md and discovery.md, anchors the files named in CONTEXT.md plus packages/bee-rs/crates/bee/src/hooks/agy_belt.rs, .agents/hooks.json and packages/bee-rs/crates/bee/src/onboard/agy_belt.rs, verified_at 2026-11-25). Body: what agy reads (AGENTS.md, .agents/skills, .agents/hooks.json), the bee key and its five events, the translation table per event, the D4 tool map, the ask/deny/continue answers and why an empty answer is never printed (agy denies on {}), invoke_subagent denied and herding-only dispatch, ANTIGRAVITY_CONVERSATION_ID, onboarding merge rules, the owner's one-time workspace trust. Register the concept in docs/knowledge/index.md if the bundle needs it (run bee knowledge index if that is the regen path). (2) In catalog-projections-and-activation.md say there are five runtimes and add one paragraph: agy takes the named exclusion; its belt is .agents/hooks.json plus bee hook agy-belt. (3) In onboarding/repo-local-guardrails.md add one Business Rules bullet for the agy belt merge (D7). (4) docs/config-reference.md: add team.agy beside team.pi. (5) README.md: add agy where the supported runtimes are listed. Write the words without deferral words such as deferred, until or later. No code comments.",
+  "verify": ".bee/bin/bee knowledge check",
+  "must_haves": {
+   "why": "Leaders and owners need to read how agy is wired before they trust it.",
+   "out_of_scope": [
+    "code"
+   ],
+   "truths": [
+    "a knowledge concept describes the agy belt translation and tool map",
+    "the README names agy as a supported runtime",
+    "the config reference names team.agy"
+   ],
+   "prohibitions": [
+    "No new rule id"
+   ]
+  },
+  "behavior_change": false
+ },
+ {
+  "id": "agyrt-5",
+  "feature": "agy-runtime",
+  "title": "Test the agy belt, the runtime label and the onboarding merge end to end",
+  "lane": "standard",
+  "role": "test",
+  "deps": [
+   "agyrt-1",
+   "agyrt-2",
+   "agyrt-3"
+  ],
+  "decisions": [
+   "fa33ba78-d185-4266-8202-1bc155607ec6"
+  ],
+  "files": [
+   "packages/bee-rs/crates/bee/tests/agy_belt_contracts.rs"
+  ],
+  "read_first": [
+   "docs/history/agy-runtime/CONTEXT.md",
+   "docs/history/agy-runtime/discovery.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Without reading the implementers' notes, check agyrt-1, agyrt-2 and agyrt-3 against agy-runtime D1-D7 and add integration tests in tests/agy_belt_contracts.rs that drive the built bee binary against a temp git repo onboarded the way the existing integration tests do (see tests/pi_plugin_contracts.rs and tests/opencode_plugin_contracts.rs for the harness). Feed bee hook agy-belt the agy payload shapes recorded in docs/history/agy-runtime/discovery.md and assert: a PreToolUse write_file to a path the write guard refuses (a governed path before the gate, or a secret-shaped file) prints decision deny; an allowed read_file prints decision ask; run_command with a command the CLI-shape or write guard refuses prints deny; invoke_subagent prints deny naming bee dispatch prepare --runtime agy --kind cell; a PreInvocation with invocationNum 0 prints injectSteps and with invocationNum 3 prints {}; SessionStart prints injectSteps with bee text; a Stop prints one JSON object; garbage stdin on PreToolUse prints deny and exit code 0; every output is exactly one JSON object. Run bee onboard --apply on a temp repo with an owner .agents/hooks.json holding a key owner: after apply the owner key is unchanged, the bee key exists, a second apply leaves the bytes equal, and a malformed file is refused and left unchanged. Assert bee dispatch prepare --runtime agy --kind cell with a native slot refuses with the herding remedy. See each new test fail on purpose once (break an assertion) before trusting it. A tester never edits product code: on a defect return BLOCKED with the red output. No code comments.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test agy_belt_contracts",
+  "must_haves": {
+   "why": "A code cell never certifies itself.",
+   "out_of_scope": [
+    "docs"
+   ],
+   "truths": [
+    "a test fails if a refused agy write prints anything but decision deny",
+    "a test fails if a passing agy tool call prints an empty object",
+    "a test fails if onboarding drops an owner key from .agents/hooks.json",
+    "a test fails if invoke_subagent is not denied"
+   ],
+   "prohibitions": [
+    "No code comments",
+    "No product code edits"
+   ]
+  },
+  "behavior_change": false,
+  "tester_rule": true,
+  "judge_obligation_ack": "Tester for agyrt-1, agyrt-2 and agyrt-3."
+ },
+ {
+  "id": "agyrt-7",
+  "feature": "agy-runtime",
+  "title": "Correct the agy docs the checker found wrong",
+  "lane": "standard",
+  "role": "docs",
+  "deps": [
+   "agyrt-4"
+  ],
+  "decisions": [
+   "fa33ba78-d185-4266-8202-1bc155607ec6"
+  ],
+  "files": [
+   "docs/config-reference.md",
+   "docs/knowledge/areas/hook-runtime/the-agy-belt.md"
+  ],
+  "read_first": [
+   "docs/history/agy-runtime/reports/agyrt-6-docs-check.md"
+  ],
+  "action": "Fix the three findings in docs/history/agy-runtime/reports/agyrt-6-docs-check.md. (1) docs/config-reference.md team.agy section: the template derives team.agy from team.claude role for role (onboard/templates.rs team.agy block), every slot { kind: herding, agent: agy, description }, and herding.agents carries agy: [\"agy\"]; replace the example so it shows that shape (a few roles plus a note that every team.claude role is present) and drop the claude-opus, claude-fable and agy-flash agents. (2) the-agy-belt.md advisory failure line: a crash or spawn error of a child hook on SessionStart, PreInvocation, PostToolUse and Stop fails open with the neutral answer; an unreadable payload fails closed on every event with {\"decision\":\"deny\",\"reason\":\"agy-belt: unreadable hook payload: ...\"} because the event is not known before the parse (hooks/agy_belt.rs handle_payload). (3) the-agy-belt.md fallback line: the second lookup is $g/../.bee/bin/bee where $g is the absolute git common dir, so it finds the main checkout's binary from a worktree. Edit only those lines. Run .bee/bin/bee knowledge check. No code comments.",
+  "verify": ".bee/bin/bee knowledge check",
+  "must_haves": {
+   "why": "The agyrt-6 checker found docs that disagree with the shipped code.",
+   "out_of_scope": [
+    "product code"
+   ],
+   "truths": [
+    "the team.agy example matches the onboarding template",
+    "the unreadable payload line matches handle_payload",
+    "the fallback line names the git common dir parent"
+   ],
+   "prohibitions": [
+    "No code comments",
+    "No product code edits"
+   ]
+  },
+  "behavior_change": false,
+  "affects_skills": [],
+  "affects_specs": []
+ },
+ {
+  "id": "agyrt-6",
+  "feature": "agy-runtime",
+  "title": "Check the agy runtime docs against the shipped code",
+  "lane": "standard",
+  "role": "test",
+  "deps": [
+   "agyrt-4",
+   "agyrt-7"
+  ],
+  "decisions": [
+   "fa33ba78-d185-4266-8202-1bc155607ec6"
+  ],
+  "files": [
+   "docs/history/agy-runtime/reports/agyrt-6-docs-check.md"
+  ],
+  "read_first": [
+   "docs/history/agy-runtime/CONTEXT.md"
+  ],
+  "action": "Without reading the implementer notes, check the agy docs (docs/knowledge/areas/hook-runtime/the-agy-belt.md, docs/knowledge/areas/hook-runtime/catalog-projections-and-activation.md, docs/knowledge/areas/onboarding/repo-local-guardrails.md, docs/config-reference.md, README.md) against the shipped code: packages/bee-rs/crates/bee/src/hooks/agy_belt.rs, packages/bee-rs/crates/bee/src/onboard/agy_belt.rs, packages/bee-rs/crates/bee/src/onboard/templates.rs, .agents/hooks.json, packages/bee-rs/crates/bee/src/session_identity.rs and packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs. A first pass found three wrong lines that agyrt-7 corrected; recheck them and every other claim. Every event name, tool name, answer shape, file path, config key and env variable the docs name must exist in that code with the meaning the docs give. Run .bee/bin/bee knowledge check and .bee/bin/bee knowledge index --check. Rewrite docs/history/agy-runtime/reports/agyrt-6-docs-check.md, one line per checked claim with a file:line anchor, and commit it. A checker never edits the docs or the code: on a wrong claim return BLOCKED naming the line.",
+  "verify": ".bee/bin/bee knowledge check",
+  "must_haves": {
+   "why": "A docs cell is checked by a second worker, never by its writer.",
+   "out_of_scope": [
+    "product code",
+    "docs edits"
+   ],
+   "truths": [
+    "every agy claim in the agyrt-4 docs has a file:line anchor in the shipped code",
+    "the knowledge bundle check is green"
+   ],
+   "prohibitions": [
+    "No code comments",
+    "No edits to docs or product code"
+   ]
+  },
+  "behavior_change": false,
+  "affects_skills": [],
+  "affects_specs": [],
+  "tester_rule": true,
+  "judge_obligation_ack": "Checker for agyrt-4 and agyrt-7."
+ }
+]
+```
+
+## Proof
+
+- agyrt-5 integration tests, green.
+- agyrt-7 corrects the three lines the first agyrt-6 pass found wrong.
+- agyrt-6 checks the agyrt-4 and agyrt-7 docs against the shipped code.
+- `bee test` (full declared suite) once before `bee worktree merge`.
+- Live: after merge, `bee onboard --apply` in a scratch repo, then a real
+  `agy -p` run there: a write to a refused path is denied by the belt and a
+  normal command runs.

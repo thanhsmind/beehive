@@ -11,6 +11,7 @@
 
 pub mod activity;
 pub mod adapter;
+pub mod agy_belt;
 pub mod chain_nudge;
 pub mod cli_shape;
 pub mod codex_subagent_audit;
@@ -74,9 +75,10 @@ fn emit_undecidable(name: &str) -> ExitCode {
 /// The hook names `bee hook <name>` dispatches to. Kept as one list so the
 /// usage line and the dispatch match arm can never drift apart silently —
 /// add a hook to both, or the usage line lies.
-const HOOK_NAMES: [&str; 12] = [
+const HOOK_NAMES: [&str; 13] = [
     "tools-logger",
     "activity",
+    "agy-belt",
     "codex-subagent-audit",
     "chain-nudge",
     "state-sync",
@@ -255,6 +257,7 @@ pub(crate) fn try_native_with(
     let outcome = match name.as_str() {
         "tools-logger" => tools_logger::run(&rest, &stdin_str),
         "activity" => activity::run(&rest, &stdin_str),
+        "agy-belt" => agy_belt::run(&rest, &stdin_str),
         "codex-subagent-audit" => codex_subagent_audit::run(&rest, &stdin_str),
         "chain-nudge" => chain_nudge::run(&rest, &stdin_str),
         "state-sync" => state_sync::run(&rest, &stdin_str),
