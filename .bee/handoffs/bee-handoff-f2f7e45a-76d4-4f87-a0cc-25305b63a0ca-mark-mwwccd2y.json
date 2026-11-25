@@ -1,0 +1,18 @@
+{
+  "request_id": "bee-handoff-f2f7e45a-76d4-4f87-a0cc-25305b63a0ca-mark-mwwccd2y",
+  "run_id": "run-0014faaa718016cd",
+  "project_id": "beehive",
+  "session_id": "f2f7e45a-76d4-4f87-a0cc-25305b63a0ca",
+  "feature": "job-worker-adopt",
+  "sent_at": "2026-11-25T16:31:34.735Z",
+  "task_file": "/mnt/data/Projects/goglbe/beehive/.bee/tmp/handoff-f2f7e45a-76d4-4f87-a0cc-25305b63a0ca-mark-mwwccd2y.md",
+  "task_text": "Handoff from previous leader session (context 132k tokens past 120k mark).\nCurrent feature: job-worker-adopt\nOpen or claimed cells: jwa-2, jwa-4, jwa-6\n\nOwner request (Vietnamese, 2026-11-25) 'Lam': build F11 (p-3f1d7db8) and the other agy spike PBIs through the full bee chain. Triage done by the previous leader: all four build, in ONE feature job-worker-adopt (worktree /mnt/data/Projects/goglbe/beehive--wt--job-worker-adopt, plan docs/history/job-worker-adopt/plan.md, decisions job-worker-adopt D1-D4). PBIs p-3f1d7db8, p-41a23d81, p-e8eeae96, p-a0f03c4a are in-flight on it. State: gate approved; code/doc cells jwa-1 (F11 finish --from-job adopts the job worker), jwa-3 (F13 settle line names proof floor), jwa-5 (F10 [owner-only: target] guard marker + Stop owner-ask pass), jwa-7 (F9 doctrine + run-verb concept) are capped (settled with cells finish --from-job --sync-ack). Next: run the tester wave from main: bee dispatch wave --runtime claude --feature job-worker-adopt --rolling --run --json (cells jwa-2, jwa-4, jwa-6); settle each with cells finish --from-job; check jwa-3 reads the cell file from the right store path (cell_settle_floor reads .bee/cells/<id>.json raw); jwa-5/jwa-6 are standard lane so close owes an independent judge read; add one line on the [owner-only: <target>] marker to docs/knowledge/areas/hook-runtime/advisories-and-turn-control.md at close (promised in the sync-ack); then bee test in the worktree, bee worktree merge, reinstall .bee/bin/bee, bee close, mark the four PBIs done. Standing orders: reply in Vietnamese, simple words; full autopilot gate bypass is on; never ask the owner to run steps the agent can run; no code comments; no release unless the owner asks.\n",
+  "expects": [
+    {
+      "kind": "branch-merged",
+      "branch": "wt/job-worker-adopt"
+    }
+  ],
+  "follow_ups": [],
+  "status": "open"
+}
