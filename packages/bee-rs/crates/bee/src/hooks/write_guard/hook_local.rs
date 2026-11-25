@@ -164,6 +164,7 @@ shell having changed directory."
 /// environment.
 pub(crate) struct HarnessRoots {
     pub(crate) roots: Vec<String>,
+    pub(crate) home_root: Option<String>,
 }
 
 impl HarnessRoots {
@@ -185,6 +186,10 @@ impl HarnessRoots {
     /// contributes nothing).
     pub(crate) fn from_bases(home: Option<PathBuf>, temp: Option<PathBuf>) -> HarnessRoots {
         let mut roots = Vec::new();
+        let home_root = home
+            .as_ref()
+            .filter(|p| !p.as_os_str().is_empty())
+            .and_then(|h| canonical_allowlist_root(&h.to_string_lossy()));
         if let Some(h) = home.filter(|p| !p.as_os_str().is_empty()) {
             let base = h.join(".claude").join("projects").to_string_lossy().into_owned();
             if let Some(r) = canonical_allowlist_root(&base) {
@@ -213,7 +218,7 @@ impl HarnessRoots {
                 }
             }
         }
-        HarnessRoots { roots }
+        HarnessRoots { roots, home_root }
     }
 }
 
@@ -257,6 +262,46 @@ pub(crate) fn harness_allowlisted_target(
         }
     }
     Ok(false)
+}
+
+pub(crate) fn home_dir_owner_only_target(
+    harness: &HarnessRoots,
+    root: &str,
+    cwd: &str,
+    raw: &Value,
+) -> R<Option<String>> {
+    let Some(home_root) = &harness.home_root else {
+        return Ok(None);
+    };
+    let Value::String(raw_s) = raw else {
+        return Ok(None);
+    };
+    if raw_s.is_empty() {
+        return Ok(None);
+    }
+    let expanded = if is_home_prefixed(raw_s) {
+        let rest = raw_s
+            .strip_prefix("~/")
+            .or_else(|| raw_s.strip_prefix("~\\"))
+            .or_else(|| raw_s.strip_prefix("$HOME/"))
+            .or_else(|| raw_s.strip_prefix("$HOME\\"))
+            .or_else(|| raw_s.strip_prefix("${HOME}/"))
+            .or_else(|| raw_s.strip_prefix("${HOME}\\"));
+        let Some(rest) = rest else {
+            return Ok(None);
+        };
+        Value::String(format!("{home_root}{SEP}{rest}"))
+    } else {
+        raw.clone()
+    };
+    let Some(resolved) = resolve_target_realpath(cwd, root, &expanded)? else {
+        return Ok(None);
+    };
+    if is_under_root(home_root, &resolved)? {
+        Ok(Some(resolved))
+    } else {
+        Ok(None)
+    }
 }
 
 /// provenance: bee-write-guard.mjs HOME_PREFIXED_TARGET_RE /

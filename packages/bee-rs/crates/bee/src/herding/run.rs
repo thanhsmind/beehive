@@ -6165,6 +6165,49 @@ fn settle_command(cell_id: &str, job_id: &str, proof_res: &str, refusal: &str) -
     cmd
 }
 
+fn floor_evidence_label(floor: &str) -> &'static str {
+    match floor {
+        "green:red-first" => "red-first evidence",
+        "green:live" => "live evidence",
+        "green:unit" => "unit-test evidence",
+        _ => "its evidence",
+    }
+}
+
+fn cell_settle_floor(main_root: &Path, cell_id: &str, proof_res: &str) -> Option<&'static str> {
+    let cell_path = main_root.join(".bee").join("cells").join(format!("{cell_id}.json"));
+    let raw = std::fs::read_to_string(&cell_path).ok()?;
+    let cell: Value = serde_json::from_str(&raw).ok()?;
+    let feature = cell.get("feature").and_then(Value::as_str).unwrap_or("");
+    let class = crate::verbs::plan_group::route_class(main_root, feature);
+    let floor = crate::verbs::cells::cell_proof_floor(&cell, class.as_deref())?;
+    let effective = if proof_res == "<green:unit>" { "green:unit" } else { proof_res };
+    if crate::verbs::cells::proof_meets_floor(floor, effective) {
+        None
+    } else {
+        Some(floor)
+    }
+}
+
+fn settle_hint(main_root: &Path, cell_id: &str, job_id: &str, proof_res: &str, refusal: &str) -> String {
+    match cell_settle_floor(main_root, cell_id, proof_res) {
+        Some(floor) => {
+            let cmd = settle_command(cell_id, job_id, floor, refusal);
+            let evidence = floor_evidence_label(floor);
+            format!("settle with `{cmd}`\npass {floor} only with {evidence}")
+        }
+        None => format!("settle with `{}`", settle_command(cell_id, job_id, proof_res, refusal)),
+    }
+}
+
+fn outcome_proof_result(outcome: &RunOutcome) -> String {
+    match outcome {
+        RunOutcome::Result(r) => crate::verbs::cells::parse_tests_proof(&r.proof).map(|(_, res, _)| res),
+        _ => None,
+    }
+    .unwrap_or_else(|| "<green:unit>".to_string())
+}
+
 fn try_cap_finished_cell(
     opts: &Options,
     cell_id: &str,
@@ -6407,21 +6450,18 @@ pub(super) fn run(flags: &[&str]) -> ExitCode {
                     ExitCode::SUCCESS
                 }
                 PostflightCapResult::Refused(refusal) => {
-                    let proof_res = match &result.outcome {
-                        RunOutcome::Result(r) => crate::verbs::cells::parse_tests_proof(&r.proof).map(|(_, res, _)| res),
-                        _ => None,
-                    }
-                    .unwrap_or_else(|| "<green:unit>".to_string());
+                    let proof_res = outcome_proof_result(&result.outcome);
                     eprintln!(
-                        "bee herding run: worker reported success for cell \"{cell_id}\" without capping it — the cap refused: {refusal}\nsettle with `{}`",
-                        settle_command(cell_id, &opts.job_id, &proof_res, &refusal)
+                        "bee herding run: worker reported success for cell \"{cell_id}\" without capping it — the cap refused: {refusal}\n{}",
+                        settle_hint(&opts.main_root, cell_id, &opts.job_id, &proof_res, &refusal)
                     );
                     ExitCode::FAILURE
                 }
                 PostflightCapResult::Uncapped => {
+                    let proof_res = outcome_proof_result(&result.outcome);
                     eprintln!(
-                        "bee herding run: worker reported success for cell \"{cell_id}\" without capping it — settle with `{}`",
-                        settle_command(cell_id, &opts.job_id, "<green:unit>", "")
+                        "bee herding run: worker reported success for cell \"{cell_id}\" without capping it — {}",
+                        settle_hint(&opts.main_root, cell_id, &opts.job_id, &proof_res, "")
                     );
                     ExitCode::FAILURE
                 }
@@ -12809,6 +12849,46 @@ mod tests {
         assert!(command.contains("--sync-ack \"<reason>\""), "{command}");
         let plain = settle_command(cell_id, job_id, "green:unit", "");
         assert!(!plain.contains("--principle-used") && !plain.contains("--sync-ack"), "{plain}");
+    }
+
+    fn settle_floor_fixture(root: &Path, cell_id: &str, role: &str) {
+        std::fs::create_dir_all(root.join(".bee/cells")).unwrap();
+        std::fs::create_dir_all(root.join(".bee/lanes")).unwrap();
+        std::fs::write(
+            root.join(".bee/lanes/feat-floor.json"),
+            serde_json::json!({"feature": "feat-floor", "route": {"class": "bugfix"}}).to_string(),
+        )
+        .unwrap();
+        std::fs::write(
+            root.join(".bee/cells").join(format!("{cell_id}.json")),
+            serde_json::json!({"id": cell_id, "feature": "feat-floor", "role": role, "files": ["src/lib.rs"]}).to_string(),
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn settle_line_names_the_floor_when_a_bugfix_test_cell_proof_is_below_it() {
+        let tmp = tempfile::tempdir().unwrap();
+        settle_floor_fixture(tmp.path(), "cell-floor-1", "test");
+
+        for proof_res in ["green:unit", "<green:unit>"] {
+            let hint = settle_hint(tmp.path(), "cell-floor-1", "job-floor-1", proof_res, "");
+            assert_eq!(
+                hint,
+                "settle with `bee cells finish --id cell-floor-1 --from-job job-floor-1 --proof-result green:red-first --no-mistakes`\npass green:red-first only with red-first evidence",
+                "{proof_res}"
+            );
+        }
+    }
+
+    #[test]
+    fn settle_line_is_unchanged_when_a_code_cell_proof_meets_its_floor() {
+        let tmp = tempfile::tempdir().unwrap();
+        settle_floor_fixture(tmp.path(), "cell-floor-2", "code");
+
+        let hint = settle_hint(tmp.path(), "cell-floor-2", "job-floor-2", "green:unit", "");
+        assert_eq!(hint, format!("settle with `{}`", settle_command("cell-floor-2", "job-floor-2", "green:unit", "")));
+        assert!(!hint.contains('\n'), "{hint}");
     }
 
     #[test]

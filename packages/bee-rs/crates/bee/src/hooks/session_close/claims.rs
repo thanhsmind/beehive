@@ -175,7 +175,7 @@ fn record_call(tools: &mut TurnTools, id: &str, name: &str, command: &str, path:
     tools.opened_playbook |= reads_file || shows_file;
 }
 
-fn result_text(content: Option<&Value>) -> String {
+pub(super) fn result_text(content: Option<&Value>) -> String {
     match content {
         Some(Value::String(s)) => s.clone(),
         Some(Value::Array(blocks)) => {

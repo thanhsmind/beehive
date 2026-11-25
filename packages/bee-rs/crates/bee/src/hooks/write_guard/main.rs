@@ -620,14 +620,23 @@ lines naming plain in-repo relative paths (no path traversal, no unresolvable es
                             }
                             Some(Unresolved::CdOpaque) => cd_opaque_bash_target_message(&c.raw),
                             None => {
-                                let enriched = describe_cross_worktree_target(
-                                    &root,
-                                    &cwd,
-                                    &Value::String(c.raw.clone()),
-                                )?;
-                                enriched.unwrap_or_else(|| {
-                                    GENERIC_BASH_CONTAINMENT_MESSAGE.to_string()
-                                })
+                                let raw_v = Value::String(c.raw.clone());
+                                let enriched = describe_cross_worktree_target(&root, &cwd, &raw_v)?;
+                                match enriched {
+                                    Some(msg) => msg,
+                                    None => {
+                                        if let Some(target) = home_dir_owner_only_target(
+                                            harness_roots,
+                                            &root,
+                                            &cwd,
+                                            &raw_v,
+                                        )? {
+                                            format!("{GENERIC_BASH_CONTAINMENT_MESSAGE} [owner-only: {target}]")
+                                        } else {
+                                            GENERIC_BASH_CONTAINMENT_MESSAGE.to_string()
+                                        }
+                                    }
+                                }
                             }
                         });
                     }
@@ -701,7 +710,18 @@ lines naming plain in-repo relative paths (no path traversal, no unresolvable es
                 // existing order and reach.
             } else {
                 let enriched = describe_cross_worktree_target(&root, &cwd, &raw_v)?;
-                denial = Some(enriched.unwrap_or_else(|| GENERIC_CONTAINMENT_MESSAGE.to_string()));
+                denial = Some(match enriched {
+                    Some(msg) => msg,
+                    None => {
+                        if let Some(target) =
+                            home_dir_owner_only_target(harness_roots, &root, &cwd, &raw_v)?
+                        {
+                            format!("{GENERIC_CONTAINMENT_MESSAGE} [owner-only: {target}]")
+                        } else {
+                            GENERIC_CONTAINMENT_MESSAGE.to_string()
+                        }
+                    }
+                });
             }
         }
 
