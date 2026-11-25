@@ -2141,3 +2141,4 @@
 {"ts":"2026-11-25T16:53:49.644Z","kind":"pbi","event":"status","id":"p-41a23d81","status":"done","feature":"job-worker-adopt"}
 {"ts":"2026-11-25T16:53:49.655Z","kind":"pbi","event":"status","id":"p-e8eeae96","status":"done","feature":"job-worker-adopt"}
 {"ts":"2026-11-25T16:53:49.665Z","kind":"pbi","event":"status","id":"p-a0f03c4a","status":"done","feature":"job-worker-adopt"}
+{"ts":"2026-11-25T16:57:40.448Z","type":"finding","title":"worker read-only guard refused a plain rg search because its pattern contained the word Paseo (job-1795625622662-4169503-1), blocking a read-only knowledge-upkeep reader","detail":"the read-only guard should judge the argv command (rg is read-only), not match tool names inside a search pattern (from run fdc833c8-8e69-44da-92c1-4639e10d5b81)","severity":"P3","layer":"fix-at:check","feature":"knowledge-upkeep-nov25b"}
