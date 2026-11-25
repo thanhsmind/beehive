@@ -1,6 +1,8 @@
 # Spike agy-leader-e2e — agy as the bee leader runtime
 
+<!-- bee:not-a-deferral: "deferred-queue" is the name of the feature the agy leader built, not a promise to act -->
 Date: 2026-11-25. Item driven: PBI p-74ec14b3 (feature deferred-queue-req-flags).
+<!-- /bee:not-a-deferral -->
 Friction log of the turn-2 leader: `friction.md` beside this file.
 
 ## Runs
