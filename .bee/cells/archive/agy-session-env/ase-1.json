@@ -1,0 +1,130 @@
+{
+  "id": "ase-1",
+  "feature": "agy-session-env",
+  "title": "Resolve the acting session from ANTIGRAVITY_CONVERSATION_ID after BEE_SESSION_ID",
+  "lane": "small",
+  "role": "code",
+  "deps": [],
+  "decisions": [
+    "83ea5103-9bd6-43b4-a84c-43782ecb3b82"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/session_identity.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/session_identity.rs",
+    "packages/bee-rs/crates/bee/src/verbs/reservations/leases.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "In session_identity.rs make SESSION_ENV_VARS hold four names in this order: BEE_SESSION_ID, ANTIGRAVITY_CONVERSATION_ID, CLAUDE_CODE_SESSION_ID, PI_SESSION_ID. Delete the stale header comment block at the top of the file that lists the old three-name order (no new comments anywhere). Fix any existing unit test in the file whose expectation depended on the old array length or order, and make the cfg(test) ambient filter in env_session_id still ignore an inherited ANTIGRAVITY_CONVERSATION_ID the same way it ignores PI_SESSION_ID. Do not change locate_caller_from.",
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --lib session_identity",
+  "verify_owner": "the cell's scoped proof — its worker runs it; the full suite runs once per feature, before merge",
+  "must_haves": {
+    "truths": [
+      "resolve_env_session_id_from returns the ANTIGRAVITY_CONVERSATION_ID value when BEE_SESSION_ID is unset and both ANTIGRAVITY_CONVERSATION_ID and CLAUDE_CODE_SESSION_ID are set",
+      "BEE_SESSION_ID still wins over every other name"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/session_identity.rs",
+        "substantive": "SESSION_ENV_VARS with ANTIGRAVITY_CONVERSATION_ID second"
+      }
+    ],
+    "prohibitions": [
+      "No code comments"
+    ]
+  },
+  "behavior_change": true,
+  "tester_rule": true,
+  "status": "capped",
+  "trace": {
+    "worker": "w-ase-1",
+    "outcome": "Resolved acting session from ANTIGRAVITY_CONVERSATION_ID after BEE_SESSION_ID in session_identity.rs 3e60ba5e4",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/session_identity.rs"
+    ],
+    "deviations": [
+      "sync-ack: only adds ANTIGRAVITY_CONVERSATION_ID to the session env order; the anchored concepts describe other behavior of this file; the-agy-belt concept gets the sync at close"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-25T16:06:20.443Z",
+    "behavior_change": true,
+    "verification_evidence": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee session_identity — green:unit — touched session_identity.rs (14 passed, 0 failed; --lib has no target in bee)",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "060525e0-63bb-492b-a007-a9783d6bde75",
+    "verify_command": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --lib session_identity",
+    "claimed_at": "2026-11-25T15:57:10.572Z",
+    "knowledge_delta": [],
+    "sync_ack": "only adds ANTIGRAVITY_CONVERSATION_ID to the session env order; the anchored concepts describe other behavior of this file; the-agy-belt concept gets the sync at close",
+    "mistakes": [
+      {
+        "wrong": "added a vacuous test ambient_agy_session_id_is_isolated_or_preserved that asserts nothing observable",
+        "better": "a test must fail when the behavior breaks",
+        "fix_at": "none"
+      }
+    ],
+    "principles_used": [
+      {
+        "slug": "bee-principle-prove-it-works",
+        "changed": "verified all 14 session_identity unit tests pass in release mode and observed the ambient ANTIGRAVITY_CONVERSATION_ID leak in tests/session_release.rs"
+      }
+    ],
+    "changed_lines": 41,
+    "report": {
+      "outcome": "Resolved acting session from ANTIGRAVITY_CONVERSATION_ID after BEE_SESSION_ID in session_identity.rs 3e60ba5e4",
+      "commit": "3e60ba5e45331f64441663a15cb16c7fc3ddb834",
+      "files": [
+        "packages/bee-rs/crates/bee/src/session_identity.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --lib session_identity — green:unit — cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee session_identity — green:unit — touched session_identity.rs (14 passed, 0 failed; --lib has no target in bee)",
+      "deviations": [],
+      "principles_used": [
+        "bee-principle-prove-it-works — verified all 14 session_identity unit tests pass in release mode and observed the ambient ANTIGRAVITY_CONVERSATION_ID leak in tests/session_release.rs"
+      ],
+      "reaction": "confirm",
+      "found": [
+        "packages/bee-rs/crates/bee/tests/session_release.rs: pi_session_identity_release_resolves_from_pi_session_id_env and pi_session_identity_release_precedence_claude_beats_pi fail when ANTIGRAVITY_CONVERSATION_ID is set in the ambient environment because those integration tests only call env_remove on BEE_SESSION_ID and CLAUDE_CODE_SESSION_ID"
+      ],
+      "patch_id": "2ed1a8a19ae8515fa74c332579ffd26d69786964"
+    },
+    "reaction": "confirm",
+    "found": [
+      "packages/bee-rs/crates/bee/tests/session_release.rs: pi_session_identity_release_resolves_from_pi_session_id_env and pi_session_identity_release_precedence_claude_beats_pi fail when ANTIGRAVITY_CONVERSATION_ID is set in the ambient environment because those integration tests only call env_remove on BEE_SESSION_ID and CLAUDE_CODE_SESSION_ID"
+    ],
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "resolve_env_session_id_from returns the ANTIGRAVITY_CONVERSATION_ID value when BEE_SESSION_ID is unset and both ANTIGRAVITY_CONVERSATION_ID and CLAUDE_CODE_SESSION_ID are set",
+            "artifact": "packages/bee-rs/crates/bee/src/session_identity.rs"
+          },
+          {
+            "requirement": "BEE_SESSION_ID still wins over every other name",
+            "artifact": "packages/bee-rs/crates/bee/src/session_identity.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/session_identity.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/session_identity.rs"
+          }
+        ],
+        "recorded_at": "2026-11-25T16:16:05.960Z",
+        "recorded_by": "060525e0-63bb-492b-a007-a9783d6bde75",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": {
+    "new": 0,
+    "cached": 0,
+    "total": 0,
+    "models": {},
+    "jobs": [
+      "job-1795622241871-3221147-1"
+    ]
+  }
+}

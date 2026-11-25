@@ -1,0 +1,223 @@
+{
+  "id": "ase-2",
+  "feature": "agy-session-env",
+  "title": "Test that an agy shell's claim resolves to the agy conversation id",
+  "lane": "small",
+  "role": "test",
+  "deps": [
+    "ase-1"
+  ],
+  "decisions": [
+    "83ea5103-9bd6-43b4-a84c-43782ecb3b82"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/session_identity.rs",
+    "packages/bee-rs/crates/bee/tests/session_release.rs",
+    "packages/bee-rs/crates/bee/tests/config_verbs.rs",
+    "packages/bee-rs/crates/bee/tests/work_verbs.rs",
+    "packages/bee-rs/crates/bee/tests/route_lane_targeting.rs",
+    "packages/bee-rs/crates/bee/tests/knowledge_first_nudge.rs",
+    "packages/bee-rs/crates/bee/tests/workflow_verbs.rs",
+    "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+    "packages/bee-rs/crates/bee/tests/hook_contracts.rs",
+    "packages/bee-rs/crates/bee/tests/handoff_self_drive.rs",
+    "packages/bee-rs/crates/bee/tests/knowledge_in_the_flow_e2e.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/session_identity.rs",
+    "packages/bee-rs/crates/bee/tests/session_release.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Independently verify ase-1 (commit 3e60ba5e4). (1) In the session_identity test module, delete the vacuous test ambient_agy_session_id_is_isolated_or_preserved and add tests that drive resolve_env_session_id_from with a lookup closure: only ANTIGRAVITY_CONVERSATION_ID set returns it; a blank ANTIGRAVITY_CONVERSATION_ID falls through to CLAUDE_CODE_SESSION_ID. Confirm the agy tests go red with ANTIGRAVITY_CONVERSATION_ID removed from SESSION_ENV_VARS, then restore it. (2) In every integration test file listed in files, wherever a command removes CLAUDE_CODE_SESSION_ID from the child env, also remove ANTIGRAVITY_CONVERSATION_ID, so the suite passes when run from an agy shell. Prove it: run session_release with ANTIGRAVITY_CONVERSATION_ID=x exported and see it green (and red before the change). No code comments.",
+  "verify": "ANTIGRAVITY_CONVERSATION_ID=x cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee session_identity && ANTIGRAVITY_CONVERSATION_ID=x cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test session_release --test config_verbs --test work_verbs --test route_lane_targeting --test knowledge_first_nudge --test workflow_verbs --test pi_plugin_contracts --test hook_contracts --test handoff_self_drive --test knowledge_in_the_flow_e2e",
+  "verify_owner": "the cell's scoped proof — its worker runs it; the full suite runs once per feature, before merge",
+  "must_haves": {
+    "truths": [
+      "agy order tests pass and went red without the agy name",
+      "the listed integration tests pass with ANTIGRAVITY_CONVERSATION_ID exported"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/session_identity.rs",
+        "substantive": "tests for agy session resolution order"
+      }
+    ],
+    "prohibitions": [
+      "No code comments"
+    ]
+  },
+  "behavior_change": false,
+  "tester_rule": true,
+  "status": "capped",
+  "trace": {
+    "worker": "w-ase-2",
+    "outcome": "Added agy resolution-order unit tests (red without the agy name) and isolated 10 integration test files from an inherited ANTIGRAVITY_CONVERSATION_ID; fd25a648ba62599f8d45b62b1fac80dc47b334d3",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/session_identity.rs",
+      "packages/bee-rs/crates/bee/tests/session_release.rs",
+      "packages/bee-rs/crates/bee/tests/config_verbs.rs",
+      "packages/bee-rs/crates/bee/tests/work_verbs.rs",
+      "packages/bee-rs/crates/bee/tests/route_lane_targeting.rs",
+      "packages/bee-rs/crates/bee/tests/knowledge_first_nudge.rs",
+      "packages/bee-rs/crates/bee/tests/workflow_verbs.rs",
+      "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+      "packages/bee-rs/crates/bee/tests/hook_contracts.rs",
+      "packages/bee-rs/crates/bee/tests/handoff_self_drive.rs",
+      "packages/bee-rs/crates/bee/tests/knowledge_in_the_flow_e2e.rs",
+      "docs/knowledge/areas/hook-runtime/the-agy-belt.md"
+    ],
+    "deviations": [
+      "sync-ack: test-only env isolation plus agy order unit tests; the anchored concepts describe other behavior of these files; the-agy-belt concept carries the pitfall"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-25T16:13:58.272Z",
+    "behavior_change": false,
+    "verification_evidence": "ANTIGRAVITY_CONVERSATION_ID=x cargo test --release -p bee --bin bee session_identity && ANTIGRAVITY_CONVERSATION_ID=x cargo test --release -p bee --test session_release ... --test knowledge_in_the_flow_e2e — green:unit — exit 0, 15 unit + 266 integration passed; touched session_identity tests and 10 integration test files",
+    "verify_output": "green:red-first",
+    "verify_passed": true,
+    "claim_session": "060525e0-63bb-492b-a007-a9783d6bde75",
+    "verify_command": "ANTIGRAVITY_CONVERSATION_ID=x cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee session_identity && ANTIGRAVITY_CONVERSATION_ID=x cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test session_release --test config_verbs --test work_verbs --test route_lane_targeting --test knowledge_first_nudge --test workflow_verbs --test pi_plugin_contracts --test hook_contracts --test handoff_self_drive --test knowledge_in_the_flow_e2e",
+    "claimed_at": "2026-11-25T16:06:40.905Z",
+    "knowledge_delta": [
+      "docs/knowledge/areas/hook-runtime/the-agy-belt.md"
+    ],
+    "sync_ack": "test-only env isolation plus agy order unit tests; the anchored concepts describe other behavior of these files; the-agy-belt concept carries the pitfall",
+    "no_mistakes": true,
+    "no_knowledge_used": true,
+    "principles_used": [
+      {
+        "slug": "bee-principle-red-before-green",
+        "changed": "confirmed session_release red (3 failed) with agy exported before editing, and unit tests red with agy name removed"
+      },
+      {
+        "slug": "bee-principle-reproduce-first",
+        "changed": "showed sites that set CLAUDE_CODE_SESSION_ID also fail, so they got the agy removal too"
+      }
+    ],
+    "changed_lines": 46,
+    "report": {
+      "outcome": "Added agy resolution-order unit tests (red without the agy name) and isolated 10 integration test files from an inherited ANTIGRAVITY_CONVERSATION_ID; fd25a648ba62599f8d45b62b1fac80dc47b334d3",
+      "commit": "fd25a648ba62599f8d45b62b1fac80dc47b334d3",
+      "files": [
+        "packages/bee-rs/crates/bee/src/session_identity.rs",
+        "packages/bee-rs/crates/bee/tests/session_release.rs",
+        "packages/bee-rs/crates/bee/tests/config_verbs.rs",
+        "packages/bee-rs/crates/bee/tests/work_verbs.rs",
+        "packages/bee-rs/crates/bee/tests/route_lane_targeting.rs",
+        "packages/bee-rs/crates/bee/tests/knowledge_first_nudge.rs",
+        "packages/bee-rs/crates/bee/tests/workflow_verbs.rs",
+        "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+        "packages/bee-rs/crates/bee/tests/hook_contracts.rs",
+        "packages/bee-rs/crates/bee/tests/handoff_self_drive.rs",
+        "packages/bee-rs/crates/bee/tests/knowledge_in_the_flow_e2e.rs",
+        "docs/knowledge/areas/hook-runtime/the-agy-belt.md"
+      ],
+      "tests": "ANTIGRAVITY_CONVERSATION_ID=x cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee session_identity && ANTIGRAVITY_CONVERSATION_ID=x cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test session_release --test config_verbs --test work_verbs --test route_lane_targeting --test knowledge_first_nudge --test workflow_verbs --test pi_plugin_contracts --test hook_contracts --test handoff_self_drive --test knowledge_in_the_flow_e2e — green:red-first — ANTIGRAVITY_CONVERSATION_ID=x cargo test --release -p bee --bin bee session_identity && ANTIGRAVITY_CONVERSATION_ID=x cargo test --release -p bee --test session_release ... --test knowledge_in_the_flow_e2e — green:unit — exit 0, 15 unit + 266 integration passed; touched session_identity tests and 10 integration test files",
+      "deviations": [],
+      "knowledge_used": [],
+      "principles_used": [
+        "bee-principle-red-before-green — confirmed session_release red (3 failed) with agy exported before editing, and unit tests red with agy name removed",
+        "bee-principle-reproduce-first — showed sites that set CLAUDE_CODE_SESSION_ID also fail, so they got the agy removal too"
+      ],
+      "reaction": "confirm",
+      "skipped": [
+        "full clippy + workspace test proof command — verify_owner runs the full suite once per feature before merge"
+      ],
+      "unknowns": [
+        "docs/history/agy-session-env/CONTEXT.md absent in worktree; locked decisions not read"
+      ],
+      "patch_id": "1abec9d9604eee289f6fdf7b57f083c73696a481"
+    },
+    "reaction": "confirm",
+    "skipped": [
+      "full clippy + workspace test proof command — verify_owner runs the full suite once per feature before merge"
+    ],
+    "unknowns": [
+      "docs/history/agy-session-env/CONTEXT.md absent in worktree; locked decisions not read"
+    ],
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "agy order tests pass and went red without the agy name",
+            "artifact": "packages/bee-rs/crates/bee/src/session_identity.rs"
+          },
+          {
+            "requirement": "the listed integration tests pass with ANTIGRAVITY_CONVERSATION_ID exported",
+            "artifact": "packages/bee-rs/crates/bee/src/session_identity.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/session_identity.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/session_identity.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/tests/session_release.rs",
+            "artifact": "packages/bee-rs/crates/bee/tests/session_release.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/tests/config_verbs.rs",
+            "artifact": "packages/bee-rs/crates/bee/tests/config_verbs.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/tests/work_verbs.rs",
+            "artifact": "packages/bee-rs/crates/bee/tests/work_verbs.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/tests/route_lane_targeting.rs",
+            "artifact": "packages/bee-rs/crates/bee/tests/route_lane_targeting.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/tests/knowledge_first_nudge.rs",
+            "artifact": "packages/bee-rs/crates/bee/tests/knowledge_first_nudge.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/tests/workflow_verbs.rs",
+            "artifact": "packages/bee-rs/crates/bee/tests/workflow_verbs.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+            "artifact": "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/tests/hook_contracts.rs",
+            "artifact": "packages/bee-rs/crates/bee/tests/hook_contracts.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/tests/handoff_self_drive.rs",
+            "artifact": "packages/bee-rs/crates/bee/tests/handoff_self_drive.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/tests/knowledge_in_the_flow_e2e.rs",
+            "artifact": "packages/bee-rs/crates/bee/tests/knowledge_in_the_flow_e2e.rs"
+          },
+          {
+            "requirement": "docs/knowledge/areas/hook-runtime/the-agy-belt.md",
+            "artifact": "docs/knowledge/areas/hook-runtime/the-agy-belt.md"
+          }
+        ],
+        "recorded_at": "2026-11-25T16:16:05.971Z",
+        "recorded_by": "060525e0-63bb-492b-a007-a9783d6bde75",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": {
+    "new": 45039,
+    "cached": 516005,
+    "total": 561044,
+    "models": {
+      "claude-opus-5-5": {
+        "new": 45039,
+        "cached": 516005,
+        "total": 561044
+      }
+    },
+    "jobs": [
+      "job-1795622805838-3408570-1"
+    ]
+  }
+}
