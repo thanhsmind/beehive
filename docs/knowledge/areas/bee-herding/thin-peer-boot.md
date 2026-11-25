@@ -1,7 +1,7 @@
 ---
 type: bee.area
 title: "Bee Herding — thin peer boot, what a herded Claude worker loads, and the switch that is on by default"
-description: "The trimmed start a herded Claude worker gets: a four-variable env layer set by bee herding run, a hook that prints only the short peer preamble, the dispatch.thin_peer_boot switch that is on unless it is explicitly false, the pilot numbers behind that default, and what a peer still loads."
+description: "The trimmed start a herded Claude worker gets: a five-variable env layer set by bee herding run, a hook that prints only the short peer preamble, the dispatch.thin_peer_boot switch that is on unless it is explicitly false, the pilot numbers behind that default, and what a peer still loads."
 timestamp: 2026-11-07
 bee:
   id: bee-herding-thin-peer-boot
@@ -13,8 +13,8 @@ bee:
   authoritative_for: "bee-herding: the thin peer boot — the env layer, the peer preamble hook, the dispatch.thin_peer_boot switch and its default"
   owns.code: [packages/bee-rs/crates/bee/src/hooks/mod.rs, packages/bee-rs/crates/bee/src/hooks/session_init.rs, packages/bee/prompts/peer-boot.md]
   anchors: [packages/bee/prompts/peer-boot.md, packages/bee-rs/crates/bee/src/herding.rs, packages/bee-rs/crates/bee/src/herding/wave.rs, packages/bee-rs/crates/bee/src/hooks/mod.rs, packages/bee-rs/crates/bee/src/herding/run.rs, packages/bee-rs/crates/bee/src/hooks/session_init.rs]
-  verified_at: 2026-11-14
-  verified_commit: cdefa65590c37a8f7f9a716d23cd23df9a082c54
+  verified_at: 2026-11-25
+  verified_commit: 63d270af0980f908cbd5a43847aa4b14253b5530
 ---
 
 # Bee Herding — thin peer boot, what a herded Claude worker loads, and the switch that is on by default
