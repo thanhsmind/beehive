@@ -13,9 +13,10 @@ refused outright, so "done" can never mean "I said so".
 - `cell-claim-gated` refuses a claim while the execution gate is unapproved.
 - `cell-cap-red` refuses a cap whose proof line result is `red`.
 - `cell-cap-green` caps the cell and stores the proof line on its trace. The
-  result segment is a CLOSED set — `green:live`, `green:unit`, `green:static`
-  (`cells/finish_support.rs:81-89`). A bare `green` is refused on write; the
-  read path stays tolerant of caps recorded before that rule.
+  result segment is a CLOSED set of four values — `green:live`, `green:unit`,
+  `green:static`, `green:red-first` (`cells/finish_support.rs:81-89`). A bare
+  `green` is refused on write; the read path stays tolerant of caps recorded
+  before that rule.
 - `cell-cap-live-evidence` refuses a `green:live` cap whose scope reason names no
   evidence locator (a run URL, an absolute path, or a path containing
   `evidence/`); the refusal names the three shapes.
@@ -26,7 +27,8 @@ refused outright, so "done" can never mean "I said so".
   Historical bare-green caps remain readable.
 - `cell-claim-contract` checks a claim on contract grounds
   (`cells/handlers_write.rs:1248-1436`): claiming a `test`-role cell that cites
-  no `contract:<name>` decision warns about the missing decision,
+  no `contract:<name>` decision refuses `CONTRACT_UNCITED` once any contract
+  decision exists (and warns about the missing decision when none exist yet),
   `CONTRACT_UNSETTLED` fires when a cited decision carries an open revisit
   trigger, and `CONTRACT_RETIRED` when one has left the active set.
 - `cell-self-cap` a dispatched execution worker finishes its work, commits with cell trailer, and self-caps via `cells finish` using the terminal composed prompt instruction.
@@ -54,14 +56,14 @@ Preconditions:
 - **Validation refuses an incomplete cell.** Pipe a cell missing `action` and
   `verify`. Run
   `printf '{"id":"demo-note-1","feature":"demo-note","title":"Add a note file","lane":"small","role":"code","affects_skills":[],"affects_specs":[]}' | control-bee cli -- cells add --stdin --dry-run --json`.
-  The payload reports `dry_run: true`, `ok: false`, and a `problems[]` array
-  naming `action` and `verify` by name; it also names the packet mismatch against
-  the approved preview. `control-bee cli -- cells list --json` shows no cell was
-  written.
+  The payload reports `dry_run: true`, `ok: false`, and problems at
+  `cells[].problems` naming `action` and `verify` by name; it also names the
+  packet mismatch against the approved preview.
+  `control-bee cli -- cells list --json` shows no cell was written.
 - **A cell that differs from the approved packet is refused.** Run
   `printf '{"id":"demo-note-1","feature":"demo-note","title":"Add a note file","action":"Write NOTE.md","verify":"test -f NOTE.md","lane":"small","role":"code","affects_skills":[],"affects_specs":[]}' | control-bee cli -- cells add --stdin --json`.
   The `.exit` file holds a non-zero code and the payload's `error` contains
-  `differs from approved preview packet (action mismatch)`.
+  `differs from approved preview packet (files mismatch)`.
 - **Add the approved cell.** Run
   `control-bee cli -- cells add --stdin --json < .bee/verify/verify-app/fixtures/demo-note-1.json`.
   The payload echoes the cell with `status: "open"` and an empty `trace`.
@@ -96,7 +98,7 @@ Preconditions:
 - **A bare `green` is NOT accepted.** Run it once with the result segment as
   plain `green`. The `.exit` file holds `1` and the payload's `error` reads
   `result segment is "green" — a cap records HOW the change was shown to work`,
-  naming the three legal values. Drive this: the older form is still written
+  naming the four legal values. Drive this: the older form is still written
   from memory, and this is the check that catches it.
 - **A mismatched proof command or descriptive prose is refused.** Attempt to cap with a command differing from `test -f NOTE.md` or with descriptive prose:
   `control-bee cli -- cells cap --id demo-note-1 --files NOTE.md --report '{"outcome":"note added","commit":"<sha>","files":["NOTE.md"],"tests":"ran verification manually — green:unit — manual check","deviations":[]}' --json`.
@@ -114,7 +116,7 @@ Preconditions:
   The payload returns `tool: "Bash"` and a herding run command whose stdin carries the task text with the runnable `.bee/bin/bee cells finish` instruction as the terminal action:
   `Finish with: .bee/bin/bee cells finish --id demo-cap-1 --outcome "<one line>" --files <a,b> --report '<json>'`.
   Execute the prepared dispatch through the returned command with `--task-file -`:
-  `control-bee cli -- herding run --task-file - --json --cwd "/tmp/bee-verify/run/<run-id>/repo--wt--demo-cap" --agent "agy-flash"`.
+  `control-bee cli -- herding run --task-file - --json --cwd "$VERIFY_HOME/run/<run-id>/repo--wt--demo-cap" --agent "agy-flash"`.
   The worker executes, creates `DUMMY.txt`, commits with trailer `cell: demo-cap-1`, runs verification, and calls `cells finish` itself.
   Inspect the cell state from the main checkout without manual capping:
   `control-bee cli -- cells show --id demo-cap-1 --json`.
@@ -133,8 +135,9 @@ Preconditions:
   main sandbox checkout.
 - The `--report` value is a JSON **string** with five required keys: `outcome`,
   `commit`, `files`, `tests`, `deviations`. An unknown or missing key is refused
-  by name. The optional keys are `mistakes`, `knowledge_used`, `baseline`,
-  `reaction`, `skipped`, `unknowns`, `found` and `stopped`. `mistakes` is an
+  by name. The optional keys are `mistakes`, `knowledge_used`, `principles_used`,
+  `knowledge_wrong`, `baseline`, `reaction`, `skipped`, `unknowns`, `found` and
+  `stopped`. `mistakes` is an
   array whose items each carry
   THREE parts — `"<what went wrong> — <what would have been better> — <fix-at>"`
   or `{wrong, better, fix_at}`. The fix-at layer is one of `architecture`,
@@ -149,8 +152,10 @@ Preconditions:
   `bee mailbox reflect --no-mistakes` (bare) or a `mistakes` array in `--report`
   whose items carry all three parts, the fix-at layer included.
 - A `small`-lane cap refuses without a registered execution worker. `tiny` lanes
-  run inline and skip that requirement, and `--inline-reason` is the audited
-  escape on the higher lanes.
+  run inline and skip that requirement only while at most one counted file
+  changed, and `--inline-reason` is the audited escape on the higher lanes.
+- Closing `demo-note` needs the dependent tester cell `demo-note-2`
+  (`fixtures/demo-note-2.json`) capped too.
 - `bee cells finish` additionally requires a `cell: <id>` trailer on the commit
   the report names; `bee cells cap` does not check for one. A recipe that swaps
   the porcelain in for the plumbing must add the trailer.

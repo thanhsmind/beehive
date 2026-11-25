@@ -32,7 +32,8 @@ Preconditions:
 - **Start a feature.** Run
   `control-bee cli -- state start-feature --feature demo-note --mode standard --json`.
   The payload reports `phase: "exploring"`, `feature: "demo-note"`,
-  `mode: "standard"`, every entry of `approved_gates` `false`, an empty
+  `mode: "standard"`, every entry of `approved_gates` (`context`, `shape`,
+  `execution`, `review`) `false` (`uat` is reported by `gate` and `orient`), an empty
   `workers` array, and a `next_action` naming the feature.
 - **A second start is refused.** Run the same command again with
   `--feature other-thing`. The `.exit` file holds a non-zero code and the payload
@@ -53,27 +54,32 @@ Preconditions:
   `control-bee put docs/history/demo-note/plan.md < .bee/verify/verify-app/fixtures/demo-note-plan.md`.
 - **Preview cell packets.** Run `control-bee cli -- gate --preview --json`.
   The payload parses the cell packet from `plan.md`, verifies execution fields
-  (`action`, `verify`, `files`, `read_first`, `must_haves`), and records
-  `approved_cell_packet` hash in `.bee/state.json`. Shape approval strictly
+  (`action`, `verify`, `files`, `read_first`, `must_haves`), and writes
+  `gate_preview` (`feature`, `plan_sha256`, `previewed_at`, `cells`) in
+  `.bee/state.json`; `approved_cell_packet` is copied from that preview at
+  shape or merged approval. Shape approval strictly
   refuses if preview is absent or stale, and `cells add` validates cell packet
   hashes against this preview. Automated Pi lifecycle coverage is exercised in
   `packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs`
   (`pi_lifecycle_end_to_end_onboarded_repo_parity`).
 - **The merged gate refuses in a fixed order.** Before the context is put it
-  refuses for the missing CONTEXT. With the context but no preview it refuses
+  refuses for the missing CONTEXT. With the context but no `plan.md` it refuses
+  `plan.md does not exist`. With `plan.md` but no preview it refuses
   `missing gate preview`. After a preview, an edit to `plan.md` makes it refuse
   `stale gate preview`.
 - **Approve the merged gate.** Run
   `control-bee cli -- gate --merge --approved true --json`. The payload's
   `approved_gates` now has `shape: true` and `execution: true`, with `context`
   and `review` still `false` and `uat: false`.
-- **An approval can refuse before it writes.** Four preconditions guard it, each
-  zero-mutation (`state_group/set_gate.rs`): a shape or merged approval refuses
-  if `approved_cell_packet` preview is missing or stale with respect to `plan.md`;
+- **An approval can refuse before it writes.** Six preconditions guard it, each
+  zero-mutation (`state_group/set_gate.rs`): a plan carrying unresolved
+  load-bearing claims refuses; a missing or empty CONTEXT read set refuses; a
+  shape or merged approval refuses if `gate_preview` (`approved_cell_packet`) is
+  missing or stale with respect to `plan.md`; an owner-first path refuses
+  `GATE_OWNER_FIRST` under `--actor auto`;
   a `high-risk` lane refuses an execution or merged approval while `advisor_ref`
-  is missing or stale; a LANE target refuses while the plan-time conflict
-  review is absent or was derived against a different `plan_rev`; and a plan
-  carrying unresolved load-bearing claims refuses. The conflict refusal fires
+  is missing or stale; and a LANE target refuses while the plan-time conflict
+  review is absent or was derived against a different `plan_rev`. The conflict refusal fires
   only for a lane target — `start-feature --as-lane` or
   `gate --merge --lane <f>` — and its remedy is
   `state plan-conflicts derive --lane <f>`.

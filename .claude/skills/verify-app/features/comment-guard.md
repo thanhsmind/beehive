@@ -23,7 +23,8 @@ opts in.
 - `comment-guard-move` allows a comment that was only moved, reindented or
   deleted — the comparison is old versus new, not "the file has comments".
 - `comment-guard-exceptions` allows a `#!` line, a `SAFETY:` line anywhere (not
-  only on an unsafe block), and a license header at file top.
+  only on an unsafe block), and a license header at file top (for `Write`/`Edit`;
+  an `apply_patch` license header is not exempt).
 - `comment-guard-scope` never touches a `.md`, `.json` or `.toml`, and never
   touches a path outside the code roots.
 - `comment-baseline-check` reports every file above its baseline and exits 1.
@@ -49,13 +50,15 @@ Preconditions:
 - The binary under test is the one `control-bee build` produced — the comment arm
   and the `dev comment-baseline` verb both ship in it.
 
-- **Turn the key on in the sandbox.** The sandbox's own config decides, so write
-  it there. bee ships no `config set` verb, so put the file:
-  `printf '{"no_code_comments": true}\n' | control-bee put .bee/config.json`.
-  Read it back with `control-bee sh -- cat .bee/config.json`. Drive the guard
-  before any feature is started: with a feature active on main, the
-  worktree-first guard answers before the comment guard. Otherwise add
-  `"worktree_first": "off"` to the same config object.
+- **Turn the key on in the sandbox.** Set `no_code_comments` with `config set`:
+  `control-bee cli -- config set --key no_code_comments --value true --json`.
+  Read it back with `control-bee sh -- cat .bee/config.json`. The comment guard
+  is reached only past the intake and execution gates, so start a feature
+  (`control-bee cli -- state start-feature --feature cg-demo --mode standard --json`),
+  set `worktree_first` off
+  (`control-bee cli -- config set --key worktree_first --value off --json`), and
+  approve the execution gate
+  (`control-bee cli -- gate --name execution --approved true --json`).
 - **Give the guard a code file to guard.** Run
   `printf 'fn f() {}\n' | control-bee put packages/bee-rs/crates/bee/src/x.rs`.
 - **Drive the refusal with a crafted hook payload.** The hook reads one JSON
@@ -73,8 +76,8 @@ Preconditions:
   is refused by the host with that same text. Use this when you want the refusal
   as the USER meets it; use the crafted payload when you want it repeatable.
 - **The key off is silent.** Re-run the same payload after
-  `printf '{}\n' | control-bee put .bee/config.json`. The `.exit` file holds `0`
-  and stderr carries no `bee comment guard` line.
+  `control-bee cli -- config set --key no_code_comments --value false --json`.
+  The `.exit` file holds `0` and stderr carries no `bee comment guard` line.
 - **A moved comment passes.** Send an Edit whose `old_string` already holds
   `// note` and whose `new_string` holds the same `// note` on another line. The
   `.exit` file holds `0`.
@@ -122,5 +125,8 @@ Preconditions:
   `the unmerged branches were not folded in — <gap>` when git could not be read.
 - **`--check` and `--write` are exclusive.** Neither flag, or both, prints
   `usage: bee dev comment-baseline (--check | --write)` and exits 1.
+- **Denials name `<path>:<line>`, not an edit index.** MultiEdit and
+  `apply_patch` refusals point to `<path>:<line>` of the offending added line;
+  an `apply_patch` license header is not exempt.
 - **A failing `--check` writes to stderr, a passing one to stdout.** Assert on the
   recorded `.exit` file, not on the stream.

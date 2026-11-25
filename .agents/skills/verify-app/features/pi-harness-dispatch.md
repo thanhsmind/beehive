@@ -2,8 +2,8 @@
 
 On Pi, a leader in an approved swarming phase on lane `small`, `standard` or
 `high-risk` cannot write source. bee's write guard refuses the write, and the
-stage tool set removes `edit` and `write` and adds `bee_dispatch` and
-`bee_advisor`. The leader starts a worker with one `bee_dispatch` call. The
+stage tool set removes `edit` and `write` and adds `bee_dispatch`,
+`bee_advisor`, and `bee_steer`. The leader starts a worker with one `bee_dispatch` call. The
 worker's result comes back to the session through the result drain.
 
 ## How to get to it (user POV)
@@ -41,7 +41,7 @@ Evidence dir: `/home/thanhsmind/.local/state/bee-verify/evidence/20261002-153242
 (`rpc-events.jsonl`, `drive-summary.txt`).
 
 - Hook probe: `allowed_tools` = read, bash, find, grep, ls, powershell,
-  codemode, tool_search, bee_dispatch, bee_advisor. The write-guard probe was
+  codemode, tool_search, bee_dispatch, bee_advisor, bee_steer. The write-guard probe was
   refused with the bee_dispatch hint (exit 2).
 - The leader called `bee_dispatch {"kind":"cell","cell":"greet-1","worker":"greet-worker-1"}`
   and got `Worker started (job job-1790930000557-3270322-1)` at once.

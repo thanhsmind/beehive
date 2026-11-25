@@ -49,10 +49,10 @@ merged view unchanged.
 
 Preconditions:
 
-- Export `BEEHIVE_CONFIG_DIR` to an empty dir under `$VERIFY_HOME` BEFORE `control-bee launch`,
-  in the environment that runs `control-bee`. `control-bee` passes it through to every bee
-  process. Leave it unset and the launch onboard and every drive read the real
-  `~/.config/beehive/config.json`.
+- `control-bee` isolates the user-global config by default (every bee process gets
+  `BEEHIVE_CONFIG_DIR` set to an empty `<run dir>/global-config`). Exporting
+  `BEEHIVE_CONFIG_DIR` to a scenario dir under `$VERIFY_HOME` BEFORE running
+  `control-bee` overrides that default and passes it through to every bee process.
 - Keep one global dir per scenario, e.g. `$VERIFY_HOME/g1/config.json`. Write each file as the
   harness (`control-bee put` only writes inside the sandbox). Point `BEEHIVE_CONFIG_DIR` at the
   scenario's dir for the calls that drive it.
@@ -119,8 +119,9 @@ Preconditions:
 
 ## Gotchas
 
-- **control-bee does not isolate the global file.** It strips `PASEO_*` but leaves
-  `BEEHIVE_CONFIG_DIR` and `XDG_CONFIG_HOME` alone. Unset, every drive reads the real home.
+- **control-bee isolates the global file by default.** It sets `BEEHIVE_CONFIG_DIR`
+  to an empty `<run dir>/global-config` unless the caller already exported
+  `BEEHIVE_CONFIG_DIR`, in which case the exported dir is passed through.
 - **The guard refuses the env assignment.** In a hooked session, a Bash command holding
   `BEEHIVE_CONFIG_DIR=` is refused. When the session itself carries `BEEHIVE_CONFIG_DIR`, a
   `Write` to that dir's `config.json` is refused too. Set the variable in the environment that

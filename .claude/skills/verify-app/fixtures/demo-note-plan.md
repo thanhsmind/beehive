@@ -40,6 +40,41 @@ Verification fixture plan.
       "prohibitions": []
     },
     "behavior_change": true
+  },
+  {
+    "id": "demo-note-2",
+    "feature": "demo-note",
+    "title": "Verify NOTE.md content",
+    "lane": "small",
+    "role": "test",
+    "deps": [
+      "demo-note-1"
+    ],
+    "decisions": [],
+    "files": [
+      "NOTE.md"
+    ],
+    "read_first": [
+      "NOTE.md"
+    ],
+    "affects_skills": [],
+    "affects_specs": [],
+    "action": "Verify NOTE.md contains note",
+    "verify": "grep -q note NOTE.md",
+    "must_haves": {
+      "truths": [
+        "NOTE.md contains note"
+      ],
+      "artifacts": [
+        {
+          "path": "NOTE.md",
+          "substantive": "holds a note"
+        }
+      ],
+      "key_links": [],
+      "prohibitions": []
+    },
+    "behavior_change": false
   }
 ]
 ```

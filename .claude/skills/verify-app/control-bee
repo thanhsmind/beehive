@@ -77,6 +77,16 @@ assert_isolated() {
   case "$REPO" in "$sb"/*) die "the real checkout sits inside the sandbox — refusing" ;; esac
 }
 
+isolate_global_config() {
+  if [ -z "${BEEHIVE_CONFIG_DIR:-}" ]; then
+    BEEHIVE_CONFIG_DIR="$(run_dir)/global-config"
+    export BEEHIVE_CONFIG_DIR
+  fi
+  if [ "$BEEHIVE_CONFIG_DIR" = "$(run_dir)/global-config" ]; then
+    mkdir -p "$BEEHIVE_CONFIG_DIR"
+  fi
+}
+
 # ------------------------------------------------------------------- the binary
 
 bee_bin() {
@@ -140,6 +150,7 @@ cmd_launch() {
   local sb ev; sb="$(sandbox_dir)"; ev="$(evidence_dir)"
   rm -rf "$(run_dir)"
   mkdir -p "$sb" "$ev"
+  isolate_global_config
 
   git -C "$sb" init -q -b main .
   git -C "$sb" config user.email verify@bee.local
@@ -170,6 +181,7 @@ cmd_launch() {
 cmd_doctor() {
   local b sb ev want got fails=0
   b="$(bee_bin)"; assert_isolated; sb="$(sandbox_dir)"; ev="$(evidence_dir)"
+  isolate_global_config
 
   printf 'doctor: run %s\n' "$(run_id)"
   want="$(release_version)"
@@ -224,6 +236,7 @@ record_in() { # record_in <cwd> <slug> <cmd...>
   local slug="$1"; shift
   local ev n stem rc
   ev="$(evidence_dir)"; mkdir -p "$ev"
+  isolate_global_config
   # Count .cmd files only — each record writes four files per step.
   n="$(printf '%03d' "$(( $(find "$ev" -maxdepth 1 -name '[0-9][0-9][0-9]-*.cmd' | wc -l) + 1 ))")"
   stem="$ev/$n-$slug"
@@ -236,7 +249,7 @@ record_in() { # record_in <cwd> <slug> <cmd...>
   local sid; sid="verify-$(run_id)"
   set +e
   ( cd "$cwd" && \
-    env BEE_SESSION_ID="$sid" CLAUDE_CODE_SESSION_ID="$sid" "$@" ) > "$stem.out" 2> "$stem.err"
+    env -u BEE_HERDING_WORKER BEE_SESSION_ID="$sid" CLAUDE_CODE_SESSION_ID="$sid" "$@" ) > "$stem.out" 2> "$stem.err"
   rc=$?
   set -e
   printf '%s\n' "$rc" > "$stem.exit"
@@ -414,6 +427,7 @@ cmd_smoke() {
   SMOKE_RUN=1; export SMOKE_RUN
   VERIFY_RUN="smoke-$(date +%Y%m%d-%H%M%S)-$$"; export VERIFY_RUN
   unset VERIFY_CWD
+  isolate_global_config
   SMOKE_STEPS=0
   mkdir -p "$(evidence_dir)" 2> /dev/null || { printf '  FAIL  prepare the evidence folder %s\n' "$(evidence_dir)"; exit 1; }
   printf 'smoke: run %s\n' "$VERIFY_RUN"
@@ -428,6 +442,445 @@ cmd_smoke() {
   smoke_step "second onboard reports up_to_date" smoke_step_reonboard
   cmd_cleanup >> "$(evidence_dir)/smoke.log" 2>&1
   printf 'smoke: green — %s steps ok, evidence kept at %s\n' "$SMOKE_STEPS" "$(evidence_dir)"
+}
+
+drive_check() {
+  printf '%s' "$1" > "$(evidence_dir)/drive-check"
+}
+
+drive_exit() {
+  cat "$(smoke_last).exit"
+}
+
+drive_out() {
+  printf '%s.out' "$(smoke_last)"
+}
+
+drive_err() {
+  printf '%s.err' "$(smoke_last)"
+}
+
+drive_expect_exit() {
+  local want="$1"; shift
+  "$@" > /dev/null 2>&1
+  [ "$(drive_exit)" = "$want" ]
+}
+
+drive_expect_nonzero() {
+  "$@" > /dev/null 2>&1
+  [ "$(drive_exit)" != "0" ]
+}
+
+drive_orient_and_status() {
+  local got
+  drive_check "version matches plugin.json"
+  drive_expect_exit 0 cmd_sh -- "$(bee_bin)" version --json
+  got="$(json_get "$(drive_out)" version)"
+  [ "$got" = "$(release_version)" ]
+
+  drive_check "idle orient"
+  drive_expect_exit 0 cmd_cli -- orient --json
+  [ "$(json_get "$(drive_out)" where.phase)" = "idle" ]
+  [ "$(json_get "$(drive_out)" next.skill)" = "bee-hive" ]
+
+  drive_check "idle status"
+  drive_expect_exit 0 cmd_cli -- status --json
+  got="$(json_get "$(drive_out)" onboarding.installed)"
+  [ "$got" = "True" ] || [ "$got" = "true" ]
+  got="$(json_get "$(drive_out)" onboarding.drift)"
+  [ "$got" = "False" ] || [ "$got" = "false" ]
+
+  drive_check "active orient after start-feature"
+  drive_expect_exit 0 cmd_cli -- state start-feature --feature demo-note --mode standard --json
+  drive_expect_exit 0 cmd_cli -- orient --json
+  [ "$(json_get "$(drive_out)" where.phase)" = "exploring" ]
+  [ "$(json_get "$(drive_out)" next.skill)" = "bee-shaping" ]
+}
+
+drive_feature_gates() {
+  local got
+  drive_check "start-feature"
+  drive_expect_exit 0 cmd_cli -- state start-feature --feature demo-note --mode standard --json
+
+  drive_check "second start refused"
+  drive_expect_nonzero cmd_cli -- state start-feature --feature other-thing --mode standard --json
+
+  drive_check "route --files non-int refused"
+  drive_expect_nonzero cmd_cli -- route --set --class feature --lane small --flags "" --files a.rs --json
+  drive_expect_exit 0 cmd_cli -- route --set --class feature --lane small --flags "" --files 1 --json
+
+  drive_check "merge refuses without CONTEXT"
+  drive_expect_nonzero cmd_cli -- gate --merge --approved true --json
+
+  drive_check "merge refuses without plan.md"
+  cmd_put docs/history/demo-note/CONTEXT.md < "$SKILL_DIR/fixtures/context-no-read-set.md" > /dev/null
+  drive_expect_nonzero cmd_cli -- gate --merge --approved true --json
+
+  drive_check "preview and stale preview refusal"
+  cmd_put docs/history/demo-note/plan.md < "$SKILL_DIR/fixtures/demo-note-plan.md" > /dev/null
+  drive_expect_exit 0 cmd_cli -- gate --preview --json
+  cmd_sh -- sh -c 'printf "\n" >> docs/history/demo-note/plan.md' > /dev/null
+  drive_expect_nonzero cmd_cli -- gate --merge --approved true --json
+
+  drive_check "re-preview and merge approve"
+  drive_expect_exit 0 cmd_cli -- gate --preview --json
+  drive_expect_exit 0 cmd_cli -- gate --merge --approved true --json
+  got="$(json_get "$(drive_out)" approved_gates.shape)"
+  [ "$got" = "True" ] || [ "$got" = "true" ]
+  got="$(json_get "$(drive_out)" approved_gates.execution)"
+  [ "$got" = "True" ] || [ "$got" = "true" ]
+
+  drive_check "gate --name uat true/false"
+  drive_expect_exit 0 cmd_cli -- gate --name uat --approved true --json
+  got="$(json_get "$(drive_out)" approved_gates.uat)"
+  [ "$got" = "True" ] || [ "$got" = "true" ]
+  drive_expect_exit 0 cmd_cli -- gate --name uat --approved false --json
+  got="$(json_get "$(drive_out)" approved_gates.uat)"
+  [ "$got" = "False" ] || [ "$got" = "false" ]
+
+  drive_check "merge+name and actor auto without bypass refused"
+  drive_expect_nonzero cmd_cli -- gate --merge --name uat --approved true --json
+  drive_expect_nonzero cmd_cli -- gate --name context --approved true --actor auto --json
+}
+
+drive_cells_and_proof() {
+  local sha ev got
+  drive_check "setup approved feature"
+  drive_expect_exit 0 cmd_cli -- state start-feature --feature demo-note --mode standard --json
+  drive_expect_exit 0 cmd_cli -- route --set --class feature --lane small --flags "" --files 1 --json
+  cmd_put docs/history/demo-note/CONTEXT.md < "$SKILL_DIR/fixtures/context-no-read-set.md" > /dev/null
+  cmd_put docs/history/demo-note/plan.md < "$SKILL_DIR/fixtures/demo-note-plan.md" > /dev/null
+  drive_expect_exit 0 cmd_cli -- gate --preview --json
+  drive_expect_exit 0 cmd_cli -- gate --merge --approved true --json
+
+  drive_check "dry-run add reports ok false"
+  printf '{"id":"demo-note-1","feature":"demo-note","title":"Add a note file","lane":"small","role":"code","affects_skills":[],"affects_specs":[]}' \
+    | cmd_cli -- cells add --stdin --dry-run --json > /dev/null 2>&1
+  got="$(json_get "$(drive_out)" ok)"
+  [ "$got" = "False" ] || [ "$got" = "false" ]
+
+  drive_check "mismatched cell refused"
+  printf '{"id":"demo-note-1","feature":"demo-note","title":"Add a note file","action":"Write NOTE.md","verify":"test -f NOTE.md","lane":"small","role":"code","affects_skills":[],"affects_specs":[]}' \
+    | cmd_cli -- cells add --stdin --json > /dev/null 2>&1
+  [ "$(drive_exit)" != "0" ]
+
+  drive_check "add claim worker add and commit"
+  drive_expect_exit 0 cmd_cli -- cells add --stdin --json < "$SKILL_DIR/fixtures/demo-note-1.json"
+  drive_expect_exit 0 cmd_cli -- cells claim --id demo-note-1 --worker verify-w1 --json
+  drive_expect_exit 0 cmd_cli -- state worker add --nickname verify-w1 --cell demo-note-1 --tier generation --status working --json
+  printf 'a note\n' | cmd_put NOTE.md > /dev/null
+  drive_expect_exit 0 cmd_sh -- git add -A
+  drive_expect_exit 0 cmd_sh -- git commit -qm "add NOTE.md"
+  sha="$(cmd_sh -- git rev-parse --short HEAD 2>/dev/null | tr -d '\n')"
+
+  drive_check "bad proof caps refused"
+  for t in \
+    "test -f NOTE.md — red — touched NOTE.md" \
+    "test -f NOTE.md — green — touched NOTE.md" \
+    "ran verification manually — green:unit — manual check" \
+    "test -f NOTE.md — green:live — checked"; do
+    drive_expect_exit 1 cmd_cli -- cells cap --id demo-note-1 --files NOTE.md \
+      --report "{\"outcome\":\"note added\",\"commit\":\"$sha\",\"files\":[\"NOTE.md\"],\"tests\":\"$t\",\"deviations\":[]}" --json
+  done
+  drive_expect_exit 0 cmd_cli -- cells show --id demo-note-1 --json
+  [ "$(json_get "$(drive_out)" status)" = "claimed" ]
+
+  drive_check "green:live with evidence caps cell"
+  ev="$(evidence_dir)"
+  drive_expect_exit 0 cmd_cli -- cells cap --id demo-note-1 --files NOTE.md \
+    --report "{\"outcome\":\"note added\",\"commit\":\"$sha\",\"files\":[\"NOTE.md\"],\"tests\":\"test -f NOTE.md — green:live — checked, evidence $ev\",\"deviations\":[]}" \
+    --no-mistakes --json
+  drive_expect_exit 0 cmd_cli -- cells show --id demo-note-1 --json
+  [ "$(json_get "$(drive_out)" status)" = "capped" ]
+}
+
+drive_onboard() {
+  local target
+  drive_check "newrepo target"
+  target="$(cmd_newrepo target)"
+
+  drive_check "initial onboard plan"
+  drive_expect_exit 0 cmd_host -- "$(bee_bin)" onboard --repo-root "$target" --json
+  [ "$(json_get "$(drive_out)" status)" = "changes_needed" ]
+  [ "$(json_get "$(drive_out)" design_offer)" != "MISSING" ]
+
+  drive_check "onboard apply"
+  drive_expect_exit 0 cmd_host -- "$(bee_bin)" onboard --repo-root "$target" --apply --json
+  [ "$(json_get "$(drive_out)" status)" = "applied" ]
+  [ "$(json_get "$(drive_out)" recheck)" = "up_to_date" ]
+  [ "$(json_get "$(drive_out)" plan)" = "MISSING" ]
+
+  drive_check "re-run onboard up_to_date"
+  drive_expect_exit 0 cmd_host -- "$(bee_bin)" onboard --repo-root "$target" --json
+  [ "$(json_get "$(drive_out)" status)" = "up_to_date" ]
+  [ "$(json_get "$(drive_out)" plan)" = "[]" ]
+}
+
+drive_comment_guard() {
+  local sb payload moved
+  sb="$(sandbox_dir)"
+  drive_check "setup comment guard"
+  drive_expect_exit 0 cmd_cli -- config set --key no_code_comments --value true --json
+  drive_expect_exit 0 cmd_cli -- state start-feature --feature demo --mode standard --json
+  drive_expect_exit 0 cmd_cli -- config set --key worktree_first --value off --json
+  drive_expect_exit 0 cmd_cli -- gate --name execution --approved true --json
+  printf 'fn f() {}\n' | cmd_put packages/bee-rs/crates/bee/src/x.rs > /dev/null
+
+  drive_check "comment guard refuses added comment"
+  payload="{\"tool_name\":\"Edit\",\"tool_input\":{\"file_path\":\"packages/bee-rs/crates/bee/src/x.rs\",\"old_string\":\"fn f() {}\",\"new_string\":\"// note\\nfn f() {}\"},\"cwd\":\"$sb\"}"
+  printf '%s' "$payload" | cmd_cli -- hook write-guard > /dev/null 2>&1
+  [ "$(drive_exit)" = "2" ]
+  grep -q 'bee comment guard' "$(drive_err)"
+
+  drive_check "key false allows comment"
+  drive_expect_exit 0 cmd_cli -- config set --key no_code_comments --value false --json
+  printf '%s' "$payload" | cmd_cli -- hook write-guard > /dev/null 2>&1
+  [ "$(drive_exit)" = "0" ]
+
+  drive_check "moved comment allowed"
+  drive_expect_exit 0 cmd_cli -- config set --key no_code_comments --value true --json
+  printf '// note\nfn f() {}\n' | cmd_put packages/bee-rs/crates/bee/src/x.rs > /dev/null
+  moved="{\"tool_name\":\"Edit\",\"tool_input\":{\"file_path\":\"packages/bee-rs/crates/bee/src/x.rs\",\"old_string\":\"// note\\nfn f() {}\",\"new_string\":\"fn f() {}\\n// note\"},\"cwd\":\"$sb\"}"
+  printf '%s' "$moved" | cmd_cli -- hook write-guard > /dev/null 2>&1
+  [ "$(drive_exit)" = "0" ]
+}
+
+drive_worker_outward_guard() {
+  local wt
+  drive_check "setup worktree"
+  drive_expect_exit 0 cmd_cli -- state start-feature --feature demo --mode standard --json
+  drive_expect_exit 0 cmd_cli -- worktree new --feature demo --json
+  wt="$(run_dir)/repo--wt--demo"
+
+  drive_check "git push refused in worktree"
+  printf '{"tool_name":"Bash","tool_input":{"command":"git push origin main"},"cwd":"%s"}' "$wt" \
+    | cmd_cli -- hook write-guard > /dev/null 2>&1
+  [ "$(drive_exit)" = "2" ]
+
+  drive_check "gh pr view allowed"
+  printf '{"tool_name":"Bash","tool_input":{"command":"gh pr view 1"},"cwd":"%s"}' "$wt" \
+    | cmd_cli -- hook write-guard > /dev/null 2>&1
+  [ "$(drive_exit)" = "0" ]
+
+  drive_check "claude -p refused"
+  printf '{"tool_name":"Bash","tool_input":{"command":"claude -p x"},"cwd":"%s"}' "$wt" \
+    | cmd_cli -- hook write-guard > /dev/null 2>&1
+  [ "$(drive_exit)" = "2" ]
+
+  drive_check "worker_outward false allows push"
+  drive_expect_exit 0 cmd_cli -- config set --key guards.worker_outward --value false --json
+  printf '{"tool_name":"Bash","tool_input":{"command":"git push origin main"},"cwd":"%s"}' "$wt" \
+    | cmd_cli -- hook write-guard > /dev/null 2>&1
+  [ "$(drive_exit)" = "0" ]
+}
+
+drive_worktree_and_close() {
+  local got sha ev
+  drive_check "worktree new and list"
+  drive_expect_exit 0 cmd_cli -- worktree new --feature wt-demo --json
+  drive_expect_exit 0 cmd_cli -- worktree list --json
+  [ "$(json_get "$(drive_out)" grants.repo--wt--wt-demo)" != "MISSING" ]
+
+  drive_check "worktree exit and commit"
+  VERIFY_CWD=repo--wt--wt-demo drive_expect_exit 0 cmd_cli -- worktree exit --json
+  printf 'work\n' | VERIFY_CWD=repo--wt--wt-demo cmd_put WORK.md > /dev/null
+  VERIFY_CWD=repo--wt--wt-demo drive_expect_exit 0 cmd_sh -- git add -A
+  VERIFY_CWD=repo--wt--wt-demo drive_expect_exit 0 cmd_sh -- git commit -qm "add WORK.md"
+
+  drive_check "linked merge emits exit-worktree-before-merge"
+  VERIFY_CWD=repo--wt--wt-demo drive_expect_exit 0 cmd_cli -- worktree merge --json
+  [ "$(json_get "$(drive_out)" sessionTransition.operation)" = "exit-worktree-before-merge" ]
+
+  drive_check "merge from main lands WORK.md"
+  drive_expect_exit 0 cmd_cli -- worktree merge --id repo--wt--wt-demo --json
+  got="$(json_get "$(drive_out)" merged)"
+  [ "$got" = "True" ] || [ "$got" = "true" ]
+  drive_expect_exit 0 cmd_sh -- test -f WORK.md
+
+  drive_check "demo-note both cells capped and close dry-run green"
+  drive_expect_exit 0 cmd_cli -- state start-feature --feature demo-note --mode standard --json
+  drive_expect_exit 0 cmd_cli -- route --set --class feature --lane small --flags "" --files 1 --json
+  cmd_put docs/history/demo-note/CONTEXT.md < "$SKILL_DIR/fixtures/context-no-read-set.md" > /dev/null
+  cmd_put docs/history/demo-note/plan.md < "$SKILL_DIR/fixtures/demo-note-plan.md" > /dev/null
+  drive_expect_exit 0 cmd_cli -- gate --preview --json
+  drive_expect_exit 0 cmd_cli -- gate --merge --approved true --json
+  drive_expect_exit 0 cmd_cli -- cells add --stdin --json < "$SKILL_DIR/fixtures/demo-note-1.json"
+  drive_expect_exit 0 cmd_cli -- cells claim --id demo-note-1 --worker verify-w1 --json
+  drive_expect_exit 0 cmd_cli -- state worker add --nickname verify-w1 --cell demo-note-1 --tier generation --status working --json
+  printf 'a note\n' | cmd_put NOTE.md > /dev/null
+  drive_expect_exit 0 cmd_sh -- git add -A
+  drive_expect_exit 0 cmd_sh -- git commit -qm "add NOTE.md"
+  sha="$(cmd_sh -- git rev-parse --short HEAD 2>/dev/null | tr -d '\n')"
+  ev="$(evidence_dir)"
+  drive_expect_exit 0 cmd_cli -- cells cap --id demo-note-1 --files NOTE.md \
+    --report "{\"outcome\":\"note added\",\"commit\":\"$sha\",\"files\":[\"NOTE.md\"],\"tests\":\"test -f NOTE.md — green:live — checked, evidence $ev\",\"deviations\":[]}" \
+    --no-mistakes --json
+  drive_expect_exit 0 cmd_cli -- cells add --stdin --json < "$SKILL_DIR/fixtures/demo-note-2.json"
+  drive_expect_exit 0 cmd_cli -- cells claim --id demo-note-2 --worker verify-w2 --json
+  drive_expect_exit 0 cmd_cli -- state worker add --nickname verify-w2 --cell demo-note-2 --tier generation --status working --json
+  drive_expect_exit 0 cmd_cli -- cells cap --id demo-note-2 --files NOTE.md \
+    --report "{\"outcome\":\"note verified\",\"commit\":\"$sha\",\"files\":[\"NOTE.md\"],\"tests\":\"grep -q note NOTE.md — green:live — checked, evidence $ev\",\"deviations\":[]}" \
+    --no-mistakes --json
+  drive_expect_exit 0 cmd_cli -- audit log --kind leader-check-deferral --feature demo-note --note "drive" --json
+  drive_expect_exit 0 cmd_cli -- audit log --kind capture-deferral --feature demo-note --note "drive" --json
+  drive_expect_exit 0 cmd_cli -- mailbox reflect --no-mistakes --json
+  drive_expect_exit 0 cmd_cli -- close --feature demo-note --dry-run --json
+  python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); sys.exit(1 if any(x.get("blocking") for x in d["doors"]) else 0)' "$(drive_out)"
+}
+
+drive_config_layers() {
+  local gd
+  drive_check "global-only key in config explain"
+  gd="$(run_dir)/global-layers"
+  mkdir -p "$gd"
+  printf '{"from_global_only":"g"}\n' > "$gd/config.json"
+  BEEHIVE_CONFIG_DIR="$gd" drive_expect_exit 0 cmd_cli -- config explain --key from_global_only --json
+  [ "$(json_get "$(drive_out)" source)" = "global" ]
+  [ "$(json_get "$(drive_out)" effective)" = "g" ]
+}
+
+drive_semantic_role_routing() {
+  drive_check "v1 preview has role_plan null"
+  drive_expect_exit 0 cmd_cli -- state start-feature --feature demo --mode standard --json
+  cmd_put docs/history/demo/CONTEXT.md < "$SKILL_DIR/fixtures/context-no-read-set.md" > /dev/null
+  sed 's/demo-note/demo/g' "$SKILL_DIR/fixtures/demo-note-plan.md" | cmd_put docs/history/demo/plan.md > /dev/null
+  drive_expect_exit 0 cmd_cli -- gate --preview --json
+  local rp
+  rp="$(json_get "$(drive_out)" role_plan)"
+  [ "$rp" = "MISSING" ] || [ "$rp" = "None" ] || [ "$rp" = "null" ]
+
+  drive_check "role-plan-v2 refuses role_plan_roster_stale"
+  sed 's/demo-note/demo/g' "$SKILL_DIR/fixtures/role-plan-v2.md" | cmd_put docs/history/demo/plan.md > /dev/null
+  drive_expect_nonzero cmd_cli -- gate --preview --json
+  grep -q 'role_plan_roster_stale' "$(drive_out)"
+}
+
+drive_codex_runtime() {
+  drive_check "codex model-guard probe"
+  printf '{"tool_name":"collaborationspawn_agent","tool_input":{"message":"opaque"}}' \
+    | cmd_cli -- hook model-guard --runtime codex > /dev/null 2>&1
+  [ "$(drive_exit)" = "2" ]
+  grep -q 'every Codex spawn_agent needs an explicit role' "$(drive_err)"
+}
+
+drive_pi_runtime() {
+  drive_check "doctor --runtime pi ready with HERDR env"
+  HERDR_ENV=1 HERDR_PANE_ID=1 drive_expect_exit 0 cmd_cli -- doctor --runtime pi --json
+  [ "$(json_get "$(drive_out)" overall_status)" = "ready" ]
+
+  drive_check "drifted index.ts blocked"
+  drive_expect_exit 0 cmd_sh -- sh -c 'echo "// drifted line" >> .pi/extensions/bee-guard/index.ts'
+  HERDR_ENV=1 HERDR_PANE_ID=1 drive_expect_exit 1 cmd_cli -- doctor --runtime pi --json
+  [ "$(json_get "$(drive_out)" overall_status)" = "blocked" ]
+  drive_expect_exit 0 cmd_sh -- git checkout -- .pi/extensions/bee-guard/index.ts
+
+  drive_check "attest refused not_applicable"
+  drive_expect_exit 1 cmd_cli -- doctor attest --runtime pi --json
+  [ "$(json_get "$(drive_out)" kind)" = "not_applicable" ]
+}
+
+drive_pi_harness_dispatch() {
+  local sb
+  sb="$(sandbox_dir)"
+  drive_check "hook stage-tools lists bee_dispatch and bee_steer"
+  drive_expect_exit 0 cmd_cli -- state start-feature --feature demo --mode standard --json
+  drive_expect_exit 0 cmd_cli -- route --set --class feature --lane small --flags "" --files 1 --json
+  drive_expect_exit 0 cmd_cli -- config set --key worktree_first --value off --json
+  drive_expect_exit 0 cmd_cli -- gate --name execution --approved true --json
+  drive_expect_exit 0 cmd_cli -- state set --phase swarming --owner exploring --json
+  printf '{"bee_runtime":"pi","cwd":"%s"}' "$sb" | cmd_cli -- hook stage-tools > /dev/null 2>&1
+  [ "$(drive_exit)" = "0" ]
+  grep -q 'bee_dispatch' "$(drive_out)"
+  grep -q 'bee_steer' "$(drive_out)"
+}
+
+drive_pi_hat_wave() {
+  local cmd_str
+  drive_check "dispatch prepare hat-facts-gaps"
+  HERDR_ENV=1 HERDR_PANE_ID=1 drive_expect_exit 0 cmd_cli -- dispatch prepare --runtime pi --kind advisor --role hat-facts-gaps --purpose "hat check" --json
+  cmd_str="$(json_get "$(drive_out)" payload.command)"
+  case "$cmd_str" in
+    *"--seat"*"hat-facts-gaps"*) : ;;
+    *) return 1 ;;
+  esac
+  case "$cmd_str" in
+    *"--ceiling 600"*) : ;;
+    *) return 1 ;;
+  esac
+  case "$cmd_str" in
+    *"--no-pane"*) : ;;
+    *) return 1 ;;
+  esac
+}
+
+drive_feature() {
+  local feat="$1" fn="$2" note="${3:-}"
+  local id="drive-${feat}-$(date +%Y%m%d-%H%M%S)-$$"
+  local ev="$VERIFY_HOME/evidence/$id"
+  local rd="$VERIFY_HOME/run/$id"
+  mkdir -p "$ev"
+  local rc
+  set +e
+  (
+    set -e
+    SMOKE_RUN=1; export SMOKE_RUN
+    VERIFY_RUN="$id"; export VERIFY_RUN
+    unset VERIFY_CWD
+    isolate_global_config
+    printf 'launch' > "$ev/drive-check"
+    cmd_launch > "$ev/drive.log" 2>&1
+    printf 'doctor' > "$ev/drive-check"
+    cmd_doctor >> "$ev/drive.log" 2>&1
+    "$fn" >> "$ev/drive.log" 2>&1
+  )
+  rc=$?
+  set -e
+  if [ "$rc" -eq 0 ]; then
+    rm -f "$ev/drive-check"
+    VERIFY_RUN="$id" SMOKE_RUN=1 cmd_cleanup > /dev/null 2>&1 || true
+    if [ -n "$note" ]; then
+      ok "$feat ($note)"
+    else
+      ok "$feat"
+    fi
+  else
+    local why="unknown"
+    [ -f "$ev/drive-check" ] && why="$(cat "$ev/drive-check")"
+    printf '  FAIL  %s  (%s, evidence %s, sandbox kept at %s)\n' "$feat" "$why" "$ev" "$rd"
+    DRIVE_FAILS=$((DRIVE_FAILS + 1))
+  fi
+}
+
+drive_usage() {
+  printf 'usage: control-bee drive (--fast|--full)\n' >&2
+  exit 2
+}
+
+cmd_drive() {
+  [ "$#" -eq 1 ] || drive_usage
+  local mode="$1"
+  case "$mode" in
+    --fast|--full) : ;;
+    *) drive_usage ;;
+  esac
+  [ -x "$(bee_bin)" ] || cmd_build > /dev/null
+  DRIVE_FAILS=0
+  drive_feature "orient-and-status" drive_orient_and_status
+  drive_feature "feature-gates" drive_feature_gates
+  drive_feature "cells-and-proof" drive_cells_and_proof
+  drive_feature "onboard" drive_onboard
+  drive_feature "comment-guard" drive_comment_guard
+  drive_feature "worker-outward-guard" drive_worker_outward_guard
+  if [ "$mode" = "--full" ]; then
+    drive_feature "worktree-and-close" drive_worktree_and_close
+    drive_feature "config-layers" drive_config_layers
+    drive_feature "semantic-role-routing" drive_semantic_role_routing
+    drive_feature "codex-runtime" drive_codex_runtime "cli surface; live canary not driven"
+    drive_feature "pi-runtime" drive_pi_runtime
+    drive_feature "pi-harness-dispatch" drive_pi_harness_dispatch "live Pi leader not driven"
+    drive_feature "pi-hat-wave" drive_pi_hat_wave "live Pi leader not driven"
+  fi
+  [ "$DRIVE_FAILS" -eq 0 ] || exit 1
 }
 
 # --------------------------------------------------------------------- dispatch
@@ -446,6 +899,7 @@ case "${1:-}" in
   snapshot) shift; cmd_snapshot "$@" ;;
   cleanup)  shift; cmd_cleanup "$@" ;;
   smoke)    shift; cmd_smoke "$@" ;;
-  ""|-h|--help) sed -n '2,34p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//' ;;
+  drive)    shift; cmd_drive "$@" ;;
+  ""|-h|--help) sed -n '2,34p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; printf '  control-bee drive (--fast|--full)  drive mapped features\n' ;;
   *) die "unknown subcommand '$1' — run 'control-bee --help'" ;;
 esac
