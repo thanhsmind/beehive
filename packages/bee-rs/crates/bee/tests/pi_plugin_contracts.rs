@@ -11481,3 +11481,85 @@ fn the_drain_delivers_the_next_rounds_done_result_through_the_same_marker() {
     assert!(msg.contains("summary: landed after question answered"), "injected message must have summary, got:\n{msg}");
 }
 
+#[test]
+fn real_bee_ignores_user_global_team_config() {
+    let dir = tempfile::tempdir().expect("tempdir for test repo");
+    write_real_bee(dir.path());
+
+    let tracked_config = json!({
+        "dispatch": { "claude_sessions": false },
+        "team": {
+            "claude": {
+                "extraction": {
+                    "model": "haiku"
+                }
+            }
+        }
+    });
+    std::fs::write(
+        dir.path().join(".bee").join("config.json"),
+        serde_json::to_string_pretty(&tracked_config).unwrap(),
+    )
+    .expect("write tracked config.json");
+
+    let global_root = tempfile::tempdir().expect("tempdir for user global config");
+    let global_config = json!({
+        "team": {
+            "claude": {
+                "extraction": {
+                    "kind": "herding",
+                    "agent": "global-herding-worker"
+                }
+            }
+        },
+        "herding": {
+            "agents": {
+                "global-herding-worker": ["pi", "--model", "dummy"]
+            }
+        }
+    });
+    let global_json = serde_json::to_string_pretty(&global_config).unwrap();
+    for rel in [
+        Path::new("beehive").join("config.json"),
+        Path::new(".config").join("beehive").join("config.json"),
+    ] {
+        let dest = global_root.path().join(rel);
+        std::fs::create_dir_all(dest.parent().expect("global config parent"))
+            .expect("create global config dir");
+        std::fs::write(&dest, &global_json).expect("write global config.json");
+    }
+
+    let out = real_bee(&dir.path().join(".bee").join("bin").join("bee"))
+        .args([
+            "dispatch",
+            "prepare",
+            "--runtime",
+            "claude",
+            "--kind",
+            "gather",
+            "--role",
+            "extraction",
+            "--json",
+        ])
+        .current_dir(dir.path())
+        .env("XDG_CONFIG_HOME", global_root.path())
+        .env("HOME", global_root.path())
+        .output()
+        .expect("run dispatch prepare via real_bee");
+    assert!(
+        out.status.success(),
+        "dispatch prepare failed: stdout={} stderr={}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let val: Value = serde_json::from_slice(&out.stdout).expect("parse dispatch prepare JSON");
+    assert_eq!(
+        val["tool"], "Agent",
+        "real_bee must ignore user-global team.claude herding config and keep Agent tool: {val}"
+    );
+    assert_eq!(
+        val["payload"]["model"], "haiku",
+        "real_bee must preserve tracked team.claude.extraction model haiku: {val}"
+    );
+}
+
