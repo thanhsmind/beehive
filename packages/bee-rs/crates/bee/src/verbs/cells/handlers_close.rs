@@ -1920,6 +1920,45 @@ pub(crate) fn finish_cap_and_release(
                 cap_flags.outcome = Some(o.to_string());
             }
         cap_flags.report = Some(report_json);
+
+        let job_names_cell = job_val.get("cell_id").and_then(Value::as_str) == Some(cap_flags.id.as_str());
+        let cell_terminal = matches!(
+            cell_val.get("status").and_then(Value::as_str),
+            Some("capped" | "dropped")
+        );
+        let current_worker = cell_val
+            .get("trace")
+            .and_then(|t| t.get("worker"))
+            .and_then(Value::as_str)
+            .filter(|w| !w.is_empty());
+        if job_names_cell && !cell_terminal && !registered_worker_for_cell(root, &cap_flags.id, current_worker)? {
+            let cell_role = cell_val
+                .get("role")
+                .and_then(Value::as_str)
+                .map(str::trim)
+                .filter(|r| !r.is_empty());
+            crate::verbs::state_group::register_worker_for_cell(root, job_id, &cap_flags.id, cell_role)
+                .map_err(Fail::Thrown)?;
+            mutate_cell(root, &cap_flags.id, "cells finish", None, false, |cell_map| {
+                let mut trace = merge_trace(cell_map.get("trace"))?;
+                trace.insert("worker".into(), Value::String(job_id.clone()));
+                cell_map.insert("trace".into(), Value::Object(trace));
+                Ok(())
+            })?;
+            let feature = cell_val.get("feature").and_then(Value::as_str).unwrap_or("");
+            let prev = current_worker.unwrap_or("none");
+            let note = format!("adopted worker {job_id} from finished job (previous trace.worker: {prev})");
+            crate::audit::append(
+                root,
+                "worker-adopt",
+                feature,
+                Some(&cap_flags.id),
+                &note,
+                "cells finish --from-job",
+                None,
+            )
+            .map_err(|e| Fail::Thrown(format!("cells finish: failed to write worker-adopt audit row: {e}")))?;
+        }
     }
     let cell = cap_cell_from_flags(root, &cap_flags, true)?;
 
