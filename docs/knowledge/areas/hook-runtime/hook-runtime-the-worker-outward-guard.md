@@ -57,7 +57,7 @@ Adapted from the Seatworks plugin, which denies `git push`, `gh` and agent launc
 
 The `worker-guard` hook guards shell commands for Paseo workers and the Pi supervisor (paseo-pi-hardening D5, store `be1699f8`; paseo-pi-hardening D9, store `e2af1dab`; contract store `9659395e`).
 
-Under `BEE_HERDING_WORKER`, most hooks exit immediately with code 0. The `worker-guard` hook is the second hook that runs past the marker short-circuit after `activity`.
+Under `BEE_HERDING_WORKER`, most hooks exit immediately with code 0. Four hook names run past the marker short-circuit: `activity`, `worker-guard`, `write-guard` and `agy-belt` (agy-runtime D9). `agy-belt` is a translator: the child hooks it starts inherit the marker and keep these same rules.
 
 The hook judges only shell requests (`Bash` tool). It reads `PreToolUse` JSON input from stdin. It judges commands independent of the working directory.
 
