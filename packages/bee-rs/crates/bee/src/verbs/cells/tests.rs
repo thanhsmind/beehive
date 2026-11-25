@@ -13114,6 +13114,107 @@ use std::time::Instant;
         assert_eq!(result_val["trace"]["verify_command"], json!("cargo test --bin bee"));
     }
 
+
+    fn small_unregistered_from_job_cell(main: &Path, wt: &Path, cell_id: &str) {
+        std::fs::write(wt.join("file.txt"), "updated\n").unwrap();
+        git_ok(wt, &["commit", "-qam", &format!("worker commit\n\ncell: {cell_id}")]);
+        let cell_val = json!({
+            "id": cell_id,
+            "feature": "myfeat",
+            "title": "leader died before cap",
+            "action": "do work",
+            "verify": "cargo test",
+            "lane": "small",
+            "role": "code",
+            "status": "claimed",
+            "deps": [],
+            "files": ["file.txt"],
+            "trace": { "worker": "unknown" },
+        });
+        write_cell_fixture(main, cell_id, &cell_val);
+    }
+
+    fn state_workers(main: &Path) -> Vec<Value> {
+        std::fs::read_to_string(main.join(".bee").join("state.json"))
+            .ok()
+            .and_then(|t| serde_json::from_str::<Value>(&t).ok())
+            .and_then(|s| s.get("workers").and_then(Value::as_array).cloned())
+            .unwrap_or_default()
+    }
+
+    fn worker_adopt_audit_rows(main: &Path) -> Vec<Value> {
+        std::fs::read_to_string(crate::audit::audit_path(main))
+            .unwrap_or_default()
+            .lines()
+            .filter_map(|l| serde_json::from_str::<Value>(l).ok())
+            .filter(|row| row.to_string().contains("worker-adopt"))
+            .collect()
+    }
+
+    #[test]
+    fn from_job_adopts_a_done_job_worker_when_the_leader_died_before_cap() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (main, wt) = setup_from_job_fixture(tmp.path(), "myfeat");
+        let cell_id = "jwa-adopt";
+        let job_id = "job-adopt-1";
+        small_unregistered_from_job_cell(&main, &wt, cell_id);
+        write_from_job_mailbox(&main, job_id, cell_id, &wt, "done", &["file.txt"], "cargo test", None);
+        assert!(state_workers(&main).is_empty());
+
+        let out = finish_cap_and_release(&main, None, cap_flags_from_job(cell_id, job_id, Some("green:unit")), None).unwrap();
+        let Out::Emit(result_val, _, 0) = out else {
+            panic!("expected Out::Emit");
+        };
+
+        assert_eq!(result_val["status"], json!("capped"));
+        assert_eq!(read_cell_fixture(&main, cell_id)["status"], json!("capped"));
+        assert_eq!(read_cell_fixture(&main, cell_id)["trace"]["worker"], json!(job_id));
+        let workers = state_workers(&main);
+        assert!(
+            workers.iter().any(|w| w["nickname"] == json!(job_id) && w["cell"] == json!(cell_id)),
+            "{workers:?}"
+        );
+        let adopt = worker_adopt_audit_rows(&main);
+        assert_eq!(adopt.len(), 1, "{adopt:?}");
+        assert!(adopt[0].to_string().contains(cell_id), "{:?}", adopt[0]);
+    }
+
+    #[test]
+    fn from_job_refuses_adoption_when_the_job_is_not_done() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (main, wt) = setup_from_job_fixture(tmp.path(), "myfeat");
+        let cell_id = "jwa-blocked";
+        let job_id = "job-adopt-2";
+        small_unregistered_from_job_cell(&main, &wt, cell_id);
+        write_from_job_mailbox(&main, job_id, cell_id, &wt, "blocked", &["file.txt"], "cargo test", None);
+
+        let err = thrown(finish_cap_and_release(&main, None, cap_flags_from_job(cell_id, job_id, Some("green:unit")), None));
+        assert!(err.contains("result status is not done"), "{err}");
+        assert_eq!(read_cell_fixture(&main, cell_id)["status"], json!("claimed"));
+        assert_eq!(read_cell_fixture(&main, cell_id)["trace"]["worker"], json!("unknown"));
+        assert!(state_workers(&main).is_empty());
+        assert!(worker_adopt_audit_rows(&main).is_empty());
+    }
+
+    #[test]
+    fn from_job_without_a_job_cell_keeps_the_no_registered_worker_refusal() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (main, wt) = setup_from_job_fixture(tmp.path(), "myfeat");
+        let cell_id = "jwa-nocell";
+        let job_id = "job-adopt-3";
+        small_unregistered_from_job_cell(&main, &wt, cell_id);
+        write_from_job_mailbox(&main, job_id, cell_id, &wt, "done", &["file.txt"], "cargo test", None);
+        let job_path = main.join(".bee/mailbox").join(job_id).join("job.json");
+        let mut job: Value = serde_json::from_str(&std::fs::read_to_string(&job_path).unwrap()).unwrap();
+        job.as_object_mut().unwrap().remove("cell_id");
+        std::fs::write(&job_path, jsjson::stringify_pretty(&job)).unwrap();
+
+        let err = thrown(finish_cap_and_release(&main, None, cap_flags_from_job(cell_id, job_id, Some("green:unit")), None));
+        assert!(err.contains("no registered execution worker"), "{err}");
+        assert_eq!(read_cell_fixture(&main, cell_id)["status"], json!("claimed"));
+        assert!(state_workers(&main).is_empty());
+        assert!(worker_adopt_audit_rows(&main).is_empty());
+    }
     #[test]
     fn a_herded_finish_in_the_principles_arm_needs_principles_used_and_meets_the_floor() {
         let tmp = tempfile::tempdir().unwrap();
