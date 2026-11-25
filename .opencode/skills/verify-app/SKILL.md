@@ -69,6 +69,11 @@ evidence captured before that point is discarded. It:
 command it runs. Without that, a drive from inside paseo makes `worktree new` in
 the sandbox register a workspace in the user's real paseo daemon.
 
+`control-bee` also isolates the user-global config by default: `launch`,
+`record_in`, `host` and `smoke` export `BEEHIVE_CONFIG_DIR` as an empty
+`<run dir>/global-config` folder unless the caller already exported
+`BEEHIVE_CONFIG_DIR` (see [config-layers](./features/config-layers.md)).
+
 Paths (override `VERIFY_HOME` to move them all):
 
 | What | Where |
@@ -213,6 +218,30 @@ sandbox, and exits 1; a clean run removes the sandbox, keeps the evidence and
 exits 0. `scripts/release.sh` runs it after the test suite and before the
 release commit; a red smoke stops the release.
 
+## Drive entry points
+
+```bash
+bash .bee/verify/verify-app/control-bee drive --fast
+bash .bee/verify/verify-app/control-bee drive --full
+```
+
+Each entry point runs one function per mapped feature on a private run id
+(`drive-<feature>-<time>-<pid>`) without touching `current-run`, removes the
+sandbox on pass and keeps it on fail, and always keeps evidence under
+`$VERIFY_HOME/evidence/<run-id>`. It prints one `ok` or `FAIL` line per feature
+and continues through all selected features even after a failure.
+
+- Exit codes: `0` when every driven feature passes, `1` when any fails, `2`
+  when `drive` is called with no argument or any argument other than `--fast`
+  or `--full`.
+- `drive --fast` runs 6 core features: `orient-and-status`, `feature-gates`,
+  `cells-and-proof`, `onboard`, `comment-guard`, `worker-outward-guard`.
+- `drive --full` runs all 13 mapped features (`--fast` plus
+  `worktree-and-close`, `config-layers`, `semantic-role-routing`,
+  `codex-runtime`, `pi-runtime`, `pi-harness-dispatch`, `pi-hat-wave`).
+- Never starts a paid model: `codex-runtime`, `pi-harness-dispatch` and
+  `pi-hat-wave` drive their CLI surface only and say so on their `ok` line.
+
 ## Gotchas
 
 - **bee's own write guard fights inline shell.** This repo's `PreToolUse` hook
@@ -253,7 +282,7 @@ bash .bee/verify/verify-app/control-bee --help
 ```
 
 Subcommands: `build`, `bin`, `paths`, `launch`, `doctor`, `cli`, `sh`, `put`,
-`newrepo`, `host`, `snapshot`, `cleanup`, `smoke`.
+`newrepo`, `host`, `snapshot`, `cleanup`, `smoke`, `drive`.
 
 ## Keeping this honest
 

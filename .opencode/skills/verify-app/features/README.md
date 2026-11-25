@@ -12,7 +12,13 @@ as the recipe.
 - Create a disposable sandbox: `control-bee launch`. It prints
   `$VERIFY_HOME/run/<run-id>/repo`, on branch `main`, with `.bee/bin/bee` linked
   to the built binary. `control-bee` strips every `PASEO_*` variable from the
-  environment of the commands it runs.
+  environment of the commands it runs, and isolates the user-global config by
+  default (`BEEHIVE_CONFIG_DIR` set to an empty `<run dir>/global-config` unless
+  the caller already exported `BEEHIVE_CONFIG_DIR`).
+- Run `control-bee drive --fast` (six core features) or `control-bee drive --full`
+  (all thirteen mapped features) for the automated deploy-facing suite; both
+  print one `ok` or `FAIL` line per feature and exit `0` when all pass or `1`
+  when any fails.
 - Set `VERIFY_HOME` to give concurrent runs separate roots. Each run already gets
   its own id, sandbox and evidence dir.
 - Run `control-bee doctor` and require every line to read `ok`.
@@ -115,9 +121,10 @@ gate preview, proof line verification, and concurrent herding allocations).
 `../fixtures/` holds the runnable inputs for the recipes that need an approved
 plan.
 
-- `demo-note-plan.md` is a plan with one packet, cell `demo-note-1` (verify
-  `test -f NOTE.md`); `demo-note-1.json` is the exact packet `cells add` must
-  receive.
+- `demo-note-plan.md` is a plan with two packets: cell `demo-note-1` (verify
+  `test -f NOTE.md`) and tester cell `demo-note-2` (role `test`, deps
+  `demo-note-1`, verify `grep -q note NOTE.md`); `demo-note-1.json` and
+  `demo-note-2.json` are the exact packets `cells add` must receive.
 - `context-no-read-set.md` is a CONTEXT.md carrying the no-read-set marker.
 - `role-plan-v2.md` is the same plan as `bee-plan/v2` with a role block; its
   `roster_sha256` is `REPLACE_FROM_ROSTER_STALE_ERROR`.
@@ -132,6 +139,9 @@ and put the plan again.
 
 ## Upkeep log
 
+- 2026-11-25, run `20261125-225437-3171768`: the feature files were audited
+  against source and driven live; `control-bee` gained global-config isolation
+  and `drive --fast|--full`; the corrections shipped in `verify-map-upkeep-3`.
 - 2026-11-12, run `20261112-123209-529324`: the feature files were audited
   against source and driven live; the corrections shipped in
   `verify-map-upkeep-2`.

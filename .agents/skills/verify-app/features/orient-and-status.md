@@ -33,8 +33,9 @@ Preconditions:
 - **Orient on an idle repo.** Run `control-bee cli -- orient --json`. The payload
   reports `where.phase: "idle"`, `where.feature: null`, every entry of
   `where.gates` `false`, `work.cells` all zero, and
-  `next.skill: "bee-hive"`, or `bee-wayfinding` when a discovery map has a
-  frontier.
+  `next.skill: "bee-hive"`, or `"bee-wayfinding"` when a discovery map has a
+  frontier and the pipeline is idle (no handoff, no open/claimed/parked cells,
+  and phase is `"idle"` or `"compounding-complete"`).
 - **Status on an idle repo.** Run `control-bee cli -- status --json`. It reports
   `onboarding.installed: true`, `onboarding.drift: false`, `phase: "idle"`,
   `feature: null`, and a `gate_records` object whose entries each carry
@@ -49,7 +50,8 @@ Preconditions:
 
 ## Gotchas
 
-- Both verbs print a `[bee] <verb> Nms` timing line to **stderr** on every call.
+- Both verbs print a `[bee] <verb> Nms` timing line to **stderr** on every call
+  (except `orient --class <c>`, which prints no timing line).
   It is not part of the payload. Parse stdout only.
 - `bee status --json` is large. Assert on named keys; never diff the whole
   payload between runs, because counts and timestamps move.

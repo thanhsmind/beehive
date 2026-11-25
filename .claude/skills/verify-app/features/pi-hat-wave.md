@@ -9,7 +9,7 @@ per seat, named by its `seat:` row, and the leader reads each full answer at
 
 ## Sub-features
 
-- `pi-hat-prepare-in-worktree` returns a `bee herding run` payload for each hat seat when run inside a granted feature worktree, with `--cwd` set to that worktree, `--seat "<seat>"`, `--ceiling 600`, and always `--no-pane`.
+- `pi-hat-prepare-in-worktree` returns a `bee herding run` payload for each hat seat when run inside a granted feature worktree, with `--cwd` set to that worktree, `--seat "<seat>"`, `--ceiling 600` (`min(configured, 600)`), and `--no-pane` for Pi-binary agents.
 - `pi-hat-detached-launch` launches every seat in the background with `--inbox-session "$PI_SESSION_ID"`.
 - `pi-hat-seat-injection` injects one `bee-result` block per seat into the Pi session, with `job_id`, `seat`, `status`, `summary`, `proof`, and `report_path` rows.
 - `pi-hat-full-answer` gives the leader the full hat answer in the file at `report_path`. The injection carries only a one-line summary.
@@ -38,7 +38,7 @@ Preconditions:
 
 - **Start the Pi leader in the worktree.** Use bee's own herding transport, not a herdr prompt from a Claude subagent (see Gotchas). Run `bee herding run --task-file - --json --cwd "<run>/repo--wt--hat-demo" --agent pi-gpt-5.6-luna` from the sandbox main checkout, with the leader task on stdin. Tell the task to: echo `PI_SESSION_ID`; read the Hat wave section; prepare the three default seats; run the returned commands detached with the note's flag appended; read each `report_path`; write a synthesis; run `advisor-ref record`; and log every command and its exact output to an evidence file.
   Observable: a Pi session log appears under `~/.pi/agent/sessions/--<run path with dashes>--wt--hat-demo--/`. Its file name ends in the same id that `echo $PI_SESSION_ID` prints.
-- **Each prepare succeeds from the worktree.** Each `dispatch prepare --runtime pi --kind advisor --role <seat>` returns `"tool": "Bash"`, `transport_ready: true` with `HERDR_ENV` set (it is `false` without it — a backlog row), and a command that carries `--cwd "<run>/repo--wt--hat-demo"`, `--seat "<seat>"`, `--ceiling 600` and `--no-pane`. It returns no granted-worktree refusal. The stdin carries a `Seat: <seat>.` line, not as its first line, and names the Hat wave row.
+- **Each prepare succeeds from the worktree.** Each `dispatch prepare --runtime pi --kind advisor --role <seat>` returns `"tool": "Bash"`, `transport_ready: true` with `HERDR_ENV` set (it is `false` without it — a backlog row; for a paseo agent, `transport_ready` checks for the `paseo` CLI on `PATH`), and a command that carries `--cwd "<run>/repo--wt--hat-demo"`, `--seat "<seat>"`, `--ceiling` (`min(configured, 600)`), and `--no-pane` (emitted only for Pi-binary agents). It returns no granted-worktree refusal. The stdin carries a `Seat: <seat>.` line, not as its first line, and names the Hat wave row.
 - **Each hat runs in the worktree.** `<run>/repo/.bee/mailbox/job-*/job.json` shows `cwd` = `<run>/repo--wt--hat-demo` for each seat.
 - **Each result is injected with its seat row.** The Pi session log holds one drain block per seat in this shape:
   ```
@@ -52,7 +52,7 @@ Preconditions:
 - **The leader reads each full answer.** The leader's next tool calls read each `report_path`. The injection header says the report body is not in the block.
 - **The wave keeps its budget.** Compare the launch time with the newest `report-1.md` mtime. Budget: 10 minutes.
 - **The advisor record succeeds from the bound leader.** `.bee/bin/bee state advisor-ref record --advisor "hat-wave:live-check" --digest-file <synthesis>` prints `Recorded advisor_ref (advisor "hat-wave:live-check", feature "hat-demo").`
-- **Each detached launch returns at once.** Each backgrounded `herding run ... --inbox-session "$PI_SESSION_ID"` prints one JSON line with `outcome detached` (`"outcome":"detached"`) and the job id. The launch shell exits with no timeout.
+- **Each detached launch returns at once.** Each backgrounded `herding run ... --inbox-session "$PI_SESSION_ID"` prints one JSON line with `outcome detached` (`"outcome":"detached"`), `inbox_session`, and the job id. The launch shell exits with no timeout.
 - **Five-seat hat wave runs as child processes without tmux panes (no-pane-wave outcome).**
   Count open panes before launch:
   `bash .bee/verify/verify-app/control-bee cli -- herding pane list`

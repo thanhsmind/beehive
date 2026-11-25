@@ -11,7 +11,7 @@ completion.
 - `codex-write-deny` denies forbidden native `apply_patch` and `Bash` writes before Gate 2 approval.
 - `codex-write-allow` allows approved edits when the write targets history/docs.
 - `codex-model-guard` inspects native spawn requests, denies unmarked input with exit 2 and `every Codex spawn_agent needs an explicit role`, and prevents child launch.
-- `codex-readonly-sandbox` dispatches model-shaped or prompt-budget non-cell roles via an explicit read-only CLI sandbox.
+- `codex-readonly-sandbox` dispatches every non-cell, non-deployment Codex dispatch via an explicit read-only CLI sandbox.
 - `codex-turn-completion` records parent turn completion as `turn-end` in `.bee/state.json` when a persisted transcript is present and preserves child isolation.
 
 ## How to get to it (user POV)
@@ -22,7 +22,7 @@ Set `CODEX_BIN` to the absolute path of the direct Codex executable before these
 - Run `BEE_CODEX_PROBE_BIN="${CODEX_BIN:?Set the absolute path to the direct Codex executable}" bash .bee/verify/verify-app/control-bee cli -- dispatch prepare --runtime codex --kind gather --role extraction --json`.
 - Execute the isolated canary script via `BEE_BIN="$(bash .bee/verify/verify-app/control-bee bin)" CANARY_CODEX_HOME="<private-codex-home>" CODEX_BIN="${CODEX_BIN:?Set the absolute path to the direct Codex executable}" TMPDIR=/var/tmp bash scripts/codex-parity-canary.sh`.
 - Inspect retained evidence in `$TMPDIR/bee-codex-canary-*/evidence/`: installed commands, raw guard exit codes, and byte checks.
-- Inspect static attestation with `bash .bee/verify/verify-app/control-bee cli -- doctor attest --runtime codex --json`.
+- Record static attestation (writes `.bee/doctor-attest.json`) with `bash .bee/verify/verify-app/control-bee cli -- doctor attest --runtime codex --json`.
 
 ## Driving it with control-bee
 
@@ -83,7 +83,7 @@ Preconditions:
 - Set `CODEX_BIN` to an absolute direct executable path before running this recipe. The canary rejects relative paths, mise wrappers, sensitive home aliases, and invalid explicit `BEE_BIN` values. It replaces inherited `BEE_CODEX_PROBE_BIN`, isolates HOME and XDG paths, and permits Codex helper links only when they resolve to the selected executable. The shell tests include probe-executed and isolated-write checks. This prevents accidental settings writes; it is not an OS sandbox for arbitrary executables. Historical global-setting restoration remains unverified.
 - Canary runs may skip native spawn if the model declines the call; check `skipped_capabilities` and test `model-guard` with raw input directly instead of relying solely on the absence of child events.
 - Dispatch prepare classifies Codex 0.154.0 as `native_hook_input_opaque` and refuses native cell dispatch. `evaluate_codex_spawn` in `model-guard` denies unmarked/opaque native spawns with exit 2 and `every Codex spawn_agent needs an explicit role`.
-- Doctor attestation (`bee doctor attest --runtime codex`) verifies static file hash and version; it does not constitute live execution proof.
+- Doctor attestation (`bee doctor attest --runtime codex`) writes `.bee/doctor-attest.json` with the static file hash and version (it is not a read-only inspection); it does not constitute live execution proof.
 
 ## Reliability repair evidence
 

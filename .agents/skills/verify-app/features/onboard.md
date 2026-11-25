@@ -23,6 +23,9 @@ idempotent, and without `--apply` it is a read-only plan that changes nothing.
 - Run `bee onboard --repo-root <path> --apply --skillstation --json` to also
   publish `bee-deploying` to the skillstation hub. Without the `skillstation` CLI
   on PATH, `skills.skipped` carries one entry with target `skillstation`.
+- Run `bee onboard --verify-only [--apply] --json` on an already-onboarded repo
+  to verify or re-render `.bee/verify/` skills only (refuses
+  `blocked_not_onboarded` on a virgin repo).
 
 ## Driving it with control-bee
 
@@ -43,12 +46,13 @@ Preconditions:
   `control-bee host -- <binary> onboard --repo-root <target> --json`, then repeat
   the `git status` call. The payload carries `"status": "changes_needed"`, a
   non-empty `plan[]`, `repo_root`, `source`, `bee_version`, `skills` and
-  `notices`. The notices also carry the Claude settings baseline and the
-  design-packs offer. The two `git status` outputs are identical.
+  `notices`. The notices also carry the Claude settings baseline, and the
+  top-level `design_offer` key carries the design-packs offer. The two
+  `git status` outputs are identical.
 - **The verification notice says which of five states the repo is in.** Read the
   `notices` array, not just its presence. `stale_advisor_notices` picks ONE
   verification line in strict priority order
-  (`onboard/notices.rs:196-233`, constants at `onboard/templates.rs:286-328`):
+  (`onboard/notices.rs`, constants at `onboard/templates.rs`):
   1. a legacy `commands.verify` key wins outright — the retirement warning, in
      its with-test or no-test form;
   2. else the skill file `.bee/verify/verify-app/SKILL.md` EXISTS — the upkeep
@@ -93,7 +97,7 @@ Preconditions:
 ## Gotchas
 
 - **Engine location is not what it looks like.** The marker onboard hunts for is
-  `packages/bee/AGENTS.block.md` (`onboard/source.rs:128`), not a Cargo manifest.
+  `packages/bee/AGENTS.block.md` (`onboard/source.rs`), not a Cargo manifest.
   It tries candidates in order: `BEE_JS_ENTRY`, then the `--repo-root` path
   itself, then a walk up from cwd that **stops at the first `.git` it crosses**.
   A sandbox is a git repo, so a cwd inside one ends the walk immediately and
@@ -102,15 +106,15 @@ Preconditions:
 - A `blocked_*` status means zero mutations happened. The set is
   `blocked_no_engine`, `blocked_no_source`, `blocked_downgrade`,
   `blocked_render`, `blocked_hooks_merge`, `blocked_worktree_migration_conflict`
-  (`onboard/apply.rs:215-225`) and a bare `blocked`. `versions` is present for the version and downgrade
+  (`onboard/apply.rs`) and a bare `blocked`. `versions` is present for the version and downgrade
   blocks only, not for migration or hook-merge conflicts. Do not retry with
   `--force-downgrade` unless that is the behavior under test.
 - The plan/apply split is the only dry-run here. Prove it by diffing
   `git status --porcelain` before and after, not by trusting the missing
   `--apply`.
 - Hook wiring is **not** written by default. It lands only when `--repo-hooks` is
-  passed or a previous run already recorded it (resolved at
-  `onboard/mod.rs:361-365`, applied at `onboard/plan.rs:908`). When it
+  passed or a previous run already recorded it (resolved in
+  `onboard/mod.rs`, applied in `onboard/plan.rs`). When it
   does land, those hooks fire for an agent session opened inside that repo, never
   for this harness, so they cannot be verified from here.
 - Status display is **written by default**, the opposite of hook wiring: when

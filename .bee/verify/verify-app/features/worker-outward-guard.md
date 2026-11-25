@@ -4,8 +4,7 @@ The write guard refuses three outward-facing shell commands from any call whose 
 directory is a linked git worktree: `git push`, a `gh` command that is not on the read-only
 list, and a nested `claude`/`codex`/`pi`/`opencode` launch. It holds in every phase, and the
 location decides rather than the caller — a human in their own worktree is refused too. The
-main checkout is unchanged. One key, `guards.worker_outward` in the MAIN checkout's
-`.bee/config.json`, turns the three refusals off. The full read-only list lives in
+main checkout is unchanged. One key, `guards.worker_outward` read from the MAIN checkout's merged config layers (`.bee/config.json` / `config.local.json`), turns the three refusals off. The full read-only list lives in
 `docs/config-reference.md` § `guards.worker_outward`.
 
 ## Sub-features
@@ -29,8 +28,9 @@ main checkout is unchanged. One key, `guards.worker_outward` in the MAIN checkou
 - Run `gh pr create --fill` there. It stops and names the main checkout and
   `scripts/release.sh` as the paths for a GitHub write.
 - Run `claude -p "hi"` there. It stops and names `bee dispatch prepare`.
-- Put `{"guards": {"worker_outward": false}}` in the MAIN checkout's `.bee/config.json` to
-  turn all three off for the repo.
+- Run `bee config set --key guards.worker_outward --value false --json` in the
+  MAIN checkout to turn all three off for the repo (read from the merged config
+  layers).
 
 ## Driving it with control-bee
 
@@ -50,9 +50,10 @@ Preconditions:
 - **Refuse a nested agent.** Send the same payload with `"command":"claude -p x"`. The `.exit`
   file holds `2` and stderr carries `bee dispatch prepare`.
 - **Turn the key off in the MAIN root.** Run
-  `printf '{"guards":{"worker_outward":false}}\n' | control-bee put .bee/config.json` — the
-  sandbox's main checkout, never the worktree. Re-send the push payload: the `.exit` file
-  holds `0`.
+  `control-bee cli -- config set --key guards.worker_outward --value false --json`
+  in the sandbox's main checkout (never `put` over `.bee/config.json`, which
+  replaces the whole config, and never set it only in the worktree). Re-send the
+  push payload: the `.exit` file holds `0`.
 - **Proof.** Run `control-bee snapshot worker-outward`. The evidence dir holds the two
   refusals at `2`, the read at `0`, the opted-out push at `0`, and the `.bee/config.json`
   that decided.
@@ -70,3 +71,7 @@ Preconditions:
 - **An unknown `gh` verb is an alias, and an alias is refused.** `gh v` cannot be proved
   read-only.
 - **`bee` is never judged.** `bee herding run` still opens its pane agent from the worktree.
+- **Leader and herded-pane boundaries.** A leader holding the worktree grant is
+  also exempt from the launch refusal (`outward-launch-exempt`), while a herded
+  pane (`BEE_HERDING_WORKER=1`) has a separate worker guard that ignores the
+  `guards.worker_outward: false` opt-out.

@@ -15,8 +15,8 @@ bee:
   owns.skills: []
   owns.tests: [packages/bee-rs/crates/bee/tests/proof_gate.rs, packages/bee-rs/crates/bee/tests/concurrency.rs]
   anchors: [.bee/verify/verify-app/control-bee, scripts/release.sh, skills/bee-verifying/SKILL.md, skills/bee-formal-verifying/SKILL.md, skills/bee-formal-upkeep/SKILL.md, skills/bee-deploying/references/deploy.sh.template, packages/bee/LEADER.md, packages/bee-rs/crates/bee/src/verbs/test_runner.rs, packages/bee-rs/crates/bee/src/verbs/cells/validate.rs, packages/bee-rs/crates/bee/src/verbs/cells/proof.rs, packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs, packages/bee-rs/crates/bee/tests/full_suite_verify.rs, packages/bee-rs/crates/bee/tests/proof_gate.rs, packages/bee-rs/crates/bee/tests/concurrency.rs]
-  verified_at: 2026-11-15
-  verified_commit: a963c71a41249647b5aa15a64118f007f39c4c67
+  verified_at: 2026-11-25
+  verified_commit: f32b1b402bcd94235598236bb608a55f603f6b3e
 ---
 
 # Verify Pipeline — Purpose, Test Execution, and Proof Discipline
@@ -69,12 +69,14 @@ lifecycle.
 - The `verify-app` feature map drifts as bee changes, and `bee-verify-upkeep` keeps it true. Nothing in close, merge or release starts the upkeep yet; it ran by hand on 2026-09-02 and 2026-11-12. The 2026-11-12 pass edits only the `.bee/verify/verify-app/` source and re-renders it with `bee onboard --apply` (verify-map-upkeep-2 D1). It files product defects to the backlog, never into the map change (verify-map-upkeep-2 D2). It ships only corrections proven live or cited from source (verify-map-upkeep-2 D3). Runnable gate fixtures live in `.bee/verify/verify-app/fixtures/`.
 - Alongside `verify-app`, bee supports project-local formal verification skills under `.bee/verify/<name>/` (for example `.bee/verify/formal-cell-lifecycle`), created by `bee-formal-verifying` (with `skills/bee-formal-verifying/references/statechart.md` for reading TLA+ and TLC results) and brought back in line after unverified code changes by `bee-formal-upkeep` (pstack-guide-gaps D1, D2; they ship through the plugin skill trees, not the hub, pstack-guide-gaps D6).
 - The release runs a live smoke of the built binary after the test suite and before the release commit (release-smoke D1). It is the `smoke` subcommand of the verify driver: a private run id that never moves `current-run`, the driver's own build, launch and doctor, then a fixed list of first-contact commands; the first failure keeps the sandbox and exits non-zero, a clean run removes the sandbox and keeps the evidence (release-smoke D2). `scripts/release.sh` stops with nothing committed, tagged or pushed on a red smoke, and `--no-test` skips it with one log line; the confirm checklist is unchanged and the idempotent re-run of a committed version does not run it (release-smoke D3). Rejected: a rule for the agent to run verify at release, because a step the script runs cannot be forgotten.
-- Every host deploy that bee-deploying writes drives the product the same way: `drive --full` on the generated control script prints one `ok` or `FAIL` line per mapped feature and exits 0 only when every feature passes, 1 when one fails, 2 when the entry point is unknown (deploy-verify-gate D4, D7). beehive's own `control-bee` has no drive entry point; its release uses the smoke above.
+- Every host deploy that bee-deploying writes drives the product the same way: `drive --full` on the generated control script prints one `ok` or `FAIL` line per mapped feature and exits 0 only when every feature passes, 1 when one fails, 2 when the entry point is unknown (deploy-verify-gate D4, D7). beehive's own `control-bee` has the same `drive --fast` and `drive --full` entry points (verify-map-upkeep-3 D2); each feature runs in its own fresh sandbox on a private run id that never moves `current-run`, removed on pass and kept on fail, evidence always kept (verify-map-upkeep-3 D3), and no drive starts a paid model, so live-agent features drive their CLI surface only and say so on their `ok` line (verify-map-upkeep-3 D4). Its release still uses the smoke above.
+- `control-bee` isolates the user-global config: every bee process it starts gets `BEEHIVE_CONFIG_DIR` set to an empty folder inside the run dir unless the caller already exported it, so a drive never reads the owner's real global config (verify-map-upkeep-3 D1).
 
 ## Pointers (implementation)
 
 - Test runner invocation: `packages/bee-rs/crates/bee/src/verbs/test_runner.rs`.
 - Cell plan check: `full_suite_verify_problem` in `packages/bee-rs/crates/bee/src/verbs/cells/validate.rs`; tests in `packages/bee-rs/crates/bee/tests/full_suite_verify.rs`.
+- beehive drive: the `drive` subcommand in `.bee/verify/verify-app/control-bee`, one recipe per file under `.bee/verify/verify-app/features/`.
 - Release smoke: `cmd_smoke` in `.bee/verify/verify-app/control-bee`, called from the test gate block of `scripts/release.sh`.
 - Host deploy drive: a deploy script `bee-deploying` writes runs `drive --full` on the project's `control-*` before its first live step; exit 0 passes, 1 is red, 2 means no entry point (deploy-verify-gate D4, D7). Contract in `skills/bee-verifying/SKILL.md`, step in `skills/bee-deploying/references/deploy.sh.template`.
 - Proof gate tests: `packages/bee-rs/crates/bee/tests/proof_gate.rs`.

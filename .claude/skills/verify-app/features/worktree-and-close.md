@@ -147,12 +147,17 @@ Preconditions:
   is added — read the array.
 - **A blocking door names its remedy.** With one capped cell and no reflection,
   the `mistakes` door reports `blocking: true` and a `detail` naming
-  `bee mailbox reflect`. The `tests` door reports `blocking: false` with
-  `1 capped cell(s) all carry a proof line`. On this `small` lane the `uat` door
+  `bee mailbox reflect`. With only `demo-note-1` capped, the `tests` door
+  reports `blocking: true` with detail naming
+  `stamped cell(s) have no capped dependent tester or checker on the test role`
+  until tester cell `demo-note-2` is capped. On this `small` lane the `uat` door
   reports `blocking: false` with `clear — this lane is exempt from the
   close-time uat door`, whatever the uat gate says.
-- **Settle it and close green.** For a `behavior_change` cell, `scribing-debt`
-  and `leader-check` block too. Clear `leader-check` with `bee cells leader-check`
+- **Settle it and close green.** Add, claim, and cap the tester cell
+  `demo-note-2` from `.bee/verify/verify-app/fixtures/demo-note-2.json`
+  (`grep -q note NOTE.md — green:unit — note present`, `--no-mistakes`). For a
+  `behavior_change` cell, `scribing-debt` and `leader-check` block too. Clear
+  `leader-check` with `bee cells leader-check`
   or `bee audit log --kind leader-check-deferral`, and `scribing-debt` with
   bee-capturing or `bee audit log --kind capture-deferral`. Run
   `control-bee cli -- mailbox reflect --no-mistakes --json`, then
