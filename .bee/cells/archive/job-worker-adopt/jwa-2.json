@@ -1,0 +1,145 @@
+{
+  "id": "jwa-2",
+  "feature": "job-worker-adopt",
+  "title": "Test that finish --from-job adopts a dead leader's job worker",
+  "lane": "small",
+  "role": "test",
+  "deps": [
+    "jwa-1"
+  ],
+  "decisions": [
+    "ac1b3903-0767-4985-82ec-665082cae61f"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/job-worker-adopt/plan.md",
+    "docs/history/job-worker-adopt/CONTEXT.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Add tests in verbs/cells/tests.rs: a small-lane cell claimed with trace.worker unknown and no state worker row, a job.json naming the cell, a done result: finish --from-job caps it, state.json workers holds the job id row for the cell, and an audit row of kind worker-adopt exists. A second test: same set-up with a result outcome other than done is refused with the no-registered-worker text and the cell stays claimed.",
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- from_job",
+  "must_haves": {
+    "truths": [
+      "a test drives leader-died-before-cap through finish --from-job and the cell caps",
+      "a test proves a not-done job is still refused"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+        "substantive": "from_job adoption tests"
+      }
+    ],
+    "key_links": [],
+    "prohibitions": [
+      "no code comments",
+      "no edit outside tests.rs unless a defect is found"
+    ]
+  },
+  "behavior_change": false,
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "w-jwa-2",
+    "outcome": "Added 3 from_job adoption tests (adopt+cap on done, refuse not-done, no-registered-worker when job names no cell) — 188063df505146d5e7f5501885ff227ab298b61e",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+    ],
+    "deviations": [
+      "sync-ack: tester commit landed in worktree; leader settles from the job result"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-25T16:45:56.561Z",
+    "behavior_change": false,
+    "verification_evidence": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- from_job — green:unit — touched tests.rs only; 19 passed incl. 3 new; full proof: clippy clean, full suite green on rerun (5727 passed)",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "18289ecb-d74f-4fb9-b672-0e198768a410",
+    "verify_command": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- from_job",
+    "claimed_at": "2026-11-25T16:31:49.945Z",
+    "knowledge_delta": [],
+    "sync_ack": "tester commit landed in worktree; leader settles from the job result",
+    "no_mistakes": true,
+    "no_knowledge_used": true,
+    "principles_used": [
+      {
+        "slug": "bee-principle-test-behavior-not-structure",
+        "changed": "tests assert cell, state and audit files on disk"
+      },
+      {
+        "slug": "bee-principle-test-behavior-not-structure",
+        "changed": "asserted cell file, state.json workers and audit.jsonl rows instead of internal calls"
+      }
+    ],
+    "changed_lines": 40,
+    "report": {
+      "outcome": "Added 3 from_job adoption tests (adopt+cap on done, refuse not-done, no-registered-worker when job names no cell) — 188063df505146d5e7f5501885ff227ab298b61e",
+      "commit": "e94956f776d4e6efb5c9911bc5012bf0a00e3002",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- from_job — green:unit — cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- from_job — green:unit — touched tests.rs only; 19 passed incl. 3 new; full proof: clippy clean, full suite green on rerun (5727 passed)",
+      "deviations": [],
+      "knowledge_used": [],
+      "principles_used": [
+        "bee-principle-test-behavior-not-structure — asserted cell file, state.json workers and audit.jsonl rows instead of internal calls"
+      ],
+      "reaction": "partial",
+      "skipped": [
+        "red-before-green revert of jwa-1 — handlers_close.rs is out of scope and the concurrent-worker guard refused git checkout",
+        "knowledge delta — the cell allows only tests.rs"
+      ],
+      "found": [
+        "first full-suite run failed settle_line_names_the_floor_when_a_bugfix_test_cell_proof_is_below_it (run.rs has a sibling's uncommitted edits) and budget_rule_fires_the_ceiling_once_it_reaches_eighty_percent; both passed on rerun"
+      ],
+      "stopped": "not-done refusal asserting the no-registered-worker text — handlers_close.rs refuses a non-done result earlier with 'result status is not done'; asserted that, and covered the no-registered-worker text with a done job that names no cell",
+      "patch_id": "8f425b6b91db92b0bc699aa1cab7f94dc3f3fa5f"
+    },
+    "reaction": "partial",
+    "skipped": [
+      "red-before-green revert of jwa-1 — handlers_close.rs is out of scope and the concurrent-worker guard refused git checkout",
+      "knowledge delta — the cell allows only tests.rs"
+    ],
+    "found": [
+      "first full-suite run failed settle_line_names_the_floor_when_a_bugfix_test_cell_proof_is_below_it (run.rs has a sibling's uncommitted edits) and budget_rule_fires_the_ceiling_once_it_reaches_eighty_percent; both passed on rerun"
+    ],
+    "stopped": "not-done refusal asserting the no-registered-worker text — handlers_close.rs refuses a non-done result earlier with 'result status is not done'; asserted that, and covered the no-registered-worker text with a done job that names no cell",
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "a test drives leader-died-before-cap through finish --from-job and the cell caps",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+          },
+          {
+            "requirement": "a test proves a not-done job is still refused",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+          }
+        ],
+        "recorded_at": "2026-11-25T16:52:33.624Z",
+        "recorded_by": "18289ecb-d74f-4fb9-b672-0e198768a410",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": {
+    "new": 50200,
+    "cached": 474995,
+    "total": 525195,
+    "models": {
+      "claude-opus-5-5": {
+        "new": 50200,
+        "cached": 474995,
+        "total": 525195
+      }
+    },
+    "jobs": [
+      "job-1795624311406-3727434-1"
+    ]
+  }
+}

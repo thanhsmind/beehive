@@ -1,0 +1,137 @@
+{
+  "id": "jwa-8",
+  "feature": "job-worker-adopt",
+  "title": "Check the parallel-leader doctrine and run-verb concept edits",
+  "lane": "small",
+  "role": "test",
+  "deps": [
+    "jwa-7"
+  ],
+  "decisions": [
+    "9dc59f64-3371-4c00-93b4-087c869effb2",
+    "ac1b3903-0767-4985-82ec-665082cae61f",
+    "22979883-1118-442b-ad6c-b9669d572c34"
+  ],
+  "files": [
+    "docs/history/job-worker-adopt/reports/jwa-8.md"
+  ],
+  "read_first": [
+    "docs/history/job-worker-adopt/plan.md",
+    "docs/history/job-worker-adopt/CONTEXT.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Check jwa-7's docs edits (commit 5e6d5372f) against job-worker-adopt D1, D2 and D4 in CONTEXT.md: packages/bee/playbooks/multi-session.md carries the parallel-leader paragraph (D4), and docs/knowledge/areas/bee-herding/the-run-verb-and-worker-outcomes.md carries D1 worker adoption and the D2 floor-aware settle line, citing them as job-worker-adopt D1 and D2. Run the verify. Write the findings, each with a file:line anchor, to docs/history/job-worker-adopt/reports/jwa-8.md and commit only that file.",
+  "verify": "rg -n -- --no-handoff packages/bee/playbooks/multi-session.md && rg -n 'job-worker-adopt D[12]' docs/knowledge/areas/bee-herding/the-run-verb-and-worker-outcomes.md && .bee/bin/bee dev release-manifest --check",
+  "must_haves": {
+    "truths": [
+      "every D1, D2 and D4 claim in jwa-7's edits matches the locked decision text"
+    ],
+    "artifacts": [
+      {
+        "path": "docs/history/job-worker-adopt/reports/jwa-8.md",
+        "substantive": "check report"
+      }
+    ],
+    "key_links": [],
+    "prohibitions": [
+      "no edits outside the report file",
+      "no code comments"
+    ],
+    "why": "The merge proof door asks every capped cell with files for a test-role dependent; docs-only jwa-7 had none.",
+    "out_of_scope": [
+      "fixing the docs (report findings only)"
+    ]
+  },
+  "behavior_change": false,
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "w-jwa-8",
+    "outcome": "jwa-7 docs match job-worker-adopt D1, D2, D4; two minor non-blocking findings recorded in jwa-8 report, commit 7b52551f99f772dffb59db82a92173472627e527",
+    "files_changed": [
+      "docs/history/job-worker-adopt/reports/jwa-8.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-11-25T16:52:06.514Z",
+    "behavior_change": false,
+    "verification_evidence": "docs-only check cell, exit 0, 994 files match manifest",
+    "verify_output": "green:static",
+    "verify_passed": true,
+    "claim_session": "18289ecb-d74f-4fb9-b672-0e198768a410",
+    "verify_command": "rg -n -- --no-handoff packages/bee/playbooks/multi-session.md && rg -n 'job-worker-adopt D[12]' docs/knowledge/areas/bee-herding/the-run-verb-and-worker-outcomes.md && .bee/bin/bee dev release-manifest --check",
+    "claimed_at": "2026-11-25T16:50:59.408Z",
+    "knowledge_delta": [],
+    "no_mistakes": true,
+    "no_knowledge_used": true,
+    "principles_used": [
+      {
+        "slug": "bee-principle-verify-before-reporting",
+        "changed": "checked each doc claim against the code before calling it a match, which surfaced the settle_command pointer drift"
+      }
+    ],
+    "changed_lines": 54,
+    "report": {
+      "outcome": "jwa-7 docs match job-worker-adopt D1, D2, D4; two minor non-blocking findings recorded in jwa-8 report, commit 7b52551f99f772dffb59db82a92173472627e527",
+      "commit": "7b52551f99f772dffb59db82a92173472627e527",
+      "files": [
+        "docs/history/job-worker-adopt/reports/jwa-8.md"
+      ],
+      "tests": "rg -n -- --no-handoff packages/bee/playbooks/multi-session.md && rg -n 'job-worker-adopt D[12]' docs/knowledge/areas/bee-herding/the-run-verb-and-worker-outcomes.md && .bee/bin/bee dev release-manifest --check — green:static — docs-only check cell, exit 0, 994 files match manifest",
+      "deviations": [],
+      "knowledge_used": [],
+      "principles_used": [
+        "bee-principle-verify-before-reporting — checked each doc claim against the code before calling it a match, which surfaced the settle_command pointer drift"
+      ],
+      "reaction": "confirm",
+      "skipped": [
+        "cargo clippy + cargo test proof command — the cell changes one markdown report and no Rust code"
+      ],
+      "found": [
+        "the-run-verb-and-worker-outcomes.md:878 names settle_command as computing the floor; the code does it in cell_settle_floor/settle_hint (run.rs:6177-6201)",
+        "body cites at the-run-verb-and-worker-outcomes.md:878,880 put a backtick between job-worker-adopt and the D-ID, so the verify rg matches only frontmatter line 11"
+      ],
+      "patch_id": "fc6e565bbb07a3194bec42516f4899b2fcf50374"
+    },
+    "reaction": "confirm",
+    "skipped": [
+      "cargo clippy + cargo test proof command — the cell changes one markdown report and no Rust code"
+    ],
+    "found": [
+      "the-run-verb-and-worker-outcomes.md:878 names settle_command as computing the floor; the code does it in cell_settle_floor/settle_hint (run.rs:6177-6201)",
+      "body cites at the-run-verb-and-worker-outcomes.md:878,880 put a backtick between job-worker-adopt and the D-ID, so the verify rg matches only frontmatter line 11"
+    ],
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "every D1, D2 and D4 claim in jwa-7's edits matches the locked decision text",
+            "artifact": "docs/history/job-worker-adopt/reports/jwa-8.md"
+          }
+        ],
+        "recorded_at": "2026-11-25T16:52:33.709Z",
+        "recorded_by": "18289ecb-d74f-4fb9-b672-0e198768a410",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": {
+    "new": 40914,
+    "cached": 366682,
+    "total": 407596,
+    "models": {
+      "claude-opus-5-5": {
+        "new": 40914,
+        "cached": 366682,
+        "total": 407596
+      }
+    },
+    "jobs": [
+      "job-1795625459884-4153471-1"
+    ]
+  }
+}

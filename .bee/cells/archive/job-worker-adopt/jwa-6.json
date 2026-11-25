@@ -1,0 +1,139 @@
+{
+  "id": "jwa-6",
+  "feature": "job-worker-adopt",
+  "title": "Test the owner-only pass of the Stop owner-ask check",
+  "lane": "standard",
+  "role": "test",
+  "deps": [
+    "jwa-5"
+  ],
+  "decisions": [
+    "b4e747ac-8eb3-47e0-bee2-bcb48c1a0056"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/hooks/session_close/owner_ask_net.rs"
+  ],
+  "read_first": [
+    "docs/history/job-worker-adopt/plan.md",
+    "docs/history/job-worker-adopt/CONTEXT.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Add tests in owner_ask_net.rs: transcript events holding a tool result with [owner-only: .bee/team.json] and a final reply 'bạn chạy cp .bee/team-only-agy.json .bee/team.json' pass with the door present; the same reply with no marker blocks; a marker for another target still blocks.",
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- owner_ask_net",
+  "must_haves": {
+    "truths": [
+      "a test drives the session-close check with an owner-only reply and gets no refusal"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/hooks/session_close/owner_ask_net.rs",
+        "substantive": "owner-only tests"
+      }
+    ],
+    "key_links": [],
+    "prohibitions": [
+      "no code comments"
+    ],
+    "why": "Spike F10: the Stop hook refused a turn end that asked the owner to run a write the guard refuses for the agent.",
+    "out_of_scope": [
+      "owner-ask phrase list changes",
+      "new guard refusals"
+    ]
+  },
+  "behavior_change": false,
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "w-jwa-6",
+    "outcome": "Added owner-only pass/block tests to the Stop owner-ask check in owner_ask_net.rs, red-proven then green 4c80e9cc2fde86a1dfc7a2133538ec1d498308b5",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/hooks/session_close/owner_ask_net.rs"
+    ],
+    "deviations": [
+      "sync-ack: tester commit landed in worktree; leader settles from the job result"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-25T16:45:57.352Z",
+    "behavior_change": false,
+    "verification_evidence": "cargo clippy -D warnings && cargo test --release --no-fail-fast (bee-rs) — green:unit — touched owner_ask_net.rs tests; 6405 passed, 0 failed; cell verify owner_ask_net 11 passed",
+    "verify_output": "green:red-first",
+    "verify_passed": true,
+    "claim_session": "18289ecb-d74f-4fb9-b672-0e198768a410",
+    "verify_command": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- owner_ask_net",
+    "claimed_at": "2026-11-25T16:31:51.160Z",
+    "knowledge_delta": [],
+    "sync_ack": "tester commit landed in worktree; leader settles from the job result",
+    "no_mistakes": true,
+    "no_knowledge_used": true,
+    "principles_used": [
+      {
+        "slug": "bee-principle-red-before-green",
+        "changed": "disabling the pass guard made the pass test fail first"
+      },
+      {
+        "slug": "bee-principle-red-before-green",
+        "changed": "disabled the owner-only pass to watch the pass test fail before keeping it"
+      },
+      {
+        "slug": "bee-principle-test-behavior-not-structure",
+        "changed": "asserted only the outcome variant, not probe calls or reason wording"
+      }
+    ],
+    "changed_lines": 40,
+    "report": {
+      "outcome": "Added owner-only pass/block tests to the Stop owner-ask check in owner_ask_net.rs, red-proven then green 4c80e9cc2fde86a1dfc7a2133538ec1d498308b5",
+      "commit": "e94956f776d4e6efb5c9911bc5012bf0a00e3002",
+      "files": [
+        "packages/bee-rs/crates/bee/src/hooks/session_close/owner_ask_net.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- owner_ask_net — green:red-first — cargo clippy -D warnings && cargo test --release --no-fail-fast (bee-rs) — green:unit — touched owner_ask_net.rs tests; 6405 passed, 0 failed; cell verify owner_ask_net 11 passed",
+      "deviations": [],
+      "knowledge_used": [],
+      "principles_used": [
+        "bee-principle-red-before-green — disabled the owner-only pass to watch the pass test fail before keeping it",
+        "bee-principle-test-behavior-not-structure — asserted only the outcome variant, not probe calls or reason wording"
+      ],
+      "reaction": "confirm",
+      "found": [
+        "Sibling workers left uncommitted edits in herding/run.rs and verbs/cells/tests.rs in this worktree; untouched"
+      ],
+      "patch_id": "8f425b6b91db92b0bc699aa1cab7f94dc3f3fa5f"
+    },
+    "reaction": "confirm",
+    "found": [
+      "Sibling workers left uncommitted edits in herding/run.rs and verbs/cells/tests.rs in this worktree; untouched"
+    ],
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "a test drives the session-close check with an owner-only reply and gets no refusal",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/session_close/owner_ask_net.rs"
+          }
+        ],
+        "recorded_at": "2026-11-25T16:52:33.680Z",
+        "recorded_by": "18289ecb-d74f-4fb9-b672-0e198768a410",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": {
+    "new": 29299,
+    "cached": 214951,
+    "total": 244250,
+    "models": {
+      "claude-opus-5-5": {
+        "new": 29299,
+        "cached": 214951,
+        "total": 244250
+      }
+    },
+    "jobs": [
+      "job-1795624311406-3727435-1"
+    ]
+  }
+}

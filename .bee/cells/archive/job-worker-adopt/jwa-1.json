@@ -1,0 +1,118 @@
+{
+  "id": "jwa-1",
+  "feature": "job-worker-adopt",
+  "title": "Adopt a finished herding job's worker in cells finish --from-job",
+  "lane": "small",
+  "role": "code",
+  "deps": [],
+  "decisions": [
+    "ac1b3903-0767-4985-82ec-665082cae61f"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/workers.rs"
+  ],
+  "read_first": [
+    "docs/history/job-worker-adopt/plan.md",
+    "docs/history/job-worker-adopt/CONTEXT.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Apply D1 in the finish --from-job path of handlers_close.rs: when registered_worker_for_cell fails for trace.worker, and the job record names the cell and its result outcome is done, register a worker row (nickname = job id) for the cell, set trace.worker to it, append an audit row of kind worker-adopt, then cap as before. A job whose result is not done keeps today's refusal.",
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- from_job",
+  "must_haves": {
+    "truths": [
+      "finish --from-job caps a cell whose trace.worker has no registered row when the job for that cell finished done",
+      "finish --from-job keeps the no-registered-worker refusal when the job result is not done"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+        "substantive": "worker adoption in the from-job path"
+      }
+    ],
+    "key_links": [],
+    "prohibitions": [
+      "no code comments",
+      "cells cap without --from-job keeps the registered-worker check unchanged"
+    ]
+  },
+  "behavior_change": true,
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "w-jwa-1",
+    "outcome": "Adopted finished herding job worker in cells finish --from-job (D1) — ce3f9ec8b",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs"
+    ],
+    "deviations": [
+      "sync-ack: behavior is a narrow addition recorded in job-worker-adopt D1-D3; the run-verb concept is synced in jwa-7 and the hook-runtime concept line lands in the close capture"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-25T16:31:12.848Z",
+    "behavior_change": true,
+    "verification_evidence": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- from_job — green:unit — touched handlers_close.rs (16 passed; 0 failed)",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "f2f7e45a-76d4-4f87-a0cc-25305b63a0ca",
+    "verify_command": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- from_job",
+    "claimed_at": "2026-11-25T16:23:38.917Z",
+    "knowledge_delta": [],
+    "sync_ack": "behavior is a narrow addition recorded in job-worker-adopt D1-D3; the run-verb concept is synced in jwa-7 and the hook-runtime concept line lands in the close capture",
+    "no_mistakes": true,
+    "no_knowledge_used": true,
+    "principles_used": [
+      {
+        "slug": "bee-principle-laziness-protocol",
+        "changed": "reused register_worker_for_cell, mutate_cell, and crate::audit::append directly in finish_cap_and_release instead of threading a new flag into cap_cell_from_flags"
+      }
+    ],
+    "changed_lines": 178,
+    "report": {
+      "outcome": "Adopted finished herding job worker in cells finish --from-job (D1) — ce3f9ec8b",
+      "commit": "3cf16690ddb9cdb9f451d7aa2bc45083a6fa2c94",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- from_job — green:unit — cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- from_job — green:unit — touched handlers_close.rs (16 passed; 0 failed)",
+      "deviations": [],
+      "knowledge_used": [],
+      "principles_used": [
+        "bee-principle-laziness-protocol — reused register_worker_for_cell, mutate_cell, and crate::audit::append directly in finish_cap_and_release instead of threading a new flag into cap_cell_from_flags"
+      ],
+      "reaction": "confirm",
+      "patch_id": "da1185e5a4b2235948780b173b2524f5e42c67f2"
+    },
+    "reaction": "confirm",
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "finish --from-job caps a cell whose trace.worker has no registered row when the job for that cell finished done",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs"
+          },
+          {
+            "requirement": "finish --from-job keeps the no-registered-worker refusal when the job result is not done",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs"
+          }
+        ],
+        "recorded_at": "2026-11-25T16:52:33.611Z",
+        "recorded_by": "18289ecb-d74f-4fb9-b672-0e198768a410",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": {
+    "new": 0,
+    "cached": 0,
+    "total": 0,
+    "models": {},
+    "jobs": [
+      "job-1795623823291-3688065-1"
+    ]
+  }
+}

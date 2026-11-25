@@ -1,0 +1,129 @@
+{
+  "id": "jwa-4",
+  "feature": "job-worker-adopt",
+  "title": "Test the floor-aware settle line",
+  "lane": "small",
+  "role": "test",
+  "deps": [
+    "jwa-3"
+  ],
+  "decisions": [
+    "22979883-1118-442b-ad6c-b9669d572c34"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/herding/run.rs"
+  ],
+  "read_first": [
+    "docs/history/job-worker-adopt/plan.md",
+    "docs/history/job-worker-adopt/CONTEXT.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Add tests in the run.rs test module: a test-role cell under a bugfix route whose worker proof is green:unit gets a settle line naming green:red-first plus the evidence line; a code-role cell with green:unit gets the old line unchanged.",
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- settle",
+  "must_haves": {
+    "truths": [
+      "a test drives the settle line with a below-floor proof and sees the floor"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/herding/run.rs",
+        "substantive": "settle floor tests"
+      }
+    ],
+    "key_links": [],
+    "prohibitions": [
+      "no code comments",
+      "no change to production code unless a defect is found"
+    ]
+  },
+  "behavior_change": false,
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "w-jwa-4",
+    "outcome": "Added two settle-floor tests in run.rs (bugfix test cell below floor names green:red-first plus evidence line; code cell keeps old line), red under mutation, green now — e94956f776d4e6efb5c9911bc5012bf0a00e3002",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/herding/run.rs"
+    ],
+    "deviations": [
+      "sync-ack: tester commit landed in worktree; leader settles from the job result"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-25T16:45:56.943Z",
+    "behavior_change": false,
+    "verification_evidence": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- settle — green:unit — touched run.rs test module only; full clippy -D warnings clean and workspace tests 6405 passed 0 failed",
+    "verify_output": "green:red-first",
+    "verify_passed": true,
+    "claim_session": "18289ecb-d74f-4fb9-b672-0e198768a410",
+    "verify_command": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- settle",
+    "claimed_at": "2026-11-25T16:31:50.549Z",
+    "knowledge_delta": [],
+    "sync_ack": "tester commit landed in worktree; leader settles from the job result",
+    "no_mistakes": true,
+    "no_knowledge_used": true,
+    "principles_used": [
+      {
+        "slug": "bee-principle-red-before-green",
+        "changed": "mutation of settle_hint made the floor test fail first"
+      },
+      {
+        "slug": "bee-principle-red-before-green",
+        "changed": "mutated settle_hint to drop the floor and watched the floor test fail before trusting it"
+      },
+      {
+        "slug": "bee-principle-test-behavior-not-structure",
+        "changed": "asserted the exact printed settle hint, not the internal floor helpers"
+      }
+    ],
+    "changed_lines": 40,
+    "report": {
+      "outcome": "Added two settle-floor tests in run.rs (bugfix test cell below floor names green:red-first plus evidence line; code cell keeps old line), red under mutation, green now — e94956f776d4e6efb5c9911bc5012bf0a00e3002",
+      "commit": "e94956f776d4e6efb5c9911bc5012bf0a00e3002",
+      "files": [
+        "packages/bee-rs/crates/bee/src/herding/run.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- settle — green:red-first — cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- settle — green:unit — touched run.rs test module only; full clippy -D warnings clean and workspace tests 6405 passed 0 failed",
+      "deviations": [],
+      "knowledge_used": [],
+      "principles_used": [
+        "bee-principle-red-before-green — mutated settle_hint to drop the floor and watched the floor test fail before trusting it",
+        "bee-principle-test-behavior-not-structure — asserted the exact printed settle hint, not the internal floor helpers"
+      ],
+      "reaction": "confirm",
+      "patch_id": "8f425b6b91db92b0bc699aa1cab7f94dc3f3fa5f"
+    },
+    "reaction": "confirm",
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "a test drives the settle line with a below-floor proof and sees the floor",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/run.rs"
+          }
+        ],
+        "recorded_at": "2026-11-25T16:52:33.653Z",
+        "recorded_by": "18289ecb-d74f-4fb9-b672-0e198768a410",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": {
+    "new": 41890,
+    "cached": 449834,
+    "total": 491724,
+    "models": {
+      "claude-opus-5-5": {
+        "new": 41890,
+        "cached": 449834,
+        "total": 491724
+      }
+    },
+    "jobs": [
+      "job-1795624311407-3727436-1"
+    ]
+  }
+}

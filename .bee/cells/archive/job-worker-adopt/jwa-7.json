@@ -1,0 +1,131 @@
+{
+  "id": "jwa-7",
+  "feature": "job-worker-adopt",
+  "title": "Doctrine for parallel leaders and knowledge sync",
+  "lane": "small",
+  "role": "docs",
+  "deps": [],
+  "decisions": [
+    "9dc59f64-3371-4c00-93b4-087c869effb2",
+    "ac1b3903-0767-4985-82ec-665082cae61f",
+    "22979883-1118-442b-ad6c-b9669d572c34"
+  ],
+  "files": [
+    "packages/bee/playbooks/multi-session.md",
+    "docs/knowledge/areas/bee-herding/the-run-verb-and-worker-outcomes.md",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/job-worker-adopt/plan.md",
+    "docs/history/job-worker-adopt/CONTEXT.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Add D4 to packages/bee/playbooks/multi-session.md as one short paragraph in STE (check waggledance state for a run on the same PBI and steer it with --follow-up-of; otherwise dispatch the parallel leader with --no-handoff). Add to the-run-verb-and-worker-outcomes.md the D1 worker adoption of finish --from-job and the D2 floor-aware settle line, citing job-worker-adopt D1 and D2.",
+  "verify": "rg -n -- --no-handoff packages/bee/playbooks/multi-session.md && .bee/bin/bee dev release-manifest --check",
+  "must_haves": {
+    "truths": [
+      "the multi-session playbook names --no-handoff and the owning-leader check",
+      "the run-verb concept names worker adoption and the floor-aware settle line"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee/playbooks/multi-session.md",
+        "substantive": "parallel leader paragraph"
+      }
+    ],
+    "key_links": [],
+    "prohibitions": [
+      "no rule markers changed"
+    ]
+  },
+  "behavior_change": false,
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "w-jwa-7",
+    "outcome": "Added D4 parallel-leader paragraph to multi-session playbook, D1/D2 to run-verb concept, and updated release manifest (5e6d5372f)",
+    "files_changed": [
+      "packages/bee/playbooks/multi-session.md",
+      "docs/knowledge/areas/bee-herding/the-run-verb-and-worker-outcomes.md",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [
+      "sync-ack: behavior is a narrow addition recorded in job-worker-adopt D1-D3; the run-verb concept is synced in jwa-7 and the hook-runtime concept line lands in the close capture"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-25T16:31:13.814Z",
+    "behavior_change": false,
+    "verification_evidence": "rg -n -- --no-handoff packages/bee/playbooks/multi-session.md && .bee/bin/bee dev release-manifest --check — green:static — docs cell verified playbook grep and release-manifest check",
+    "verify_output": "green:static",
+    "verify_passed": true,
+    "claim_session": "f2f7e45a-76d4-4f87-a0cc-25305b63a0ca",
+    "verify_command": "rg -n -- --no-handoff packages/bee/playbooks/multi-session.md && .bee/bin/bee dev release-manifest --check",
+    "claimed_at": "2026-11-25T16:23:42.394Z",
+    "knowledge_delta": [
+      "docs/knowledge/areas/bee-herding/the-run-verb-and-worker-outcomes.md"
+    ],
+    "sync_ack": "behavior is a narrow addition recorded in job-worker-adopt D1-D3; the run-verb concept is synced in jwa-7 and the hook-runtime concept line lands in the close capture",
+    "no_mistakes": true,
+    "knowledge_used": [
+      {
+        "path": "docs/knowledge/areas/bee-herding/the-run-verb-and-worker-outcomes.md",
+        "changed": "extended existing auto-settle section with D1 and D2"
+      }
+    ],
+    "principles_used": [
+      {
+        "slug": "bee-principle-one-fact-one-home",
+        "changed": "extended the-run-verb-and-worker-outcomes.md instead of filing a new doc"
+      }
+    ],
+    "changed_lines": 178,
+    "report": {
+      "outcome": "Added D4 parallel-leader paragraph to multi-session playbook, D1/D2 to run-verb concept, and updated release manifest (5e6d5372f)",
+      "commit": "3cf16690ddb9cdb9f451d7aa2bc45083a6fa2c94",
+      "files": [
+        "packages/bee/playbooks/multi-session.md",
+        "docs/knowledge/areas/bee-herding/the-run-verb-and-worker-outcomes.md",
+        "docs/history/codex-harness-hardening/release-manifest.json"
+      ],
+      "tests": "rg -n -- --no-handoff packages/bee/playbooks/multi-session.md && .bee/bin/bee dev release-manifest --check — green:static — rg -n -- --no-handoff packages/bee/playbooks/multi-session.md && .bee/bin/bee dev release-manifest --check — green:static — docs cell verified playbook grep and release-manifest check",
+      "deviations": [],
+      "knowledge_used": [
+        "docs/knowledge/areas/bee-herding/the-run-verb-and-worker-outcomes.md — extended existing auto-settle section with D1 and D2"
+      ],
+      "principles_used": [
+        "bee-principle-one-fact-one-home — extended the-run-verb-and-worker-outcomes.md instead of filing a new doc"
+      ],
+      "patch_id": "da1185e5a4b2235948780b173b2524f5e42c67f2"
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "the multi-session playbook names --no-handoff and the owning-leader check",
+            "artifact": "packages/bee/playbooks/multi-session.md"
+          },
+          {
+            "requirement": "the run-verb concept names worker adoption and the floor-aware settle line",
+            "artifact": "packages/bee/playbooks/multi-session.md"
+          }
+        ],
+        "recorded_at": "2026-11-25T16:52:33.695Z",
+        "recorded_by": "18289ecb-d74f-4fb9-b672-0e198768a410",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": {
+    "new": 0,
+    "cached": 0,
+    "total": 0,
+    "models": {},
+    "jobs": [
+      "job-1795623823292-3688067-1"
+    ]
+  }
+}
