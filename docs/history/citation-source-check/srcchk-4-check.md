@@ -24,7 +24,7 @@ this is not a fail.
 
 Pushback text and both examples are unchanged: `git show 682f29869
 --numstat` on the source file gives `2 0` (paragraph plus blank line,
-no deletions), and no later commit touches the file.
+no deletions), and no commit after it touches the file.
 
 ## Rendered copies
 
