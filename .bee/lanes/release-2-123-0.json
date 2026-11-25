@@ -16,8 +16,8 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "Đang chạy script release 2.123.0 (chạy test, gắn tag, đẩy code, chờ CI). Có kết quả tôi sẽ báo ngay.",
-    "asked_at": "2026-11-25T23:16:04.088Z",
+    "subject": "[2] `git ls-remote --tags origin v2.123.0` → `66e8e9e93…`; `gh release view v2.123.0` → 6 file; `gh run view 45723393203` → `success`; `git",
+    "asked_at": "2026-11-25T23:50:01.945Z",
     "session": "d316f143-d6dd-4647-b7e8-4425e8626d85"
   },
   "gate_preview": {

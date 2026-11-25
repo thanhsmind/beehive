@@ -1,0 +1,96 @@
+{
+  "id": "rel21230-1",
+  "feature": "release-2-123-0",
+  "title": "Publish release 2.123.0 through the sanctioned script",
+  "lane": "small",
+  "role": "deploy",
+  "deps": [],
+  "decisions": [
+    "9f3a4a0d-cc16-4ace-aaf3-dba890a21370"
+  ],
+  "files": [
+    ".claude-plugin/plugin.json",
+    ".codex-plugin/plugin.json",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/release-2-123-0/CONTEXT.md",
+    "scripts/release.sh"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Run `scripts/release.sh 2.123.0` with BEE_DISPATCH_ID set to an authorized deployment dispatch and the CI-pinned opencode 1.18.16 (/mnt/data/Projects/goglbe/beehive/.bee/tmp/oc11816/bin) first on PATH and CARGO_TARGET_DIR=/home/thanhsmind/.cache/cargo-target-rel21230, so the opencode contract tests run green. The script bumps both plugin manifests, runs the regen chain (render-skill-trees, onboard --apply, release-manifest --write), runs the declared test suite before tagging, makes the release commit, tags v2.123.0, pushes main and the tag, waits for the release-binaries workflow and verifies the published assets. Never walk those steps by hand. Re-running at a version already committed is idempotent — it resumes the tail. The regen obligation on .claude-plugin/plugin.json is discharged INSIDE the script's own regen chain, which is why the release manifest rides this cell's files.",
+  "verify": "bash scripts/release.sh 2.123.0 && bee dev release-manifest --check",
+  "must_haves": {
+    "truths": [
+      "both plugin manifests report 2.123.0",
+      "tag v2.123.0 exists locally and on the remote",
+      "the GitHub release for v2.123.0 carries the binaries and SHA256SUMS",
+      "the script printed its final OK line"
+    ],
+    "artifacts": [
+      {
+        "path": ".claude-plugin/plugin.json",
+        "substantive": "version 2.123.0"
+      },
+      {
+        "path": ".codex-plugin/plugin.json",
+        "substantive": "version 2.123.0"
+      }
+    ],
+    "key_links": [
+      "the pushed tag is what triggers release-binaries.yml"
+    ],
+    "prohibitions": [
+      "Do not hand-walk bump, tag or push",
+      "Do not skip the test gate"
+    ]
+  },
+  "behavior_change": false,
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "rel21230-deployer",
+    "outcome": null,
+    "files_changed": [
+      ".claude-plugin/plugin.json",
+      ".codex-plugin/plugin.json",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [
+      "first run red at the cargo suite on pi_plugin_contracts real_bee host global config leak; fixed by real-bee-global-isolation (a66ce6b) and re-run under a fresh permit",
+      "sync-ack: release lane moves manifest versions only"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-25T23:49:37.700Z",
+    "behavior_change": false,
+    "verification_evidence": "release OK bee 2.123.0 is live; CI run 45723393203 success; https://github.com/thanhsmind/beehive/releases/tag/v2.123.0 — release lane",
+    "verify_output": "green:live",
+    "verify_passed": true,
+    "claim_session": "d316f143-d6dd-4647-b7e8-4425e8626d85",
+    "verify_command": "bash scripts/release.sh 2.123.0 && bee dev release-manifest --check",
+    "claimed_at": "2026-11-25T23:15:47.496Z",
+    "knowledge_delta": [],
+    "sync_ack": "release lane moves manifest versions only",
+    "commit_pending": "release.sh commit 66e8e9e93 has no cell trailer by design",
+    "changed_lines": 27,
+    "report": {
+      "outcome": "Released bee 2.123.0; tag v2.123.0 on origin; 6 assets published",
+      "commit": "66e8e9e93",
+      "files": [
+        ".claude-plugin/plugin.json",
+        ".codex-plugin/plugin.json",
+        "docs/history/codex-harness-hardening/release-manifest.json"
+      ],
+      "tests": "bash scripts/release.sh 2.123.0 && bee dev release-manifest --check — green:live — release OK bee 2.123.0 is live; CI run 45723393203 success; https://github.com/thanhsmind/beehive/releases/tag/v2.123.0 — release lane",
+      "deviations": [
+        "first run red at the cargo suite on pi_plugin_contracts real_bee host global config leak; fixed by real-bee-global-isolation (a66ce6b) and re-run under a fresh permit"
+      ],
+      "patch_id": "a849dc3baa3d19480be1b70fdbcbfb17163395c9"
+    },
+    "warnings": [],
+    "tests": "boundary"
+  },
+  "usage": null,
+  "usage_reason": "no herding job names this cell: no session is attributable to it"
+}

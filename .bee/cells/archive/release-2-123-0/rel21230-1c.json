@@ -1,0 +1,102 @@
+{
+  "id": "rel21230-1c",
+  "feature": "release-2-123-0",
+  "title": "Check the published 2.123.0 release",
+  "lane": "small",
+  "role": "test",
+  "deps": [
+    "rel21230-1"
+  ],
+  "decisions": [
+    "9f3a4a0d-cc16-4ace-aaf3-dba890a21370",
+    "783ed791-d484-48dd-b1c8-728e9f2e75c6"
+  ],
+  "files": [
+    "docs/history/release-2-123-0/reports/rel21230-1c.md"
+  ],
+  "read_first": [
+    "docs/history/release-2-123-0/CONTEXT.md",
+    "docs/history/release-2-123-0/plan.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Check the release independently, read-only: both plugin manifests on main report 2.123.0; tag v2.123.0 exists locally and on origin (git ls-remote --tags origin v2.123.0); the GitHub release v2.123.0 lists the five binaries and SHA256SUMS (gh release view v2.123.0 --json assets); the release-binaries run for v2.123.0 concluded success. Write each check with its command and output to docs/history/release-2-123-0/reports/rel21230-1c.md and commit it with the trailer cell: rel21230-1c. Bee commands you may run: bee herding notify; never bee dispatch.",
+  "verify": "gh release view v2.123.0 --json assets --jq '.assets | length'",
+  "must_haves": {
+    "truths": [
+      "the report shows each of the four checks with its command and output"
+    ],
+    "prohibitions": [
+      "No edit outside the report file"
+    ]
+  },
+  "behavior_change": false,
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "rel21230-checker",
+    "outcome": "Verified published release 2.123.0 across all four checks and committed report d491cd974",
+    "files_changed": [
+      "docs/history/release-2-123-0/reports/rel21230-1c.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-11-25T23:52:46.858Z",
+    "behavior_change": false,
+    "verification_evidence": "read-only release check, 6 assets on https://github.com/thanhsmind/beehive/releases/tag/v2.123.0, run https://github.com/thanhsmind/beehive/actions/runs/45723393203",
+    "verify_output": "green:live",
+    "verify_passed": true,
+    "claim_session": "792b0ac2-04a9-46d8-80c8-3f3af20d2299",
+    "verify_command": "gh release view v2.123.0 --json assets --jq '.assets | length'",
+    "claimed_at": "2026-11-25T23:50:11.125Z",
+    "knowledge_delta": [],
+    "no_mistakes": true,
+    "no_knowledge_used": true,
+    "principles_used": [
+      {
+        "slug": "bee-principle-prove-it-works",
+        "changed": "checked the published release assets, not the local build"
+      },
+      {
+        "slug": "bee-principle-prove-it-works",
+        "changed": "checked the live git refs, manifests on main, GitHub release assets, and workflow run directly instead of trusting rel21230-1's summary"
+      }
+    ],
+    "changed_lines": 229,
+    "report": {
+      "outcome": "Verified published release 2.123.0 across all four checks and committed report d491cd974",
+      "commit": "d491cd97430ba77629370e00dac81e8f2c7d1297",
+      "files": [
+        "docs/history/release-2-123-0/reports/rel21230-1c.md"
+      ],
+      "tests": "gh release view v2.123.0 --json assets --jq '.assets | length' — green:live — read-only release check, 6 assets on https://github.com/thanhsmind/beehive/releases/tag/v2.123.0, run https://github.com/thanhsmind/beehive/actions/runs/45723393203",
+      "deviations": [],
+      "knowledge_used": [],
+      "principles_used": [
+        "bee-principle-prove-it-works — checked the live git refs, manifests on main, GitHub release assets, and workflow run directly instead of trusting rel21230-1's summary"
+      ],
+      "reaction": "confirm",
+      "skipped": [
+        "cargo clippy and cargo test — only added markdown verification report docs/history/release-2-123-0/reports/rel21230-1c.md; no Rust source touched"
+      ],
+      "patch_id": "2f79169ae2efeaac7c3060d0bad1c9acf7ac3e75"
+    },
+    "reaction": "confirm",
+    "skipped": [
+      "cargo clippy and cargo test — only added markdown verification report docs/history/release-2-123-0/reports/rel21230-1c.md; no Rust source touched"
+    ],
+    "warnings": [
+      "advisory: this cap's commit changes 229 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
+  },
+  "usage": {
+    "new": 0,
+    "cached": 0,
+    "total": 0,
+    "models": {},
+    "jobs": [
+      "job-1795650623669-1313598-1"
+    ]
+  }
+}

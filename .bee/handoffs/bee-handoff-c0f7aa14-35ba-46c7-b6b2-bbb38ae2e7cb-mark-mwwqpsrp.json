@@ -9,5 +9,5 @@
   "task_text": "Handoff from previous leader session (context 202k tokens past 120k mark).\nCurrent feature: windows-test-build\nOpen or claimed cells: none\n\nOwner request (Vietnamese, 2026-11-26): 'Push code va release'. Push main to origin and release bee 2.123.0 (last tag v2.122.0; main is 104 commits ahead of origin/main, including agy-runtime, agy-session-env, agy-leader-e2e spike fixes and the PBIs p-b454de67, p-3f1d7db8, p-e8eeae96, p-41a23d81, p-a0f03c4a). Do it the release way only: open a release lane release-2-123-0, then run scripts/release.sh 2.123.0 under an authorized deployment dispatch (--kind gather --role deploy --stage deployment --release-version 2.123.0 --feature release-2-123-0); release.sh pushes main, tags, waits for release-binaries CI and verifies assets. Done only when release.sh prints its final OK line. If another session's worktree work is not merged, release what is on main; do not wait on it. Standing orders: reply to the owner in Vietnamese, short and simple; full autopilot gate bypass is on; never ask the owner to run steps the agent can run; report the release URL and the OK line.\n",
   "expects": [],
   "follow_ups": [],
-  "status": "open"
+  "status": "met"
 }

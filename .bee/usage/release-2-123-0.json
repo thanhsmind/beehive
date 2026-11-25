@@ -1,0 +1,93 @@
+{
+  "schema": "bee-usage/v1",
+  "feature": "release-2-123-0",
+  "closed_at": "2026-11-25T23:53:18.843Z",
+  "sessions": [
+    {
+      "session_id": "792b0ac2-04a9-46d8-80c8-3f3af20d2299",
+      "models": {
+        "claude-opus-5-5": {
+          "input": 46,
+          "output": 5671,
+          "cache_write": 40251,
+          "cache_read": 855445,
+          "new": 45968,
+          "cached": 855445,
+          "total": 901413
+        }
+      },
+      "subagent_models": {},
+      "subagent_count": 0,
+      "started_ms": 1795650600548,
+      "ended_ms": 1795650794283,
+      "totals": {
+        "new": 45968,
+        "cached": 855445,
+        "total": 901413
+      }
+    },
+    {
+      "session_id": "d316f143-d6dd-4647-b7e8-4425e8626d85",
+      "models": {
+        "claude-opus-5-5": {
+          "input": 186,
+          "output": 31016,
+          "cache_write": 116718,
+          "cache_read": 7862916,
+          "new": 147920,
+          "cached": 7862916,
+          "total": 8010836
+        }
+      },
+      "subagent_models": {},
+      "subagent_count": 0,
+      "started_ms": 1795648442998,
+      "ended_ms": 1795650602028,
+      "totals": {
+        "new": 147920,
+        "cached": 7862916,
+        "total": 8010836
+      }
+    }
+  ],
+  "skipped": 0,
+  "totals": {
+    "main": {
+      "new": 193888,
+      "cached": 8718361,
+      "total": 8912249
+    },
+    "subagents": {
+      "new": 0,
+      "cached": 0,
+      "total": 0
+    },
+    "total": {
+      "new": 193888,
+      "cached": 8718361,
+      "total": 8912249
+    },
+    "herding": {
+      "new": 0,
+      "cached": 0,
+      "total": 0,
+      "models": {}
+    }
+  },
+  "herding_sessions": [
+    {
+      "session_id": "transcript_full",
+      "models": {},
+      "subagent_models": {},
+      "subagent_count": 0,
+      "started_ms": 1795648562000,
+      "ended_ms": 1795649154000,
+      "totals": {
+        "new": 0,
+        "cached": 0,
+        "total": 0
+      },
+      "job_id": "job-1795648559343-1071912-1"
+    }
+  ]
+}
