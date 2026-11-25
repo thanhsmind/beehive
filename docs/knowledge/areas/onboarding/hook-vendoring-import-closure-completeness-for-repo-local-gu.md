@@ -1,7 +1,7 @@
 ---
 type: bee.area
-title: Onboarding — hook vendoring import-closure completeness
-description: "Why a fresh repo-hooks onboard must vendor every module a vendored hook imports, transitively, not merely the hook entrypoints themselves, and the regression suite that guards the class of bug rather than the one instance."
+title: "Onboarding — hook vendoring import closure, closed by the Node runtime's removal"
+description: "Why a vendored hook once had to ship with every module it imports, the fresh-install crash that taught it, and why the rule has no live surface since R6: onboarding vendors no .mjs hook, and HOOK_FILENAMES now only names the stale hook files an apply deletes."
 timestamp: 2026-07-24
 bee:
   id: onboarding-hook-vendoring-import-closure-completeness
@@ -9,59 +9,63 @@ bee:
   areas: [onboarding]
   required_context: [areas/onboarding/overview.md]
   decisions: ["bee6fcb2 (i54-closeout Gate 3 approval, naming the canary-caught fresh-install write-guard crash)", 103a5608 (i54-closeout scope lock)]
-  sources: ["i54-closeout cell i54-closeout-9 (fresh-install write-guard crash fix: vendor tokenize-command.mjs + import-closure regression suite; trace in .bee/cells/, 2026-07-24)", "docs/history/i54-closeout/reports/validation-canary.md section 1 (P5 red, real bug: ERR_MODULE_NOT_FOUND on a fresh repo-hooks install)"]
+  sources: ["i54-closeout cell i54-closeout-9 (fresh-install write-guard crash fix: vendor tokenize-command.mjs + import-closure regression suite; trace in .bee/cells/, 2026-07-24)", "docs/history/i54-closeout/reports/validation-canary.md section 1 (P5 red, real bug: ERR_MODULE_NOT_FOUND on a fresh repo-hooks install)", "commit 5c62cad02 (R6: delete the Node runtime)", packages/bee-rs/crates/bee/src/onboard/templates.rs, packages/bee-rs/crates/bee/src/onboard/plan.rs]
   authoritative_for: "onboarding: hook vendoring import-closure completeness"
-  anchors: [packages/bee-rs/crates/bee/src/main.rs]
-  verified_at: 2026-11-15
-  verified_commit: a963c71a41249647b5aa15a64118f007f39c4c67
+  anchors: [packages/bee-rs/crates/bee/src/onboard/templates.rs, packages/bee-rs/crates/bee/src/onboard/plan.rs]
+  verified_at: 2026-11-25
+  verified_commit: 1de3a4bfff52f6ac99fdc9e5524e24b24a1f762a
 ---
 
-# Onboarding — Hook Vendoring Import-Closure Completeness
+# Onboarding — Hook Vendoring Import Closure, Closed by the Node Runtime's Removal
+
+Read when: a host still carries `.bee/bin/hooks/*.mjs`, an onboard plan shows
+`remove_repo_hook` items, or someone proposes vendoring a script hook again.
 
 Vendoring a hook file is not the same as vendoring the hook: a hook that imports
 a sibling module ships broken the moment that sibling is missing, and the break
-only shows up the first time the hook actually fires. This concept owns the rule
-that closes that gap and the suite that keeps it closed.
+only shows up the first time the hook fires. That rule governed the Node hook
+set. Since R6 deleted the Node runtime, bee's hooks run inside the `bee` binary,
+so no vendored hook has a sibling import to miss.
 
 ## Behaviors & Operations
 
-**A fresh repo-hooks onboard vendors every module a vendored hook imports,
-transitively, not just the hook entrypoints named in the vendored-hook list.**
-The vendored-hook list used to name `bee-write-guard.mjs` without naming
-`tokenize-command.mjs`, a module that hook imports directly. A fresh
-`--repo-hooks` install therefore copied the hook file but not its dependency,
-and the vendored guard crashed with a module-not-found error the first time it
-ran — silently fail-open, so the write it existed to block went through
-unguarded. The fix is not "add the one missing filename": the vendored-hook
-list must now be import-closed — every relative import of a listed hook is
-itself listed — so the same class of gap (a hook gains a new sibling import
-tomorrow and nobody remembers to vendor it) is caught the next time it happens,
-not just this one instance.
+**Today: onboarding vendors no `.mjs` hook.** `HOOK_FILENAMES` in
+`onboard/templates.rs` still lists the eleven old hook names, including
+`bee-write-guard.mjs` and `tokenize-command.mjs`. `list_plugin_hooks` in
+`onboard/plan.rs` keeps only the names that exist in the engine's
+`packages/bee/hooks/` directory. That directory now holds no `.mjs` file, so
+the list is empty and nothing is copied.
 
-**The regression suite proves the class, not the instance.** A static
-import-closure parse walks the vendored-hook list's declared entrypoints and
-asserts every relative import they make is itself a listed entry — this is what
-would have caught the gap before a fresh install ever hit it. A companion
-fresh-install/subprocess proof actually runs the vendored guard as a real child
-process and asserts the specific crash signature (`ERR_MODULE_NOT_FOUND`)
-is absent — a syntax check alone (`node --check`) is not sufficient evidence,
-because it is syntax-only and does not detect a missing relative-import module.
+**Today: an apply deletes stale vendored hooks.** The plan takes the hook names
+recorded under `managed.repo_hooks` and `managed.codex_hooks` in the previous
+`.bee/onboarding.json`, drops the names the current source still lists, and
+plans one `remove_repo_hook` item for each one that still exists under
+`.bee/bin/hooks/`. A host that never vendored hooks gets no item.
+
+**History: the crash that set the rule (cell i54-closeout-9).** The vendored
+list once named `bee-write-guard.mjs` without `tokenize-command.mjs`, a module
+that hook imports. A fresh `--repo-hooks` install copied the hook but not its
+dependency, and the guard crashed with `ERR_MODULE_NOT_FOUND` the first time it
+ran — fail-open, so the write it existed to block went through. The fix made
+the list import-closed and added a regression suite that parsed each listed
+hook's relative imports and ran the vendored guard as a real child process.
+That suite (`scripts/tests/test_hook_vendor_closure.mjs`) was retired with the
+Node runtime on 2026-08-02.
 
 ## Business Rules
 
-- The vendored-hook list must be import-closed: every relative import made by a
-  listed hook file is itself a listed entry, checked mechanically rather than
-  trusted to a human remembering to update it by hand.
-- A syntax check (`node --check`) is never accepted as proof that a vendored
-  module's imports resolve; only a real subprocess run (or an equivalent
-  module-resolution check) proves an import closure complete.
+- A vendored script that imports a sibling ships only with that sibling. Any
+  future vendored script hook needs a mechanical import-closure check, never a
+  hand-kept list.
+- A syntax check (`node --check`) is never proof that a module's imports
+  resolve; only a real subprocess run or a module-resolution check is. The
+  general lesson lives in
+  [the vendoring-drift pattern](../../patterns/20260724-canonical-source-tests-cannot-see-vendoring-drift.md).
 
 ## Pointers (implementation)
 
-- Vendored-hook list: `HOOK_FILENAMES` in
-  `packages/bee-rs/crates/bee/src/main.rs onboard` (formerly packages/bee/scripts/bee).
-- Regression suite: scripts/tests/test_hook_vendor_closure.mjs (retired with the Node runtime, 2026-08-02) (static
-  import-closure parse + fresh-install/subprocess proof).
+- Legacy hook list: `HOOK_FILENAMES` in `packages/bee-rs/crates/bee/src/onboard/templates.rs`.
+- Existence filter: `list_plugin_hooks` in `packages/bee-rs/crates/bee/src/onboard/plan.rs`.
+- Stale-hook removal: the `remove_repo_hook` plan item in `onboard/plan.rs`.
 - Evidence: cell i54-closeout-9 (trace purged from .bee/cells/),
   `docs/history/i54-closeout/reports/validation-canary.md` (section 1, P5).
-
