@@ -11,9 +11,9 @@ bee:
   decisions: [advisor D1-D3, f1ca79b9 (AO15 — attribution fields)]
   sources: ["advisor cells adv-1..adv-3 (worker consult loop, 2026-07-13)", "advisor-and-orchestration Slices 2A-i..2A-iv, 2B, 3A, 3B, 4, 5 (cells ao-2ai-1..ao-5-1, traces in .bee/cells/, reports docs/history/advisor-and-orchestration/reports/, 2026-07-17)", "docs/specs/advisor-protocol.md#B2", "docs/specs/advisor-protocol.md#B4", "docs/specs/advisor-protocol.md#R7", "docs/specs/advisor-protocol.md#P1"]
   authoritative_for: "advisor-protocol: worker consult loop"
-  anchors: [skills/bee-swarming/references/worker-details.md, skills/bee-swarming/references/swarming-reference.md, skills/bee-swarming/SKILL.md]
-  verified_at: 2026-11-14
-  verified_commit: cdefa65590c37a8f7f9a716d23cd23df9a082c54
+  anchors: [skills/bee-swarming/references/worker-details.md, skills/bee-swarming/references/swarming-reference.md, skills/bee-swarming/SKILL.md, packages/bee/prompts/worker-cell.md]
+  verified_at: 2026-11-25
+  verified_commit: f75c1c76556b610f03ae2100dfbf750d56b0c0b9
 ---
 
 # Advisor Protocol — Worker Consult Loop
@@ -44,6 +44,7 @@ privileges at configuration checking.
 ## Pointers (implementation)
 
 - **P1 —** Worker loop: `skills/bee-swarming/references/worker-details.md`
-  ("Advisor consult in full"); dispatch-time offer + same-model no-op: the
-  `Advisor` line of the worker prompt template in
-  `skills/bee-swarming/references/swarming-reference.md`.
+  ("Advisor consult in full"); dispatch-time offer + same-model no-op:
+  `skills/bee-swarming/references/swarming-reference.md` ("Worker Prompt
+  Template"); the rendered `Advisor:` line itself is in
+  `packages/bee/prompts/worker-cell.md`.

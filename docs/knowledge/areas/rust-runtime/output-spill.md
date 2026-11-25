@@ -10,11 +10,11 @@ bee:
   areas: [rust-runtime]
   required_context: [areas/rust-runtime/command-surface.md]
   decisions: ["cli-output-spill D1 (allowlist of read verbs, text stdout only, never --json, never a terminal)", "cli-output-spill D2 (opt-in key output_spill_bytes, BEE_OUTPUT_FULL override, head two thirds, marker, tail one quarter)", "cli-output-spill D3 (Unix file-descriptor redirect, Windows pass-through)"]
-  sources: [docs/history/cli-output-spill/CONTEXT.md, packages/bee-rs/crates/bee/src/output_spill.rs, packages/bee-rs/crates/bee/src/main.rs, packages/bee-rs/crates/bee/tests/output_spill.rs]
+  sources: [docs/history/cli-output-spill/CONTEXT.md, packages/bee-rs/crates/bee/src/output_spill.rs, packages/bee-rs/crates/bee/src/main.rs, packages/bee-rs/crates/bee/src/config_layers.rs, packages/bee-rs/crates/bee/tests/output_spill.rs]
   authoritative_for: "rust-runtime: when a bee command's stdout is spilled to a file and what the caller sees instead"
-  anchors: [packages/bee-rs/crates/bee/src/output_spill.rs, packages/bee-rs/crates/bee/src/main.rs, packages/bee-rs/crates/bee/tests/output_spill.rs]
-  verified_at: 2026-11-15
-  verified_commit: a963c71a41249647b5aa15a64118f007f39c4c67
+  anchors: [packages/bee-rs/crates/bee/src/output_spill.rs, packages/bee-rs/crates/bee/src/main.rs, packages/bee-rs/crates/bee/src/config_layers.rs, packages/bee-rs/crates/bee/tests/output_spill.rs]
+  verified_at: 2026-11-25
+  verified_commit: f75c1c76556b610f03ae2100dfbf750d56b0c0b9
 ---
 
 # Compiled runtime — output spill
@@ -30,8 +30,11 @@ view and puts the full output in a file the agent can open when it needs it.
 
 All of these must be true (cli-output-spill D1, D2):
 
-- The repository's `.bee/config.json` sets `output_spill_bytes` to a positive
-  integer. An absent key or `0` turns spill off. This repository sets `8000`.
+- The merged config sets `output_spill_bytes` to a positive integer. The
+  layers are the global config, `.bee/config.json` and
+  `.bee/config.local.json`, and the later layer wins; `.bee/team.json` cannot
+  set this key (`config_layers.rs`). An absent key or `0` turns spill off.
+  This repository sets `8000` in `.bee/config.json`.
 - The argv starts with `status`, `cells list`, `decisions list`,
   `backlog list`, `knowledge context` or `knowledge search`, or it carries
   `--help`. The list has one home: `SPILL_VERBS` in
