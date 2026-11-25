@@ -2656,6 +2656,110 @@ so the next session can resume cleanly, or record a capture stub for what settle
         for (shape, case, result, out) in &runs {
             assert_eq!(*result, Ok(()), "{shape:?} / {}", case.name);
             assert!(!out.contains("\"decision\":\"block\""), "{shape:?} / {}: {out}", case.name);
-            assert_eq!(out.contains(AGREEMENT_RULE), case.warns, "{shape:?} / {}: {out}", case.name);
+            assert_eq!(out.contains("agrees with a proposal but cites no source"), case.warns, "{shape:?} / {}: {out}", case.name);
         }
+    }
+
+    #[test]
+    fn citation_source_real_path_line_with_matching_token_is_quiet() {
+        let fx = tempfile::tempdir().unwrap();
+        let root = fx.path();
+        std::fs::create_dir_all(root.join("src")).unwrap();
+        std::fs::write(root.join("src/loader.rs"), "fn init() {}\nfn load_cache() {\n    let size = 10;\n}\n").unwrap();
+        let events = claude_turn(
+            "check loader",
+            &["The function `load_cache` reads the file [1].\n\nSources:\n[1] src/loader.rs:2 — `load_cache`"],
+        );
+        assert_eq!(citation_source_warning(root, &events), None);
+    }
+
+    #[test]
+    fn citation_source_missing_file_warns() {
+        let fx = tempfile::tempdir().unwrap();
+        let events = claude_turn(
+            "check missing",
+            &["See [1].\n\nSources:\n[1] src/missing.rs:10 — `nope`"],
+        );
+        let warning = citation_source_warning(fx.path(), &events).expect("warns");
+        assert!(warning.contains("1 cited source(s) did not check out"), "{warning}");
+        assert!(warning.contains("agents-verify-before-agreeing"), "{warning}");
+        assert!(warning.contains("[1] src/missing.rs:10: file not found"), "{warning}");
+        assert!(!warning.contains('\n'));
+    }
+
+    #[test]
+    fn citation_source_line_past_end_warns() {
+        let fx = tempfile::tempdir().unwrap();
+        let root = fx.path();
+        std::fs::create_dir_all(root.join("src")).unwrap();
+        std::fs::write(root.join("src/short.rs"), "line 1\nline 2\n").unwrap();
+        let events = claude_turn(
+            "check line",
+            &["See [1].\n\nSources:\n[1] src/short.rs:99"],
+        );
+        let warning = citation_source_warning(root, &events).expect("warns");
+        assert!(warning.contains("[1] src/short.rs:99: line 99 past end (file has 2 lines)"), "{warning}");
+    }
+
+    #[test]
+    fn citation_source_token_absent_near_line_warns() {
+        let fx = tempfile::tempdir().unwrap();
+        let root = fx.path();
+        std::fs::create_dir_all(root.join("src")).unwrap();
+        let mut content = String::new();
+        for i in 1..=60 {
+            if i == 55 {
+                content.push_str("fn target_symbol() {}\n");
+            } else {
+                content.push_str(&format!("fn filler_{i}() {{}}\n"));
+            }
+        }
+        std::fs::write(root.join("src/long.rs"), content).unwrap();
+        let events = claude_turn(
+            "check token",
+            &["Found `target_symbol` [1].\n\nSources:\n[1] src/long.rs:5"],
+        );
+        let warning = citation_source_warning(root, &events).expect("warns");
+        assert!(warning.contains("[1] src/long.rs:5: text not found near line 5: target_symbol"), "{warning}");
+    }
+
+    #[test]
+    fn citation_source_url_is_quiet() {
+        let fx = tempfile::tempdir().unwrap();
+        let events = claude_turn(
+            "check url",
+            &["Docs say so [1].\n\nSources:\n[1] https://example.com/docs/missing.rs:99 — `absent_token`"],
+        );
+        assert_eq!(citation_source_warning(fx.path(), &events), None);
+    }
+
+    #[test]
+    fn citation_source_command_run_in_transcript_is_quiet() {
+        let fx = tempfile::tempdir().unwrap();
+        let events = vec![
+            user_message(Shape::Claude, "run tests"),
+            shell_call(Shape::Claude, "t1", "cargo test --release -- session_close"),
+            call_output(Shape::Claude, "t1", "test result: ok. 5 passed"),
+            assistant_reply(
+                Shape::Claude,
+                "Tests pass [1].\n\nSources:\n[1] cargo test session_close — 5 passed",
+            ),
+        ];
+        assert_eq!(citation_source_warning(fx.path(), &events), None);
+    }
+
+    #[test]
+    fn citation_source_command_never_run_warns() {
+        let fx = tempfile::tempdir().unwrap();
+        let events = vec![
+            user_message(Shape::Claude, "run tests"),
+            shell_call(Shape::Claude, "t1", "git status"),
+            call_output(Shape::Claude, "t1", "clean"),
+            assistant_reply(
+                Shape::Claude,
+                "Tests pass [1].\n\nSources:\n[1] `cargo test --release` — 5 passed",
+            ),
+        ];
+        let warning = citation_source_warning(fx.path(), &events).expect("warns");
+        assert!(warning.contains("[1] cargo test --release: command not run"), "{warning}");
     }

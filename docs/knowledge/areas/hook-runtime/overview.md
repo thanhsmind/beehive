@@ -8,13 +8,13 @@ bee:
   lifecycle: active
   areas: [hook-runtime]
   required_context: []
-  decisions: ["codex-runtime-parity D1, D2", "orient-host-playbook D2", "c2c46488 (a closed feature's approvals never license the next write; the guard's silence is never permission)"]
+  decisions: ["codex-runtime-parity D1, D2", "orient-host-playbook D2", "citation-source-check D1, D2", "c2c46488 (a closed feature's approvals never license the next write; the guard's silence is never permission)"]
   sources: ["codex-runtime-parity Safety foundation — cells codex-parity-2, 2b, 3, 4 (traces in .bee/cells/), reports in docs/history/codex-runtime-parity/reports/", "docs/specs/hook-runtime.md#B1", "docs/specs/hook-runtime.md#R2", "docs/specs/hook-runtime.md#R13", "knowledge-loop cell kl-4 (session-start critical-pattern digest ranked by relevance; trace .bee/cells/archive/knowledge-loop/kl-4.json, commit d74ca11c, 2026-08-05) — cross-referenced, owned by okf-profile/context-and-promote.md"]
   authoritative_for: "hook-runtime: purpose, actors, and the cross-cutting checkpoint frame"
   owns.code: [packages/bee-rs/crates/bee/src/hooks/*]
   owns.skills: []
   owns.tests: [packages/bee-rs/crates/bee/tests/hook_contracts.rs, packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs, packages/bee-rs/crates/bee/src/hooks/session_preamble/tests.rs, packages/bee-rs/crates/bee/src/hooks/session_close/tests.rs]
-  anchors: [packages/bee-rs/crates/bee/src/hooks/session_close/claims.rs]
+  anchors: [packages/bee-rs/crates/bee/src/hooks/session_close/claims.rs, packages/bee-rs/crates/bee/src/hooks/session_close/citations.rs]
   verified_at: 2026-11-07
   verified_commit: a9d2d9d1b7827947d43f8a8c839a81a9dcb5b88c
 ---
@@ -95,7 +95,16 @@ that same `[n]` (cited-claims D2). A conditional marker ("checking", "kiểm tra
 trước") also silences it. The line names the citation form so the fix is
 obvious. The line is advisory only: the turn is never blocked and the exit code
 never changes, and a Stop that blocks or whose hook is disabled adds nothing.
-Pointer: `packages/bee-rs/crates/bee/src/hooks/session_close/claims.rs`.
+When the last reply includes a `Sources:` or `Nguồn:` block, the same Stop
+checkpoint also checks each `[n]` source against disk and the transcript: a
+`path:line` or `path:a-b` source warns when the file is missing, the line is
+past the end, or no 3+-character backticked token from the source or matching
+`[n]` reply line appears case-insensitively within 20 lines of the range (or
+anywhere in the file with no line number); a non-path, non-URL command source
+(backticked span or `<command> — <result>`) warns when no shell command in the
+transcript contains its first word and another word when multi-word, while URLs
+and plain prose are skipped (citation-source-check D1, D2).
+Pointer: `packages/bee-rs/crates/bee/src/hooks/session_close/claims.rs`, `packages/bee-rs/crates/bee/src/hooks/session_close/citations.rs`.
 
 **B2b — Routed-reply warnings (Stop).** Beside B2, the same Stop reads the last
 turn's tool calls and results (Claude `tool_use`/`tool_result` and Codex

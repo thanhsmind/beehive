@@ -209,6 +209,7 @@ fn run_inner(argv: &[String], stdin: &str) -> Result<(), ()> {
         unverified_agreement_warning(events)
             .into_iter()
             .chain(routed_reply_warnings(events))
+            .chain(citation_source_warning(&root, events))
             .collect()
     } else {
         Default::default()
@@ -713,6 +714,8 @@ mod html;
 mod obligations;
 mod owner_ask_net;
 mod claims;
+mod citations;
+pub(crate) use self::citations::*;
 pub(crate) use self::claims::*;
 pub(crate) use self::reads::*;
 pub(crate) use self::nudges::*;
