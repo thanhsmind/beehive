@@ -999,6 +999,7 @@
     "contract:pi-shutdown-stops-drain",
     "contract:pi-install-hint",
     "contract:leader-self-handoff",
-    "contract:published-release-2-121-0"
+    "contract:published-release-2-121-0",
+    "contract:citation-source-check"
   ]
 }
