@@ -1,0 +1,208 @@
+---
+artifact_contract: bee-plan/v2
+mode: small
+---
+
+# citation-source-check — plan
+
+## Summary
+
+The Stop hook opens each cited source and checks it: the file exists,
+the line is in range, a backticked token of the claim is near that
+line, and a cited command was really run. One advisory line names the
+sources that fail.
+
+Lane: small. Class: feature. Situation: `skills/bee-planning/playbooks/feature/feature.md`.
+Architect skipped: one pure check function over the reply text, the
+transcript commands and the files it names; the shape is fixed by D1 and D2.
+Tutorial skipped: no other code calls the check.
+Statechart skipped: no event-order flow.
+
+## Throughput
+
+- Blocking first steps: none.
+- Independent workstreams: the Stop check (srcchk-1) and the doctrine
+  text (srcchk-3) touch disjoint files and run in parallel.
+- Shared mutable state: none.
+- Smallest safe decomposition: one implementer cell, one tester cell
+  (srcchk-2) on it, one docs cell.
+
+## Cell map
+
+| Cell | Role | Does | Decisions |
+|---|---|---|---|
+| srcchk-1 | code | Stop hook checks each cited source against disk and the transcript | D1, D2 |
+| srcchk-2 | test | proves each fail and pass case on fixtures, independent of srcchk-1 | D1, D2 |
+| srcchk-3 | docs | Claim labels and the hook concept say what the check reads | D1, D2 |
+
+## Load-bearing claims
+
+| # | Claim | Label | Anchor | Verbatim evidence |
+|---|---|---|---|---|
+| 1 | the citation check never opens the cited file | read | packages/bee-rs/crates/bee/src/hooks/session_close/claims.rs:61 | fn is_cited(text: &str) -> bool { |
+| 2 | the claims warnings join the Stop output | read | packages/bee-rs/crates/bee/src/hooks/session_close/mod.rs:208 | let claims_warning: Vec<String> = if ctx.event == "Stop" { |
+
+## Proof
+
+Each cell runs its filtered cargo tests or parity checks. The full suite
+runs once with `bee test` before `bee worktree merge`.
+
+## Role assignments
+
+```json
+{
+ "schema_version": "1.0",
+ "runtime": "claude",
+ "roster_sha256": "d4e696dbde7989d6388dacce3fd7057cb3a6935b46024b79698596a46f6f41d3",
+ "stages": [
+  {"stage": "deployment", "classification": "not-applicable", "role": "deploy", "reason": "Release is a separate owner call."},
+  {"stage": "planning", "classification": "not-applicable", "role": "plan", "reason": "The leader wrote this plan from CONTEXT.md."},
+  {"stage": "implementation", "classification": "required", "role": "code", "reason": "srcchk-1 writes the source check."},
+  {"stage": "test-and-live-proof", "classification": "required", "role": "test", "reason": "srcchk-2 tests srcchk-1 independently."},
+  {"stage": "documentation-and-capture", "classification": "required", "role": "docs", "reason": "srcchk-3 updates the Claim labels text and the hook concept."},
+  {"stage": "read-only-gather", "classification": "not-applicable", "role": "read", "reason": "The leader read the Stop hook; no gather needed."},
+  {"stage": "fact-extraction", "classification": "not-applicable", "role": "extraction", "reason": "No narrow fact lookup is needed."},
+  {"stage": "generation-fallback", "classification": "not-applicable", "role": "generation", "reason": "Every job here has a specific role."},
+  {"stage": "independent-review", "classification": "not-applicable", "role": "review", "reason": "Independent review stays user-invoked and was not requested."},
+  {"stage": "generic-advisor", "classification": "not-applicable", "role": "advisor", "reason": "Decisions locked from the owner ask; no consult owed."},
+  {"stage": "supervision", "classification": "not-applicable", "role": "supervisor", "reason": "No unattended loop runs here."},
+  {"stage": "blind-lane-1", "classification": "not-applicable", "role": "lane-1", "reason": "The check shape is fixed by D1 and D2."},
+  {"stage": "blind-lane-2", "classification": "not-applicable", "role": "lane-2", "reason": "The check shape is fixed by D1 and D2."},
+  {"stage": "blind-lane-3", "classification": "not-applicable", "role": "lane-3", "reason": "The check shape is fixed by D1 and D2."},
+  {"stage": "design-ui", "classification": "not-applicable", "role": "design", "reason": "No rendered UI."},
+  {"stage": "hat-facts-gaps", "classification": "not-applicable", "role": "hat-facts-gaps", "reason": "Small lane, shape fixed by the owner ask; hat wave skipped."},
+  {"stage": "hat-risks", "classification": "not-applicable", "role": "hat-risks", "reason": "Small lane, shape fixed by the owner ask; hat wave skipped."},
+  {"stage": "hat-value", "classification": "not-applicable", "role": "hat-value", "reason": "Small lane, shape fixed by the owner ask; hat wave skipped."},
+  {"stage": "hat-alternatives", "classification": "not-applicable", "role": "hat-alternatives", "reason": "Small lane, shape fixed by the owner ask; hat wave skipped."},
+  {"stage": "hat-user-impact", "classification": "not-applicable", "role": "hat-user-impact", "reason": "Small lane, shape fixed by the owner ask; hat wave skipped."},
+  {"stage": "writing", "classification": "not-applicable", "role": "writer", "reason": "Doctrine text rides srcchk-3 under the docs role."}
+ ]
+}
+```
+
+## Cells — current slice (preview)
+
+```json
+[
+  {
+    "id": "srcchk-1",
+    "feature": "citation-source-check",
+    "title": "Check each cited source against disk and the session commands",
+    "lane": "small",
+    "role": "code",
+    "deps": [],
+    "decisions": ["D1", "70692733-4e2a-4d1c-a585-2d0077941503", "D2", "b74990d9-f9a0-4635-b920-35200a175ef9"],
+    "files": [
+      "packages/bee-rs/crates/bee/src/hooks/session_close/citations.rs",
+      "packages/bee-rs/crates/bee/src/hooks/session_close/claims.rs",
+      "packages/bee-rs/crates/bee/src/hooks/session_close/mod.rs",
+      "packages/bee-rs/crates/bee/src/hooks/session_close/tests.rs",
+      "docs/knowledge/areas/hook-runtime/overview.md"
+    ],
+    "read_first": [
+      "docs/history/citation-source-check/CONTEXT.md",
+      "packages/bee-rs/crates/bee/src/hooks/session_close/claims.rs",
+      "packages/bee-rs/crates/bee/src/hooks/session_close/mod.rs"
+    ],
+    "action": "D1 and D2. Add a new module session_close/citations.rs with pub(crate) fn citation_source_warning(root: &Path, events: &[Value]) -> Option<String>. Parse the last-turn assistant text (reuse claims::last_turn_assistant_text and the Sources heading and leading-number parse already in claims.rs; make those helpers pub(crate), do not copy them). For each Sources line [n] <rest>: (a) skip it when rest holds http:// or https://; (b) find a path token: a whitespace-separated word, backticks and trailing ,.;) stripped, that contains '/' or a file extension, optionally ending :N or :N-M; resolve it against root (absolute paths as is). Missing file fails 'file not found'; a line number past the file's line count fails 'line N past end (file has L lines)'. Tokens: backticked spans of 3+ characters from the rest of the source line and from every reply line that holds the inline [n], minus the path itself. With tokens, at least one must appear case-insensitive in the file lines from start-20 to end+20 (whole file with no line number), else fail 'text not found near line N: <first token>'. (c) with no path and no URL, the line is a command source when it holds a backticked span or the form '<command> — <result>'; the command is the backticked span or the text before ' — '. Collect every shell command run in the whole events list: Claude assistant tool_use blocks whose input.command is a string, Codex response_item function_call arguments (JSON string, read cmd or command, string or array joined by spaces). The source fails 'command not run' when no collected command contains the cited first word and, when the cited command has more words, at least one other cited word. Anything else is skipped. Return one line: 'bee: N cited source(s) did not check out — rule agents-verify-before-agreeing: ' then up to three '[n] <source>: <reason>' joined by '; ', no newline. Reading a file that fails to open counts as file not found; never panic. In mod.rs add the result to claims_warning beside unverified_agreement_warning and routed_reply_warnings, Stop only, never a block. Add unit tests in tests.rs with a tempdir root for: a real path:line with a matching backticked token (quiet), a missing file, a line past the end, a token absent near the line, a URL source (quiet), a command source run in the transcript (quiet), a command source never run. Sync the B2 paragraph of docs/knowledge/areas/hook-runtime/overview.md: add one sentence group on the source check citing citation-source-check D1 and D2 (cite D-numbers, never decision ids). No code comments. One commit. Bee commands you may run: bee knowledge check. Run no dispatch verb, not even its help.",
+    "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- session_close",
+    "must_haves": {
+      "truths": [
+        "a Sources line naming a missing file produces the source warning",
+        "a Sources line whose line number is past the end of the file produces the source warning",
+        "a backticked token absent within 20 lines of the cited line produces the source warning",
+        "a cited command never run in the transcript produces the source warning",
+        "a correct path:line source with its token near the line and a command run in the session stay quiet",
+        "the source warning never blocks the Stop"
+      ],
+      "artifacts": [
+        {"path": "packages/bee-rs/crates/bee/src/hooks/session_close/citations.rs", "substantive": "citation_source_warning"}
+      ],
+      "key_links": [
+        "mod.rs adds the source warning to the Stop claims warnings"
+      ],
+      "prohibitions": [
+        "No code comments",
+        "No block or exit-code change in the Stop hook",
+        "No new config key"
+      ]
+    },
+    "affects_skills": [],
+    "affects_specs": ["docs/knowledge/areas/hook-runtime/overview.md"]
+  },
+  {
+    "id": "srcchk-2",
+    "feature": "citation-source-check",
+    "title": "Prove the cited-source check on fixtures",
+    "lane": "small",
+    "role": "test",
+    "deps": ["srcchk-1"],
+    "decisions": ["D1", "70692733-4e2a-4d1c-a585-2d0077941503", "D2", "b74990d9-f9a0-4635-b920-35200a175ef9"],
+    "files": [
+      "packages/bee-rs/crates/bee/src/hooks/session_close/tests.rs"
+    ],
+    "read_first": [
+      "docs/history/citation-source-check/CONTEXT.md",
+      "packages/bee-rs/crates/bee/src/hooks/session_close/citations.rs"
+    ],
+    "action": "Test only, no product code. Read the srcchk-1 commit. Add tests that drive citation_source_warning on Claude-shaped and Codex-shaped transcripts with a tempdir root. Cover cases srcchk-1 did not: a path:a-b range with the token inside the range (quiet); the token only in the reply line carrying the inline [n], not on the source line (quiet when near, warns when far); a path with no line number and a token present anywhere (quiet); the doctrine form '[2] cargo test route_rejects_unknown_lane — 1 passed' with a transcript command 'PATH=x cargo test --release -- route_rejects_unknown_lane' (quiet); a Codex function_call command run (quiet); a reply with four failed sources lists only three; a Sources line with plain prose and no path, URL, backticks or ' — ' (quiet); a reply with no Sources block (quiet). Show each new test red against a mutation of the srcchk-1 check, then restore it. A red against the product is a finding returned as blocked. Bee commands you may run: none beyond the verify. Run no dispatch verb, not even its help.",
+    "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- session_close",
+    "must_haves": {
+      "truths": [
+        "a test fails if a correct cited range warns",
+        "a test fails if the short doctrine command form warns when its command ran",
+        "a test fails if more than three failed sources are listed"
+      ],
+      "artifacts": [],
+      "key_links": [],
+      "prohibitions": [
+        "No code comments",
+        "No product code edits"
+      ]
+    },
+    "affects_skills": [],
+    "affects_specs": []
+  },
+  {
+    "id": "srcchk-3",
+    "feature": "citation-source-check",
+    "title": "Say in Claim labels what the source check reads",
+    "lane": "small",
+    "role": "docs",
+    "deps": [],
+    "decisions": ["D1", "70692733-4e2a-4d1c-a585-2d0077941503", "D2", "b74990d9-f9a0-4635-b920-35200a175ef9"],
+    "files": [
+      "skills/bee-hive/references/routing-and-contracts.md",
+      ".claude-plugin/skills/bee-hive/",
+      ".codex-plugin/skills/bee-hive/",
+      ".claude/skills/bee-hive/",
+      ".agents/skills/bee-hive/",
+      ".opencode/skills/bee-hive/",
+      "docs/history/codex-harness-hardening/release-manifest.json",
+      ".bee/onboarding.json"
+    ],
+    "read_first": [
+      "docs/history/citation-source-check/CONTEXT.md",
+      "skills/bee-hive/references/routing-and-contracts.md"
+    ],
+    "action": "D1 and D2. In skills/bee-hive/references/routing-and-contracts.md, section Claim labels and pushback, after the two claim-label example blocks, add one short paragraph: the Stop hook opens each path:line source and warns when the file is missing, the line is past the end, or no backticked token of the claim or source line appears within 20 lines of it; it warns when a cited command was never run in the session. So put the identifier the claim is about in backticks, and cite the command you ran. Keep the examples and the Pushback text unchanged. Run bee dev regen to re-render the skill trees, then restore .claude/skills hub-served skills other than bee-hive if regen touched them. One commit. Bee commands you may run: bee dev regen, bee dev release-manifest --check, bee onboard --repo-root . --json, bee knowledge check. Run no dispatch verb, not even its help.",
+    "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test pointer_integrity && .bee/bin/bee dev release-manifest --check",
+    "must_haves": {
+      "truths": [
+        "the Claim labels section says the Stop hook checks each source file, line and backticked token, and each cited command",
+        "the Pushback text is unchanged"
+      ],
+      "artifacts": [
+        {"path": "skills/bee-hive/references/routing-and-contracts.md", "substantive": "source check paragraph"}
+      ],
+      "key_links": [],
+      "prohibitions": [
+        "No code edits",
+        "No change to LEADER.md"
+      ]
+    },
+    "affects_skills": ["skills/bee-hive/references/routing-and-contracts.md"],
+    "affects_specs": []
+  }
+]
+```
