@@ -2763,3 +2763,64 @@ so the next session can resume cleanly, or record a capture stub for what settle
         let warning = citation_source_warning(fx.path(), &events).expect("warns");
         assert!(warning.contains("[1] cargo test --release: command not run"), "{warning}");
     }
+
+    #[test]
+    fn citation_source_backticked_command_starting_with_path_run_is_quiet() {
+        let fx = tempfile::tempdir().unwrap();
+        let events = vec![
+            user_message(Shape::Claude, "list cells"),
+            shell_call(Shape::Claude, "t1", ".bee/bin/bee cells list"),
+            call_output(Shape::Claude, "t1", "3 open"),
+            assistant_reply(
+                Shape::Claude,
+                "There are 3 open cells [1].\n\nSources:\n[1] `.bee/bin/bee cells list` — 3 open",
+            ),
+        ];
+        assert_eq!(citation_source_warning(fx.path(), &events), None);
+    }
+
+    #[test]
+    fn citation_source_backticked_command_starting_with_path_never_run_warns() {
+        let fx = tempfile::tempdir().unwrap();
+        let events = vec![
+            user_message(Shape::Claude, "list cells"),
+            shell_call(Shape::Claude, "t1", "git status"),
+            call_output(Shape::Claude, "t1", "clean"),
+            assistant_reply(
+                Shape::Claude,
+                "There are 3 open cells [1].\n\nSources:\n[1] `.bee/bin/bee cells list` — 3 open",
+            ),
+        ];
+        let warning = citation_source_warning(fx.path(), &events).expect("warns");
+        assert!(warning.contains("[1] .bee/bin/bee cells list: command not run"), "{warning}");
+    }
+
+    #[test]
+    fn citation_source_path_only_in_later_word_is_command_source() {
+        let fx = tempfile::tempdir().unwrap();
+        let events = vec![
+            user_message(Shape::Claude, "run tests"),
+            shell_call(Shape::Claude, "t1", "cargo test --manifest-path packages/x/Cargo.toml"),
+            call_output(Shape::Claude, "t1", "ok"),
+            assistant_reply(
+                Shape::Claude,
+                "Tests pass [1].\n\nSources:\n[1] cargo test --manifest-path packages/x/Cargo.toml — ok, ran",
+            ),
+        ];
+        assert_eq!(citation_source_warning(fx.path(), &events), None);
+
+        let never_run_events = vec![
+            user_message(Shape::Claude, "run tests"),
+            shell_call(Shape::Claude, "t1", "git status"),
+            call_output(Shape::Claude, "t1", "clean"),
+            assistant_reply(
+                Shape::Claude,
+                "Tests pass [1].\n\nSources:\n[1] cargo test --manifest-path packages/x/Cargo.toml — ok, ran",
+            ),
+        ];
+        let warning = citation_source_warning(fx.path(), &never_run_events).expect("warns");
+        assert!(
+            warning.contains("[1] cargo test --manifest-path packages/x/Cargo.toml: command not run"),
+            "{warning}"
+        );
+    }

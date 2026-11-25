@@ -77,22 +77,27 @@ struct PathToken {
 }
 
 fn find_path_token(rest: &str) -> Option<PathToken> {
-    for word in rest.split_whitespace() {
-        let cleaned = word
-            .trim_matches('`')
-            .trim_end_matches([',', '.', ';', ')'])
-            .trim_matches('`');
-        if cleaned.is_empty() {
-            continue;
-        }
-        let (path_part, range) = split_line_range(cleaned);
-        if looks_like_path(path_part) {
-            return Some(PathToken {
-                label: cleaned.to_string(),
-                path: path_part.to_string(),
-                range,
-            });
-        }
+    if let Some(after) = rest.strip_prefix('`')
+        && let Some(end) = after.find('`')
+        && after[..end].chars().any(char::is_whitespace)
+    {
+        return None;
+    }
+    let word = rest.split_whitespace().next()?;
+    let cleaned = word
+        .trim_matches('`')
+        .trim_end_matches([',', '.', ';', ')'])
+        .trim_matches('`');
+    if cleaned.is_empty() {
+        return None;
+    }
+    let (path_part, range) = split_line_range(cleaned);
+    if looks_like_path(path_part) {
+        return Some(PathToken {
+            label: cleaned.to_string(),
+            path: path_part.to_string(),
+            range,
+        });
     }
     None
 }
