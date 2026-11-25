@@ -414,6 +414,48 @@ is a named list read off a live agy run, with a fail-safe for unknown tools.
   "affects_specs": [],
   "tester_rule": true,
   "judge_obligation_ack": "Checker for agyrt-4 and agyrt-7."
+ },
+ {
+  "id": "agyrt-8",
+  "feature": "agy-runtime",
+  "title": "Test the agy belt inside a herded worker pane",
+  "lane": "standard",
+  "role": "test",
+  "deps": [
+   "agyrt-2"
+  ],
+  "decisions": [
+   "fa33ba78-d185-4266-8202-1bc155607ec6",
+   "47232f09-4274-4c05-87f2-665846ae4786"
+  ],
+  "files": [
+   "packages/bee-rs/crates/bee/tests/agy_belt_contracts.rs"
+  ],
+  "read_first": [
+   "docs/history/agy-runtime/CONTEXT.md",
+   "docs/history/agy-runtime/discovery.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "The agyrt-2 judge found that with BEE_HERDING_WORKER=1 set, bee hook agy-belt exited 0 with empty stdout before the belt ran, so an agy herding worker got no PreToolUse answer and no write guard. Without reading the implementer notes, add integration tests in tests/agy_belt_contracts.rs, using the harness that file already has, that run the built bee binary with BEE_HERDING_WORKER=1 in the child env and assert: a PreToolUse list_dir prints exactly one JSON object with decision ask; a PreToolUse write_file to a path the write guard refuses in a herded pane prints decision deny; a PreToolUse invoke_subagent prints decision deny; SessionStart and Stop each print exactly one JSON object and exit 0. See each new test fail on purpose once (break an assertion) before trusting it. A tester never edits product code: on a defect return BLOCKED with the red output. No code comments.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test agy_belt_contracts",
+  "must_haves": {
+   "why": "A code cell never certifies itself, and the herded pane is the path agy workers run on.",
+   "out_of_scope": [
+    "docs"
+   ],
+   "truths": [
+    "a test fails if agy-belt under BEE_HERDING_WORKER prints empty output on PreToolUse",
+    "a test fails if a refused agy write under BEE_HERDING_WORKER is not denied"
+   ],
+   "prohibitions": [
+    "No code comments",
+    "No product code edits"
+   ]
+  },
+  "behavior_change": false,
+  "tester_rule": true,
+  "judge_obligation_ack": "Tester for the agyrt-2 herded-marker fix."
  }
 ]
 ```
@@ -423,6 +465,9 @@ is a named list read off a live agy run, with a fail-safe for unknown tools.
 - agyrt-5 integration tests, green.
 - agyrt-7 corrects the three lines the first agyrt-6 pass found wrong.
 - agyrt-6 checks the agyrt-4 and agyrt-7 docs against the shipped code.
+- agyrt-2 reopened by its judge: under BEE_HERDING_WORKER the hook entry
+  returned before the belt ran. The fix exempts agy-belt from the marker
+  exit; its child hooks keep their own marker rules. agyrt-8 tests it.
 - `bee test` (full declared suite) once before `bee worktree merge`.
 - Live: after merge, `bee onboard --apply` in a scratch repo, then a real
   `agy -p` run there: a write to a refused path is denied by the belt and a

@@ -80,6 +80,8 @@ On `PreToolUse` and `PostToolUse`, `agy-belt` maps `toolCall.name` and `toolCall
 
 ## `invoke_subagent` Denial and Herding-Only Dispatch
 
+Under `BEE_HERDING_WORKER`, `bee hook agy-belt` still runs and prints one JSON answer per event (agy-runtime D9). The child hooks it starts inherit the marker, so in a herded pane only `activity`, `worker-guard` and `write-guard` act; the others exit 0 with no output.
+
 Dispatch on `agy` is herding-only, matching the Pi rule. `bee dispatch prepare --runtime agy` reads `team.agy`, and any native, model, cli, or budget slot refuses with the herding remedy. Because a subagent spawned via `agy`'s `invoke_subagent` would bypass the herding door, `agy-belt` denies `invoke_subagent` on `PreToolUse` with a reason naming `bee dispatch prepare --runtime agy`.
 
 ## Session Identity (`ANTIGRAVITY_CONVERSATION_ID`)
