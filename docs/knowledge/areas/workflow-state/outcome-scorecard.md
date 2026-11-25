@@ -13,7 +13,7 @@ bee:
   authoritative_for: "workflow-state: per-feature outcome scorecard metrics, sources, and missing-data rules"
   anchors: [packages/bee-rs/crates/bee/src/verbs/report_outcomes.rs, packages/bee-rs/crates/bee/src/herding/run.rs, packages/bee-rs/crates/bee/src/verbs/drivers/close.rs, packages/bee-rs/crates/bee/src/audit.rs]
   verified_at: 2026-11-25
-  verified_commit: f75c1c76556b610f03ae2100dfbf750d56b0c0b9
+  verified_commit: 9729d9879406757099df32ece356a4c21eb4239a
 ---
 
 # Workflow State — the per-feature outcome scorecard (`bee report outcomes --by-feature`)

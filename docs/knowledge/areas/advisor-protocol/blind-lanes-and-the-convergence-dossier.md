@@ -12,11 +12,13 @@ bee:
   sources: ["docs/history/slp-blind-lanes/CONTEXT.md (locked decisions D1-D7, terms, boundary)", "docs/history/slp-blind-lanes/plan.md (the slice queue 1a, 1b, 2, 3, 4, 5)", "slp-blind-lanes cell bln-1 (the brief carried into the advisor payload and its stamped digest; trace .bee/cells/archive/slp-blind-lanes/bln-1.json, commit 2f1d57ae)", "slp-blind-lanes cell bln-2 (the leaning guard refusing at the dispatch door; trace .bee/cells/archive/slp-blind-lanes/bln-2.json, commit 5f16ef6f)", "slp-blind-lanes cell bln-3 (the dossier's fixed section contract, refusing by section name; trace .bee/cells/archive/slp-blind-lanes/bln-3.json, commit 5678b2f8)", "slp-blind-lanes cell bln-4 (the three evidence checks: citation, brief digest, read diet; trace .bee/cells/archive/slp-blind-lanes/bln-4.json, commit c47fd241)", "slp-blind-lanes cells bln-5, bln-6, bln-7 (three judge rounds over the sentence-boundary rule: the abbreviation dot, the enumerator dot, the curly-quote panic; traces in .bee/cells/, commits 6eaf4955, 417fff74, a5ad7864)", "docs/history/slp-blind-lanes/blind/example-run.md (the worked dossier shape, pinned green by the door's own test)", docs/knowledge/patterns/20260812-a-guard-and-its-tests-are-one-model-so-green-proves-only-that-the-model-agrees-with-itself.md]
   authoritative_for: "advisor-protocol: blind lanes and the convergence dossier"
   anchors: [skills/bee-hive/references/gates-and-delegation.md, packages/bee-rs/crates/bee/src/verbs/blind/mod.rs, packages/bee-rs/crates/bee/src/verbs/drivers/brief_lint.rs, packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs, packages/bee/prompts/advisor.md, skills/bee-shaping/SKILL.md]
-  verified_at: 2026-11-10
-  verified_commit: 2f0495d24e30048da79fa3d5dcc287605cf6869c
+  verified_at: 2026-11-25
+  verified_commit: 9729d9879406757099df32ece356a4c21eb4239a
 ---
 
 # Advisor Protocol — Blind Lanes and the Convergence Dossier
+
+Read when: opening blind lanes on one hard decision, writing a lane brief that the leaning guard refuses, or running `bee blind check --dossier` on a convergence dossier.
 
 A blind lane is one isolated advisor consult that designs an answer to a
 single hard question without seeing a sibling lane's work or the
@@ -122,9 +124,13 @@ against whatever it happened to say.
   resolves them, and closing that gap is unbuilt work, not a hidden defect.
 - **The framing limit is open work, not a defect to hide:** a citation whose
   preceding sentence negates or forward-references it resolves and passes. The
-  acceptance for closing it is recorded as a backlog item.
-- **Still deferred, not pending:** heterogeneous lane models, which break the
-  one-name advisor slot (decision `4faf1de9`).
+  acceptance for closing it is recorded as a backlog item, now parked.
+- **Each lane has its own model seat.** Lanes no longer share the one advisor
+  slot: `--role lane-1`, `lane-2` and `lane-3` are ordinary `team.<runtime>`
+  roles, so each lane can run a different model. A lane seat with no slot
+  falls through to `advisor` (`SEAT_ROLES` in
+  `packages/bee-rs/crates/bee/src/verbs/drivers/models.rs`; the procedure home
+  names the rule).
 
 ## Pointers (implementation)
 
@@ -138,17 +144,17 @@ against whatever it happened to say.
   prompt's brief block is `packages/bee/prompts/advisor.md`.
 - The worked dossier shape, pinned green by the door's own test:
   `docs/history/slp-blind-lanes/blind/example-run.md`.
-- The open framing limit: backlog item `p-e09a0b7e`.
+- The open framing limit: backlog item `p-e09a0b7e` (parked).
 - The procedure — when lanes open, the four moves, the rule that convergence
   runs the checker green before it logs, and the three named limits — has ONE
   home: `skills/bee-hive/references/gates-and-delegation.md` ("Blind lanes and
   convergence"). This concept describes what shipped; it never restates that
   procedure.
 - A second, sibling plan-step consult now lives beside blind lanes at that
-  same home: the **hat wave** — five fixed-perspective advisor dispatches at
-  the plan step, prompt-carried perspective, blue hat = orchestrator, the
-  human at Lock is the checker. Shipped as a docs-only procedure (no new
-  code); its home is the same file, section "Hat wave"
+  same home: the **hat wave** — five fixed-perspective advisor dispatches, one
+  per hat seat role. Its default window is the plan step, where the wave
+  builds the implementation plan; a discretionary pre-Lock window critiques a
+  drafted big spec. Its home is the same file, section "Hat wave"
   (`skills/bee-hive/references/gates-and-delegation.md`). The foreign-origin
   spec-drop intake (corr-id as PBI id, provenance in CoS, proposed-until-shaped)
   is documented separately, in `skills/bee-shaping/SKILL.md` ("Qualify").

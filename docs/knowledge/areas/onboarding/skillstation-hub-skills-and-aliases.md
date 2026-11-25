@@ -8,12 +8,12 @@ bee:
   lifecycle: active
   areas: [onboarding]
   required_context: [areas/onboarding/overview.md]
-  decisions: ["skillstation-aliases D1-D9 (a bee skillstation verb group checks the hub skills bee relies on and writes a small alias skill so /<id> works; CONTEXT.md)", "skillstation-onboard-aliases D1-D7 (install and onboard write the aliases by default; the hub changes only behind --skillstation; CONTEXT.md)", "skillstation-principles D1-D5, D8-D10, D12-D14 (skillstation.principles hub serves the bee-principle skills to Claude Code; CONTEXT.md)", "skillstation-human-skills D1-D5 (five human-started bee skills join the hub-served set and get /<id> aliases; CONTEXT.md)", "skillstation-more-skills D1-D3 (nine more engine skills join the set; an alias keeps disable-model-invocation; bee-deploying publishes once; CONTEXT.md)"]
-  sources: ["skillstation-aliases cell ssa-1 (2026-11-14; the verb group)", "skillstation-aliases cell ssa-2 (2026-11-14; this concept and the README section)", "skillstation-onboard-aliases cells sooa-1 and sooa-2 (2026-11-14; onboard and install write the aliases)", "skillstation-principles cells ssp-1 to ssp-3, ssp-6, ssp-7, ssp-9 (2026-11-14; hub-served principles)"]
+  decisions: [skillstation-aliases D1-D9 (a bee skillstation verb group checks the hub skills bee relies on and writes a small alias skill so /<id> works; CONTEXT.md), skillstation-onboard-aliases D1-D7 (install and onboard write the aliases by default; the hub changes only behind --skillstation; CONTEXT.md), "skillstation-principles D1-D5, D8-D10, D12-D14 (skillstation.principles hub serves the bee-principle skills to Claude Code; CONTEXT.md)", skillstation-human-skills D1-D5 (five human-started bee skills join the hub-served set and get /<id> aliases; CONTEXT.md), skillstation-more-skills D1-D3 (nine more engine skills join the set; an alias keeps disable-model-invocation; bee-deploying publishes once; CONTEXT.md)]
+  sources: [skillstation-aliases cell ssa-1 (2026-11-14; the verb group), skillstation-aliases cell ssa-2 (2026-11-14; this concept and the README section), skillstation-onboard-aliases cells sooa-1 and sooa-2 (2026-11-14; onboard and install write the aliases), "skillstation-principles cells ssp-1 to ssp-3, ssp-6, ssp-7, ssp-9 (2026-11-14; hub-served principles)"]
   authoritative_for: "onboarding: the bee skillstation verb group"
   anchors: [packages/bee-rs/crates/bee/src/verbs/skillstation_group.rs, packages/bee-rs/crates/bee/src/principles.rs, packages/bee-rs/crates/bee/src/onboard/agents.rs, packages/bee-rs/crates/bee/src/onboard/apply.rs, packages/bee-rs/crates/bee/src/onboard/plan.rs, packages/bee-rs/crates/bee/src/onboard/skills.rs, scripts/install.sh]
-  verified_at: 2026-11-14
-  verified_commit: efc1408fed3c7be37d646ce975dedf8b0e84390e
+  verified_at: 2026-11-25
+  verified_commit: 9729d9879406757099df32ece356a4c21eb4239a
 ---
 
 # Onboarding — Skillstation Hub Skills and the /<id> Alias
@@ -44,8 +44,9 @@ because `bee onboard --skillstation` owns that one (skillstation-aliases D2).
 tells the agent to load the real skill from the hub with
 `skillstation skill show <id> --json` first (its `content` field when
 `manifest.status` is `active`) and to call the MCP `skill_get` tool as the
-fallback for relative files, non-active status, a remote hub, or a CLI failure
-(cli-before-mcp D3, D4). The hub stays the only copy (skillstation-aliases D5).
+fallback when the content sends it to a relative file of the skill, when the
+status is not active, or when the CLI is missing or fails; when neither works,
+it tells the user to run `skillstation connect -g` (cli-before-mcp D3, D4). The hub stays the only copy (skillstation-aliases D5).
 `install --apply` aliases the listed skills that agents may not trigger
 themselves; `alias <id>` aliases any active hub skill (skillstation-aliases
 D4).
@@ -184,8 +185,9 @@ cannot change their result (skillstation-onboard-aliases D6).
   request that cannot work must say so (skillstation-aliases D7).
 - Claude Code only. Codex, opencode and the plugin trees keep their local
   copies (skillstation-aliases D8, skillstation-principles D1).
-- The alias body relies on the host having the skillstation MCP server; when the
-  tool is missing the alias tells the user to run `skillstation connect -g`.
+- The alias body needs the `skillstation` CLI or the skillstation MCP server on
+  the host; when neither works, it tells the user to run
+  `skillstation connect -g`.
 - The `--skillstation` switch renders the Claude agent files in hub mode at plan
   time, because the plan reads config before `set_principles_hub` has written it.
   Those `sync_agent_file` items are `after_publish` and sort behind
