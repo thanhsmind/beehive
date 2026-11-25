@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "verify-map-upkeep-3",
   "mode": "small",
-  "phase": "exploring",
+  "phase": "idle",
   "approved_gates": {
     "context": false,
     "shape": true,
@@ -11,9 +11,9 @@
     "uat": false
   },
   "summary": "Feature \"verify-map-upkeep-3\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at d87e7a3; capture what settled, then bee close --feature verify-map-upkeep-3, then write the handoff and continue in a fresh leader session (one leader session per feature).",
+  "next_action": "bee close finished \"verify-map-upkeep-3\" — feature is closed.",
   "created_at": "2026-11-25T15:57:41.836Z",
-  "run_state": null,
+  "run_state": "awaiting-approval",
   "waiting_on": null,
   "route": {
     "class": "docs",
