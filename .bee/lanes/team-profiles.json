@@ -1,0 +1,646 @@
+{
+  "schema_version": "1.0",
+  "feature": "team-profiles",
+  "mode": null,
+  "phase": "exploring",
+  "approved_gates": {
+    "context": true,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"team-profiles\" started at phase \"exploring\" (lane).",
+  "next_action": "Continue bee-exploring for \"team-profiles\" (lane).",
+  "created_at": "2026-11-25T15:48:31.998Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null,
+  "route": {
+    "class": "feature",
+    "lane": "standard",
+    "flags": [
+      "public-contracts"
+    ],
+    "product_files": 6,
+    "rationale": "two new team verbs plus profile data",
+    "updated_at": "2026-11-25T15:52:10.394Z",
+    "feature": "team-profiles"
+  },
+  "gate_preview": {
+    "feature": "team-profiles",
+    "plan_sha256": "2213b5a98811e89db4a042b46f3e10399b1f27f6c1330c1ef5c25ad4fdf33592",
+    "previewed_at": "2026-11-25T15:53:03.460Z",
+    "cells": [
+      {
+        "id": "tp-1",
+        "feature": "team-profiles",
+        "title": "Ship team profiles and the team profiles and team use verbs",
+        "lane": "standard",
+        "role": "code",
+        "deps": [],
+        "decisions": [
+          "d2b7654d-7738-473e-989b-e89f81f4137e"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/team_profiles/only-agy.json",
+          "packages/bee-rs/crates/bee/src/verbs/team_profiles.rs",
+          "packages/bee-rs/crates/bee/src/verbs/models_group.rs",
+          "packages/bee-rs/crates/bee/src/verbs/mod.rs",
+          "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+        ],
+        "read_first": [
+          "docs/history/team-profiles/CONTEXT.md",
+          "packages/bee-rs/crates/bee/src/config_layers.rs",
+          "packages/bee-rs/crates/bee/src/verbs/config.rs",
+          "packages/bee-rs/crates/bee/src/verbs/models_group.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Implement team-profiles D1-D7 code. (1) Create packages/bee-rs/crates/bee/src/team_profiles/only-agy.json: name only-agy, a one-sentence description (every role of every runtime runs on agy herding agents: hydrogen writes, carbon reads, neon tests, neon-high reviews and plans), then the team and herding keys copied value for value from .bee/tmp/team-profiles/seed-only-agy.json. (2) New module verbs/team_profiles.rs: a const table of (name, include_str!) profiles; a typed TeamProfile parsed once; pure functions plan_apply(target: &Map, profile) -> (new object, changed: bool) per D3, shadowed_roles(profile, higher layers) per D4, best_match(profile list, merged team) per D6; try_native serving exactly `team profiles [--json]` and `team use <profile> [--global] [--json]`, using the same g_prelude/emit helpers models_group uses. Project target is ctx.root/.bee/team.json; global target is crate::config_layers::global_config_dir() joined with config.json (create the folder). Before any read or write, `team use` refuses per D5 when one of CLAUDECODE, CLAUDE_CODE_SESSION_ID, BEE_SESSION_ID, PI_SESSION_ID, ANTIGRAVITY_CONVERSATION_ID, CODEX_THREAD_ID, BEE_HERDING_WORKER, PASEO_AGENT_ID is non-empty; put that check in a pure function over a lookup closure so a unit test can drive it. Run the model check the way verbs/config.rs model_refusal does on the merged before/after config and refuse on a new problem. Write with the same atomic JSON writer split-team uses. Refuse an unknown profile naming the legal list. (3) Wire try_native into verbs/mod.rs beside models_group. (4) In models_group.rs add the D6 `profile` field to build_table's result and the one text line to render; keep every existing field. (5) Add team.profiles and team.use entries to generated/registry_payload.json in the same style as team.show (descriptions say what the verb does; team.use says only the owner runs it). (6) Unit tests in team_profiles.rs, every test name starting with team_profile_: every shipped profile passes D1 checks; plan_apply replaces team, merges herding.agents and keeps other keys; a second plan_apply reports no change; the D5 check refuses for each env name and passes with none; shadowed_roles names a local-layer override; best_match reports 84/84 for only-agy applied. Fix any existing registry or verb-count test the new entries move. No code comments.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee team_ && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test registry_contracts --test registry_dispatch",
+        "must_haves": {
+          "why": "The owner applies the agy-only team with one command, per project or for every project.",
+          "out_of_scope": [
+            "owner-authored profiles on disk",
+            "changes to bee config set or the layer order",
+            "docs"
+          ],
+          "truths": [
+            "bee team profiles lists only-agy with its description",
+            "bee team use only-agy writes team and herding.agents into .bee/team.json and keeps other keys",
+            "bee team use only-agy --global writes the user-global config.json",
+            "bee team use refuses inside an agent env and writes nothing",
+            "bee team show names the applied profile"
+          ],
+          "prohibitions": [
+            "No code comments",
+            "No hand edit of .bee/*.json(l) state files"
+          ]
+        },
+        "behavior_change": true
+      },
+      {
+        "id": "tp-2",
+        "feature": "team-profiles",
+        "title": "Test team profiles through the real binary",
+        "lane": "standard",
+        "role": "test",
+        "deps": [
+          "tp-1"
+        ],
+        "decisions": [
+          "d2b7654d-7738-473e-989b-e89f81f4137e"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/tests/team_profiles.rs"
+        ],
+        "read_first": [
+          "docs/history/team-profiles/CONTEXT.md",
+          "packages/bee-rs/crates/bee/tests/config_verbs.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Independent tester for tp-1. Without reading tp-1's unit tests first, write packages/bee-rs/crates/bee/tests/team_profiles.rs that runs the built bee binary (copy the harness pattern of tests/config_verbs.rs: a temp onboarded repo, env_clear or env_remove of every D5 agent variable, BEEHIVE_CONFIG_DIR set to a temp folder). Cover: team profiles --json lists only-agy; team use only-agy writes .bee/team.json with the profile team and herding.agents and keeps a pre-existing unrelated herding.agents entry; a second run reports no change and leaves the file bytes equal; team use only-agy --global writes BEEHIVE_CONFIG_DIR/config.json, keeps a pre-existing ship_visibility key there, and names roles the project config shadows; team use with CLAUDE_CODE_SESSION_ID set exits non-zero, prints refused, nothing changed, and leaves both files absent or unchanged; an unknown profile refuses naming only-agy; team show --json after a project apply carries profile.name only-agy with applied true. Report any behavior that disagrees with CONTEXT.md D1-D7 as a finding, never adapt the test to it. No code comments.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test team_profiles",
+        "must_haves": {
+          "why": "A code cell never certifies itself.",
+          "out_of_scope": [
+            "changing tp-1 source"
+          ],
+          "truths": [
+            "the integration tests drive project apply, global apply and the agent refusal through the real binary",
+            "the integration tests are green"
+          ],
+          "prohibitions": [
+            "No code comments"
+          ]
+        },
+        "behavior_change": false,
+        "tester_rule": true,
+        "judge_obligation_ack": "Tester for tp-1."
+      },
+      {
+        "id": "tp-3",
+        "feature": "team-profiles",
+        "title": "Document team profiles in the knowledge bundle",
+        "lane": "standard",
+        "role": "docs",
+        "deps": [],
+        "decisions": [
+          "d2b7654d-7738-473e-989b-e89f81f4137e"
+        ],
+        "files": [
+          "docs/knowledge/areas/onboarding/team-profiles.md",
+          "docs/knowledge/areas/onboarding/host-project-artifacts.md",
+          "docs/knowledge/areas/hook-runtime/the-agy-belt.md",
+          "docs/knowledge/areas/rust-runtime/command-surface.md"
+        ],
+        "read_first": [
+          "docs/history/team-profiles/CONTEXT.md",
+          "docs/knowledge/areas/hook-runtime/the-agy-belt.md",
+          "docs/knowledge/areas/onboarding/host-project-artifacts.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Write a new concept docs/knowledge/areas/onboarding/team-profiles.md in the same frontmatter and section shape as the sibling concepts in that area: what a team profile is, the only-agy profile and its role-to-agent map, bee team profiles, bee team use with and without --global and which file each writes, the shadow report, the owner-only refusal and why, and how bee team show names the applied profile; cite team-profiles D1-D7 by D-number. Add one short paragraph to host-project-artifacts.md (team.json can be written by bee team use) and to the-agy-belt.md (the only-agy profile puts every role on agy), and add the two verbs to command-surface.md where team show is listed. Run bee knowledge index if the area index needs the new concept and bee knowledge check on the touched files. No code comments.",
+        "verify": ".bee/bin/bee knowledge check",
+        "must_haves": {
+          "why": "Behavior that moves syncs its knowledge in the same change.",
+          "out_of_scope": [
+            "code"
+          ],
+          "truths": [
+            "a team-profiles concept explains bee team profiles and bee team use with --global",
+            "the agy-belt and host-project-artifacts concepts name the only-agy profile"
+          ],
+          "prohibitions": [
+            "No code comments"
+          ]
+        },
+        "behavior_change": false
+      },
+      {
+        "id": "tp-4",
+        "feature": "team-profiles",
+        "title": "Check the team profiles docs against the shipped verbs",
+        "lane": "standard",
+        "role": "test",
+        "deps": [
+          "tp-1",
+          "tp-3"
+        ],
+        "decisions": [
+          "d2b7654d-7738-473e-989b-e89f81f4137e"
+        ],
+        "files": [
+          "docs/history/team-profiles/reports/tp-4-docs-check.md"
+        ],
+        "read_first": [
+          "docs/history/team-profiles/CONTEXT.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Independent checker for tp-3. Read each concept tp-3 touched and check every statement about bee team profiles, bee team use, --global, the target files, the shadow report, the owner-only refusal and bee team show against the tp-1 source and a real run of the built binary in a scratch repo with the agent env cleared and BEEHIVE_CONFIG_DIR set to a scratch folder. Write docs/history/team-profiles/reports/tp-4-docs-check.md: one row per checked statement with file:line, the evidence and PASS or WRONG. Fix nothing; a WRONG row is a finding. No code comments.",
+        "verify": ".bee/bin/bee knowledge check",
+        "must_haves": {
+          "why": "A docs change gets an independent check against the code it describes.",
+          "out_of_scope": [
+            "editing docs or code"
+          ],
+          "truths": [
+            "every team profiles statement in the tp-3 concepts is checked against the shipped binary"
+          ],
+          "prohibitions": [
+            "No code comments"
+          ]
+        },
+        "behavior_change": false,
+        "tester_rule": true,
+        "judge_obligation_ack": "Checker for tp-3."
+      }
+    ],
+    "role_plan": {
+      "schema_version": "1.0",
+      "runtime": "claude",
+      "roster_sha256": "d4e696dbde7989d6388dacce3fd7057cb3a6935b46024b79698596a46f6f41d3",
+      "stages": [
+        {
+          "stage": "deployment",
+          "classification": "not-applicable",
+          "role": "deploy",
+          "reason": "Release is a separate owner call."
+        },
+        {
+          "stage": "planning",
+          "classification": "not-applicable",
+          "role": "plan",
+          "reason": "The leader wrote this plan from CONTEXT.md."
+        },
+        {
+          "stage": "implementation",
+          "classification": "required",
+          "role": "code",
+          "reason": "tp-1 writes the profile data and the two verbs."
+        },
+        {
+          "stage": "test-and-live-proof",
+          "classification": "required",
+          "role": "test",
+          "reason": "tp-2 tests tp-1 independently through the real binary."
+        },
+        {
+          "stage": "documentation-and-capture",
+          "classification": "required",
+          "role": "docs",
+          "reason": "tp-3 writes the team profiles knowledge."
+        },
+        {
+          "stage": "read-only-gather",
+          "classification": "not-applicable",
+          "role": "read",
+          "reason": "The leader read the config layer seams."
+        },
+        {
+          "stage": "fact-extraction",
+          "classification": "not-applicable",
+          "role": "extraction",
+          "reason": "No narrow fact lookup is needed."
+        },
+        {
+          "stage": "generation-fallback",
+          "classification": "not-applicable",
+          "role": "generation",
+          "reason": "Every job here has a specific role."
+        },
+        {
+          "stage": "independent-review",
+          "classification": "not-applicable",
+          "role": "review",
+          "reason": "Independent review stays user-invoked and was not requested."
+        },
+        {
+          "stage": "generic-advisor",
+          "classification": "not-applicable",
+          "role": "advisor",
+          "reason": "Decisions locked from the owner ask; no consult owed."
+        },
+        {
+          "stage": "supervision",
+          "classification": "not-applicable",
+          "role": "supervisor",
+          "reason": "No unattended loop runs here."
+        },
+        {
+          "stage": "blind-lane-1",
+          "classification": "not-applicable",
+          "role": "lane-1",
+          "reason": "The data shape is the existing team-layer shape; no blind design lanes."
+        },
+        {
+          "stage": "blind-lane-2",
+          "classification": "not-applicable",
+          "role": "lane-2",
+          "reason": "The data shape is the existing team-layer shape; no blind design lanes."
+        },
+        {
+          "stage": "blind-lane-3",
+          "classification": "not-applicable",
+          "role": "lane-3",
+          "reason": "The data shape is the existing team-layer shape; no blind design lanes."
+        },
+        {
+          "stage": "design-ui",
+          "classification": "not-applicable",
+          "role": "design",
+          "reason": "No rendered UI."
+        },
+        {
+          "stage": "hat-facts-gaps",
+          "classification": "not-applicable",
+          "role": "hat-facts-gaps",
+          "reason": "Shape fixed by the owner ask, the PBI text and the existing team-layer shape; hat wave skipped."
+        },
+        {
+          "stage": "hat-risks",
+          "classification": "not-applicable",
+          "role": "hat-risks",
+          "reason": "Shape fixed by the owner ask, the PBI text and the existing team-layer shape; hat wave skipped."
+        },
+        {
+          "stage": "hat-value",
+          "classification": "not-applicable",
+          "role": "hat-value",
+          "reason": "Shape fixed by the owner ask, the PBI text and the existing team-layer shape; hat wave skipped."
+        },
+        {
+          "stage": "hat-alternatives",
+          "classification": "not-applicable",
+          "role": "hat-alternatives",
+          "reason": "Shape fixed by the owner ask, the PBI text and the existing team-layer shape; hat wave skipped."
+        },
+        {
+          "stage": "hat-user-impact",
+          "classification": "not-applicable",
+          "role": "hat-user-impact",
+          "reason": "Shape fixed by the owner ask, the PBI text and the existing team-layer shape; hat wave skipped."
+        },
+        {
+          "stage": "writing",
+          "classification": "not-applicable",
+          "role": "writer",
+          "reason": "Reference text rides tp-3 under the docs role."
+        }
+      ]
+    }
+  },
+  "approved_cell_packet": {
+    "feature": "team-profiles",
+    "plan_sha256": "2213b5a98811e89db4a042b46f3e10399b1f27f6c1330c1ef5c25ad4fdf33592",
+    "previewed_at": "2026-11-25T15:53:03.460Z",
+    "cells": [
+      {
+        "id": "tp-1",
+        "feature": "team-profiles",
+        "title": "Ship team profiles and the team profiles and team use verbs",
+        "lane": "standard",
+        "role": "code",
+        "deps": [],
+        "decisions": [
+          "d2b7654d-7738-473e-989b-e89f81f4137e"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/team_profiles/only-agy.json",
+          "packages/bee-rs/crates/bee/src/verbs/team_profiles.rs",
+          "packages/bee-rs/crates/bee/src/verbs/models_group.rs",
+          "packages/bee-rs/crates/bee/src/verbs/mod.rs",
+          "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+        ],
+        "read_first": [
+          "docs/history/team-profiles/CONTEXT.md",
+          "packages/bee-rs/crates/bee/src/config_layers.rs",
+          "packages/bee-rs/crates/bee/src/verbs/config.rs",
+          "packages/bee-rs/crates/bee/src/verbs/models_group.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Implement team-profiles D1-D7 code. (1) Create packages/bee-rs/crates/bee/src/team_profiles/only-agy.json: name only-agy, a one-sentence description (every role of every runtime runs on agy herding agents: hydrogen writes, carbon reads, neon tests, neon-high reviews and plans), then the team and herding keys copied value for value from .bee/tmp/team-profiles/seed-only-agy.json. (2) New module verbs/team_profiles.rs: a const table of (name, include_str!) profiles; a typed TeamProfile parsed once; pure functions plan_apply(target: &Map, profile) -> (new object, changed: bool) per D3, shadowed_roles(profile, higher layers) per D4, best_match(profile list, merged team) per D6; try_native serving exactly `team profiles [--json]` and `team use <profile> [--global] [--json]`, using the same g_prelude/emit helpers models_group uses. Project target is ctx.root/.bee/team.json; global target is crate::config_layers::global_config_dir() joined with config.json (create the folder). Before any read or write, `team use` refuses per D5 when one of CLAUDECODE, CLAUDE_CODE_SESSION_ID, BEE_SESSION_ID, PI_SESSION_ID, ANTIGRAVITY_CONVERSATION_ID, CODEX_THREAD_ID, BEE_HERDING_WORKER, PASEO_AGENT_ID is non-empty; put that check in a pure function over a lookup closure so a unit test can drive it. Run the model check the way verbs/config.rs model_refusal does on the merged before/after config and refuse on a new problem. Write with the same atomic JSON writer split-team uses. Refuse an unknown profile naming the legal list. (3) Wire try_native into verbs/mod.rs beside models_group. (4) In models_group.rs add the D6 `profile` field to build_table's result and the one text line to render; keep every existing field. (5) Add team.profiles and team.use entries to generated/registry_payload.json in the same style as team.show (descriptions say what the verb does; team.use says only the owner runs it). (6) Unit tests in team_profiles.rs, every test name starting with team_profile_: every shipped profile passes D1 checks; plan_apply replaces team, merges herding.agents and keeps other keys; a second plan_apply reports no change; the D5 check refuses for each env name and passes with none; shadowed_roles names a local-layer override; best_match reports 84/84 for only-agy applied. Fix any existing registry or verb-count test the new entries move. No code comments.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee team_ && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test registry_contracts --test registry_dispatch",
+        "must_haves": {
+          "why": "The owner applies the agy-only team with one command, per project or for every project.",
+          "out_of_scope": [
+            "owner-authored profiles on disk",
+            "changes to bee config set or the layer order",
+            "docs"
+          ],
+          "truths": [
+            "bee team profiles lists only-agy with its description",
+            "bee team use only-agy writes team and herding.agents into .bee/team.json and keeps other keys",
+            "bee team use only-agy --global writes the user-global config.json",
+            "bee team use refuses inside an agent env and writes nothing",
+            "bee team show names the applied profile"
+          ],
+          "prohibitions": [
+            "No code comments",
+            "No hand edit of .bee/*.json(l) state files"
+          ]
+        },
+        "behavior_change": true
+      },
+      {
+        "id": "tp-2",
+        "feature": "team-profiles",
+        "title": "Test team profiles through the real binary",
+        "lane": "standard",
+        "role": "test",
+        "deps": [
+          "tp-1"
+        ],
+        "decisions": [
+          "d2b7654d-7738-473e-989b-e89f81f4137e"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/tests/team_profiles.rs"
+        ],
+        "read_first": [
+          "docs/history/team-profiles/CONTEXT.md",
+          "packages/bee-rs/crates/bee/tests/config_verbs.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Independent tester for tp-1. Without reading tp-1's unit tests first, write packages/bee-rs/crates/bee/tests/team_profiles.rs that runs the built bee binary (copy the harness pattern of tests/config_verbs.rs: a temp onboarded repo, env_clear or env_remove of every D5 agent variable, BEEHIVE_CONFIG_DIR set to a temp folder). Cover: team profiles --json lists only-agy; team use only-agy writes .bee/team.json with the profile team and herding.agents and keeps a pre-existing unrelated herding.agents entry; a second run reports no change and leaves the file bytes equal; team use only-agy --global writes BEEHIVE_CONFIG_DIR/config.json, keeps a pre-existing ship_visibility key there, and names roles the project config shadows; team use with CLAUDE_CODE_SESSION_ID set exits non-zero, prints refused, nothing changed, and leaves both files absent or unchanged; an unknown profile refuses naming only-agy; team show --json after a project apply carries profile.name only-agy with applied true. Report any behavior that disagrees with CONTEXT.md D1-D7 as a finding, never adapt the test to it. No code comments.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test team_profiles",
+        "must_haves": {
+          "why": "A code cell never certifies itself.",
+          "out_of_scope": [
+            "changing tp-1 source"
+          ],
+          "truths": [
+            "the integration tests drive project apply, global apply and the agent refusal through the real binary",
+            "the integration tests are green"
+          ],
+          "prohibitions": [
+            "No code comments"
+          ]
+        },
+        "behavior_change": false,
+        "tester_rule": true,
+        "judge_obligation_ack": "Tester for tp-1."
+      },
+      {
+        "id": "tp-3",
+        "feature": "team-profiles",
+        "title": "Document team profiles in the knowledge bundle",
+        "lane": "standard",
+        "role": "docs",
+        "deps": [],
+        "decisions": [
+          "d2b7654d-7738-473e-989b-e89f81f4137e"
+        ],
+        "files": [
+          "docs/knowledge/areas/onboarding/team-profiles.md",
+          "docs/knowledge/areas/onboarding/host-project-artifacts.md",
+          "docs/knowledge/areas/hook-runtime/the-agy-belt.md",
+          "docs/knowledge/areas/rust-runtime/command-surface.md"
+        ],
+        "read_first": [
+          "docs/history/team-profiles/CONTEXT.md",
+          "docs/knowledge/areas/hook-runtime/the-agy-belt.md",
+          "docs/knowledge/areas/onboarding/host-project-artifacts.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Write a new concept docs/knowledge/areas/onboarding/team-profiles.md in the same frontmatter and section shape as the sibling concepts in that area: what a team profile is, the only-agy profile and its role-to-agent map, bee team profiles, bee team use with and without --global and which file each writes, the shadow report, the owner-only refusal and why, and how bee team show names the applied profile; cite team-profiles D1-D7 by D-number. Add one short paragraph to host-project-artifacts.md (team.json can be written by bee team use) and to the-agy-belt.md (the only-agy profile puts every role on agy), and add the two verbs to command-surface.md where team show is listed. Run bee knowledge index if the area index needs the new concept and bee knowledge check on the touched files. No code comments.",
+        "verify": ".bee/bin/bee knowledge check",
+        "must_haves": {
+          "why": "Behavior that moves syncs its knowledge in the same change.",
+          "out_of_scope": [
+            "code"
+          ],
+          "truths": [
+            "a team-profiles concept explains bee team profiles and bee team use with --global",
+            "the agy-belt and host-project-artifacts concepts name the only-agy profile"
+          ],
+          "prohibitions": [
+            "No code comments"
+          ]
+        },
+        "behavior_change": false
+      },
+      {
+        "id": "tp-4",
+        "feature": "team-profiles",
+        "title": "Check the team profiles docs against the shipped verbs",
+        "lane": "standard",
+        "role": "test",
+        "deps": [
+          "tp-1",
+          "tp-3"
+        ],
+        "decisions": [
+          "d2b7654d-7738-473e-989b-e89f81f4137e"
+        ],
+        "files": [
+          "docs/history/team-profiles/reports/tp-4-docs-check.md"
+        ],
+        "read_first": [
+          "docs/history/team-profiles/CONTEXT.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Independent checker for tp-3. Read each concept tp-3 touched and check every statement about bee team profiles, bee team use, --global, the target files, the shadow report, the owner-only refusal and bee team show against the tp-1 source and a real run of the built binary in a scratch repo with the agent env cleared and BEEHIVE_CONFIG_DIR set to a scratch folder. Write docs/history/team-profiles/reports/tp-4-docs-check.md: one row per checked statement with file:line, the evidence and PASS or WRONG. Fix nothing; a WRONG row is a finding. No code comments.",
+        "verify": ".bee/bin/bee knowledge check",
+        "must_haves": {
+          "why": "A docs change gets an independent check against the code it describes.",
+          "out_of_scope": [
+            "editing docs or code"
+          ],
+          "truths": [
+            "every team profiles statement in the tp-3 concepts is checked against the shipped binary"
+          ],
+          "prohibitions": [
+            "No code comments"
+          ]
+        },
+        "behavior_change": false,
+        "tester_rule": true,
+        "judge_obligation_ack": "Checker for tp-3."
+      }
+    ],
+    "role_plan": {
+      "schema_version": "1.0",
+      "runtime": "claude",
+      "roster_sha256": "d4e696dbde7989d6388dacce3fd7057cb3a6935b46024b79698596a46f6f41d3",
+      "stages": [
+        {
+          "stage": "deployment",
+          "classification": "not-applicable",
+          "role": "deploy",
+          "reason": "Release is a separate owner call."
+        },
+        {
+          "stage": "planning",
+          "classification": "not-applicable",
+          "role": "plan",
+          "reason": "The leader wrote this plan from CONTEXT.md."
+        },
+        {
+          "stage": "implementation",
+          "classification": "required",
+          "role": "code",
+          "reason": "tp-1 writes the profile data and the two verbs."
+        },
+        {
+          "stage": "test-and-live-proof",
+          "classification": "required",
+          "role": "test",
+          "reason": "tp-2 tests tp-1 independently through the real binary."
+        },
+        {
+          "stage": "documentation-and-capture",
+          "classification": "required",
+          "role": "docs",
+          "reason": "tp-3 writes the team profiles knowledge."
+        },
+        {
+          "stage": "read-only-gather",
+          "classification": "not-applicable",
+          "role": "read",
+          "reason": "The leader read the config layer seams."
+        },
+        {
+          "stage": "fact-extraction",
+          "classification": "not-applicable",
+          "role": "extraction",
+          "reason": "No narrow fact lookup is needed."
+        },
+        {
+          "stage": "generation-fallback",
+          "classification": "not-applicable",
+          "role": "generation",
+          "reason": "Every job here has a specific role."
+        },
+        {
+          "stage": "independent-review",
+          "classification": "not-applicable",
+          "role": "review",
+          "reason": "Independent review stays user-invoked and was not requested."
+        },
+        {
+          "stage": "generic-advisor",
+          "classification": "not-applicable",
+          "role": "advisor",
+          "reason": "Decisions locked from the owner ask; no consult owed."
+        },
+        {
+          "stage": "supervision",
+          "classification": "not-applicable",
+          "role": "supervisor",
+          "reason": "No unattended loop runs here."
+        },
+        {
+          "stage": "blind-lane-1",
+          "classification": "not-applicable",
+          "role": "lane-1",
+          "reason": "The data shape is the existing team-layer shape; no blind design lanes."
+        },
+        {
+          "stage": "blind-lane-2",
+          "classification": "not-applicable",
+          "role": "lane-2",
+          "reason": "The data shape is the existing team-layer shape; no blind design lanes."
+        },
+        {
+          "stage": "blind-lane-3",
+          "classification": "not-applicable",
+          "role": "lane-3",
+          "reason": "The data shape is the existing team-layer shape; no blind design lanes."
+        },
+        {
+          "stage": "design-ui",
+          "classification": "not-applicable",
+          "role": "design",
+          "reason": "No rendered UI."
+        },
+        {
+          "stage": "hat-facts-gaps",
+          "classification": "not-applicable",
+          "role": "hat-facts-gaps",
+          "reason": "Shape fixed by the owner ask, the PBI text and the existing team-layer shape; hat wave skipped."
+        },
+        {
+          "stage": "hat-risks",
+          "classification": "not-applicable",
+          "role": "hat-risks",
+          "reason": "Shape fixed by the owner ask, the PBI text and the existing team-layer shape; hat wave skipped."
+        },
+        {
+          "stage": "hat-value",
+          "classification": "not-applicable",
+          "role": "hat-value",
+          "reason": "Shape fixed by the owner ask, the PBI text and the existing team-layer shape; hat wave skipped."
+        },
+        {
+          "stage": "hat-alternatives",
+          "classification": "not-applicable",
+          "role": "hat-alternatives",
+          "reason": "Shape fixed by the owner ask, the PBI text and the existing team-layer shape; hat wave skipped."
+        },
+        {
+          "stage": "hat-user-impact",
+          "classification": "not-applicable",
+          "role": "hat-user-impact",
+          "reason": "Shape fixed by the owner ask, the PBI text and the existing team-layer shape; hat wave skipped."
+        },
+        {
+          "stage": "writing",
+          "classification": "not-applicable",
+          "role": "writer",
+          "reason": "Reference text rides tp-3 under the docs role."
+        }
+      ]
+    }
+  },
+  "gate_revoked_at": {
+    "execution": "2026-11-25T15:52:59.175Z"
+  }
+}

@@ -1004,6 +1004,9 @@
     "contract:release-2-122-0-published",
     "contract:agy-belt",
     "agy",
-    "contract:agy-belt-herded"
+    "contract:agy-belt-herded",
+    "contract:deferred-queue-req-flags",
+    "contract:team-profiles",
+    "session-identity"
   ]
 }

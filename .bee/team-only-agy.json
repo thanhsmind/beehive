@@ -1,0 +1,464 @@
+{
+  "team": {
+    "claude": {
+      "code": {
+        "kind": "herding",
+        "agent": "agy-hydrogen",
+        "description": "write the cell's Rust code and its tests"
+      },
+      "read": {
+        "kind": "herding",
+        "agent": "agy-carbon",
+        "description": "read-only lookups from known locations; a bare --kind gather also runs here"
+      },
+      "test": {
+        "kind": "herding",
+        "agent": "agy-neon",
+        "description": "author or repair tests, red-first"
+      },
+      "docs": {
+        "kind": "herding",
+        "agent": "agy-hydrogen",
+        "description": "doc edits and parity sweeps"
+      },
+      "deploy": {
+        "kind": "herding",
+        "agent": "agy-carbon",
+        "description": "publish an approved release from main, wait for CI, and verify release assets"
+      },
+      "plan": {
+        "kind": "herding",
+        "agent": "agy-neon-high",
+        "description": "planning-shaped work — shaping a slice, drafting cells, plan checks — asked for with --role plan"
+      },
+      "extraction": {
+        "kind": "herding",
+        "agent": "agy-carbon",
+        "description": "narrow fact lookups from known locations"
+      },
+      "generation": {
+        "kind": "herding",
+        "agent": "agy-hydrogen",
+        "description": "fall-through tail: default writer role"
+      },
+      "review": {
+        "kind": "herding",
+        "agent": "agy-neon-high",
+        "description": "independent read-only check of a claim or diff"
+      },
+      "advisor": {
+        "kind": "herding",
+        "agent": "agy-neon-high",
+        "description": "session-class consult for high-risk gates"
+      },
+      "supervisor": {
+        "kind": "herding",
+        "agent": "agy-carbon",
+        "description": "cold observer tick — structured observation on a cheap model; decides nothing, escalation rides the advisor role"
+      },
+      "lane-1": {
+        "kind": "herding",
+        "agent": "agy-neon-high",
+        "description": "blind-lane seat 1 — isolated design proposal; three seats run three different brains on one identical brief"
+      },
+      "lane-2": {
+        "kind": "herding",
+        "agent": "agy-carbon",
+        "description": "blind-lane seat 2 — isolated design proposal; three seats run three different brains on one identical brief"
+      },
+      "lane-3": {
+        "kind": "herding",
+        "agent": "agy-hydrogen",
+        "description": "blind-lane seat 3 — isolated design proposal; three seats run three different brains on one identical brief"
+      },
+      "hat-facts-gaps": {
+        "kind": "herding",
+        "agent": "agy-neon",
+        "description": "hat: what the spec cannot answer — 5-Layer rubric + Truth Table Test"
+      },
+      "hat-risks": {
+        "kind": "herding",
+        "agent": "agy-neon-high",
+        "description": "hat: what breaks, and can it be undone — CRUD lifecycle, the delete half is the reversibility interrogation"
+      },
+      "hat-value": {
+        "kind": "herding",
+        "agent": "agy-carbon",
+        "description": "hat: is this worth its cost — materiality test"
+      },
+      "hat-alternatives": {
+        "kind": "herding",
+        "agent": "agy-carbon",
+        "description": "hat: is there a cheaper shape — the SMALLER PATH question at spec altitude"
+      },
+      "hat-user-impact": {
+        "kind": "herding",
+        "agent": "agy-neon",
+        "description": "hat: what the user sees and feels — gray-area probes + the SEE mock"
+      },
+      "design": {
+        "kind": "herding",
+        "agent": "agy-neon",
+        "description": "build and critique rendered UI with the bee-design taste; proves with the design gate"
+      },
+      "writer": {
+        "kind": "herding",
+        "agent": "agy-hydrogen",
+        "description": "dedicated technical writer — any role (plan, code, review, design) hands finished work here to write its docs, specs, plans, READMEs and reports; writes through bee-technical-writing; asked for with --role writer"
+      }
+    },
+    "codex": {
+      "code": {
+        "kind": "herding",
+        "agent": "agy-hydrogen",
+        "description": "write the cell's Rust code and its tests"
+      },
+      "read": {
+        "kind": "herding",
+        "agent": "agy-carbon",
+        "description": "read-only lookups from known locations; a bare --kind gather also runs here"
+      },
+      "test": {
+        "kind": "herding",
+        "agent": "agy-neon",
+        "description": "author or repair tests, red-first"
+      },
+      "docs": {
+        "kind": "herding",
+        "agent": "agy-hydrogen",
+        "description": "doc edits and parity sweeps"
+      },
+      "deploy": {
+        "kind": "herding",
+        "agent": "agy-carbon",
+        "description": "publish an approved release from main, wait for CI, and verify release assets"
+      },
+      "plan": {
+        "kind": "herding",
+        "agent": "agy-neon-high",
+        "description": "planning-shaped work — shaping a slice, drafting cells, plan checks — asked for with --role plan"
+      },
+      "extraction": {
+        "kind": "herding",
+        "agent": "agy-carbon",
+        "description": "narrow fact lookups from known locations"
+      },
+      "generation": {
+        "kind": "herding",
+        "agent": "agy-hydrogen",
+        "description": "fall-through tail: default writer role"
+      },
+      "review": {
+        "kind": "herding",
+        "agent": "agy-neon-high",
+        "description": "independent read-only check of a claim or diff"
+      },
+      "advisor": {
+        "kind": "herding",
+        "agent": "agy-neon-high",
+        "description": "session-class consult for high-risk gates"
+      },
+      "supervisor": {
+        "kind": "herding",
+        "agent": "agy-carbon",
+        "description": "cold observer tick — structured observation on a cheap model; decides nothing, escalation rides the advisor role"
+      },
+      "lane-1": {
+        "kind": "herding",
+        "agent": "agy-neon-high",
+        "description": "blind-lane seat 1 — isolated design proposal; three seats run three different brains on one identical brief"
+      },
+      "lane-2": {
+        "kind": "herding",
+        "agent": "agy-carbon",
+        "description": "blind-lane seat 2 — isolated design proposal; three seats run three different brains on one identical brief"
+      },
+      "lane-3": {
+        "kind": "herding",
+        "agent": "agy-hydrogen",
+        "description": "blind-lane seat 3 — isolated design proposal; three seats run three different brains on one identical brief"
+      },
+      "hat-facts-gaps": {
+        "kind": "herding",
+        "agent": "agy-neon",
+        "description": "hat: what the spec cannot answer — 5-Layer rubric + Truth Table Test"
+      },
+      "hat-risks": {
+        "kind": "herding",
+        "agent": "agy-neon-high",
+        "description": "hat: what breaks, and can it be undone — CRUD lifecycle, the delete half is the reversibility interrogation"
+      },
+      "hat-value": {
+        "kind": "herding",
+        "agent": "agy-carbon",
+        "description": "hat: is this worth its cost — materiality test"
+      },
+      "hat-alternatives": {
+        "kind": "herding",
+        "agent": "agy-carbon",
+        "description": "hat: is there a cheaper shape — the SMALLER PATH question at spec altitude"
+      },
+      "hat-user-impact": {
+        "kind": "herding",
+        "agent": "agy-neon",
+        "description": "hat: what the user sees and feels — gray-area probes + the SEE mock"
+      },
+      "design": {
+        "kind": "herding",
+        "agent": "agy-neon",
+        "description": "build and critique rendered UI with the bee-design taste; proves with the design gate"
+      },
+      "writer": {
+        "kind": "herding",
+        "agent": "agy-hydrogen",
+        "description": "dedicated technical writer — any role (plan, code, review, design) hands finished work here to write its docs, specs, plans, READMEs and reports; writes through bee-technical-writing; asked for with --role writer"
+      }
+    },
+    "pi": {
+      "code": {
+        "kind": "herding",
+        "agent": "agy-hydrogen",
+        "description": "write the cell's Rust code and its tests"
+      },
+      "read": {
+        "kind": "herding",
+        "agent": "agy-carbon",
+        "description": "read-only lookups from known locations; a bare --kind gather also runs here"
+      },
+      "test": {
+        "kind": "herding",
+        "agent": "agy-neon",
+        "description": "author or repair tests, red-first"
+      },
+      "docs": {
+        "kind": "herding",
+        "agent": "agy-hydrogen",
+        "description": "doc edits and parity sweeps"
+      },
+      "deploy": {
+        "kind": "herding",
+        "agent": "agy-carbon",
+        "description": "publish an approved release from main, wait for CI, and verify release assets"
+      },
+      "plan": {
+        "kind": "herding",
+        "agent": "agy-neon-high",
+        "description": "planning-shaped work — shaping a slice, drafting cells, plan checks — asked for with --role plan"
+      },
+      "extraction": {
+        "kind": "herding",
+        "agent": "agy-carbon",
+        "description": "narrow fact lookups from known locations"
+      },
+      "generation": {
+        "kind": "herding",
+        "agent": "agy-hydrogen",
+        "description": "fall-through tail: default writer role"
+      },
+      "review": {
+        "kind": "herding",
+        "agent": "agy-neon-high",
+        "description": "independent read-only check of a claim or diff"
+      },
+      "advisor": {
+        "kind": "herding",
+        "agent": "agy-neon-high",
+        "description": "session-class consult for high-risk gates"
+      },
+      "supervisor": {
+        "kind": "herding",
+        "agent": "agy-carbon",
+        "description": "cold observer tick — structured observation on a cheap model; decides nothing, escalation rides the advisor role"
+      },
+      "lane-1": {
+        "kind": "herding",
+        "agent": "agy-neon-high",
+        "description": "blind-lane seat 1 — isolated design proposal; three seats run three different brains on one identical brief"
+      },
+      "lane-2": {
+        "kind": "herding",
+        "agent": "agy-carbon",
+        "description": "blind-lane seat 2 — isolated design proposal; three seats run three different brains on one identical brief"
+      },
+      "lane-3": {
+        "kind": "herding",
+        "agent": "agy-hydrogen",
+        "description": "blind-lane seat 3 — isolated design proposal; three seats run three different brains on one identical brief"
+      },
+      "hat-facts-gaps": {
+        "kind": "herding",
+        "agent": "agy-neon",
+        "description": "hat: what the spec cannot answer — 5-Layer rubric + Truth Table Test"
+      },
+      "hat-risks": {
+        "kind": "herding",
+        "agent": "agy-neon-high",
+        "description": "hat: what breaks, and can it be undone — CRUD lifecycle, the delete half is the reversibility interrogation"
+      },
+      "hat-value": {
+        "kind": "herding",
+        "agent": "agy-carbon",
+        "description": "hat: is this worth its cost — materiality test"
+      },
+      "hat-alternatives": {
+        "kind": "herding",
+        "agent": "agy-carbon",
+        "description": "hat: is there a cheaper shape — the SMALLER PATH question at spec altitude"
+      },
+      "hat-user-impact": {
+        "kind": "herding",
+        "agent": "agy-neon",
+        "description": "hat: what the user sees and feels — gray-area probes + the SEE mock"
+      },
+      "design": {
+        "kind": "herding",
+        "agent": "agy-neon",
+        "description": "build and critique rendered UI with the bee-design taste; proves with the design gate"
+      },
+      "writer": {
+        "kind": "herding",
+        "agent": "agy-hydrogen",
+        "description": "dedicated technical writer — any role (plan, code, review, design) hands finished work here to write its docs, specs, plans, READMEs and reports; writes through bee-technical-writing; asked for with --role writer"
+      }
+    },
+    "agy": {
+      "code": {
+        "kind": "herding",
+        "agent": "agy-hydrogen",
+        "description": "write the cell's Rust code and its tests"
+      },
+      "read": {
+        "kind": "herding",
+        "agent": "agy-carbon",
+        "description": "read-only lookups from known locations; a bare --kind gather also runs here"
+      },
+      "test": {
+        "kind": "herding",
+        "agent": "agy-neon",
+        "description": "author or repair tests, red-first"
+      },
+      "docs": {
+        "kind": "herding",
+        "agent": "agy-hydrogen",
+        "description": "doc edits and parity sweeps"
+      },
+      "deploy": {
+        "kind": "herding",
+        "agent": "agy-carbon",
+        "description": "publish an approved release from main, wait for CI, and verify release assets"
+      },
+      "plan": {
+        "kind": "herding",
+        "agent": "agy-neon-high",
+        "description": "planning-shaped work — shaping a slice, drafting cells, plan checks — asked for with --role plan"
+      },
+      "extraction": {
+        "kind": "herding",
+        "agent": "agy-carbon",
+        "description": "narrow fact lookups from known locations"
+      },
+      "generation": {
+        "kind": "herding",
+        "agent": "agy-hydrogen",
+        "description": "fall-through tail: default writer role"
+      },
+      "review": {
+        "kind": "herding",
+        "agent": "agy-neon-high",
+        "description": "independent read-only check of a claim or diff"
+      },
+      "advisor": {
+        "kind": "herding",
+        "agent": "agy-neon-high",
+        "description": "session-class consult for high-risk gates"
+      },
+      "supervisor": {
+        "kind": "herding",
+        "agent": "agy-carbon",
+        "description": "cold observer tick — structured observation on a cheap model; decides nothing, escalation rides the advisor role"
+      },
+      "lane-1": {
+        "kind": "herding",
+        "agent": "agy-neon-high",
+        "description": "blind-lane seat 1 — isolated design proposal; three seats run three different brains on one identical brief"
+      },
+      "lane-2": {
+        "kind": "herding",
+        "agent": "agy-carbon",
+        "description": "blind-lane seat 2 — isolated design proposal; three seats run three different brains on one identical brief"
+      },
+      "lane-3": {
+        "kind": "herding",
+        "agent": "agy-hydrogen",
+        "description": "blind-lane seat 3 — isolated design proposal; three seats run three different brains on one identical brief"
+      },
+      "hat-facts-gaps": {
+        "kind": "herding",
+        "agent": "agy-neon",
+        "description": "hat: what the spec cannot answer — 5-Layer rubric + Truth Table Test"
+      },
+      "hat-risks": {
+        "kind": "herding",
+        "agent": "agy-neon-high",
+        "description": "hat: what breaks, and can it be undone — CRUD lifecycle, the delete half is the reversibility interrogation"
+      },
+      "hat-value": {
+        "kind": "herding",
+        "agent": "agy-carbon",
+        "description": "hat: is this worth its cost — materiality test"
+      },
+      "hat-alternatives": {
+        "kind": "herding",
+        "agent": "agy-carbon",
+        "description": "hat: is there a cheaper shape — the SMALLER PATH question at spec altitude"
+      },
+      "hat-user-impact": {
+        "kind": "herding",
+        "agent": "agy-neon",
+        "description": "hat: what the user sees and feels — gray-area probes + the SEE mock"
+      },
+      "design": {
+        "kind": "herding",
+        "agent": "agy-neon",
+        "description": "build and critique rendered UI with the bee-design taste; proves with the design gate"
+      },
+      "writer": {
+        "kind": "herding",
+        "agent": "agy-hydrogen",
+        "description": "dedicated technical writer — any role (plan, code, review, design) hands finished work here to write its docs, specs, plans, READMEs and reports; writes through bee-technical-writing; asked for with --role writer"
+      }
+    }
+  },
+  "herding": {
+    "agents": {
+      "agy-hydrogen": {
+        "paseo": {
+          "provider": "antigravity",
+          "model": "gemini-4-hydrogen-medium",
+          "mode": "full-access"
+        }
+      },
+      "agy-carbon": {
+        "paseo": {
+          "provider": "antigravity",
+          "model": "gemini-4-carbon-medium",
+          "mode": "full-access"
+        }
+      },
+      "agy-neon": {
+        "paseo": {
+          "provider": "antigravity",
+          "model": "gemini-4-neon-medium",
+          "mode": "full-access"
+        }
+      },
+      "agy-neon-high": {
+        "paseo": {
+          "provider": "antigravity",
+          "model": "gemini-4-neon-high",
+          "mode": "full-access"
+        }
+      }
+    }
+  }
+}

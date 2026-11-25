@@ -1,0 +1,13 @@
+{
+  "request_id": "bee-handoff-c0f7aa14-35ba-46c7-b6b2-bbb38ae2e7cb-mark-mww9n4hd",
+  "run_id": "run-b75f3a967082bd8d",
+  "project_id": "beehive",
+  "session_id": "c0f7aa14-35ba-46c7-b6b2-bbb38ae2e7cb",
+  "feature": "windows-test-build",
+  "sent_at": "2026-11-25T15:15:57.953Z",
+  "task_file": "/mnt/data/Projects/goglbe/beehive/.bee/tmp/handoff-c0f7aa14-35ba-46c7-b6b2-bbb38ae2e7cb-mark-mww9n4hd.md",
+  "task_text": "Handoff from previous leader session (context 168k tokens past 120k mark).\nCurrent feature: windows-test-build\nOpen or claimed cells: none\n\nOwner request (Vietnamese, 2026-11-25): 'Lam' - run one real end-to-end bee workflow with agy (Antigravity CLI) as the LEADER runtime and record what breaks. Background: feature agy-runtime is merged (agy belt .agents/hooks.json + bee hook agy-belt, D1-D9; docs/knowledge/areas/hook-runtime/the-agy-belt.md). Proven live so far: a normal command runs and invoke_subagent is denied. NOT proven: session-init text and prompt-context reach agy, the Stop hook continue path, dispatch from an agy leader through herding, and a full chain explore -> gate -> plan -> dispatched worker -> tester -> bee test -> worktree merge. Do: open this as a spike (bee feature start --class spike), pick one small real proposed PBI or fix-at item in this repo, and have an agy leader session (agy in a herding/herdr pane or agy -p turns, cwd = the repo, workspace trusted) drive that item through the bee chain. Watch it via herding status, not transcripts. Record every failure or friction as a finding with evidence in docs/history/<spike>/report.md and as bee mailbox reflect / backlog rows; fix small belt defects through the bee chain; anything big becomes a proposed PBI. Then answer the owner in Vietnamese, short: what works, what breaks, what was fixed. Standing orders: reply in Vietnamese, simple words; full autopilot gate bypass is on; never ask the owner to run steps the agent can run; no code comments; no release unless the owner asks.\n",
+  "expects": [],
+  "follow_ups": [],
+  "status": "met"
+}

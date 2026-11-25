@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "agy-runtime",
   "mode": null,
-  "phase": "compounding",
+  "phase": "idle",
   "approved_gates": {
     "context": true,
     "shape": true,
@@ -11,15 +11,10 @@
     "uat": false
   },
   "summary": "Feature \"agy-runtime\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at dee7b25; reload the product and test \"agy-runtime\", then either approve uat (\"bee gate --name uat --approved true --lane agy-runtime\") or fix it in the worktree and merge again.",
+  "next_action": "bee close finished \"agy-runtime\" — feature is closed.",
   "created_at": "2026-11-25T09:15:57.577Z",
   "run_state": "awaiting-approval",
-  "waiting_on": {
-    "kind": "gate",
-    "subject": "uat: agy-runtime",
-    "asked_at": "2026-11-25T10:43:45.277Z",
-    "session": "bee-worktree-merge-sessionless"
-  },
+  "waiting_on": null,
   "route": {
     "class": "feature",
     "lane": "standard",
