@@ -91,7 +91,7 @@ Inside `agy` commands, `ANTIGRAVITY_CONVERSATION_ID` identifies the session. `se
 `bee onboard --apply` writes or merges `.agents/hooks.json`:
 
 - If `.agents/hooks.json` does not exist, onboarding writes `{"bee": ...}`.
-- If `.agents/hooks.json` is a JSON object, onboarding replaces only the `"bee"` key and keeps every other key's value byte-equal.
+- If `.agents/hooks.json` is a JSON object, onboarding replaces only the `"bee"` key and keeps every other key's value equal as JSON and its key order (the file is parsed and re-printed, so formatting may change).
 - Before the first rewrite of a pre-existing file, onboarding backs it up to `.agents/hooks.json.bee-backup`.
 - If the file is not a JSON object or cannot be parsed, onboarding refuses with a typed error and writes nothing.
 - A second `bee onboard --apply` run changes nothing.
