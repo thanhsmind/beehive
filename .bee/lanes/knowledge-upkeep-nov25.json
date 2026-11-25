@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "knowledge-upkeep-nov25",
   "mode": null,
-  "phase": "exploring",
+  "phase": "compounding",
   "approved_gates": {
     "context": false,
     "shape": true,
@@ -11,9 +11,9 @@
     "uat": false
   },
   "summary": "Feature \"knowledge-upkeep-nov25\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at f73dcff; capture what settled, then bee close --feature knowledge-upkeep-nov25, then write the handoff and continue in a fresh leader session (one leader session per feature).",
+  "next_action": "close",
   "created_at": "2026-11-25T15:58:22.768Z",
-  "run_state": null,
+  "run_state": "awaiting-approval",
   "waiting_on": null,
   "route": {
     "class": "docs",
@@ -23,5 +23,17 @@
     "rationale": null,
     "updated_at": "2026-11-25T15:58:15.686Z",
     "feature": "knowledge-upkeep-nov25"
+  },
+  "last_scribing_run": {
+    "feature": "knowledge-upkeep-nov25",
+    "date": "2026-11-25",
+    "at": "2026-11-25T16:00:15.018Z",
+    "areas_synced": [
+      "advisor-protocol",
+      "project",
+      "workflow-state",
+      "rust-runtime"
+    ],
+    "next_action": "close"
   }
 }
