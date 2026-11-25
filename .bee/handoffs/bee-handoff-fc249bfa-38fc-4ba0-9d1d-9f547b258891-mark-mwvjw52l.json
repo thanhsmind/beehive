@@ -1,0 +1,13 @@
+{
+  "request_id": "bee-handoff-fc249bfa-38fc-4ba0-9d1d-9f547b258891-mark-mwvjw52l",
+  "run_id": "run-0a76731aa7c31dc5",
+  "project_id": "beehive",
+  "session_id": "fc249bfa-38fc-4ba0-9d1d-9f547b258891",
+  "feature": "release-2-122-0",
+  "sent_at": "2026-11-25T03:15:08.613Z",
+  "task_file": "/mnt/data/Projects/goglbe/beehive/.bee/tmp/handoff-fc249bfa-38fc-4ba0-9d1d-9f547b258891-mark-mwvjw52l.md",
+  "task_text": "Handoff from previous leader session (context 181k tokens past 120k mark).\nCurrent feature: release-2-122-0\nOpen or claimed cells: rel21220-1, rel21220-1c\n\nOwner asked (Vietnamese): add a code eval that checks each cited source really exists in the cited file, then 'push code rồi release'. Done: feature citation-source-check merged to main (ca6721bf2), release 2.122.0 published by scripts/release.sh (commit 7633a20ca, tag v2.122.0 on origin, CI run 45537977079 green, 6 assets, https://github.com/thanhsmind/beehive/releases/tag/v2.122.0). Left for you, bookkeeping only: (1) cap release cell rel21220-1 — cells finish refused: no registered worker and inline cap refused; report JSON is .bee/tmp/rel21220/r1.json, settle it the way release-2-121-0 settled rel21210-1. (2) dispatch the test-role checker rel21220-1c read-only on the published release. (3) bee close release-2-122-0 and citation-source-check; the uat door is the owner's: use the uat-deferral audit row only if the owner says so, else ask once. (4) commit the dirty .bee lane files. Standing orders: reply in Vietnamese, short and plain; never ask the owner to open a session.\n",
+  "expects": [],
+  "follow_ups": [],
+  "status": "open"
+}

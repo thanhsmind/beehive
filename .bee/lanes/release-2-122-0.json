@@ -14,7 +14,12 @@
   "next_action": "Continue bee-exploring for \"release-2-122-0\" (lane).",
   "created_at": "2026-11-25T03:00:50.715Z",
   "run_state": "awaiting-approval",
-  "waiting_on": null,
+  "waiting_on": {
+    "kind": "turn-end",
+    "subject": "[2] `gh release view v2.122.0` — 6 assets; `git ls-remote --tags origin v2.122.0` — 7633a20ca",
+    "asked_at": "2026-11-25T03:15:13.152Z",
+    "session": "fc249bfa-38fc-4ba0-9d1d-9f547b258891"
+  },
   "gate_preview": {
     "feature": "release-2-122-0",
     "plan_sha256": "cb2f1d08c36c4233edf64411ddedbf31a0036c7e716ad0855c7f83ce38f84500",
@@ -462,5 +467,16 @@
         }
       ]
     }
+  },
+  "route": {
+    "class": "release",
+    "lane": "small",
+    "flags": [
+      "external-systems"
+    ],
+    "product_files": 1,
+    "rationale": null,
+    "updated_at": "2026-11-25T03:15:42.349Z",
+    "feature": "release-2-122-0"
   }
 }

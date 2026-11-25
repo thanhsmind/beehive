@@ -1,0 +1,119 @@
+{
+  "id": "srcchk-4",
+  "feature": "citation-source-check",
+  "title": "Check the Claim labels source-check paragraph against the code",
+  "lane": "small",
+  "role": "test",
+  "deps": [
+    "srcchk-3"
+  ],
+  "decisions": [
+    "D1",
+    "70692733-4e2a-4d1c-a585-2d0077941503",
+    "D2",
+    "b74990d9-f9a0-4635-b920-35200a175ef9"
+  ],
+  "files": [
+    "docs/history/citation-source-check/srcchk-4-check.md"
+  ],
+  "read_first": [
+    "docs/history/citation-source-check/CONTEXT.md",
+    "skills/bee-hive/references/routing-and-contracts.md",
+    "packages/bee-rs/crates/bee/src/hooks/session_close/citations.rs"
+  ],
+  "action": "Docs checker, no edits to skills, doctrine or code. Read the srcchk-3 commit 682f29869. Confirm the new paragraph in skills/bee-hive/references/routing-and-contracts.md section Claim labels and pushback matches what citations.rs does (file missing, line past end, backticked token within 20 lines, command never run), that the Pushback text and the two examples are unchanged, and that the rendered bee-hive copies under .claude/skills, .agents/skills, .claude-plugin/skills, .codex-plugin/skills and .opencode/skills carry the same paragraph. Write docs/history/citation-source-check/srcchk-4-check.md with what you checked, the command output summary and a pass or fail verdict. A fail is returned as blocked with the evidence. Bee commands you may run: bee dev release-manifest --check. Run no dispatch verb, not even its help.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test pointer_integrity && .bee/bin/bee dev release-manifest --check",
+  "judge_obligation_ack": "docs checker over one paragraph, no guard logic",
+  "must_haves": {
+    "truths": [
+      "the checker report states pass only when the paragraph matches citations.rs and every rendered copy carries it",
+      "pointer integrity passes"
+    ],
+    "artifacts": [
+      {
+        "path": "docs/history/citation-source-check/srcchk-4-check.md",
+        "substantive": "check record with verdict"
+      }
+    ],
+    "key_links": [],
+    "prohibitions": [
+      "No edits outside the check record"
+    ]
+  },
+  "affects_skills": [],
+  "affects_specs": [],
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "check-srcchk-4",
+    "outcome": "Claim labels source-check paragraph matches citations.rs and all five rendered copies are identical; verdict pass — 57839eac4",
+    "files_changed": [
+      "docs/history/citation-source-check/srcchk-4-check.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-11-25T02:45:38.039Z",
+    "behavior_change": false,
+    "verification_evidence": "docs checker over one paragraph (10 passed; manifest 994 match, exit 0)",
+    "verify_output": "green:static",
+    "verify_passed": true,
+    "claim_session": "fc249bfa-38fc-4ba0-9d1d-9f547b258891",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test pointer_integrity && .bee/bin/bee dev release-manifest --check",
+    "claimed_at": "2026-11-25T02:44:49.118Z",
+    "knowledge_delta": [],
+    "no_mistakes": true,
+    "no_knowledge_used": true,
+    "principles_used": [
+      {
+        "slug": "bee-principle-verify-before-reporting",
+        "changed": "verdict written only after cmp, rg count and the verify command output"
+      }
+    ],
+    "changed_lines": 43,
+    "report": {
+      "outcome": "Claim labels source-check paragraph matches citations.rs and all five rendered copies are identical; verdict pass — 57839eac4",
+      "commit": "57839eac4e8e9d668e82047aa1d334206ea0ba49",
+      "files": [
+        "docs/history/citation-source-check/srcchk-4-check.md"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test pointer_integrity && .bee/bin/bee dev release-manifest --check — green:static — docs checker over one paragraph (10 passed; manifest 994 match, exit 0)",
+      "deviations": [],
+      "knowledge_used": [],
+      "principles_used": [
+        "bee-principle-verify-before-reporting — verdict written only after cmp, rg count and the verify command output"
+      ],
+      "reaction": "confirm",
+      "skipped": [
+        "full clippy + workspace cargo test proof command — no code changed, the cell's verify command was run instead"
+      ],
+      "found": [
+        "paragraph names only path:line sources; the code also checks a bare path against the whole file — narrower, not wrong"
+      ],
+      "patch_id": "f60a242e97fd80dcec1142f7b509023a9308eeb9"
+    },
+    "reaction": "confirm",
+    "skipped": [
+      "full clippy + workspace cargo test proof command — no code changed, the cell's verify command was run instead"
+    ],
+    "found": [
+      "paragraph names only path:line sources; the code also checks a bare path against the whole file — narrower, not wrong"
+    ],
+    "warnings": [],
+    "tests": "boundary"
+  },
+  "usage": {
+    "new": 26876,
+    "cached": 269366,
+    "total": 296242,
+    "models": {
+      "claude-opus-5-5": {
+        "new": 26876,
+        "cached": 269366,
+        "total": 296242
+      }
+    },
+    "jobs": [
+      "job-1795574693212-672600-1"
+    ]
+  }
+}

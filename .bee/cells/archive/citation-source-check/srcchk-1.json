@@ -1,0 +1,112 @@
+{
+  "id": "srcchk-1",
+  "feature": "citation-source-check",
+  "title": "Check each cited source against disk and the session commands",
+  "lane": "small",
+  "role": "code",
+  "deps": [],
+  "decisions": [
+    "D1",
+    "70692733-4e2a-4d1c-a585-2d0077941503",
+    "D2",
+    "b74990d9-f9a0-4635-b920-35200a175ef9"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/hooks/session_close/citations.rs",
+    "packages/bee-rs/crates/bee/src/hooks/session_close/claims.rs",
+    "packages/bee-rs/crates/bee/src/hooks/session_close/mod.rs",
+    "packages/bee-rs/crates/bee/src/hooks/session_close/tests.rs",
+    "docs/knowledge/areas/hook-runtime/overview.md"
+  ],
+  "read_first": [
+    "docs/history/citation-source-check/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/hooks/session_close/claims.rs",
+    "packages/bee-rs/crates/bee/src/hooks/session_close/mod.rs"
+  ],
+  "action": "D1 and D2. Add a new module session_close/citations.rs with pub(crate) fn citation_source_warning(root: &Path, events: &[Value]) -> Option<String>. Parse the last-turn assistant text (reuse claims::last_turn_assistant_text and the Sources heading and leading-number parse already in claims.rs; make those helpers pub(crate), do not copy them). For each Sources line [n] <rest>: (a) skip it when rest holds http:// or https://; (b) find a path token: a whitespace-separated word, backticks and trailing ,.;) stripped, that contains '/' or a file extension, optionally ending :N or :N-M; resolve it against root (absolute paths as is). Missing file fails 'file not found'; a line number past the file's line count fails 'line N past end (file has L lines)'. Tokens: backticked spans of 3+ characters from the rest of the source line and from every reply line that holds the inline [n], minus the path itself. With tokens, at least one must appear case-insensitive in the file lines from start-20 to end+20 (whole file with no line number), else fail 'text not found near line N: <first token>'. (c) with no path and no URL, the line is a command source when it holds a backticked span or the form '<command> — <result>'; the command is the backticked span or the text before ' — '. Collect every shell command run in the whole events list: Claude assistant tool_use blocks whose input.command is a string, Codex response_item function_call arguments (JSON string, read cmd or command, string or array joined by spaces). The source fails 'command not run' when no collected command contains the cited first word and, when the cited command has more words, at least one other cited word. Anything else is skipped. Return one line: 'bee: N cited source(s) did not check out — rule agents-verify-before-agreeing: ' then up to three '[n] <source>: <reason>' joined by '; ', no newline. Reading a file that fails to open counts as file not found; never panic. In mod.rs add the result to claims_warning beside unverified_agreement_warning and routed_reply_warnings, Stop only, never a block. Add unit tests in tests.rs with a tempdir root for: a real path:line with a matching backticked token (quiet), a missing file, a line past the end, a token absent near the line, a URL source (quiet), a command source run in the transcript (quiet), a command source never run. Sync the B2 paragraph of docs/knowledge/areas/hook-runtime/overview.md: add one sentence group on the source check citing citation-source-check D1 and D2 (cite D-numbers, never decision ids). No code comments. One commit. Bee commands you may run: bee knowledge check. Run no dispatch verb, not even its help.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- session_close",
+  "must_haves": {
+    "truths": [
+      "a Sources line naming a missing file produces the source warning",
+      "a Sources line whose line number is past the end of the file produces the source warning",
+      "a backticked token absent within 20 lines of the cited line produces the source warning",
+      "a cited command never run in the transcript produces the source warning",
+      "a correct path:line source with its token near the line and a command run in the session stay quiet",
+      "the source warning never blocks the Stop"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/hooks/session_close/citations.rs",
+        "substantive": "citation_source_warning"
+      }
+    ],
+    "key_links": [
+      "mod.rs adds the source warning to the Stop claims warnings"
+    ],
+    "prohibitions": [
+      "No code comments",
+      "No block or exit-code change in the Stop hook",
+      "No new config key"
+    ]
+  },
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/hook-runtime/overview.md"
+  ],
+  "judge_obligation_ack": "advisory-only Stop line, never a block; srcchk-2 is an independent tester cell sharing no context with srcchk-1",
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "impl-srcchk-1",
+    "outcome": "Decide path sources by first word only and treat backticked multi-word spans as command sources; commit feb31707c",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/hooks/session_close/citations.rs",
+      "packages/bee-rs/crates/bee/src/hooks/session_close/tests.rs"
+    ],
+    "deviations": [
+      "sync-ack: hook-runtime overview B2 is synced; the other anchored concepts do not describe the Stop citation check."
+    ],
+    "friction": null,
+    "capped_at": "2026-11-25T02:23:05.565Z",
+    "behavior_change": false,
+    "verification_evidence": "101 passed, 0 failed in session_close",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "fc249bfa-38fc-4ba0-9d1d-9f547b258891",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- session_close",
+    "claimed_at": "2026-11-25T02:13:33.171Z",
+    "knowledge_delta": [],
+    "sync_ack": "hook-runtime overview B2 is synced; the other anchored concepts do not describe the Stop citation check.",
+    "no_mistakes": true,
+    "principles_used": [
+      {
+        "slug": "bee-principle-boundary-discipline",
+        "changed": "decided path vs command classification once at the start of find_path_token"
+      },
+      {
+        "slug": "bee-principle-test-behavior-not-structure",
+        "changed": "tested observable citation_source_warning output for backticked and later-word path commands"
+      }
+    ],
+    "changed_lines": 98,
+    "report": {
+      "outcome": "Decide path sources by first word only and treat backticked multi-word spans as command sources; commit feb31707c",
+      "commit": "feb31707c188ef88de5d7fd50969b53a39ff670d",
+      "files": [
+        "packages/bee-rs/crates/bee/src/hooks/session_close/citations.rs",
+        "packages/bee-rs/crates/bee/src/hooks/session_close/tests.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- session_close — green:unit — 101 passed, 0 failed in session_close",
+      "deviations": [],
+      "principles_used": [
+        "bee-principle-boundary-discipline — decided path vs command classification once at the start of find_path_token",
+        "bee-principle-test-behavior-not-structure — tested observable citation_source_warning output for backticked and later-word path commands"
+      ],
+      "patch_id": "f40ad31a0a8da91c249f3f29cc492c33e9b760bc"
+    },
+    "warnings": [],
+    "tests": "boundary"
+  },
+  "usage": null,
+  "usage_reason": "herding job(s) named this cell but no readable session transcript (2 unreadable)"
+}

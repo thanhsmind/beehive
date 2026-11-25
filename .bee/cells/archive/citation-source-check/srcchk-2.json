@@ -1,0 +1,126 @@
+{
+  "id": "srcchk-2",
+  "feature": "citation-source-check",
+  "title": "Prove the cited-source check on fixtures",
+  "lane": "small",
+  "role": "test",
+  "deps": [
+    "srcchk-1"
+  ],
+  "decisions": [
+    "D1",
+    "70692733-4e2a-4d1c-a585-2d0077941503",
+    "D2",
+    "b74990d9-f9a0-4635-b920-35200a175ef9"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/hooks/session_close/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/citation-source-check/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/hooks/session_close/citations.rs"
+  ],
+  "action": "Test only, no product code. Read the srcchk-1 commit. Add tests that drive citation_source_warning on Claude-shaped and Codex-shaped transcripts with a tempdir root. Cover cases srcchk-1 did not: a path:a-b range with the token inside the range (quiet); the token only in the reply line carrying the inline [n], not on the source line (quiet when near, warns when far); a path with no line number and a token present anywhere (quiet); the doctrine form '[2] cargo test route_rejects_unknown_lane — 1 passed' with a transcript command 'PATH=x cargo test --release -- route_rejects_unknown_lane' (quiet); a Codex function_call command run (quiet); a reply with four failed sources lists only three; a Sources line with plain prose and no path, URL, backticks or ' — ' (quiet); a reply with no Sources block (quiet). Show each new test red against a mutation of the srcchk-1 check, then restore it. A red against the product is a finding returned as blocked. Bee commands you may run: none beyond the verify. Run no dispatch verb, not even its help.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- session_close",
+  "must_haves": {
+    "truths": [
+      "a test fails if a correct cited range warns",
+      "a test fails if the short doctrine command form warns when its command ran",
+      "a test fails if more than three failed sources are listed"
+    ],
+    "artifacts": [],
+    "key_links": [],
+    "prohibitions": [
+      "No code comments",
+      "No product code edits"
+    ]
+  },
+  "affects_skills": [],
+  "affects_specs": [],
+  "judge_obligation_ack": "advisory-only Stop line, never a block; srcchk-2 is an independent tester cell sharing no context with srcchk-1",
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "test-srcchk-2",
+    "outcome": "Added 8 Claude/Codex fixture tests for citation_source_warning, each red under a citations.rs mutation, verify 109 passed — 9abb8a10eaadee3f05d2e99f274180561564a5b9",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/hooks/session_close/tests.rs"
+    ],
+    "deviations": [
+      "sync-ack: test-only cell; hook-runtime overview B2 synced by srcchk-1; anchored concepts do not describe the Stop citation check"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-25T02:40:03.686Z",
+    "behavior_change": false,
+    "verification_evidence": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- session_close (109 passed, 0 failed); clippy -D warnings clean; full cargo test --release --no-fail-fast 0 failed — green:unit — test-only change to session_close/tests.rs",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "fc249bfa-38fc-4ba0-9d1d-9f547b258891",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- session_close",
+    "claimed_at": "2026-11-25T02:23:13.933Z",
+    "knowledge_delta": [],
+    "sync_ack": "test-only cell; hook-runtime overview B2 synced by srcchk-1; anchored concepts do not describe the Stop citation check",
+    "no_mistakes": true,
+    "knowledge_used": [
+      {
+        "path": "docs/knowledge/patterns/20260818-a-green-count-is-not-evidence-that-your-new-test-ran.md",
+        "changed": "ran a citation_source filter and confirmed 18 named tests, not just the suite count"
+      }
+    ],
+    "principles_used": [
+      {
+        "slug": "bee-principle-red-before-green",
+        "changed": "each new test shown failing under a targeted mutation before commit"
+      },
+      {
+        "slug": "bee-principle-test-behavior-not-structure",
+        "changed": "tests assert only the warning string or its absence from citation_source_warning"
+      }
+    ],
+    "changed_lines": 108,
+    "report": {
+      "outcome": "Added 8 Claude/Codex fixture tests for citation_source_warning, each red under a citations.rs mutation, verify 109 passed — 9abb8a10eaadee3f05d2e99f274180561564a5b9",
+      "commit": "9abb8a10eaadee3f05d2e99f274180561564a5b9",
+      "files": [
+        "packages/bee-rs/crates/bee/src/hooks/session_close/tests.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- session_close — green:unit — PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- session_close (109 passed, 0 failed); clippy -D warnings clean; full cargo test --release --no-fail-fast 0 failed — green:unit — test-only change to session_close/tests.rs",
+      "deviations": [],
+      "knowledge_used": [
+        "docs/knowledge/patterns/20260818-a-green-count-is-not-evidence-that-your-new-test-ran.md — ran a citation_source filter and confirmed 18 named tests, not just the suite count"
+      ],
+      "principles_used": [
+        "bee-principle-red-before-green — each new test shown failing under a targeted mutation before commit",
+        "bee-principle-test-behavior-not-structure — tests assert only the warning string or its absence from citation_source_warning"
+      ],
+      "reaction": "confirm",
+      "skipped": [
+        "knowledge delta — test-only cell, scope grants only tests.rs",
+        "Co-Authored-By trailer — brief requires cell trailer as last body line"
+      ],
+      "patch_id": "455eb4ed96808f73614c7b8be9045b046de0beb0"
+    },
+    "reaction": "confirm",
+    "skipped": [
+      "knowledge delta — test-only cell, scope grants only tests.rs",
+      "Co-Authored-By trailer — brief requires cell trailer as last body line"
+    ],
+    "warnings": [],
+    "tests": "boundary"
+  },
+  "usage": {
+    "new": 53939,
+    "cached": 444681,
+    "total": 498620,
+    "models": {
+      "claude-opus-5-5": {
+        "new": 53939,
+        "cached": 444681,
+        "total": 498620
+      }
+    },
+    "jobs": [
+      "job-1795573398097-437369-1"
+    ]
+  }
+}
