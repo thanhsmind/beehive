@@ -1,0 +1,140 @@
+{
+  "id": "rbgi-1t",
+  "feature": "real-bee-global-isolation",
+  "title": "Prove real_bee children ignore a user-global team config",
+  "lane": "small",
+  "role": "test",
+  "deps": [
+    "rbgi-1"
+  ],
+  "decisions": [
+    "20732f48-e507-4ec4-b460-c64499870a95",
+    "77dff9a0-f52d-4ab5-bbd5-4dedef88eaf4"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
+  ],
+  "read_first": [
+    "docs/history/real-bee-global-isolation/CONTEXT.md",
+    "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Verify rbgi-1 independently, then add one test to packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs whose name starts with real_bee_ (C1). The test writes a user-global config.json that sets team.claude.extraction to kind herding with an agent, under a temp folder, and starts a fixture bee through real_bee with XDG_CONFIG_HOME and HOME pointed at that temp folder (so the global layer would load if real_bee did not isolate it). It runs dispatch prepare --runtime claude --kind gather --role extraction --json in a fixture whose tracked config sets team.claude.extraction model haiku, and asserts tool Agent and payload.model haiku. Watch it fail with the BEEHIVE_CONFIG_DIR line of real_bee removed, then restore it. Write no code comments. Run only the cell verify filter, never the full suite. Bee commands you may run: none besides the cell cap your brief names.",
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pi_plugin_contracts -- real_bee injected_dispatch_guidance",
+  "must_haves": {
+    "truths": [
+      "a real_bee_ test sets a herding team.claude config in a user-global folder and still gets tool Agent",
+      "the new test fails when real_bee does not set BEEHIVE_CONFIG_DIR"
+    ],
+    "prohibitions": [
+      "No edit outside packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+      "No code comments"
+    ]
+  },
+  "behavior_change": false,
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "rbgi-tester",
+    "outcome": "Verified rbgi-1 and added real_bee_ignores_user_global_team_config isolation test; 662198fa3e0e9d630ed0ef9f2fadf54371dff8c8",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
+    ],
+    "deviations": [
+      "sync-ack: test-only isolation contract; no product behavior in the cited concepts changed"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-25T23:33:26.688Z",
+    "behavior_change": false,
+    "verification_evidence": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pi_plugin_contracts -- real_bee injected_dispatch_guidance — green:unit — added real_bee_ignores_user_global_team_config in pi_plugin_contracts.rs",
+    "verify_output": "green:red-first",
+    "verify_passed": true,
+    "claim_session": "d316f143-d6dd-4647-b7e8-4425e8626d85",
+    "verify_command": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pi_plugin_contracts -- real_bee injected_dispatch_guidance",
+    "claimed_at": "2026-11-25T23:30:54.121Z",
+    "knowledge_delta": [],
+    "sync_ack": "test-only isolation contract; no product behavior in the cited concepts changed",
+    "no_mistakes": true,
+    "knowledge_used": [
+      {
+        "path": "docs/knowledge/patterns/20260721-local-green-is-worthless-if-suites-inherit-harness.md",
+        "changed": "confirmed structural env isolation via BEEHIVE_CONFIG_DIR must be tested against hostile XDG_CONFIG_HOME/HOME"
+      }
+    ],
+    "principles_used": [
+      {
+        "slug": "bee-principle-red-before-green",
+        "changed": "removed BEEHIVE_CONFIG_DIR from real_bee first and observed real_bee_ignores_user_global_team_config fail with tool Bash before restoring it"
+      },
+      {
+        "slug": "bee-principle-test-behavior-not-structure",
+        "changed": "asserted observable dispatch prepare JSON output (tool Agent, payload.model haiku) rather than inspecting Command env internals"
+      },
+      {
+        "slug": "bee-principle-prove-it-works",
+        "changed": "ran the real bee binary via cargo test --release against both isolated and unisolated states"
+      }
+    ],
+    "changed_lines": 82,
+    "report": {
+      "outcome": "Verified rbgi-1 and added real_bee_ignores_user_global_team_config isolation test; 662198fa3e0e9d630ed0ef9f2fadf54371dff8c8",
+      "commit": "662198fa3e0e9d630ed0ef9f2fadf54371dff8c8",
+      "files": [
+        "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pi_plugin_contracts -- real_bee injected_dispatch_guidance — green:red-first — cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pi_plugin_contracts -- real_bee injected_dispatch_guidance — green:unit — added real_bee_ignores_user_global_team_config in pi_plugin_contracts.rs",
+      "deviations": [],
+      "knowledge_used": [
+        "docs/knowledge/patterns/20260721-local-green-is-worthless-if-suites-inherit-harness.md — confirmed structural env isolation via BEEHIVE_CONFIG_DIR must be tested against hostile XDG_CONFIG_HOME/HOME"
+      ],
+      "principles_used": [
+        "bee-principle-red-before-green — removed BEEHIVE_CONFIG_DIR from real_bee first and observed real_bee_ignores_user_global_team_config fail with tool Bash before restoring it",
+        "bee-principle-test-behavior-not-structure — asserted observable dispatch prepare JSON output (tool Agent, payload.model haiku) rather than inspecting Command env internals",
+        "bee-principle-prove-it-works — ran the real bee binary via cargo test --release against both isolated and unisolated states"
+      ],
+      "reaction": "confirm",
+      "skipped": [
+        "full cargo test suite and clippy — cell action restricted verification to the cell verify filter only"
+      ],
+      "patch_id": "b72d46a8fa2a57b5b828755a79f5290d8e26f208"
+    },
+    "reaction": "confirm",
+    "skipped": [
+      "full cargo test suite and clippy — cell action restricted verification to the cell verify filter only"
+    ],
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "a real_bee_ test sets a herding team.claude config in a user-global folder and still gets tool Agent",
+            "artifact": "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
+          },
+          {
+            "requirement": "the new test fails when real_bee does not set BEEHIVE_CONFIG_DIR",
+            "artifact": "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+            "artifact": "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
+          }
+        ],
+        "recorded_at": "2026-11-25T23:36:34.361Z",
+        "recorded_by": "d316f143-d6dd-4647-b7e8-4425e8626d85",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": {
+    "new": 0,
+    "cached": 0,
+    "total": 0,
+    "models": {},
+    "jobs": [
+      "job-1795649458043-1160432-1"
+    ]
+  }
+}

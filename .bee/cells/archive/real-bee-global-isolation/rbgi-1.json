@@ -1,0 +1,119 @@
+{
+  "id": "rbgi-1",
+  "feature": "real-bee-global-isolation",
+  "title": "Isolate the user-global config in the real_bee test helper",
+  "lane": "small",
+  "role": "code",
+  "deps": [],
+  "decisions": [
+    "20732f48-e507-4ec4-b460-c64499870a95",
+    "77dff9a0-f52d-4ab5-bbd5-4dedef88eaf4"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
+  ],
+  "read_first": [
+    "docs/history/real-bee-global-isolation/CONTEXT.md",
+    "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+    "packages/bee-rs/crates/bee/src/config_layers.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "In packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs, change the real_bee helper so every bee child it starts gets BEEHIVE_CONFIG_DIR set to an empty folder that the helper creates (for example a folder next to the copied binary, created with create_dir_all). Keep the two env_remove calls. Follow the same pattern as opencode_plugin_contracts.rs, which sets BEEHIVE_CONFIG_DIR to an empty dir. Write no code comments. Run only the cell verify filter, never the full suite. Bee commands you may run: none besides the cell cap your brief names.",
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pi_plugin_contracts -- real_bee injected_dispatch_guidance",
+  "must_haves": {
+    "truths": [
+      "real_bee sets BEEHIVE_CONFIG_DIR to an existing empty folder for each child",
+      "injected_dispatch_guidance_extracts_and_executes_pi_runtime_herding passes on a host whose global config routes team.claude to herding agents"
+    ],
+    "prohibitions": [
+      "No edit outside packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+      "No code comments"
+    ]
+  },
+  "behavior_change": false,
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "rbgi-impl",
+    "outcome": "Isolated user-global config in real_bee via BEEHIVE_CONFIG_DIR and verified pi_plugin_contracts filter passes; eaa0bd6af0bb57b2f6ee90ae9dff528571844ad5",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
+    ],
+    "deviations": [
+      "sync-ack: test-helper isolation only; no product behavior in the cited concepts changed"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-25T23:30:48.756Z",
+    "behavior_change": false,
+    "verification_evidence": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pi_plugin_contracts -- real_bee injected_dispatch_guidance — green:unit — isolated real_bee via BEEHIVE_CONFIG_DIR in pi_plugin_contracts.rs (4 passed, 0 failed)",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "d316f143-d6dd-4647-b7e8-4425e8626d85",
+    "verify_command": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pi_plugin_contracts -- real_bee injected_dispatch_guidance",
+    "claimed_at": "2026-11-25T23:28:26.583Z",
+    "knowledge_delta": [],
+    "sync_ack": "test-helper isolation only; no product behavior in the cited concepts changed",
+    "no_mistakes": true,
+    "no_knowledge_used": true,
+    "principles_used": [
+      {
+        "slug": "bee-principle-reproduce-first",
+        "changed": "reproduced the Bash vs Agent failure on injected_dispatch_guidance_extracts_and_executes_pi_runtime_herding before editing"
+      },
+      {
+        "slug": "bee-principle-laziness-protocol",
+        "changed": "created empty-global-config next to bin and set BEEHIVE_CONFIG_DIR directly in real_bee"
+      }
+    ],
+    "changed_lines": 6,
+    "report": {
+      "outcome": "Isolated user-global config in real_bee via BEEHIVE_CONFIG_DIR and verified pi_plugin_contracts filter passes; eaa0bd6af0bb57b2f6ee90ae9dff528571844ad5",
+      "commit": "eaa0bd6af0bb57b2f6ee90ae9dff528571844ad5",
+      "files": [
+        "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pi_plugin_contracts -- real_bee injected_dispatch_guidance — green:unit — cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pi_plugin_contracts -- real_bee injected_dispatch_guidance — green:unit — isolated real_bee via BEEHIVE_CONFIG_DIR in pi_plugin_contracts.rs (4 passed, 0 failed)",
+      "deviations": [],
+      "knowledge_used": [],
+      "principles_used": [
+        "bee-principle-reproduce-first — reproduced the Bash vs Agent failure on injected_dispatch_guidance_extracts_and_executes_pi_runtime_herding before editing",
+        "bee-principle-laziness-protocol — created empty-global-config next to bin and set BEEHIVE_CONFIG_DIR directly in real_bee"
+      ],
+      "patch_id": "69ad830473d1c3bf963ffcec076f40d1201cf514"
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "real_bee sets BEEHIVE_CONFIG_DIR to an existing empty folder for each child",
+            "artifact": "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
+          },
+          {
+            "requirement": "injected_dispatch_guidance_extracts_and_executes_pi_runtime_herding passes on a host whose global config routes team.claude to herding agents",
+            "artifact": "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+            "artifact": "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
+          }
+        ],
+        "recorded_at": "2026-11-25T23:36:34.348Z",
+        "recorded_by": "d316f143-d6dd-4647-b7e8-4425e8626d85",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": {
+    "new": 0,
+    "cached": 0,
+    "total": 0,
+    "models": {},
+    "jobs": [
+      "job-1795649322253-1153545-1"
+    ]
+  }
+}

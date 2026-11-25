@@ -2538,5 +2538,10 @@
     "capped": 8,
     "dropped": 0,
     "archived_at": "2026-11-25T16:53:33.714Z"
+  },
+  "real-bee-global-isolation": {
+    "capped": 2,
+    "dropped": 0,
+    "archived_at": "2026-11-25T23:36:55.798Z"
   }
 }
