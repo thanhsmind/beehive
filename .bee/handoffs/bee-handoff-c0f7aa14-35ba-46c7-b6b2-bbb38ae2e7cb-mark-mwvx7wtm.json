@@ -1,0 +1,25 @@
+{
+  "request_id": "bee-handoff-c0f7aa14-35ba-46c7-b6b2-bbb38ae2e7cb-mark-mwvx7wtm",
+  "run_id": "run-d511d3cba721390f",
+  "project_id": "beehive",
+  "session_id": "c0f7aa14-35ba-46c7-b6b2-bbb38ae2e7cb",
+  "feature": "windows-test-build",
+  "sent_at": "2026-11-25T09:28:12.795Z",
+  "task_file": "/mnt/data/Projects/goglbe/beehive/.bee/tmp/handoff-c0f7aa14-35ba-46c7-b6b2-bbb38ae2e7cb-mark-mwvx7wtm.md",
+  "task_text": "Handoff from previous leader session (context 168k tokens past 120k mark).\nCurrent feature: windows-test-build\nOpen or claimed cells: none\n\nOwner request (Vietnamese): 'Lam beehive ho tro agy giong claudecode hay pi' - make agy (Antigravity CLI 1.5.17) a full bee runtime like Claude Code and Pi. State: feature agy-runtime, worktree /mnt/data/Projects/goglbe/beehive--wt--agy-runtime, branch wt/agy-runtime. CONTEXT.md, discovery.md (live agy probe) and plan.md are committed under docs/history/agy-runtime/. Decision fa33ba78 logged. Gates context, shape and execution approved (full autopilot bypass). Cells agyrt-1..agyrt-5 added, all open, none claimed. Next: from main run bee dispatch wave --runtime claude --feature agy-runtime (agyrt-1, agyrt-2, agyrt-4 run at once; agyrt-3 after agyrt-2; agyrt-5 tester after 1-3). Note: cells add warned agyrt-4 (docs) has no test-role checker; resolve at merge (add agyrt-4 to agyrt-5 deps via the plan or record the door escape). Then bee test in the worktree, bee worktree merge from main, reinstall .bee/bin/bee, and the live proof in plan.md (onboard --apply in a scratch repo, real agy -p run: refused write denied, normal command runs; key probe fact: a PreToolUse hook printing {} denies every tool, ask is the neutral answer). Standing orders: reply to the owner in Vietnamese, short and simple; full autopilot gate bypass is on; never stop to ask the owner to run steps the agent can run; no code comments; release only if the owner asks.\n",
+  "expects": [
+    {
+      "kind": "branch-merged",
+      "branch": "wt/agy-runtime"
+    }
+  ],
+  "follow_ups": [
+    {
+      "run_id": "run-d511d3cba721390f",
+      "request_id": "bee-handoff-followup-run-c3636eaaa7c2d666-1",
+      "sent_at": "2026-11-25T10:07:43.025Z",
+      "reason": "branch wt/agy-runtime is not merged into main"
+    }
+  ],
+  "status": "open"
+}

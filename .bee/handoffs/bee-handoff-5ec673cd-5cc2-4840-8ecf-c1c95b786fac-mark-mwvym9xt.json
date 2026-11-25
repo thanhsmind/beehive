@@ -1,0 +1,18 @@
+{
+  "request_id": "bee-handoff-5ec673cd-5cc2-4840-8ecf-c1c95b786fac-mark-mwvym9xt",
+  "run_id": "run-b7e88990852751af",
+  "project_id": "beehive",
+  "session_id": "5ec673cd-5cc2-4840-8ecf-c1c95b786fac",
+  "feature": "windows-test-build",
+  "sent_at": "2026-11-25T10:07:22.591Z",
+  "task_file": "/mnt/data/Projects/goglbe/beehive/.bee/tmp/handoff-5ec673cd-5cc2-4840-8ecf-c1c95b786fac-mark-mwvym9xt.md",
+  "task_text": "Handoff from previous leader session (context 122k tokens past 120k mark).\nCurrent feature: windows-test-build\nOpen or claimed cells: none\n\nOwner request (Vietnamese): 'Lam beehive ho tro agy giong claudecode hay pi' - make agy (Antigravity CLI 1.5.17) a full bee runtime like Claude Code and Pi. Feature agy-runtime, worktree /mnt/data/Projects/goglbe/beehive--wt--agy-runtime, branch wt/agy-runtime. State: agyrt-1..agyrt-5 capped (agyrt-5 tester 19/19 green, red-on-purpose seen); leader-checks recorded for all five. The full suite (bee test) in the worktree was GREEN before the last two commits; those commits touch only docs/history/agy-runtime/plan.md (rev 1 added the kind flag to three quoted dispatch spellings; rev 2 added checker cell agyrt-6 and changed the agyrt-4 verify to the plain knowledge check). Gates shape+execution are re-approved (auto, full bypass). The first worktree merge refused WORKTREE_MERGE_PROOF_DEBT: docs cell agyrt-4 needs a capped test-role dependent (by design, a docs cell gets a checker). agyrt-6 (role test, deps agyrt-4, files docs/history/agy-runtime/reports/agyrt-6-docs-check.md) is added and OPEN. Next: from main run the dispatch wave for feature agy-runtime and run the payload it returns; settle agyrt-6 and leader-check it; rerun the full suite in the worktree only if the merge door asks for fresh proof (CARGO_TARGET_DIR=/home/thanhsmind/.cache/cargo-target-agyrt); merge the worktree from main; rebuild and install the bee binary into .bee/bin/bee and grep it for agy-belt; then the live proof in plan.md: onboard apply in a scratch repo, a real agy -p run there where a refused write is denied by the belt and a normal command runs (a PreToolUse hook printing an empty object denies every tool; ask is the neutral answer). Then close the feature. Standing orders: reply to the owner in Vietnamese, short and simple; full autopilot gate bypass is on; never stop to ask the owner to run steps the agent can run; no code comments; release only if the owner asks.\n",
+  "expects": [
+    {
+      "kind": "branch-merged",
+      "branch": "wt/agy-runtime"
+    }
+  ],
+  "follow_ups": [],
+  "status": "open"
+}
