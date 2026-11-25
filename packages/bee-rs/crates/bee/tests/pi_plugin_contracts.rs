@@ -4186,7 +4186,13 @@ fn bee_bin() -> PathBuf {
 }
 
 fn real_bee(bin: &Path) -> Command {
+    let empty_global_cfg = bin
+        .parent()
+        .expect("bee bin parent")
+        .join("empty-global-config");
+    std::fs::create_dir_all(&empty_global_cfg).expect("create empty global config dir");
     let mut cmd = Command::new(bin);
+    cmd.env("BEEHIVE_CONFIG_DIR", &empty_global_cfg);
     cmd.env_remove("BEE_HERDING_WORKER");
     cmd.env_remove("BEE_HERDING_JOB_ID");
     cmd
