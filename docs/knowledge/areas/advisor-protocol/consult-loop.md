@@ -13,7 +13,7 @@ bee:
   authoritative_for: "advisor-protocol: worker consult loop"
   anchors: [skills/bee-swarming/references/worker-details.md, skills/bee-swarming/references/swarming-reference.md, skills/bee-swarming/SKILL.md, packages/bee/prompts/worker-cell.md]
   verified_at: 2026-11-25
-  verified_commit: f75c1c76556b610f03ae2100dfbf750d56b0c0b9
+  verified_commit: 8cb65072c5bac494d6932b551e354041f436b01f
 ---
 
 # Advisor Protocol — Worker Consult Loop
