@@ -35,15 +35,18 @@ where
 
 #[cfg(test)]
 static AMBIENT_PI_SESSION_ID: std::sync::OnceLock<Option<String>> = std::sync::OnceLock::new();
+#[cfg(test)]
+static AMBIENT_AGY_SESSION_ID: std::sync::OnceLock<Option<String>> = std::sync::OnceLock::new();
 
 #[cfg(test)]
-fn read_initial_pi_session_id() -> Option<String> {
+fn read_initial_env_var(var: &str) -> Option<String> {
+    let prefix = format!("{var}=");
     #[cfg(target_os = "linux")]
     {
         if let Ok(bytes) = std::fs::read("/proc/self/environ") {
             for entry in bytes.split(|&b| b == 0) {
                 if let Ok(s) = std::str::from_utf8(entry) {
-                    if let Some(val) = s.strip_prefix("PI_SESSION_ID=") {
+                    if let Some(val) = s.strip_prefix(&prefix) {
                         let trimmed = js_trim(val);
                         if !trimmed.is_empty() {
                             return Some(trimmed.to_string());
@@ -54,17 +57,23 @@ fn read_initial_pi_session_id() -> Option<String> {
             return None;
         }
     }
-    std::env::var("PI_SESSION_ID")
+    std::env::var(var)
         .ok()
         .map(|s| js_trim(&s).to_string())
         .filter(|s| !s.is_empty())
 }
 
 #[cfg(test)]
-fn ambient_pi_session_id() -> Option<&'static str> {
-    AMBIENT_PI_SESSION_ID
-        .get_or_init(read_initial_pi_session_id)
-        .as_deref()
+fn ambient_env_var(key: &str) -> Option<&'static str> {
+    match key {
+        "PI_SESSION_ID" => AMBIENT_PI_SESSION_ID
+            .get_or_init(|| read_initial_env_var("PI_SESSION_ID"))
+            .as_deref(),
+        "ANTIGRAVITY_CONVERSATION_ID" => AMBIENT_AGY_SESSION_ID
+            .get_or_init(|| read_initial_env_var("ANTIGRAVITY_CONVERSATION_ID"))
+            .as_deref(),
+        _ => None,
+    }
 }
 
 /// Ordered environment-only session identity lookup.
@@ -72,11 +81,9 @@ pub(crate) fn env_session_id() -> Option<String> {
     resolve_env_session_id_from(|key| {
         let val = std::env::var(key).ok()?;
         #[cfg(test)]
-        if key == "PI_SESSION_ID" {
-            if let Some(ambient) = ambient_pi_session_id() {
-                if val == ambient {
-                    return None;
-                }
+        if let Some(ambient) = ambient_env_var(key) {
+            if val == ambient {
+                return None;
             }
         }
         Some(val)
@@ -93,6 +100,15 @@ pub(crate) fn locate_caller_from<F>(lookup: F) -> Option<CallerSession>
 where
     F: Fn(&str) -> Option<String>,
 {
+    if let Some(val) = lookup("ANTIGRAVITY_CONVERSATION_ID") {
+        let trimmed = js_trim(&val);
+        if !trimmed.is_empty() {
+            return Some(CallerSession {
+                id: trimmed.to_string(),
+                runtime: "agy".to_string(),
+            });
+        }
+    }
     if let Some(val) = lookup("PI_SESSION_ID") {
         let trimmed = js_trim(&val);
         if !trimmed.is_empty() {
@@ -140,11 +156,9 @@ pub(crate) fn locate_caller() -> Option<CallerSession> {
     locate_caller_from(|key| {
         let val = std::env::var(key).ok()?;
         #[cfg(test)]
-        if key == "PI_SESSION_ID" {
-            if let Some(ambient) = ambient_pi_session_id() {
-                if val == ambient {
-                    return None;
-                }
+        if let Some(ambient) = ambient_env_var(key) {
+            if val == ambient {
+                return None;
             }
         }
         Some(val)
@@ -218,7 +232,7 @@ mod tests {
 
     #[test]
     fn ambient_pi_session_id_is_isolated_or_preserved() {
-        let initial = ambient_pi_session_id();
+        let initial = ambient_env_var("PI_SESSION_ID");
         if let Some(ambient) = initial {
             assert!(!ambient.is_empty());
         }
@@ -292,6 +306,24 @@ mod tests {
     fn locator_returns_none_for_empty_env() {
         let caller = locate_caller_from(|_| None);
         assert_eq!(caller, None);
+    }
+
+    #[test]
+    fn locator_resolves_agy_first_even_over_claude_and_pi() {
+        let caller = locate_caller_from(|k| match k {
+            "ANTIGRAVITY_CONVERSATION_ID" => Some("agy-conv-1".into()),
+            "PI_SESSION_ID" => Some("pi-id".into()),
+            "CODEX_THREAD_ID" => Some("codex-id".into()),
+            "CLAUDE_CODE_SESSION_ID" => Some("claude-id".into()),
+            _ => None,
+        });
+        assert_eq!(
+            caller,
+            Some(CallerSession {
+                id: "agy-conv-1".into(),
+                runtime: "agy".into(),
+            })
+        );
     }
 
     #[test]

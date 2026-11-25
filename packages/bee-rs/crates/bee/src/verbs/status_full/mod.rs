@@ -71,7 +71,7 @@ const WORKTREE_COMPANION_COMMAND_KEYS: [&str; 3] = [
 // made the reader widen to it); this status/doctor copy of the runtime list
 // follows so bee status's model line and the .claude(/opencode)/agent(s)
 // drift check both see it too — R1 named export, not a hand-kept mirror.
-const RUNTIMES: [&str; 3] = ["claude", "codex", "opencode"];
+const RUNTIMES: [&str; 5] = ["claude", "codex", "opencode", "pi", "agy"];
 
 // model-role-split D2 (store 06e49368): this module's private
 // `MODEL_VALIDATE_SLOTS` is gone. It was the LAST closed list of role names

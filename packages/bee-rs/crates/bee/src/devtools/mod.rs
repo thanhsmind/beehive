@@ -547,7 +547,7 @@ pub fn render_projection_text_for(runtime: &str) -> Option<String> {
         "opencode" => return None,
         // pi-support D4 (named deviation): the Pi belt is the TS extension,
         // so there is no fourth projection to render and no `Runtime::Pi`.
-        "pi" => return None,
+        "pi" | "agy" => return None,
         _ => return None,
     };
     Some(hook_manifests::render_projection_text(r, hook_manifests::Target::Repo))
@@ -567,6 +567,7 @@ mod render_projection_text_for_tests {
         // documented reason.
         assert_eq!(render_projection_text_for("opencode"), None);
         assert_eq!(render_projection_text_for("pi"), None);
+        assert_eq!(render_projection_text_for("agy"), None);
         assert_eq!(render_projection_text_for("emacs"), None);
     }
 }

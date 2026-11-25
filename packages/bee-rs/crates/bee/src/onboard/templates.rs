@@ -271,7 +271,8 @@ pub fn default_config() -> Value {
                 ],
                 // host-packaging-gaps D2: bare `pi` runs the user's own Pi
                 // default model — bee picks no provider or model.
-                "pi": ["pi"]
+                "pi": ["pi"],
+                "agy": ["agy"]
             }
         }
     });
@@ -290,6 +291,18 @@ pub fn default_config() -> Value {
         .as_object_mut()
         .expect("team is an object literal")
         .insert("pi".into(), Value::Object(pi));
+    let agy: Map<String, Value> = config["team"]["claude"]
+        .as_object()
+        .expect("team.claude is an object literal")
+        .iter()
+        .map(|(role, slot)| {
+            (role.clone(), json!({ "kind": "herding", "agent": "agy", "description": slot["description"] }))
+        })
+        .collect();
+    config["team"]
+        .as_object_mut()
+        .expect("team is an object literal")
+        .insert("agy".into(), Value::Object(agy));
     config
 }
 
@@ -437,7 +450,7 @@ pub const HEADER_POINTER_CANDIDATES: &[&str] =
 /// (opencode-support oc-4) and `pi` joined under D1 (pi-stage-dispatch psd-4):
 /// the marker grammar (`render.rs::classify_marker_line`) accepts both as valid
 /// marker labels (`<!-- bee:only opencode -->` and `<!-- bee:only pi -->`).
-pub const RENDER_RUNTIMES: &[&str] = &["claude", "codex", "opencode", "pi"];
+pub const RENDER_RUNTIMES: &[&str] = &["claude", "codex", "opencode", "pi", "agy"];
 pub const RENDER_SCHEMA: &str = "bee-render/2";
 pub const RENDER_SIDECAR: &str = ".bee-render.json";
 pub const SKILLS_VERSION_STAMP: &str = ".bee-skills-version.json";
@@ -606,9 +619,10 @@ mod tests {
         assert!(v["herding"]["agents"].as_object().is_some());
         // host-packaging-gaps D2: a bare `pi` agent — no provider, no model.
         assert_eq!(v["herding"]["agents"]["pi"], json!(["pi"]));
+        assert_eq!(v["herding"]["agents"]["agy"], json!(["agy"]));
         let agent_names: Vec<&str> =
             v["herding"]["agents"].as_object().unwrap().keys().map(|k| k.as_str()).collect();
-        assert_eq!(agent_names, vec!["claude-sonnet", "claude-opus", "claude-fable", "claude-haiku", "pi"]);
+        assert_eq!(agent_names, vec!["claude-sonnet", "claude-opus", "claude-fable", "claude-haiku", "pi", "agy"]);
         assert_eq!(v["herding"]["agent_command"], "claude-sonnet");
     }
 
@@ -657,9 +671,11 @@ mod tests {
 
         // host-packaging-gaps D2: pi mirrors claude's names, in order, after codex.
         let team_keys: Vec<&str> = v["team"].as_object().unwrap().keys().map(|k| k.as_str()).collect();
-        assert_eq!(team_keys, vec!["claude", "codex", "pi"]);
+        assert_eq!(team_keys, vec!["claude", "codex", "pi", "agy"]);
         let pi_names: Vec<&str> = v["team"]["pi"].as_object().unwrap().keys().map(|k| k.as_str()).collect();
         assert_eq!(pi_names, claude_names, "pi");
+        let agy_names: Vec<&str> = v["team"]["agy"].as_object().unwrap().keys().map(|k| k.as_str()).collect();
+        assert_eq!(agy_names, claude_names, "agy");
     }
 
     /// Every claude role ships with a description so `bee models show` is
@@ -687,6 +703,11 @@ mod tests {
                 v["team"]["pi"][name],
                 json!({ "kind": "herding", "agent": "pi", "description": obj["description"] }),
                 "pi.{name}"
+            );
+            assert_eq!(
+                v["team"]["agy"][name],
+                json!({ "kind": "herding", "agent": "agy", "description": obj["description"] }),
+                "agy.{name}"
             );
         }
     }

@@ -45,7 +45,7 @@ const RENDER_RUNTIMES: [&str; 2] = ["claude", "codex"];
 /// a strict superset of RENDER_RUNTIMES. `opencode` and `pi` are valid marker labels
 /// (the ONBOARDING SYNC PATH renders an opencode target and keeps pi in the agents root)
 /// even though this pipeline never emits opencode or pi trees of its own.
-const MARKER_RUNTIMES: [&str; 4] = ["claude", "codex", "opencode", "pi"];
+const MARKER_RUNTIMES: [&str; 5] = ["claude", "codex", "opencode", "pi", "agy"];
 /// Sidecar schema id (bee-render/2, D7).
 const RENDER_SCHEMA: &str = "bee-render/2";
 const RENDER_SIDECAR: &str = ".bee-render.json";
@@ -753,10 +753,11 @@ mod tests {
         // pipeline's own two committed trees) never includes it — D1/E2.
         assert!(matches!(classify_marker_line("<!-- bee:only opencode -->"), MarkerClass::Only(r) if r == "opencode"));
         assert!(matches!(classify_marker_line("<!-- bee:only pi -->"), MarkerClass::Only(r) if r == "pi"));
+        assert!(matches!(classify_marker_line("<!-- bee:only agy -->"), MarkerClass::Only(r) if r == "agy"));
         assert!(matches!(classify_marker_line("<!-- bee:end -->"), MarkerClass::End));
         match classify_marker_line("<!-- bee:only python -->") {
             MarkerClass::Error(e) => {
-                assert_eq!(e, "unknown runtime label \"python\" (expected claude or codex or opencode or pi)")
+                assert_eq!(e, "unknown runtime label \"python\" (expected claude or codex or opencode or pi or agy)")
             }
             _ => panic!("expected an unknown-runtime error"),
         }
@@ -809,7 +810,7 @@ mod tests {
         assert_eq!(
             validate_skill_markers("<!-- bee:only python -->\n<!-- bee:end -->\n"),
             [
-                "unknown runtime label \"python\" (expected claude or codex or opencode or pi) at line 1",
+                "unknown runtime label \"python\" (expected claude or codex or opencode or pi or agy) at line 1",
                 "stray bee:end with no open block at line 2"
             ]
         );
