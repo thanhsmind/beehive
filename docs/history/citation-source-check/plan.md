@@ -25,7 +25,8 @@ Statechart skipped: no event-order flow.
   text (srcchk-3) touch disjoint files and run in parallel.
 - Shared mutable state: none.
 - Smallest safe decomposition: one implementer cell, one tester cell
-  (srcchk-2) on it, one docs cell.
+  (srcchk-2) on it, one docs cell with a docs checker (srcchk-4); the
+  merge door owes srcchk-4 because srcchk-3 was capped from its job.
 
 ## Cell map
 
@@ -34,6 +35,7 @@ Statechart skipped: no event-order flow.
 | srcchk-1 | code | Stop hook checks each cited source against disk and the transcript | D1, D2 |
 | srcchk-2 | test | proves each fail and pass case on fixtures, independent of srcchk-1 | D1, D2 |
 | srcchk-3 | docs | Claim labels and the hook concept say what the check reads | D1, D2 |
+| srcchk-4 | test | checks the srcchk-3 paragraph against the code and the rendered copies | D1, D2 |
 
 ## Load-bearing claims
 
@@ -91,7 +93,12 @@ runs once with `bee test` before `bee worktree merge`.
     "lane": "small",
     "role": "code",
     "deps": [],
-    "decisions": ["D1", "70692733-4e2a-4d1c-a585-2d0077941503", "D2", "b74990d9-f9a0-4635-b920-35200a175ef9"],
+    "decisions": [
+      "D1",
+      "70692733-4e2a-4d1c-a585-2d0077941503",
+      "D2",
+      "b74990d9-f9a0-4635-b920-35200a175ef9"
+    ],
     "files": [
       "packages/bee-rs/crates/bee/src/hooks/session_close/citations.rs",
       "packages/bee-rs/crates/bee/src/hooks/session_close/claims.rs",
@@ -116,7 +123,10 @@ runs once with `bee test` before `bee worktree merge`.
         "the source warning never blocks the Stop"
       ],
       "artifacts": [
-        {"path": "packages/bee-rs/crates/bee/src/hooks/session_close/citations.rs", "substantive": "citation_source_warning"}
+        {
+          "path": "packages/bee-rs/crates/bee/src/hooks/session_close/citations.rs",
+          "substantive": "citation_source_warning"
+        }
       ],
       "key_links": [
         "mod.rs adds the source warning to the Stop claims warnings"
@@ -128,7 +138,10 @@ runs once with `bee test` before `bee worktree merge`.
       ]
     },
     "affects_skills": [],
-    "affects_specs": ["docs/knowledge/areas/hook-runtime/overview.md"]
+    "affects_specs": [
+      "docs/knowledge/areas/hook-runtime/overview.md"
+    ],
+    "judge_obligation_ack": "advisory-only Stop line, never a block; srcchk-2 is an independent tester cell sharing no context with srcchk-1"
   },
   {
     "id": "srcchk-2",
@@ -136,8 +149,15 @@ runs once with `bee test` before `bee worktree merge`.
     "title": "Prove the cited-source check on fixtures",
     "lane": "small",
     "role": "test",
-    "deps": ["srcchk-1"],
-    "decisions": ["D1", "70692733-4e2a-4d1c-a585-2d0077941503", "D2", "b74990d9-f9a0-4635-b920-35200a175ef9"],
+    "deps": [
+      "srcchk-1"
+    ],
+    "decisions": [
+      "D1",
+      "70692733-4e2a-4d1c-a585-2d0077941503",
+      "D2",
+      "b74990d9-f9a0-4635-b920-35200a175ef9"
+    ],
     "files": [
       "packages/bee-rs/crates/bee/src/hooks/session_close/tests.rs"
     ],
@@ -161,7 +181,8 @@ runs once with `bee test` before `bee worktree merge`.
       ]
     },
     "affects_skills": [],
-    "affects_specs": []
+    "affects_specs": [],
+    "judge_obligation_ack": "advisory-only Stop line, never a block; srcchk-2 is an independent tester cell sharing no context with srcchk-1"
   },
   {
     "id": "srcchk-3",
@@ -170,7 +191,12 @@ runs once with `bee test` before `bee worktree merge`.
     "lane": "small",
     "role": "docs",
     "deps": [],
-    "decisions": ["D1", "70692733-4e2a-4d1c-a585-2d0077941503", "D2", "b74990d9-f9a0-4635-b920-35200a175ef9"],
+    "decisions": [
+      "D1",
+      "70692733-4e2a-4d1c-a585-2d0077941503",
+      "D2",
+      "b74990d9-f9a0-4635-b920-35200a175ef9"
+    ],
     "files": [
       "skills/bee-hive/references/routing-and-contracts.md",
       ".claude-plugin/skills/bee-hive/",
@@ -193,7 +219,10 @@ runs once with `bee test` before `bee worktree merge`.
         "the Pushback text is unchanged"
       ],
       "artifacts": [
-        {"path": "skills/bee-hive/references/routing-and-contracts.md", "substantive": "source check paragraph"}
+        {
+          "path": "skills/bee-hive/references/routing-and-contracts.md",
+          "substantive": "source check paragraph"
+        }
       ],
       "key_links": [],
       "prohibitions": [
@@ -201,7 +230,54 @@ runs once with `bee test` before `bee worktree merge`.
         "No change to LEADER.md"
       ]
     },
-    "affects_skills": ["skills/bee-hive/references/routing-and-contracts.md"],
+    "affects_skills": [
+      "skills/bee-hive/references/routing-and-contracts.md"
+    ],
+    "affects_specs": []
+  },
+  {
+    "id": "srcchk-4",
+    "feature": "citation-source-check",
+    "title": "Check the Claim labels source-check paragraph against the code",
+    "lane": "small",
+    "role": "test",
+    "deps": [
+      "srcchk-3"
+    ],
+    "decisions": [
+      "D1",
+      "70692733-4e2a-4d1c-a585-2d0077941503",
+      "D2",
+      "b74990d9-f9a0-4635-b920-35200a175ef9"
+    ],
+    "files": [
+      "docs/history/citation-source-check/srcchk-4-check.md"
+    ],
+    "read_first": [
+      "docs/history/citation-source-check/CONTEXT.md",
+      "skills/bee-hive/references/routing-and-contracts.md",
+      "packages/bee-rs/crates/bee/src/hooks/session_close/citations.rs"
+    ],
+    "action": "Docs checker, no edits to skills, doctrine or code. Read the srcchk-3 commit 682f29869. Confirm the new paragraph in skills/bee-hive/references/routing-and-contracts.md section Claim labels and pushback matches what citations.rs does (file missing, line past end, backticked token within 20 lines, command never run), that the Pushback text and the two examples are unchanged, and that the rendered bee-hive copies under .claude/skills, .agents/skills, .claude-plugin/skills, .codex-plugin/skills and .opencode/skills carry the same paragraph. Write docs/history/citation-source-check/srcchk-4-check.md with what you checked, the command output summary and a pass or fail verdict. A fail is returned as blocked with the evidence. Bee commands you may run: bee dev release-manifest --check. Run no dispatch verb, not even its help.",
+    "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test pointer_integrity && .bee/bin/bee dev release-manifest --check",
+    "judge_obligation_ack": "docs checker over one paragraph, no guard logic",
+    "must_haves": {
+      "truths": [
+        "the checker report states pass only when the paragraph matches citations.rs and every rendered copy carries it",
+        "pointer integrity passes"
+      ],
+      "artifacts": [
+        {
+          "path": "docs/history/citation-source-check/srcchk-4-check.md",
+          "substantive": "check record with verdict"
+        }
+      ],
+      "key_links": [],
+      "prohibitions": [
+        "No edits outside the check record"
+      ]
+    },
+    "affects_skills": [],
     "affects_specs": []
   }
 ]
