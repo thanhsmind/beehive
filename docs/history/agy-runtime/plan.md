@@ -134,7 +134,7 @@ is a named list read off a live agy run, with a fail-safe for unknown tools.
    "why": "agy must be a runtime bee knows by name before a leader can run in it.",
    "out_of_scope": ["the hooks.json belt", "the agy-belt translator", "docs"],
    "truths": [
-    "bee dispatch prepare --runtime agy is accepted and a native slot refuses with the herding remedy",
+    "bee dispatch prepare --runtime agy --kind cell is accepted and a native slot refuses with the herding remedy",
     "a skill block marked bee:only agy survives the codex render and is stripped from the claude render",
     "ANTIGRAVITY_CONVERSATION_ID names an agy session even when CLAUDE_CODE_SESSION_ID is set",
     "the onboarding template carries team.agy with the same roles as team.pi"
@@ -166,7 +166,7 @@ is a named list read off a live agy run, with a fail-safe for unknown tools.
    "truths": [
     "a PreToolUse run_command that the write guard refuses prints decision deny with the guard's reason",
     "a PreToolUse the checks pass prints decision ask",
-    "invoke_subagent is denied with a reason naming bee dispatch prepare --runtime agy",
+    "invoke_subagent is denied with a reason naming bee dispatch prepare --runtime agy --kind cell",
     "a Stop the session-close hook blocks prints decision continue",
     "every run prints exactly one JSON object and exits 0"
    ],
@@ -255,7 +255,7 @@ is a named list read off a live agy run, with a fail-safe for unknown tools.
   "read_first": ["docs/history/agy-runtime/CONTEXT.md", "docs/history/agy-runtime/discovery.md"],
   "affects_skills": [],
   "affects_specs": [],
-  "action": "Without reading the implementers' notes, check agyrt-1, agyrt-2 and agyrt-3 against agy-runtime D1-D7 and add integration tests in tests/agy_belt_contracts.rs that drive the built bee binary against a temp git repo onboarded the way the existing integration tests do (see tests/pi_plugin_contracts.rs and tests/opencode_plugin_contracts.rs for the harness). Feed bee hook agy-belt the agy payload shapes recorded in docs/history/agy-runtime/discovery.md and assert: a PreToolUse write_file to a path the write guard refuses (a governed path before the gate, or a secret-shaped file) prints decision deny; an allowed read_file prints decision ask; run_command with a command the CLI-shape or write guard refuses prints deny; invoke_subagent prints deny naming bee dispatch prepare --runtime agy; a PreInvocation with invocationNum 0 prints injectSteps and with invocationNum 3 prints {}; SessionStart prints injectSteps with bee text; a Stop prints one JSON object; garbage stdin on PreToolUse prints deny and exit code 0; every output is exactly one JSON object. Run bee onboard --apply on a temp repo with an owner .agents/hooks.json holding a key owner: after apply the owner key is unchanged, the bee key exists, a second apply leaves the bytes equal, and a malformed file is refused and left unchanged. Assert bee dispatch prepare --runtime agy with a native slot refuses with the herding remedy. See each new test fail on purpose once (break an assertion) before trusting it. A tester never edits product code: on a defect return BLOCKED with the red output. No code comments.",
+  "action": "Without reading the implementers' notes, check agyrt-1, agyrt-2 and agyrt-3 against agy-runtime D1-D7 and add integration tests in tests/agy_belt_contracts.rs that drive the built bee binary against a temp git repo onboarded the way the existing integration tests do (see tests/pi_plugin_contracts.rs and tests/opencode_plugin_contracts.rs for the harness). Feed bee hook agy-belt the agy payload shapes recorded in docs/history/agy-runtime/discovery.md and assert: a PreToolUse write_file to a path the write guard refuses (a governed path before the gate, or a secret-shaped file) prints decision deny; an allowed read_file prints decision ask; run_command with a command the CLI-shape or write guard refuses prints deny; invoke_subagent prints deny naming bee dispatch prepare --runtime agy --kind cell; a PreInvocation with invocationNum 0 prints injectSteps and with invocationNum 3 prints {}; SessionStart prints injectSteps with bee text; a Stop prints one JSON object; garbage stdin on PreToolUse prints deny and exit code 0; every output is exactly one JSON object. Run bee onboard --apply on a temp repo with an owner .agents/hooks.json holding a key owner: after apply the owner key is unchanged, the bee key exists, a second apply leaves the bytes equal, and a malformed file is refused and left unchanged. Assert bee dispatch prepare --runtime agy --kind cell with a native slot refuses with the herding remedy. See each new test fail on purpose once (break an assertion) before trusting it. A tester never edits product code: on a defect return BLOCKED with the red output. No code comments.",
   "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test agy_belt_contracts",
   "must_haves": {
    "why": "A code cell never certifies itself.",
