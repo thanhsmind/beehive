@@ -9,11 +9,11 @@ bee:
   areas: [onboarding]
   required_context: [areas/onboarding/overview.md]
   decisions: ["claude-settings-baseline D1-D7 (onboarding projects the owner's Claude settings baseline add-only into the host's own .claude/settings.json, on by default, with a durable opt-out; the projection announces itself whenever it runs; CONTEXT.md)", "verification-ships-to-hosts D1/D2/D3 (a host project also receives a verification skill pair and, once generated, its own project verification skill rendered into every runtime home; the generated drive command composes into the declared test command)", "0d3e4f89 (that render creates and updates only, never removes)", "3318374a (installer hardening: default instructions import, D1)", "bbc6bcea (shim-retire: unified command surface; retired helper scripts removed from hosts)", de967733 (advisor mode removed; stale config key warned-and-ignored), capture flush b57f6470 (shipped configuration sample is the annotated reference; 2026-07-19)]
-  sources: ["claude-settings-baseline cell csb-1 (2026-11-10; the baseline constant, the add-only merge, the durable opt-out and the notice)", "claude-settings-baseline cell csb-2 (2026-11-10; installer pass-through in install.sh and install.ps1)", "verification-ships-to-hosts cells vsh-1..vsh-4 (2026-09-01; the skill pair, the copy-only render path, the offer notice and the consent split — capped traces, independently goal-checked, and driven end to end against a throwaway host repo)", "shim-retire D2 retirement pass (cells shim-retire-2, shim-retire-6 self-onboard proof, 2026-07-14)", "installer-hardening ih-1..ih-6 (cells, 2026-07-13; flushed capture stub 92c9bcf6)", "fanout-delegation D1 (stale advisor key tolerance, 2026-07-12)", "capture stub b57f6470-bac2-422a-9dea-1bb4cc93bc0e (shipped config sample carries a per-surface doc block, all model-slot shapes, gate-bypass levels, hook toggles, and the external-command tier's gather-only contract; flushed 2026-07-19)", "docs/specs/onboarding.md#R13", "docs/specs/onboarding.md#R14", "docs/specs/onboarding.md#E6", "docs/specs/onboarding.md#E15", "docs/specs/onboarding.md#P14"]
+  sources: ["claude-settings-baseline cell csb-1 (2026-11-10; the baseline constant, the add-only merge, the durable opt-out and the notice)", claude-settings-baseline cell csb-2 (2026-11-10; installer pass-through in install.sh and install.ps1), "verification-ships-to-hosts cells vsh-1..vsh-4 (2026-09-01; the skill pair, the copy-only render path, the offer notice and the consent split — capped traces, independently goal-checked, and driven end to end against a throwaway host repo)", "shim-retire D2 retirement pass (cells shim-retire-2, shim-retire-6 self-onboard proof, 2026-07-14)", "installer-hardening ih-1..ih-6 (cells, 2026-07-13; flushed capture stub 92c9bcf6)", "fanout-delegation D1 (stale advisor key tolerance, 2026-07-12)", "capture stub b57f6470-bac2-422a-9dea-1bb4cc93bc0e (shipped config sample carries a per-surface doc block, all model-slot shapes, gate-bypass levels, hook toggles, and the external-command tier's gather-only contract; flushed 2026-07-19)", "docs/specs/onboarding.md#R13", "docs/specs/onboarding.md#R14", "docs/specs/onboarding.md#E6", "docs/specs/onboarding.md#E15", "docs/specs/onboarding.md#P14"]
   authoritative_for: "onboarding: the artifacts a host project receives and keeps"
   anchors: [.claude/settings.json, packages/bee-rs/crates/bee/src/onboard/hooks_wiring.rs, packages/bee-rs/crates/bee/src/onboard/notices.rs, packages/bee-rs/crates/bee/src/onboard/templates.rs, packages/bee-rs/crates/bee/src/onboard/apply.rs, packages/bee/AGENTS.windows.md, packages/bee-rs/crates/bee/src/onboard/merge.rs, packages/bee-rs/crates/bee/src/onboard/plan.rs, packages/bee-rs/crates/bee/src/onboard/mod.rs, scripts/install.sh, scripts/install.ps1, skills/bee-deploying/references/deploy.sh.template, skills/bee-deploying/references/DEPLOY.template.md]
-  verified_at: 2026-11-16
-  verified_commit: 32878a03635a413a538709e9ca05050fccd6e6fb
+  verified_at: 2026-11-25
+  verified_commit: 1de3a4bfff52f6ac99fdc9e5524e24b24a1f762a
 ---
 
 # Onboarding — The Artifacts a Host Project Receives and Keeps
@@ -138,8 +138,13 @@ the notice names the denied set rather than mentioning it in passing.
 **Publish the deploy skill to the skillstation hub (only with `--skillstation`).**
 Trigger: an onboard run with `--skillstation` while the skill sync is on and not
 blocked. What changes: the plan gains one `publish_skillstation` item per entry of
-the constant `HUB_SKILLS`, which holds only `bee-deploying`; the item names the
-skill, its rendered `.claude/skills/<name>` path and target `skillstation`. The
+the constant `HUB_SKILLS`, which holds only `bee-deploying`, unless the hub already
+serves that skill as `active` with the same rendered files (`hub_needs_publish`), or
+the skill is one of the hub-served principles in hub mode. The item names the
+skill, its rendered `.claude/skills/<name>` path and target `skillstation`. In hub
+mode the same switch also plans a publish for each hub-served engine skill and
+picked design pack (`publish_principle_items`); that flow is owned by
+[Skillstation hub skills and the /<id> alias](skillstation-hub-skills-and-aliases.md). The
 apply copies that rendered folder to a staging copy under
 `.bee/tmp/skillstation-publish/<name>` and points the CLI at the copy, because
 `skillstation skill commit <folder> --yes` (measured on skillstation 0.9.0)

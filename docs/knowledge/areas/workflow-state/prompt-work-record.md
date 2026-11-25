@@ -12,11 +12,14 @@ bee:
   sources: [prompt-work-record capture stubs 754cfe7e and 36f69784 (flushed 2026-08-26), packages/bee-rs/crates/bee/src/hooks/activity.rs, packages/bee-rs/crates/bee/src/verbs/work.rs]
   authoritative_for: "workflow-state: the prompt work record, its statuses, and its acceptance"
   anchors: [packages/bee-rs/crates/bee/src/hooks/activity.rs, packages/bee-rs/crates/bee/src/verbs/work.rs]
-  verified_at: 2026-08-26
-  verified_commit: ec9d3604d04eaa87beb3c6890909ffa457e027e9
+  verified_at: 2026-11-25
+  verified_commit: 1de3a4bfff52f6ac99fdc9e5524e24b24a1f762a
 ---
 
 # Workflow State — the prompt work record and its acceptance
+
+Read when: a board or a sibling session shows the wrong ask, `bee work set`
+refuses, or a prompt is stored as `[redacted]`.
 
 The session record already says what an agent is *doing* (the activity
 record). This concept owns the sibling object that says what the human
@@ -28,10 +31,14 @@ of the agent's paraphrase.
 
 **B1 — The prompt is captured verbatim, titled by its first line.** The
 session record carries a `work` object beside `activity`. It holds the
-user's prompt as typed, with the first line as the title. A follow-up
-prompt while the record stays open is appended to the same record, never
-a second record. Before storage the text is path-scrubbed and
-secret-redacted.
+user's prompt as typed, with the first line as the title (capped at 200
+characters). A follow-up prompt while the record's status is `open` is
+appended to the same record, never a second record; once the agent moves
+the record off `open`, the next prompt opens a fresh one. The text keeps
+the newest 8000 characters and drops the oldest. Before storage, absolute
+paths are reduced (repo-relative under the root, `<path>` elsewhere), and
+a prompt that matches a secret pattern is stored whole as `[redacted]` —
+never a partial redaction.
 
 **B2 — Only the secret half of the scanners reads a prompt.** Of the two
 scanner families that watch recorded text, only the secret patterns run
@@ -47,13 +54,15 @@ open record; `bee work set` writes the agent's side, including the
 acceptance. An acceptance IS the promotion to a card — there is no
 separate promote verb. The status vocabulary is a closed set of four,
 chosen to match the board columns that already exist rather than
-inventing a new column:
+inventing a new column. The diagram shows the intended flow; `bee work set
+--status` checks only that the value is one of the four, so any status can
+follow any other:
 
 ```mermaid
 stateDiagram-v2
     [*] --> open : prompt captured
     open --> open : follow-up appended
-    open --> active : acceptance written
+    open --> active : status set to active
     active --> done
     open --> dropped
     active --> dropped
