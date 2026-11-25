@@ -11,10 +11,15 @@
     "uat": false
   },
   "summary": "Feature \"agy-runtime\" started at phase \"exploring\" (lane).",
-  "next_action": "Continue bee-exploring for \"agy-runtime\" (lane).",
+  "next_action": "Merged into main at 263d74a; reload the product and test \"agy-runtime\", then either approve uat (\"bee gate --name uat --approved true --lane agy-runtime\") or fix it in the worktree and merge again.",
   "created_at": "2026-11-25T09:15:57.577Z",
   "run_state": "awaiting-approval",
-  "waiting_on": null,
+  "waiting_on": {
+    "kind": "gate",
+    "subject": "uat: agy-runtime",
+    "asked_at": "2026-11-25T10:20:19.400Z",
+    "session": "bee-worktree-merge-sessionless"
+  },
   "route": {
     "class": "feature",
     "lane": "standard",
@@ -932,12 +937,5 @@
   },
   "gate_revoked_at": {
     "execution": "2026-11-25T10:06:28.235Z"
-  },
-  "merge_ready": {
-    "since": "2026-11-25T10:19:53.656Z",
-    "branch": "wt/agy-runtime",
-    "worktree_id": "beehive--wt--agy-runtime",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
