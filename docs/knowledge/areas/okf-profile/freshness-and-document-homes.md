@@ -12,8 +12,8 @@ bee:
   sources: [docs/history/knowledge-freshness-mechanic/CONTEXT.md, docs/history/knowledge-freshness-mechanic/plan.md, docs/history/knowledge-docs-in-the-flow/CONTEXT.md, docs/history/knowledge-docs-in-the-flow/plan.md, docs/history/knowledge-useful-rules/CONTEXT.md]
   authoritative_for: "okf-profile: the document homes rule, the anchor and verified fields, the cap re-confirm step, the host seed step, the pull-rate measure, the read set, the templates rule and its three writing warnings, and the decision-link error"
   anchors: [packages/bee-rs/crates/bee/src/verbs/knowledge/freshness.rs, packages/bee-rs/crates/bee/src/verbs/cells/sync_door.rs, packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs, packages/bee-rs/crates/bee/src/verbs/drivers/context_table.rs, packages/bee-rs/crates/bee/src/verbs/state_group/plan_packets.rs, packages/bee-rs/crates/bee/src/verbs/knowledge/check.rs, packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs]
-  verified_at: 2026-11-14
-  verified_commit: cdefa65590c37a8f7f9a716d23cd23df9a082c54
+  verified_at: 2026-11-25
+  verified_commit: 9729d9879406757099df32ece356a4c21eb4239a
 ---
 
 # Bee OKF Profile (freshness, anchors and the document homes)
@@ -100,12 +100,14 @@ The parser (`parse_read_set` in `packages/bee-rs/crates/bee/src/verbs/drivers/co
 Gate approval for `shape` or `--merge` gates validates the read set through `read_set_refusal` (`packages/bee-rs/crates/bee/src/verbs/state_group/plan_packets.rs`) at the pre-lock peek, immediately after the plan claims check. Plain `--name execution` approvals never run the check. Features running on `tiny`, `small`, or `docs` lanes are exempt.
 
 The check enforces three conditions:
+The check reads from the feature's granted worktree when one exists, and from the repo root otherwise; both the CONTEXT.md and the read-set paths resolve against that one base.
+
 1. **Readable context file:** `docs/history/<feature>/CONTEXT.md` must exist and be readable. If the file cannot be read, approval is refused with:
    `gate: approval refused — docs/history/<feature>/CONTEXT.md could not be read at <path> (<reason>). FIX: run \`bee knowledge context --work <feature>\` and \`bee knowledge search --text "<topic>"\`, write the section (skills/bee-shaping/references/context-template.md), or add \`<!-- bee:no-read-set: <reason> -->\` for a CONTEXT.md written before the read set existed.`
 2. **Recorded escape marker:** If the file contains `<!-- bee:no-read-set:` anywhere, the check passes immediately. The marker records the rationale for legacy context files created before the read set existed.
 3. **Section presence and resolving paths:** When no escape marker is present, `parse_read_set` must return a list of paths. If the `## Read set` section or the knowledge table is missing, approval is refused with:
    `gate: approval refused — docs/history/<feature>/CONTEXT.md has no "## Read set" section. FIX: run \`bee knowledge context --work <feature>\` and \`bee knowledge search --text "<topic>"\`, write the section (skills/bee-shaping/references/context-template.md), or add \`<!-- bee:no-read-set: <reason> -->\` for a CONTEXT.md written before the read set existed.`
-   An empty knowledge table (zero rows) passes. When rows are present, every path must start with `docs/knowledge/` and resolve to an existing file on disk under the repo root. If any path fails this check, approval is refused with:
+   An empty knowledge table (zero rows) passes. When rows are present, every path must start with `docs/knowledge/` and resolve to an existing file on disk under that base. If any path fails this check, approval is refused with:
    `gate: approval refused — docs/history/<feature>/CONTEXT.md read set names \`<path>\`, which is not a docs/knowledge/ path on disk. FIX: fix the path or remove the row.`
 
 Refusals mutate no state. Knowledge is pulled on demand; briefs do not push the read set.
