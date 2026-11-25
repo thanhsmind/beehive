@@ -340,4 +340,43 @@ mod tests {
         assert!(!probed.get());
         assert!(matches!(outcome, OwnerAskOutcome::Pass));
     }
+
+    fn owner_only_events(marker: Option<&str>) -> Vec<Value> {
+        let refusal = match marker {
+            Some(target) => format!("bee: write refused for the agent. [owner-only: {target}]"),
+            None => "bee: write refused for the agent.".to_string(),
+        };
+        vec![
+            json!({
+                "type": "user",
+                "message": { "content": [{ "type": "tool_result", "tool_use_id": "t1", "content": refusal }] }
+            }),
+            json!({
+                "type": "assistant",
+                "message": { "content": [{ "type": "text", "text": "bạn chạy cp .bee/team-only-agy.json .bee/team.json" }] }
+            }),
+        ]
+    }
+
+    fn evaluate_present(events: &[Value]) -> OwnerAskOutcome {
+        evaluate_with(&stop_ctx(json!({})), events, false, present_door)
+    }
+
+    #[test]
+    fn owner_only_marker_for_named_target_passes_with_door_present() {
+        let outcome = evaluate_present(&owner_only_events(Some(".bee/team.json")));
+        assert!(matches!(outcome, OwnerAskOutcome::Pass));
+    }
+
+    #[test]
+    fn owner_ask_without_owner_only_marker_blocks() {
+        let outcome = evaluate_present(&owner_only_events(None));
+        assert!(matches!(outcome, OwnerAskOutcome::Block(_)));
+    }
+
+    #[test]
+    fn owner_only_marker_for_another_target_blocks() {
+        let outcome = evaluate_present(&owner_only_events(Some(".bee/state.json")));
+        assert!(matches!(outcome, OwnerAskOutcome::Block(_)));
+    }
 }
