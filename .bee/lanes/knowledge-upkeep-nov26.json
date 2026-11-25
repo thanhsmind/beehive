@@ -11,8 +11,8 @@
     "uat": false
   },
   "summary": "Feature \"knowledge-upkeep-nov26\" started at phase \"exploring\" (lane).",
-  "next_action": "Continue bee-exploring for \"knowledge-upkeep-nov26\" (lane).",
+  "next_action": "Merged into main at 6e02906; capture what settled, then bee close --feature knowledge-upkeep-nov26, then write the handoff and continue in a fresh leader session (one leader session per feature).",
   "created_at": "2026-11-25T17:55:47.685Z",
-  "run_state": "awaiting-approval",
+  "run_state": null,
   "waiting_on": null
 }
