@@ -2824,3 +2824,111 @@ so the next session can resume cleanly, or record a capture stub for what settle
             "{warning}"
         );
     }
+
+    fn cited_fixture(token_line: usize, total: usize) -> tempfile::TempDir {
+        let fx = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(fx.path().join("src")).unwrap();
+        let content: String = (1..=total)
+            .map(|i| if i == token_line { "fn target_symbol() {}\n".to_string() } else { format!("fn filler_{i}() {{}}\n") })
+            .collect();
+        std::fs::write(fx.path().join("src/long.rs"), content).unwrap();
+        fx
+    }
+
+    fn cited_turn(shape: Shape, ran: &[&str], reply: &str) -> Vec<Value> {
+        let mut events = vec![user_message(shape, "check it")];
+        for (i, cmd) in ran.iter().enumerate() {
+            let id = format!("c{i}");
+            events.push(shell_call(shape, &id, cmd));
+            events.push(call_output(shape, &id, "ok"));
+        }
+        events.push(assistant_reply(shape, reply));
+        events
+    }
+
+    #[test]
+    fn citation_source_range_with_token_inside_is_quiet() {
+        let fx = cited_fixture(50, 80);
+        for shape in SHAPES {
+            let events = cited_turn(shape, &[], "Found it [1].\n\nSources:\n[1] src/long.rs:5-50 — `target_symbol`");
+            assert_eq!(citation_source_warning(fx.path(), &events), None, "{shape:?}");
+        }
+    }
+
+    #[test]
+    fn citation_source_token_only_in_reply_line_checks_near_the_cited_line() {
+        let fx = cited_fixture(50, 80);
+        for shape in SHAPES {
+            let near = cited_turn(shape, &[], "The loader calls `target_symbol` [1].\n\nSources:\n[1] src/long.rs:45");
+            assert_eq!(citation_source_warning(fx.path(), &near), None, "{shape:?}");
+            let far = cited_turn(shape, &[], "The loader calls `target_symbol` [1].\n\nSources:\n[1] src/long.rs:5");
+            let warning = citation_source_warning(fx.path(), &far).expect("warns");
+            assert!(warning.contains("[1] src/long.rs:5: text not found near line 5: target_symbol"), "{shape:?}: {warning}");
+        }
+    }
+
+    #[test]
+    fn citation_source_path_without_line_finds_token_anywhere() {
+        let fx = cited_fixture(75, 80);
+        for shape in SHAPES {
+            let events = cited_turn(shape, &[], "Found it [1].\n\nSources:\n[1] src/long.rs — `target_symbol`");
+            assert_eq!(citation_source_warning(fx.path(), &events), None, "{shape:?}");
+        }
+    }
+
+    #[test]
+    fn citation_source_doctrine_command_form_matches_a_longer_run() {
+        let fx = tempfile::tempdir().unwrap();
+        let reply = "The lane check holds [2].\n\nSources:\n[2] cargo test route_rejects_unknown_lane — 1 passed";
+        for shape in SHAPES {
+            let ran = cited_turn(shape, &["PATH=x cargo test --release -- route_rejects_unknown_lane"], reply);
+            assert_eq!(citation_source_warning(fx.path(), &ran), None, "{shape:?}");
+            let not_ran = cited_turn(shape, &["git status"], reply);
+            let warning = citation_source_warning(fx.path(), &not_ran).expect("warns");
+            assert!(warning.contains("[2] cargo test route_rejects_unknown_lane: command not run"), "{shape:?}: {warning}");
+        }
+    }
+
+    #[test]
+    fn citation_source_codex_function_call_cmd_string_counts_as_run() {
+        let fx = tempfile::tempdir().unwrap();
+        let arguments = json!({"cmd":"cargo test --release -- session_close"}).to_string();
+        let events = vec![
+            user_message(Shape::Codex, "run tests"),
+            json!({"type":"response_item","payload":{"type":"function_call","name":"exec_command","call_id":"x1","arguments":arguments}}),
+            call_output(Shape::Codex, "x1", "ok"),
+            assistant_reply(Shape::Codex, "Tests pass [1].\n\nSources:\n[1] `cargo test session_close` — 5 passed"),
+        ];
+        assert_eq!(citation_source_warning(fx.path(), &events), None);
+    }
+
+    #[test]
+    fn citation_source_four_failures_lists_three() {
+        let fx = tempfile::tempdir().unwrap();
+        let reply = "See [1] [2] [3] [4].\n\nSources:\n[1] src/a.rs:1\n[2] src/b.rs:2\n[3] src/c.rs:3\n[4] src/d.rs:4";
+        for shape in SHAPES {
+            let warning = citation_source_warning(fx.path(), &cited_turn(shape, &[], reply)).expect("warns");
+            assert!(warning.contains("bee: 4 cited source(s) did not check out"), "{shape:?}: {warning}");
+            assert!(warning.contains("[1] src/a.rs:1: file not found"), "{shape:?}: {warning}");
+            assert!(warning.contains("[3] src/c.rs:3: file not found"), "{shape:?}: {warning}");
+            assert!(!warning.contains("src/d.rs"), "{shape:?}: {warning}");
+        }
+    }
+
+    #[test]
+    fn citation_source_plain_prose_source_is_quiet() {
+        let fx = tempfile::tempdir().unwrap();
+        for shape in SHAPES {
+            let events = cited_turn(shape, &["git status"], "The team chose this [1].\n\nSources:\n[1] the design review notes from last week");
+            assert_eq!(citation_source_warning(fx.path(), &events), None, "{shape:?}");
+        }
+    }
+
+    #[test]
+    fn citation_source_reply_without_sources_block_is_quiet() {
+        let fx = tempfile::tempdir().unwrap();
+        for shape in SHAPES {
+            let events = cited_turn(shape, &[], "Steps to read:\n[1] src/missing.rs:9 holds `absent_token`\n[2] `cargo test never_ran` — 1 passed");
+            assert_eq!(citation_source_warning(fx.path(), &events), None, "{shape:?}");
+        }
+    }
