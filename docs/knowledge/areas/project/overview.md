@@ -16,8 +16,8 @@ bee:
   owns.skills: [skills/bee-knowledge-setup/SKILL.md]
   owns.tests: []
   anchors: [README.md, packages/bee-rs/Cargo.toml, packages/bee-rs/crates/bee/src/main.rs, packages/bee-rs/crates/bee/src/router.rs, packages/bee-rs/crates/bee/src/verbs/mod.rs, packages/bee-rs/crates/fleet/Cargo.toml, .github/workflows/ci.yml, scripts/release.sh]
-  verified_at: 2026-11-15
-  verified_commit: a963c71a41249647b5aa15a64118f007f39c4c67
+  verified_at: 2026-11-25
+  verified_commit: f75c1c76556b610f03ae2100dfbf750d56b0c0b9
 ---
 
 # Project map
@@ -106,8 +106,8 @@ The full routed list of every concept is `docs/knowledge/index.md`.
 | Job | Command |
 |---|---|
 | Build | `cargo build --release --manifest-path packages/bee-rs/Cargo.toml` |
-| Full suite | `bee test`, which runs `commands.test` from `.bee/config.json`: `cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml` |
-| CI | `.github/workflows/ci.yml` (Linux) and `.github/workflows/windows.yml` run the full suite on every push and pull request. |
+| Full suite | `bee test`, which runs the entries of `commands.test` in `.bee/config.json` in order: `cargo clippy --manifest-path packages/bee-rs/Cargo.toml -- -D warnings`, then `cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml` |
+| CI | On every push and pull request, `.github/workflows/ci.yml` (Linux) runs clippy with `-D warnings` and then the cargo test suite, in a matrix over two pinned OpenCode versions; `.github/workflows/windows.yml` runs the cargo test suite. |
 | Release | `scripts/release.sh <VERSION>` only. It bumps the manifests, regenerates, runs the suite and the live smoke, tags, and waits for `release-binaries.yml`. |
 
 ## Dependencies that matter

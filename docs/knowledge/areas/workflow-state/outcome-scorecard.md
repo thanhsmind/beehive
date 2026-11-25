@@ -12,8 +12,8 @@ bee:
   sources: [outcome-scorecard cells osc-1/osc-1t/osc-2/osc-2t/osc-3/osc-3t/osc-4/osc-4c (docs/history/outcome-scorecard/plan.md, 2026-11-17), packages/bee-rs/crates/bee/src/verbs/report_outcomes.rs, packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs, packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs, packages/bee-rs/crates/bee/src/herding/run.rs, packages/bee-rs/crates/bee/src/verbs/drivers/close.rs]
   authoritative_for: "workflow-state: per-feature outcome scorecard metrics, sources, and missing-data rules"
   anchors: [packages/bee-rs/crates/bee/src/verbs/report_outcomes.rs, packages/bee-rs/crates/bee/src/herding/run.rs, packages/bee-rs/crates/bee/src/verbs/drivers/close.rs, packages/bee-rs/crates/bee/src/audit.rs]
-  verified_at: 2026-11-17
-  verified_commit: 993b9548c8f1ec83c3b7d0e846b7930e662ae316
+  verified_at: 2026-11-25
+  verified_commit: f75c1c76556b610f03ae2100dfbf750d56b0c0b9
 ---
 
 # Workflow State — the per-feature outcome scorecard (`bee report outcomes --by-feature`)

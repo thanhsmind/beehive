@@ -12,8 +12,8 @@ bee:
   sources: [docs/history/workspace-protocol/CONTEXT.md (D1-D12), docs/history/workspace-protocol/plan.md, workspace-protocol cells wsp-1..wsp-4, docs/history/protocol-init-from-project/CONTEXT.md (D1-D8), docs/history/onboard-workspace-protocol/CONTEXT.md (D1-D3), cell owp-2]
   authoritative_for: "workflow-state: WORKSPACE_PROTOCOL.md, bee protocol, the prepare digests, bee dispatch verify, the purpose leaning lint"
   anchors: [packages/bee/prompts/worker-cell.md, packages/bee/prompts/advisor.md, packages/bee-rs/crates/bee/src/verbs/protocol.rs, packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs, packages/bee-rs/crates/bee/src/verbs/drivers/brief_lint.rs, packages/bee-rs/crates/bee/src/doctor.rs, packages/bee-rs/crates/bee/src/onboard/notices.rs, packages/bee-rs/crates/bee/src/onboard/mod.rs]
-  verified_at: 2026-11-14
-  verified_commit: cdefa65590c37a8f7f9a716d23cd23df9a082c54
+  verified_at: 2026-11-25
+  verified_commit: f75c1c76556b610f03ae2100dfbf750d56b0c0b9
 ---
 
 # Workflow State — the workspace protocol file, dispatch receipts, and brief discipline
@@ -121,10 +121,12 @@ gate. A worker never reads the file. The rule lives in the leader doctrine
 
 **Prepare records a digest of the prompt and of the protocol (D7).** Every
 record that `bee dispatch prepare` appends to `.bee/logs/dispatch.jsonl`, of
-every kind, has two more keys. `prompt_sha256` is the sha256 hex of the exact
-text field that the returned payload carries to the worker: `prompt` for an
-Agent or spawn payload, `stdin` for a Bash herding or cli payload, `message`
-for a codex payload. `protocol_sha256` is the sha256 hex of the protocol file
+every kind, has two more keys. `prompt_sha256` is the sha256 hex of the
+prompt text the worker receives: the `prompt` field for an Agent or spawn
+payload, `stdin` for a Bash herding or cli payload, `message` for a codex
+payload. When `--prompt-out` routes the prompt into a `--task-file`, the
+payload carries none of these fields, and the digest is over the bytes
+written to that file. `protocol_sha256` is the sha256 hex of the protocol file
 bytes at prepare time, or `null` when the file is missing or unreadable. The
 prepare JSON output carries both keys beside `dispatch_id`. Prepare reads the
 protocol from the control root (the main checkout that holds the bee store),
@@ -140,7 +142,8 @@ or `absent`, from the recorded digest against the current file. `prompt` is
 not, and `unrecorded` when the record has no `prompt_sha256`. A prompt file
 that is not UTF-8 is `mismatch`, so the one `&str` hasher stays the only
 hasher. The leader saves the carried field byte-exact, for example with `jq -j
-'.payload.prompt // .payload.stdin'` over the prepare output. Verify reads the
+'.payload.prompt // .payload.stdin'` over the prepare output; when the prompt
+went to a `--task-file`, it saves the bytes of that file instead. Verify reads the
 log and the file from the control root, from main or from a worktree alike.
 An unknown id is the typed refusal `dispatch_not_found`, and its fix names the
 control root that was searched. Verify exits 0 whenever it finds the record.
