@@ -1,0 +1,163 @@
+{
+  "id": "vmu3-1",
+  "feature": "verify-map-upkeep-3",
+  "title": "Isolate global config and add drive entry points to control-bee",
+  "lane": "small",
+  "role": "code",
+  "deps": [],
+  "decisions": [],
+  "files": [
+    ".bee/verify/verify-app/control-bee",
+    ".bee/verify/verify-app/SKILL.md",
+    ".bee/verify/verify-app/fixtures/demo-note-plan.md",
+    ".bee/verify/verify-app/fixtures/demo-note-2.json"
+  ],
+  "read_first": [
+    "docs/history/verify-map-upkeep-3/plan.md",
+    "docs/history/verify-map-upkeep-3/CONTEXT.md",
+    ".bee/verify/verify-app/SKILL.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Apply H1-H5 from docs/history/verify-map-upkeep-3/plan.md to control-bee, SKILL.md and the fixtures",
+  "verify": "bash .bee/verify/verify-app/control-bee drive --full",
+  "must_haves": {
+    "truths": [
+      "drive --full prints one ok line per mapped feature and exits 0",
+      "drive with an unknown argument exits 2",
+      "a sandbox bee process sees an empty global config unless the caller exported one"
+    ],
+    "artifacts": [
+      {
+        "path": ".bee/verify/verify-app/control-bee",
+        "substantive": "drive subcommand and global-config isolation"
+      }
+    ],
+    "key_links": [],
+    "prohibitions": [
+      "no comment lines added to control-bee",
+      "no product code changes"
+    ]
+  },
+  "behavior_change": true,
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "worker-vmu3-1",
+    "outcome": "Isolated global config, added drive --fast|--full and demo-note-2 fixture, and verified all 13 features in f32b1b402",
+    "files_changed": [
+      ".bee/verify/verify-app/control-bee",
+      ".bee/verify/verify-app/SKILL.md",
+      ".bee/verify/verify-app/fixtures/demo-note-plan.md",
+      ".bee/verify/verify-app/fixtures/demo-note-2.json"
+    ],
+    "deviations": [
+      "sync-ack: verify-pipeline overview line 72 now stale (says control-bee has no drive); synced by docs cell vmu3-4 in this feature before merge"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-25T16:11:26.053Z",
+    "behavior_change": true,
+    "verification_evidence": "all 13 mapped features ok, drive and drive --bogus exit 2, 0 added comment lines; evidence /home/thanhsmind/.local/state/bee-verify/evidence/drive-pi-hat-wave-20261125-231006-3476558 (one of 13 drive-*-3476558 dirs)",
+    "verify_output": "green:live",
+    "verify_passed": true,
+    "claim_session": "990d3c4a-e62b-4166-81fb-9129138fbfb7",
+    "verify_command": "bash .bee/verify/verify-app/control-bee drive --full",
+    "claimed_at": "2026-11-25T16:02:39.135Z",
+    "knowledge_delta": [],
+    "sync_ack": "verify-pipeline overview line 72 now stale (says control-bee has no drive); synced by docs cell vmu3-4 in this feature before merge",
+    "mistakes": [
+      {
+        "wrong": "worker cap refused: green:live proof lacked an evidence locator",
+        "better": "name the evidence/ path in the proof reason",
+        "fix_at": "doctrine"
+      }
+    ],
+    "no_knowledge_used": true,
+    "principles_used": [
+      {
+        "slug": "bee-principle-prove-it-works",
+        "changed": "verified all 13 features live via control-bee drive --full instead of relying on syntax check alone"
+      }
+    ],
+    "changed_lines": 525,
+    "report": {
+      "outcome": "Isolated global config, added drive --fast|--full and demo-note-2 fixture, and verified all 13 features in f32b1b402",
+      "commit": "f32b1b402bcd94235598236bb608a55f603f6b3e",
+      "files": [
+        ".bee/verify/verify-app/control-bee",
+        ".bee/verify/verify-app/SKILL.md",
+        ".bee/verify/verify-app/fixtures/demo-note-plan.md",
+        ".bee/verify/verify-app/fixtures/demo-note-2.json"
+      ],
+      "tests": "bash .bee/verify/verify-app/control-bee drive --full — green:live — all 13 mapped features ok, drive and drive --bogus exit 2, 0 added comment lines; evidence /home/thanhsmind/.local/state/bee-verify/evidence/drive-pi-hat-wave-20261125-231006-3476558 (one of 13 drive-*-3476558 dirs)",
+      "deviations": [],
+      "principles_used": [
+        "bee-principle-prove-it-works — verified all 13 features live via control-bee drive --full instead of relying on syntax check alone"
+      ],
+      "patch_id": "21f852c8adaaa0d922b5be075884384a492684ae"
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 525 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "drive --full prints one ok line per mapped feature and exits 0",
+            "artifact": ".bee/verify/verify-app/control-bee"
+          },
+          {
+            "requirement": "drive with an unknown argument exits 2",
+            "artifact": ".bee/verify/verify-app/control-bee"
+          },
+          {
+            "requirement": "a sandbox bee process sees an empty global config unless the caller exported one",
+            "artifact": ".bee/verify/verify-app/control-bee"
+          },
+          {
+            "requirement": ".bee/verify/verify-app/control-bee — drive subcommand and global-config isolation",
+            "artifact": ".bee/verify/verify-app/control-bee"
+          },
+          {
+            "requirement": "no comment lines added to control-bee",
+            "artifact": ".bee/verify/verify-app/control-bee"
+          },
+          {
+            "requirement": "no product code changes",
+            "artifact": ".bee/verify/verify-app/control-bee"
+          },
+          {
+            "requirement": ".bee/verify/verify-app/control-bee",
+            "artifact": ".bee/verify/verify-app/control-bee"
+          },
+          {
+            "requirement": ".bee/verify/verify-app/SKILL.md",
+            "artifact": ".bee/verify/verify-app/SKILL.md"
+          },
+          {
+            "requirement": ".bee/verify/verify-app/fixtures/demo-note-plan.md",
+            "artifact": ".bee/verify/verify-app/fixtures/demo-note-plan.md"
+          },
+          {
+            "requirement": ".bee/verify/verify-app/fixtures/demo-note-2.json",
+            "artifact": ".bee/verify/verify-app/fixtures/demo-note-2.json"
+          }
+        ],
+        "recorded_at": "2026-11-25T16:19:39.859Z",
+        "recorded_by": "990d3c4a-e62b-4166-81fb-9129138fbfb7",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": {
+    "new": 0,
+    "cached": 0,
+    "total": 0,
+    "models": {},
+    "jobs": [
+      "job-1795622580106-3334209-1"
+    ]
+  }
+}

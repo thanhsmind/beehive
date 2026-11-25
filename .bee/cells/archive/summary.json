@@ -2528,5 +2528,10 @@
     "capped": 2,
     "dropped": 0,
     "archived_at": "2026-11-25T16:16:26.201Z"
+  },
+  "verify-map-upkeep-3": {
+    "capped": 3,
+    "dropped": 0,
+    "archived_at": "2026-11-25T16:20:07.949Z"
   }
 }

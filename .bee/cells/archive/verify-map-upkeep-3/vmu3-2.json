@@ -1,0 +1,207 @@
+{
+  "id": "vmu3-2",
+  "feature": "verify-map-upkeep-3",
+  "title": "Correct the verify feature map drift",
+  "lane": "small",
+  "role": "docs",
+  "deps": [],
+  "decisions": [],
+  "files": [
+    ".bee/verify/verify-app/features/README.md",
+    ".bee/verify/verify-app/features/orient-and-status.md",
+    ".bee/verify/verify-app/features/feature-gates.md",
+    ".bee/verify/verify-app/features/cells-and-proof.md",
+    ".bee/verify/verify-app/features/worktree-and-close.md",
+    ".bee/verify/verify-app/features/comment-guard.md",
+    ".bee/verify/verify-app/features/onboard.md",
+    ".bee/verify/verify-app/features/worker-outward-guard.md",
+    ".bee/verify/verify-app/features/codex-runtime.md",
+    ".bee/verify/verify-app/features/pi-runtime.md",
+    ".bee/verify/verify-app/features/pi-harness-dispatch.md",
+    ".bee/verify/verify-app/features/pi-hat-wave.md",
+    ".bee/verify/verify-app/features/config-layers.md"
+  ],
+  "read_first": [
+    "docs/history/verify-map-upkeep-3/plan.md",
+    ".bee/verify/verify-app/features/README.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Apply M1-M13 from docs/history/verify-map-upkeep-3/plan.md to the feature files",
+  "verify": "rg -c green:red-first .bee/verify/verify-app/features/cells-and-proof.md",
+  "must_haves": {
+    "truths": [
+      "every M item is reflected in its feature file"
+    ],
+    "artifacts": [
+      {
+        "path": ".bee/verify/verify-app/features/README.md",
+        "substantive": "2026-11-25 upkeep log line"
+      }
+    ],
+    "key_links": [],
+    "prohibitions": [
+      "feature entry contract keeps its four H2 sections"
+    ]
+  },
+  "behavior_change": false,
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "worker-vmu3-2",
+    "outcome": "Applied M1-M13 to all 13 verify-app feature map files 9b83be94f",
+    "files_changed": [
+      ".bee/verify/verify-app/features/README.md",
+      ".bee/verify/verify-app/features/orient-and-status.md",
+      ".bee/verify/verify-app/features/feature-gates.md",
+      ".bee/verify/verify-app/features/cells-and-proof.md",
+      ".bee/verify/verify-app/features/worktree-and-close.md",
+      ".bee/verify/verify-app/features/comment-guard.md",
+      ".bee/verify/verify-app/features/onboard.md",
+      ".bee/verify/verify-app/features/worker-outward-guard.md",
+      ".bee/verify/verify-app/features/codex-runtime.md",
+      ".bee/verify/verify-app/features/pi-runtime.md",
+      ".bee/verify/verify-app/features/pi-harness-dispatch.md",
+      ".bee/verify/verify-app/features/pi-hat-wave.md",
+      ".bee/verify/verify-app/features/config-layers.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-11-25T16:06:08.772Z",
+    "behavior_change": false,
+    "verification_evidence": "docs-only cell; verified green:red-first count (1) and 4-H2 structure across all feature files",
+    "verify_output": "green:static",
+    "verify_passed": true,
+    "claim_session": "990d3c4a-e62b-4166-81fb-9129138fbfb7",
+    "verify_command": "rg -c green:red-first .bee/verify/verify-app/features/cells-and-proof.md",
+    "claimed_at": "2026-11-25T16:02:41.698Z",
+    "knowledge_delta": [],
+    "no_mistakes": true,
+    "no_knowledge_used": true,
+    "principles_used": [
+      {
+        "slug": "bee-principle-single-source-of-truth",
+        "changed": "pointed feature map recipes at config set and canonical gate_preview/error/fixture shapes rather than stale inline copies"
+      },
+      {
+        "slug": "bee-principle-prove-it-works",
+        "changed": "ran rg -c green:red-first and checked H2 headings across all feature files after the final edit"
+      }
+    ],
+    "changed_lines": 200,
+    "report": {
+      "outcome": "Applied M1-M13 to all 13 verify-app feature map files 9b83be94f",
+      "commit": "9b83be94f46c682957a074678c55a0e95050092a",
+      "files": [
+        ".bee/verify/verify-app/features/README.md",
+        ".bee/verify/verify-app/features/orient-and-status.md",
+        ".bee/verify/verify-app/features/feature-gates.md",
+        ".bee/verify/verify-app/features/cells-and-proof.md",
+        ".bee/verify/verify-app/features/worktree-and-close.md",
+        ".bee/verify/verify-app/features/comment-guard.md",
+        ".bee/verify/verify-app/features/onboard.md",
+        ".bee/verify/verify-app/features/worker-outward-guard.md",
+        ".bee/verify/verify-app/features/codex-runtime.md",
+        ".bee/verify/verify-app/features/pi-runtime.md",
+        ".bee/verify/verify-app/features/pi-harness-dispatch.md",
+        ".bee/verify/verify-app/features/pi-hat-wave.md",
+        ".bee/verify/verify-app/features/config-layers.md"
+      ],
+      "tests": "rg -c green:red-first .bee/verify/verify-app/features/cells-and-proof.md — green:static — docs-only cell; verified green:red-first count (1) and 4-H2 structure across all feature files",
+      "deviations": [],
+      "knowledge_used": [],
+      "principles_used": [
+        "bee-principle-single-source-of-truth — pointed feature map recipes at config set and canonical gate_preview/error/fixture shapes rather than stale inline copies",
+        "bee-principle-prove-it-works — ran rg -c green:red-first and checked H2 headings across all feature files after the final edit"
+      ],
+      "patch_id": "180d918b651bf3065d3f2ff785c472fcc3b9468c"
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 200 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "every M item is reflected in its feature file",
+            "artifact": ".bee/verify/verify-app/features/README.md"
+          },
+          {
+            "requirement": ".bee/verify/verify-app/features/README.md — 2026-11-25 upkeep log line",
+            "artifact": ".bee/verify/verify-app/features/README.md"
+          },
+          {
+            "requirement": "feature entry contract keeps its four H2 sections",
+            "artifact": ".bee/verify/verify-app/features/README.md"
+          },
+          {
+            "requirement": ".bee/verify/verify-app/features/README.md",
+            "artifact": ".bee/verify/verify-app/features/README.md"
+          },
+          {
+            "requirement": ".bee/verify/verify-app/features/orient-and-status.md",
+            "artifact": ".bee/verify/verify-app/features/orient-and-status.md"
+          },
+          {
+            "requirement": ".bee/verify/verify-app/features/feature-gates.md",
+            "artifact": ".bee/verify/verify-app/features/feature-gates.md"
+          },
+          {
+            "requirement": ".bee/verify/verify-app/features/cells-and-proof.md",
+            "artifact": ".bee/verify/verify-app/features/cells-and-proof.md"
+          },
+          {
+            "requirement": ".bee/verify/verify-app/features/worktree-and-close.md",
+            "artifact": ".bee/verify/verify-app/features/worktree-and-close.md"
+          },
+          {
+            "requirement": ".bee/verify/verify-app/features/comment-guard.md",
+            "artifact": ".bee/verify/verify-app/features/comment-guard.md"
+          },
+          {
+            "requirement": ".bee/verify/verify-app/features/onboard.md",
+            "artifact": ".bee/verify/verify-app/features/onboard.md"
+          },
+          {
+            "requirement": ".bee/verify/verify-app/features/worker-outward-guard.md",
+            "artifact": ".bee/verify/verify-app/features/worker-outward-guard.md"
+          },
+          {
+            "requirement": ".bee/verify/verify-app/features/codex-runtime.md",
+            "artifact": ".bee/verify/verify-app/features/codex-runtime.md"
+          },
+          {
+            "requirement": ".bee/verify/verify-app/features/pi-runtime.md",
+            "artifact": ".bee/verify/verify-app/features/pi-runtime.md"
+          },
+          {
+            "requirement": ".bee/verify/verify-app/features/pi-harness-dispatch.md",
+            "artifact": ".bee/verify/verify-app/features/pi-harness-dispatch.md"
+          },
+          {
+            "requirement": ".bee/verify/verify-app/features/pi-hat-wave.md",
+            "artifact": ".bee/verify/verify-app/features/pi-hat-wave.md"
+          },
+          {
+            "requirement": ".bee/verify/verify-app/features/config-layers.md",
+            "artifact": ".bee/verify/verify-app/features/config-layers.md"
+          }
+        ],
+        "recorded_at": "2026-11-25T16:19:39.869Z",
+        "recorded_by": "990d3c4a-e62b-4166-81fb-9129138fbfb7",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": {
+    "new": 0,
+    "cached": 0,
+    "total": 0,
+    "models": {},
+    "jobs": [
+      "job-1795622581472-3334306-1"
+    ]
+  }
+}

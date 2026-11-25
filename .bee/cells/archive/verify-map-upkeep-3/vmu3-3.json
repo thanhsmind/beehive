@@ -1,0 +1,580 @@
+{
+  "id": "vmu3-3",
+  "feature": "verify-map-upkeep-3",
+  "title": "Test the drive entry points",
+  "lane": "small",
+  "role": "test",
+  "deps": [
+    "vmu3-1",
+    "vmu3-2"
+  ],
+  "decisions": [
+    "a0373af4-e3db-4ae0-902d-a3d4e29fe495"
+  ],
+  "files": [
+    ".bee/verify/verify-app/control-bee"
+  ],
+  "read_first": [
+    "docs/history/verify-map-upkeep-3/plan.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Run drive --fast, drive --full and drive --bogus; check per-feature lines and exit codes 0, 0, 2; check a sandbox launched without BEEHIVE_CONFIG_DIR does not read the user-global config",
+  "verify": "bash .bee/verify/verify-app/control-bee drive --fast",
+  "must_haves": {
+    "truths": [
+      "drive exit codes are 0 on green and 2 on an unknown entry point"
+    ],
+    "artifacts": [
+      {
+        "path": ".bee/verify/verify-app/control-bee",
+        "substantive": "verified, not edited unless a defect is found"
+      }
+    ],
+    "key_links": [],
+    "prohibitions": [
+      "no product code changes"
+    ]
+  },
+  "behavior_change": false,
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "worker-vmu3-3",
+    "outcome": "drive --fast 6/6 ok exit 0, --full 13/13 ok exit 0, --bogus and no-arg exit 2, sandbox global config isolated (0 vs 151 global keys); no files changed, no commit, at f32b1b402",
+    "files_changed": [
+      ".agents/skills/verify-app/SKILL.md",
+      ".agents/skills/verify-app/control-bee",
+      ".agents/skills/verify-app/features/README.md",
+      ".agents/skills/verify-app/features/cells-and-proof.md",
+      ".agents/skills/verify-app/features/codex-runtime.md",
+      ".agents/skills/verify-app/features/comment-guard.md",
+      ".agents/skills/verify-app/features/config-layers.md",
+      ".agents/skills/verify-app/features/feature-gates.md",
+      ".agents/skills/verify-app/features/onboard.md",
+      ".agents/skills/verify-app/features/orient-and-status.md",
+      ".agents/skills/verify-app/features/pi-harness-dispatch.md",
+      ".agents/skills/verify-app/features/pi-hat-wave.md",
+      ".agents/skills/verify-app/features/pi-runtime.md",
+      ".agents/skills/verify-app/features/worker-outward-guard.md",
+      ".agents/skills/verify-app/features/worktree-and-close.md",
+      ".agents/skills/verify-app/fixtures/demo-note-2.json",
+      ".agents/skills/verify-app/fixtures/demo-note-plan.md",
+      ".bee/onboarding.json",
+      ".bee/verify/verify-app/SKILL.md",
+      ".bee/verify/verify-app/control-bee",
+      ".bee/verify/verify-app/features/README.md",
+      ".bee/verify/verify-app/features/cells-and-proof.md",
+      ".bee/verify/verify-app/features/codex-runtime.md",
+      ".bee/verify/verify-app/features/comment-guard.md",
+      ".bee/verify/verify-app/features/config-layers.md",
+      ".bee/verify/verify-app/features/feature-gates.md",
+      ".bee/verify/verify-app/features/onboard.md",
+      ".bee/verify/verify-app/features/orient-and-status.md",
+      ".bee/verify/verify-app/features/pi-harness-dispatch.md",
+      ".bee/verify/verify-app/features/pi-hat-wave.md",
+      ".bee/verify/verify-app/features/pi-runtime.md",
+      ".bee/verify/verify-app/features/worker-outward-guard.md",
+      ".bee/verify/verify-app/features/worktree-and-close.md",
+      ".bee/verify/verify-app/fixtures/demo-note-2.json",
+      ".bee/verify/verify-app/fixtures/demo-note-plan.md",
+      ".claude/skills/verify-app/SKILL.md",
+      ".claude/skills/verify-app/control-bee",
+      ".claude/skills/verify-app/features/README.md",
+      ".claude/skills/verify-app/features/cells-and-proof.md",
+      ".claude/skills/verify-app/features/codex-runtime.md",
+      ".claude/skills/verify-app/features/comment-guard.md",
+      ".claude/skills/verify-app/features/config-layers.md",
+      ".claude/skills/verify-app/features/feature-gates.md",
+      ".claude/skills/verify-app/features/onboard.md",
+      ".claude/skills/verify-app/features/orient-and-status.md",
+      ".claude/skills/verify-app/features/pi-harness-dispatch.md",
+      ".claude/skills/verify-app/features/pi-hat-wave.md",
+      ".claude/skills/verify-app/features/pi-runtime.md",
+      ".claude/skills/verify-app/features/worker-outward-guard.md",
+      ".claude/skills/verify-app/features/worktree-and-close.md",
+      ".claude/skills/verify-app/fixtures/demo-note-2.json",
+      ".claude/skills/verify-app/fixtures/demo-note-plan.md",
+      ".opencode/skills/verify-app/SKILL.md",
+      ".opencode/skills/verify-app/control-bee",
+      ".opencode/skills/verify-app/features/README.md",
+      ".opencode/skills/verify-app/features/cells-and-proof.md",
+      ".opencode/skills/verify-app/features/codex-runtime.md",
+      ".opencode/skills/verify-app/features/comment-guard.md",
+      ".opencode/skills/verify-app/features/config-layers.md",
+      ".opencode/skills/verify-app/features/feature-gates.md",
+      ".opencode/skills/verify-app/features/onboard.md",
+      ".opencode/skills/verify-app/features/orient-and-status.md",
+      ".opencode/skills/verify-app/features/pi-harness-dispatch.md",
+      ".opencode/skills/verify-app/features/pi-hat-wave.md",
+      ".opencode/skills/verify-app/features/pi-runtime.md",
+      ".opencode/skills/verify-app/features/worker-outward-guard.md",
+      ".opencode/skills/verify-app/features/worktree-and-close.md",
+      ".opencode/skills/verify-app/fixtures/demo-note-2.json",
+      ".opencode/skills/verify-app/fixtures/demo-note-plan.md",
+      "docs/history/verify-map-upkeep-3/",
+      "docs/knowledge/areas/verify-pipeline/overview.md"
+    ],
+    "deviations": [
+      "re-capped after reopen to add vmu3-2 as a dep; same tester job, no re-run",
+      "sync-ack: the listed paths are onboard-rendered verify-app copies (commit 6b1c5b1cd), not tester edits; the anchored concepts describe rendering in general and stay true"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-25T16:19:16.561Z",
+    "behavior_change": false,
+    "verification_evidence": "independent tester: drive --fast 6/6 ok, --full 13/13 ok over every corrected feature map, --bogus and no-arg exit 2, global config isolated (0 vs 151 keys); no new test files, the driver is proven by live drive; evidence /home/thanhsmind/.local/state/bee-verify/evidence/drive-pi-hat-wave-20261125-231318-3522940",
+    "verify_output": "green:live",
+    "verify_passed": true,
+    "claim_session": "990d3c4a-e62b-4166-81fb-9129138fbfb7",
+    "verify_command": "bash .bee/verify/verify-app/control-bee drive --fast",
+    "claimed_at": "2026-11-25T16:19:08.815Z",
+    "knowledge_delta": [
+      "docs/knowledge/areas/verify-pipeline/overview.md"
+    ],
+    "no_mistakes": true,
+    "no_knowledge_used": true,
+    "principles_used": [
+      {
+        "slug": "bee-principle-prove-it-works",
+        "changed": "proved isolation with a live control comparison (bare bee reads 151 global keys) instead of trusting that global-config was empty"
+      }
+    ],
+    "commit_pending": "tester changed no files; verification-only cell",
+    "changed_lines": 2175,
+    "report": {
+      "outcome": "drive --fast 6/6 ok exit 0, --full 13/13 ok exit 0, --bogus and no-arg exit 2, sandbox global config isolated (0 vs 151 global keys); no files changed, no commit, at f32b1b402",
+      "commit": "6b1c5b1cdd8f6cdeac22bd8746e68ae8b8cfd9ac",
+      "files": [
+        ".agents/skills/verify-app/SKILL.md",
+        ".agents/skills/verify-app/control-bee",
+        ".agents/skills/verify-app/features/README.md",
+        ".agents/skills/verify-app/features/cells-and-proof.md",
+        ".agents/skills/verify-app/features/codex-runtime.md",
+        ".agents/skills/verify-app/features/comment-guard.md",
+        ".agents/skills/verify-app/features/config-layers.md",
+        ".agents/skills/verify-app/features/feature-gates.md",
+        ".agents/skills/verify-app/features/onboard.md",
+        ".agents/skills/verify-app/features/orient-and-status.md",
+        ".agents/skills/verify-app/features/pi-harness-dispatch.md",
+        ".agents/skills/verify-app/features/pi-hat-wave.md",
+        ".agents/skills/verify-app/features/pi-runtime.md",
+        ".agents/skills/verify-app/features/worker-outward-guard.md",
+        ".agents/skills/verify-app/features/worktree-and-close.md",
+        ".agents/skills/verify-app/fixtures/demo-note-2.json",
+        ".agents/skills/verify-app/fixtures/demo-note-plan.md",
+        ".bee/onboarding.json",
+        ".bee/verify/verify-app/SKILL.md",
+        ".bee/verify/verify-app/control-bee",
+        ".bee/verify/verify-app/features/README.md",
+        ".bee/verify/verify-app/features/cells-and-proof.md",
+        ".bee/verify/verify-app/features/codex-runtime.md",
+        ".bee/verify/verify-app/features/comment-guard.md",
+        ".bee/verify/verify-app/features/config-layers.md",
+        ".bee/verify/verify-app/features/feature-gates.md",
+        ".bee/verify/verify-app/features/onboard.md",
+        ".bee/verify/verify-app/features/orient-and-status.md",
+        ".bee/verify/verify-app/features/pi-harness-dispatch.md",
+        ".bee/verify/verify-app/features/pi-hat-wave.md",
+        ".bee/verify/verify-app/features/pi-runtime.md",
+        ".bee/verify/verify-app/features/worker-outward-guard.md",
+        ".bee/verify/verify-app/features/worktree-and-close.md",
+        ".bee/verify/verify-app/fixtures/demo-note-2.json",
+        ".bee/verify/verify-app/fixtures/demo-note-plan.md",
+        ".claude/skills/verify-app/SKILL.md",
+        ".claude/skills/verify-app/control-bee",
+        ".claude/skills/verify-app/features/README.md",
+        ".claude/skills/verify-app/features/cells-and-proof.md",
+        ".claude/skills/verify-app/features/codex-runtime.md",
+        ".claude/skills/verify-app/features/comment-guard.md",
+        ".claude/skills/verify-app/features/config-layers.md",
+        ".claude/skills/verify-app/features/feature-gates.md",
+        ".claude/skills/verify-app/features/onboard.md",
+        ".claude/skills/verify-app/features/orient-and-status.md",
+        ".claude/skills/verify-app/features/pi-harness-dispatch.md",
+        ".claude/skills/verify-app/features/pi-hat-wave.md",
+        ".claude/skills/verify-app/features/pi-runtime.md",
+        ".claude/skills/verify-app/features/worker-outward-guard.md",
+        ".claude/skills/verify-app/features/worktree-and-close.md",
+        ".claude/skills/verify-app/fixtures/demo-note-2.json",
+        ".claude/skills/verify-app/fixtures/demo-note-plan.md",
+        ".opencode/skills/verify-app/SKILL.md",
+        ".opencode/skills/verify-app/control-bee",
+        ".opencode/skills/verify-app/features/README.md",
+        ".opencode/skills/verify-app/features/cells-and-proof.md",
+        ".opencode/skills/verify-app/features/codex-runtime.md",
+        ".opencode/skills/verify-app/features/comment-guard.md",
+        ".opencode/skills/verify-app/features/config-layers.md",
+        ".opencode/skills/verify-app/features/feature-gates.md",
+        ".opencode/skills/verify-app/features/onboard.md",
+        ".opencode/skills/verify-app/features/orient-and-status.md",
+        ".opencode/skills/verify-app/features/pi-harness-dispatch.md",
+        ".opencode/skills/verify-app/features/pi-hat-wave.md",
+        ".opencode/skills/verify-app/features/pi-runtime.md",
+        ".opencode/skills/verify-app/features/worker-outward-guard.md",
+        ".opencode/skills/verify-app/features/worktree-and-close.md",
+        ".opencode/skills/verify-app/fixtures/demo-note-2.json",
+        ".opencode/skills/verify-app/fixtures/demo-note-plan.md",
+        "docs/history/verify-map-upkeep-3/",
+        "docs/knowledge/areas/verify-pipeline/overview.md"
+      ],
+      "tests": "bash .bee/verify/verify-app/control-bee drive --fast — green:live — independent tester: drive --fast 6/6 ok, --full 13/13 ok over every corrected feature map, --bogus and no-arg exit 2, global config isolated (0 vs 151 keys); no new test files, the driver is proven by live drive; evidence /home/thanhsmind/.local/state/bee-verify/evidence/drive-pi-hat-wave-20261125-231318-3522940",
+      "deviations": [],
+      "knowledge_used": [],
+      "principles_used": [
+        "bee-principle-prove-it-works — proved isolation with a live control comparison (bare bee reads 151 global keys) instead of trusting that global-config was empty"
+      ],
+      "reaction": "confirm",
+      "skipped": [
+        "cargo clippy -D warnings + cargo test --release — stopped mid-compile when the leader asked for the result; no Rust changed in this cell"
+      ],
+      "unknowns": [
+        "Did not reproduce the original paseo_ready doctor row on the non-isolated path; isolation is proven by the global_supplied key count instead"
+      ],
+      "found": [
+        "bee config write guard refused writing a synthetic beehive/config.json under a temp XDG_CONFIG_HOME in /tmp as if it were the real user-global config — likely a false positive that blocks hermetic isolation tests"
+      ],
+      "patch_id": "bcb03f30cf625638735a0b09f406a69e8f222a7c"
+    },
+    "reaction": "confirm",
+    "skipped": [
+      "cargo clippy -D warnings + cargo test --release — stopped mid-compile when the leader asked for the result; no Rust changed in this cell"
+    ],
+    "unknowns": [
+      "Did not reproduce the original paseo_ready doctor row on the non-isolated path; isolation is proven by the global_supplied key count instead"
+    ],
+    "found": [
+      "bee config write guard refused writing a synthetic beehive/config.json under a temp XDG_CONFIG_HOME in /tmp as if it were the real user-global config — likely a false positive that blocks hermetic isolation tests"
+    ],
+    "warnings": [],
+    "tests": "boundary",
+    "verified_at": null,
+    "baseline": null,
+    "stopped": null,
+    "blocked_reason": null,
+    "dropped_reason": null,
+    "reopened_at": "2026-11-25T16:19:08.419Z",
+    "reopened_reason": "add vmu3-2 to deps: the tester's drive --full exercised all 13 features whose maps vmu3-2 corrected; merge proof-debt needs a test-role dependent for the docs cell",
+    "sync_ack": "the listed paths are onboard-rendered verify-app copies (commit 6b1c5b1cd), not tester edits; the anchored concepts describe rendering in general and stay true",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "drive exit codes are 0 on green and 2 on an unknown entry point",
+            "artifact": ".bee/verify/verify-app/control-bee"
+          },
+          {
+            "requirement": ".bee/verify/verify-app/control-bee — verified, not edited unless a defect is found",
+            "artifact": ".bee/verify/verify-app/control-bee"
+          },
+          {
+            "requirement": "no product code changes",
+            "artifact": ".bee/verify/verify-app/control-bee"
+          },
+          {
+            "requirement": ".agents/skills/verify-app/SKILL.md",
+            "artifact": ".agents/skills/verify-app/SKILL.md"
+          },
+          {
+            "requirement": ".agents/skills/verify-app/control-bee",
+            "artifact": ".agents/skills/verify-app/control-bee"
+          },
+          {
+            "requirement": ".agents/skills/verify-app/features/README.md",
+            "artifact": ".agents/skills/verify-app/features/README.md"
+          },
+          {
+            "requirement": ".agents/skills/verify-app/features/cells-and-proof.md",
+            "artifact": ".agents/skills/verify-app/features/cells-and-proof.md"
+          },
+          {
+            "requirement": ".agents/skills/verify-app/features/codex-runtime.md",
+            "artifact": ".agents/skills/verify-app/features/codex-runtime.md"
+          },
+          {
+            "requirement": ".agents/skills/verify-app/features/comment-guard.md",
+            "artifact": ".agents/skills/verify-app/features/comment-guard.md"
+          },
+          {
+            "requirement": ".agents/skills/verify-app/features/config-layers.md",
+            "artifact": ".agents/skills/verify-app/features/config-layers.md"
+          },
+          {
+            "requirement": ".agents/skills/verify-app/features/feature-gates.md",
+            "artifact": ".agents/skills/verify-app/features/feature-gates.md"
+          },
+          {
+            "requirement": ".agents/skills/verify-app/features/onboard.md",
+            "artifact": ".agents/skills/verify-app/features/onboard.md"
+          },
+          {
+            "requirement": ".agents/skills/verify-app/features/orient-and-status.md",
+            "artifact": ".agents/skills/verify-app/features/orient-and-status.md"
+          },
+          {
+            "requirement": ".agents/skills/verify-app/features/pi-harness-dispatch.md",
+            "artifact": ".agents/skills/verify-app/features/pi-harness-dispatch.md"
+          },
+          {
+            "requirement": ".agents/skills/verify-app/features/pi-hat-wave.md",
+            "artifact": ".agents/skills/verify-app/features/pi-hat-wave.md"
+          },
+          {
+            "requirement": ".agents/skills/verify-app/features/pi-runtime.md",
+            "artifact": ".agents/skills/verify-app/features/pi-runtime.md"
+          },
+          {
+            "requirement": ".agents/skills/verify-app/features/worker-outward-guard.md",
+            "artifact": ".agents/skills/verify-app/features/worker-outward-guard.md"
+          },
+          {
+            "requirement": ".agents/skills/verify-app/features/worktree-and-close.md",
+            "artifact": ".agents/skills/verify-app/features/worktree-and-close.md"
+          },
+          {
+            "requirement": ".agents/skills/verify-app/fixtures/demo-note-2.json",
+            "artifact": ".agents/skills/verify-app/fixtures/demo-note-2.json"
+          },
+          {
+            "requirement": ".agents/skills/verify-app/fixtures/demo-note-plan.md",
+            "artifact": ".agents/skills/verify-app/fixtures/demo-note-plan.md"
+          },
+          {
+            "requirement": ".bee/onboarding.json",
+            "artifact": ".bee/onboarding.json"
+          },
+          {
+            "requirement": ".bee/verify/verify-app/SKILL.md",
+            "artifact": ".bee/verify/verify-app/SKILL.md"
+          },
+          {
+            "requirement": ".bee/verify/verify-app/control-bee",
+            "artifact": ".bee/verify/verify-app/control-bee"
+          },
+          {
+            "requirement": ".bee/verify/verify-app/features/README.md",
+            "artifact": ".bee/verify/verify-app/features/README.md"
+          },
+          {
+            "requirement": ".bee/verify/verify-app/features/cells-and-proof.md",
+            "artifact": ".bee/verify/verify-app/features/cells-and-proof.md"
+          },
+          {
+            "requirement": ".bee/verify/verify-app/features/codex-runtime.md",
+            "artifact": ".bee/verify/verify-app/features/codex-runtime.md"
+          },
+          {
+            "requirement": ".bee/verify/verify-app/features/comment-guard.md",
+            "artifact": ".bee/verify/verify-app/features/comment-guard.md"
+          },
+          {
+            "requirement": ".bee/verify/verify-app/features/config-layers.md",
+            "artifact": ".bee/verify/verify-app/features/config-layers.md"
+          },
+          {
+            "requirement": ".bee/verify/verify-app/features/feature-gates.md",
+            "artifact": ".bee/verify/verify-app/features/feature-gates.md"
+          },
+          {
+            "requirement": ".bee/verify/verify-app/features/onboard.md",
+            "artifact": ".bee/verify/verify-app/features/onboard.md"
+          },
+          {
+            "requirement": ".bee/verify/verify-app/features/orient-and-status.md",
+            "artifact": ".bee/verify/verify-app/features/orient-and-status.md"
+          },
+          {
+            "requirement": ".bee/verify/verify-app/features/pi-harness-dispatch.md",
+            "artifact": ".bee/verify/verify-app/features/pi-harness-dispatch.md"
+          },
+          {
+            "requirement": ".bee/verify/verify-app/features/pi-hat-wave.md",
+            "artifact": ".bee/verify/verify-app/features/pi-hat-wave.md"
+          },
+          {
+            "requirement": ".bee/verify/verify-app/features/pi-runtime.md",
+            "artifact": ".bee/verify/verify-app/features/pi-runtime.md"
+          },
+          {
+            "requirement": ".bee/verify/verify-app/features/worker-outward-guard.md",
+            "artifact": ".bee/verify/verify-app/features/worker-outward-guard.md"
+          },
+          {
+            "requirement": ".bee/verify/verify-app/features/worktree-and-close.md",
+            "artifact": ".bee/verify/verify-app/features/worktree-and-close.md"
+          },
+          {
+            "requirement": ".bee/verify/verify-app/fixtures/demo-note-2.json",
+            "artifact": ".bee/verify/verify-app/fixtures/demo-note-2.json"
+          },
+          {
+            "requirement": ".bee/verify/verify-app/fixtures/demo-note-plan.md",
+            "artifact": ".bee/verify/verify-app/fixtures/demo-note-plan.md"
+          },
+          {
+            "requirement": ".claude/skills/verify-app/SKILL.md",
+            "artifact": ".claude/skills/verify-app/SKILL.md"
+          },
+          {
+            "requirement": ".claude/skills/verify-app/control-bee",
+            "artifact": ".claude/skills/verify-app/control-bee"
+          },
+          {
+            "requirement": ".claude/skills/verify-app/features/README.md",
+            "artifact": ".claude/skills/verify-app/features/README.md"
+          },
+          {
+            "requirement": ".claude/skills/verify-app/features/cells-and-proof.md",
+            "artifact": ".claude/skills/verify-app/features/cells-and-proof.md"
+          },
+          {
+            "requirement": ".claude/skills/verify-app/features/codex-runtime.md",
+            "artifact": ".claude/skills/verify-app/features/codex-runtime.md"
+          },
+          {
+            "requirement": ".claude/skills/verify-app/features/comment-guard.md",
+            "artifact": ".claude/skills/verify-app/features/comment-guard.md"
+          },
+          {
+            "requirement": ".claude/skills/verify-app/features/config-layers.md",
+            "artifact": ".claude/skills/verify-app/features/config-layers.md"
+          },
+          {
+            "requirement": ".claude/skills/verify-app/features/feature-gates.md",
+            "artifact": ".claude/skills/verify-app/features/feature-gates.md"
+          },
+          {
+            "requirement": ".claude/skills/verify-app/features/onboard.md",
+            "artifact": ".claude/skills/verify-app/features/onboard.md"
+          },
+          {
+            "requirement": ".claude/skills/verify-app/features/orient-and-status.md",
+            "artifact": ".claude/skills/verify-app/features/orient-and-status.md"
+          },
+          {
+            "requirement": ".claude/skills/verify-app/features/pi-harness-dispatch.md",
+            "artifact": ".claude/skills/verify-app/features/pi-harness-dispatch.md"
+          },
+          {
+            "requirement": ".claude/skills/verify-app/features/pi-hat-wave.md",
+            "artifact": ".claude/skills/verify-app/features/pi-hat-wave.md"
+          },
+          {
+            "requirement": ".claude/skills/verify-app/features/pi-runtime.md",
+            "artifact": ".claude/skills/verify-app/features/pi-runtime.md"
+          },
+          {
+            "requirement": ".claude/skills/verify-app/features/worker-outward-guard.md",
+            "artifact": ".claude/skills/verify-app/features/worker-outward-guard.md"
+          },
+          {
+            "requirement": ".claude/skills/verify-app/features/worktree-and-close.md",
+            "artifact": ".claude/skills/verify-app/features/worktree-and-close.md"
+          },
+          {
+            "requirement": ".claude/skills/verify-app/fixtures/demo-note-2.json",
+            "artifact": ".claude/skills/verify-app/fixtures/demo-note-2.json"
+          },
+          {
+            "requirement": ".claude/skills/verify-app/fixtures/demo-note-plan.md",
+            "artifact": ".claude/skills/verify-app/fixtures/demo-note-plan.md"
+          },
+          {
+            "requirement": ".opencode/skills/verify-app/SKILL.md",
+            "artifact": ".opencode/skills/verify-app/SKILL.md"
+          },
+          {
+            "requirement": ".opencode/skills/verify-app/control-bee",
+            "artifact": ".opencode/skills/verify-app/control-bee"
+          },
+          {
+            "requirement": ".opencode/skills/verify-app/features/README.md",
+            "artifact": ".opencode/skills/verify-app/features/README.md"
+          },
+          {
+            "requirement": ".opencode/skills/verify-app/features/cells-and-proof.md",
+            "artifact": ".opencode/skills/verify-app/features/cells-and-proof.md"
+          },
+          {
+            "requirement": ".opencode/skills/verify-app/features/codex-runtime.md",
+            "artifact": ".opencode/skills/verify-app/features/codex-runtime.md"
+          },
+          {
+            "requirement": ".opencode/skills/verify-app/features/comment-guard.md",
+            "artifact": ".opencode/skills/verify-app/features/comment-guard.md"
+          },
+          {
+            "requirement": ".opencode/skills/verify-app/features/config-layers.md",
+            "artifact": ".opencode/skills/verify-app/features/config-layers.md"
+          },
+          {
+            "requirement": ".opencode/skills/verify-app/features/feature-gates.md",
+            "artifact": ".opencode/skills/verify-app/features/feature-gates.md"
+          },
+          {
+            "requirement": ".opencode/skills/verify-app/features/onboard.md",
+            "artifact": ".opencode/skills/verify-app/features/onboard.md"
+          },
+          {
+            "requirement": ".opencode/skills/verify-app/features/orient-and-status.md",
+            "artifact": ".opencode/skills/verify-app/features/orient-and-status.md"
+          },
+          {
+            "requirement": ".opencode/skills/verify-app/features/pi-harness-dispatch.md",
+            "artifact": ".opencode/skills/verify-app/features/pi-harness-dispatch.md"
+          },
+          {
+            "requirement": ".opencode/skills/verify-app/features/pi-hat-wave.md",
+            "artifact": ".opencode/skills/verify-app/features/pi-hat-wave.md"
+          },
+          {
+            "requirement": ".opencode/skills/verify-app/features/pi-runtime.md",
+            "artifact": ".opencode/skills/verify-app/features/pi-runtime.md"
+          },
+          {
+            "requirement": ".opencode/skills/verify-app/features/worker-outward-guard.md",
+            "artifact": ".opencode/skills/verify-app/features/worker-outward-guard.md"
+          },
+          {
+            "requirement": ".opencode/skills/verify-app/features/worktree-and-close.md",
+            "artifact": ".opencode/skills/verify-app/features/worktree-and-close.md"
+          },
+          {
+            "requirement": ".opencode/skills/verify-app/fixtures/demo-note-2.json",
+            "artifact": ".opencode/skills/verify-app/fixtures/demo-note-2.json"
+          },
+          {
+            "requirement": ".opencode/skills/verify-app/fixtures/demo-note-plan.md",
+            "artifact": ".opencode/skills/verify-app/fixtures/demo-note-plan.md"
+          },
+          {
+            "requirement": "docs/history/verify-map-upkeep-3/",
+            "artifact": "docs/history/verify-map-upkeep-3/"
+          },
+          {
+            "requirement": "docs/knowledge/areas/verify-pipeline/overview.md",
+            "artifact": "docs/knowledge/areas/verify-pipeline/overview.md"
+          }
+        ],
+        "recorded_at": "2026-11-25T16:19:39.878Z",
+        "recorded_by": "990d3c4a-e62b-4166-81fb-9129138fbfb7",
+        "commit_diff": "skipped: commit_pending"
+      }
+    ]
+  },
+  "usage": {
+    "new": 42823,
+    "cached": 559509,
+    "total": 602332,
+    "models": {
+      "claude-opus-5-5": {
+        "new": 42823,
+        "cached": 559509,
+        "total": 602332
+      }
+    },
+    "jobs": [
+      "job-1795623153607-3512839-1"
+    ]
+  }
+}
