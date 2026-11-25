@@ -1,0 +1,138 @@
+{
+  "id": "dqrf-1",
+  "feature": "deferred-queue-req-flags",
+  "title": "Mark required flags for deferred-queue add, claim, and release in registry_payload.json",
+  "lane": "small",
+  "role": "code",
+  "deps": [],
+  "decisions": [
+    "ed0f18ae-5089-4a81-abd1-c3ebbb9f44fb"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/verbs/deferred_queue.rs",
+    "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+    "packages/bee-rs/crates/bee/tests/registry_contracts.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Update packages/bee-rs/crates/bee/src/generated/registry_payload.json so parameters.required lists the flags verbs/deferred_queue.rs enforces as required: kind, feature, and reason for deferred-queue.add; id for deferred-queue.claim; and id for deferred-queue.release. Add contract tests in packages/bee-rs/crates/bee/tests/registry_contracts.rs pinning that registry_payload.json declares these required flags. Ensure bee deferred-queue claim --help --brief marks --id with *.",
+  "verify": "cargo test --test registry_contracts --test registry_dispatch --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "registry_payload.json lists the flags verbs/deferred_queue.rs enforces as required for add, claim and release",
+      "bee deferred-queue claim --help --brief marks --id with *",
+      "registry_contracts and registry_dispatch tests pass"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+        "substantive": "required arrays for deferred-queue commands"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/tests/registry_contracts.rs",
+        "substantive": "contract tests for deferred-queue required flags"
+      }
+    ],
+    "prohibitions": [
+      "No code comments"
+    ]
+  },
+  "behavior_change": true,
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "w-dqrf-1",
+    "outcome": "Marked required flags for deferred-queue add, claim, and release in registry_payload.json and pinned them in registry_contracts.rs",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+      "packages/bee-rs/crates/bee/tests/registry_contracts.rs"
+    ],
+    "deviations": [
+      "sync-ack: registry_payload.json only marks required flags for deferred-queue add, claim, and release matching verbs/deferred_queue.rs; the 11 suspect concepts do not document deferred-queue flag markers"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-25T15:55:21.275Z",
+    "behavior_change": true,
+    "verification_evidence": "touched registry_payload.json and registry_contracts.rs; bee deferred-queue claim --help --brief shows --id*",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "6cc848e6-2a25-4ddb-b8aa-7abbc2e7be19",
+    "verify_command": "cargo test --test registry_contracts --test registry_dispatch --manifest-path packages/bee-rs/Cargo.toml",
+    "claimed_at": "2026-11-25T15:55:03.495Z",
+    "verified_at": null,
+    "baseline": null,
+    "reaction": null,
+    "skipped": null,
+    "unknowns": null,
+    "found": null,
+    "stopped": null,
+    "knowledge_delta": [],
+    "sync_ack": "registry_payload.json only marks required flags for deferred-queue add, claim, and release matching verbs/deferred_queue.rs; the 11 suspect concepts do not document deferred-queue flag markers",
+    "no_mistakes": true,
+    "no_knowledge_used": true,
+    "principles_used": [
+      {
+        "slug": "bee-principle-single-source-of-truth",
+        "changed": "declared deferred-queue required flags in registry_payload.json to match verbs/deferred_queue.rs",
+        "off_route": true
+      }
+    ],
+    "changed_lines": 31,
+    "report": {
+      "outcome": "Marked required flags for deferred-queue add, claim, and release in registry_payload.json and pinned them in registry_contracts.rs",
+      "commit": "93c3be6ade34e32d834086fc71ee5c540e115fa1",
+      "files": [
+        "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+        "packages/bee-rs/crates/bee/tests/registry_contracts.rs"
+      ],
+      "tests": "cargo test --test registry_contracts --test registry_dispatch --manifest-path packages/bee-rs/Cargo.toml — green:unit — touched registry_payload.json and registry_contracts.rs; bee deferred-queue claim --help --brief shows --id*",
+      "deviations": [],
+      "mistakes": [],
+      "patch_id": "98332a23212423db25ce4047631593885f47a7e5"
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "registry_payload.json lists the flags verbs/deferred_queue.rs enforces as required for add, claim and release",
+            "artifact": "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+          },
+          {
+            "requirement": "bee deferred-queue claim --help --brief marks --id with *",
+            "artifact": "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+          },
+          {
+            "requirement": "registry_contracts and registry_dispatch tests pass",
+            "artifact": "packages/bee-rs/crates/bee/tests/registry_contracts.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+            "artifact": "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/tests/registry_contracts.rs",
+            "artifact": "packages/bee-rs/crates/bee/tests/registry_contracts.rs"
+          }
+        ],
+        "recorded_at": "2026-11-25T16:10:32.662Z",
+        "recorded_by": "6cc848e6-2a25-4ddb-b8aa-7abbc2e7be19",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": {
+    "new": 0,
+    "cached": 0,
+    "total": 0,
+    "models": {},
+    "jobs": [
+      "job-1795620567998-3027644-1"
+    ]
+  }
+}

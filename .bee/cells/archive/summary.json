@@ -2518,5 +2518,10 @@
     "capped": 8,
     "dropped": 0,
     "archived_at": "2026-11-25T10:44:29.935Z"
+  },
+  "deferred-queue-req-flags": {
+    "capped": 2,
+    "dropped": 0,
+    "archived_at": "2026-11-25T16:12:19.808Z"
   }
 }

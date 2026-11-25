@@ -1,0 +1,150 @@
+{
+  "id": "dqrf-2",
+  "feature": "deferred-queue-req-flags",
+  "title": "Verify deferred-queue required flags in registry and help with independent tests",
+  "lane": "small",
+  "role": "test",
+  "deps": [
+    "dqrf-1"
+  ],
+  "decisions": [
+    "ed0f18ae-5089-4a81-abd1-c3ebbb9f44fb"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/tests/registry_contracts.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/verbs/deferred_queue.rs",
+    "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+    "packages/bee-rs/crates/bee/tests/registry_contracts.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Verify that registry_payload.json declares the flags verbs/deferred_queue.rs enforces as required for add, claim, and release. Verify that bee deferred-queue claim --help --brief displays the asterisk marker for --id* (str). Run registry_contracts and registry_dispatch tests and verify they pass.",
+  "verify": "cargo test --test registry_contracts --test registry_dispatch --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "registry_contracts and registry_dispatch tests pass",
+      "bee deferred-queue claim --help --brief displays --id* (str)"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/tests/registry_contracts.rs",
+        "substantive": "test coverage for deferred-queue required flags"
+      }
+    ],
+    "prohibitions": [
+      "No code comments"
+    ]
+  },
+  "behavior_change": false,
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "w-dqrf-2",
+    "outcome": "Added a binary-level test pinning the --help --brief asterisk on required deferred-queue flags; registry matches the handler; red on the pre-dqrf-1 payload, green now; f0fa6f9bca0e62f384a0f00a95e9dce3917366a7",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/tests/registry_contracts.rs"
+    ],
+    "deviations": [
+      "sync-ack: test-only cell adding a binary-level help test to registry_contracts.rs; unrelated suspect concepts do not document deferred-queue flag markers"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-25T16:03:28.479Z",
+    "behavior_change": false,
+    "verification_evidence": "cargo test --test registry_contracts --test registry_dispatch --manifest-path packages/bee-rs/Cargo.toml (14+10 passed) plus the brief proof (clippy -D warnings && cargo test --release: rc=0, 6394 passed, 0 failed) — green:unit — touched registry_contracts.rs only",
+    "verify_output": "green:red-first",
+    "verify_passed": true,
+    "claim_session": "6cc848e6-2a25-4ddb-b8aa-7abbc2e7be19",
+    "verify_command": "cargo test --test registry_contracts --test registry_dispatch --manifest-path packages/bee-rs/Cargo.toml",
+    "claimed_at": "2026-11-25T15:55:22.902Z",
+    "knowledge_delta": [],
+    "sync_ack": "test-only cell adding a binary-level help test to registry_contracts.rs; unrelated suspect concepts do not document deferred-queue flag markers",
+    "no_mistakes": true,
+    "no_knowledge_used": true,
+    "principles_used": [
+      {
+        "slug": "bee-principle-red-before-green",
+        "changed": "verified the new binary help test fails on the pre-dqrf-1 payload and passes after dqrf-1"
+      },
+      {
+        "slug": "bee-principle-red-before-green",
+        "changed": "reverted the payload to HEAD~1 and saw the new help test fail on the missing --kind asterisk before accepting it"
+      },
+      {
+        "slug": "bee-principle-test-behavior-not-structure",
+        "changed": "asserted the real binary's help output rather than the JSON again"
+      },
+      {
+        "slug": "bee-principle-prove-it-works",
+        "changed": "ran bee deferred-queue claim --help --brief live and read --id* (str)"
+      }
+    ],
+    "changed_lines": 31,
+    "report": {
+      "outcome": "Added a binary-level test pinning the --help --brief asterisk on required deferred-queue flags; registry matches the handler; red on the pre-dqrf-1 payload, green now; f0fa6f9bca0e62f384a0f00a95e9dce3917366a7",
+      "commit": "f0fa6f9bca0e62f384a0f00a95e9dce3917366a7",
+      "files": [
+        "packages/bee-rs/crates/bee/tests/registry_contracts.rs"
+      ],
+      "tests": "cargo test --test registry_contracts --test registry_dispatch --manifest-path packages/bee-rs/Cargo.toml — green:red-first — cargo test --test registry_contracts --test registry_dispatch --manifest-path packages/bee-rs/Cargo.toml (14+10 passed) plus the brief proof (clippy -D warnings && cargo test --release: rc=0, 6394 passed, 0 failed) — green:unit — touched registry_contracts.rs only",
+      "deviations": [],
+      "knowledge_used": [],
+      "principles_used": [
+        "bee-principle-red-before-green — reverted the payload to HEAD~1 and saw the new help test fail on the missing --kind asterisk before accepting it",
+        "bee-principle-test-behavior-not-structure — asserted the real binary's help output rather than the JSON again",
+        "bee-principle-prove-it-works — ran bee deferred-queue claim --help --brief live and read --id* (str)"
+      ],
+      "reaction": "confirm",
+      "skipped": [
+        "knowledge delta — test-only cell, no concept changed",
+        "CONTEXT.md/plan.md — docs/history/deferred-queue-req-flags/ is absent"
+      ],
+      "patch_id": "df89f65cb9b18bed18f6b1453a187737dea2d587"
+    },
+    "reaction": "confirm",
+    "skipped": [
+      "knowledge delta — test-only cell, no concept changed",
+      "CONTEXT.md/plan.md — docs/history/deferred-queue-req-flags/ is absent"
+    ],
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "registry_contracts and registry_dispatch tests pass",
+            "artifact": "packages/bee-rs/crates/bee/tests/registry_contracts.rs"
+          },
+          {
+            "requirement": "bee deferred-queue claim --help --brief displays --id* (str)",
+            "artifact": "packages/bee-rs/crates/bee/tests/registry_contracts.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/tests/registry_contracts.rs",
+            "artifact": "packages/bee-rs/crates/bee/tests/registry_contracts.rs"
+          }
+        ],
+        "recorded_at": "2026-11-25T16:10:32.674Z",
+        "recorded_by": "6cc848e6-2a25-4ddb-b8aa-7abbc2e7be19",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": {
+    "new": 34258,
+    "cached": 477881,
+    "total": 512139,
+    "models": {
+      "claude-opus-5-5": {
+        "new": 34258,
+        "cached": 477881,
+        "total": 512139
+      }
+    },
+    "jobs": [
+      "job-1795622147472-3191999-1"
+    ]
+  }
+}

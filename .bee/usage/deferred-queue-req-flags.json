@@ -1,0 +1,80 @@
+{
+  "schema": "bee-usage/v1",
+  "feature": "deferred-queue-req-flags",
+  "closed_at": "2026-11-25T16:12:19.913Z",
+  "sessions": [
+    {
+      "session_id": "6cc848e6-2a25-4ddb-b8aa-7abbc2e7be19",
+      "models": {},
+      "subagent_models": {},
+      "subagent_count": 0,
+      "started_ms": 1795621916000,
+      "ended_ms": 1795623122000,
+      "totals": {
+        "new": 0,
+        "cached": 0,
+        "total": 0
+      }
+    }
+  ],
+  "skipped": 0,
+  "totals": {
+    "main": {
+      "new": 0,
+      "cached": 0,
+      "total": 0
+    },
+    "subagents": {
+      "new": 0,
+      "cached": 0,
+      "total": 0
+    },
+    "total": {
+      "new": 34258,
+      "cached": 477881,
+      "total": 512139
+    },
+    "herding": {
+      "new": 34258,
+      "cached": 477881,
+      "total": 512139,
+      "models": {
+        "claude-opus-5-5": {
+          "input": 40,
+          "output": 6747,
+          "cache_write": 27471,
+          "cache_read": 477881,
+          "new": 34258,
+          "cached": 477881,
+          "total": 512139
+        }
+      }
+    }
+  },
+  "herding_sessions": [
+    {
+      "session_id": "89088907-c2c5-4f74-88a0-3464df952b88",
+      "models": {
+        "claude-opus-5-5": {
+          "input": 40,
+          "output": 6747,
+          "cache_write": 27471,
+          "cache_read": 477881,
+          "new": 34258,
+          "cached": 477881,
+          "total": 512139
+        }
+      },
+      "subagent_models": {},
+      "subagent_count": 0,
+      "started_ms": 1795622161834,
+      "ended_ms": 1795622554711,
+      "totals": {
+        "new": 34258,
+        "cached": 477881,
+        "total": 512139
+      },
+      "job_id": "job-1795622147472-3191999-1"
+    }
+  ]
+}
