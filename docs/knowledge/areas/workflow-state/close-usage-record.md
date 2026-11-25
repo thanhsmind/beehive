@@ -12,11 +12,13 @@ bee:
   sources: [docs/history/knowledge-work/usage-in-bee-store/delivery.md, packages/bee-rs/crates/bee/src/verbs/drivers/close.rs, packages/bee-rs/crates/bee/src/hooks/session_close/perf.rs, docs/history/herding-job-feature/plan.md, packages/bee-rs/crates/bee/src/herding/run.rs, packages/bee-rs/crates/bee/src/hooks/activity.rs, packages/bee-rs/crates/bee/src/verbs/mailbox.rs, packages/bee-rs/crates/bee/src/verbs/report.rs]
   authoritative_for: "workflow-state: the close usage record — accounting, home, and persistence"
   anchors: [packages/bee-rs/crates/bee/src/hooks/session_close/perf.rs, packages/bee-rs/crates/bee/src/hooks/activity.rs]
-  verified_at: 2026-11-07
-  verified_commit: 5e715b42536c2fb2acd1d3b1e08d77452a9ee402
+  verified_at: 2026-11-25
+  verified_commit: 63d270af0980f908cbd5a43847aa4b14253b5530
 ---
 
 # Workflow State — the close usage record: token accounting, its home, and its persistence
+
+Read when: you need what a feature cost in tokens, a task's completion report needs its token table, or `.bee/usage/<feature>.json` is missing after a close.
 
 A green `bee close` accounts for the tokens a feature actually cost, across
 every session that touched it, and leaves that accounting somewhere another
@@ -45,18 +47,20 @@ tool can read it back.
   mailbox gets a matching one-line Token usage section, and report walkers
   key on the `bee-usage/v1` schema plus the close result's `usage_record`
   path.
-- **Persistence (implementation-confirmed).** `usage.json` is written by
-  `close`, but it is not close's own commit that persists it — close's
-  bookkeeping commit stages `.bee` only, the same as promote-proposals.
-  It is the **merge-time auto-commit** that actually lands the file in
-  history, when the feature's worktree merges back.
+- **Persistence (implementation-confirmed).** `close` writes
+  `.bee/usage/<feature>.json` before its bookkeeping commit, and that
+  commit stages `.bee` (`git add -A -- .bee`), so close's own commit lands
+  the record in history; a main-checkout close has no merge-time
+  dependency (test `green_close_commits_the_usage_record_it_just_wrote`
+  in `verbs/drivers/close.rs`).
 - **Per-task report (report-usage-verb · af457159).** `bee report usage
   --corr <t-hex>` prints the waggledance COMPLETION-REPORT header and
   per-model token table for one task window, read from the session
   transcript and its `subagents/*.jsonl` through `aggregate_usage`.
   Input = fresh + cache write + cache read, Cache = the cached part,
   Total = Input + Output; a missing transcript is a typed error, never
-  zeros. AGENTS.md names it the first token source.
+  zeros. `docs/handbook/waggledance-completion-report.md` names it the first
+  token source.
 - **Herded sessions in the per-task report (report-usage-herding plan,
   contract RUH-2).** A herded worker — a claude-session sub-session or a
   pane — writes its own transcript, outside the leader's `subagents/`.
@@ -97,8 +101,9 @@ tool can read it back.
 - **Worktree record/stage-root split.** A close run from inside a linked
   worktree writes the usage record to **main's** `.bee` (the control root)
   but stages the change against the **worktree's** `.bee` — record root and
-  stage root differ there, so the write can land somewhere the merge-time
-  auto-commit does not look. Not yet fixed; flagged at the moment it was
+  stage root differ there, so close's own commit does not carry the record
+  and the persistence rule above covers only a close whose control root is
+  its own root. Not yet fixed; flagged at the moment it was
   found (`c1064938`, 2026-08-30).
 
 ## Pointers (implementation)

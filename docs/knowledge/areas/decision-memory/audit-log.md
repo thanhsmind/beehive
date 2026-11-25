@@ -12,8 +12,8 @@ bee:
   sources: ["knowledge-first-lean-decisions cells kbc-2, kbc-3, kbc-4 (traces in .bee/cells/, 2026-11-07)", "outcome-scorecard cells osc-2/osc-2t (docs/history/outcome-scorecard/plan.md, 2026-11-17)", packages/bee-rs/crates/bee/src/audit.rs, packages/bee-rs/crates/bee/src/verbs/audit.rs, packages/bee/LEADER.md (§ Capture what settles)]
   authoritative_for: "decision-memory: what belongs in the audit log and what stays a decision"
   anchors: [packages/bee/LEADER.md, packages/bee-rs/crates/bee/src/audit.rs, packages/bee-rs/crates/bee/src/verbs/upkeep_group.rs, packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs]
-  verified_at: 2026-11-17
-  verified_commit: 993b9548c8f1ec83c3b7d0e846b7930e662ae316
+  verified_at: 2026-11-25
+  verified_commit: 63d270af0980f908cbd5a43847aa4b14253b5530
 ---
 
 # Decision Memory — the audit log for bookkeeping
@@ -31,7 +31,8 @@ store exists to recall.
 `curator-run` joins the closed kind set as the fourth upkeep row (after `knowledge-upkeep`,
 `verify-upkeep`, `fix-at-upkeep`): `bee upkeep due --kind curator` reads its newest row to decide
 whether the cadence window has elapsed. Adding a kind means the `KINDS` array, the registry enum
-of `audit.log` and its description move together; `registry_contracts` fails when they drift.
+of `audit.log` and its description move together. No test ties the array to the enum, so the
+author keeps them in step.
 
 **B1 — Gate auto-approval has one home** (plan D3). `bee gate --actor auto`
 stamps the gate record and appends one `gate-bypass` row to the audit log
@@ -42,20 +43,24 @@ preamble or nudge text tells it to.
 tracked file with `merge=union`, written by `bee audit log --kind <k> --feature
 <f> --note "<text>"` and read by `bee audit list`. It is tracked on purpose:
 `.bee/logs/` is git-ignored, so rows there would never reach main through a
-worktree merge, and the close doors run on main. The kind set is closed:
-`gate`, `gate-bypass`, `close`, `merge`, `release`, `scribing`, `promote`, `handoff`
-and nine `*-deferral` kinds (judge, uat, capture, knowledge-freshness, impact,
-routing, doc, leader-check, dissent).
+worktree merge, and the close doors run on main. The kind set is closed
+at 23 kinds (`KINDS` in `audit.rs`): `gate`, `gate-bypass`, `close`, `merge`,
+`release`, `scribing`, `promote`, `handoff`, `handoff-waived`,
+`handoff-dispatched`, the four upkeep kinds (`knowledge-upkeep`,
+`verify-upkeep`, `fix-at-upkeep`, `curator-run`) and nine `*-deferral` kinds
+(judge, uat, capture, knowledge-freshness, impact, routing, doc, leader-check,
+dissent).
 
 **B3 — Old rows stay where they are** (plan D5). Nothing rewrites
 `decisions.jsonl`. The doors read the audit log first and then the legacy
 decision rows, so a deferral logged either way satisfies its door. `decisions
-active` and `search`, status and the preamble hide rows tagged with an audit
-kind at read time unless the caller asks for that tag.
+active` and `search`, status and the preamble hide rows tagged `gate-bypass`
+or a `*-deferral` kind at read time unless the caller asks for that tag
+(`is_audit_only_tag` in `audit.rs`). The other kinds stay visible as tags.
 
-**B4 — The decision verb refuses audit kinds** (plan D6). `bee decisions log`
-refuses a `--tags` value that is an audit kind and names `bee audit log` as the
-remedy. Words like `release` or `merge` stay legal decision tags, because many
+**B4 — The decision verb refuses audit-only tags** (plan D6). `bee decisions log`
+refuses a `--tags` value that is `gate-bypass` or a `*-deferral` kind and names
+`bee audit log` as the remedy. Words like `release` or `merge` stay legal decision tags, because many
 real rules carry them.
 
 **B5 — Doctrine names the home where no check can** (plan D6). For

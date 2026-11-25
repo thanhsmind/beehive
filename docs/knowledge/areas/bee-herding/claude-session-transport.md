@@ -13,11 +13,13 @@ bee:
   authoritative_for: "bee-herding: the claude-session transport, its spawn argv and poll decisions, steer_to, and the dispatch door switch that selects it"
   owns.code: [packages/bee-rs/crates/bee/src/herding/claude_session.rs]
   anchors: [packages/bee-rs/crates/bee/src/herding/claude_session.rs, packages/bee-rs/crates/bee/src/herding/run.rs, packages/bee-rs/crates/bee/src/herding.rs, packages/bee-rs/crates/bee/src/verbs/report_usage.rs, packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs]
-  verified_at: 2026-11-10
-  verified_commit: 2f0495d24e30048da79fa3d5dcc287605cf6869c
+  verified_at: 2026-11-25
+  verified_commit: 63d270af0980f908cbd5a43847aa4b14253b5530
 ---
 
 # Bee Herding — the claude-session transport, and how a leader steers a Claude worker
+
+Read when: a herded Claude worker runs as a `claude --bg` session, you need its `steer_to` name, or a dispatch returned a Bash payload where you expected an Agent call.
 
 ## What it is
 
@@ -27,15 +29,17 @@ The claude-session transport is a third herding transport, beside Paseo and the 
 
 The worker is bee-ignorant, like every herded worker. It reads `brief-1.txt` and writes `ack-1.json`, `report-1.md` and `result-1.json` in its job mailbox. `bee herding run` reads the outcome only from `result-1.json`. The transport never reads `claude logs`, because that output is raw terminal bytes.
 
-The dispatch door picks this transport by itself. On runtime `claude`, a native-model role for kind `cell`, `gather`, `reviewer` or `advisor` returns a `Bash` payload that runs `bee herding run --task-file - --json … --session-model <model>`, with channel `claude-session`. Before this change the door returned an `Agent` payload.
+The dispatch door picks this transport by itself. On runtime `claude`, a native-model slot that is not an escalated cell returns a `Bash` payload that runs `bee herding run --task-file - --json … --session-model <model>`, with channel `claude-session`, for any dispatch kind. The kind only adds flags: `cell` adds `--cell-id`, and `gather` and `advisor` add `--read-only`. Before this change the door returned an `Agent` payload.
 
 ## The spawn
 
 bee spawns `claude` itself, from inside the `bee` process, with the argv in this order:
 
 ```text
-claude --bg --name <name> --model <model> [--effort <effort>] --permission-mode bypassPermissions --settings <json> <prompt>
+claude --bg --name <name> --model <model> [--effort <effort>] --permission-mode bypassPermissions --settings <json> [--disable-slash-commands --disallowedTools Agent] <prompt>
 ```
+
+- The bracketed thin flags (`THIN_CLAUDE_FLAGS` in `claude_session.rs`) sit before the prompt when the `dispatch.thin_peer_boot` switch is on, which is the default.
 
 - The working directory is the `--cwd` of the run.
 - The command is `claude` unless `herding.claude_command` names another binary.
@@ -85,7 +89,7 @@ After every outcome except `died`, bee runs `claude stop <id>`, so a finished, i
 
 ## Steering: `steer_to`
 
-The job record and the run JSON carry `session_id` and `steer_to` (claude-sub-session-dispatch D1). `bee herding status --job <id>` prints `steer_to=<name>`. A leader sends `SendMessage` to that name to steer the worker.
+The job record and the run JSON carry `session_id` and `steer_to` (claude-sub-session-dispatch D1). `steer_to` is the name `claude --bg` prints for the session, or the planned `bee-<label>-<tail>` name when that output names none. `bee herding status --job <id>` prints `steer_to=<name>`. A leader sends `SendMessage` to that name to steer the worker.
 
 Steering is not a transcript read. The rule that a leader never reads a worker's transcript, pane log or activity stream stays in force.
 
