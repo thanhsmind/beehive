@@ -38,7 +38,7 @@ Preconditions:
   Assert the command output:
   - Exit code is 0.
   - Payload field `overall_status` is `"ready"`.
-  - Rows are keyed `row`. Six mechanical rows report `"ok"`: `hooks_file`, `hook_handler`, `skills_installed`, `wiring_matches_binary`, `binary_freshness`, and `herding_transport`. The payload also carries `design_skill`, `owner_briefs` and `runtime_*` advisory rows.
+  - Rows are keyed `row`. Mechanical rows report `"ok"`: `hooks_file`, `hook_handler`, `skills_installed`, `wiring_matches_binary`, `binary_freshness`, `herding_transport`, and `workspace-protocol` (plus `paseo_ready` when `team.pi` names paseo agents). The payload also carries `design_skill`, `owner_briefs` and `runtime_*` advisory rows.
 
 - **Doctor reports not_ok and unknown on absent files (absent outcomes).**
   Drive each absent artifact refusal case:
@@ -79,7 +79,7 @@ Preconditions:
   - Exit code is 1.
   - Payload field `overall_status` is `"blocked"`.
   - Row `hooks_file` reports `status: "ok"`.
-  - Row `wiring_matches_binary` reports `status: "not_ok"` with detail stating `.pi/extensions/bee-guard/index.ts differs from what this bee embeds — run `bee onboard --apply` to refresh it`.
+  - Row `wiring_matches_binary` reports `status: "not_ok"` with detail stating `1 file in .pi/extensions/bee-guard/ differs from what this bee embeds (index.ts) — run `bee onboard --apply` to refresh`.
   Restore: `bash .bee/verify/verify-app/control-bee sh -- git checkout -- .pi/extensions/bee-guard/index.ts`
 
 - **Doctor reports unknown on invalid transport configuration (malformed-config outcome).**
@@ -147,7 +147,7 @@ Preconditions:
 ## Gotchas
 
 - Pi has no structurally unprovable trust rows. Do not expect attestation to succeed; `doctor attest --runtime pi` always refuses.
-- If `.pi/extensions/bee-guard/` differs by even one byte from the compiled extension bytes (or if legacy `.pi/extensions/bee-guard.ts` exists), `wiring_matches_binary` fails. Re-install or refresh the extension to fix drift.
+- If `.pi/extensions/bee-guard/` differs by even one byte from the compiled extension bytes (or if an extra `*.ts` file or legacy `.pi/extensions/bee-guard.ts` exists), `wiring_matches_binary` fails. Re-install or refresh the extension to fix drift.
 - With default `team.pi` roles on `--no-pane`, a missing `HERDR_ENV` or `HERDR_PANE_ID`, and `herding.transport: "tmux"` without `TMUX`, doctor still reports `ready`.
 - Every missing or unreadable required artifact returns `not_ok` or `unknown` and fails closed to `blocked` (exit 1).
 - Direct write-guard pipes with synthetic diffs do not reproduce installed hook context; use `cargo test -p bee --test pi_plugin_contracts` to drive real installed commands.
