@@ -344,6 +344,53 @@ tutorial skipped: no new API for other code to call.
       ]
     },
     "behavior_change": false
+  },
+  {
+    "id": "jwa-8",
+    "feature": "job-worker-adopt",
+    "title": "Check the parallel-leader doctrine and run-verb concept edits",
+    "lane": "small",
+    "role": "test",
+    "deps": [
+      "jwa-7"
+    ],
+    "decisions": [
+      "9dc59f64-3371-4c00-93b4-087c869effb2",
+      "ac1b3903-0767-4985-82ec-665082cae61f",
+      "22979883-1118-442b-ad6c-b9669d572c34"
+    ],
+    "files": [
+      "docs/history/job-worker-adopt/reports/jwa-8.md"
+    ],
+    "read_first": [
+      "docs/history/job-worker-adopt/plan.md",
+      "docs/history/job-worker-adopt/CONTEXT.md"
+    ],
+    "affects_skills": [],
+    "affects_specs": [],
+    "action": "Check jwa-7's docs edits (commit 5e6d5372f) against job-worker-adopt D1, D2 and D4 in CONTEXT.md: packages/bee/playbooks/multi-session.md carries the parallel-leader paragraph (D4), and docs/knowledge/areas/bee-herding/the-run-verb-and-worker-outcomes.md carries D1 worker adoption and the D2 floor-aware settle line, citing them as job-worker-adopt D1 and D2. Run the verify. Write the findings, each with a file:line anchor, to docs/history/job-worker-adopt/reports/jwa-8.md and commit only that file.",
+    "verify": "rg -n -- --no-handoff packages/bee/playbooks/multi-session.md && rg -n 'job-worker-adopt D[12]' docs/knowledge/areas/bee-herding/the-run-verb-and-worker-outcomes.md && .bee/bin/bee dev release-manifest --check",
+    "must_haves": {
+      "truths": [
+        "every D1, D2 and D4 claim in jwa-7's edits matches the locked decision text"
+      ],
+      "artifacts": [
+        {
+          "path": "docs/history/job-worker-adopt/reports/jwa-8.md",
+          "substantive": "check report"
+        }
+      ],
+      "key_links": [],
+      "prohibitions": [
+        "no edits outside the report file",
+        "no code comments"
+      ],
+      "why": "The merge proof door asks every capped cell with files for a test-role dependent; docs-only jwa-7 had none.",
+      "out_of_scope": [
+        "fixing the docs (report findings only)"
+      ]
+    },
+    "behavior_change": false
   }
 ]
 ```
