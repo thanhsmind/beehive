@@ -39,7 +39,7 @@ In `.agents/hooks.json`, bee owns one top-level hook key, `"bee"`, with five eve
 - `PostToolUse` (grouped with `matcher: ""`)
 - `Stop` (flat handler list)
 
-Every handler runs `bee hook agy-belt` through `sh -c` with `cwd` set to the `.agents/` folder that holds `hooks.json`. The command resolves `../.bee/bin/bee` first, then falls back to `.bee/bin/bee` under the git common directory. If no `bee` binary is executable, the fallback prints the neutral answer for that event (`{"decision":"ask"}` on `PreToolUse`, `{}` on all other events) so a missing binary never blocks every tool.
+Every handler runs `bee hook agy-belt` through `sh -c` with `cwd` set to the `.agents/` folder that holds `hooks.json`. The command resolves `../.bee/bin/bee` first, then falls back to `$g/../.bee/bin/bee` where `$g` is the absolute git common directory, so it finds the main checkout's binary from a worktree. If no `bee` binary is executable, the fallback prints the neutral answer for that event (`{"decision":"ask"}` on `PreToolUse`, `{}` on all other events) so a missing binary never blocks every tool.
 
 ## Event Translation (`bee hook agy-belt`)
 
@@ -61,7 +61,7 @@ On `agy` 1.5.17, a `PreToolUse` hook that prints `{}` causes `agy` to **deny eve
 - **Allow / normal approval (`ask`):** `{"decision":"ask"}` keeps `agy`'s own approval path. When a check repairs tool arguments (`updatedInput`), `agy-belt` maps the repaired fields back to `agy` argument keys (`command` -> `CommandLine`, `file_path` -> `Path`, `content` -> `Content`, `old_string` -> `Target`, `new_string` -> `Replacement`) and emits `{"decision":"ask","overwrite":{...}}`.
 - **Deny (`deny`):** `{"decision":"deny","reason": r}` blocks the tool call on the first denial. A crash, spawn error, or unreadable payload on `PreToolUse` fails closed and prints `{"decision":"deny","reason": ...}`.
 - **Turn continuation (`continue`):** On `Stop`, a blocking `session-close` result emits `{"decision":"continue","reason": r}`; otherwise `{}`.
-- **Advisory failure policy:** `SessionStart`, `PreInvocation`, `PostToolUse`, and `Stop` fail open. On a crash or unreadable payload, they print the neutral `{}` answer and exit `0`.
+- **Advisory failure policy:** `SessionStart`, `PreInvocation`, `PostToolUse`, and `Stop` fail open on a crash or spawn error of a child hook, printing the neutral `{}` answer and exiting `0`. An unreadable payload fails closed on every event with `{"decision":"deny","reason":"agy-belt: unreadable hook payload: ..."}` because `handle_payload` parses stdin before the event name is known.
 
 ## The D4 Tool Map
 

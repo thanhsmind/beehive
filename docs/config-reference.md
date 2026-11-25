@@ -305,21 +305,23 @@ The Claude hook manifest (`packages/bee/hooks/claude-hooks.json`) fires some rul
 
 `agy` (Antigravity CLI 1.5.17+) is a legal runtime at both dispatch doors — `bee dispatch prepare --runtime agy` and `bee dispatch wave --runtime agy` — and resolves `team.agy` in `.bee/config.json` (agy-runtime D1, D5). Its guard belt is `.agents/hooks.json` (under the `"bee"` key), which runs `bee hook agy-belt` and denies `invoke_subagent` with a reason naming `bee dispatch prepare --runtime agy` (agy-runtime D2–D5).
 
-Like `team.pi`, `team.agy` is herding-only: every slot must resolve to `{ "kind": "herding", "agent": "<name>" }`, and any native, model, cli, or budget slot refuses with the herding remedy. The onboarding template gives `team.agy` the same herding roles as `team.pi`:
+Like `team.pi`, `team.agy` is herding-only: every slot must resolve to `{ "kind": "herding", "agent": "<name>" }`, and any native, model, cli, or budget slot refuses with the herding remedy. The onboarding template derives `team.agy` from `team.claude` role for role (every `team.claude` role is present, including `plan`, `design`, `lane-1`–`lane-3`, and `hat-*`), with every slot pointing at `"agy"` and `herding.agents` carrying `"agy": ["agy"]`:
 
 ```jsonc
 {
   "team": {
     "agy": {
-      "code":       { "kind": "herding", "agent": "claude-opus" },
-      "test":       { "kind": "herding", "agent": "claude-opus" },
-      "docs":       { "kind": "herding", "agent": "claude-opus" },
-      "review":     { "kind": "herding", "agent": "claude-opus" },
-      "advisor":    { "kind": "herding", "agent": "claude-fable" },
-      "read":       { "kind": "herding", "agent": "agy-flash" },
-      "extraction": { "kind": "herding", "agent": "agy-flash" },
-      "generation": { "kind": "herding", "agent": "agy-flash" },
-      "supervisor": { "kind": "herding", "agent": "agy-flash" }
+      "code":   { "kind": "herding", "agent": "agy", "description": "write the cell's code and its tests" },
+      "read":   { "kind": "herding", "agent": "agy", "description": "read-only lookups from known locations; a bare --kind gather also runs here" },
+      "plan":   { "kind": "herding", "agent": "agy", "description": "planning-shaped work — shaping, drafting cells, plan checks" },
+      "design": { "kind": "herding", "agent": "agy", "description": "build and critique rendered UI with the bee-design taste; proves with the design gate" },
+      "lane-1": { "kind": "herding", "agent": "agy", "description": "blind-lane seat 1 — isolated design proposal" }
+      // ...every other team.claude role with { "kind": "herding", "agent": "agy", "description": ... }
+    }
+  },
+  "herding": {
+    "agents": {
+      "agy": ["agy"]
     }
   }
 }
