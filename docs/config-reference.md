@@ -169,9 +169,9 @@ Every role slot — a seeded one, `review`, `advisor`, or a name you invented �
   | `inherited-or-unknown` | session model (escalated cell) or runtime without per-agent selection (Codex default) |
   | `native-requested` | capability probe confirmed the runtime accepted the native model override |
 
-### Runtimes: Claude Code, Codex, OpenCode, and Pi — and everything else (agy, …)
+### Runtimes: Claude Code, Codex, OpenCode, Pi, and agy — and everything else
 
-`team` accepts **four runtime keys: `claude`, `codex`, `opencode`, and `pi`** — the runtimes bee ships hooks or a guard belt, rendered skills, and a dispatch door for (opencode-support D1; pi-support D5 added `pi`). Any other top-level runtime key (e.g. `"gemini"`) is still **silently ignored**: not an error, just dead config that never resolves.
+`team` accepts **five runtime keys: `claude`, `codex`, `opencode`, `pi`, and `agy`** — the runtimes bee ships hooks or a guard belt, rendered skills, and a dispatch door for (opencode-support D1; pi-support D5 added `pi`; agy-runtime D1 added `agy`). Any other top-level runtime key (e.g. `"gemini"`) is still **silently ignored**: not an error, just dead config that never resolves.
 
 - **OpenCode** names models as `provider/model` ids (e.g. `"opencode/big-pickle"` on the zero-config `opencode/*` free provider this machine ships out of the box) — a real catalog id, the same way Codex takes its real model ids, never a Claude-style family alias. There is no per-call model override on OpenCode's dispatch (`task`) tool, so `team.opencode.{code,read,extraction,generation,review}` is consumed **structurally**: each `.opencode/agent/bee-{build,gather,extract,review}.md` worker file pins its role's model directly in that file's own `model:` frontmatter (today hand-authored to match this key, not yet rendered by a `bee dev` generator the way `.claude/agents/*.md` is), so a wrong-role dispatch is unrepresentable rather than caught after the fact. Example:
 
@@ -301,6 +301,29 @@ The Claude hook manifest (`packages/bee/hooks/claude-hooks.json`) fires some rul
 - **`activity` on `PermissionRequest`:** Pi 0.84–0.85 provides no interactive permission request event.
 - **`state-sync` on `SubagentStop`:** Pi has no `SubagentStop` event (state synchronization runs on `tool_result` and `agent_settled`).
 
+### agy — `team.agy` is herding-only
+
+`agy` (Antigravity CLI 1.5.17+) is a legal runtime at both dispatch doors — `bee dispatch prepare --runtime agy` and `bee dispatch wave --runtime agy` — and resolves `team.agy` in `.bee/config.json` (agy-runtime D1, D5). Its guard belt is `.agents/hooks.json` (under the `"bee"` key), which runs `bee hook agy-belt` and denies `invoke_subagent` with a reason naming `bee dispatch prepare --runtime agy` (agy-runtime D2–D5).
+
+Like `team.pi`, `team.agy` is herding-only: every slot must resolve to `{ "kind": "herding", "agent": "<name>" }`, and any native, model, cli, or budget slot refuses with the herding remedy. The onboarding template gives `team.agy` the same herding roles as `team.pi`:
+
+```jsonc
+{
+  "team": {
+    "agy": {
+      "code":       { "kind": "herding", "agent": "claude-opus" },
+      "test":       { "kind": "herding", "agent": "claude-opus" },
+      "docs":       { "kind": "herding", "agent": "claude-opus" },
+      "review":     { "kind": "herding", "agent": "claude-opus" },
+      "advisor":    { "kind": "herding", "agent": "claude-fable" },
+      "read":       { "kind": "herding", "agent": "agy-flash" },
+      "extraction": { "kind": "herding", "agent": "agy-flash" },
+      "generation": { "kind": "herding", "agent": "agy-flash" },
+      "supervisor": { "kind": "herding", "agent": "agy-flash" }
+    }
+  }
+}
+```
 
 ## `retry.fallbackChains` — a chain bee PUBLISHES, never one it runs
 

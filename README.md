@@ -4,7 +4,7 @@
 ![backlog declined](https://img.shields.io/badge/backlog%20declined-1-red) ![backlog done](https://img.shields.io/badge/backlog%20done-48-brightgreen) ![backlog parked](https://img.shields.io/badge/backlog%20parked-0-yellow) ![backlog in-flight](https://img.shields.io/badge/backlog%20in--flight-4-blue) ![backlog proposed](https://img.shields.io/badge/backlog%20proposed-29-lightgrey)
 <!-- BEE:BACKLOG-BADGES:END -->
 
-**bee** is a lightweight, *validate-first* agentic-development plugin suite for **Claude Code** and **Codex**. It turns "vibe-coding with an AI" into a staged, gated workflow where the agent proves each step before taking the next, records what it learns, and gets less wrong over time.
+**bee** is a lightweight, *validate-first* agentic-development plugin suite for **Claude Code**, **Codex**, **OpenCode**, **Pi**, and **agy**. It turns "vibe-coding with an AI" into a staged, gated workflow where the agent proves each step before taking the next, records what it learns, and gets less wrong over time.
 
 It is distilled from seven upstream systems (khuym, claudekit, gsd-core, gstack, repository-harness, superpowers, compound-engineering) — bee keeps only the pieces that hold up in daily practice for a solo developer and throws away the rest.
 
@@ -707,7 +707,7 @@ The six core hooks are tabled above; `bee hook model-guard`, `bee hook tools-log
 
 ## Status
 
-**v2.6.3** (versioned by git tag; the Rust workspace's `Cargo.toml` version is decoupled from release numbering). Core built and green on the Rust CLI: the skills, hook automation on all three runtimes, onboarding, and the full `cargo test` suite — exercised end to end (onboard → gate-locked claim → verify-gated cap → hook denials).
+**v2.6.3** (versioned by git tag; the Rust workspace's `Cargo.toml` version is decoupled from release numbering). Core built and green on the Rust CLI: the skills, hook automation on all five runtimes, onboarding, and the full `cargo test` suite — exercised end to end (onboard → gate-locked claim → verify-gated cap → hook denials).
 
 2.6.3 is a doctrine release — the handbook catches up with the 2.6.2 guards, and the vendored block gains two sections every host project now receives. The skill references state the docs-lane solo condition the guard already enforces, so an agent reading the handbook and an agent hitting the guard hear the same rule. The BEE block adds Token efficiency (no re-reading freshly written files, no certain-outcome re-runs, no unasked echoes or recaps, batched edits — with prove-then-say-so explicitly winning on contact) and the cross-runtime work discipline (rg/fd over grep/find, done-means-done, act-don't-ask, a-question-is-a-question) moves from CLAUDE.md into AGENTS.md where every runtime reads it.
 
