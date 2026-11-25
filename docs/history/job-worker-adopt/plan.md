@@ -214,7 +214,7 @@ tutorial skipped: no new API for other code to call.
     "id": "jwa-5",
     "feature": "job-worker-adopt",
     "title": "Let the Stop owner-ask check pass a step a guard refused as owner-only",
-    "lane": "small",
+    "lane": "standard",
     "role": "code",
     "deps": [],
     "decisions": [
@@ -256,7 +256,7 @@ tutorial skipped: no new API for other code to call.
     "id": "jwa-6",
     "feature": "job-worker-adopt",
     "title": "Test the owner-only pass of the Stop owner-ask check",
-    "lane": "small",
+    "lane": "standard",
     "role": "test",
     "deps": [
       "jwa-5"
@@ -306,7 +306,8 @@ tutorial skipped: no new API for other code to call.
     ],
     "files": [
       "packages/bee/playbooks/multi-session.md",
-      "docs/knowledge/areas/bee-herding/the-run-verb-and-worker-outcomes.md"
+      "docs/knowledge/areas/bee-herding/the-run-verb-and-worker-outcomes.md",
+      "docs/history/codex-harness-hardening/release-manifest.json"
     ],
     "read_first": [
       "docs/history/job-worker-adopt/plan.md",
@@ -315,7 +316,7 @@ tutorial skipped: no new API for other code to call.
     "affects_skills": [],
     "affects_specs": [],
     "action": "Add D4 to packages/bee/playbooks/multi-session.md as one short paragraph in STE (check waggledance state for a run on the same PBI and steer it with --follow-up-of; otherwise dispatch the parallel leader with --no-handoff). Add to the-run-verb-and-worker-outcomes.md the D1 worker adoption of finish --from-job and the D2 floor-aware settle line, citing job-worker-adopt D1 and D2.",
-    "verify": "rg -n -- --no-handoff packages/bee/playbooks/multi-session.md",
+    "verify": "rg -n -- --no-handoff packages/bee/playbooks/multi-session.md && .bee/bin/bee dev release-manifest --check",
     "must_haves": {
       "truths": [
         "the multi-session playbook names --no-handoff and the owning-leader check",
