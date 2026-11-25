@@ -1,3 +1,4 @@
+<!-- bee:not-a-deferral: "deferred-queue" is the name of the feature and verb the agy leader built, not a promise to act -->
 step 1 | .bee/bin/bee backlog pbi status --id p-74ec14b3 --to in_progress --feature deferred-queue-req-flags | invalid value, expected one of proposed, in-flight, parked, done, declined (--to) (field: to) | changed --to to in-flight
 step 2 | cd /mnt/data/Projects/goglbe/beehive--wt--deferred-queue-req-flags && .bee/bin/bee gate --merge --approved true --actor auto --bypass-level full --reason "Full autopilot bypass on for p-74ec14b3" | gate: approval refused for lane deferred-queue-req-flags — the plan-time conflict check has never run against this plan (D5) | ran bee state plan-conflicts derive --lane deferred-queue-req-flags
 step 4 | cd /mnt/data/Projects/goglbe/beehive--wt--deferred-queue-req-flags && .bee/bin/bee dispatch prepare --runtime agy --kind cell --cell dqrf-1 --claim --json | bee dispatch prepare: refused inside a granted feature worktree | ran from /mnt/data/Projects/goglbe/beehive
@@ -12,3 +13,4 @@ step 5 | cd /mnt/data/Projects/goglbe/beehive--wt--deferred-queue-req-flags && .
 step 5 | .bee/bin/bee worktree merge --id beehive--wt--deferred-queue-req-flags --detached --json | WORKTREE_MERGE_LEADER_CHECK_DEBT — dqrf-1 and dqrf-2 capped with no leader check | checking bee cells leader-check flags and recording leader checks for dqrf-1 and dqrf-2
 step 5 | bash redirect cat > "$SCRATCH/lc-dqrf-1.json" | bee write guard denied Bash: unexpanded shell variable $SCRATCH in redirect target | wrote leader-check JSON files using write_file with literal scratch paths
 step 5 | write_file ~/.gemini/antigravity-cli/brain/.../scratch/lc-dqrf-1.json | bee write guard denied write outside physical worktree (even to agy scratch dir) | wrote leader-check JSON payloads to .bee/tmp/agy-leader-e2e/ inside repo root
+<!-- /bee:not-a-deferral -->
