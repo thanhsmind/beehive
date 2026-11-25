@@ -41,7 +41,7 @@ agy-runtime D1-D8, decision `fa33ba78-d185-4266-8202-1bc155607ec6`.
 
 | # | Claim | Label | Anchor | Verbatim evidence |
 |---|-------|-------|--------|-------------------|
-| 1 | an empty PreToolUse answer denies the tool | read | docs/history/agy-runtime/discovery.md:54 | `- A PreToolUse hook that prints ` |
+| 1 | an empty PreToolUse answer denies the tool | ran | agy -p with a logging hook printing {} | `tool call denied by pre-tool hook` |
 | 2 | Pi and OpenCode take a named exclusion from the catalog | read | packages/bee-rs/crates/bee/src/devtools/hook_manifests.rs:44 | `/// NAMED EXCLUSION (hook-runtime R1: every per-runtime difference is a named` |
 | 3 | hook names are a closed list | read | packages/bee-rs/crates/bee/src/hooks/mod.rs:243 | `if !HOOK_NAMES.contains(&name.as_str()) {` |
 | 4 | session identity checks Pi first | read | packages/bee-rs/crates/bee/src/session_identity.rs:96 | `if let Some(val) = lookup("PI_SESSION_ID") {` |
