@@ -28,3 +28,8 @@ no companion config (`commands.worktree_companion_start` and
 `commands.worktree_companion_mount`), `bee` opens the worktree and warns
 that the nested checkout stays guarded by the write guard while sessions
 are concurrent.
+
+When a live leader opens a parallel leader for new work in the same project,
+first check `waggledance state` for a run already on the same PBI and steer
+that owning leader with `--follow-up-of`; otherwise dispatch the parallel
+leader with `--no-handoff` so it is not folded into a handoff of the live run.
