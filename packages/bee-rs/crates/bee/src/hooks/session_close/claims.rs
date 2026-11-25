@@ -39,18 +39,18 @@ pub(crate) fn unverified_agreement_warning(events: &[Value]) -> Option<String> {
     (agrees && !checked && !conditional).then(|| WARNING.to_string())
 }
 
-fn is_sources_heading(line: &str) -> bool {
+pub(crate) fn is_sources_heading(line: &str) -> bool {
     let word = line.trim().trim_start_matches(['#', '*', ' ']).trim_end_matches(['*', ':', ' ']);
-    matches!(word, "sources" | "nguồn")
+    word.eq_ignore_ascii_case("sources") || word.to_lowercase() == "nguồn"
 }
 
-fn leading_number(line: &str) -> Option<&str> {
+pub(crate) fn leading_number(line: &str) -> Option<&str> {
     let rest = line.trim().strip_prefix('[')?;
     let (digits, _) = rest.split_once(']')?;
     (!digits.is_empty() && digits.bytes().all(|b| b.is_ascii_digit())).then_some(digits)
 }
 
-fn inline_numbers(line: &str) -> Vec<&str> {
+pub(crate) fn inline_numbers(line: &str) -> Vec<&str> {
     line.split('[')
         .skip(1)
         .filter_map(|part| part.split_once(']').map(|(inner, _)| inner))

@@ -271,6 +271,8 @@ Sources:
 [2] cargo test route_rejects_unknown_lane — 1 passed
 ```
 
+The Stop hook opens each `path:line` source and warns when the file is missing, the line is past the end, or no backticked token of the claim or source line appears within 20 lines of it; it also warns when a cited command was never run in the session. Put the identifier the claim is about in backticks, and cite the command you ran.
+
 **Pushback.** When the user's direction conflicts with the code, never say "you are wrong". Open in plain language: "I understand the goal is X. Current code does Y because Z (file:line). To keep X, the options are..." Then four parts, in this order:
 
 1. **Current state** — what the code does, with `file:line`.
