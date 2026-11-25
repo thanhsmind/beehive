@@ -8,7 +8,7 @@ bee:
   lifecycle: active
   areas: [hook-runtime]
   required_context: [areas/hook-runtime/overview.md]
-  decisions: ["codex-runtime-parity D1, D2", "4c1c5921 (GitHub #18 — the gate-bypass net mechanized at runtime as a loop-guarded turn-control block)", "validation-diet D1-D3 (docs/history/validation-diet/CONTEXT.md, 2026-07-28)", "knowledge-first-lean-decisions D1, D2 (docs/history/knowledge-first-lean-decisions/plan.md, 2026-11-07)"]
+  decisions: ["codex-runtime-parity D1, D2", "4c1c5921 (GitHub #18 — the gate-bypass net mechanized at runtime as a loop-guarded turn-control block)", "validation-diet D1-D3 (docs/history/validation-diet/CONTEXT.md, 2026-07-28)", "knowledge-first-lean-decisions D1, D2 (docs/history/knowledge-first-lean-decisions/plan.md, 2026-11-07)", "job-worker-adopt D3 (docs/history/job-worker-adopt/plan.md, 2026-11-25)"]
   sources: ["codex-runtime-parity Safety foundation — cells codex-parity-2, 2b, 3, 4 (traces in .bee/cells/), reports in docs/history/codex-runtime-parity/reports/", "post-advisor-hardening cells pah-1/pah-3 (onboarding-generator drift check + B15 consult instruction, 2026-07-18)", "docs/specs/hook-runtime.md#B2", "docs/specs/hook-runtime.md#B10", "docs/specs/hook-runtime.md#B15", "docs/specs/hook-runtime.md#R4", "docs/specs/hook-runtime.md#R10", "docs/specs/hook-runtime.md#R14", "docs/specs/hook-runtime.md#P4", "docs/specs/hook-runtime.md#P5", "codex-loop-p0 cell clp-1 (the prompt reminder threads sessionId and stops reporting the on-demand review gate outside a review session; trace in `.bee/cells/`, 2026-07-23)", "loop-seams-1112 cell ls-1 (advisor issue #54 — both surfaces, terminal owes no gate, per-session dedup; trace in `.bee/cells/`, 2026-07-23)", "validation-diet cell vd-1 (trace in .bee/cells/, report docs/history/validation-diet/reports/vd-1.md, 2026-07-28 — the bypass net's fire matrix narrowed to the single phase now carrying the merged approval, since the standalone feasibility phase it used to also cover is retired)", "knowledge-first-lean-decisions cell kbc-1 (trace in .bee/cells/, 2026-11-07 — the knowledge-before-code nudge)"]
   authoritative_for: "hook-runtime: the advisory contract and the gate-bypass turn-control exception"
   anchors: [packages/bee/LEADER.md, packages/, packages/bee-rs/crates/bee/src/, skills/, packages/bee-rs/crates/bee/src/hooks/write_guard/knowledge_first.rs, packages/bee-rs/crates/bee/src/hooks/prompt_context.rs, packages/bee-rs/crates/bee/tests/knowledge_first_nudge.rs, packages/bee-rs/crates/bee/src/hooks/adapter.rs, packages/bee-rs/crates/bee/src/hooks/session_close/mod.rs]
@@ -155,6 +155,14 @@ non-empty `agent_id` or `agent_type` (a native subagent) is skipped.
   not per-session records) and transitions activity state to `idle`. Child subagent
   completion (`SubagentStop`) is isolated from the parent turn and does not alter the
   parent session's waiting state or activity journal.
+
+- A write-guard refusal for an owner-only target (a governed config key, the
+  team layer file, a write outside the repo under the home dir) ends with the
+  marker `[owner-only: <target>]`. The Stop owner-ask check reads the turn's
+  tool results for that marker. An owner-ask in the closing message passes
+  when it names a marked target, as written or in its `~/` form; any other
+  owner-ask keeps its block, or its advisory when no handoff door exists
+  (job-worker-adopt D3, `hooks/session_close/owner_ask_net.rs`).
 
 ## Pointers (implementation)
 
