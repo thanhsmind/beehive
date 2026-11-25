@@ -1,0 +1,311 @@
+{
+  "id": "agyrt-1",
+  "feature": "agy-runtime",
+  "title": "Add agy as a runtime label with its session identity and a herding-only dispatch door",
+  "lane": "standard",
+  "role": "code",
+  "deps": [],
+  "decisions": [
+    "fa33ba78-d185-4266-8202-1bc155607ec6"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/devtools/skill_trees.rs",
+    "packages/bee-rs/crates/bee/src/onboard/templates.rs",
+    "packages/bee-rs/crates/bee/src/onboard/render.rs",
+    "packages/bee-rs/crates/bee/src/onboard/plan.rs",
+    "packages/bee-rs/crates/bee/src/devtools/mod.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/mod.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+    "packages/bee-rs/crates/bee/src/verbs/status_full/mod.rs",
+    "packages/bee-rs/crates/bee/src/verbs/models_group.rs",
+    "packages/bee-rs/crates/bee/src/verbs/config.rs",
+    "packages/bee-rs/crates/bee/src/session_identity.rs",
+    "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+  ],
+  "read_first": [
+    "docs/history/agy-runtime/CONTEXT.md",
+    "docs/history/agy-runtime/discovery.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Implement agy-runtime D1, D5 (the dispatch door half) and D6. Follow every place the label pi is a runtime and add agy beside it: MARKER_RUNTIMES in devtools/skill_trees.rs, RENDER_RUNTIMES and the team template in onboard/templates.rs (team.agy gets the same herding role map team.pi gets, with agent agy; herding.agents gets an agy entry whose argv is [\"agy\"] if the pi entry pattern needs one), the codex render in onboard/render.rs keeps agy blocks as it keeps pi blocks (a claude or opencode render strips them), the label arm in devtools/mod.rs (agy returns None like pi: no rendered hook projection), DISPATCH_RUNTIMES and the pi_requires_herding refusal (generalize it so agy is herding-only with the same remedy text naming its runtime), the status RUNTIMES list, models/config readers that list runtimes, and onboard/plan.rs where team.pi is special-cased. Register agy wherever registry_payload.json lists the --runtime values. In session_identity.rs locate_caller_from, check ANTIGRAVITY_CONVERSATION_ID first, before PI_SESSION_ID, CODEX_THREAD_ID and every Claude variable, returning runtime agy. Update the existing tests that pin the runtime lists (for example models_group.rs names, templates.rs team keys, drivers tests that walk DISPATCH_RUNTIMES) so they include agy, and add unit tests: the agy marker filters like pi, a dispatch prepare --runtime agy with a native slot refuses with the herding remedy, ANTIGRAVITY_CONVERSATION_ID wins over CLAUDE_CODE_SESSION_ID. Use rg to find every list; do not leave a runtime list that names pi without agy unless it is Pi-specific behavior (the Pi extension, PI_GUARD_FILES). No code comments.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee runtime && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee session_identity && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee drivers && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee onboard",
+  "must_haves": {
+    "why": "agy must be a runtime bee knows by name before a leader can run in it.",
+    "out_of_scope": [
+      "the hooks.json belt",
+      "the agy-belt translator",
+      "docs"
+    ],
+    "truths": [
+      "bee dispatch prepare --runtime agy is accepted and a native slot refuses with the herding remedy",
+      "a skill block marked bee:only agy survives the codex render and is stripped from the claude render",
+      "ANTIGRAVITY_CONVERSATION_ID names an agy session even when CLAUDE_CODE_SESSION_ID is set",
+      "the onboarding template carries team.agy with the same roles as team.pi"
+    ],
+    "prohibitions": [
+      "No code comments",
+      "No hand edit of .bee/*.json(l) state files"
+    ]
+  },
+  "behavior_change": true,
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "w-agyrt-1",
+    "outcome": "Added agy runtime label, session identity, and herding-only dispatch door (656e303e7)",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/devtools/mod.rs",
+      "packages/bee-rs/crates/bee/src/devtools/skill_trees.rs",
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+      "packages/bee-rs/crates/bee/src/onboard/render.rs",
+      "packages/bee-rs/crates/bee/src/onboard/templates.rs",
+      "packages/bee-rs/crates/bee/src/session_identity.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/models.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+      "packages/bee-rs/crates/bee/src/verbs/models_group.rs",
+      "packages/bee-rs/crates/bee/src/verbs/status_full/mod.rs"
+    ],
+    "deviations": [
+      "sync-ack: worker reported all four cell verify filters green"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-25T09:43:04.725Z",
+    "behavior_change": true,
+    "verification_evidence": "cargo clippy -- -D warnings && cargo test --release -p bee --bin bee (runtime, session_identity, drivers, onboard) — green:unit — all 4 targeted suites + clippy passed",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "5ec673cd-5cc2-4840-8ecf-c1c95b786fac",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee runtime && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee session_identity && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee drivers && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee onboard",
+    "claimed_at": "2026-11-25T09:28:51.727Z",
+    "verified_at": null,
+    "baseline": null,
+    "reaction": null,
+    "skipped": null,
+    "unknowns": null,
+    "found": null,
+    "stopped": null,
+    "knowledge_delta": [],
+    "sync_ack": "worker reported all four cell verify filters green",
+    "no_mistakes": true,
+    "principles_used": [
+      {
+        "slug": "bee-principle-redesign-from-first-principles",
+        "changed": "generalized requires_herding_refusal for pi and agy rather than duplicating refusal logic"
+      },
+      {
+        "slug": "bee-principle-test-behavior-not-structure",
+        "changed": "added unit tests for agy marker filtering, native slot refusal, and ANTIGRAVITY_CONVERSATION_ID precedence"
+      }
+    ],
+    "changed_lines": 218,
+    "report": {
+      "outcome": "Added agy runtime label, session identity, and herding-only dispatch door (656e303e7)",
+      "commit": "656e303e764e4e708cab356118ced7ecafc0641a",
+      "files": [
+        "packages/bee-rs/crates/bee/src/devtools/mod.rs",
+        "packages/bee-rs/crates/bee/src/devtools/skill_trees.rs",
+        "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+        "packages/bee-rs/crates/bee/src/onboard/render.rs",
+        "packages/bee-rs/crates/bee/src/onboard/templates.rs",
+        "packages/bee-rs/crates/bee/src/session_identity.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/models.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+        "packages/bee-rs/crates/bee/src/verbs/models_group.rs",
+        "packages/bee-rs/crates/bee/src/verbs/status_full/mod.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee runtime && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee session_identity && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee drivers && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee onboard — green:unit — cargo clippy -- -D warnings && cargo test --release -p bee --bin bee (runtime, session_identity, drivers, onboard) — green:unit — all 4 targeted suites + clippy passed",
+      "deviations": [],
+      "principles_used": [
+        "bee-principle-redesign-from-first-principles — generalized requires_herding_refusal for pi and agy rather than duplicating refusal logic",
+        "bee-principle-test-behavior-not-structure — added unit tests for agy marker filtering, native slot refusal, and ANTIGRAVITY_CONVERSATION_ID precedence"
+      ],
+      "patch_id": "1834788f881cb4cf6ab81cc566acf92509e61ffe"
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "bee dispatch prepare --runtime agy is accepted and a native slot refuses with the herding remedy",
+            "artifact": "packages/bee-rs/crates/bee/src/devtools/skill_trees.rs"
+          },
+          {
+            "requirement": "a skill block marked bee:only agy survives the codex render and is stripped from the claude render",
+            "artifact": "packages/bee-rs/crates/bee/src/devtools/skill_trees.rs"
+          },
+          {
+            "requirement": "ANTIGRAVITY_CONVERSATION_ID names an agy session even when CLAUDE_CODE_SESSION_ID is set",
+            "artifact": "packages/bee-rs/crates/bee/src/devtools/skill_trees.rs"
+          },
+          {
+            "requirement": "the onboarding template carries team.agy with the same roles as team.pi",
+            "artifact": "packages/bee-rs/crates/bee/src/devtools/skill_trees.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/devtools/mod.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/devtools/mod.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/devtools/skill_trees.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/devtools/skill_trees.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+            "artifact": "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/onboard/render.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/onboard/render.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/onboard/templates.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/onboard/templates.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/session_identity.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/session_identity.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/drivers/models.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/models.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/models_group.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/models_group.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/status_full/mod.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/status_full/mod.rs"
+          }
+        ],
+        "recorded_at": "2026-11-25T10:01:52.158Z",
+        "recorded_by": "5ec673cd-5cc2-4840-8ecf-c1c95b786fac",
+        "commit_diff": "checked"
+      },
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "bee dispatch prepare --runtime agy is accepted and a native slot refuses with the herding remedy",
+            "artifact": "packages/bee-rs/crates/bee/src/devtools/skill_trees.rs"
+          },
+          {
+            "requirement": "a skill block marked bee:only agy survives the codex render and is stripped from the claude render",
+            "artifact": "packages/bee-rs/crates/bee/src/devtools/skill_trees.rs"
+          },
+          {
+            "requirement": "ANTIGRAVITY_CONVERSATION_ID names an agy session even when CLAUDE_CODE_SESSION_ID is set",
+            "artifact": "packages/bee-rs/crates/bee/src/devtools/skill_trees.rs"
+          },
+          {
+            "requirement": "the onboarding template carries team.agy with the same roles as team.pi",
+            "artifact": "packages/bee-rs/crates/bee/src/devtools/skill_trees.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/devtools/mod.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/devtools/mod.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/devtools/skill_trees.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/devtools/skill_trees.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+            "artifact": "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/onboard/render.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/onboard/render.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/onboard/templates.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/onboard/templates.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/session_identity.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/session_identity.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/drivers/models.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/models.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/models_group.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/models_group.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/status_full/mod.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/status_full/mod.rs"
+          }
+        ],
+        "recorded_at": "2026-11-25T10:05:30.183Z",
+        "recorded_by": "5ec673cd-5cc2-4840-8ecf-c1c95b786fac",
+        "commit_diff": "checked"
+      }
+    ],
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "dispatch-agy-accepted-native-refuses",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs:150 DISPATCH_RUNTIMES has agy; registry_payload.json runtime enum [codex,claude,pi,agy]; prepare.rs:2731 and :2798 is_herding_only_runtime -> requires_herding_refusal with reason agy_requires_herding and fix 'set team.agy.<slot> ... {kind:herding,...}'; test a_native_slot_on_agy_refuses_with_the_herding_remedy (drivers/tests.rs) passes in drivers 602 passed"
+          },
+          {
+            "id": "agy-marker-codex-keeps-claude-strips",
+            "status": "PASS",
+            "evidence": "onboard/render.rs:353 codex keeps r == pi || r == agy; skill_trees.rs MARKER_RUNTIMES [..,pi,agy]; templates.rs RENDER_RUNTIMES has agy; test agy_marker_label_is_accepted_and_filters_like_pi asserts codex keeps AGY, claude and opencode strip it; onboard 373 passed"
+          },
+          {
+            "id": "antigravity-id-wins-over-claude",
+            "status": "PASS",
+            "evidence": "session_identity.rs:103 ANTIGRAVITY_CONVERSATION_ID checked first in locate_caller_from, runtime agy; test locator_resolves_agy_first_even_over_claude_and_pi; session_identity 12 passed"
+          },
+          {
+            "id": "team-agy-same-roles-as-team-pi",
+            "status": "PASS",
+            "evidence": "onboard/templates.rs:294-305 team.agy built from team.claude roles as {kind:herding, agent:agy, description}, same shape as team.pi; herding.agents.agy = [\"agy\"]; tests assert team keys [claude,codex,pi,agy] and agy role names == claude names"
+          },
+          {
+            "id": "prohibitions",
+            "status": "PASS",
+            "evidence": "comment scan of 656e303e7 finds no added comment lines; diff touches no .bee/*.json(l)"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "gemini-4-hydrogen",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-11-25T10:26:07.322Z"
+      }
+    ]
+  },
+  "usage": null,
+  "usage_reason": "herding job(s) named this cell but no readable session transcript (1 unreadable)"
+}

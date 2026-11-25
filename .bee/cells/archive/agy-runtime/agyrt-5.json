@@ -1,0 +1,186 @@
+{
+  "id": "agyrt-5",
+  "feature": "agy-runtime",
+  "title": "Test the agy belt, the runtime label and the onboarding merge end to end",
+  "lane": "standard",
+  "role": "test",
+  "deps": [
+    "agyrt-1",
+    "agyrt-2",
+    "agyrt-3"
+  ],
+  "decisions": [
+    "fa33ba78-d185-4266-8202-1bc155607ec6"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/tests/agy_belt_contracts.rs"
+  ],
+  "read_first": [
+    "docs/history/agy-runtime/CONTEXT.md",
+    "docs/history/agy-runtime/discovery.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Without reading the implementers' notes, check agyrt-1, agyrt-2 and agyrt-3 against agy-runtime D1-D7 and add integration tests in tests/agy_belt_contracts.rs that drive the built bee binary against a temp git repo onboarded the way the existing integration tests do (see tests/pi_plugin_contracts.rs and tests/opencode_plugin_contracts.rs for the harness). Feed bee hook agy-belt the agy payload shapes recorded in docs/history/agy-runtime/discovery.md and assert: a PreToolUse write_file to a path the write guard refuses (a governed path before the gate, or a secret-shaped file) prints decision deny; an allowed read_file prints decision ask; run_command with a command the CLI-shape or write guard refuses prints deny; invoke_subagent prints deny naming bee dispatch prepare --runtime agy; a PreInvocation with invocationNum 0 prints injectSteps and with invocationNum 3 prints {}; SessionStart prints injectSteps with bee text; a Stop prints one JSON object; garbage stdin on PreToolUse prints deny and exit code 0; every output is exactly one JSON object. Run bee onboard --apply on a temp repo with an owner .agents/hooks.json holding a key owner: after apply the owner key is unchanged, the bee key exists, a second apply leaves the bytes equal, and a malformed file is refused and left unchanged. Assert bee dispatch prepare --runtime agy with a native slot refuses with the herding remedy. See each new test fail on purpose once (break an assertion) before trusting it. A tester never edits product code: on a defect return BLOCKED with the red output. No code comments.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test agy_belt_contracts",
+  "must_haves": {
+    "why": "A code cell never certifies itself.",
+    "out_of_scope": [
+      "docs"
+    ],
+    "truths": [
+      "a test fails if a refused agy write prints anything but decision deny",
+      "a test fails if a passing agy tool call prints an empty object",
+      "a test fails if onboarding drops an owner key from .agents/hooks.json",
+      "a test fails if invoke_subagent is not denied"
+    ],
+    "prohibitions": [
+      "No code comments",
+      "No product code edits"
+    ]
+  },
+  "behavior_change": false,
+  "tester_rule": true,
+  "judge_obligation_ack": "Tester for agyrt-1, agyrt-2 and agyrt-3.",
+  "status": "capped",
+  "trace": {
+    "worker": "w-agyrt-5",
+    "outcome": "Added 19 end-to-end agy belt/onboarding/dispatch tests in tests/agy_belt_contracts.rs, seen red (19 failed) then green (19 passed); no product defects; commit affbead79b1c3af49cd3f436874ffad0bd26a97c",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/tests/agy_belt_contracts.rs"
+    ],
+    "deviations": [
+      "sync-ack: tester ran agy_belt_contracts 19 passed, red-on-purpose 19 failed then restored"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-25T10:00:57.050Z",
+    "behavior_change": false,
+    "verification_evidence": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test agy_belt_contracts — green:unit — test result: ok. 19 passed; 0 failed; only a new integration test file was touched",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "5ec673cd-5cc2-4840-8ecf-c1c95b786fac",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test agy_belt_contracts",
+    "claimed_at": "2026-11-25T09:55:33.773Z",
+    "knowledge_delta": [],
+    "sync_ack": "tester ran agy_belt_contracts 19 passed, red-on-purpose 19 failed then restored",
+    "no_mistakes": true,
+    "no_knowledge_used": true,
+    "principles_used": [
+      {
+        "slug": "bee-principle-red-before-green",
+        "changed": "saw all 19 tests fail on mutated assertions before trusting the green"
+      },
+      {
+        "slug": "bee-principle-test-behavior-not-structure",
+        "changed": "drove the built binary and the shipped hooks.json command via sh -c instead of asserting on internal functions"
+      }
+    ],
+    "changed_lines": 570,
+    "report": {
+      "outcome": "Added 19 end-to-end agy belt/onboarding/dispatch tests in tests/agy_belt_contracts.rs, seen red (19 failed) then green (19 passed); no product defects; commit affbead79b1c3af49cd3f436874ffad0bd26a97c",
+      "commit": "affbead79b1c3af49cd3f436874ffad0bd26a97c",
+      "files": [
+        "packages/bee-rs/crates/bee/tests/agy_belt_contracts.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test agy_belt_contracts — green:unit — PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test agy_belt_contracts — green:unit — test result: ok. 19 passed; 0 failed; only a new integration test file was touched",
+      "deviations": [],
+      "knowledge_used": [],
+      "principles_used": [
+        "bee-principle-red-before-green — saw all 19 tests fail on mutated assertions before trusting the green",
+        "bee-principle-test-behavior-not-structure — drove the built binary and the shipped hooks.json command via sh -c instead of asserting on internal functions"
+      ],
+      "reaction": "confirm",
+      "skipped": [
+        "full proof command (workspace clippy + whole release suite) — the cell touched only one new test file; ran the cell verify and clippy on that test target instead",
+        "knowledge delta — docs are out of scope for this cell"
+      ],
+      "found": [
+        "agy write_file .env passes (ask) once execution is approved; the Claude write-guard does the same for Write .env, so parity holds; only reads of secret-shaped files are refused"
+      ],
+      "patch_id": "94026ba21f53729eaa9076e98e2e2e18940e4198"
+    },
+    "reaction": "confirm",
+    "skipped": [
+      "full proof command (workspace clippy + whole release suite) — the cell touched only one new test file; ran the cell verify and clippy on that test target instead",
+      "knowledge delta — docs are out of scope for this cell"
+    ],
+    "found": [
+      "agy write_file .env passes (ask) once execution is approved; the Claude write-guard does the same for Write .env, so parity holds; only reads of secret-shaped files are refused"
+    ],
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "a test fails if a refused agy write prints anything but decision deny",
+            "artifact": "packages/bee-rs/crates/bee/tests/agy_belt_contracts.rs"
+          },
+          {
+            "requirement": "a test fails if a passing agy tool call prints an empty object",
+            "artifact": "packages/bee-rs/crates/bee/tests/agy_belt_contracts.rs"
+          },
+          {
+            "requirement": "a test fails if onboarding drops an owner key from .agents/hooks.json",
+            "artifact": "packages/bee-rs/crates/bee/tests/agy_belt_contracts.rs"
+          },
+          {
+            "requirement": "a test fails if invoke_subagent is not denied",
+            "artifact": "packages/bee-rs/crates/bee/tests/agy_belt_contracts.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/tests/agy_belt_contracts.rs",
+            "artifact": "packages/bee-rs/crates/bee/tests/agy_belt_contracts.rs"
+          }
+        ],
+        "recorded_at": "2026-11-25T10:01:52.214Z",
+        "recorded_by": "5ec673cd-5cc2-4840-8ecf-c1c95b786fac",
+        "commit_diff": "checked"
+      },
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "a test fails if a refused agy write prints anything but decision deny",
+            "artifact": "packages/bee-rs/crates/bee/tests/agy_belt_contracts.rs"
+          },
+          {
+            "requirement": "a test fails if a passing agy tool call prints an empty object",
+            "artifact": "packages/bee-rs/crates/bee/tests/agy_belt_contracts.rs"
+          },
+          {
+            "requirement": "a test fails if onboarding drops an owner key from .agents/hooks.json",
+            "artifact": "packages/bee-rs/crates/bee/tests/agy_belt_contracts.rs"
+          },
+          {
+            "requirement": "a test fails if invoke_subagent is not denied",
+            "artifact": "packages/bee-rs/crates/bee/tests/agy_belt_contracts.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/tests/agy_belt_contracts.rs",
+            "artifact": "packages/bee-rs/crates/bee/tests/agy_belt_contracts.rs"
+          }
+        ],
+        "recorded_at": "2026-11-25T10:05:30.234Z",
+        "recorded_by": "5ec673cd-5cc2-4840-8ecf-c1c95b786fac",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": {
+    "new": 103018,
+    "cached": 1743983,
+    "total": 1847001,
+    "models": {
+      "claude-opus-5-5": {
+        "new": 103018,
+        "cached": 1743983,
+        "total": 1847001
+      }
+    },
+    "jobs": [
+      "job-1795600535389-2040198-1"
+    ]
+  }
+}

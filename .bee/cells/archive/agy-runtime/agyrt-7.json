@@ -1,0 +1,123 @@
+{
+  "id": "agyrt-7",
+  "feature": "agy-runtime",
+  "title": "Correct the agy docs the checker found wrong",
+  "lane": "standard",
+  "role": "docs",
+  "deps": [
+    "agyrt-4"
+  ],
+  "decisions": [
+    "fa33ba78-d185-4266-8202-1bc155607ec6"
+  ],
+  "files": [
+    "docs/config-reference.md",
+    "docs/knowledge/areas/hook-runtime/the-agy-belt.md"
+  ],
+  "read_first": [
+    "docs/history/agy-runtime/reports/agyrt-6-docs-check.md"
+  ],
+  "action": "Fix the three findings in docs/history/agy-runtime/reports/agyrt-6-docs-check.md. (1) docs/config-reference.md team.agy section: the template derives team.agy from team.claude role for role (onboard/templates.rs team.agy block), every slot { kind: herding, agent: agy, description }, and herding.agents carries agy: [\"agy\"]; replace the example so it shows that shape (a few roles plus a note that every team.claude role is present) and drop the claude-opus, claude-fable and agy-flash agents. (2) the-agy-belt.md advisory failure line: a crash or spawn error of a child hook on SessionStart, PreInvocation, PostToolUse and Stop fails open with the neutral answer; an unreadable payload fails closed on every event with {\"decision\":\"deny\",\"reason\":\"agy-belt: unreadable hook payload: ...\"} because the event is not known before the parse (hooks/agy_belt.rs handle_payload). (3) the-agy-belt.md fallback line: the second lookup is $g/../.bee/bin/bee where $g is the absolute git common dir, so it finds the main checkout's binary from a worktree. Edit only those lines. Run .bee/bin/bee knowledge check. No code comments. (4) the-agy-belt.md onboarding merge line: merge_into in onboard/agy_belt.rs parses the file and writes the whole object again, so every other key keeps its value equal as JSON and its key order, but formatting may change; replace the byte-equal wording with that.",
+  "verify": ".bee/bin/bee knowledge check",
+  "must_haves": {
+    "why": "The agyrt-6 checker found docs that disagree with the shipped code.",
+    "out_of_scope": [
+      "product code"
+    ],
+    "truths": [
+      "the team.agy example matches the onboarding template",
+      "the unreadable payload line matches handle_payload",
+      "the fallback line names the git common dir parent"
+    ],
+    "prohibitions": [
+      "No code comments",
+      "No product code edits"
+    ]
+  },
+  "behavior_change": false,
+  "affects_skills": [],
+  "affects_specs": [],
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "w-agyrt-7",
+    "outcome": "Fixed onboarding merge wording in the-agy-belt.md to match merge_into; committed 7ee72e11a",
+    "files_changed": [
+      "docs/knowledge/areas/hook-runtime/the-agy-belt.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-11-25T10:17:02.533Z",
+    "behavior_change": false,
+    "verification_evidence": "docs-only edit",
+    "verify_output": "green:static",
+    "verify_passed": true,
+    "claim_session": "7ac9cde6-6011-4018-9141-054933190876",
+    "verify_command": ".bee/bin/bee knowledge check",
+    "claimed_at": "2026-11-25T10:15:59.302Z",
+    "knowledge_delta": [
+      "docs/knowledge/areas/hook-runtime/the-agy-belt.md"
+    ],
+    "no_mistakes": true,
+    "no_knowledge_used": true,
+    "principles_used": [
+      {
+        "slug": "bee-principle-single-source-of-truth",
+        "changed": "aligned the-agy-belt.md:94 with onboard/agy_belt.rs::merge_into"
+      }
+    ],
+    "changed_lines": 2,
+    "report": {
+      "outcome": "Fixed onboarding merge wording in the-agy-belt.md to match merge_into; committed 7ee72e11a",
+      "commit": "7ee72e11a383f4293f24e009b7186d366bf2f1dd",
+      "files": [
+        "docs/knowledge/areas/hook-runtime/the-agy-belt.md"
+      ],
+      "tests": ".bee/bin/bee knowledge check — green:static — docs-only edit",
+      "deviations": [],
+      "knowledge_used": [],
+      "principles_used": [
+        "bee-principle-single-source-of-truth — aligned the-agy-belt.md:94 with onboard/agy_belt.rs::merge_into"
+      ],
+      "reaction": "confirm",
+      "patch_id": "e34f38ca245ae22e1ab25cd13d14321116d7efda"
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "verified_at": null,
+    "baseline": null,
+    "reaction": "confirm",
+    "skipped": null,
+    "unknowns": null,
+    "found": null,
+    "stopped": null,
+    "blocked_reason": null,
+    "dropped_reason": null,
+    "reopened_at": "2026-11-25T10:15:54.004Z",
+    "reopened_reason": "agyrt-6 recheck found the-agy-belt.md:94 says byte-equal; merge re-prints the file",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "the team.agy example matches the onboarding template",
+            "artifact": "docs/config-reference.md"
+          },
+          {
+            "requirement": "the unreadable payload line matches handle_payload",
+            "artifact": "docs/knowledge/areas/hook-runtime/the-agy-belt.md"
+          },
+          {
+            "requirement": "the fallback line names the git common dir parent",
+            "artifact": "docs/knowledge/areas/hook-runtime/the-agy-belt.md"
+          }
+        ],
+        "recorded_at": "2026-11-25T10:20:11.993Z",
+        "recorded_by": "7ac9cde6-6011-4018-9141-054933190876",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": null,
+  "usage_reason": "herding job(s) named this cell but no readable session transcript (2 unreadable)"
+}

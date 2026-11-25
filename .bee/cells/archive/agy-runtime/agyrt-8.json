@@ -1,0 +1,149 @@
+{
+  "id": "agyrt-8",
+  "feature": "agy-runtime",
+  "title": "Test the agy belt inside a herded worker pane",
+  "lane": "standard",
+  "role": "test",
+  "deps": [
+    "agyrt-2"
+  ],
+  "decisions": [
+    "fa33ba78-d185-4266-8202-1bc155607ec6",
+    "47232f09-4274-4c05-87f2-665846ae4786"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/tests/agy_belt_contracts.rs"
+  ],
+  "read_first": [
+    "docs/history/agy-runtime/CONTEXT.md",
+    "docs/history/agy-runtime/discovery.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "The agyrt-2 judge found that with BEE_HERDING_WORKER=1 set, bee hook agy-belt exited 0 with empty stdout before the belt ran, so an agy herding worker got no PreToolUse answer and no write guard. Without reading the implementer notes, add integration tests in tests/agy_belt_contracts.rs, using the harness that file already has, that run the built bee binary with BEE_HERDING_WORKER=1 in the child env and assert: a PreToolUse list_dir prints exactly one JSON object with decision ask; a PreToolUse write_file to a path the write guard refuses in a herded pane prints decision deny; a PreToolUse invoke_subagent prints decision deny; SessionStart and Stop each print exactly one JSON object and exit 0. See each new test fail on purpose once (break an assertion) before trusting it. A tester never edits product code: on a defect return BLOCKED with the red output. No code comments.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test agy_belt_contracts",
+  "must_haves": {
+    "why": "A code cell never certifies itself, and the herded pane is the path agy workers run on.",
+    "out_of_scope": [
+      "docs"
+    ],
+    "truths": [
+      "a test fails if agy-belt under BEE_HERDING_WORKER prints empty output on PreToolUse",
+      "a test fails if a refused agy write under BEE_HERDING_WORKER is not denied"
+    ],
+    "prohibitions": [
+      "No code comments",
+      "No product code edits"
+    ]
+  },
+  "behavior_change": false,
+  "tester_rule": true,
+  "judge_obligation_ack": "Tester for the agyrt-2 herded-marker fix.",
+  "status": "capped",
+  "trace": {
+    "worker": "agyrt8-test",
+    "outcome": "Added 4 herded-pane agy-belt tests (list_dir ask, refused config write deny, invoke_subagent deny, SessionStart/Stop one JSON); red against the reverted agyrt-2 fix; aebd9ade8dca22daf0abbee1c934995764789b5e",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/tests/agy_belt_contracts.rs"
+    ],
+    "deviations": [
+      "sync-ack: test-only cell; the herded-pane behavior is documented in the-agy-belt and worker-outward-guard concepts at 945562fac"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-25T10:38:59.663Z",
+    "behavior_change": false,
+    "verification_evidence": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test agy_belt_contracts — green:unit — 23 passed; brief full clippy+test proof exit 0, 0 FAILED",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "032bb5c9-3ae4-4cb4-9c03-5c80212ddfe6",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test agy_belt_contracts",
+    "claimed_at": "2026-11-25T10:33:27.064Z",
+    "knowledge_delta": [],
+    "sync_ack": "test-only cell; the herded-pane behavior is documented in the-agy-belt and worker-outward-guard concepts at 945562fac",
+    "no_mistakes": true,
+    "no_knowledge_used": true,
+    "principles_used": [
+      {
+        "slug": "bee-principle-red-before-green",
+        "changed": "proved each new test red against the reverted agyrt-2 fix before trusting it"
+      },
+      {
+        "slug": "bee-principle-test-behavior-not-structure",
+        "changed": "asserted the printed agy answer from the built binary, not internal calls"
+      }
+    ],
+    "changed_lines": 69,
+    "report": {
+      "outcome": "Added 4 herded-pane agy-belt tests (list_dir ask, refused config write deny, invoke_subagent deny, SessionStart/Stop one JSON); red against the reverted agyrt-2 fix; aebd9ade8dca22daf0abbee1c934995764789b5e",
+      "commit": "aebd9ade8dca22daf0abbee1c934995764789b5e",
+      "files": [
+        "packages/bee-rs/crates/bee/tests/agy_belt_contracts.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test agy_belt_contracts — green:unit — PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test agy_belt_contracts — green:unit — 23 passed; brief full clippy+test proof exit 0, 0 FAILED",
+      "deviations": [],
+      "knowledge_used": [],
+      "principles_used": [
+        "bee-principle-red-before-green — proved each new test red against the reverted agyrt-2 fix before trusting it",
+        "bee-principle-test-behavior-not-structure — asserted the printed agy answer from the built binary, not internal calls"
+      ],
+      "reaction": "confirm",
+      "skipped": [
+        "knowledge delta — cell grants only the test file and marks docs out of scope"
+      ],
+      "found": [
+        "clippy --tests -D warnings fails in unrelated pre-existing tests: installer_invocations.rs:90, verification_contract_parity.rs:122, specs_fence.rs:59",
+        "cargo fmt --check flags src/hooks/agy_belt.rs and src/onboard/agy_belt.rs from agyrt-2",
+        "in a herded pane the write guard uses run_herded (team/config + whole-tree only), so an idle-gate src/ write answers ask; the test uses the config-guard refusal on .bee/config.json"
+      ],
+      "patch_id": "2296ea18bbc4112f10b874be3be41c45adf1df63"
+    },
+    "reaction": "confirm",
+    "skipped": [
+      "knowledge delta — cell grants only the test file and marks docs out of scope"
+    ],
+    "found": [
+      "clippy --tests -D warnings fails in unrelated pre-existing tests: installer_invocations.rs:90, verification_contract_parity.rs:122, specs_fence.rs:59",
+      "cargo fmt --check flags src/hooks/agy_belt.rs and src/onboard/agy_belt.rs from agyrt-2",
+      "in a herded pane the write guard uses run_herded (team/config + whole-tree only), so an idle-gate src/ write answers ask; the test uses the config-guard refusal on .bee/config.json"
+    ],
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "a test fails if agy-belt under BEE_HERDING_WORKER prints empty output on PreToolUse",
+            "artifact": "packages/bee-rs/crates/bee/tests/agy_belt_contracts.rs"
+          },
+          {
+            "requirement": "a test fails if a refused agy write under BEE_HERDING_WORKER is not denied",
+            "artifact": "packages/bee-rs/crates/bee/tests/agy_belt_contracts.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/tests/agy_belt_contracts.rs",
+            "artifact": "packages/bee-rs/crates/bee/tests/agy_belt_contracts.rs"
+          }
+        ],
+        "recorded_at": "2026-11-25T10:43:36.829Z",
+        "recorded_by": "032bb5c9-3ae4-4cb4-9c03-5c80212ddfe6",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": {
+    "new": 57386,
+    "cached": 809054,
+    "total": 866440,
+    "models": {
+      "claude-opus-5-5": {
+        "new": 57386,
+        "cached": 809054,
+        "total": 866440
+      }
+    },
+    "jobs": [
+      "job-1795602811532-2282545-1"
+    ]
+  }
+}

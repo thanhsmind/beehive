@@ -1,0 +1,302 @@
+{
+  "id": "agyrt-2",
+  "feature": "agy-runtime",
+  "title": "Add bee hook agy-belt that translates agy hook payloads onto the existing bee checks",
+  "lane": "standard",
+  "role": "code",
+  "deps": [],
+  "decisions": [
+    "fa33ba78-d185-4266-8202-1bc155607ec6"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/hooks/agy_belt.rs",
+    "packages/bee-rs/crates/bee/src/hooks/mod.rs"
+  ],
+  "read_first": [
+    "docs/history/agy-runtime/CONTEXT.md",
+    "docs/history/agy-runtime/discovery.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Implement agy-runtime D3, D4 and the belt half of D5. Add hooks/agy_belt.rs and register agy-belt in HOOK_NAMES and the dispatch match in hooks/mod.rs. The module has pure functions plus a thin run(): (1) parse the agy payload (camelCase: hookEventName, conversationId, cwd, workspacePaths, lastUserInput, invocationNum, toolCall {id,name,args}, error, continuationActive); (2) map_tool(name, args) -> a typed enum MappedTool { Check { tool_name, tool_input }, NoWrite, Subagent, Unknown } per D4: run_command {CommandLine} -> Bash {command}; write_file {Path, Content} -> Write {file_path, content}; edit_file {Path, Target, Replacement} -> Edit {file_path, old_string, new_string}; read_file {Path} -> Read {file_path}; invoke_subagent -> Subagent; a named const list of no-write tools (search_web, send_message, call_mcp_tool, read_url_content, list_dir, view_file, list_directory, the plan tool name seen in discovery, every name starting with browser_ or capture_browser or read_browser) -> NoWrite; any other tool carrying Path, AbsolutePath, TargetFile or File -> Check as Write {file_path, content: \"\"}; else Unknown; (3) build the Claude-shaped payload: hook_event_name, session_id = conversationId, cwd, bee_runtime agy, transcript_path, plus prompt (UserPromptSubmit), tool_name/tool_input (PreToolUse/PostToolUse), stop_hook_active (Stop); (4) run the existing hooks as child processes of std::env::current_exe() with args [hook, <name>] and the translated stdin, capturing stdout and exit status. Which hooks per event: read the Claude projection rows in devtools/hook_manifests.rs CATALOG for that event and tool (the same scripts the Claude plugin wires, mapped to their bee hook names as the existing Claude command builder does) so the belt never hand-lists checks that drift; (5) map answers back: SessionStart and PreInvocation (only invocationNum 0, else print {} and run nothing; PreInvocation maps to UserPromptSubmit with prompt = lastUserInput) -> collect the plain text or systemMessage text of each hook into {\"injectSteps\":[{\"systemMessage\":{\"systemMessage\":text}}]} or {} when empty; PreToolUse -> the first deny (hookSpecificOutput.permissionDecision deny, decision block, or exit code 2 with stderr) gives {\"decision\":\"deny\",\"reason\":r}; an updatedInput repair gives {\"decision\":\"ask\",\"overwrite\":{...}} mapped back to agy keys (command -> CommandLine, file_path -> Path, content -> Content, old_string -> Target, new_string -> Replacement); otherwise {\"decision\":\"ask\"}; Subagent -> deny with reason naming bee dispatch prepare --runtime agy --kind cell|gather|reviewer|advisor --json; NoWrite -> ask; Unknown -> ask and append a coverage-gap row with adapter::log_coverage_gap; a crash, a spawn error or an unreadable payload on PreToolUse -> deny (fail closed); PostToolUse -> run the checks, print {}; Stop -> session-close with stop_hook_active = continuationActive; a block (decision block) -> {\"decision\":\"continue\",\"reason\":r}, else {}; any failure on a non-PreToolUse event prints the neutral answer and exits 0. Always exit 0 and always print exactly one JSON object. Unit-test every pure function: the tool map for each named tool, the unknown-with-path case, the answer mapping for deny, repair, pass, Stop block, and invocationNum > 0. No code comments.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee agy_belt",
+  "must_haves": {
+    "why": "agy sends its own JSON shape, so the existing checks need a translator to guard an agy session.",
+    "out_of_scope": [
+      "the hooks.json file",
+      "onboarding",
+      "runtime lists"
+    ],
+    "truths": [
+      "a PreToolUse run_command that the write guard refuses prints decision deny with the guard's reason",
+      "a PreToolUse the checks pass prints decision ask",
+      "invoke_subagent is denied with a reason naming bee dispatch prepare --runtime agy",
+      "a Stop the session-close hook blocks prints decision continue",
+      "every run prints exactly one JSON object and exits 0"
+    ],
+    "prohibitions": [
+      "No code comments",
+      "No hand list of checks that duplicates the catalog"
+    ]
+  },
+  "behavior_change": true,
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "agyrt2-fix",
+    "outcome": "Exempt agy-belt from BEE_HERDING_WORKER short-circuit in hooks/mod.rs c894947af",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/hooks/mod.rs"
+    ],
+    "deviations": [
+      "sync-ack: worker-outward-guard and the-agy-belt concepts updated for agy-runtime D9 in the worktree; the other anchored concepts do not describe the marker exemption list"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-25T10:33:21.168Z",
+    "behavior_change": true,
+    "verification_evidence": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo clippy --manifest-path packages/bee-rs/Cargo.toml -- -D warnings && cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee hooks::tests && cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee agy_belt && cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml -p bee --test agy_belt_contracts — green:unit — touched hooks/mod.rs; 13 hooks::tests, 11 agy_belt unit tests, and 19 agy_belt_contracts integration tests passed",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "032bb5c9-3ae4-4cb4-9c03-5c80212ddfe6",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee agy_belt",
+    "claimed_at": "2026-11-25T10:29:03.489Z",
+    "verified_at": null,
+    "baseline": null,
+    "reaction": "confirm",
+    "skipped": null,
+    "unknowns": null,
+    "found": null,
+    "stopped": null,
+    "knowledge_delta": [],
+    "sync_ack": "worker-outward-guard and the-agy-belt concepts updated for agy-runtime D9 in the worktree; the other anchored concepts do not describe the marker exemption list",
+    "no_mistakes": true,
+    "knowledge_used": [
+      {
+        "path": "docs/knowledge/patterns/20260714-a-fail-open-host-swallows-fail-closed-throws.md",
+        "changed": "returned typed deny JSON on PreToolUse errors instead of failing open"
+      },
+      {
+        "path": "docs/knowledge/patterns/20260818-a-green-count-is-not-evidence-that-your-new-test-ran.md",
+        "changed": "ran agy_belt tests by exact filter and verified 3 passed"
+      }
+    ],
+    "principles_used": [
+      {
+        "slug": "bee-principle-red-before-green",
+        "changed": "added under_the_marker_agy_belt_reaches_dispatch_and_reads_stdin under BEE_HERDING_WORKER=1"
+      },
+      {
+        "slug": "bee-principle-smallest-honest-shape",
+        "changed": "exempted agy-belt in marker_short_circuits so child hooks keep their own marker rules"
+      }
+    ],
+    "changed_lines": 4,
+    "report": {
+      "outcome": "Exempt agy-belt from BEE_HERDING_WORKER short-circuit in hooks/mod.rs c894947af",
+      "commit": "945562facdb6ac1e39e361e9815a253e8cd67c8f",
+      "files": [
+        "packages/bee-rs/crates/bee/src/hooks/mod.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee agy_belt — green:unit — PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo clippy --manifest-path packages/bee-rs/Cargo.toml -- -D warnings && cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee hooks::tests && cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee agy_belt && cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml -p bee --test agy_belt_contracts — green:unit — touched hooks/mod.rs; 13 hooks::tests, 11 agy_belt unit tests, and 19 agy_belt_contracts integration tests passed",
+      "deviations": [],
+      "knowledge_used": [],
+      "principles_used": [
+        "bee-principle-red-before-green — added under_the_marker_agy_belt_reaches_dispatch_and_reads_stdin under BEE_HERDING_WORKER=1",
+        "bee-principle-smallest-honest-shape — exempted agy-belt in marker_short_circuits so child hooks keep their own marker rules"
+      ],
+      "reaction": "confirm",
+      "patch_id": "f2b0835ea05c30de910aea670aeb31b52137b653"
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "a PreToolUse run_command that the write guard refuses prints decision deny with the guard's reason",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/agy_belt.rs"
+          },
+          {
+            "requirement": "a PreToolUse the checks pass prints decision ask",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/agy_belt.rs"
+          },
+          {
+            "requirement": "invoke_subagent is denied with a reason naming bee dispatch prepare --runtime agy",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/agy_belt.rs"
+          },
+          {
+            "requirement": "a Stop the session-close hook blocks prints decision continue",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/agy_belt.rs"
+          },
+          {
+            "requirement": "every run prints exactly one JSON object and exits 0",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/agy_belt.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/hooks/agy_belt.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/agy_belt.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/hooks/mod.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/mod.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/devtools/mod.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/devtools/mod.rs"
+          }
+        ],
+        "recorded_at": "2026-11-25T10:01:52.172Z",
+        "recorded_by": "5ec673cd-5cc2-4840-8ecf-c1c95b786fac",
+        "commit_diff": "checked"
+      },
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "a PreToolUse run_command that the write guard refuses prints decision deny with the guard's reason",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/agy_belt.rs"
+          },
+          {
+            "requirement": "a PreToolUse the checks pass prints decision ask",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/agy_belt.rs"
+          },
+          {
+            "requirement": "invoke_subagent is denied with a reason naming bee dispatch prepare --runtime agy",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/agy_belt.rs"
+          },
+          {
+            "requirement": "a Stop the session-close hook blocks prints decision continue",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/agy_belt.rs"
+          },
+          {
+            "requirement": "every run prints exactly one JSON object and exits 0",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/agy_belt.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/hooks/agy_belt.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/agy_belt.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/hooks/mod.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/mod.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/devtools/mod.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/devtools/mod.rs"
+          }
+        ],
+        "recorded_at": "2026-11-25T10:05:30.196Z",
+        "recorded_by": "5ec673cd-5cc2-4840-8ecf-c1c95b786fac",
+        "commit_diff": "checked"
+      }
+    ],
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "NEEDS_REVISION",
+        "checks": [
+          {
+            "id": "run-command-write-guard-deny",
+            "status": "PASS",
+            "evidence": "hooks/agy_belt.rs:88 run_command -> Bash{command}; packages/bee/hooks/claude-hooks.json PreToolUse matcher 'Edit|Write|...|Bash|...' -> write-guard, so claude_hooks_for(PreToolUse, Bash) spawns write-guard; agy_belt.rs:314-320 exit 2 + stderr -> {decision:deny, reason:stderr}; :343-351 permissionDecision deny -> deny with permissionDecisionReason. Reasoned path; no end-to-end test runs the real write-guard"
+          },
+          {
+            "id": "checks-pass-ask",
+            "status": "PASS",
+            "evidence": "agy_belt.rs:361-365 no deny/repair -> {decision:ask}; test answer_mapping_handles_deny_repair_pass_stop_and_invocation_num asserts pass == {decision:ask}"
+          },
+          {
+            "id": "invoke-subagent-denied-names-door",
+            "status": "PASS",
+            "evidence": "agy_belt.rs:26 SUBAGENT_DENY_REASON names 'bee dispatch prepare --runtime agy --kind cell|gather|reviewer|advisor --json'; :493 Subagent -> deny; test asserts reason contains 'bee dispatch prepare --runtime agy'"
+          },
+          {
+            "id": "stop-block-continue",
+            "status": "PASS",
+            "evidence": "agy_belt.rs:368-389 map_stop_answers block -> {decision:continue, reason}; :182 stop_hook_active = continuationActive; test stop_block asserts continue"
+          },
+          {
+            "id": "one-json-object-exit-0",
+            "status": "FAIL",
+            "evidence": "agy_belt.rs:534-537 run() prints one object and returns SUCCESS, but hooks/mod.rs:227-238 short-circuits every hook except activity/worker-guard/write-guard when BEE_HERDING_WORKER=1 (marker_short_circuits at hooks/mod.rs:126-128 does not exempt agy-belt), so `bee hook agy-belt` in a herded pane exits 0 with EMPTY stdout, never reaching agy_belt::run"
+          },
+          {
+            "id": "catalog-not-hand-listed",
+            "status": "PASS",
+            "evidence": "agy_belt.rs:216-249 claude_hooks_for reads render_projection(Runtime::Claude, Target::Plugin) and extracts hook names; no hand list of checks"
+          },
+          {
+            "id": "prohibitions",
+            "status": "PASS",
+            "evidence": "comment scan of 43c1f52cf finds no added comment lines"
+          }
+        ],
+        "failure_signature": "bee hook agy-belt prints nothing when BEE_HERDING_WORKER=1: hooks/mod.rs:126 marker_short_circuits returns true for agy-belt, so the silent exit-0 branch at hooks/mod.rs:236-237 runs before agy_belt::run. Scenario: an agy herding worker (CONTEXT: agy already runs as a herding worker) in an onboarded repo fires .agents/hooks.json PreToolUse -> empty stdout instead of {\"decision\":\"ask\"}. Fix: exempt agy-belt in marker_short_circuits (its child hooks inherit the marker and short-circuit, so it then answers the neutral ask/{}), plus a test with the marker set.",
+        "fixability": "automatic",
+        "confidence": "medium",
+        "builder_model": "gemini-4-hydrogen",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-11-25T10:26:07.324Z"
+      },
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "run-command-write-guard-deny",
+            "status": "PASS",
+            "evidence": "agy_belt.rs:88-95 run_command->Bash; write-guard in PreToolUse catalog set (agy_belt.rs:628); deny mapping agy_belt.rs:314-351; contract run_command_that_writes_a_governed_path_before_the_gate_is_denied (contracts:287) passes with reason containing src/lib.rs"
+          },
+          {
+            "id": "checks-pass-ask",
+            "status": "PASS",
+            "evidence": "agy_belt.rs:361-365; contract a_harmless_run_command_answers_ask (contracts:304) asserts {decision:ask}"
+          },
+          {
+            "id": "invoke-subagent-denied-names-door",
+            "status": "PASS",
+            "evidence": "agy_belt.rs:26 SUBAGENT_DENY_REASON, :493; contract :320 asserts reason contains 'bee dispatch prepare --runtime agy'; herded variant :442 passes"
+          },
+          {
+            "id": "stop-block-continue",
+            "status": "PASS",
+            "evidence": "agy_belt.rs:368-389 block->{decision:continue}; :182 stop_hook_active=continuationActive; session-close in Stop catalog set (:633-634); unit answer-mapping test passes; no e2e test forces a real block"
+          },
+          {
+            "id": "one-json-object-exit-0",
+            "status": "PASS",
+            "evidence": "earlier finding fixed: hooks/mod.rs:126-128 exempts agy-belt from marker_short_circuits, so dispatch reaches agy_belt::run (mod.rs:258); run() agy_belt.rs:532-536 prints one object and returns SUCCESS; herded contract rows :414/:425/:442/:458 pass via one_json_object (contracts:96-113), and herded write_file .bee/config.json is still denied; 23/23 contracts pass"
+          },
+          {
+            "id": "prohibitions",
+            "status": "PASS",
+            "evidence": "no added comment lines in 43c1f52cf^..HEAD under hooks/; checks come from render_projection(Claude, Plugin) at agy_belt.rs:216-249, no hand list of checks"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": null,
+        "model_independence": "unverified",
+        "recorded_at": "2026-11-25T10:40:51.329Z"
+      }
+    ],
+    "reopened_for_rework": {
+      "at": "2026-11-25T10:26:07.324Z",
+      "reason": "NEEDS_REVISION semantic-judge verdict recorded after cap"
+    },
+    "no_knowledge_used": true,
+    "judge_overrides": [
+      {
+        "overridden_at": "2026-11-25T10:33:21.171Z",
+        "reason": "judge finding fixed at c894947af (agy-belt exempt from the marker exit, 1 line plus unit test); agyrt-8 tester and a fresh judge run next",
+        "last_verdict": "NEEDS_REVISION"
+      }
+    ]
+  },
+  "usage": null,
+  "usage_reason": "herding job(s) named this cell but no readable session transcript (2 unreadable)"
+}

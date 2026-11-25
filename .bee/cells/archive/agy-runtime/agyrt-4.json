@@ -1,0 +1,229 @@
+{
+  "id": "agyrt-4",
+  "feature": "agy-runtime",
+  "title": "Document the agy runtime, its belt and team.agy",
+  "lane": "standard",
+  "role": "docs",
+  "deps": [],
+  "decisions": [
+    "fa33ba78-d185-4266-8202-1bc155607ec6"
+  ],
+  "files": [
+    "docs/knowledge/areas/hook-runtime/the-agy-belt.md",
+    "docs/knowledge/areas/hook-runtime/catalog-projections-and-activation.md",
+    "docs/knowledge/areas/onboarding/repo-local-guardrails.md",
+    "docs/config-reference.md",
+    "README.md"
+  ],
+  "read_first": [
+    "docs/history/agy-runtime/CONTEXT.md",
+    "docs/history/agy-runtime/discovery.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Implement agy-runtime D8 in plain ASD-STE100 English. (1) New concept docs/knowledge/areas/hook-runtime/the-agy-belt.md with the same frontmatter shape as docs/knowledge/areas/hook-runtime/pi-version-pin-and-capability-audit.md (type bee.area, id hook-runtime-the-agy-belt, areas [hook-runtime], decisions citing agy-runtime D1-D8 as the history D-number on one line, sources docs/history/agy-runtime/CONTEXT.md and discovery.md, anchors the files named in CONTEXT.md plus packages/bee-rs/crates/bee/src/hooks/agy_belt.rs, .agents/hooks.json and packages/bee-rs/crates/bee/src/onboard/agy_belt.rs, verified_at 2026-11-25). Body: what agy reads (AGENTS.md, .agents/skills, .agents/hooks.json), the bee key and its five events, the translation table per event, the D4 tool map, the ask/deny/continue answers and why an empty answer is never printed (agy denies on {}), invoke_subagent denied and herding-only dispatch, ANTIGRAVITY_CONVERSATION_ID, onboarding merge rules, the owner's one-time workspace trust. Register the concept in docs/knowledge/index.md if the bundle needs it (run bee knowledge index if that is the regen path). (2) In catalog-projections-and-activation.md say there are five runtimes and add one paragraph: agy takes the named exclusion; its belt is .agents/hooks.json plus bee hook agy-belt. (3) In onboarding/repo-local-guardrails.md add one Business Rules bullet for the agy belt merge (D7). (4) docs/config-reference.md: add team.agy beside team.pi. (5) README.md: add agy where the supported runtimes are listed. Write the words without deferral words such as deferred, until or later. No code comments.",
+  "verify": ".bee/bin/bee knowledge check",
+  "must_haves": {
+    "why": "Leaders and owners need to read how agy is wired before they trust it.",
+    "out_of_scope": [
+      "code"
+    ],
+    "truths": [
+      "a knowledge concept describes the agy belt translation and tool map",
+      "the README names agy as a supported runtime",
+      "the config reference names team.agy"
+    ],
+    "prohibitions": [
+      "No new rule id"
+    ]
+  },
+  "behavior_change": false,
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "w-agyrt-4",
+    "outcome": "Documented agy runtime, belt translation, tool map, onboarding merge, and team.agy in commit 68760a611",
+    "files_changed": [
+      "docs/knowledge/areas/hook-runtime/the-agy-belt.md",
+      "docs/knowledge/areas/hook-runtime/catalog-projections-and-activation.md",
+      "docs/knowledge/areas/onboarding/repo-local-guardrails.md",
+      "docs/config-reference.md",
+      "README.md"
+    ],
+    "deviations": [
+      "verify revised from a --path form the verb lacks to the whole-bundle check",
+      "sync-ack: docs cell, knowledge check green in worktree"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-25T10:06:08.134Z",
+    "behavior_change": false,
+    "verification_evidence": "knowledge check: 331 concept(s) in 352 file(s), 0 OKF error(s), 0 profile error(s), 610 profile warning(s) — OK; docs-only cell, bundle check run in the feature worktree",
+    "verify_output": "green:static",
+    "verify_passed": true,
+    "claim_session": "5ec673cd-5cc2-4840-8ecf-c1c95b786fac",
+    "verify_command": ".bee/bin/bee knowledge check",
+    "claimed_at": "2026-11-25T10:06:07.675Z",
+    "verified_at": null,
+    "baseline": null,
+    "reaction": null,
+    "skipped": null,
+    "unknowns": null,
+    "found": null,
+    "stopped": null,
+    "knowledge_delta": [
+      "docs/knowledge/areas/hook-runtime/the-agy-belt.md",
+      "docs/knowledge/areas/hook-runtime/catalog-projections-and-activation.md",
+      "docs/knowledge/areas/onboarding/repo-local-guardrails.md"
+    ],
+    "sync_ack": "docs cell, knowledge check green in worktree",
+    "no_mistakes": true,
+    "knowledge_used": [
+      {
+        "path": "docs/knowledge/areas/hook-runtime/catalog-projections-and-activation.md",
+        "changed": "aligned agy named exclusion with the OpenCode and Pi belt precedent"
+      },
+      {
+        "path": "docs/knowledge/areas/onboarding/repo-local-guardrails.md",
+        "changed": "matched Business Rules bullet style without minting a new rule id"
+      }
+    ],
+    "principles_used": [
+      {
+        "slug": "bee-principle-single-source-of-truth",
+        "changed": "placed the full belt specification in the-agy-belt.md and linked to it from catalog-projections-and-activation.md"
+      },
+      {
+        "slug": "bee-principle-one-fact-one-home",
+        "changed": "extended existing runtime sections in config-reference.md, README.md, and repo-local-guardrails.md"
+      }
+    ],
+    "changed_lines": 167,
+    "report": {
+      "outcome": "Documented the agy runtime, its belt and team.agy",
+      "commit": "68760a61170c2981e509f31408324853b33b0eab",
+      "files": [
+        "docs/knowledge/areas/hook-runtime/the-agy-belt.md",
+        "docs/knowledge/areas/hook-runtime/catalog-projections-and-activation.md",
+        "docs/knowledge/areas/onboarding/repo-local-guardrails.md",
+        "docs/config-reference.md",
+        "README.md"
+      ],
+      "tests": ".bee/bin/bee knowledge check — green:static — knowledge check: 331 concept(s) in 352 file(s), 0 OKF error(s), 0 profile error(s), 610 profile warning(s) — OK; docs-only cell, bundle check run in the feature worktree",
+      "deviations": [
+        "verify revised from a --path form the verb lacks to the whole-bundle check"
+      ],
+      "patch_id": "f558f6f1c9058b6ecea62f391baef65fb835884e"
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "a knowledge concept describes the agy belt translation and tool map",
+            "artifact": "docs/knowledge/areas/hook-runtime/the-agy-belt.md"
+          },
+          {
+            "requirement": "the README names agy as a supported runtime",
+            "artifact": "docs/knowledge/areas/hook-runtime/the-agy-belt.md"
+          },
+          {
+            "requirement": "the config reference names team.agy",
+            "artifact": "docs/knowledge/areas/hook-runtime/the-agy-belt.md"
+          },
+          {
+            "requirement": "docs/knowledge/areas/hook-runtime/the-agy-belt.md",
+            "artifact": "docs/knowledge/areas/hook-runtime/the-agy-belt.md"
+          },
+          {
+            "requirement": "docs/knowledge/areas/hook-runtime/catalog-projections-and-activation.md",
+            "artifact": "docs/knowledge/areas/hook-runtime/catalog-projections-and-activation.md"
+          },
+          {
+            "requirement": "docs/knowledge/areas/onboarding/repo-local-guardrails.md",
+            "artifact": "docs/knowledge/areas/onboarding/repo-local-guardrails.md"
+          },
+          {
+            "requirement": "docs/config-reference.md",
+            "artifact": "docs/config-reference.md"
+          },
+          {
+            "requirement": "README.md",
+            "artifact": "README.md"
+          },
+          {
+            "requirement": "docs/knowledge/index.md",
+            "artifact": "docs/knowledge/index.md"
+          },
+          {
+            "requirement": "docs/knowledge/areas/index.md",
+            "artifact": "docs/knowledge/areas/index.md"
+          },
+          {
+            "requirement": "docs/knowledge/areas/hook-runtime/index.md",
+            "artifact": "docs/knowledge/areas/hook-runtime/index.md"
+          }
+        ],
+        "recorded_at": "2026-11-25T10:01:52.198Z",
+        "recorded_by": "5ec673cd-5cc2-4840-8ecf-c1c95b786fac",
+        "commit_diff": "checked"
+      },
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "a knowledge concept describes the agy belt translation and tool map",
+            "artifact": "docs/knowledge/areas/hook-runtime/the-agy-belt.md"
+          },
+          {
+            "requirement": "the README names agy as a supported runtime",
+            "artifact": "docs/knowledge/areas/hook-runtime/the-agy-belt.md"
+          },
+          {
+            "requirement": "the config reference names team.agy",
+            "artifact": "docs/knowledge/areas/hook-runtime/the-agy-belt.md"
+          },
+          {
+            "requirement": "docs/knowledge/areas/hook-runtime/the-agy-belt.md",
+            "artifact": "docs/knowledge/areas/hook-runtime/the-agy-belt.md"
+          },
+          {
+            "requirement": "docs/knowledge/areas/hook-runtime/catalog-projections-and-activation.md",
+            "artifact": "docs/knowledge/areas/hook-runtime/catalog-projections-and-activation.md"
+          },
+          {
+            "requirement": "docs/knowledge/areas/onboarding/repo-local-guardrails.md",
+            "artifact": "docs/knowledge/areas/onboarding/repo-local-guardrails.md"
+          },
+          {
+            "requirement": "docs/config-reference.md",
+            "artifact": "docs/config-reference.md"
+          },
+          {
+            "requirement": "README.md",
+            "artifact": "README.md"
+          }
+        ],
+        "recorded_at": "2026-11-25T10:05:30.221Z",
+        "recorded_by": "5ec673cd-5cc2-4840-8ecf-c1c95b786fac",
+        "commit_diff": "checked"
+      }
+    ],
+    "blocked_reason": null,
+    "dropped_reason": null,
+    "reopened_at": "2026-11-25T10:05:44.508Z",
+    "reopened_reason": "docs-only cell carries tester_rule true; doctrine says a docs-only cell needs no tester",
+    "mistakes": [
+      {
+        "wrong": "planned verify used a flag the verb lacks",
+        "better": "dry-run each verify before freezing the plan",
+        "fix_at": "check"
+      }
+    ],
+    "no_knowledge_used": true,
+    "no_principles_used": true
+  },
+  "usage": null,
+  "usage_reason": "herding job(s) named this cell but no readable session transcript (1 unreadable)"
+}

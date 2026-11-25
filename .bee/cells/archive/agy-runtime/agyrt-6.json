@@ -1,0 +1,141 @@
+{
+  "id": "agyrt-6",
+  "feature": "agy-runtime",
+  "title": "Check the agy runtime docs against the shipped code",
+  "lane": "standard",
+  "role": "test",
+  "deps": [
+    "agyrt-4",
+    "agyrt-7"
+  ],
+  "decisions": [
+    "fa33ba78-d185-4266-8202-1bc155607ec6"
+  ],
+  "files": [
+    "docs/history/agy-runtime/reports/agyrt-6-docs-check.md"
+  ],
+  "read_first": [
+    "docs/history/agy-runtime/CONTEXT.md"
+  ],
+  "action": "Without reading the implementer notes, check the agy docs (docs/knowledge/areas/hook-runtime/the-agy-belt.md, docs/knowledge/areas/hook-runtime/catalog-projections-and-activation.md, docs/knowledge/areas/onboarding/repo-local-guardrails.md, docs/config-reference.md, README.md) against the shipped code: packages/bee-rs/crates/bee/src/hooks/agy_belt.rs, packages/bee-rs/crates/bee/src/onboard/agy_belt.rs, packages/bee-rs/crates/bee/src/onboard/templates.rs, .agents/hooks.json, packages/bee-rs/crates/bee/src/session_identity.rs and packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs. A first pass found three wrong lines that agyrt-7 corrected; recheck them and every other claim. Every event name, tool name, answer shape, file path, config key and env variable the docs name must exist in that code with the meaning the docs give. Run .bee/bin/bee knowledge check and .bee/bin/bee knowledge index --check. Rewrite docs/history/agy-runtime/reports/agyrt-6-docs-check.md, one line per checked claim with a file:line anchor, and commit it. A checker never edits the docs or the code: on a wrong claim return BLOCKED naming the line.",
+  "verify": ".bee/bin/bee knowledge check",
+  "must_haves": {
+    "why": "A docs cell is checked by a second worker, never by its writer.",
+    "out_of_scope": [
+      "product code",
+      "docs edits"
+    ],
+    "truths": [
+      "every agy claim in the agyrt-4 docs has a file:line anchor in the shipped code",
+      "the knowledge bundle check is green"
+    ],
+    "prohibitions": [
+      "No code comments",
+      "No edits to docs or product code"
+    ]
+  },
+  "behavior_change": false,
+  "affects_skills": [],
+  "affects_specs": [],
+  "tester_rule": true,
+  "judge_obligation_ack": "Checker for agyrt-4.",
+  "status": "capped",
+  "trace": {
+    "worker": "w-agyrt-6",
+    "outcome": "Rechecked every agy claim in the five docs against shipped code with file:line anchors; no wrong line remains; committed 568cf920733592220c1c30a90866ead439f1995c",
+    "files_changed": [
+      "docs/history/agy-runtime/reports/agyrt-6-docs-check.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-11-25T10:19:52.764Z",
+    "behavior_change": false,
+    "verification_evidence": "docs-only check report; knowledge index --check also exit 0",
+    "verify_output": "green:static",
+    "verify_passed": true,
+    "claim_session": "7ac9cde6-6011-4018-9141-054933190876",
+    "verify_command": ".bee/bin/bee knowledge check",
+    "claimed_at": "2026-11-25T10:17:08.221Z",
+    "ownership_overrides": [
+      {
+        "verb": "unclaimCell",
+        "forced_by": "7ac9cde6-6011-4018-9141-054933190876",
+        "owner_bypassed": null,
+        "at": "2026-11-25T10:11:58.906Z"
+      },
+      {
+        "verb": "unclaimCell",
+        "forced_by": "7ac9cde6-6011-4018-9141-054933190876",
+        "owner_bypassed": null,
+        "at": "2026-11-25T10:15:54.040Z"
+      }
+    ],
+    "verified_at": null,
+    "baseline": null,
+    "reaction": "confirm",
+    "skipped": [
+      "cargo clippy + cargo test proof command — no code changed; cell verify is the knowledge check"
+    ],
+    "unknowns": null,
+    "found": null,
+    "stopped": null,
+    "knowledge_delta": [],
+    "no_mistakes": true,
+    "no_knowledge_used": true,
+    "no_principles_used": true,
+    "changed_lines": 77,
+    "report": {
+      "outcome": "Rechecked every agy claim in the five docs against shipped code with file:line anchors; no wrong line remains; committed 568cf920733592220c1c30a90866ead439f1995c",
+      "commit": "568cf920733592220c1c30a90866ead439f1995c",
+      "files": [
+        "docs/history/agy-runtime/reports/agyrt-6-docs-check.md"
+      ],
+      "tests": ".bee/bin/bee knowledge check — green:static — docs-only check report; knowledge index --check also exit 0",
+      "deviations": [],
+      "knowledge_used": [],
+      "principles_used": [],
+      "reaction": "confirm",
+      "skipped": [
+        "cargo clippy + cargo test proof command — no code changed; cell verify is the knowledge check"
+      ],
+      "patch_id": "546b68ba0190b98d602484be7d7c32e61ffa7ad4"
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "every agy claim in the agyrt-4 docs has a file:line anchor in the shipped code",
+            "artifact": "docs/history/agy-runtime/reports/agyrt-6-docs-check.md"
+          },
+          {
+            "requirement": "the knowledge bundle check is green",
+            "artifact": "docs/history/agy-runtime/reports/agyrt-6-docs-check.md"
+          }
+        ],
+        "recorded_at": "2026-11-25T10:20:12.008Z",
+        "recorded_by": "7ac9cde6-6011-4018-9141-054933190876",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": {
+    "new": 254364,
+    "cached": 3984901,
+    "total": 4239265,
+    "models": {
+      "claude-opus-5-5": {
+        "new": 254364,
+        "cached": 3984901,
+        "total": 4239265
+      }
+    },
+    "jobs": [
+      "job-1795601268350-2123070-1",
+      "job-1795601600296-2222863-1",
+      "job-1795601829822-2233414-1"
+    ]
+  }
+}
