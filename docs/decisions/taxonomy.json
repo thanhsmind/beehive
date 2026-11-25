@@ -1007,6 +1007,7 @@
     "contract:agy-belt-herded",
     "contract:deferred-queue-req-flags",
     "contract:team-profiles",
-    "session-identity"
+    "session-identity",
+    "contract:control-bee-drive"
   ]
 }

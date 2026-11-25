@@ -23,5 +23,12 @@
     "rationale": null,
     "updated_at": "2026-11-25T15:56:28.082Z",
     "feature": "agy-session-env"
+  },
+  "merge_ready": {
+    "since": "2026-11-25T16:13:58.337Z",
+    "branch": "wt/agy-session-env",
+    "worktree_id": "beehive--wt--agy-session-env",
+    "uat": "pending",
+    "blocked_by": []
   }
 }
