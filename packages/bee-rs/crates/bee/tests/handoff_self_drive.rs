@@ -1,3 +1,5 @@
+#![cfg(unix)]
+
 use assert_cmd::Command;
 use serde_json::{json, Value};
 use std::path::{Path, PathBuf};

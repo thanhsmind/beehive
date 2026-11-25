@@ -961,6 +961,7 @@ mod tests {
         assert!(audit_rows(&repo).is_empty());
     }
 
+    #[cfg(unix)]
     const FAKE_WAGGLEDANCE: &str = r#"#!/bin/sh
 case "$1" in
   list) echo '{"projects":[{"id":"proj-hive","root_path":"__ROOT__"}]}' ;;
@@ -976,6 +977,7 @@ case "$1" in
 esac
 "#;
 
+    #[cfg(unix)]
     #[derive(Clone, Copy, Debug)]
     enum FakeDispatch {
         Sends,
@@ -984,12 +986,14 @@ esac
         DedupedDone,
     }
 
+    #[cfg(unix)]
     struct FakeWaggledance {
         prior_path: Option<OsString>,
         prior_agent: Option<OsString>,
         argv_file: PathBuf,
     }
 
+    #[cfg(unix)]
     impl FakeWaggledance {
         fn install(tmp: &Path, listed_root: &Path, agent: Option<&str>, dispatch: FakeDispatch) -> Self {
             let bin = tmp.join("fake-bin");
@@ -1041,6 +1045,7 @@ esac
         }
     }
 
+    #[cfg(unix)]
     impl Drop for FakeWaggledance {
         fn drop(&mut self) {
             unsafe {
@@ -1056,6 +1061,7 @@ esac
         }
     }
 
+    #[cfg(unix)]
     fn handoff_argv(feature: &str, task: Option<&str>, same_session: Option<&str>) -> Vec<OsString> {
         let mut argv = start_argv(feature, same_session);
         if let Some(t) = task {
@@ -1065,6 +1071,7 @@ esac
         argv
     }
 
+    #[cfg(unix)]
     fn seed_merged_session(repo: &Path, sid: &str) {
         crate::integration_queue::record_merger(repo, sid, "first-feat");
         let dir = repo.join(".bee").join("sessions");
@@ -1072,15 +1079,18 @@ esac
         std::fs::write(dir.join(format!("{sid}.json")), json!({"id": sid, "status": "active"}).to_string()).unwrap();
     }
 
+    #[cfg(unix)]
     fn session_record(repo: &Path, sid: &str) -> Value {
         serde_json::from_str(&std::fs::read_to_string(repo.join(".bee").join("sessions").join(format!("{sid}.json"))).unwrap()).unwrap()
     }
 
+    #[cfg(unix)]
     fn assert_no_lane_and_no_worktree(tmp: &Path, repo: &Path) {
         assert!(!tmp.join("testrepo--wt--second-feat").exists());
         assert!(!repo.join(".bee").join("lanes").join("second-feat.json").exists());
     }
 
+    #[cfg(unix)]
     fn set_handoff_auto(repo: &Path, on: bool) {
         std::fs::write(
             repo.join(".bee").join("config.json"),
@@ -1089,6 +1099,7 @@ esac
         .unwrap();
     }
 
+    #[cfg(unix)]
     #[test]
     fn handoff_after_merge_door_with_waggledance_refuses_without_handoff_task() {
         let tmp = tempfile::tempdir().unwrap();
@@ -1109,6 +1120,7 @@ esac
         assert_eq!(session_record(&repo, "sess-auto-1")["status"], "active");
     }
 
+    #[cfg(unix)]
     #[test]
     fn handoff_after_merge_door_with_waggledance_refuses_same_session() {
         let tmp = tempfile::tempdir().unwrap();
@@ -1130,6 +1142,7 @@ esac
         assert_eq!(session_record(&repo, "sess-auto-2")["status"], "active");
     }
 
+    #[cfg(unix)]
     #[test]
     fn handoff_after_merge_door_with_waggledance_sends_releases_and_follows_up_on_a_pane_match() {
         let tmp = tempfile::tempdir().unwrap();
@@ -1184,6 +1197,7 @@ esac
         assert!(task.contains("Owner: build second-feat. Standing order: keep it small."), "{task}");
     }
 
+    #[cfg(unix)]
     #[test]
     fn handoff_after_merge_door_with_waggledance_sends_a_plain_leader_dispatch_without_a_pane_match() {
         for agent in [Some("agent-stranger"), None] {
@@ -1206,6 +1220,7 @@ esac
         }
     }
 
+    #[cfg(unix)]
     #[test]
     fn handoff_after_merge_door_with_waggledance_failed_dispatch_writes_nothing() {
         for failure in [FakeDispatch::ExitsNonZero, FakeDispatch::Unparsable] {
@@ -1226,6 +1241,7 @@ esac
         }
     }
 
+    #[cfg(unix)]
     #[test]
     fn handoff_after_merge_door_with_waggledance_for_another_root_keeps_the_waiver() {
         let tmp = tempfile::tempdir().unwrap();
@@ -1251,6 +1267,7 @@ esac
         assert_eq!(session_record(&repo, "sess-auto-6")["status"], "active");
     }
 
+    #[cfg(unix)]
     #[test]
     fn handoff_after_merge_door_with_handoff_auto_false_keeps_the_waiver() {
         let tmp = tempfile::tempdir().unwrap();
@@ -1794,6 +1811,7 @@ esac
         }
     }
 
+    #[cfg(unix)]
     fn seed_session_at(repo: &Path, sid: &str, tokens: u64) {
         let dir = repo.join(".bee").join("sessions");
         std::fs::create_dir_all(&dir).unwrap();
@@ -1812,6 +1830,7 @@ esac
         .unwrap();
     }
 
+    #[cfg(unix)]
     fn set_mark_config(repo: &Path, extra: Value) {
         let mut cfg = json!({"commands": {"test": "none"}});
         for (k, v) in extra.as_object().unwrap() {
@@ -1820,6 +1839,7 @@ esac
         std::fs::write(repo.join(".bee").join("config.json"), cfg.to_string()).unwrap();
     }
 
+    #[cfg(unix)]
     fn seed_claimable_cell(repo: &Path, id: &str) {
         std::fs::write(
             repo.join(".bee").join("state.json"),
@@ -1860,6 +1880,7 @@ esac
         assert_eq!(code, Some(ExitCode::SUCCESS));
     }
 
+    #[cfg(unix)]
     fn cell_status(repo: &Path, id: &str) -> Value {
         let v: Value = serde_json::from_str(
             &std::fs::read_to_string(repo.join(".bee").join("cells").join(format!("{id}.json"))).unwrap(),
@@ -1868,14 +1889,17 @@ esac
         v["status"].clone()
     }
 
+    #[cfg(unix)]
     fn claim_argv(id: &str) -> Vec<OsString> {
         ["cells", "claim", "--id", id, "--worker", "w1"].iter().map(OsString::from).collect()
     }
 
+    #[cfg(unix)]
     fn send_argv(task: &str) -> Vec<OsString> {
         ["state", "handoff", "send", "--task", task].iter().map(OsString::from).collect()
     }
 
+    #[cfg(unix)]
     #[test]
     fn handoff_context_mark_refusal_names_the_send_verb_at_and_past_the_mark() {
         let tmp = tempfile::tempdir().unwrap();
@@ -1898,6 +1922,7 @@ esac
         assert_eq!(crate::verbs::handoff_door::context_mark_refusal(&repo, &repo, None), None);
     }
 
+    #[cfg(unix)]
     #[test]
     fn handoff_context_mark_refusal_passes_when_the_door_is_off() {
         let cases: [(&str, Value, bool, bool); 4] = [
@@ -1926,6 +1951,7 @@ esac
         }
     }
 
+    #[cfg(unix)]
     #[test]
     fn handoff_context_mark_door_refuses_feature_start_at_and_past_the_mark() {
         for tokens in [120_000u64, 150_000] {
@@ -1947,6 +1973,7 @@ esac
         }
     }
 
+    #[cfg(unix)]
     #[test]
     fn handoff_context_mark_door_lets_feature_start_through_when_off() {
         let cases: [(&str, u64, Value, bool, bool); 5] = [
@@ -1978,6 +2005,7 @@ esac
         }
     }
 
+    #[cfg(unix)]
     #[test]
     fn handoff_context_mark_door_feature_start_with_handoff_task_sends_with_the_mark_request_id() {
         let tmp = tempfile::tempdir().unwrap();
@@ -2003,6 +2031,7 @@ esac
         assert_eq!(rows[0]["kind"], "handoff-dispatched");
     }
 
+    #[cfg(unix)]
     #[test]
     fn handoff_context_mark_door_refuses_cells_claim_past_the_mark_and_not_below() {
         let tmp = tempfile::tempdir().unwrap();
@@ -2025,6 +2054,7 @@ esac
         assert_eq!(fake.dispatch_argv(), None);
     }
 
+    #[cfg(unix)]
     #[test]
     fn handoff_context_mark_door_never_refuses_cells_cap() {
         let tmp = tempfile::tempdir().unwrap();
@@ -2053,6 +2083,7 @@ esac
         assert_ne!(cell_status(&repo, "demo-1"), "claimed");
     }
 
+    #[cfg(unix)]
     #[test]
     fn handoff_send_dispatches_with_the_mark_request_id_releases_and_audits() {
         let tmp = tempfile::tempdir().unwrap();
@@ -2085,6 +2116,7 @@ esac
         assert!(rows[0].to_string().contains("bee-handoff-sess-mark-6-mark-"), "{}", rows[0]);
     }
 
+    #[cfg(unix)]
     #[test]
     fn handoff_send_failed_dispatch_writes_nothing() {
         for failure in [FakeDispatch::ExitsNonZero, FakeDispatch::Unparsable] {
@@ -2107,6 +2139,7 @@ esac
         }
     }
 
+    #[cfg(unix)]
     #[test]
     fn handoff_send_refuses_without_a_door() {
         let tmp = tempfile::tempdir().unwrap();
@@ -2166,6 +2199,7 @@ esac
         assert!(!sessions.join("sess-hook-plain.json").exists());
     }
 
+    #[cfg(unix)]
     #[test]
     fn handoff_send_two_attempts_get_distinct_request_ids_and_task_files() {
         let tmp = tempfile::tempdir().unwrap();
@@ -2200,6 +2234,7 @@ esac
         assert_eq!(open.len(), 2);
     }
 
+    #[cfg(unix)]
     #[test]
     fn handoff_send_follow_up_of_wins_over_paseo_and_expect_merge_writes_ledger() {
         let tmp = tempfile::tempdir().unwrap();
@@ -2260,6 +2295,7 @@ esac
         );
     }
 
+    #[cfg(unix)]
     #[test]
     fn handoff_send_deduped_done_run_keeps_session_and_writes_no_ledger_or_audit() {
         let tmp = tempfile::tempdir().unwrap();
