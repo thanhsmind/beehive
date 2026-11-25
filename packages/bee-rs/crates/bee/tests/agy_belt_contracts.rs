@@ -113,7 +113,17 @@ fn one_json_object(out: &Output, row: &str) -> Value {
 }
 
 fn belt_raw(root: &Path, stdin: &[u8], row: &str) -> Value {
-    let mut child = bee()
+    run_belt(bee(), root, stdin, row)
+}
+
+fn herded_belt(root: &Path, payload: Value, row: &str) -> Value {
+    let mut cmd = bee();
+    cmd.env("BEE_HERDING_WORKER", "1");
+    run_belt(cmd, root, payload.to_string().as_bytes(), row)
+}
+
+fn run_belt(mut cmd: Command, root: &Path, stdin: &[u8], row: &str) -> Value {
+    let mut child = cmd
         .args(["hook", "agy-belt"])
         .current_dir(root)
         .stdin(Stdio::piped())
@@ -398,6 +408,63 @@ fn stop_and_post_tool_use_print_one_json_object() {
         json!({ "Path": abs(&repo.root, "README.md") }),
     );
     assert_eq!(belt(&repo.root, post, "PostToolUse"), json!({}));
+}
+
+#[test]
+fn a_herded_pane_list_dir_answers_ask() {
+    let repo = onboarded_repo(None);
+    let answer = herded_belt(
+        &repo.root,
+        tool_call(&repo.root, "PreToolUse", "list_dir", json!({ "DirectoryPath": abs(&repo.root, "") })),
+        "herded list_dir",
+    );
+    assert_eq!(answer, json!({ "decision": "ask" }));
+}
+
+#[test]
+fn a_herded_pane_write_file_the_write_guard_refuses_is_denied() {
+    let repo = onboarded_repo(None);
+    let answer = herded_belt(
+        &repo.root,
+        tool_call(
+            &repo.root,
+            "PreToolUse",
+            "write_file",
+            json!({ "Path": abs(&repo.root, ".bee/config.json"), "Content": "{}\n" }),
+        ),
+        "herded write_file .bee/config.json",
+    );
+    let reason = assert_deny(&answer, "herded write_file .bee/config.json");
+    assert!(reason.contains(".bee/config.json"), "reason names the refused path: {reason}");
+}
+
+#[test]
+fn a_herded_pane_invoke_subagent_is_denied() {
+    let repo = onboarded_repo(None);
+    let answer = herded_belt(
+        &repo.root,
+        tool_call(
+            &repo.root,
+            "PreToolUse",
+            "invoke_subagent",
+            json!({ "Prompt": "research this", "Role": "researcher", "TypeName": "research", "Model": "inherit" }),
+        ),
+        "herded invoke_subagent",
+    );
+    assert_deny(&answer, "herded invoke_subagent");
+}
+
+#[test]
+fn a_herded_pane_session_start_and_stop_print_one_json_object() {
+    let repo = onboarded_repo(None);
+    herded_belt(&repo.root, common(&repo.root, "SessionStart"), "herded SessionStart");
+    let mut stop = common(&repo.root, "Stop");
+    stop["executionNum"] = json!(1);
+    stop["terminationReason"] = json!("completed");
+    stop["error"] = json!("");
+    stop["fullyIdle"] = json!(true);
+    stop["continuationActive"] = json!(false);
+    herded_belt(&repo.root, stop, "herded Stop");
 }
 
 #[test]
