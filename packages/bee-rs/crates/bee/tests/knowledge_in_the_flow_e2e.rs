@@ -48,6 +48,7 @@ fn bee_cmd(fx: &Fixture, args: &[&str]) -> (i32, String, String) {
         .env_remove("BEE_HERDING_WORKER")
         .env_remove("BEE_HERDING_JOB_ID")
         .env_remove("BEE_SESSION_ID")
+        .env_remove("ANTIGRAVITY_CONVERSATION_ID")
         .env_remove("CLAUDE_CODE_SESSION_ID")
         .env_remove("PI_SESSION_ID");
     let out = cmd.output().unwrap();

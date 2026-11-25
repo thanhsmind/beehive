@@ -40,6 +40,7 @@ fn run_hook(hook: &str, payload: &Value, cwd: &Path, worker: bool) -> Output {
         .env_remove("BEE_HERDING_WORKER")
         .env_remove("BEE_HERDING_JOB_ID")
         .env_remove("BEE_SESSION_ID")
+        .env_remove("ANTIGRAVITY_CONVERSATION_ID")
         .env_remove("CLAUDE_CODE_SESSION_ID")
         .env_remove("PI_SESSION_ID")
         .stdin(Stdio::piped())

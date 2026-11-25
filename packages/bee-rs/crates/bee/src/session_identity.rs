@@ -250,11 +250,23 @@ mod tests {
     }
 
     #[test]
-    fn ambient_agy_session_id_is_isolated_or_preserved() {
-        let initial = ambient_env_var("ANTIGRAVITY_CONVERSATION_ID");
-        if let Some(ambient) = initial {
-            assert!(!ambient.is_empty());
-        }
+    fn agy_session_identity_resolves_agy_when_others_absent() {
+        let sid = resolve_env_session_id_from(|k| match k {
+            "ANTIGRAVITY_CONVERSATION_ID" => Some("agy-only".into()),
+            _ => None,
+        });
+        assert_eq!(sid.as_deref(), Some("agy-only"));
+    }
+
+    #[test]
+    fn agy_session_identity_blank_falls_through_to_claude() {
+        let sid = resolve_env_session_id_from(|k| match k {
+            "ANTIGRAVITY_CONVERSATION_ID" => Some("   ".into()),
+            "CLAUDE_CODE_SESSION_ID" => Some("claude-id".into()),
+            "PI_SESSION_ID" => Some("pi-id".into()),
+            _ => None,
+        });
+        assert_eq!(sid.as_deref(), Some("claude-id"));
     }
 
     #[test]
