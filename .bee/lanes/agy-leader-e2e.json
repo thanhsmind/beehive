@@ -11,7 +11,7 @@
     "uat": false
   },
   "summary": "Feature \"agy-leader-e2e\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at c4466ca; capture what settled, then bee close --feature agy-leader-e2e, then write the handoff and continue in a fresh leader session (one leader session per feature).",
+  "next_action": "Merged into main at d736b00; capture what settled, then bee close --feature agy-leader-e2e, then write the handoff and continue in a fresh leader session (one leader session per feature).",
   "created_at": "2026-11-25T15:16:46.371Z",
   "run_state": null,
   "waiting_on": null,
