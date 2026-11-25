@@ -1,0 +1,13 @@
+{
+  "request_id": "bee-handoff-060525e0-63bb-492b-a007-a9783d6bde75-mark-mwwbuxbd",
+  "run_id": "run-ac3a2156c8493dec",
+  "project_id": "beehive",
+  "session_id": "060525e0-63bb-492b-a007-a9783d6bde75",
+  "feature": "windows-test-build",
+  "sent_at": "2026-11-25T16:18:01.148Z",
+  "task_file": "/mnt/data/Projects/goglbe/beehive/.bee/tmp/handoff-060525e0-63bb-492b-a007-a9783d6bde75-mark-mwwbuxbd.md",
+  "task_text": "Handoff from previous leader session (context 130k tokens past 120k mark).\nCurrent feature: windows-test-build\nOpen or claimed cells: none\n\nOwner request (Vietnamese, 2026-11-25): 'Lam' — the agy-as-leader end-to-end spike is closed (report docs/history/agy-leader-e2e/report.md); F1/F14 fixed and merged (agy-session-env). Next: build proposed PBI p-3f1d7db8 (F11: let a leader adopt a finished herding job's worker so a cell whose leader died can still be capped) through the full bee chain: feature worktree, gate, plan, dispatched implementer plus separate tester, bee test, bee worktree merge, close. Then triage the other spike PBIs p-e8eeae96 (F10), p-41a23d81 (F13), p-a0f03c4a (F9 doctrine). Standing orders: reply in Vietnamese, simple words; full autopilot gate bypass is on; never ask the owner to run steps the agent can run; no code comments; no release unless the owner asks.\n",
+  "expects": [],
+  "follow_ups": [],
+  "status": "open"
+}

@@ -295,7 +295,7 @@
     ]
   },
   "merge_ready": {
-    "since": "2026-11-25T16:14:50.093Z",
+    "since": "2026-11-25T16:19:16.617Z",
     "branch": "wt/verify-map-upkeep-3",
     "worktree_id": "beehive--wt--verify-map-upkeep-3",
     "uat": "pending",
