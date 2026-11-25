@@ -1,0 +1,18 @@
+{
+  "schema_version": "1.0",
+  "feature": "knowledge-upkeep-nov25b",
+  "mode": "docs",
+  "phase": "exploring",
+  "approved_gates": {
+    "context": false,
+    "shape": true,
+    "execution": false,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"knowledge-upkeep-nov25b\" started at phase \"exploring\" (lane).",
+  "next_action": "Continue bee-exploring for \"knowledge-upkeep-nov25b\" (lane).",
+  "created_at": "2026-11-25T16:55:56.508Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null
+}

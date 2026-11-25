@@ -1,0 +1,13 @@
+{
+  "request_id": "bee-handoff-9b8ce71c-a933-4660-bb75-688c8a0bf1cf-mark-mwwd9oxn",
+  "run_id": "run-02cb0c371782fe95",
+  "project_id": "beehive",
+  "session_id": "9b8ce71c-a933-4660-bb75-688c8a0bf1cf",
+  "feature": "windows-test-build",
+  "sent_at": "2026-11-25T16:57:29.741Z",
+  "task_file": "/mnt/data/Projects/goglbe/beehive/.bee/tmp/handoff-9b8ce71c-a933-4660-bb75-688c8a0bf1cf-mark-mwwd9oxn.md",
+  "task_text": "Handoff from previous leader session (context 146k tokens past 120k mark).\nCurrent feature: windows-test-build\nOpen or claimed cells: none\n\nContinue feature team-profiles (PBI p-3b770721) in worktree /mnt/data/Projects/goglbe/beehive--wt--team-profiles, branch wt/team-profiles. Owner ask 2026-11-25: ship the agy-only team set as a bee config, applicable globally. DONE: brief docs/briefs/p-3b770721.md; docs/history/team-profiles/CONTEXT.md D1-D7 (decision d2b7654d); plan.md rev 1 committed; 50 plan-conflict candidates verdicted compatible; shape+execution gate approved (actor auto, full bypass); cells tp-1 (code: profiles data + bee team profiles + bee team use [--global] + team show profile line + registry), tp-2 (test, deps tp-1, integration tests tests/team_profiles.rs), tp-3 (docs), tp-4 (test, checks tp-3 docs) added and open, none claimed. Seed copied to worktree .bee/tmp/team-profiles/seed-only-agy.json. NEXT: from main run bee dispatch prepare --runtime claude --kind cell --cell tp-1 --worker tp1-impl --claim --json and the same for tp-3 (worker tp3-docs); run the returned payloads (herding run with --cwd the worktree); earlier a refusal limits.concurrency 14/12 came from another session's 12 read-only workers. Then tp-2 and tp-4 as separate testers, bee test in the worktree, bee worktree merge, uat via audit-log uat-deferral, PBI status done, capture line. Notes: a bee defect report about the worker-guard refusing an rg pattern that names a bee verb is saved at .bee/reports/20261125T154857714Z-herded-read-only-worker-guard-refuses-an.md (gh not logged in). Do not touch spike agy-leader-e2e or feature deferred-queue-req-flags. Keep the governed guard: an agent never applies a team table, the owner runs bee team use. Standing orders: reply in Vietnamese, simple words; full autopilot gate bypass on; never ask the owner to run steps the agent can run; no code comments; no release unless the owner asks.\n",
+  "expects": [],
+  "follow_ups": [],
+  "status": "open"
+}
