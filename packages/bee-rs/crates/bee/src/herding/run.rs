@@ -12851,6 +12851,46 @@ mod tests {
         assert!(!plain.contains("--principle-used") && !plain.contains("--sync-ack"), "{plain}");
     }
 
+    fn settle_floor_fixture(root: &Path, cell_id: &str, role: &str) {
+        std::fs::create_dir_all(root.join(".bee/cells")).unwrap();
+        std::fs::create_dir_all(root.join(".bee/lanes")).unwrap();
+        std::fs::write(
+            root.join(".bee/lanes/feat-floor.json"),
+            serde_json::json!({"feature": "feat-floor", "route": {"class": "bugfix"}}).to_string(),
+        )
+        .unwrap();
+        std::fs::write(
+            root.join(".bee/cells").join(format!("{cell_id}.json")),
+            serde_json::json!({"id": cell_id, "feature": "feat-floor", "role": role, "files": ["src/lib.rs"]}).to_string(),
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn settle_line_names_the_floor_when_a_bugfix_test_cell_proof_is_below_it() {
+        let tmp = tempfile::tempdir().unwrap();
+        settle_floor_fixture(tmp.path(), "cell-floor-1", "test");
+
+        for proof_res in ["green:unit", "<green:unit>"] {
+            let hint = settle_hint(tmp.path(), "cell-floor-1", "job-floor-1", proof_res, "");
+            assert_eq!(
+                hint,
+                "settle with `bee cells finish --id cell-floor-1 --from-job job-floor-1 --proof-result green:red-first --no-mistakes`\npass green:red-first only with red-first evidence",
+                "{proof_res}"
+            );
+        }
+    }
+
+    #[test]
+    fn settle_line_is_unchanged_when_a_code_cell_proof_meets_its_floor() {
+        let tmp = tempfile::tempdir().unwrap();
+        settle_floor_fixture(tmp.path(), "cell-floor-2", "code");
+
+        let hint = settle_hint(tmp.path(), "cell-floor-2", "job-floor-2", "green:unit", "");
+        assert_eq!(hint, format!("settle with `{}`", settle_command("cell-floor-2", "job-floor-2", "green:unit", "")));
+        assert!(!hint.contains('\n'), "{hint}");
+    }
+
     #[test]
     fn red_or_missing_proof_or_no_commit_leaves_cell_uncapped() {
         let tmp = tempfile::tempdir().unwrap();
