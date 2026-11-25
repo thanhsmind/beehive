@@ -5,8 +5,8 @@
   "phase": "exploring",
   "approved_gates": {
     "context": false,
-    "shape": false,
-    "execution": false,
+    "shape": true,
+    "execution": true,
     "review": false,
     "uat": false
   },
@@ -14,5 +14,284 @@
   "next_action": "Continue bee-exploring for \"verify-map-upkeep-3\" (lane).",
   "created_at": "2026-11-25T15:57:41.836Z",
   "run_state": "awaiting-approval",
-  "waiting_on": null
+  "waiting_on": null,
+  "route": {
+    "class": "docs",
+    "lane": "small",
+    "flags": [],
+    "product_files": 18,
+    "rationale": null,
+    "updated_at": "2026-11-25T16:01:11.611Z",
+    "feature": "verify-map-upkeep-3"
+  },
+  "gate_preview": {
+    "feature": "verify-map-upkeep-3",
+    "plan_sha256": "5dfefad2627b2fc8339f55550c4f2f27774e78fd52c2312dca66481a803fe47c",
+    "previewed_at": "2026-11-25T16:01:12.371Z",
+    "cells": [
+      {
+        "id": "vmu3-1",
+        "feature": "verify-map-upkeep-3",
+        "title": "Isolate global config and add drive entry points to control-bee",
+        "lane": "small",
+        "role": "code",
+        "deps": [],
+        "decisions": [],
+        "files": [
+          ".bee/verify/verify-app/control-bee",
+          ".bee/verify/verify-app/SKILL.md",
+          ".bee/verify/verify-app/fixtures/demo-note-plan.md",
+          ".bee/verify/verify-app/fixtures/demo-note-2.json"
+        ],
+        "read_first": [
+          "docs/history/verify-map-upkeep-3/plan.md",
+          "docs/history/verify-map-upkeep-3/CONTEXT.md",
+          ".bee/verify/verify-app/SKILL.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Apply H1-H5 from docs/history/verify-map-upkeep-3/plan.md to control-bee, SKILL.md and the fixtures",
+        "verify": "bash .bee/verify/verify-app/control-bee drive --full",
+        "must_haves": {
+          "truths": [
+            "drive --full prints one ok line per mapped feature and exits 0",
+            "drive with an unknown argument exits 2",
+            "a sandbox bee process sees an empty global config unless the caller exported one"
+          ],
+          "artifacts": [
+            {
+              "path": ".bee/verify/verify-app/control-bee",
+              "substantive": "drive subcommand and global-config isolation"
+            }
+          ],
+          "key_links": [],
+          "prohibitions": [
+            "no comment lines added to control-bee",
+            "no product code changes"
+          ]
+        },
+        "behavior_change": true
+      },
+      {
+        "id": "vmu3-2",
+        "feature": "verify-map-upkeep-3",
+        "title": "Correct the verify feature map drift",
+        "lane": "small",
+        "role": "docs",
+        "deps": [],
+        "decisions": [],
+        "files": [
+          ".bee/verify/verify-app/features/README.md",
+          ".bee/verify/verify-app/features/orient-and-status.md",
+          ".bee/verify/verify-app/features/feature-gates.md",
+          ".bee/verify/verify-app/features/cells-and-proof.md",
+          ".bee/verify/verify-app/features/worktree-and-close.md",
+          ".bee/verify/verify-app/features/comment-guard.md",
+          ".bee/verify/verify-app/features/onboard.md",
+          ".bee/verify/verify-app/features/worker-outward-guard.md",
+          ".bee/verify/verify-app/features/codex-runtime.md",
+          ".bee/verify/verify-app/features/pi-runtime.md",
+          ".bee/verify/verify-app/features/pi-harness-dispatch.md",
+          ".bee/verify/verify-app/features/pi-hat-wave.md",
+          ".bee/verify/verify-app/features/config-layers.md"
+        ],
+        "read_first": [
+          "docs/history/verify-map-upkeep-3/plan.md",
+          ".bee/verify/verify-app/features/README.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Apply M1-M13 from docs/history/verify-map-upkeep-3/plan.md to the feature files",
+        "verify": "rg -c green:red-first .bee/verify/verify-app/features/cells-and-proof.md",
+        "must_haves": {
+          "truths": [
+            "every M item is reflected in its feature file"
+          ],
+          "artifacts": [
+            {
+              "path": ".bee/verify/verify-app/features/README.md",
+              "substantive": "2026-11-25 upkeep log line"
+            }
+          ],
+          "key_links": [],
+          "prohibitions": [
+            "feature entry contract keeps its four H2 sections"
+          ]
+        },
+        "behavior_change": false
+      },
+      {
+        "id": "vmu3-3",
+        "feature": "verify-map-upkeep-3",
+        "title": "Test the drive entry points",
+        "lane": "small",
+        "role": "test",
+        "deps": [
+          "vmu3-1"
+        ],
+        "decisions": [],
+        "files": [
+          ".bee/verify/verify-app/control-bee"
+        ],
+        "read_first": [
+          "docs/history/verify-map-upkeep-3/plan.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Run drive --fast, drive --full and drive --bogus; check per-feature lines and exit codes 0, 0, 2; check a sandbox launched without BEEHIVE_CONFIG_DIR does not read the user-global config",
+        "verify": "bash .bee/verify/verify-app/control-bee drive --fast",
+        "must_haves": {
+          "truths": [
+            "drive exit codes are 0 on green and 2 on an unknown entry point"
+          ],
+          "artifacts": [
+            {
+              "path": ".bee/verify/verify-app/control-bee",
+              "substantive": "verified, not edited unless a defect is found"
+            }
+          ],
+          "key_links": [],
+          "prohibitions": [
+            "no product code changes"
+          ]
+        },
+        "behavior_change": false
+      }
+    ]
+  },
+  "approved_cell_packet": {
+    "feature": "verify-map-upkeep-3",
+    "plan_sha256": "5dfefad2627b2fc8339f55550c4f2f27774e78fd52c2312dca66481a803fe47c",
+    "previewed_at": "2026-11-25T16:01:12.371Z",
+    "cells": [
+      {
+        "id": "vmu3-1",
+        "feature": "verify-map-upkeep-3",
+        "title": "Isolate global config and add drive entry points to control-bee",
+        "lane": "small",
+        "role": "code",
+        "deps": [],
+        "decisions": [],
+        "files": [
+          ".bee/verify/verify-app/control-bee",
+          ".bee/verify/verify-app/SKILL.md",
+          ".bee/verify/verify-app/fixtures/demo-note-plan.md",
+          ".bee/verify/verify-app/fixtures/demo-note-2.json"
+        ],
+        "read_first": [
+          "docs/history/verify-map-upkeep-3/plan.md",
+          "docs/history/verify-map-upkeep-3/CONTEXT.md",
+          ".bee/verify/verify-app/SKILL.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Apply H1-H5 from docs/history/verify-map-upkeep-3/plan.md to control-bee, SKILL.md and the fixtures",
+        "verify": "bash .bee/verify/verify-app/control-bee drive --full",
+        "must_haves": {
+          "truths": [
+            "drive --full prints one ok line per mapped feature and exits 0",
+            "drive with an unknown argument exits 2",
+            "a sandbox bee process sees an empty global config unless the caller exported one"
+          ],
+          "artifacts": [
+            {
+              "path": ".bee/verify/verify-app/control-bee",
+              "substantive": "drive subcommand and global-config isolation"
+            }
+          ],
+          "key_links": [],
+          "prohibitions": [
+            "no comment lines added to control-bee",
+            "no product code changes"
+          ]
+        },
+        "behavior_change": true
+      },
+      {
+        "id": "vmu3-2",
+        "feature": "verify-map-upkeep-3",
+        "title": "Correct the verify feature map drift",
+        "lane": "small",
+        "role": "docs",
+        "deps": [],
+        "decisions": [],
+        "files": [
+          ".bee/verify/verify-app/features/README.md",
+          ".bee/verify/verify-app/features/orient-and-status.md",
+          ".bee/verify/verify-app/features/feature-gates.md",
+          ".bee/verify/verify-app/features/cells-and-proof.md",
+          ".bee/verify/verify-app/features/worktree-and-close.md",
+          ".bee/verify/verify-app/features/comment-guard.md",
+          ".bee/verify/verify-app/features/onboard.md",
+          ".bee/verify/verify-app/features/worker-outward-guard.md",
+          ".bee/verify/verify-app/features/codex-runtime.md",
+          ".bee/verify/verify-app/features/pi-runtime.md",
+          ".bee/verify/verify-app/features/pi-harness-dispatch.md",
+          ".bee/verify/verify-app/features/pi-hat-wave.md",
+          ".bee/verify/verify-app/features/config-layers.md"
+        ],
+        "read_first": [
+          "docs/history/verify-map-upkeep-3/plan.md",
+          ".bee/verify/verify-app/features/README.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Apply M1-M13 from docs/history/verify-map-upkeep-3/plan.md to the feature files",
+        "verify": "rg -c green:red-first .bee/verify/verify-app/features/cells-and-proof.md",
+        "must_haves": {
+          "truths": [
+            "every M item is reflected in its feature file"
+          ],
+          "artifacts": [
+            {
+              "path": ".bee/verify/verify-app/features/README.md",
+              "substantive": "2026-11-25 upkeep log line"
+            }
+          ],
+          "key_links": [],
+          "prohibitions": [
+            "feature entry contract keeps its four H2 sections"
+          ]
+        },
+        "behavior_change": false
+      },
+      {
+        "id": "vmu3-3",
+        "feature": "verify-map-upkeep-3",
+        "title": "Test the drive entry points",
+        "lane": "small",
+        "role": "test",
+        "deps": [
+          "vmu3-1"
+        ],
+        "decisions": [],
+        "files": [
+          ".bee/verify/verify-app/control-bee"
+        ],
+        "read_first": [
+          "docs/history/verify-map-upkeep-3/plan.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Run drive --fast, drive --full and drive --bogus; check per-feature lines and exit codes 0, 0, 2; check a sandbox launched without BEEHIVE_CONFIG_DIR does not read the user-global config",
+        "verify": "bash .bee/verify/verify-app/control-bee drive --fast",
+        "must_haves": {
+          "truths": [
+            "drive exit codes are 0 on green and 2 on an unknown entry point"
+          ],
+          "artifacts": [
+            {
+              "path": ".bee/verify/verify-app/control-bee",
+              "substantive": "verified, not edited unless a defect is found"
+            }
+          ],
+          "key_links": [],
+          "prohibitions": [
+            "no product code changes"
+          ]
+        },
+        "behavior_change": false
+      }
+    ]
+  }
 }

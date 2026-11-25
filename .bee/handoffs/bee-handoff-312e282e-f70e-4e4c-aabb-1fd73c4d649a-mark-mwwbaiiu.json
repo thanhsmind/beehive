@@ -1,0 +1,18 @@
+{
+  "request_id": "bee-handoff-312e282e-f70e-4e4c-aabb-1fd73c4d649a-mark-mwwbaiiu",
+  "run_id": "run-71dfd61a47b188a5",
+  "project_id": "beehive",
+  "session_id": "312e282e-f70e-4e4c-aabb-1fd73c4d649a",
+  "feature": "windows-test-build",
+  "sent_at": "2026-11-25T16:02:08.855Z",
+  "task_file": "/mnt/data/Projects/goglbe/beehive/.bee/tmp/handoff-312e282e-f70e-4e4c-aabb-1fd73c4d649a-mark-mwwbaiiu.md",
+  "task_text": "Handoff from previous leader session (context 182k tokens past 120k mark).\nCurrent feature: windows-test-build\nOpen or claimed cells: none\n\nOwner request: /bee-verify-upkeep (audit the verify-app skill and its feature map; due reason never_run). Reply to the owner in Vietnamese, short and simple. Done so far: source wave (13 read-only digests; report paths in .bee/tmp/vu/out/<feature>.json report_path, main checkout) and a live pass of all 13 features (evidence ~/.local/state/bee-verify/evidence/20261125-225437-3171768 and vu-*). Findings and the full correction list are in docs/history/verify-map-upkeep-3/plan.md and CONTEXT.md inside worktree beehive--wt--verify-map-upkeep-3 (lane feature verify-map-upkeep-3, mode small). Merged gate already approved under gate_bypass full; cells vmu3-1 (code: global-config isolation + drive --fast/--full in control-bee, fixture demo-note-2, SKILL.md), vmu3-2 (docs: feature-map drift M1-M13), vmu3-3 (test, deps vmu3-1) are open, none claimed. Next: dispatch vmu3-1 and vmu3-2 in parallel via bee dispatch prepare --claim from main, then the tester vmu3-3; then bee onboard --verify-only --apply in the worktree so rendered copies ship; then bee worktree merge; then bee audit log --kind verify-upkeep --feature verify-map-upkeep-3 --note 'changed - <one line>'. Product gaps to report to the owner (not fix): herded read-only worker guard refuses rg patterns containing tokens like sessionRuntime/--id/claim_ownership (reflected, fix-at architecture); commands.test none counts as a declared test in the onboard notice. Standing orders: never approve user gates beyond the recorded bypass; no code comments; drive never starts a paid model; Pi/Codex live-agent parts are reported unreachable with the prerequisite named.\n",
+  "expects": [
+    {
+      "kind": "branch-merged",
+      "branch": "wt/verify-map-upkeep-3"
+    }
+  ],
+  "follow_ups": [],
+  "status": "open"
+}

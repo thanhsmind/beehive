@@ -23,5 +23,12 @@
     "rationale": null,
     "updated_at": "2026-11-25T15:19:32.060Z",
     "feature": "deferred-queue-req-flags"
+  },
+  "merge_ready": {
+    "since": "2026-11-25T16:03:28.554Z",
+    "branch": "wt/deferred-queue-req-flags",
+    "worktree_id": "beehive--wt--deferred-queue-req-flags",
+    "uat": "pending",
+    "blocked_by": []
   }
 }
