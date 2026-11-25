@@ -629,6 +629,7 @@ fn run_with_no_session_env(cwd: &Path, args: &[&str]) -> (i32, String) {
         .args(args)
         .current_dir(cwd)
         .env_remove("BEE_SESSION_ID")
+        .env_remove("ANTIGRAVITY_CONVERSATION_ID")
         .env_remove("CLAUDE_CODE_SESSION_ID")
         .env_remove("PI_SESSION_ID")
         .output()

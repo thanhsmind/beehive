@@ -1,19 +1,10 @@
-// session_identity.rs — ordered runtime environment lookup for session identity (pihp-1, D6).
-//
-// Shared order across all session-owned commands:
-// 1. BEE_SESSION_ID
-// 2. CLAUDE_CODE_SESSION_ID
-// 3. PI_SESSION_ID
-//
-// Explicit command flags always take precedence before this environment lookup.
-// Durable single-live-session fallback stays with commands that own durable stores.
-
 fn js_trim(s: &str) -> &str {
     s.trim_matches(|c: char| c.is_whitespace() || c == '\u{feff}')
 }
 
-pub(crate) const SESSION_ENV_VARS: [&str; 3] = [
+pub(crate) const SESSION_ENV_VARS: [&str; 4] = [
     "BEE_SESSION_ID",
+    "ANTIGRAVITY_CONVERSATION_ID",
     "CLAUDE_CODE_SESSION_ID",
     "PI_SESSION_ID",
 ];
@@ -236,6 +227,46 @@ mod tests {
         if let Some(ambient) = initial {
             assert!(!ambient.is_empty());
         }
+    }
+
+    #[test]
+    fn agy_session_identity_beats_claude_and_pi_and_loses_to_bee() {
+        let sid = resolve_env_session_id_from(|k| match k {
+            "ANTIGRAVITY_CONVERSATION_ID" => Some("agy-id".into()),
+            "CLAUDE_CODE_SESSION_ID" => Some("claude-id".into()),
+            "PI_SESSION_ID" => Some("pi-id".into()),
+            _ => None,
+        });
+        assert_eq!(sid.as_deref(), Some("agy-id"));
+
+        let sid = resolve_env_session_id_from(|k| match k {
+            "BEE_SESSION_ID" => Some("bee-id".into()),
+            "ANTIGRAVITY_CONVERSATION_ID" => Some("agy-id".into()),
+            "CLAUDE_CODE_SESSION_ID" => Some("claude-id".into()),
+            "PI_SESSION_ID" => Some("pi-id".into()),
+            _ => None,
+        });
+        assert_eq!(sid.as_deref(), Some("bee-id"));
+    }
+
+    #[test]
+    fn agy_session_identity_resolves_agy_when_others_absent() {
+        let sid = resolve_env_session_id_from(|k| match k {
+            "ANTIGRAVITY_CONVERSATION_ID" => Some("agy-only".into()),
+            _ => None,
+        });
+        assert_eq!(sid.as_deref(), Some("agy-only"));
+    }
+
+    #[test]
+    fn agy_session_identity_blank_falls_through_to_claude() {
+        let sid = resolve_env_session_id_from(|k| match k {
+            "ANTIGRAVITY_CONVERSATION_ID" => Some("   ".into()),
+            "CLAUDE_CODE_SESSION_ID" => Some("claude-id".into()),
+            "PI_SESSION_ID" => Some("pi-id".into()),
+            _ => None,
+        });
+        assert_eq!(sid.as_deref(), Some("claude-id"));
     }
 
     #[test]

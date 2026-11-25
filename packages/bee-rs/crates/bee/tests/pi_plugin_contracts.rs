@@ -8123,6 +8123,7 @@ fn pi_lifecycle_end_to_end_onboarded_repo_parity() {
     let release_out = real_bee(&bee_target)
         .args(["state", "session", "release", "--json"])
         .env_remove("BEE_SESSION_ID")
+        .env_remove("ANTIGRAVITY_CONVERSATION_ID")
         .env_remove("CLAUDE_CODE_SESSION_ID")
         .env("PI_SESSION_ID", PI_SESSION)
         .current_dir(repo_path)

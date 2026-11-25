@@ -674,6 +674,7 @@ fn write_guard_env(repo: &Path, herded: bool, payload: Value, env: &[(&str, &Pat
     }
     cmd.env_remove("BEE_HERDING_JOB_ID")
         .env_remove("BEE_SESSION_ID")
+        .env_remove("ANTIGRAVITY_CONVERSATION_ID")
         .env_remove("CLAUDE_CODE_SESSION_ID")
         .env_remove("PI_SESSION_ID")
         .write_stdin(body.to_string());

@@ -11,7 +11,7 @@ bee:
   decisions: ["agy-runtime D1-D8 (docs/history/agy-runtime/CONTEXT.md)"]
   sources: [docs/history/agy-runtime/CONTEXT.md, docs/history/agy-runtime/discovery.md]
   authoritative_for: "hook-runtime: the agy belt translation, tool map, and onboarding merge"
-  anchors: [packages/bee-rs/crates/bee/src/devtools/hook_manifests.rs, packages/bee-rs/crates/bee/src/hooks/adapter.rs, packages/bee-rs/crates/bee/src/hooks/mod.rs, packages/bee-rs/crates/bee/src/session_identity.rs, packages/bee-rs/crates/bee/src/onboard/templates.rs, packages/bee-rs/crates/bee/src/onboard/apply.rs, packages/bee-rs/crates/bee/src/hooks/agy_belt.rs, .agents/hooks.json, packages/bee-rs/crates/bee/src/onboard/agy_belt.rs]
+  anchors: [packages/bee-rs/crates/bee/src/devtools/hook_manifests.rs, packages/bee-rs/crates/bee/src/hooks/adapter.rs, packages/bee-rs/crates/bee/src/hooks/mod.rs, packages/bee-rs/crates/bee/src/session_identity.rs, packages/bee-rs/crates/bee/src/onboard/templates.rs, packages/bee-rs/crates/bee/src/onboard/apply.rs, packages/bee-rs/crates/bee/src/hooks/agy_belt.rs, .agents/hooks.json, packages/bee-rs/crates/bee/src/onboard/agy_belt.rs, packages/bee-rs/crates/bee/tests/session_release.rs]
   verified_at: 2026-11-25
 ---
 
@@ -87,6 +87,8 @@ Dispatch on `agy` is herding-only, matching the Pi rule. `bee dispatch prepare -
 ## Session Identity (`ANTIGRAVITY_CONVERSATION_ID`)
 
 Inside `agy` commands, `ANTIGRAVITY_CONVERSATION_ID` identifies the session. `session_identity` checks `ANTIGRAVITY_CONVERSATION_ID` before Pi, Codex, and Claude environment variables because an `agy` process started from a Claude Code session inherits `CLAUDE_CODE_SESSION_ID`.
+
+Pitfall, integration tests run from an `agy` shell: a test that spawns `bee` with `CLAUDE_CODE_SESSION_ID` set or removed but still inherits `ANTIGRAVITY_CONVERSATION_ID` resolves the agy id instead and goes red. Remove `ANTIGRAVITY_CONVERSATION_ID` wherever a test command sets or removes `CLAUDE_CODE_SESSION_ID`; to find the sites, `rg -n 'CLAUDE_CODE_SESSION_ID' packages/bee-rs/crates/bee/tests`. Reproduce with `ANTIGRAVITY_CONVERSATION_ID=x cargo test -p bee --test session_release`.
 
 ## Onboarding Merge Rules and Workspace Trust
 
