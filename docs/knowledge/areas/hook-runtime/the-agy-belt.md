@@ -8,7 +8,7 @@ bee:
   lifecycle: active
   areas: [hook-runtime]
   required_context: [areas/hook-runtime/overview.md, areas/hook-runtime/catalog-projections-and-activation.md]
-  decisions: [agy-runtime D1-D8 (fa33ba78-d185-4266-8202-1bc155607ec6)]
+  decisions: ["agy-runtime D1-D8 (docs/history/agy-runtime/CONTEXT.md)"]
   sources: [docs/history/agy-runtime/CONTEXT.md, docs/history/agy-runtime/discovery.md]
   authoritative_for: "hook-runtime: the agy belt translation, tool map, and onboarding merge"
   anchors: [packages/bee-rs/crates/bee/src/devtools/hook_manifests.rs, packages/bee-rs/crates/bee/src/hooks/adapter.rs, packages/bee-rs/crates/bee/src/hooks/mod.rs, packages/bee-rs/crates/bee/src/session_identity.rs, packages/bee-rs/crates/bee/src/onboard/templates.rs, packages/bee-rs/crates/bee/src/onboard/apply.rs, packages/bee-rs/crates/bee/src/hooks/agy_belt.rs, .agents/hooks.json, packages/bee-rs/crates/bee/src/onboard/agy_belt.rs]

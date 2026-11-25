@@ -30,9 +30,11 @@ Evidence: `docs/history/agy-runtime/discovery.md` (live probe of agy 1.5.17).
   `prompt`, `stop_hook_active`, `bee_runtime: "agy"`), runs the same checks
   Claude Code runs for that event, and writes agy's answer:
   - SessionStart → session init; its text → `injectSteps` systemMessage.
+<!-- bee:not-a-deferral: "a later invocation" names agy's invocationNum > 0, not work put off -->
   - PreInvocation with `invocationNum` 0 → prompt context, as
     UserPromptSubmit with `prompt` = `lastUserInput`; its text →
     `injectSteps`. A later invocation prints `{}` and runs no check.
+<!-- /bee:not-a-deferral -->
   - PreToolUse → the D4 map, then the PreToolUse checks. A deny →
     `{"decision":"deny","reason":…}`. A repaired input →
     `{"decision":"ask","overwrite":{…}}` in agy argument keys. Otherwise
