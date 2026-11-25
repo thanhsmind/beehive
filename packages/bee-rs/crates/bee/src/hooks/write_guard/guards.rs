@@ -1284,8 +1284,13 @@ pub(crate) fn global_config_write_denial(
         .map(|dir| dir.to_string_lossy().into_owned())
         .unwrap_or_default();
     let refuse = || {
+        let marker = if global_s.is_empty() {
+            String::new()
+        } else {
+            format!(" [owner-only: {global_s}]")
+        };
         Some(format!(
-            "bee config guard: the global config file {global_s} is written only by waggledance, never by an agent — it changes every project at once. FIX: ask the user to change it through waggledance."
+            "bee config guard: the global config file {global_s} is written only by waggledance, never by an agent — it changes every project at once. FIX: ask the user to change it through waggledance.{marker}"
         ))
     };
     let resolves_to_global = |raw: &str| {
@@ -1343,8 +1348,8 @@ fn format_diff_old(val: Option<&Value>) -> String {
 fn build_config_denial(rel: &str, address: &str, old_str: &str, new_str: &str) -> String {
     format!(
         "bee config guard: \"{}\" changes governed config key {}: {} -> {}. \
-FIX: ask the user to edit this mapping directly in {}; agents may not alter resolved role models or guard configuration.",
-        rel, address, old_str, new_str, rel
+FIX: ask the user to edit this mapping directly in {}; agents may not alter resolved role models or guard configuration. [owner-only: {}]",
+        rel, address, old_str, new_str, rel, rel
     )
 }
 
