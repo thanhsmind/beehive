@@ -11,8 +11,8 @@ bee:
   decisions: [leader-call-thrift D3, worker-outward-guard D1-D11, guard-config-and-class D3, paseo-pi-hardening D5 be1699f8, paseo-pi-hardening D9 e2af1dab, "contract:worker-guard 9659395e", wave-chain-thrift D3]
   sources: [docs/history/worker-outward-guard/CONTEXT.md, docs/history/paseo-pi-hardening/CONTEXT.md, docs/history/paseo-pi-hardening/plan.md, docs/history/wave-chain-thrift/CONTEXT.md]
   anchors: [.pi/extensions/bee-guard/events.ts, .pi/extensions/bee-guard/index.ts, packages/bee-rs/crates/bee/src/hooks/write_guard/checks.rs, packages/bee-rs/crates/bee/src/hooks/write_guard/paths.rs, packages/bee-rs/crates/bee/src/hooks/write_guard/main.rs, packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs, packages/bee-rs/crates/bee/src/hooks/worker_guard.rs, packages/bee-rs/crates/bee/src/verbs/cells/validate.rs, packages/bee-rs/crates/bee/src/hooks/mod.rs, packages/bee-rs/crates/bee/src/herding/mailbox.rs, packages/bee-rs/crates/bee/tests/pi_worker_guard_contracts.rs]
-  verified_at: 2026-10-06
-  verified_commit: 72ddcb2e9aba91116cd6fa59f03645d05b773b78
+  verified_at: 2026-11-25
+  verified_commit: 2325f0cd3e0abef541ca598098f3fcb9247788af
 ---
 
 ## Purpose
