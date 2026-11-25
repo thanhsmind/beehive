@@ -1011,6 +1011,7 @@
     "contract:control-bee-drive",
     "contract:from-job-adopt",
     "contract:settle-hint-floor",
-    "contract:owner-only-refusal"
+    "contract:owner-only-refusal",
+    "team-profiles"
   ]
 }

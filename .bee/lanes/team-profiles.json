@@ -642,5 +642,12 @@
   },
   "gate_revoked_at": {
     "execution": "2026-11-25T15:52:59.175Z"
+  },
+  "merge_ready": {
+    "since": "2026-11-25T17:23:03.844Z",
+    "branch": "wt/team-profiles",
+    "worktree_id": "beehive--wt--team-profiles",
+    "uat": "pending",
+    "blocked_by": []
   }
 }
