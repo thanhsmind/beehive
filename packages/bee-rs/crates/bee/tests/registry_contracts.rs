@@ -569,3 +569,32 @@ fn log_known_flags_parser_would_catch_a_new_handler_flag() {
         "decisions.log: an undeclared parsed flag must exist for the drift net to have teeth"
     );
 }
+
+fn assert_required_flags(p: &serde_json::Value, cmd_name: &str, expected: &[&str]) {
+    let entry = commands(p)
+        .iter()
+        .find(|e| e["name"] == cmd_name)
+        .unwrap_or_else(|| panic!("registry payload has no {cmd_name:?} entry"));
+    let declared: Vec<&str> = entry["parameters"]["required"]
+        .as_array()
+        .unwrap_or_else(|| panic!("{cmd_name}: parameters.required must be an array"))
+        .iter()
+        .map(|v| v.as_str().expect("required entries are strings"))
+        .collect();
+    assert_eq!(
+        declared, expected,
+        "{cmd_name}: parameters.required declared {declared:?}, expected {expected:?}"
+    );
+}
+
+#[test]
+fn deferred_queue_declares_required_flags_for_add_claim_and_release() {
+    let p = payload();
+    for (cmd_name, expected) in [
+        ("deferred-queue.add", &["kind", "feature", "reason"][..]),
+        ("deferred-queue.claim", &["id"][..]),
+        ("deferred-queue.release", &["id"][..]),
+    ] {
+        assert_required_flags(&p, cmd_name, expected);
+    }
+}
