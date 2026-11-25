@@ -1,0 +1,170 @@
+{
+  "schema": "bee-usage/v1",
+  "feature": "release-2-122-0",
+  "closed_at": "2026-11-25T03:17:20.917Z",
+  "sessions": [
+    {
+      "session_id": "4b2fee19-90d5-4802-a5f0-bfbd60db3ca1",
+      "models": {
+        "claude-opus-5-5": {
+          "input": 40,
+          "output": 5563,
+          "cache_write": 46116,
+          "cache_read": 864342,
+          "new": 51719,
+          "cached": 864342,
+          "total": 916061
+        }
+      },
+      "subagent_models": {},
+      "subagent_count": 0,
+      "started_ms": 1795576514317,
+      "ended_ms": 1795576635117,
+      "totals": {
+        "new": 51719,
+        "cached": 864342,
+        "total": 916061
+      }
+    },
+    {
+      "session_id": "fc249bfa-38fc-4ba0-9d1d-9f547b258891",
+      "models": {
+        "claude-opus-5-5": {
+          "input": 270,
+          "output": 57934,
+          "cache_write": 175531,
+          "cache_read": 16332082,
+          "new": 233735,
+          "cached": 16332082,
+          "total": 16565817
+        }
+      },
+      "subagent_models": {},
+      "subagent_count": 0,
+      "started_ms": 1795572593766,
+      "ended_ms": 1795576513227,
+      "totals": {
+        "new": 233735,
+        "cached": 16332082,
+        "total": 16565817
+      }
+    }
+  ],
+  "skipped": 0,
+  "totals": {
+    "main": {
+      "new": 285454,
+      "cached": 17196424,
+      "total": 17481878
+    },
+    "subagents": {
+      "new": 0,
+      "cached": 0,
+      "total": 0
+    },
+    "total": {
+      "new": 354109,
+      "cached": 17563982,
+      "total": 17918091
+    },
+    "herding": {
+      "new": 68655,
+      "cached": 367558,
+      "total": 436213,
+      "models": {
+        "claude-haiku-5-5": {
+          "input": 28,
+          "output": 6340,
+          "cache_write": 41705,
+          "cache_read": 253062,
+          "new": 48073,
+          "cached": 253062,
+          "total": 301135
+        },
+        "claude-opus-5-5": {
+          "input": 12,
+          "output": 3484,
+          "cache_write": 17086,
+          "cache_read": 114496,
+          "new": 20582,
+          "cached": 114496,
+          "total": 135078
+        }
+      }
+    }
+  },
+  "herding_sessions": [
+    {
+      "session_id": "096fb0a0-5d04-424c-a3a3-fb38826e01fa",
+      "models": {
+        "claude-haiku-5-5": {
+          "input": 12,
+          "output": 2628,
+          "cache_write": 21997,
+          "cache_read": 92878,
+          "new": 24637,
+          "cached": 92878,
+          "total": 117515
+        }
+      },
+      "subagent_models": {},
+      "subagent_count": 0,
+      "started_ms": 1795575718834,
+      "ended_ms": 1795575737766,
+      "totals": {
+        "new": 24637,
+        "cached": 92878,
+        "total": 117515
+      },
+      "job_id": "job-1795575717264-716159-1"
+    },
+    {
+      "session_id": "3c9a61fc-5829-4e39-9035-94882c1f5e81",
+      "models": {
+        "claude-haiku-5-5": {
+          "input": 16,
+          "output": 3712,
+          "cache_write": 19708,
+          "cache_read": 160184,
+          "new": 23436,
+          "cached": 160184,
+          "total": 183620
+        }
+      },
+      "subagent_models": {},
+      "subagent_count": 0,
+      "started_ms": 1795575929172,
+      "ended_ms": 1795576479775,
+      "totals": {
+        "new": 23436,
+        "cached": 160184,
+        "total": 183620
+      },
+      "job_id": "job-1795575927590-725004-1"
+    },
+    {
+      "session_id": "704002f5-a8d5-4f2b-9f20-3cdffa960035",
+      "models": {
+        "claude-opus-5-5": {
+          "input": 12,
+          "output": 3484,
+          "cache_write": 17086,
+          "cache_read": 114496,
+          "new": 20582,
+          "cached": 114496,
+          "total": 135078
+        }
+      },
+      "subagent_models": {},
+      "subagent_count": 0,
+      "started_ms": 1795576554380,
+      "ended_ms": 1795576597743,
+      "totals": {
+        "new": 20582,
+        "cached": 114496,
+        "total": 135078
+      },
+      "job_id": "job-1795576552823-795369-1"
+    }
+  ]
+}

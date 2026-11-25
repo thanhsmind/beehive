@@ -1,0 +1,97 @@
+{
+  "id": "rel21220-1",
+  "feature": "release-2-122-0",
+  "title": "Publish release 2.122.0 through the sanctioned script",
+  "lane": "small",
+  "role": "deploy",
+  "deps": [],
+  "decisions": [
+    "77873f5e-2f26-4eb6-8400-391fc223ee76"
+  ],
+  "files": [
+    ".claude-plugin/plugin.json",
+    ".codex-plugin/plugin.json",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/release-2-122-0/CONTEXT.md",
+    "scripts/release.sh"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Run `scripts/release.sh 2.122.0` with BEE_DISPATCH_ID set to an authorized deployment dispatch and the CI-pinned opencode 1.18.16 (/mnt/data/Projects/goglbe/beehive/.bee/tmp/oc11816/bin) first on PATH and CARGO_TARGET_DIR=/home/thanhsmind/.cache/cargo-target-rel21220, so the opencode contract tests run green. The script bumps both plugin manifests, runs the regen chain (render-skill-trees, onboard --apply, release-manifest --write), runs the declared test suite before tagging, makes the release commit, tags v2.122.0, pushes main and the tag, waits for the release-binaries workflow and verifies the published assets. Never walk those steps by hand. Re-running at a version already committed is idempotent — it resumes the tail. The regen obligation on .claude-plugin/plugin.json is discharged INSIDE the script's own regen chain, which is why the release manifest rides this cell's files.",
+  "verify": "bash scripts/release.sh 2.122.0 && bee dev release-manifest --check",
+  "must_haves": {
+    "truths": [
+      "both plugin manifests report 2.122.0",
+      "tag v2.122.0 exists locally and on the remote",
+      "the GitHub release for v2.122.0 carries the binaries and SHA256SUMS",
+      "the script printed its final OK line"
+    ],
+    "artifacts": [
+      {
+        "path": ".claude-plugin/plugin.json",
+        "substantive": "version 2.122.0"
+      },
+      {
+        "path": ".codex-plugin/plugin.json",
+        "substantive": "version 2.122.0"
+      }
+    ],
+    "key_links": [
+      "the pushed tag is what triggers release-binaries.yml"
+    ],
+    "prohibitions": [
+      "Do not hand-walk bump, tag or push",
+      "Do not skip the test gate"
+    ]
+  },
+  "behavior_change": false,
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "rel21220-deployer",
+    "outcome": null,
+    "files_changed": [
+      ".claude-plugin/plugin.json",
+      ".codex-plugin/plugin.json",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [
+      "first run refused on 9 untracked rendered files; owner chose to commit them (9af74bc3c)",
+      "sync-ack: release lane; no knowledge area changes"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-25T03:15:32.006Z",
+    "behavior_change": false,
+    "verification_evidence": "release OK bee 2.122.0 is live; CI run 45537977079 success; https://github.com/thanhsmind/beehive/releases/tag/v2.122.0 — release lane",
+    "verify_output": "green:live",
+    "verify_passed": true,
+    "claim_session": "4b2fee19-90d5-4802-a5f0-bfbd60db3ca1",
+    "verify_command": "bash scripts/release.sh 2.122.0 && bee dev release-manifest --check",
+    "claimed_at": "2026-11-25T03:15:29.211Z",
+    "knowledge_delta": [],
+    "sync_ack": "release lane; no knowledge area changes",
+    "no_mistakes": true,
+    "commit_pending": "release.sh commit 7633a20ca has no cell trailer by design",
+    "changed_lines": 20,
+    "report": {
+      "outcome": "Released bee 2.122.0; tag v2.122.0 on origin; 6 assets published",
+      "commit": "7633a20ca",
+      "files": [
+        ".claude-plugin/plugin.json",
+        ".codex-plugin/plugin.json",
+        "docs/history/codex-harness-hardening/release-manifest.json"
+      ],
+      "tests": "bash scripts/release.sh 2.122.0 && bee dev release-manifest --check — green:live — release OK bee 2.122.0 is live; CI run 45537977079 success; https://github.com/thanhsmind/beehive/releases/tag/v2.122.0 — release lane",
+      "deviations": [
+        "first run refused on 9 untracked rendered files; owner chose to commit them (9af74bc3c)"
+      ],
+      "patch_id": "642e7a18b1b7b6772cce04b1b0f5a6a23c95dddc"
+    },
+    "warnings": [],
+    "tests": "boundary"
+  },
+  "usage": null,
+  "usage_reason": "no herding job names this cell: no session is attributable to it"
+}
