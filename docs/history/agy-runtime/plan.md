@@ -425,7 +425,8 @@ is a named list read off a live agy run, with a fail-safe for unknown tools.
    "agyrt-2"
   ],
   "decisions": [
-   "fa33ba78-d185-4266-8202-1bc155607ec6"
+   "fa33ba78-d185-4266-8202-1bc155607ec6",
+   "47232f09-4274-4c05-87f2-665846ae4786"
   ],
   "files": [
    "packages/bee-rs/crates/bee/tests/agy_belt_contracts.rs"
