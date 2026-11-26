@@ -1,0 +1,152 @@
+{
+  "id": "kun26c-2",
+  "feature": "knowledge-upkeep-nov26c",
+  "title": "Check the knowledge upkeep corrections against their sources",
+  "role": "test",
+  "lane": "small",
+  "action": "Independent checker for docs cell kun26c-1 (commit bcbe7b288). Read only; edit nothing. Run the verify command. Then check each changed claim against its source: (1) docs/knowledge/areas/workflow-state/merge-readiness.md says a parked unit keeps the merge_ready fact unset — check set_after_cap in packages/bee-rs/crates/bee/src/verbs/workflow_store/merge_ready.rs; it says clear_merge_ready_for is called from record_leader_check on a gap verdict (verbs/cells/leader_check.rs), the released-dissent path (verbs/cells/dissent.rs) and the parked answer (verbs/cells/park.rs) — check each call site. (2) docs/knowledge/patterns/20260723-pinned-readonly-type-vs-execution-dispatch.md is lifecycle superseded with superseded_by naming an existing concept id, and the agent type names it cites exist in .claude/agents/. (3) Every path written in the two edited concepts exists. Return green:static with the command output, or BLOCKED naming each wrong claim with file:line.",
+  "files": [],
+  "verify": ".bee/bin/bee knowledge index --check && .bee/bin/bee knowledge check",
+  "must_haves": [
+    "Each changed claim traced to its source line",
+    "Every written path resolves"
+  ],
+  "read_first": [
+    "docs/knowledge/areas/workflow-state/merge-readiness.md",
+    "docs/knowledge/patterns/20260723-pinned-readonly-type-vs-execution-dispatch.md"
+  ],
+  "deps": [
+    "kun26c-1"
+  ],
+  "decisions": [
+    "a04079ff-9dc0-4538-8e4c-2f6470549aad"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "tester-kun26c-2",
+    "outcome": "Verified kun26c-1 knowledge upkeep claims, call sites, agent types, and all written paths against source — green:static on bcbe7b288",
+    "files_changed": [
+      "docs/knowledge/areas/advisor-protocol/consult-loop.md",
+      "docs/knowledge/areas/hook-runtime/argv-decidable-refusals-precede-the-stdin-read.md",
+      "docs/knowledge/areas/hook-runtime/hook-runtime-the-worker-outward-guard.md",
+      "docs/knowledge/areas/workflow-state/merge-readiness.md",
+      "docs/knowledge/index.md",
+      "docs/knowledge/patterns/20260723-pinned-readonly-type-vs-execution-dispatch.md",
+      "docs/knowledge/patterns/index.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-11-26T00:03:59.848Z",
+    "behavior_change": false,
+    "verification_evidence": ".bee/bin/bee knowledge index --check && .bee/bin/bee knowledge check — green:static — verified kun26c-1 commit bcbe7b288 claims and paths against source (0 OKF errors, 0 profile errors, 0 stale indexes)",
+    "verify_output": "green:static",
+    "verify_passed": true,
+    "claim_session": "d73a391b-87c6-4d17-9790-3e98c84cc468",
+    "verify_command": ".bee/bin/bee knowledge index --check && .bee/bin/bee knowledge check",
+    "claimed_at": "2026-11-26T00:01:12.463Z",
+    "knowledge_delta": [
+      "docs/knowledge/areas/advisor-protocol/consult-loop.md",
+      "docs/knowledge/areas/hook-runtime/argv-decidable-refusals-precede-the-stdin-read.md",
+      "docs/knowledge/areas/hook-runtime/hook-runtime-the-worker-outward-guard.md",
+      "docs/knowledge/areas/workflow-state/merge-readiness.md",
+      "docs/knowledge/index.md",
+      "docs/knowledge/patterns/20260723-pinned-readonly-type-vs-execution-dispatch.md",
+      "docs/knowledge/patterns/index.md"
+    ],
+    "no_mistakes": true,
+    "principles_used": [
+      {
+        "slug": "bee-principle-verify-before-reporting",
+        "changed": "traced every changed claim, call site, agent type and path directly to source lines before reporting green"
+      },
+      {
+        "slug": "bee-principle-prove-it-works",
+        "changed": "ran the knowledge index and check commands and verified zero warnings on both edited concepts"
+      }
+    ],
+    "commit_pending": "read-only checker cell: changes nothing, so it has no commit",
+    "changed_lines": 112,
+    "report": {
+      "outcome": "Verified kun26c-1 knowledge upkeep claims, call sites, agent types, and all written paths against source — green:static on bcbe7b288",
+      "commit": "bcbe7b288429e36a09685711c778252041375770",
+      "files": [
+        "docs/knowledge/areas/advisor-protocol/consult-loop.md",
+        "docs/knowledge/areas/hook-runtime/argv-decidable-refusals-precede-the-stdin-read.md",
+        "docs/knowledge/areas/hook-runtime/hook-runtime-the-worker-outward-guard.md",
+        "docs/knowledge/areas/workflow-state/merge-readiness.md",
+        "docs/knowledge/index.md",
+        "docs/knowledge/patterns/20260723-pinned-readonly-type-vs-execution-dispatch.md",
+        "docs/knowledge/patterns/index.md"
+      ],
+      "tests": ".bee/bin/bee knowledge index --check && .bee/bin/bee knowledge check — green:static — .bee/bin/bee knowledge index --check && .bee/bin/bee knowledge check — green:static — verified kun26c-1 commit bcbe7b288 claims and paths against source (0 OKF errors, 0 profile errors, 0 stale indexes)",
+      "deviations": [],
+      "principles_used": [
+        "bee-principle-verify-before-reporting — traced every changed claim, call site, agent type and path directly to source lines before reporting green",
+        "bee-principle-prove-it-works — ran the knowledge index and check commands and verified zero warnings on both edited concepts"
+      ],
+      "reaction": "confirm",
+      "patch_id": "c05c354074cdeef0cfd252d5e4d814df1a4f33d5"
+    },
+    "reaction": "confirm",
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "Each changed claim traced to its source line",
+            "artifact": "docs/knowledge/areas/workflow-state/merge-readiness.md"
+          },
+          {
+            "requirement": "Every written path resolves",
+            "artifact": "docs/knowledge/areas/workflow-state/merge-readiness.md"
+          },
+          {
+            "requirement": "docs/knowledge/areas/advisor-protocol/consult-loop.md",
+            "artifact": "docs/knowledge/areas/advisor-protocol/consult-loop.md"
+          },
+          {
+            "requirement": "docs/knowledge/areas/hook-runtime/argv-decidable-refusals-precede-the-stdin-read.md",
+            "artifact": "docs/knowledge/areas/hook-runtime/argv-decidable-refusals-precede-the-stdin-read.md"
+          },
+          {
+            "requirement": "docs/knowledge/areas/hook-runtime/hook-runtime-the-worker-outward-guard.md",
+            "artifact": "docs/knowledge/areas/hook-runtime/hook-runtime-the-worker-outward-guard.md"
+          },
+          {
+            "requirement": "docs/knowledge/areas/workflow-state/merge-readiness.md",
+            "artifact": "docs/knowledge/areas/workflow-state/merge-readiness.md"
+          },
+          {
+            "requirement": "docs/knowledge/index.md",
+            "artifact": "docs/knowledge/index.md"
+          },
+          {
+            "requirement": "docs/knowledge/patterns/20260723-pinned-readonly-type-vs-execution-dispatch.md",
+            "artifact": "docs/knowledge/patterns/20260723-pinned-readonly-type-vs-execution-dispatch.md"
+          },
+          {
+            "requirement": "docs/knowledge/patterns/index.md",
+            "artifact": "docs/knowledge/patterns/index.md"
+          }
+        ],
+        "recorded_at": "2026-11-26T00:04:19.357Z",
+        "recorded_by": "d73a391b-87c6-4d17-9790-3e98c84cc468",
+        "commit_diff": "skipped: commit_pending"
+      }
+    ]
+  },
+  "usage": {
+    "new": 0,
+    "cached": 0,
+    "total": 0,
+    "models": {},
+    "jobs": [
+      "job-1795651285181-1371824-1"
+    ]
+  }
+}

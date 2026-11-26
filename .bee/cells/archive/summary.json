@@ -2548,5 +2548,10 @@
     "capped": 2,
     "dropped": 0,
     "archived_at": "2026-11-25T23:53:18.722Z"
+  },
+  "knowledge-upkeep-nov26c": {
+    "capped": 2,
+    "dropped": 0,
+    "archived_at": "2026-11-26T00:04:39.286Z"
   }
 }

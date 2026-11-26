@@ -1,0 +1,93 @@
+{
+  "schema": "bee-usage/v1",
+  "feature": "knowledge-upkeep-nov26c",
+  "closed_at": "2026-11-26T00:04:39.356Z",
+  "sessions": [
+    {
+      "session_id": "2dc3730b-6729-46c2-b118-c09ab87ba184",
+      "models": {
+        "claude-opus-5-5": {
+          "input": 222,
+          "output": 46774,
+          "cache_write": 149757,
+          "cache_read": 11105176,
+          "new": 196753,
+          "cached": 11105176,
+          "total": 11301929
+        }
+      },
+      "subagent_models": {},
+      "subagent_count": 0,
+      "started_ms": 1795650747969,
+      "ended_ms": 1795651253537,
+      "totals": {
+        "new": 196753,
+        "cached": 11105176,
+        "total": 11301929
+      }
+    },
+    {
+      "session_id": "d73a391b-87c6-4d17-9790-3e98c84cc468",
+      "models": {
+        "claude-opus-5-5": {
+          "input": 60,
+          "output": 7976,
+          "cache_write": 50871,
+          "cache_read": 1245268,
+          "new": 58907,
+          "cached": 1245268,
+          "total": 1304175
+        }
+      },
+      "subagent_models": {},
+      "subagent_count": 0,
+      "started_ms": 1795651242381,
+      "ended_ms": 1795651477295,
+      "totals": {
+        "new": 58907,
+        "cached": 1245268,
+        "total": 1304175
+      }
+    }
+  ],
+  "skipped": 0,
+  "totals": {
+    "main": {
+      "new": 255660,
+      "cached": 12350444,
+      "total": 12606104
+    },
+    "subagents": {
+      "new": 0,
+      "cached": 0,
+      "total": 0
+    },
+    "total": {
+      "new": 255660,
+      "cached": 12350444,
+      "total": 12606104
+    },
+    "herding": {
+      "new": 0,
+      "cached": 0,
+      "total": 0,
+      "models": {}
+    }
+  },
+  "herding_sessions": [
+    {
+      "session_id": "transcript_full",
+      "models": {},
+      "subagent_models": {},
+      "subagent_count": 0,
+      "started_ms": 1795651291000,
+      "ended_ms": 1795651399000,
+      "totals": {
+        "new": 0,
+        "cached": 0,
+        "total": 0
+      },
+      "job_id": "job-1795651285181-1371824-1"
+    }
+  ]
+}

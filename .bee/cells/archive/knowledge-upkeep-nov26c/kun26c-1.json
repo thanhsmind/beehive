@@ -1,0 +1,159 @@
+{
+  "id": "kun26c-1",
+  "feature": "knowledge-upkeep-nov26c",
+  "title": "Correct merge-readiness and retire the pinned read-only worker type pattern",
+  "role": "docs",
+  "lane": "small",
+  "action": "Knowledge upkeep run (skills/bee-knowledge-upkeep). Five concepts audited against their own sources. Fix workflow-state/merge-readiness: the readiness condition now also requires zero parked units (merge_ready.rs set_after_cap counts parked, cell-question-park D4), and the reopen paths that clear the fact now include a leader-check gap verdict (leader_check.rs, agent-efficiency D1 item 4), a released dissent (dissent.rs) and answering a parked cell (park.rs). Retire patterns/20260723-pinned-readonly-type-vs-execution-dispatch out loud: its type names (bee-gather, bee-extract, bee-review) no longer exist and its remedy (hand-picked model param and a general subagent type) is now refused by the dispatch door; mark it superseded by pattern-20260831-prose-that-recommends-a-shape-drifts-from-the-resolver-that-computes-it, not critical. Confirm the three that held (hook-runtime-the-worker-outward-guard, argv-decidable-refusals-precede-the-stdin-read, advisor-protocol/consult-loop). Regenerate the indexes.",
+  "files": [
+    "docs/knowledge/areas/workflow-state/merge-readiness.md",
+    "docs/knowledge/patterns/20260723-pinned-readonly-type-vs-execution-dispatch.md",
+    "docs/knowledge/patterns/20260831-prose-that-recommends-a-shape-drifts-from-the-resolver-that-computes-it.md",
+    "docs/knowledge/areas/hook-runtime/hook-runtime-the-worker-outward-guard.md",
+    "docs/knowledge/areas/hook-runtime/argv-decidable-refusals-precede-the-stdin-read.md",
+    "docs/knowledge/areas/advisor-protocol/consult-loop.md",
+    "docs/knowledge/index.md",
+    "docs/knowledge/areas/index.md",
+    "docs/knowledge/areas/workflow-state/index.md",
+    "docs/knowledge/areas/hook-runtime/index.md",
+    "docs/knowledge/areas/advisor-protocol/index.md",
+    "docs/knowledge/patterns/index.md"
+  ],
+  "verify": ".bee/bin/bee knowledge index --check && .bee/bin/bee knowledge check",
+  "must_haves": [
+    "Every changed claim matches the source line the audit cited",
+    "No profile error on any touched concept",
+    "knowledge index --check reports 0 stale"
+  ],
+  "read_first": [],
+  "deps": [],
+  "decisions": [],
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/workflow-state/merge-readiness.md",
+    "docs/knowledge/patterns/20260723-pinned-readonly-type-vs-execution-dispatch.md"
+  ],
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": null,
+    "outcome": null,
+    "files_changed": [
+      "docs/knowledge/areas/workflow-state/merge-readiness.md",
+      "docs/knowledge/patterns/20260723-pinned-readonly-type-vs-execution-dispatch.md",
+      "docs/knowledge/areas/hook-runtime/hook-runtime-the-worker-outward-guard.md",
+      "docs/knowledge/areas/hook-runtime/argv-decidable-refusals-precede-the-stdin-read.md",
+      "docs/knowledge/areas/advisor-protocol/consult-loop.md",
+      "docs/knowledge/index.md",
+      "docs/knowledge/patterns/index.md"
+    ],
+    "deviations": [
+      "leader ran this docs cell inline: the upkeep skill has the leader revise after the source wave, and the read-only gather door refused (antigravity has no read-only guard, issue 176), so the leader read the sources itself"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-26T00:00:04.853Z",
+    "behavior_change": false,
+    "verification_evidence": "docs-only change; 20 indexes 0 stale, 0 errors, no warning on the two edited concepts, the five picked concepts grade confirmed; (check --strict stays red on 575 older bundle warnings (580 on main before this cell))",
+    "verify_output": "green:static",
+    "verify_passed": true,
+    "claim_session": null,
+    "verify_command": ".bee/bin/bee knowledge index --check && .bee/bin/bee knowledge check",
+    "knowledge_delta": [
+      "docs/knowledge/areas/workflow-state/merge-readiness.md",
+      "docs/knowledge/patterns/20260723-pinned-readonly-type-vs-execution-dispatch.md",
+      "docs/knowledge/areas/hook-runtime/hook-runtime-the-worker-outward-guard.md",
+      "docs/knowledge/areas/hook-runtime/argv-decidable-refusals-precede-the-stdin-read.md",
+      "docs/knowledge/areas/advisor-protocol/consult-loop.md",
+      "docs/knowledge/index.md",
+      "docs/knowledge/patterns/index.md"
+    ],
+    "no_mistakes": true,
+    "knowledge_used": [
+      {
+        "path": "docs/knowledge/patterns/20260831-prose-that-recommends-a-shape-drifts-from-the-resolver-that-computes-it.md",
+        "changed": "named as the superseding owner of the retired pattern"
+      }
+    ],
+    "principles_used": [
+      {
+        "slug": "bee-principle-one-fact-one-home",
+        "changed": "retired the 2026-07-23 pattern into the 2026-08-31 owner instead of rewriting a second copy"
+      }
+    ],
+    "inline_reason": "docs-only upkeep cell: the upkeep skill has the leader revise after the source wave, and the gather door refused read-only on antigravity (issue 176)",
+    "changed_lines": 112,
+    "report": {
+      "outcome": "done: merge-readiness corrected (parked counts as outstanding, three more reopen paths clear the fact), the 2026-07-23 pinned-type pattern retired as superseded, three held concepts confirmed, indexes regenerated",
+      "commit": "bcbe7b288",
+      "files": [
+        "docs/knowledge/areas/workflow-state/merge-readiness.md",
+        "docs/knowledge/patterns/20260723-pinned-readonly-type-vs-execution-dispatch.md",
+        "docs/knowledge/areas/hook-runtime/hook-runtime-the-worker-outward-guard.md",
+        "docs/knowledge/areas/hook-runtime/argv-decidable-refusals-precede-the-stdin-read.md",
+        "docs/knowledge/areas/advisor-protocol/consult-loop.md",
+        "docs/knowledge/index.md",
+        "docs/knowledge/patterns/index.md"
+      ],
+      "tests": ".bee/bin/bee knowledge index --check && .bee/bin/bee knowledge check — green:static — docs-only change; 20 indexes 0 stale, 0 errors, no warning on the two edited concepts, the five picked concepts grade confirmed; (check --strict stays red on 575 older bundle warnings (580 on main before this cell))",
+      "deviations": [
+        "leader ran this docs cell inline: the upkeep skill has the leader revise after the source wave, and the read-only gather door refused (antigravity has no read-only guard, issue 176), so the leader read the sources itself"
+      ],
+      "mistakes": [],
+      "patch_id": "c05c354074cdeef0cfd252d5e4d814df1a4f33d5"
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "Every changed claim matches the source line the audit cited",
+            "artifact": "docs/knowledge/areas/workflow-state/merge-readiness.md"
+          },
+          {
+            "requirement": "No profile error on any touched concept",
+            "artifact": "docs/knowledge/areas/workflow-state/merge-readiness.md"
+          },
+          {
+            "requirement": "knowledge index --check reports 0 stale",
+            "artifact": "docs/knowledge/areas/workflow-state/merge-readiness.md"
+          },
+          {
+            "requirement": "docs/knowledge/areas/workflow-state/merge-readiness.md",
+            "artifact": "docs/knowledge/areas/workflow-state/merge-readiness.md"
+          },
+          {
+            "requirement": "docs/knowledge/patterns/20260723-pinned-readonly-type-vs-execution-dispatch.md",
+            "artifact": "docs/knowledge/patterns/20260723-pinned-readonly-type-vs-execution-dispatch.md"
+          },
+          {
+            "requirement": "docs/knowledge/areas/hook-runtime/hook-runtime-the-worker-outward-guard.md",
+            "artifact": "docs/knowledge/areas/hook-runtime/hook-runtime-the-worker-outward-guard.md"
+          },
+          {
+            "requirement": "docs/knowledge/areas/hook-runtime/argv-decidable-refusals-precede-the-stdin-read.md",
+            "artifact": "docs/knowledge/areas/hook-runtime/argv-decidable-refusals-precede-the-stdin-read.md"
+          },
+          {
+            "requirement": "docs/knowledge/areas/advisor-protocol/consult-loop.md",
+            "artifact": "docs/knowledge/areas/advisor-protocol/consult-loop.md"
+          },
+          {
+            "requirement": "docs/knowledge/index.md",
+            "artifact": "docs/knowledge/index.md"
+          },
+          {
+            "requirement": "docs/knowledge/patterns/index.md",
+            "artifact": "docs/knowledge/patterns/index.md"
+          }
+        ],
+        "recorded_at": "2026-11-26T00:04:19.344Z",
+        "recorded_by": "d73a391b-87c6-4d17-9790-3e98c84cc468",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": null,
+  "usage_reason": "no herding job names this cell: no session is attributable to it"
+}
