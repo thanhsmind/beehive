@@ -11,15 +11,10 @@
     "uat": false
   },
   "summary": "Feature \"knowledge-upkeep-nov26c\" started at phase \"exploring\" (lane).",
-  "next_action": "Continue bee-exploring for \"knowledge-upkeep-nov26c\" (lane).",
+  "next_action": "Merged into main at daf5051; capture what settled, then bee close --feature knowledge-upkeep-nov26c, then write the handoff and continue in a fresh leader session (one leader session per feature).",
   "created_at": "2026-11-25T23:55:57.250Z",
-  "run_state": "awaiting-approval",
-  "waiting_on": {
-    "kind": "turn-end",
-    "subject": "[3] `.claude/agents/` (bee-worker, bee-forager, bee-scout, bee-guard, bee-comb, bee-elder)",
-    "asked_at": "2026-11-26T00:00:53.463Z",
-    "session": "2dc3730b-6729-46c2-b118-c09ab87ba184"
-  },
+  "run_state": null,
+  "waiting_on": null,
   "route": {
     "class": "docs",
     "lane": "docs",
@@ -28,12 +23,5 @@
     "rationale": null,
     "updated_at": "2026-11-25T23:55:52.631Z",
     "feature": "knowledge-upkeep-nov26c"
-  },
-  "merge_ready": {
-    "since": "2026-11-26T00:00:05.675Z",
-    "branch": "wt/knowledge-upkeep-nov26c",
-    "worktree_id": "beehive--wt--knowledge-upkeep-nov26c",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
