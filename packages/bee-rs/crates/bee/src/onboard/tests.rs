@@ -3821,7 +3821,7 @@ mod principles_on_the_hub {
                 if failing.is_some_and(|id| path.ends_with(id)) {
                     return Err("hub refused the commit".to_string());
                 }
-                published.borrow_mut().push(path.rsplit('/').next().unwrap_or("").to_string());
+                published.borrow_mut().push(path.rsplit(['/', '\\']).next().unwrap_or("").to_string());
                 return Ok(json!({"activated": true}));
             }
             let id = args.get(2).copied().unwrap_or("");

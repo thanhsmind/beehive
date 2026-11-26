@@ -25,11 +25,21 @@ fn repo_root() -> PathBuf {
         .to_path_buf()
 }
 
+fn isolated_global_dir() -> &'static Path {
+    static DIR: std::sync::OnceLock<tempfile::TempDir> = std::sync::OnceLock::new();
+    DIR.get_or_init(|| tempfile::tempdir().expect("isolated global config dir"))
+        .path()
+}
+
 fn bee() -> Command {
     let mut cmd = Command::new(bee_bin());
     for var in SESSION_VARS {
         cmd.env_remove(var);
     }
+    let dir = isolated_global_dir();
+    cmd.env("BEEHIVE_CONFIG_DIR", dir)
+        .env("HOME", dir)
+        .env("USERPROFILE", dir);
     cmd
 }
 
@@ -628,7 +638,13 @@ fn dispatch_prepare_on_agy_with_a_native_slot_refuses_with_the_herding_remedy() 
             String::from_utf8_lossy(&out.stderr)
         )
     });
-    assert_eq!(answer["ok"], json!(false), "{answer}");
+    let explain = bee()
+        .args(["config", "explain", "--key", "team.agy.read", "--json"])
+        .current_dir(&repo.root)
+        .output()
+        .unwrap();
+    let explain_stdout = String::from_utf8_lossy(&explain.stdout);
+    assert_eq!(answer["ok"], json!(false), "{answer}\nexplain: {explain_stdout}");
     assert_eq!(answer["reason"], json!("agy_requires_herding"), "{answer}");
     assert_eq!(answer["runtime"], json!("agy"), "{answer}");
     let fix = answer["fix"].as_str().unwrap_or_default();

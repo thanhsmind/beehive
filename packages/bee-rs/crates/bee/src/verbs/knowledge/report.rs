@@ -1621,7 +1621,10 @@ mod tests {
         let GPre::Go(ctx) = g_prelude_at("knowledge report", true, true, Instant::now(), Some(target.path())).unwrap() else {
             panic!("target did not resolve");
         };
-        assert_eq!(ctx.root, target.path().canonicalize().unwrap_or(target.path().to_path_buf()));
+        assert_eq!(
+            dunce::canonicalize(&ctx.root).unwrap_or_else(|_| ctx.root.clone()),
+            dunce::canonicalize(target.path()).unwrap_or_else(|_| target.path().to_path_buf())
+        );
         let concepts = collect_concepts(&bundle_dir(&ctx.root).unwrap()).unwrap();
         let (measured, unmeasured, _, _) = build_report(&ctx.root, &concepts);
         assert_eq!(measured.len(), 1);

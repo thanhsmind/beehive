@@ -668,9 +668,15 @@ fn write_guard_env(repo: &Path, herded: bool, payload: Value, env: &[(&str, &Pat
     cmd.args(["hook", "write-guard"]).current_dir(repo).env("BEE_HOOK_NO_DELEGATE", "1");
     for name in removed {
         cmd.env_remove(name);
+        if *name == "HOME" {
+            cmd.env_remove("USERPROFILE");
+        }
     }
     for (name, value) in env {
         cmd.env(name, value);
+        if *name == "HOME" {
+            cmd.env("USERPROFILE", value);
+        }
     }
     cmd.env_remove("BEE_HERDING_JOB_ID")
         .env_remove("BEE_SESSION_ID")
@@ -700,9 +706,15 @@ fn explain_with_env(repo: &Path, key: &str, env: &[(&str, &Path)], removed: &[&s
     cmd.args(["config", "explain", "--key", key, "--json"]).current_dir(repo);
     for name in removed {
         cmd.env_remove(name);
+        if *name == "HOME" {
+            cmd.env_remove("USERPROFILE");
+        }
     }
     for (name, value) in env {
         cmd.env(name, value);
+        if *name == "HOME" {
+            cmd.env("USERPROFILE", value);
+        }
     }
     let out = cmd.output().unwrap();
     serde_json::from_str(String::from_utf8_lossy(&out.stdout).trim()).unwrap_or(Value::Null)
@@ -728,6 +740,7 @@ fn config_tester_global_dir_falls_back_to_xdg_then_home() {
         .env("BEEHIVE_CONFIG_DIR", "")
         .env("XDG_CONFIG_HOME", &xdg)
         .env("HOME", &home)
+        .env("USERPROFILE", &home)
         .output()
         .unwrap();
     let v: Value = serde_json::from_str(String::from_utf8_lossy(&out.stdout).trim()).unwrap();

@@ -180,7 +180,7 @@ fn scan_for_nested_checkout(root_real: &str, dir: &str, depth: usize) -> D<bool>
             continue;
         }
         let child = s(&entry.path());
-        if child == format!("{root_real}/.bee/tmp") {
+        if std::path::Path::new(&child) == std::path::Path::new(root_real).join(".bee").join("tmp") {
             continue;
         }
         if guard::has_git_node_f2(&child).map_err(|_| {
