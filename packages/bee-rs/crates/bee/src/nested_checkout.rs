@@ -389,6 +389,60 @@ mod tests {
         );
     }
 
+    #[test]
+    fn bee_tmp_skip_honors_platform_separator_paths() {
+        let (_tmp, root) = fixture();
+        write_live_session(&root, "other-session");
+        let ctrl = root.to_string_lossy().into_owned();
+
+        let scratch_repo = root.join(".bee").join("tmp").join("scratch").join("repo");
+        std::fs::create_dir_all(scratch_repo.join(".git")).unwrap();
+        assert!(
+            !has_any_shared_nested_checkout(&root, &ctrl, None).unwrap(),
+            "nested checkout under .bee/tmp joined with platform separators must be skipped"
+        );
+
+        let root_real = guard::realpath_f2(&ctrl).unwrap().unwrap();
+        assert!(
+            !scan_for_nested_checkout(&root_real, &root_real, 0).unwrap(),
+            "direct scan with native root_real must skip .bee/tmp"
+        );
+
+        std::fs::create_dir_all(root.join(".bee").join("tmp").join(".git")).unwrap();
+        assert!(
+            !has_any_shared_nested_checkout(&root, &ctrl, None).unwrap(),
+            ".bee/tmp itself as a git checkout with platform separators must be skipped"
+        );
+    }
+
+    #[test]
+    fn nested_checkout_outside_bee_tmp_is_still_found_alongside_skipped_tmp() {
+        let (_tmp, root) = fixture();
+        write_live_session(&root, "other-session");
+        let ctrl = root.to_string_lossy().into_owned();
+
+        let scratch_repo = root.join(".bee").join("tmp").join("job").join("repo");
+        std::fs::create_dir_all(scratch_repo.join(".git")).unwrap();
+        assert!(!has_any_shared_nested_checkout(&root, &ctrl, None).unwrap());
+
+        let outside_repo = root.join("packages").join("nested");
+        std::fs::create_dir_all(outside_repo.join(".git")).unwrap();
+        assert!(
+            has_any_shared_nested_checkout(&root, &ctrl, None).unwrap(),
+            "a nested checkout outside .bee/tmp must still be found"
+        );
+
+        std::fs::remove_dir_all(root.join("packages")).unwrap();
+        assert!(!has_any_shared_nested_checkout(&root, &ctrl, None).unwrap());
+
+        let sibling_bee_repo = root.join(".bee").join("work").join("nested");
+        std::fs::create_dir_all(sibling_bee_repo.join(".git")).unwrap();
+        assert!(
+            has_any_shared_nested_checkout(&root, &ctrl, None).unwrap(),
+            "a nested checkout under .bee outside tmp must still be found"
+        );
+    }
+
     /// Shape (a): a marker-verified companion mount fires the guard through
     /// THE write guard's own verification (never a second copy).
     #[test]
