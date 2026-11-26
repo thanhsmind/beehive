@@ -1016,6 +1016,8 @@
     "contract:release-2-123-0-published",
     "contract:real-bee-global-isolation",
     "contract:windows-test-build",
-    "contract:knowledge-upkeep-nov26c"
+    "contract:knowledge-upkeep-nov26c",
+    "path-identity",
+    "contract:windows-portable-tests"
   ]
 }

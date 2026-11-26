@@ -9,5 +9,5 @@
   "task_text": "Handoff from previous leader session (context 202k tokens past 120k mark).\nCurrent feature: windows-test-build\nOpen or claimed cells: none\n\nOwner context (2026-11-26): bee 2.123.0 is released (https://github.com/thanhsmind/beehive/releases/tag/v2.123.0, release-binaries green, all 5 binaries + SHA256SUMS). The Windows CI job on tag v2.123.0 (run 45723393331, job verify-windows) is red on a TEST BUILD error: test code uses unix-only APIs without cfg(unix) gates - 'cannot find unix in os' and 'Permissions::from_mode' in tests/handoff_self_drive.rs and in the bin bee unit tests (2 errors each). The open feature windows-test-build looks like this exact work. Fix it through the bee chain: gate unix-only test code with cfg(unix) (or a cross-platform helper), find every such site with rg (a build error hides an unknown number of failures: after the build compiles, read the real Windows test result, not only the compile), prove it on the Windows CI run, merge to main and push. No new release unless the owner asks. Standing orders: reply to the owner in Vietnamese, short and simple; full autopilot gate bypass is on; never ask the owner to run steps the agent can run; no code comments.\n",
   "expects": [],
   "follow_ups": [],
-  "status": "open"
+  "status": "met"
 }

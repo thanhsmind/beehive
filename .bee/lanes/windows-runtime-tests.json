@@ -1,0 +1,460 @@
+{
+  "schema_version": "1.0",
+  "feature": "windows-runtime-tests",
+  "mode": null,
+  "phase": "exploring",
+  "approved_gates": {
+    "context": true,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"windows-runtime-tests\" started at phase \"exploring\" (lane).",
+  "next_action": "Continue bee-exploring for \"windows-runtime-tests\" (lane).",
+  "created_at": "2026-11-26T00:17:25.699Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null,
+  "route": {
+    "class": "bugfix",
+    "lane": "standard",
+    "flags": [],
+    "product_files": 8,
+    "rationale": null,
+    "updated_at": "2026-11-26T00:17:21.764Z",
+    "feature": "windows-runtime-tests"
+  },
+  "gate_preview": {
+    "feature": "windows-runtime-tests",
+    "plan_sha256": "33553cbe9fa5665bf8dee6cf4eb13a056064ae07315ec56e1614de9f1b90dac0",
+    "previewed_at": "2026-11-26T00:33:02.708Z",
+    "cells": [
+      {
+        "id": "wrt-1",
+        "feature": "windows-runtime-tests",
+        "title": "Make the write guard cross-project scope and its tests work on Windows paths",
+        "lane": "standard",
+        "role": "code",
+        "deps": [],
+        "decisions": [
+          "a0beedae-437a-4e5c-bf82-2ab3b1b20cae"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/hooks/write_guard/cross_project.rs",
+          "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs"
+        ],
+        "read_first": [
+          "docs/history/windows-runtime-tests/CONTEXT.md",
+          "docs/knowledge/areas/worktree-parallelism/path-identity.md",
+          "/mnt/data/Projects/goglbe/beehive/.bee/tmp/wrt/panics.txt"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "The panic digest from Windows CI run 45725981958 is in /mnt/data/Projects/goglbe/beehive/.bee/tmp/wrt/panics.txt; read the hooks::write_guard rows. PRODUCT, in src/hooks/write_guard/cross_project.rs: (1) replace every std::fs::canonicalize (expand, git_common_dir, Scope::load including the temp dir) with dunce::canonicalize, so no \\\\?\\ verbatim prefix reaches a compare or a message; (2) the allow-list filter in Scope::load and the token tests in shell_candidates (body and the flag tail) accept an entry when it starts with / or ~ OR Path::new(entry).is_absolute(), and expand treats a Path::is_absolute raw as absolute; Linux behavior must not change. TESTS, in src/hooks/write_guard/tests.rs, make each failing test portable, never cfg(unix): wherever a test splices a temp path into a Bash command string (the <m> substitution of the cross_project_supervisor_* tests, bash_cd_absolute_*, cross_project_bash_path_token_and_cd_are_refused, cross_project_glob_absolute_pattern_prefix_is_refused, extract_bash_targets_marks_cd_opaque_only_for_targets_after_cd), splice it with backslashes turned into forward slashes, the shape Git Bash commands carry; build expected message paths the way the product prints them (cross_project_supervisor_key_absent_leaves_the_text_unchanged); the wording tests bash_resolved_path_containment_denial_wording_is_unchanged, edit_dollar_named_target_resolves_literally_after_grw2 and escape_rows_deny_and_contained_backslashes_pass accept the generic message optionally followed by exactly ' [owner-only: <target>]' (on Windows the temp dir sits under the user profile, so the suffix is correct product behavior). cross_project_supervisor_shell_needs_the_cwd_inside_this_project and the allow tests (cross_project_allow_config_entry_allows_the_path, cross_project_additional_directories_entry_allows_the_path) must pass from the product fix; adjust their inputs only if they splice a Windows path into JSON in a unix shape. No assertion loosened beyond what is stated here, no comment lines, no cfg(unix).",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo check --tests --target x86_64-pc-windows-gnu --manifest-path packages/bee-rs/Cargo.toml -p bee && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo clippy --manifest-path packages/bee-rs/Cargo.toml -p bee --tests -- -D warnings && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee -- hooks::write_guard",
+        "must_haves": {
+          "truths": [
+            "cross_project.rs calls no std::fs::canonicalize",
+            "a Windows absolute allow entry or shell token is kept, a unix one still is",
+            "all hooks::write_guard tests pass on Linux",
+            "the Windows test check compiles"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/hooks/write_guard/cross_project.rs",
+              "substantive": "dunce::canonicalize and Path::is_absolute in scope, expand and shell_candidates"
+            },
+            {
+              "path": "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs",
+              "substantive": "bash command strings carry forward-slash paths; wording tests accept the owner-only suffix"
+            }
+          ],
+          "key_links": [],
+          "prohibitions": [
+            "no cfg(unix) gate",
+            "no comment lines",
+            "no change outside the two files"
+          ],
+          "why": "17 write guard tests fail on Windows CI run 45725981958; two causes are real product bugs a Windows session hits (verbatim canonical paths, Windows absolute entries dropped).",
+          "out_of_scope": [
+            "Git Bash /c/ style paths",
+            "the guard's main.rs containment logic",
+            "any file outside the two listed"
+          ]
+        }
+      },
+      {
+        "id": "wrt-2",
+        "feature": "windows-runtime-tests",
+        "title": "Fix the .bee/tmp skip on Windows and make the remaining unix-shaped tests portable",
+        "lane": "standard",
+        "role": "code",
+        "deps": [],
+        "decisions": [
+          "a0beedae-437a-4e5c-bf82-2ab3b1b20cae",
+          "a7c1afaf-b389-4c4d-bd10-877f48b8ce26"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/nested_checkout.rs",
+          "packages/bee-rs/crates/bee/src/hooks/worker_guard.rs",
+          "packages/bee-rs/crates/bee/src/onboard/tests.rs",
+          "packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs",
+          "packages/bee-rs/crates/bee/tests/config_verbs.rs",
+          "packages/bee-rs/crates/bee/tests/agy_belt_contracts.rs"
+        ],
+        "read_first": [
+          "docs/history/windows-runtime-tests/CONTEXT.md",
+          "/mnt/data/Projects/goglbe/beehive/.bee/tmp/wrt/panics.txt"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "The panic digest from Windows CI run 45725981958 is in /mnt/data/Projects/goglbe/beehive/.bee/tmp/wrt/panics.txt. PRODUCT: src/nested_checkout.rs:183 compares child against format!(\"{root_real}/.bee/tmp\"); compare as paths instead (Path::new(&child) == Path::new(root_real).join(\".bee\").join(\"tmp\")) so the skip holds with Windows separators. TESTS, portable, never cfg(unix): (a) src/hooks/worker_guard.rs test worker_full_suite_exits_two_through_the_hook_only_for_a_herded_job compares Debug text \"ExitCode(unix_exit_status(2))\"; compare against format!(\"{:?}\", std::process::ExitCode::from(2)) instead. (b) src/onboard/tests.rs switching_hub takes the published id with path.rsplit('/'); take the last component with either separator (Path::new(path).file_name() or rsplit(['/', '\\\\'])). (c) src/verbs/knowledge/report.rs test report_root_measures_the_target_store_not_the_cwd_store compares ctx.root to std canonicalize of the temp path; compare dunce::canonicalize of both sides (the temp path can be an 8.3 short name on Windows). (d) tests/config_verbs.rs: bee reads the home dir from USERPROFILE on Windows (hooks/session_close/perf.rs node_homedir); in the env helpers (explain_with_env, write_guard_env and any direct Command in config_tester_global_dir_falls_back_to_xdg_then_home) set USERPROFILE to the same value whenever the test sets HOME, and remove USERPROFILE whenever HOME is removed, so config_tester_global_dir_falls_back_to_xdg_then_home and config_tester_spelling_beehive_config_dir_names_the_global_file_in_both_panes pass on Windows. (e) tests/agy_belt_contracts.rs: in the bee() helper isolate the global config layer for every command: set BEEHIVE_CONFIG_DIR, HOME and USERPROFILE to one shared temp dir that lives for the test process (for example a std::sync::OnceLock<tempfile::TempDir>), and in dispatch_prepare_on_agy_with_a_native_slot_refuses_with_the_herding_remedy add to the first assertion message the stdout of `bee config explain --key team.agy.read --json` run in the repo. Change nothing else; no comment lines; no cfg(unix).\n FOLLOW-UP (state at commit aaec0b55e): every listed test now passes except dispatch_prepare_on_agy_with_a_native_slot_refuses_with_the_herding_remedy in tests/agy_belt_contracts.rs, which now fails on Linux too. Cause, read from its config explain evidence: onboard writes .bee/team.json, the team layer, with herding agy slots, and the team layer wins over the tracked .bee/config.json the test writes its native slots into. Fix the test so its native team.agy slots land in the layer that wins (write them into .bee/team.json under team.agy, keeping the rest of that file), keep the BEEHIVE_CONFIG_DIR/HOME/USERPROFILE isolation, and prove it with cargo test --release -p bee --test agy_belt_contracts plus the cell verify. Keep the explain evidence in the assertion message.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo check --tests --target x86_64-pc-windows-gnu --manifest-path packages/bee-rs/Cargo.toml -p bee && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo clippy --manifest-path packages/bee-rs/Cargo.toml -p bee --tests -- -D warnings && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee -- nested_checkout hooks::worker_guard onboard::tests::principles_on_the_hub verbs::knowledge::report && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test config_verbs --test agy_belt_contracts",
+        "must_haves": {
+          "truths": [
+            "the .bee/tmp skip compares paths, not a slash-built string",
+            "the named tests pass on Linux",
+            "the Windows test check compiles"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/nested_checkout.rs",
+              "substantive": "Path compare for the root .bee/tmp skip"
+            },
+            {
+              "path": "packages/bee-rs/crates/bee/tests/agy_belt_contracts.rs",
+              "substantive": "bee() isolates BEEHIVE_CONFIG_DIR, HOME and USERPROFILE"
+            }
+          ],
+          "key_links": [],
+          "prohibitions": [
+            "no cfg(unix) gate",
+            "no comment lines",
+            "no change outside the six files"
+          ],
+          "why": "12 Windows CI failures outside the write guard: one real bug (the .bee/tmp skip) and unix-shaped tests that hide Windows coverage.",
+          "out_of_scope": [
+            "changing node_homedir or the global config path",
+            "the agy dispatch refusal logic",
+            "any file outside the six listed"
+          ]
+        }
+      },
+      {
+        "id": "wrt-1-t",
+        "feature": "windows-runtime-tests",
+        "title": "Test the write guard Windows path fix independently",
+        "lane": "standard",
+        "role": "test",
+        "deps": [
+          "wrt-1"
+        ],
+        "decisions": [
+          "a0beedae-437a-4e5c-bf82-2ab3b1b20cae"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs"
+        ],
+        "read_first": [
+          "docs/history/windows-runtime-tests/CONTEXT.md",
+          "/mnt/data/Projects/goglbe/beehive/.bee/tmp/wrt/panics.txt"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "You are the tester for cell wrt-1 (commit cc4c24566 on wt/windows-runtime-tests). Never edit product code. Read the wrt-1 diff (git show cc4c24566) and check it against its action: std::fs::canonicalize replaced by dunce::canonicalize in src/hooks/write_guard/cross_project.rs, and allow-list entries plus shell tokens accepted when they start with / or ~ OR Path::new(entry).is_absolute(), with Linux behavior unchanged. Add new tests in src/hooks/write_guard/tests.rs that pin the new behavior portably (no cfg(unix), no comments): a cross_project allow entry given as an absolute path in the platform's native form is honored; the denial message for an out-of-project absolute path never carries a \\\\?\\ verbatim prefix; a relative entry like foo/bar is still filtered out. Run the verify. A red result is a finding: return [BLOCKED] with the red output and its diagnosis. Return the judge block for wrt-1 beside your test report.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo check --tests --target x86_64-pc-windows-gnu --manifest-path packages/bee-rs/Cargo.toml -p bee && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee -- hooks::write_guard",
+        "must_haves": {
+          "truths": [
+            "new tests pin native absolute allow entries, no verbatim prefix in denials, relative entries filtered",
+            "all hooks::write_guard tests pass on Linux",
+            "the Windows test check compiles"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs",
+              "substantive": "new portable tests for the wrt-1 behavior"
+            }
+          ],
+          "key_links": [],
+          "prohibitions": [
+            "no product code edits",
+            "no cfg(unix) gate",
+            "no comment lines"
+          ],
+          "why": "a code cell never certifies itself; a separate tester verifies wrt-1 and adds its new tests",
+          "out_of_scope": [
+            "product code"
+          ]
+        }
+      },
+      {
+        "id": "wrt-2-t",
+        "feature": "windows-runtime-tests",
+        "title": "Test the nested checkout fix and the portable tests independently",
+        "lane": "standard",
+        "role": "test",
+        "deps": [
+          "wrt-2"
+        ],
+        "decisions": [
+          "a0beedae-437a-4e5c-bf82-2ab3b1b20cae"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/nested_checkout.rs"
+        ],
+        "read_first": [
+          "docs/history/windows-runtime-tests/CONTEXT.md",
+          "/mnt/data/Projects/goglbe/beehive/.bee/tmp/wrt/panics.txt"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "You are the tester for cell wrt-2 (its commits on wt/windows-runtime-tests carry the trailer cell: wrt-2, or read git log for nested_checkout.rs). Never edit product code; the test module inside src/nested_checkout.rs is the only place you write. Read the wrt-2 diff and check it against its action: the .bee/tmp skip in nested_checkout works for Windows separators, and the listed tests were made portable without cfg(unix) and without loosened assertions. Add new tests in the nested_checkout test module that pin the fix portably (no cfg(unix), no comments): a nested checkout under .bee/tmp is skipped when the path uses the platform separator, and one outside .bee/tmp is still found. Run the verify. A red result is a finding: return [BLOCKED] with the red output and its diagnosis. Return the judge block for wrt-2 beside your test report.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo check --tests --target x86_64-pc-windows-gnu --manifest-path packages/bee-rs/Cargo.toml -p bee && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee -- nested_checkout hooks::worker_guard onboard::tests verbs::knowledge::report && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test config_verbs --test agy_belt_contracts",
+        "must_haves": {
+          "truths": [
+            "new tests pin the .bee/tmp skip with native separators and a nested checkout outside it is still found",
+            "the wrt-2 listed tests pass on Linux",
+            "the Windows test check compiles"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/nested_checkout.rs",
+              "substantive": "new portable tests in its test module"
+            }
+          ],
+          "key_links": [],
+          "prohibitions": [
+            "no product code edits",
+            "no cfg(unix) gate",
+            "no comment lines"
+          ],
+          "why": "a code cell never certifies itself; a separate tester verifies wrt-2 and adds its new tests",
+          "out_of_scope": [
+            "product code"
+          ]
+        }
+      }
+    ]
+  },
+  "approved_cell_packet": {
+    "feature": "windows-runtime-tests",
+    "plan_sha256": "33553cbe9fa5665bf8dee6cf4eb13a056064ae07315ec56e1614de9f1b90dac0",
+    "previewed_at": "2026-11-26T00:33:02.708Z",
+    "cells": [
+      {
+        "id": "wrt-1",
+        "feature": "windows-runtime-tests",
+        "title": "Make the write guard cross-project scope and its tests work on Windows paths",
+        "lane": "standard",
+        "role": "code",
+        "deps": [],
+        "decisions": [
+          "a0beedae-437a-4e5c-bf82-2ab3b1b20cae"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/hooks/write_guard/cross_project.rs",
+          "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs"
+        ],
+        "read_first": [
+          "docs/history/windows-runtime-tests/CONTEXT.md",
+          "docs/knowledge/areas/worktree-parallelism/path-identity.md",
+          "/mnt/data/Projects/goglbe/beehive/.bee/tmp/wrt/panics.txt"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "The panic digest from Windows CI run 45725981958 is in /mnt/data/Projects/goglbe/beehive/.bee/tmp/wrt/panics.txt; read the hooks::write_guard rows. PRODUCT, in src/hooks/write_guard/cross_project.rs: (1) replace every std::fs::canonicalize (expand, git_common_dir, Scope::load including the temp dir) with dunce::canonicalize, so no \\\\?\\ verbatim prefix reaches a compare or a message; (2) the allow-list filter in Scope::load and the token tests in shell_candidates (body and the flag tail) accept an entry when it starts with / or ~ OR Path::new(entry).is_absolute(), and expand treats a Path::is_absolute raw as absolute; Linux behavior must not change. TESTS, in src/hooks/write_guard/tests.rs, make each failing test portable, never cfg(unix): wherever a test splices a temp path into a Bash command string (the <m> substitution of the cross_project_supervisor_* tests, bash_cd_absolute_*, cross_project_bash_path_token_and_cd_are_refused, cross_project_glob_absolute_pattern_prefix_is_refused, extract_bash_targets_marks_cd_opaque_only_for_targets_after_cd), splice it with backslashes turned into forward slashes, the shape Git Bash commands carry; build expected message paths the way the product prints them (cross_project_supervisor_key_absent_leaves_the_text_unchanged); the wording tests bash_resolved_path_containment_denial_wording_is_unchanged, edit_dollar_named_target_resolves_literally_after_grw2 and escape_rows_deny_and_contained_backslashes_pass accept the generic message optionally followed by exactly ' [owner-only: <target>]' (on Windows the temp dir sits under the user profile, so the suffix is correct product behavior). cross_project_supervisor_shell_needs_the_cwd_inside_this_project and the allow tests (cross_project_allow_config_entry_allows_the_path, cross_project_additional_directories_entry_allows_the_path) must pass from the product fix; adjust their inputs only if they splice a Windows path into JSON in a unix shape. No assertion loosened beyond what is stated here, no comment lines, no cfg(unix).",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo check --tests --target x86_64-pc-windows-gnu --manifest-path packages/bee-rs/Cargo.toml -p bee && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo clippy --manifest-path packages/bee-rs/Cargo.toml -p bee --tests -- -D warnings && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee -- hooks::write_guard",
+        "must_haves": {
+          "truths": [
+            "cross_project.rs calls no std::fs::canonicalize",
+            "a Windows absolute allow entry or shell token is kept, a unix one still is",
+            "all hooks::write_guard tests pass on Linux",
+            "the Windows test check compiles"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/hooks/write_guard/cross_project.rs",
+              "substantive": "dunce::canonicalize and Path::is_absolute in scope, expand and shell_candidates"
+            },
+            {
+              "path": "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs",
+              "substantive": "bash command strings carry forward-slash paths; wording tests accept the owner-only suffix"
+            }
+          ],
+          "key_links": [],
+          "prohibitions": [
+            "no cfg(unix) gate",
+            "no comment lines",
+            "no change outside the two files"
+          ],
+          "why": "17 write guard tests fail on Windows CI run 45725981958; two causes are real product bugs a Windows session hits (verbatim canonical paths, Windows absolute entries dropped).",
+          "out_of_scope": [
+            "Git Bash /c/ style paths",
+            "the guard's main.rs containment logic",
+            "any file outside the two listed"
+          ]
+        }
+      },
+      {
+        "id": "wrt-2",
+        "feature": "windows-runtime-tests",
+        "title": "Fix the .bee/tmp skip on Windows and make the remaining unix-shaped tests portable",
+        "lane": "standard",
+        "role": "code",
+        "deps": [],
+        "decisions": [
+          "a0beedae-437a-4e5c-bf82-2ab3b1b20cae",
+          "a7c1afaf-b389-4c4d-bd10-877f48b8ce26"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/nested_checkout.rs",
+          "packages/bee-rs/crates/bee/src/hooks/worker_guard.rs",
+          "packages/bee-rs/crates/bee/src/onboard/tests.rs",
+          "packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs",
+          "packages/bee-rs/crates/bee/tests/config_verbs.rs",
+          "packages/bee-rs/crates/bee/tests/agy_belt_contracts.rs"
+        ],
+        "read_first": [
+          "docs/history/windows-runtime-tests/CONTEXT.md",
+          "/mnt/data/Projects/goglbe/beehive/.bee/tmp/wrt/panics.txt"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "The panic digest from Windows CI run 45725981958 is in /mnt/data/Projects/goglbe/beehive/.bee/tmp/wrt/panics.txt. PRODUCT: src/nested_checkout.rs:183 compares child against format!(\"{root_real}/.bee/tmp\"); compare as paths instead (Path::new(&child) == Path::new(root_real).join(\".bee\").join(\"tmp\")) so the skip holds with Windows separators. TESTS, portable, never cfg(unix): (a) src/hooks/worker_guard.rs test worker_full_suite_exits_two_through_the_hook_only_for_a_herded_job compares Debug text \"ExitCode(unix_exit_status(2))\"; compare against format!(\"{:?}\", std::process::ExitCode::from(2)) instead. (b) src/onboard/tests.rs switching_hub takes the published id with path.rsplit('/'); take the last component with either separator (Path::new(path).file_name() or rsplit(['/', '\\\\'])). (c) src/verbs/knowledge/report.rs test report_root_measures_the_target_store_not_the_cwd_store compares ctx.root to std canonicalize of the temp path; compare dunce::canonicalize of both sides (the temp path can be an 8.3 short name on Windows). (d) tests/config_verbs.rs: bee reads the home dir from USERPROFILE on Windows (hooks/session_close/perf.rs node_homedir); in the env helpers (explain_with_env, write_guard_env and any direct Command in config_tester_global_dir_falls_back_to_xdg_then_home) set USERPROFILE to the same value whenever the test sets HOME, and remove USERPROFILE whenever HOME is removed, so config_tester_global_dir_falls_back_to_xdg_then_home and config_tester_spelling_beehive_config_dir_names_the_global_file_in_both_panes pass on Windows. (e) tests/agy_belt_contracts.rs: in the bee() helper isolate the global config layer for every command: set BEEHIVE_CONFIG_DIR, HOME and USERPROFILE to one shared temp dir that lives for the test process (for example a std::sync::OnceLock<tempfile::TempDir>), and in dispatch_prepare_on_agy_with_a_native_slot_refuses_with_the_herding_remedy add to the first assertion message the stdout of `bee config explain --key team.agy.read --json` run in the repo. Change nothing else; no comment lines; no cfg(unix).\n FOLLOW-UP (state at commit aaec0b55e): every listed test now passes except dispatch_prepare_on_agy_with_a_native_slot_refuses_with_the_herding_remedy in tests/agy_belt_contracts.rs, which now fails on Linux too. Cause, read from its config explain evidence: onboard writes .bee/team.json, the team layer, with herding agy slots, and the team layer wins over the tracked .bee/config.json the test writes its native slots into. Fix the test so its native team.agy slots land in the layer that wins (write them into .bee/team.json under team.agy, keeping the rest of that file), keep the BEEHIVE_CONFIG_DIR/HOME/USERPROFILE isolation, and prove it with cargo test --release -p bee --test agy_belt_contracts plus the cell verify. Keep the explain evidence in the assertion message.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo check --tests --target x86_64-pc-windows-gnu --manifest-path packages/bee-rs/Cargo.toml -p bee && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo clippy --manifest-path packages/bee-rs/Cargo.toml -p bee --tests -- -D warnings && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee -- nested_checkout hooks::worker_guard onboard::tests::principles_on_the_hub verbs::knowledge::report && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test config_verbs --test agy_belt_contracts",
+        "must_haves": {
+          "truths": [
+            "the .bee/tmp skip compares paths, not a slash-built string",
+            "the named tests pass on Linux",
+            "the Windows test check compiles"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/nested_checkout.rs",
+              "substantive": "Path compare for the root .bee/tmp skip"
+            },
+            {
+              "path": "packages/bee-rs/crates/bee/tests/agy_belt_contracts.rs",
+              "substantive": "bee() isolates BEEHIVE_CONFIG_DIR, HOME and USERPROFILE"
+            }
+          ],
+          "key_links": [],
+          "prohibitions": [
+            "no cfg(unix) gate",
+            "no comment lines",
+            "no change outside the six files"
+          ],
+          "why": "12 Windows CI failures outside the write guard: one real bug (the .bee/tmp skip) and unix-shaped tests that hide Windows coverage.",
+          "out_of_scope": [
+            "changing node_homedir or the global config path",
+            "the agy dispatch refusal logic",
+            "any file outside the six listed"
+          ]
+        }
+      },
+      {
+        "id": "wrt-1-t",
+        "feature": "windows-runtime-tests",
+        "title": "Test the write guard Windows path fix independently",
+        "lane": "standard",
+        "role": "test",
+        "deps": [
+          "wrt-1"
+        ],
+        "decisions": [
+          "a0beedae-437a-4e5c-bf82-2ab3b1b20cae"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs"
+        ],
+        "read_first": [
+          "docs/history/windows-runtime-tests/CONTEXT.md",
+          "/mnt/data/Projects/goglbe/beehive/.bee/tmp/wrt/panics.txt"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "You are the tester for cell wrt-1 (commit cc4c24566 on wt/windows-runtime-tests). Never edit product code. Read the wrt-1 diff (git show cc4c24566) and check it against its action: std::fs::canonicalize replaced by dunce::canonicalize in src/hooks/write_guard/cross_project.rs, and allow-list entries plus shell tokens accepted when they start with / or ~ OR Path::new(entry).is_absolute(), with Linux behavior unchanged. Add new tests in src/hooks/write_guard/tests.rs that pin the new behavior portably (no cfg(unix), no comments): a cross_project allow entry given as an absolute path in the platform's native form is honored; the denial message for an out-of-project absolute path never carries a \\\\?\\ verbatim prefix; a relative entry like foo/bar is still filtered out. Run the verify. A red result is a finding: return [BLOCKED] with the red output and its diagnosis. Return the judge block for wrt-1 beside your test report.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo check --tests --target x86_64-pc-windows-gnu --manifest-path packages/bee-rs/Cargo.toml -p bee && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee -- hooks::write_guard",
+        "must_haves": {
+          "truths": [
+            "new tests pin native absolute allow entries, no verbatim prefix in denials, relative entries filtered",
+            "all hooks::write_guard tests pass on Linux",
+            "the Windows test check compiles"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs",
+              "substantive": "new portable tests for the wrt-1 behavior"
+            }
+          ],
+          "key_links": [],
+          "prohibitions": [
+            "no product code edits",
+            "no cfg(unix) gate",
+            "no comment lines"
+          ],
+          "why": "a code cell never certifies itself; a separate tester verifies wrt-1 and adds its new tests",
+          "out_of_scope": [
+            "product code"
+          ]
+        }
+      },
+      {
+        "id": "wrt-2-t",
+        "feature": "windows-runtime-tests",
+        "title": "Test the nested checkout fix and the portable tests independently",
+        "lane": "standard",
+        "role": "test",
+        "deps": [
+          "wrt-2"
+        ],
+        "decisions": [
+          "a0beedae-437a-4e5c-bf82-2ab3b1b20cae"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/nested_checkout.rs"
+        ],
+        "read_first": [
+          "docs/history/windows-runtime-tests/CONTEXT.md",
+          "/mnt/data/Projects/goglbe/beehive/.bee/tmp/wrt/panics.txt"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "You are the tester for cell wrt-2 (its commits on wt/windows-runtime-tests carry the trailer cell: wrt-2, or read git log for nested_checkout.rs). Never edit product code; the test module inside src/nested_checkout.rs is the only place you write. Read the wrt-2 diff and check it against its action: the .bee/tmp skip in nested_checkout works for Windows separators, and the listed tests were made portable without cfg(unix) and without loosened assertions. Add new tests in the nested_checkout test module that pin the fix portably (no cfg(unix), no comments): a nested checkout under .bee/tmp is skipped when the path uses the platform separator, and one outside .bee/tmp is still found. Run the verify. A red result is a finding: return [BLOCKED] with the red output and its diagnosis. Return the judge block for wrt-2 beside your test report.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo check --tests --target x86_64-pc-windows-gnu --manifest-path packages/bee-rs/Cargo.toml -p bee && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee -- nested_checkout hooks::worker_guard onboard::tests verbs::knowledge::report && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test config_verbs --test agy_belt_contracts",
+        "must_haves": {
+          "truths": [
+            "new tests pin the .bee/tmp skip with native separators and a nested checkout outside it is still found",
+            "the wrt-2 listed tests pass on Linux",
+            "the Windows test check compiles"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/nested_checkout.rs",
+              "substantive": "new portable tests in its test module"
+            }
+          ],
+          "key_links": [],
+          "prohibitions": [
+            "no product code edits",
+            "no cfg(unix) gate",
+            "no comment lines"
+          ],
+          "why": "a code cell never certifies itself; a separate tester verifies wrt-2 and adds its new tests",
+          "out_of_scope": [
+            "product code"
+          ]
+        }
+      }
+    ]
+  },
+  "merge_ready": {
+    "since": "2026-11-26T00:38:46.562Z",
+    "branch": "wt/windows-runtime-tests",
+    "worktree_id": "beehive--wt--windows-runtime-tests",
+    "uat": "pending",
+    "blocked_by": [
+      "leader-check"
+    ]
+  }
+}
