@@ -11,10 +11,15 @@
     "uat": false
   },
   "summary": "Feature \"windows-runtime-tests\" started at phase \"exploring\" (lane).",
-  "next_action": "Continue bee-exploring for \"windows-runtime-tests\" (lane).",
+  "next_action": "Merged into main at 317a169; reload the product and test \"windows-runtime-tests\", then either approve uat (\"bee gate --name uat --approved true --lane windows-runtime-tests\") or fix it in the worktree and merge again.",
   "created_at": "2026-11-26T00:17:25.699Z",
   "run_state": "awaiting-approval",
-  "waiting_on": null,
+  "waiting_on": {
+    "kind": "gate",
+    "subject": "uat: windows-runtime-tests",
+    "asked_at": "2026-11-26T00:53:40.124Z",
+    "session": "bee-worktree-merge-sessionless"
+  },
   "route": {
     "class": "bugfix",
     "lane": "standard",
@@ -446,15 +451,6 @@
           ]
         }
       }
-    ]
-  },
-  "merge_ready": {
-    "since": "2026-11-26T00:38:46.562Z",
-    "branch": "wt/windows-runtime-tests",
-    "worktree_id": "beehive--wt--windows-runtime-tests",
-    "uat": "pending",
-    "blocked_by": [
-      "leader-check"
     ]
   }
 }
