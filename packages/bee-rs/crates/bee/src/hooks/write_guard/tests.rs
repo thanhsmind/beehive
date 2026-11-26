@@ -7772,3 +7772,75 @@ If the user asked you to research that repo from here, ask the user to add the p
         let drop_allow = json!({ "guards": { "supervises": "waggledance" } }).to_string();
         assert!(config_governed_change_deny(".bee/config.json", Some(&both), &drop_allow).is_some());
     }
+
+    #[test]
+    fn cross_project_allow_honors_native_absolute_entry() {
+        let fx = build_cross_project_fixture("swarming");
+        assert!(fx.sibling.is_absolute(), "{}", fx.sibling.display());
+        std::fs::write(
+            fx.root.join(".bee").join("config.json"),
+            json!({ "guards": { "cross_project_allow": [fx.sibling.to_string_lossy()] } }).to_string(),
+        )
+        .unwrap();
+        let read_out = expect_done(cp_read(&fx.sibling.join("x.txt")), &fx.root);
+        assert_eq!(read_out.code, 0, "{}", read_out.stderr);
+        let grep_out = expect_done(
+            json!({ "tool_name": "Grep", "tool_input": { "pattern": "x", "path": fx.sibling.to_string_lossy() } }),
+            &fx.root,
+        );
+        assert_eq!(grep_out.code, 0, "{}", grep_out.stderr);
+        let sibling_slash = fx.sibling.to_string_lossy().replace('\\', "/");
+        let glob_out = expect_done(
+            json!({ "tool_name": "Glob", "tool_input": { "pattern": format!("{sibling_slash}/**/*.txt") } }),
+            &fx.root,
+        );
+        assert_eq!(glob_out.code, 0, "{}", glob_out.stderr);
+        let bash_out = expect_done(bash(&format!("cat {sibling_slash}/x.txt")), &fx.root);
+        assert_eq!(bash_out.code, 0, "{}", bash_out.stderr);
+    }
+
+    #[test]
+    fn cross_project_denial_for_absolute_path_never_carries_verbatim_prefix() {
+        let fx = build_cross_project_fixture("swarming");
+        let read_out = expect_done(cp_read(&fx.sibling.join("x.txt")), &fx.root);
+        cp_refused(&read_out, &fx.sibling);
+        assert!(!read_out.stderr.contains(r"\\?\"), "{}", read_out.stderr);
+
+        let grep_out = expect_done(
+            json!({ "tool_name": "Grep", "tool_input": { "pattern": "x", "path": fx.sibling.to_string_lossy() } }),
+            &fx.root,
+        );
+        cp_refused(&grep_out, &fx.sibling);
+        assert!(!grep_out.stderr.contains(r"\\?\"), "{}", grep_out.stderr);
+
+        let sibling_slash = fx.sibling.to_string_lossy().replace('\\', "/");
+        let glob_out = expect_done(
+            json!({ "tool_name": "Glob", "tool_input": { "pattern": format!("{sibling_slash}/**/*.txt") } }),
+            &fx.root,
+        );
+        cp_refused(&glob_out, &fx.sibling);
+        assert!(!glob_out.stderr.contains(r"\\?\"), "{}", glob_out.stderr);
+
+        let bash_out = expect_done(bash(&format!("cat {sibling_slash}/x.txt")), &fx.root);
+        cp_refused(&bash_out, &fx.sibling);
+        assert!(!bash_out.stderr.contains(r"\\?\"), "{}", bash_out.stderr);
+    }
+
+    #[test]
+    fn cross_project_allow_filters_out_relative_entries() {
+        let fx = build_cross_project_fixture("swarming");
+        let mut entries = vec!["foo/bar".to_string(), "../sibling".to_string()];
+        let raw_sibling = fx.sibling.to_string_lossy();
+        if let Some(rel) = raw_sibling.strip_prefix('/') {
+            entries.push(rel.to_string());
+        }
+        std::fs::write(
+            fx.root.join(".bee").join("config.json"),
+            json!({ "guards": { "cross_project_allow": entries } }).to_string(),
+        )
+        .unwrap();
+        let read_out = expect_done(cp_read(&fx.sibling.join("x.txt")), &fx.root);
+        cp_refused(&read_out, &fx.sibling);
+        let bash_out = expect_done(bash("cat ../sibling/x.txt"), &fx.root);
+        cp_refused(&bash_out, &fx.sibling);
+    }
