@@ -9,5 +9,5 @@
   "task_text": "Handoff from previous leader session (context 123k tokens past 120k mark).\nCurrent feature: release-2-123-0\nOpen or claimed cells: rel21230-1c\n\nOwner request (Vietnamese, 2026-11-26): 'Push code va release'. DONE: bee 2.123.0 released by scripts/release.sh (commit 66e8e9e93, tag v2.123.0 on origin, release-binaries run 45723393203 success, 6 assets, https://github.com/thanhsmind/beehive/releases/tag/v2.123.0); main pushed. Cell rel21230-1 capped. First run was red on pi_plugin_contracts real_bee leaking host global config; fixed and closed as feature real-bee-global-isolation (merge a66ce6b). REMAINING for release lane release-2-123-0: (1) dispatch checker cell rel21230-1c through bee dispatch prepare --kind cell --role test --cell rel21230-1c --worker rel21230-checker --claim (from main), settle it; (2) leader-check-deferral audit row for the release commit (no cell trailer by design), log a feature-local decision for release-2-123-0 D1 and C1 routing, then bee close --feature release-2-123-0; (3) commit bookkeeping. Pattern: docs/history/release-2-122-0 and .bee/tmp/rel21220. Standing orders: reply to the owner in Vietnamese, short and simple; full autopilot gate bypass is on; never ask the owner to run steps the agent can run.\n",
   "expects": [],
   "follow_ups": [],
-  "status": "open"
+  "status": "met"
 }

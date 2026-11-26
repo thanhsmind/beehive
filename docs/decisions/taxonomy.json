@@ -1014,6 +1014,8 @@
     "contract:owner-only-refusal",
     "team-profiles",
     "contract:release-2-123-0-published",
-    "contract:real-bee-global-isolation"
+    "contract:real-bee-global-isolation",
+    "contract:windows-test-build",
+    "contract:knowledge-upkeep-nov26c"
   ]
 }

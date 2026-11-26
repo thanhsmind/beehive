@@ -1,0 +1,39 @@
+{
+  "schema_version": "1.0",
+  "feature": "knowledge-upkeep-nov26c",
+  "mode": null,
+  "phase": "swarming",
+  "approved_gates": {
+    "context": false,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"knowledge-upkeep-nov26c\" started at phase \"exploring\" (lane).",
+  "next_action": "Continue bee-exploring for \"knowledge-upkeep-nov26c\" (lane).",
+  "created_at": "2026-11-25T23:55:57.250Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": {
+    "kind": "turn-end",
+    "subject": "[3] `.claude/agents/` (bee-worker, bee-forager, bee-scout, bee-guard, bee-comb, bee-elder)",
+    "asked_at": "2026-11-26T00:00:53.463Z",
+    "session": "2dc3730b-6729-46c2-b118-c09ab87ba184"
+  },
+  "route": {
+    "class": "docs",
+    "lane": "docs",
+    "flags": [],
+    "product_files": 0,
+    "rationale": null,
+    "updated_at": "2026-11-25T23:55:52.631Z",
+    "feature": "knowledge-upkeep-nov26c"
+  },
+  "merge_ready": {
+    "since": "2026-11-26T00:00:05.675Z",
+    "branch": "wt/knowledge-upkeep-nov26c",
+    "worktree_id": "beehive--wt--knowledge-upkeep-nov26c",
+    "uat": "pending",
+    "blocked_by": []
+  }
+}

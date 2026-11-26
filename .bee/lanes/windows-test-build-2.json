@@ -5,8 +5,8 @@
   "phase": "exploring",
   "approved_gates": {
     "context": false,
-    "shape": false,
-    "execution": false,
+    "shape": true,
+    "execution": true,
     "review": false,
     "uat": false
   },
@@ -23,5 +23,12 @@
     "rationale": null,
     "updated_at": "2026-11-25T23:52:48.026Z",
     "feature": "windows-test-build-2"
+  },
+  "merge_ready": {
+    "since": "2026-11-26T00:03:40.578Z",
+    "branch": "wt/windows-test-build-2",
+    "worktree_id": "beehive--wt--windows-test-build-2",
+    "uat": "pending",
+    "blocked_by": []
   }
 }

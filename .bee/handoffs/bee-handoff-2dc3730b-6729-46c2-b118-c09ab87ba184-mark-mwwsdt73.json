@@ -1,0 +1,18 @@
+{
+  "request_id": "bee-handoff-2dc3730b-6729-46c2-b118-c09ab87ba184-mark-mwwsdt73",
+  "run_id": "run-168e5971ad02a909",
+  "project_id": "beehive",
+  "session_id": "2dc3730b-6729-46c2-b118-c09ab87ba184",
+  "feature": "knowledge-upkeep-nov26c",
+  "sent_at": "2026-11-26T00:00:36.130Z",
+  "task_file": "/mnt/data/Projects/goglbe/beehive/.bee/tmp/handoff-2dc3730b-6729-46c2-b118-c09ab87ba184-mark-mwwsdt73.md",
+  "task_text": "Handoff from previous leader session (context 154k tokens past 120k mark).\nCurrent feature: knowledge-upkeep-nov26c\nOpen or claimed cells: kun26c-2\n\nOwner ran /bee-knowledge-upkeep with this standing order: before ending a turn while work you handed out is still running, run waggledance hold --why '<what it waits for>'; when that work reports, mail your result or run waggledance hold --release. Upkeep run state: feature knowledge-upkeep-nov26c, worktree /mnt/data/Projects/goglbe/beehive--wt--knowledge-upkeep-nov26c, session lane binding on 2dc3730b. Cell kun26c-1 is capped (commit bcbe7b288): merge-readiness corrected for parked cells and three new reopen paths; pattern 20260723-pinned-readonly-type retired as superseded by pattern-20260831; outward-guard, argv-decidable and consult-loop held and confirmed. Remaining: (1) dispatch checker cell kun26c-2 (role test, deps kun26c-1) with bee dispatch prepare --runtime claude --kind cell --cell kun26c-2 --worker tester-kun26c-2 --claim --json and run the exact payload; hold with waggledance while it runs. (2) cap kun26c-2 on its green:static result, then bee worktree merge for knowledge-upkeep-nov26c (docs-only, no bee test needed beyond the cell verify unless merge asks). (3) Record the run last: bee audit log --kind knowledge-upkeep --feature knowledge-upkeep-nov26c --note 'changed — merge-readiness drift fixed (parked + leader-check gap/dissent/park-answer clears); pattern 20260723 retired as superseded; worker-outward-guard, argv-decidable-refusals, consult-loop held; gather door refused read-only on antigravity (issue 176) so sources read inline; strict check red bundle-wide (575, pre-existing). Left for next run: 43 more loaded-never-used concepts; split token-economy and host-project-artifacts (past 300 lines)'. (4) Bee gap to report to the owner: needs_tester in verbs/cells/proof.rs stamps docs-only cells too, matching decision 95e310df (docs cell gets a checker); and the knowledge-upkeep skill's gather wave cannot run while the read slot is antigravity. Reply to the owner in Vietnamese, short.\n",
+  "expects": [
+    {
+      "kind": "branch-merged",
+      "branch": "wt/knowledge-upkeep-nov26c"
+    }
+  ],
+  "follow_ups": [],
+  "status": "open"
+}
