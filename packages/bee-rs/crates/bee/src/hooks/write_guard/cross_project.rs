@@ -24,7 +24,7 @@ fn expand(raw: &str, cwd: &Path, home: Option<&Path>) -> Option<PathBuf> {
         home?.to_path_buf()
     } else if let Some(rest) = raw.strip_prefix("~/") {
         home?.join(rest)
-    } else if raw.starts_with('/') {
+    } else if raw.starts_with('/') || Path::new(raw).is_absolute() {
         PathBuf::from(raw)
     } else {
         cwd.join(raw)
@@ -45,7 +45,7 @@ fn expand(raw: &str, cwd: &Path, home: Option<&Path>) -> Option<PathBuf> {
     let mut tail: Vec<std::ffi::OsString> = Vec::new();
     let mut cur = norm.clone();
     loop {
-        if let Ok(real) = std::fs::canonicalize(&cur) {
+        if let Ok(real) = dunce::canonicalize(&cur) {
             let mut out = real;
             for part in tail.iter().rev() {
                 out.push(part);
@@ -65,7 +65,7 @@ fn expand(raw: &str, cwd: &Path, home: Option<&Path>) -> Option<PathBuf> {
 fn git_common_dir(dir: &Path) -> Option<PathBuf> {
     let dot_git = dir.join(".git");
     if dot_git.is_dir() {
-        return std::fs::canonicalize(dot_git).ok();
+        return dunce::canonicalize(dot_git).ok();
     }
     let text = std::fs::read_to_string(&dot_git).ok()?;
     let target = text.lines().next()?.strip_prefix("gitdir:")?.trim();
@@ -75,9 +75,9 @@ fn git_common_dir(dir: &Path) -> Option<PathBuf> {
         dir.join(target)
     };
     if let Ok(rel) = std::fs::read_to_string(gitdir.join("commondir")) {
-        return std::fs::canonicalize(gitdir.join(rel.trim())).ok();
+        return dunce::canonicalize(gitdir.join(rel.trim())).ok();
     }
-    let gitdir = std::fs::canonicalize(&gitdir).ok()?;
+    let gitdir = dunce::canonicalize(&gitdir).ok()?;
     match (gitdir.parent(), gitdir.parent().and_then(Path::parent)) {
         (Some(p), Some(common)) if p.file_name().is_some_and(|n| n == "worktrees") => {
             Some(common.to_path_buf())
@@ -105,7 +105,7 @@ fn read_json(path: &Path) -> Option<Value> {
 
 impl Scope {
     fn load(root: &Path, store_root: &Path, home: Option<PathBuf>) -> Scope {
-        let canon = |p: &Path| std::fs::canonicalize(p).unwrap_or_else(|_| p.to_path_buf());
+        let canon = |p: &Path| dunce::canonicalize(p).unwrap_or_else(|_| p.to_path_buf());
         let mut roots = vec![canon(root)];
         let store = canon(store_root);
         if !roots.contains(&store) {
@@ -141,10 +141,10 @@ impl Scope {
         }
         let allowed = raw_allowed
             .iter()
-            .filter(|e| e.starts_with('/') || e.starts_with('~'))
+            .filter(|e| e.starts_with('/') || e.starts_with('~') || Path::new(e).is_absolute())
             .filter_map(|e| expand(e, Path::new("/"), home.as_deref()))
             .collect();
-        let temp = std::fs::canonicalize(std::env::temp_dir()).ok();
+        let temp = dunce::canonicalize(std::env::temp_dir()).ok();
         Scope { roots, common, home, temp, allowed, supervises }
     }
 
@@ -218,12 +218,12 @@ fn shell_candidates(tokens: &[String], cwd: &Path, home: Option<&Path>) -> Vec<S
         }
         if let Some(rest) = token.strip_prefix('-').filter(|r| !r.starts_with('-')) {
             let tail = rest.get(1..).unwrap_or("");
-            if tail.starts_with('/') || tail.starts_with('~') {
+            if tail.starts_with('/') || tail.starts_with('~') || Path::new(tail).is_absolute() {
                 out.push(tail.to_string());
             }
         }
         if let Some(body) = token_body(token) {
-            if body.starts_with('/') || body.starts_with('~') {
+            if body.starts_with('/') || body.starts_with('~') || Path::new(body).is_absolute() {
                 out.push(body.to_string());
             } else if Path::new(body).components().any(|c| c == Component::ParentDir) {
                 out.push(base.join(body).to_string_lossy().into_owned());
@@ -287,7 +287,7 @@ pub(crate) fn waggledance_binary(scope: &Scope) -> Option<PathBuf> {
     let path = std::env::var_os("PATH")?;
     for dir in std::env::split_paths(&path) {
         let candidate = dir.join("waggledance");
-        let Ok(real) = std::fs::canonicalize(&candidate) else { continue };
+        let Ok(real) = dunce::canonicalize(&candidate) else { continue };
         if real.is_file() && !real.parent().is_some_and(|d| scope.is_this_project(d)) {
             return Some(candidate);
         }
@@ -430,7 +430,7 @@ impl Grant<'_> {
                 let roots = (self.provider)(self.scope)?;
                 let canon: Vec<PathBuf> = roots
                     .iter()
-                    .map(|r| std::fs::canonicalize(r).unwrap_or_else(|_| r.clone()))
+                    .map(|r| dunce::canonicalize(r).unwrap_or_else(|_| r.clone()))
                     .collect();
                 if canon.is_empty() { None } else { Some(canon) }
             })
@@ -671,7 +671,7 @@ pub(crate) fn cross_project_denial_with_registry(
             if tool_name == "Glob"
                 && let Some(Value::String(p)) = tool_input.get("pattern") {
                     let prefix = glob_prefix(p);
-                    if prefix.starts_with('/') || prefix.starts_with('~') {
+                    if prefix.starts_with('/') || prefix.starts_with('~') || Path::new(prefix).is_absolute() {
                         candidates.push(prefix.to_string());
                     }
                 }

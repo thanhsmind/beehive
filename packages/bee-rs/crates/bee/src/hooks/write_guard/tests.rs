@@ -1855,12 +1855,24 @@ use std::process::ExitCode;
         }
     }
 
+    fn assert_containment_message(actual: &str, base: &str) {
+        if actual == base {
+            return;
+        }
+        let rest = actual.strip_prefix(base).unwrap_or_else(|| panic!("unexpected message: {actual}"));
+        let inner = rest
+            .strip_prefix(" [owner-only: ")
+            .and_then(|s| s.strip_suffix(']'))
+            .unwrap_or_else(|| panic!("unexpected suffix: {actual}"));
+        assert!(!inner.is_empty(), "empty owner-only target: {actual}");
+    }
+
     #[test]
     fn escape_rows_deny_and_contained_backslashes_pass() {
         let lx = build_linked(true);
         let traversal = expect_done(edit("../outside.txt"), &lx.work_root);
         assert_eq!(traversal.code, 2);
-        assert_eq!(traversal.stderr, GENERIC_CONTAINMENT_MESSAGE);
+        assert_containment_message(&traversal.stderr, GENERIC_CONTAINMENT_MESSAGE);
         assert!(traversal.stderr.contains("A path outside this project belongs to the user \u{2014} ask them to change it, never write it through another tool."));
         assert!(!traversal.stderr.contains("open your session at"));
         let win_traversal = expect_done(edit("..\\outside-win.txt"), &lx.work_root);
@@ -5810,7 +5822,7 @@ use std::process::ExitCode;
         let bash_target = target.to_string_lossy().replace('\\', "/");
         let e = expect_done(bash(&format!("printf x > \"{bash_target}\"")), &fx.root);
         assert_eq!(e.code, 2, "{}", e.stderr);
-        assert_eq!(e.stderr, GENERIC_BASH_CONTAINMENT_MESSAGE);
+        assert_containment_message(&e.stderr, GENERIC_BASH_CONTAINMENT_MESSAGE);
     }
 
     // ── D3: bounded/sanitized token echo ────────────────────────────────────
@@ -5878,7 +5890,7 @@ use std::process::ExitCode;
         // never the Bash-only D2 resolution-failure wording.
         let denied = expect_done(edit("../$outside.txt"), &fx.root);
         assert_eq!(denied.code, 2, "{}", denied.stderr);
-        assert_eq!(denied.stderr, GENERIC_CONTAINMENT_MESSAGE);
+        assert_containment_message(&denied.stderr, GENERIC_CONTAINMENT_MESSAGE);
         assert!(!denied.stderr.contains("could not be resolved"), "{}", denied.stderr);
     }
 
@@ -6389,12 +6401,17 @@ use std::process::ExitCode;
         assert_eq!(t.paths, vec!["before.txt", "after.txt"]);
         assert_eq!(t.cd_opaque, vec![false, true]);
 
-        let t = extract_bash_targets("cd /tmp && touch /abs/file.txt");
-        assert_eq!(t.paths, vec!["/abs/file.txt"]);
+        let abs = std::env::temp_dir()
+            .join("abs")
+            .join("file.txt")
+            .to_string_lossy()
+            .replace('\\', "/");
+        let t = extract_bash_targets(&format!("cd /tmp && touch {abs}"));
+        assert_eq!(t.paths, vec![abs.clone()]);
         assert_eq!(t.cd_opaque, vec![false]);
 
-        let t = extract_bash_targets("cd /tmp && touch /abs/file.txt && touch rel.txt");
-        assert_eq!(t.paths, vec!["/abs/file.txt", "rel.txt"]);
+        let t = extract_bash_targets(&format!("cd /tmp && touch {abs} && touch rel.txt"));
+        assert_eq!(t.paths, vec![abs, "rel.txt".to_string()]);
         assert_eq!(t.cd_opaque, vec![false, true]);
 
         let t = extract_bash_targets("cd /tmp && touch ~/file.txt");
@@ -6437,7 +6454,7 @@ use std::process::ExitCode;
     fn bash_cd_absolute_target_in_root_is_allowed() {
         let fx = build_fixture("swarming", true);
         let target = fx.root.join("in_root.txt");
-        let cmd = format!("cd /tmp && touch {}", target.display());
+        let cmd = format!("cd /tmp && touch {}", target.to_string_lossy().replace('\\', "/"));
         let e = expect_done(bash(&cmd), &fx.root);
         assert_eq!(e.code, 0, "{}", e.stderr);
     }
@@ -6446,7 +6463,7 @@ use std::process::ExitCode;
     fn bash_cd_absolute_target_bee_state_refused_with_direct_edit_wording() {
         let fx = build_fixture("swarming", true);
         let target = fx.root.join(".bee").join("state.json");
-        let cmd = format!("cd /tmp && touch {}", target.display());
+        let cmd = format!("cd /tmp && touch {}", target.to_string_lossy().replace('\\', "/"));
         let e = expect_done(bash(&cmd), &fx.root);
         assert_eq!(e.code, 2, "{}", e.stderr);
         assert!(e.stderr.contains("bee direct-edit guard") || e.stderr.contains("bee state"), "{}", e.stderr);
@@ -7205,7 +7222,7 @@ use std::process::ExitCode;
     #[test]
     fn cross_project_glob_absolute_pattern_prefix_is_refused() {
         let fx = build_cross_project_fixture("swarming");
-        let pattern = format!("{}/**/*.txt", fx.sibling.to_string_lossy());
+        let pattern = format!("{}/**/*.txt", fx.sibling.to_string_lossy().replace('\\', "/"));
         let e = expect_done(
             json!({ "tool_name": "Glob", "tool_input": { "pattern": pattern } }),
             &fx.root,
@@ -7216,11 +7233,12 @@ use std::process::ExitCode;
     #[test]
     fn cross_project_bash_path_token_and_cd_are_refused() {
         let fx = build_cross_project_fixture("swarming");
-        let cat = format!("cat {}/x.txt", fx.sibling.to_string_lossy());
+        let sibling = fx.sibling.to_string_lossy().replace('\\', "/");
+        let cat = format!("cat {sibling}/x.txt");
         cp_refused(&expect_done(bash(&cat), &fx.root), &fx.sibling);
-        let cd = format!("cd {} && ls", fx.sibling.to_string_lossy());
+        let cd = format!("cd {sibling} && ls");
         cp_refused(&expect_done(bash(&cd), &fx.root), &fx.sibling);
-        let flag = format!("grep --include=x --file={}/x.txt y", fx.sibling.to_string_lossy());
+        let flag = format!("grep --include=x --file={sibling}/x.txt y");
         cp_refused(&expect_done(bash(&flag), &fx.root), &fx.sibling);
     }
 
@@ -7242,7 +7260,7 @@ use std::process::ExitCode;
             &expect_done(bash("cd ../plain && cat ../sibling/x.txt"), &fx.root),
             &fx.sibling,
         );
-        let abs = format!("cd {} && cat ../sibling/x.txt", fx.plain.to_string_lossy());
+        let abs = format!("cd {} && cat ../sibling/x.txt", fx.plain.to_string_lossy().replace('\\', "/"));
         cp_refused(&expect_done(bash(&abs), &fx.root), &fx.sibling);
     }
 
@@ -7293,7 +7311,7 @@ use std::process::ExitCode;
         std::fs::write(other.join("w.txt"), "w\n").unwrap();
         let e = expect_done(cp_read(&other.join("w.txt")), &lx.work_root);
         assert_eq!(e.code, 0, "{}", e.stderr);
-        let e = expect_done(bash(&format!("cat {}/w.txt", other.to_string_lossy())), &lx.work_root);
+        let e = expect_done(bash(&format!("cat {}/w.txt", other.to_string_lossy().replace('\\', "/"))), &lx.work_root);
         assert_eq!(e.code, 0, "{}", e.stderr);
     }
 
@@ -7307,7 +7325,7 @@ use std::process::ExitCode;
         .unwrap();
         let e = expect_done(cp_read(&fx.sibling.join("x.txt")), &fx.root);
         assert_eq!(e.code, 0, "{}", e.stderr);
-        let e = expect_done(bash(&format!("cat {}/x.txt", fx.sibling.to_string_lossy())), &fx.root);
+        let e = expect_done(bash(&format!("cat {}/x.txt", fx.sibling.to_string_lossy().replace('\\', "/"))), &fx.root);
         assert_eq!(e.code, 0, "{}", e.stderr);
         let still = expect_done(
             json!({ "tool_name": "Grep", "tool_input": { "pattern": "x", "path": fx.folder.to_string_lossy() } }),
@@ -7416,7 +7434,7 @@ use std::process::ExitCode;
     }
 
     fn sup_sh(s: &SupFx, template: &str) -> Option<String> {
-        let command = template.replace("<m>", &s.managed.to_string_lossy());
+        let command = template.replace("<m>", &s.managed.to_string_lossy().replace('\\', "/"));
         sup_managed(s, "Bash", json!({ "command": command }))
     }
 
@@ -7541,7 +7559,7 @@ use std::process::ExitCode;
         let s = sup_fixture(Some("waggledance"));
         let unmanaged = s.fx.folder.join("child");
         std::fs::write(unmanaged.join("x"), "x\n").unwrap();
-        let mixed = format!("cat <m>/.bee/state.json {}/x", unmanaged.to_string_lossy());
+        let mixed = format!("cat <m>/.bee/state.json {}/x", unmanaged.to_string_lossy().replace('\\', "/"));
         for cmd in [
             "cat <m>/.bee/{state.json,../src/main.rs}",
             "cat <m>/.bee/$x/state.json",
@@ -7632,7 +7650,7 @@ use std::process::ExitCode;
     #[test]
     fn cross_project_supervisor_shell_needs_the_cwd_inside_this_project() {
         let s = sup_fixture(Some("waggledance"));
-        let command = format!("cat {}/.bee/state.json", s.managed.to_string_lossy());
+        let command = format!("cat {}/.bee/state.json", s.managed.to_string_lossy().replace('\\', "/"));
         let map = json!({ "command": command }).as_object().unwrap().clone();
         let roots = vec![s.managed.clone()];
         let provider = move |_: &super::cross_project::Scope| Some(roots.clone());
@@ -7664,7 +7682,7 @@ use std::process::ExitCode;
     fn cross_project_supervisor_key_absent_leaves_the_text_unchanged() {
         let s = sup_fixture(None);
         let denied = sup_read(&s, "src/main.rs").expect("refused");
-        let plain = refusal_text_for_test(&s.managed.join("src").join("main.rs"), &s.managed);
+        let plain = refusal_text_for_test(&s.managed.join("src/main.rs"), &s.managed);
         assert_eq!(denied, plain);
         assert!(!denied.contains("registry"), "{denied}");
         let state = sup_read(&s, ".bee/state.json").expect("refused without the key");
