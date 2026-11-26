@@ -8,15 +8,18 @@ bee:
   lifecycle: active
   areas: [workflow-state]
   required_context: [areas/workflow-state/overview.md, areas/workflow-state/gates.md]
-  decisions: ["merge-ready-fact D1 (cfccdde4, 2026-08-22 — the feature's record carries an optional merge_ready {since, branch, worktree_id, uat, blocked_by}, set by the completion that leaves zero open or claimed units when a worktree grant exists; a zero-unit feature never gets it)", "merge-ready-fact D2 (e069ef73, 2026-08-22 — every verb that can falsify the fact also owns correcting it: close rewrites blocked_by, the uat gate flips uat, merge and unregister delete it, any reopen deletes it and the next last completion sets it again with a fresh since)", "merge-ready-fact D3 (f2c16247, 2026-08-22 — additive projection only: bee's own gates and its merge door never read it; status lane rows surface it verbatim)"]
-  sources: ["merge-ready-fact cells mrf-1 and mrf-2 (2026-08-22 — the one helper every writer calls, and the four verbs wired through it)", docs/history/merge-ready-fact/CONTEXT.md, docs/history/merge-ready-fact/plan.md, "the user's ask of 2026-08-22 from the waggledance session — a board needs a stored, file-readable 'Ready to merge' fact instead of deriving one"]
+  decisions: ["merge-ready-fact D1 (cfccdde4, 2026-08-22 — the feature's record carries an optional merge_ready {since, branch, worktree_id, uat, blocked_by}, set by the completion that leaves zero open or claimed units when a worktree grant exists; a zero-unit feature never gets it)", "merge-ready-fact D2 (e069ef73, 2026-08-22 — every verb that can falsify the fact also owns correcting it: close rewrites blocked_by, the uat gate flips uat, merge and unregister delete it, any reopen deletes it and the next last completion sets it again with a fresh since)", "merge-ready-fact D3 (f2c16247, 2026-08-22 — additive projection only: bee's own gates and its merge door never read it; status lane rows surface it verbatim)", "cell-question-park D1 (b7b5b3c7) and D4 (2fe6f2a3) — a parked cell is outstanding work that close and merge refuse, so it also keeps the fact unset", agent-efficiency D1 item 4 (c4da7108) — a leader-check gap verdict reopens the cell]
+  sources: ["merge-ready-fact cells mrf-1 and mrf-2 (2026-08-22 — the one helper every writer calls, and the four verbs wired through it)", cell-question-park cell cqp-4 (parked counts as outstanding), agent-efficiency cell aef-4 (leader-check gap reopen), slp-dissent-stop-and-ask cell sd-2 (dissent release), docs/history/merge-ready-fact/CONTEXT.md, docs/history/cell-question-park/CONTEXT.md, docs/history/agent-efficiency/CONTEXT.md, docs/history/merge-ready-fact/plan.md, "the user's ask of 2026-08-22 from the waggledance session — a board needs a stored, file-readable 'Ready to merge' fact instead of deriving one"]
   authoritative_for: "workflow-state: the merge_ready fact on a feature record — its meaning, fields, lifecycle, and read rules"
-  anchors: [packages/bee-rs/crates/bee/src/verbs/workflow_store/merge_ready.rs, packages/bee-rs/crates/bee/src/verbs/drivers/close.rs, packages/bee-rs/crates/bee/src/verbs/drivers/proof_pointers.rs]
-  verified_at: 2026-09-08
-  verified_commit: fcc91f2f25e63b07d716b778eb6a7c8ec1144451
+  anchors: [packages/bee-rs/crates/bee/src/verbs/workflow_store/merge_ready.rs, packages/bee-rs/crates/bee/src/verbs/drivers/close.rs, packages/bee-rs/crates/bee/src/verbs/drivers/proof_pointers.rs, packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs, packages/bee-rs/crates/bee/src/verbs/cells/leader_check.rs, packages/bee-rs/crates/bee/src/verbs/cells/dissent.rs, packages/bee-rs/crates/bee/src/verbs/cells/park.rs]
+  verified_at: 2026-11-25
+  verified_commit: 8cb65072c5bac494d6932b551e354041f436b01f
 ---
 
 # Workflow State — merge-readiness, the stored fact that a feature is waiting for its merge
+
+Read when: a board or status row shows or lacks `merge_ready`, or a change adds
+a cell status or a verb that reopens a cell.
 
 A board that shows "Ready to merge" is asking a question bee could always
 answer and never wrote down. To answer it a reader had to join three separate
@@ -39,8 +42,10 @@ blocks nothing, and no door in bee asks it for permission.
 - **The uat gate** flips the acceptance field when it is approved, and flips it
   back when the approval is withdrawn.
 - **A worktree merge and a worktree unregister** each remove the fact.
-- **Any return of a unit to open work** — reopening it, giving up its claim, or
-  a judge verdict that sends it back for rework — removes the fact.
+- **Any return of a unit to open work** — reopening it, giving up its claim, a
+  judge verdict that sends it back for rework, a leader-check `gap` verdict, a
+  dissent verdict that releases its claim, or an answer that returns a parked
+  unit to open — removes the fact.
 - **Readers** trigger on their own and never write: the status projection
   carries the object verbatim on the feature's row.
 
@@ -54,7 +59,7 @@ may never change that verb's result, its output, or its exit code.
 | merge-readiness | The claim that a feature has nothing left to do inside its own checkout: every unit of work is complete, a worktree is open for it, and the only remaining step is the human's decision to merge. |
 | the merge-readiness fact | The optional `merge_ready` object holding that claim. One per feature, written in place, absent when the claim is not true. |
 | the feature's record | Where the fact lives: the feature's own pipeline record when the feature has one, and the default record when the feature is unlaned and the default record names it. A feature with neither is simply never stamped. |
-| last completion | The completion that leaves no unit of the feature open, claimed, or blocked, with at least one complete. It is the single moment merge-readiness becomes true. |
+| last completion | The completion that leaves no unit of the feature open, claimed, blocked, or parked, with at least one complete. It is the single moment merge-readiness becomes true. |
 | worktree grant | The recorded, granted worktree for this feature. Without one there is nothing to merge from, so there is no readiness to claim. |
 | blocking door | A close requirement the feature has not met yet — named on the fact so a reader can say *why* a ready-looking feature is not actually mergeable. |
 
@@ -71,12 +76,14 @@ The fields of the fact:
 ## Behaviors & Operations
 
 **B1 — One moment sets the fact.** A completion checks three things about the
-feature it belongs to: no unit is open, claimed, or blocked; at least one unit
-is complete; and a worktree grant exists. All three true, and the completion
-writes the fact with `since` set to its own time, `branch` and `worktree_id`
-from the grant, `uat` mirroring the acceptance gate as it stands right then,
-and `blocked_by` empty. Any one of the three false, and nothing is written
-(decision cfccdde4).
+feature it belongs to: no unit is open, claimed, blocked, or parked; at least
+one unit is complete; and a worktree grant exists. All three true, and the
+completion writes the fact with `since` set to its own time, `branch` and
+`worktree_id` from the grant, `uat` mirroring the acceptance gate as it stands
+right then, and `blocked_by` empty. Any one of the three false, and nothing is
+written (decision cfccdde4). A parked unit waits on a human answer, and close
+and merge refuse a feature that still has one (cell-question-park D4), so it
+counts as outstanding here too (`set_after_cap` in `merge_ready.rs`).
 
 A feature with zero units of work never becomes ready this way. There is no
 last completion, so the trigger never fires — a docs-only feature that never
@@ -112,9 +119,11 @@ fact points at is gone. Either way the object is deleted rather than left
 behind to describe a state that ended.
 
 **B5 — Any return to open work removes the fact.** Reopening a unit, giving up
-its claim, or a judge verdict that sends a completed unit back for rework each
-delete the fact immediately, because each one makes "every unit is complete"
-false. Nothing repairs it in place. When the feature finishes again, the new
+its claim, a judge verdict that sends a completed unit back for rework, a
+leader-check `gap` verdict that reopens a capped unit (agent-efficiency D1 item
+4), a dissent verdict that releases a unit's claim, and an answer that returns
+a parked unit to open each delete the fact immediately, because each one makes
+"every unit is complete" false. Nothing repairs it in place. When the feature finishes again, the new
 last completion sets a whole new fact with a fresh `since` — the waiting clock
 starts from the moment the feature actually became ready again, not from the
 first time it once was.
@@ -136,7 +145,7 @@ stateDiagram-v2
 ## Business Rules
 
 - **R1 — The fact is set at exactly one moment and by exactly one condition.**
-  Zero open, claimed, or blocked units; at least one complete; a worktree
+  Zero open, claimed, blocked, or parked units; at least one complete; a worktree
   grant present. No other event may create it, and no partial match may
   (decision cfccdde4).
 - **R2 — Every writer that can falsify the fact also owns correcting it.**
@@ -227,7 +236,12 @@ should not infer it.
   - `bee cells reopen` / `bee cells unclaim` / `bee cells judge-record`
     (NEEDS_REVISION) — `run_reopen` and `unclaim_cell` in
     `verbs/cells/handlers_close.rs`, plus the rework path in
-    `verbs/cells/handlers_meta.rs` (B5).
+    `verbs/cells/handlers_meta.rs` (B5). Every reopen path calls the one
+    shared line `clear_merge_ready_for` in `handlers_close.rs`; the other
+    callers are `record_leader_check` (`gap` verdict) in
+    `verbs/cells/leader_check.rs`, the released-dissent path in
+    `verbs/cells/dissent.rs`, and the parked-cell answer in
+    `verbs/cells/park.rs`.
   - `bee close` — the doors vector in `verbs/drivers/close.rs`, written before
     any refusal arm returns (B2).
   - `bee gate --name uat` — `run_gate_body` in

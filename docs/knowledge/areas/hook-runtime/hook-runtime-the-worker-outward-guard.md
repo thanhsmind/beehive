@@ -12,7 +12,7 @@ bee:
   sources: [docs/history/worker-outward-guard/CONTEXT.md, docs/history/paseo-pi-hardening/CONTEXT.md, docs/history/paseo-pi-hardening/plan.md, docs/history/wave-chain-thrift/CONTEXT.md]
   anchors: [.pi/extensions/bee-guard/events.ts, .pi/extensions/bee-guard/index.ts, packages/bee-rs/crates/bee/src/hooks/write_guard/checks.rs, packages/bee-rs/crates/bee/src/hooks/write_guard/paths.rs, packages/bee-rs/crates/bee/src/hooks/write_guard/main.rs, packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs, packages/bee-rs/crates/bee/src/hooks/worker_guard.rs, packages/bee-rs/crates/bee/src/verbs/cells/validate.rs, packages/bee-rs/crates/bee/src/hooks/mod.rs, packages/bee-rs/crates/bee/src/herding/mailbox.rs, packages/bee-rs/crates/bee/tests/pi_worker_guard_contracts.rs]
   verified_at: 2026-11-25
-  verified_commit: 2325f0cd3e0abef541ca598098f3fcb9247788af
+  verified_commit: 8cb65072c5bac494d6932b551e354041f436b01f
 ---
 
 ## Purpose

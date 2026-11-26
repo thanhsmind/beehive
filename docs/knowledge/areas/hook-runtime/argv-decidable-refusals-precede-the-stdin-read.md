@@ -12,8 +12,8 @@ bee:
   sources: [packages/bee-rs/crates/bee/src/hooks/mod.rs — try_native dispatch order]
   authoritative_for: "hook-runtime: the fixed order between argv-decidable refusals and the stdin read"
   anchors: [packages/bee-rs/crates/bee/src/hooks/mod.rs]
-  verified_at: 2026-08-31
-  verified_commit: 9ac7eead709bd5b918cdb7ef3db662e7f0f1fca3
+  verified_at: 2026-11-25
+  verified_commit: 8cb65072c5bac494d6932b551e354041f436b01f
 ---
 
 # Hook Runtime — argv-decidable refusals run before the blocking stdin read
