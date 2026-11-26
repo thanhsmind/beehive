@@ -2553,5 +2553,10 @@
     "capped": 2,
     "dropped": 0,
     "archived_at": "2026-11-26T00:04:39.286Z"
+  },
+  "windows-test-build-2": {
+    "capped": 2,
+    "dropped": 0,
+    "archived_at": "2026-11-26T00:16:42.447Z"
   }
 }

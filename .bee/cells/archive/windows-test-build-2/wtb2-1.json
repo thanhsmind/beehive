@@ -1,0 +1,146 @@
+{
+  "id": "wtb2-1",
+  "feature": "windows-test-build-2",
+  "title": "Gate the sh-fake waggledance test fixtures with cfg(unix)",
+  "lane": "small",
+  "role": "code",
+  "deps": [],
+  "decisions": [
+    "4f4447ee-7e4b-4786-852e-0a126371fe1a",
+    "598cb791-6d67-4509-b9fd-f4af2afc679c"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/tests/handoff_self_drive.rs",
+    "packages/bee-rs/crates/bee/src/verbs/feature_group.rs"
+  ],
+  "read_first": [
+    "docs/history/windows-test-build-2/CONTEXT.md",
+    "docs/knowledge/patterns/20260821-a-platform-job-red-on-a-build-error-is-an-unknown-number-of-failures.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Add #![cfg(unix)] as the first line of packages/bee-rs/crates/bee/tests/handoff_self_drive.rs. In the mod tests of packages/bee-rs/crates/bee/src/verbs/feature_group.rs, add #[cfg(unix)] to FAKE_WAGGLEDANCE, the FakeDispatch enum, the FakeWaggledance struct and its impl blocks (including Drop), every #[test] fn that calls FakeWaggledance::install or names FakeDispatch, and any helper, const or use item that only those tests need, so the x86_64-pc-windows-gnu test check has no error and no unused or dead-code warning. Change nothing else; no test body rewritten; add no comment lines. Linux behavior and test count stay the same.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo check --tests --target x86_64-pc-windows-gnu --manifest-path packages/bee-rs/Cargo.toml -p bee && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test handoff_self_drive && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee -- verbs::feature_group",
+  "must_haves": {
+    "truths": [
+      "cargo check --tests for x86_64-pc-windows-gnu reports no error",
+      "the handoff_self_drive and verbs::feature_group tests still run and pass on Linux"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/tests/handoff_self_drive.rs",
+        "substantive": "the file starts with #![cfg(unix)]"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/feature_group.rs",
+        "substantive": "FakeWaggledance, its script, FakeDispatch and every test using them carry #[cfg(unix)]"
+      }
+    ],
+    "key_links": [],
+    "prohibitions": [
+      "no production code change",
+      "no test body rewritten",
+      "no comment lines"
+    ]
+  },
+  "behavior_change": false,
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "wtb2-impl",
+    "outcome": "Gated sh-fake waggledance test fixtures and tests with cfg(unix) — 7c1a3aaa46977c07590ee84fc327045fdb4c25fb",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/tests/handoff_self_drive.rs",
+      "packages/bee-rs/crates/bee/src/verbs/feature_group.rs"
+    ],
+    "deviations": [
+      "sync-ack: test-only cfg(unix) gating; no behavior any knowledge concept describes changed"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-25T23:59:41.465Z",
+    "behavior_change": false,
+    "verification_evidence": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo check --tests --target x86_64-pc-windows-gnu --manifest-path packages/bee-rs/Cargo.toml -p bee && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test handoff_self_drive && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee -- verbs::feature_group — green:unit — gated sh-fake test fixtures and tests with cfg(unix)",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "e80a583f-c588-429d-8239-a11dda07d48a",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo check --tests --target x86_64-pc-windows-gnu --manifest-path packages/bee-rs/Cargo.toml -p bee && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test handoff_self_drive && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee -- verbs::feature_group",
+    "claimed_at": "2026-11-25T23:54:05.616Z",
+    "knowledge_delta": [],
+    "sync_ack": "test-only cfg(unix) gating; no behavior any knowledge concept describes changed",
+    "no_mistakes": true,
+    "knowledge_used": [
+      {
+        "path": "docs/knowledge/patterns/20260821-a-platform-job-red-on-a-build-error-is-an-unknown-number-of-failures.md",
+        "changed": "confirmed cargo check --tests --target x86_64-pc-windows-gnu compiles cfg(test) code and surfaces the real Windows errors"
+      }
+    ],
+    "principles_used": [
+      {
+        "slug": "bee-principle-reproduce-first",
+        "changed": "reproduced the Windows test-build E0433/E0599 errors before editing"
+      },
+      {
+        "slug": "bee-principle-laziness-protocol",
+        "changed": "added only #[cfg(unix)] attributes without modifying test bodies or production code"
+      }
+    ],
+    "changed_lines": 38,
+    "report": {
+      "outcome": "Gated sh-fake waggledance test fixtures and tests with cfg(unix) — 7c1a3aaa46977c07590ee84fc327045fdb4c25fb",
+      "commit": "7c1a3aaa46977c07590ee84fc327045fdb4c25fb",
+      "files": [
+        "packages/bee-rs/crates/bee/tests/handoff_self_drive.rs",
+        "packages/bee-rs/crates/bee/src/verbs/feature_group.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo check --tests --target x86_64-pc-windows-gnu --manifest-path packages/bee-rs/Cargo.toml -p bee && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test handoff_self_drive && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee -- verbs::feature_group — green:unit — PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo check --tests --target x86_64-pc-windows-gnu --manifest-path packages/bee-rs/Cargo.toml -p bee && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test handoff_self_drive && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee -- verbs::feature_group — green:unit — gated sh-fake test fixtures and tests with cfg(unix)",
+      "deviations": [],
+      "knowledge_used": [
+        "docs/knowledge/patterns/20260821-a-platform-job-red-on-a-build-error-is-an-unknown-number-of-failures.md — confirmed cargo check --tests --target x86_64-pc-windows-gnu compiles cfg(test) code and surfaces the real Windows errors"
+      ],
+      "principles_used": [
+        "bee-principle-reproduce-first — reproduced the Windows test-build E0433/E0599 errors before editing",
+        "bee-principle-laziness-protocol — added only #[cfg(unix)] attributes without modifying test bodies or production code"
+      ],
+      "reaction": "confirm",
+      "patch_id": "f36a616f115141fb77bef5ee9a48d191e96437bf"
+    },
+    "reaction": "confirm",
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "cargo check --tests for x86_64-pc-windows-gnu reports no error",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/feature_group.rs"
+          },
+          {
+            "requirement": "the handoff_self_drive and verbs::feature_group tests still run and pass on Linux",
+            "artifact": "packages/bee-rs/crates/bee/tests/handoff_self_drive.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/tests/handoff_self_drive.rs",
+            "artifact": "packages/bee-rs/crates/bee/tests/handoff_self_drive.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/feature_group.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/feature_group.rs"
+          }
+        ],
+        "recorded_at": "2026-11-26T00:16:11.360Z",
+        "recorded_by": "e80a583f-c588-429d-8239-a11dda07d48a",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": {
+    "new": 0,
+    "cached": 0,
+    "total": 0,
+    "models": {},
+    "jobs": [
+      "job-1795650856072-1343005-1"
+    ]
+  }
+}

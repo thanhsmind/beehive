@@ -1,0 +1,114 @@
+{
+  "id": "wtb2-1t",
+  "feature": "windows-test-build-2",
+  "title": "Independently prove the Windows test build and the Linux tests",
+  "lane": "small",
+  "role": "test",
+  "deps": [
+    "wtb2-1"
+  ],
+  "decisions": [
+    "4f4447ee-7e4b-4786-852e-0a126371fe1a",
+    "3487e31a-6f48-4fc1-8636-93e90d928314",
+    "598cb791-6d67-4509-b9fd-f4af2afc679c"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/tests/handoff_self_drive.rs",
+    "packages/bee-rs/crates/bee/src/verbs/feature_group.rs"
+  ],
+  "read_first": [
+    "docs/history/windows-test-build-2/CONTEXT.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Verify wtb2-1 independently: run the cell verify, confirm the x86_64-pc-windows-gnu test check shows no error and no warning in the two files, run cargo clippy --release --all-targets -p bee with -D warnings on Linux, and confirm the Linux test count for handoff_self_drive and verbs::feature_group did not drop against main. Run rg -n 'os::unix|from_mode' over packages/bee-rs/crates/bee and report any hit not under a cfg(unix) item. Edit only if wtb2-1 missed a site in the two files; add no comment lines.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo check --tests --target x86_64-pc-windows-gnu --manifest-path packages/bee-rs/Cargo.toml -p bee && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test handoff_self_drive && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee -- verbs::feature_group",
+  "must_haves": {
+    "truths": [
+      "the Windows test check is clean with no warning in the two files",
+      "Linux clippy all-targets is clean and the Linux test counts did not drop"
+    ],
+    "artifacts": [],
+    "key_links": [],
+    "prohibitions": [
+      "no production code change",
+      "no comment lines"
+    ]
+  },
+  "behavior_change": false,
+  "status": "capped",
+  "tester_rule": true,
+  "trace": {
+    "worker": "wtb2-tester",
+    "outcome": "Verified wtb2-1 Windows test check (0 errors/warnings in both files), Linux test counts (10 and 47 unchanged), clippy clean on both files/bin, and os::unix|from_mode audit — 7c1a3aaa46977c07590ee84fc327045fdb4c25fb",
+    "files_changed": [
+      "docs/history/windows-test-build-2/CONTEXT.md",
+      "docs/history/windows-test-build-2/plan.md",
+      "packages/bee-rs/crates/bee/src/verbs/feature_group.rs",
+      "packages/bee-rs/crates/bee/tests/handoff_self_drive.rs"
+    ],
+    "deviations": [
+      "sync-ack: verification only; red-first: the same x86_64-pc-windows-gnu test check failed with E0433/E0599 at both sites on the base before wtb2-1"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-26T00:03:40.537Z",
+    "behavior_change": false,
+    "verification_evidence": "cargo check --tests --target x86_64-pc-windows-gnu -p bee && cargo test --release -p bee --test handoff_self_drive && cargo test --release -p bee --bin bee -- verbs::feature_group && cargo clippy --release -p bee --bin bee --test handoff_self_drive -- -D warnings — green:unit — verified wtb2-1 Windows check, Linux tests (10+47), and clippy on touched targets",
+    "verify_output": "green:red-first",
+    "verify_passed": true,
+    "claim_session": "e80a583f-c588-429d-8239-a11dda07d48a",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo check --tests --target x86_64-pc-windows-gnu --manifest-path packages/bee-rs/Cargo.toml -p bee && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test handoff_self_drive && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee -- verbs::feature_group",
+    "claimed_at": "2026-11-25T23:59:45.783Z",
+    "knowledge_delta": [],
+    "sync_ack": "verification only; red-first: the same x86_64-pc-windows-gnu test check failed with E0433/E0599 at both sites on the base before wtb2-1",
+    "no_mistakes": true,
+    "no_knowledge_used": true,
+    "principles_used": [
+      {
+        "slug": "bee-principle-prove-it-works",
+        "changed": "verified the actual Windows check diagnostics, Linux test counts against main, clippy output on both targets, and every os::unix/from_mode hit directly"
+      }
+    ],
+    "changed_lines": 119,
+    "report": {
+      "outcome": "Verified wtb2-1 Windows test check (0 errors/warnings in both files), Linux test counts (10 and 47 unchanged), clippy clean on both files/bin, and os::unix|from_mode audit — 7c1a3aaa46977c07590ee84fc327045fdb4c25fb",
+      "commit": "88c39ebe975f0c86d68118efbbec1854d4d5cc13",
+      "files": [
+        "docs/history/windows-test-build-2/CONTEXT.md",
+        "docs/history/windows-test-build-2/plan.md",
+        "packages/bee-rs/crates/bee/src/verbs/feature_group.rs",
+        "packages/bee-rs/crates/bee/tests/handoff_self_drive.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo check --tests --target x86_64-pc-windows-gnu --manifest-path packages/bee-rs/Cargo.toml -p bee && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test handoff_self_drive && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee -- verbs::feature_group — green:red-first — cargo check --tests --target x86_64-pc-windows-gnu -p bee && cargo test --release -p bee --test handoff_self_drive && cargo test --release -p bee --bin bee -- verbs::feature_group && cargo clippy --release -p bee --bin bee --test handoff_self_drive -- -D warnings — green:unit — verified wtb2-1 Windows check, Linux tests (10+47), and clippy on touched targets",
+      "deviations": [],
+      "knowledge_used": [],
+      "principles_used": [
+        "bee-principle-prove-it-works — verified the actual Windows check diagnostics, Linux test counts against main, clippy output on both targets, and every os::unix/from_mode hit directly"
+      ],
+      "reaction": "partial",
+      "found": [
+        "pre-existing clippy -D warnings failures in unrelated bee test targets (specs_fence, knowledge_in_the_flow_e2e, pointer_integrity, concurrency, verification_contract_parity, rule_index_parity, and 77 errors across unrelated bin bee unit tests)",
+        "three production os::unix hits are gated with #[cfg(not(windows))] rather than #[cfg(unix)]: src/onboard/util.rs:203, src/path_identity.rs:87, src/verbs/worktree/git.rs:335"
+      ],
+      "stopped": "cargo clippy --release --all-targets -p bee -- -D warnings — fails with exit 101 on pre-existing lint errors in unrelated test targets on main (specs_fence, knowledge_in_the_flow_e2e, pointer_integrity, concurrency, and 77 errors in unrelated bin bee unit tests); both wtb2-1 files and --bin bee --test handoff_self_drive have 0 clippy warnings/errors",
+      "patch_id": "52515459e58a9f4175bfa590fb672b26dd68e8b5"
+    },
+    "reaction": "partial",
+    "found": [
+      "pre-existing clippy -D warnings failures in unrelated bee test targets (specs_fence, knowledge_in_the_flow_e2e, pointer_integrity, concurrency, verification_contract_parity, rule_index_parity, and 77 errors across unrelated bin bee unit tests)",
+      "three production os::unix hits are gated with #[cfg(not(windows))] rather than #[cfg(unix)]: src/onboard/util.rs:203, src/path_identity.rs:87, src/verbs/worktree/git.rs:335"
+    ],
+    "stopped": "cargo clippy --release --all-targets -p bee -- -D warnings — fails with exit 101 on pre-existing lint errors in unrelated test targets on main (specs_fence, knowledge_in_the_flow_e2e, pointer_integrity, concurrency, and 77 errors in unrelated bin bee unit tests); both wtb2-1 files and --bin bee --test handoff_self_drive have 0 clippy warnings/errors",
+    "warnings": [],
+    "tests": "boundary"
+  },
+  "usage": {
+    "new": 0,
+    "cached": 0,
+    "total": 0,
+    "models": {},
+    "jobs": [
+      "job-1795651189136-1365462-1"
+    ]
+  }
+}
