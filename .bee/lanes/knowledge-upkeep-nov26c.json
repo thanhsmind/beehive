@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "knowledge-upkeep-nov26c",
   "mode": null,
-  "phase": "swarming",
+  "phase": "idle",
   "approved_gates": {
     "context": false,
     "shape": true,
@@ -11,10 +11,15 @@
     "uat": false
   },
   "summary": "Feature \"knowledge-upkeep-nov26c\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at daf5051; capture what settled, then bee close --feature knowledge-upkeep-nov26c, then write the handoff and continue in a fresh leader session (one leader session per feature).",
+  "next_action": "bee close finished \"knowledge-upkeep-nov26c\" — feature is closed.",
   "created_at": "2026-11-25T23:55:57.250Z",
-  "run_state": null,
-  "waiting_on": null,
+  "run_state": "awaiting-approval",
+  "waiting_on": {
+    "kind": "turn-end",
+    "subject": "[3] `.claude/agents/` (bee-worker, bee-forager, bee-scout, bee-guard, bee-comb, bee-elder)",
+    "asked_at": "2026-11-26T00:00:53.463Z",
+    "session": "2dc3730b-6729-46c2-b118-c09ab87ba184"
+  },
   "route": {
     "class": "docs",
     "lane": "docs",
