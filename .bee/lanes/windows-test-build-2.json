@@ -11,9 +11,9 @@
     "uat": false
   },
   "summary": "Feature \"windows-test-build-2\" started at phase \"exploring\" (lane).",
-  "next_action": "Continue bee-exploring for \"windows-test-build-2\" (lane).",
+  "next_action": "Merged into main at c06e891; capture what settled, then bee close --feature windows-test-build-2, then write the handoff and continue in a fresh leader session (one leader session per feature).",
   "created_at": "2026-11-25T23:52:52.237Z",
-  "run_state": "awaiting-approval",
+  "run_state": null,
   "waiting_on": null,
   "route": {
     "class": "bugfix",
@@ -23,12 +23,5 @@
     "rationale": null,
     "updated_at": "2026-11-25T23:52:48.026Z",
     "feature": "windows-test-build-2"
-  },
-  "merge_ready": {
-    "since": "2026-11-26T00:03:40.578Z",
-    "branch": "wt/windows-test-build-2",
-    "worktree_id": "beehive--wt--windows-test-build-2",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
