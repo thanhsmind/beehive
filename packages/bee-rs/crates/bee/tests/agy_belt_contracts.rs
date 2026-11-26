@@ -25,11 +25,21 @@ fn repo_root() -> PathBuf {
         .to_path_buf()
 }
 
+fn isolated_global_dir() -> &'static Path {
+    static DIR: std::sync::OnceLock<tempfile::TempDir> = std::sync::OnceLock::new();
+    DIR.get_or_init(|| tempfile::tempdir().expect("isolated global config dir"))
+        .path()
+}
+
 fn bee() -> Command {
     let mut cmd = Command::new(bee_bin());
     for var in SESSION_VARS {
         cmd.env_remove(var);
     }
+    let dir = isolated_global_dir();
+    cmd.env("BEEHIVE_CONFIG_DIR", dir)
+        .env("HOME", dir)
+        .env("USERPROFILE", dir);
     cmd
 }
 
@@ -601,20 +611,18 @@ fn onboarding_refuses_a_malformed_hooks_json_and_leaves_it_unchanged() {
 #[test]
 fn dispatch_prepare_on_agy_with_a_native_slot_refuses_with_the_herding_remedy() {
     let repo = onboarded_repo(None);
-    let config_path = repo.root.join(".bee/config.json");
-    let mut config: Value =
-        serde_json::from_str(&std::fs::read_to_string(&config_path).unwrap()).unwrap();
+    let team_path = repo.root.join(".bee/team.json");
+    let mut team: Value =
+        serde_json::from_str(&std::fs::read_to_string(&team_path).unwrap()).unwrap();
     let native = json!({ "kind": "native", "model": "gemini-3" });
-    config["team"] = json!({
-        "agy": {
-            "generation": native,
-            "read": native,
-            "code": native,
-            "review": native,
-            "advisor": native
-        }
+    team["team"]["agy"] = json!({
+        "generation": native,
+        "read": native,
+        "code": native,
+        "review": native,
+        "advisor": native
     });
-    std::fs::write(&config_path, serde_json::to_string_pretty(&config).unwrap()).unwrap();
+    std::fs::write(&team_path, serde_json::to_string_pretty(&team).unwrap()).unwrap();
 
     let out = bee()
         .args(["dispatch", "prepare", "--runtime", "agy", "--kind", "gather", "--purpose", "probe", "--json"])
@@ -628,7 +636,13 @@ fn dispatch_prepare_on_agy_with_a_native_slot_refuses_with_the_herding_remedy() 
             String::from_utf8_lossy(&out.stderr)
         )
     });
-    assert_eq!(answer["ok"], json!(false), "{answer}");
+    let explain = bee()
+        .args(["config", "explain", "--key", "team.agy.read", "--json"])
+        .current_dir(&repo.root)
+        .output()
+        .unwrap();
+    let explain_stdout = String::from_utf8_lossy(&explain.stdout);
+    assert_eq!(answer["ok"], json!(false), "{answer}\nexplain: {explain_stdout}");
     assert_eq!(answer["reason"], json!("agy_requires_herding"), "{answer}");
     assert_eq!(answer["runtime"], json!("agy"), "{answer}");
     let fix = answer["fix"].as_str().unwrap_or_default();

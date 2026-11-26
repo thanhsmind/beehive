@@ -838,9 +838,10 @@ mod tests {
                 None => unsafe { std::env::remove_var(k) },
             }
         }
-        assert_ne!(outside_a_herd, "ExitCode(unix_exit_status(2))");
-        assert_eq!(refused, "ExitCode(unix_exit_status(2))");
-        assert_ne!(filtered, "ExitCode(unix_exit_status(2))");
+        let expected_two = format!("{:?}", std::process::ExitCode::from(2));
+        assert_ne!(outside_a_herd, expected_two);
+        assert_eq!(refused, expected_two);
+        assert_ne!(filtered, expected_two);
     }
 
     #[test]
